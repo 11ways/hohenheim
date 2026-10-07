@@ -24,8 +24,8 @@
     <pl-table>
         <pl-table-header><pl-table-row>
             <pl-table-head>{{ t("singular", scope: "database") }}</pl-table-head>
-            <pl-table-head>{{ t("engine", scope: "field") }}</pl-table-head>
-            <pl-table-head>{{ t("env_prefix", scope: "field") }}</pl-table-head>
+            <pl-table-head>{{ t("engine", scope: "hohenheim_field") }}</pl-table-head>
+            <pl-table-head>{{ t("env_prefix", scope: "hohenheim_field") }}</pl-table-head>
             <pl-table-head>{{ t("status", scope: "instance_database") }}</pl-table-head>
         </pl-table-row></pl-table-header>
         <pl-table-body>

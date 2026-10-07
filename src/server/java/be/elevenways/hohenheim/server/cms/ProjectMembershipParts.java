@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -45,7 +46,7 @@ public final class ProjectMembershipParts {
                              @NonNull String subjectType, int subjectId, @NonNull String member) {}
 
     private static final StringField PROJECT = StringField.builder("project")
-        .label(Microcopy.of("project").withFilter("scope", "field")).build();
+        .label(HohenheimFormCopy.label("project")).build();
     private static final StringField MEMBER = StringField.builder("member")
         .label(Microcopy.of("member").withFilter("scope", "project")).build();
     private static final StringField KIND = StringField.builder("kind")

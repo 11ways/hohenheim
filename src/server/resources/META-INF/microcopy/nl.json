@@ -165,7 +165,7 @@
   "api_keys": [
     {
       "text": "API-sleutels",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Sleutels die de proces-API aanvaardt. Alleen een digest wordt bewaard, dus een sleutel wordt nooit opnieuw getoond: laat dit leeg om de bewaarde sleutels te behouden, voeg een rij toe om een sleutel die je al hebt over te nemen, of gebruik de rijactie om er een te genereren.",
@@ -175,7 +175,7 @@
   "auto_deploy": [
     {
       "text": "Automatisch uitrollen",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Rol elke nieuwe revisie uit die de push-webhook van de repository voor deze branch meldt.",
@@ -185,7 +185,7 @@
   "autoindex": [
     {
       "text": "Mappenlijst",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Toon de inhoud van een map wanneer er geen indexbestand bestaat.",
@@ -195,7 +195,7 @@
   "basic_auth_user": [
     {
       "text": "Basic Auth-gebruikersnaam",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Optionele gebruikersnaam die naast de IP-regels vereist is.",
@@ -205,7 +205,7 @@
   "basic_auth_password": [
     {
       "text": "Basic Auth-wachtwoord",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Laat leeg tijdens het bewerken om het opgeslagen wachtwoord te behouden; de waarde wordt nooit teruggestuurd naar de browser.",
@@ -215,7 +215,7 @@
   "auth_provider_name": [
     {
       "text": "Naam",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Een herkenbare naam die wordt gebruikt wanneer deze provider aan een site wordt toegewezen.",
@@ -225,7 +225,7 @@
   "auth_provider_type": [
     {
       "text": "Providertype",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "De authenticatiemethode die deze provider gebruikt.",
@@ -235,7 +235,7 @@
   "auth_provider_config": [
     {
       "text": "Inloggegevens en verbinding",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Instellingen voor het geselecteerde providertype.",
@@ -245,7 +245,7 @@
   "required_permission": [
     {
       "text": "Vereiste permissie",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Een enkele permissienaam, bv. \"site.internal\", vergeleken met de permissie-claims van de identiteit. Alleen gebruikt door claims-gebaseerde providers zoals Proteus (HTTP Basic Auth negeert dit). Leeg vraagt hohenheim.site.<slug>, de permissie genoemd naar de beschermde site.",
@@ -255,7 +255,7 @@
   "credentials": [
     {
       "text": "Inloggegevens",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Eén Basic Auth-gebruikersnaam en wachtwoord per rij. Wachtwoorden worden gehasht opgeslagen en nooit getoond: laat een wachtwoord leeg om het te behouden, typ er een om het te vervangen.",
@@ -272,21 +272,11 @@
   ],
   "key": [
     {
-      "text": "Gebruikersnaam",
-      "scope": "forms",
-      "field": "credentials"
-    },
-    {
       "text": "Sleutel",
       "scope": "template_contents"
     }
   ],
   "value": [
-    {
-      "text": "Wachtwoord",
-      "scope": "forms",
-      "field": "credentials"
-    },
     {
       "text": "Waarde",
       "scope": "instance_provisioning"
@@ -299,7 +289,7 @@
   "proteus_endpoint": [
     {
       "text": "Endpoint",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Basis-URL van de Proteus-identiteitsdienst.",
@@ -309,7 +299,7 @@
   "proteus_realm_client": [
     {
       "text": "Realm-client",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Client-ID geregistreerd in de Proteus-realm.",
@@ -319,7 +309,7 @@
   "proteus_access_key": [
     {
       "text": "Toegangssleutel",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Geheime toegangssleutel voor de Proteus-realm.",
@@ -329,7 +319,7 @@
   "proteus_authenticator": [
     {
       "text": "Authenticator",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Slug van een specifieke Proteus-aanmeldmethode om af te dwingen. Laat leeg om bezoekers te laten kiezen uit alle ingeschakelde aanmeldmethodes van de realm.",
@@ -339,7 +329,7 @@
   "branch": [
     {
       "text": "Branch",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Git-branch om uit te checken. Leeg gebruikt de standaardbranch.",
@@ -349,7 +339,7 @@
   "build_command": [
     {
       "text": "Buildcommando",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Shellcommando na checkout en vóór de deployment actief wordt.",
@@ -359,7 +349,7 @@
   "build_directory": [
     {
       "text": "Buildmap",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Werkmap voor het buildcommando, relatief aan de repository.",
@@ -369,7 +359,7 @@
   "build_environment_variables": [
     {
       "text": "Buildomgeving",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Omgevingsvariabelen die alleen tijdens het bouwen beschikbaar zijn.",
@@ -379,7 +369,7 @@
   "build_timeout": [
     {
       "text": "Build-time-out",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Maximale buildduur in seconden voordat de deployment wordt geannuleerd; het buildtijdquotum van de host blijft gelden.",
@@ -389,7 +379,7 @@
   "container_command": [
     {
       "text": "Containercommando",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Optioneel commando dat het standaardcommando van de image vervangt.",
@@ -399,7 +389,7 @@
   "container_port": [
     {
       "text": "Containerpoort",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "TCP-poort waarop de applicatie in de container luistert.",
@@ -409,7 +399,7 @@
   "connect_timeout": [
     {
       "text": "Verbindingstime-out",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Maximale tijd in seconden om de TCP-verbinding met de passthroughbackend op te zetten.",
@@ -419,7 +409,7 @@
   "cpu_limit": [
     {
       "text": "CPU-limiet",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Maximaal aantal CPU-kernen voor de container. Leeg betekent onbeperkt.",
@@ -429,7 +419,7 @@
   "delay": [
     {
       "text": "Antwoordvertraging",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Kunstmatige vertraging in milliseconden vóór elke aanvraag.",
@@ -439,7 +429,7 @@
   "dockerfile": [
     {
       "text": "Dockerfile",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Pad naar de Dockerfile, relatief aan de repository.",
@@ -453,7 +443,7 @@
   "builder": [
     {
       "text": "Bouwmethode",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hoe een git-checkout een image wordt. Nixpacks detecteert de taal en heeft geen Dockerfile in de repository nodig.",
@@ -463,7 +453,7 @@
   "build_arguments": [
     {
       "text": "Build-argumenten",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Waarden die tijdens het BOUWEN aan de Dockerfile worden meegegeven. De runtime-omgevingsvariabelen zijn bewust niet beschikbaar voor de build, zodat een buildlog ze nooit kan lekken; een build-argument belandt wel in de image-history, zet er dus nooit een geheim in.",
@@ -473,7 +463,7 @@
   "environment_variables": [
     {
       "text": "Omgevingsvariabelen",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Variabelen die bij runtime aan elk proces worden doorgegeven.",
@@ -483,7 +473,7 @@
   "fallback_file": [
     {
       "text": "Terugvalbestand",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Bestand voor ontbrekende paden, bijvoorbeeld index.html voor een SPA.",
@@ -493,7 +483,7 @@
   "forward_host": [
     {
       "text": "Upstream-host",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hostnaam of IP-adres van de HTTP-upstream.",
@@ -503,7 +493,7 @@
   "forward_port": [
     {
       "text": "Upstream-poort",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "TCP-poort van de upstream. Standaard 80 voor HTTP en 443 voor HTTPS.",
@@ -513,7 +503,7 @@
   "forward_scheme": [
     {
       "text": "Protocol",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "http of https: hoe Hohenheim verbinding maakt met waar verzoeken heen gaan.",
@@ -523,7 +513,7 @@
   "proxy_protocol_v2": [
     {
       "text": "PROXY-protocol v2 verzenden",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Voeg de binaire PROXY v2-header toe zodat de backend de oorspronkelijke client- en doeladressen ontvangt.",
@@ -533,7 +523,7 @@
   "tls_forward_host": [
     {
       "text": "TLS-backendhost",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hostnaam of IP-adres dat de oorspronkelijke, nog versleutelde TLS-stream ontvangt.",
@@ -547,7 +537,7 @@
   "ignore_certificates": [
     {
       "text": "TLS-fouten negeren",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Aanvaard een ongeldig of zelfondertekend upstreamcertificaat.",
@@ -557,7 +547,7 @@
   "image": [
     {
       "text": "Container-image",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Image die wordt gestart wanneer geen Dockerfile-build wordt gebruikt.",
@@ -575,7 +565,7 @@
   "image_tag": [
     {
       "text": "Image-tag",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Tag voor een lokaal gebouwde image.",
@@ -585,7 +575,7 @@
   "indexes": [
     {
       "text": "Indexbestanden",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Serveer conventionele indexbestanden zoals index.html uit mappen.",
@@ -595,7 +585,7 @@
   "maximum_processes": [
     {
       "text": "Maximum processen",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Bovengrens voor gelijktijdig draaiende applicatieprocessen.",
@@ -605,7 +595,7 @@
   "memory_limit": [
     {
       "text": "Geheugenlimiet",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Maximaal containergeheugen in megabytes. Leeg betekent onbeperkt.",
@@ -615,7 +605,7 @@
   "minimum_processes": [
     {
       "text": "Minimum processen",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Aantal warme applicatieprocessen dat Hohenheim actief houdt.",
@@ -625,7 +615,7 @@
   "node_runtime": [
     {
       "text": "Node.js-runtime",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Gevonden Node.js-versie waarmee deze site wordt gestart.",
@@ -635,7 +625,7 @@
   "poll_interval": [
     {
       "text": "Pollinginterval",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Seconden tussen repositorycontroles wanneer polling actief is.",
@@ -645,7 +635,7 @@
   "port_argument": [
     {
       "text": "Poortargument",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Commandoregelargument vóór het toegewezen poortnummer.",
@@ -655,7 +645,7 @@
   "preserve_path": [
     {
       "text": "Pad behouden",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Voeg het oorspronkelijke pad en de query aan het doel toe.",
@@ -665,7 +655,7 @@
   "redirect_status": [
     {
       "text": "Redirectstatus",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "HTTP-statuscode van de redirect.",
@@ -675,7 +665,7 @@
   "repository_url": [
     {
       "text": "Repository-URL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Git-clone-URL. SSH gebruikt de geconfigureerde sleutels van de host.",
@@ -685,7 +675,7 @@
   "request_timeout": [
     {
       "text": "Time-out aanvraag",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Maximale levensduur van een aanvraag in seconden, van 0 tot {$max}. 0 verwijdert de limiet voor streaming, gRPC en WebSockets.",
@@ -695,7 +685,7 @@
   "rewrite_location": [
     {
       "text": "Location-headers herschrijven",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Herschrijf upstreamredirects naar de publieke sitehostnaam.",
@@ -705,7 +695,7 @@
   "upstream_protocol": [
     {
       "text": "HTTP-versie",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "HTTP/2 is vereist voor gRPC-backends. Upstreams zonder TLS gebruiken dan h2c met prior knowledge.",
@@ -715,7 +705,7 @@
   "root_path": [
     {
       "text": "Documentroot",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Map met de bestanden die worden geserveerd; een relatief pad wordt opgelost tegen de werkmap van Hohenheim.",
@@ -725,7 +715,7 @@
   "run_as_user": [
     {
       "text": "Uitvoeren als gebruiker",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Systeemaccount voor het proces, inclusief uid, gid en home-map.",
@@ -735,7 +725,7 @@
   "script": [
     {
       "text": "Script",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Startscript relatief aan de werkmap.",
@@ -745,7 +735,7 @@
   "server": [
     {
       "text": "Host",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Host waarop de container draait.",
@@ -755,7 +745,7 @@
   "shallow_clone": [
     {
       "text": "Ondiepe clone",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Haal alleen de recentste geschiedenis op voor minder tijd en schijfruimte.",
@@ -765,7 +755,7 @@
   "show_hidden_files": [
     {
       "text": "Verborgen bestanden tonen",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Sta bestanden met een punt vooraan toe in lijsten en antwoorden.",
@@ -775,7 +765,7 @@
   "source": [
     {
       "text": "Bron",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Gebruik lokale bestanden of rol uit vanuit een Git-repository.",
@@ -793,7 +783,7 @@
   "start_command": [
     {
       "text": "Startcommando",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Programma en argumenten waarmee elk applicatieproces start.",
@@ -803,7 +793,7 @@
   "submodules": [
     {
       "text": "Git-submodules",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Initialiseer en update submodules na de checkout.",
@@ -813,7 +803,7 @@
   "target_url": [
     {
       "text": "Doel-URL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Absolute URL of root-relatief pad voor de redirect.",
@@ -823,7 +813,7 @@
   "upstream_socket": [
     {
       "text": "Upstream Unix-socket",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Unix-socketpad. Indien ingevuld krijgt dit voorrang op host en poort.",
@@ -833,7 +823,7 @@
   "use_ports": [
     {
       "text": "TCP-poorten gebruiken",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Gebruik een lokale TCP-poort in plaats van de standaard Unix-socket.",
@@ -843,7 +833,7 @@
   "volumes": [
     {
       "text": "Volumes",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Containerkoppelingen in de vorm hostpad:containerpad.",
@@ -857,7 +847,7 @@
   "wait_for_ready": [
     {
       "text": "Op gereed-signaal wachten",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Stuur pas verkeer nadat het proces meldt dat de start voltooid is.",
@@ -867,7 +857,7 @@
   "webhook_secret": [
     {
       "text": "Webhookgeheim",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Geheim waarmee ondertekende repositorywebhooks worden gecontroleerd.",
@@ -877,7 +867,7 @@
   "websocket_upgrade": [
     {
       "text": "WebSockets toestaan",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Stuur WebSocket-upgrades door naar de upstream.",
@@ -887,7 +877,7 @@
   "working_directory": [
     {
       "text": "Werkmap",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Map waarin het applicatiecommando wordt gestart.",
@@ -939,7 +929,7 @@
   "active": [
     {
       "text": "Actief",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Actief",
@@ -1013,7 +1003,7 @@
     },
     {
       "text": "Certificaat",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "TLS-certificaat voor deze hostnaam. Leeg laat het platform kiezen of er een aanvragen.",
@@ -1139,7 +1129,7 @@
   "deploy": [
     {
       "text": "Deploy",
-      "scope": "nav"
+      "scope": "hohenheim_nav"
     },
     {
       "text": "Deployment van {$name}",
@@ -1287,7 +1277,7 @@
     },
     {
       "text": "Engine",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Database-engine. Vast na aanmaak; vernietig en maak opnieuw aan om te wijzigen.",
@@ -1305,7 +1295,7 @@
     },
     {
       "text": "Env-voorvoegsel",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Bepaalt de naam van de geinjecteerde variabelen: DB geeft DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME en DB_URL. De eerste koppeling van de site levert ook DATABASE_URL.",
@@ -1361,7 +1351,7 @@
   "hostname": [
     {
       "text": "Hostnaam",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "De Host-header die moet overeenkomen. Wildcardmodus laat * en ? toe binnen een label, een leidende *. voor precies een label en **. voor een of meer; regexmodus neemt een volledige reguliere expressie.",
@@ -1383,7 +1373,7 @@
   "match_type": [
     {
       "text": "Overeenkomsttype",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hoe de hostnaam wordt vergeleken: exact, wildcard of reguliere expressie.",
@@ -1434,6 +1424,10 @@
     {
       "text": "Wachtwoord",
       "scope": "protect_path"
+    },
+    {
+      "text": "Wachtwoord",
+      "scope": "hohenheim_field"
     }
   ],
   "payload_url": {
@@ -1493,7 +1487,7 @@
       "text": "Let's Encrypt-certificaat aanvragen",
       "scope": "certificate_request"
     },
-    { "text": "{$actor} vroeg een certificaat aan voor {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} vroeg een certificaat aan voor {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "restore": [
     {
@@ -1658,7 +1652,7 @@
     },
     {
       "text": "Status",
-      "scope": "field"
+      "scope": "hohenheim_field"
     }
   ],
   "stored_log": {
@@ -1758,7 +1752,7 @@
     },
     {
       "text": "Beschrijving",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Live uitvoer van de workload van deze instantie. Commando's verstuur je met het formulier hieronder.",
@@ -1805,7 +1799,7 @@
     },
     {
       "text": "Naam",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Eigenaarsnaam relatief aan de zone: @ voor de zone zelf, www voor een subdomein, * voor een wildcard",
@@ -1819,7 +1813,7 @@
     },
     {
       "text": "Waarde",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "A/AAAA: een IP-adres. CNAME/NS/MX/SRV: een hostnaam. TXT: de tekst. CAA: vlaggen tag waarde, bv. 0 issue letsencrypt.org",
@@ -1853,7 +1847,7 @@
     },
     {
       "text": "Naam",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Naam",
@@ -2578,13 +2572,13 @@
     },
     {
       "text": "Back-up gemaakt",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
   "networking": {
     "text": "Netwerk",
-    "scope": "nav"
+    "scope": "hohenheim_nav"
   },
   "test": [
     {
@@ -2771,7 +2765,7 @@
   "upstream_kind": [
     {
       "text": "Upstream",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Waar deze hostnaam naartoe leidt: statische bestanden, een omleiding, een adres, een instantie die je beheert, ...",
@@ -2781,7 +2775,7 @@
   "enabled": [
     {
       "text": "Ingeschakeld",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Uitgeschakelde sites worden niet gerouteerd; verzoeken krijgen de offlinepagina.",
@@ -2797,14 +2791,14 @@
     },
     {
       "text": "Ingeschakeld",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
   "settings": [
     {
       "text": "Instellingen",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Instellingen",
@@ -2817,12 +2811,12 @@
   ],
   "source_settings": {
     "text": "Broninstellingen",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "access_list": [
     {
       "text": "Toegangslijst",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Optionele regelboom (adressen, wachtwoorden, aanmelding) die geldt voordat verzoeken de site bereiken.",
@@ -2832,7 +2826,7 @@
   "auth_provider": [
     {
       "text": "Auth-provider",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Optionele identiteitsprovider waarmee bezoekers zich eerst moeten aanmelden.",
@@ -2846,7 +2840,7 @@
   "listen_on": [
     {
       "text": "Luisteradres",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Bedien dit domein alleen op het gekozen lokale IP-adres. Leeg betekent alle interfaces.",
@@ -2856,7 +2850,7 @@
   "path_prefix": [
     {
       "text": "Padvoorvoegsel",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Alleen verzoeken waarvan het pad met dit voorvoegsel begint gebruiken deze regel. Leeg matcht alles.",
@@ -2866,7 +2860,7 @@
   "strip_path": [
     {
       "text": "Pad strippen",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Verwijder het gematchte padvoorvoegsel voordat het verzoek wordt doorgestuurd.",
@@ -2876,7 +2870,7 @@
   "force_ssl": [
     {
       "text": "SSL afdwingen",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Stuurt bezoekers naar HTTPS. Zonder werkend certificaat voor dit adres krijgen ze in plaats daarvan een foutpagina. Een nieuw adres zet dit zelf aan zodra zijn certificaat werkt.",
@@ -2886,7 +2880,7 @@
   "hsts_enabled": [
     {
       "text": "HSTS",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Stuur de Strict-Transport-Security-header zodat browsers HTTP voor deze host weigeren.",
@@ -2896,7 +2890,7 @@
   "hsts_subdomains": [
     {
       "text": "HSTS-subdomeinen",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Breid HSTS uit naar alle subdomeinen (includeSubDomains).",
@@ -2906,7 +2900,7 @@
   "custom_headers": [
     {
       "text": "Verzoekheaders",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Headers gezet op het verzoek voordat het wordt doorgestuurd. Een lege waarde verwijdert de header.",
@@ -2916,7 +2910,7 @@
   "response_headers": [
     {
       "text": "Antwoordheaders",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Headers gezet op het antwoord naar de client. Een lege waarde verwijdert de header.",
@@ -2926,7 +2920,7 @@
   "exclude_from_letsencrypt": [
     {
       "text": "Uitsluiten van Let's Encrypt",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Laat deze hostnaam weg bij het aanvragen van Let's Encrypt-certificaten voor de site.",
@@ -2944,7 +2938,7 @@
   "db_user": [
     {
       "text": "Databasegebruiker",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Gebruikersnaam aangemaakt in de databasecontainer en geinjecteerd in gekoppelde sites.",
@@ -2954,7 +2948,7 @@
   "db_password": [
     {
       "text": "Databasewachtwoord",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Wachtwoord voor de databasegebruiker. Leeg laten om er een te genereren.",
@@ -2964,7 +2958,7 @@
   "db_name": [
     {
       "text": "Databasenaam",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Naam van de initiele database binnen de engine.",
@@ -2974,7 +2968,7 @@
   "ephemeral": [
     {
       "text": "Vluchtig",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Bewaar data in een RAM-tmpfs: snel, maar ALLE data gaat verloren wanneer de container herstart.",
@@ -2996,7 +2990,7 @@
   "origin": [
     {
       "text": "Zone-origin",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Het domein waarvoor deze zone autoritatief is, bv. example.com (zonder punt op het einde)",
@@ -3006,7 +3000,7 @@
   "soa_primary_ns": [
     {
       "text": "Primaire naamserver",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hostnaam van de primaire naamserver (de MNAME in het SOA-record); leeg = ns1.<zone>",
@@ -3016,7 +3010,7 @@
   "soa_contact": [
     {
       "text": "Contact-e-mail",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Administratief contact voor de zone; leeg = hostmaster@<zone>",
@@ -3026,7 +3020,7 @@
   "serial": [
     {
       "text": "Serienummer",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Het SOA-serienummer. Hohenheim verhoogt het bij elke wijziging; secundaire servers vergelijken het om te bepalen of ze de zone opnieuw moeten ophalen.",
@@ -3036,7 +3030,7 @@
   "default_ttl": [
     {
       "text": "Standaard-TTL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Seconden dat resolvers records zonder eigen TTL mogen cachen (3600 = 1 uur)",
@@ -3046,7 +3040,7 @@
   "negative_ttl": [
     {
       "text": "Negatieve TTL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Seconden dat resolvers naam-bestaat-niet-antwoorden mogen cachen (300 = 5 minuten)",
@@ -3056,7 +3050,7 @@
   "soa_refresh": [
     {
       "text": "SOA-refresh",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Seconden voordat een secundaire naamserver deze zone opnieuw controleert (7200 = 2 uur)",
@@ -3066,7 +3060,7 @@
   "soa_retry": [
     {
       "text": "SOA-retry",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Seconden die een secundaire wacht na een mislukte refresh (3600 = 1 uur)",
@@ -3076,7 +3070,7 @@
   "soa_expire": [
     {
       "text": "SOA-expire",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Seconden waarna een secundaire die deze server niet bereikt stopt met antwoorden (1209600 = 2 weken)",
@@ -3086,7 +3080,7 @@
   "zone_enabled": [
     {
       "text": "Ingeschakeld",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Uitgeschakelde zones worden niet bediend; hun namen krijgen REFUSED-antwoorden",
@@ -3096,7 +3090,7 @@
   "record_zone": [
     {
       "text": "Zone",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "De autoritatieve zone waartoe dit record behoort.",
@@ -3106,7 +3100,7 @@
   "record_type": [
     {
       "text": "Type",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Het recordtype; MX en SRV hebben ook een prioriteit nodig, SRV ook een poort",
@@ -3116,7 +3110,7 @@
   "record_ttl": [
     {
       "text": "TTL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Seconden dat resolvers dit record mogen cachen; leeg = de zonestandaard",
@@ -3126,7 +3120,7 @@
   "record_priority": [
     {
       "text": "Prioriteit",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Verplicht voor MX- en SRV-records; lagere nummers worden eerst geprobeerd",
@@ -3136,7 +3130,7 @@
   "record_weight": [
     {
       "text": "Gewicht",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Alleen SRV: relatief gewicht voor records met dezelfde prioriteit (0 bij twijfel)",
@@ -3146,7 +3140,7 @@
   "record_port": [
     {
       "text": "Poort",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Alleen SRV: de TCP/UDP-poort waarop de dienst luistert",
@@ -3156,7 +3150,7 @@
   "record_enabled": [
     {
       "text": "Ingeschakeld",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Uitgeschakelde records blijven opgeslagen maar worden niet bediend",
@@ -3166,7 +3160,7 @@
   "managed_by": [
     {
       "text": "Beheerd door",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Beheerd door",
@@ -3188,7 +3182,7 @@
   "dnssec_enabled": [
     {
       "text": "Deze zone ondertekenen (DNSSEC)",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Genereert bij eerste gebruik een sleutel en serveert ondertekende antwoorden. Vereist het registreren van het DS-record (zie het tabblad Zonebestand) bij je registrar.",
@@ -3436,7 +3430,7 @@
   "game_domain": [
     {
       "text": "Domein",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Het exacte-hostnaam domeinrecord waar spelers mee verbinden.",
@@ -3446,7 +3440,7 @@
   "game_backend": [
     {
       "text": "Backend-instantie",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "De gameserver waarnaar de proxy dit domein doorstuurt.",
@@ -3456,7 +3450,7 @@
   "game_proxy": [
     {
       "text": "Velocity-proxy",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "De proxy-instantie waarvan de forced-hosts-configuratie uit deze koppeling gegenereerd wordt.",
@@ -3466,7 +3460,7 @@
   "game_backend_port": [
     {
       "text": "Backend-poort",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Gamepoort binnen de backend-container (Minecraft-standaard 25565).",
@@ -3508,7 +3502,7 @@
   "trusted_upstream": [
     {
       "text": "Vertrouwde upstream",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Laat deze site de upstream bereiken die je hebt ingesteld, ook wanneer een tenant de site beheert en het doel een loopback-adres, een adres in een intern netwerk, een unix-socket of een map op de host is. Tenants kunnen deze instelling en de upstream zelf nooit wijzigen.",
@@ -3632,7 +3626,7 @@
   "registration_token": [
     {
       "text": "Registratietoken",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Geheim dat externe dev-servers aanbieden bij het registreren. Wordt automatisch gegenereerd wanneer leeg; plak het in de zenit-dev-configuratie van de dev-machine.",
@@ -3646,7 +3640,7 @@
   "peer_name": [
     {
       "text": "Naam",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Een herkenbare naam voor deze DNS-peer.",
@@ -3656,7 +3650,7 @@
   "peer_base_url": [
     {
       "text": "Admin-basis-URL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "HTTPS-URL van de admin-server van een Hohenheim-peer, om bewerkingen van zones die het bezit door te sturen.",
@@ -3666,7 +3660,7 @@
   "peer_api_key": [
     {
       "text": "API-sleutel",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "znit_ API-sleutel om de admin van de peer aan te roepen voor edit-forwarding.",
@@ -3676,7 +3670,7 @@
   "peer_transfer_host": [
     {
       "text": "Transfer-host",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Adres van de DNS-server van de peer voor AXFR/NOTIFY.",
@@ -3686,7 +3680,7 @@
   "peer_transfer_port": [
     {
       "text": "Transfer-poort",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "DNS-poort voor AXFR en NOTIFY; normaal 53.",
@@ -3696,7 +3690,7 @@
   "peer_tsig_key_name": [
     {
       "text": "TSIG-sleutelnaam",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Gedeelde sleutelnaam die zone-transfers met deze peer authenticeert.",
@@ -3706,7 +3700,7 @@
   "peer_tsig_algorithm": [
     {
       "text": "TSIG-algoritme",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "HMAC-algoritme, bijv. hmac-sha256.",
@@ -3716,7 +3710,7 @@
   "peer_tsig_secret": [
     {
       "text": "TSIG-geheim",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Base64 gedeeld geheim voor de TSIG-sleutel.",
@@ -3726,7 +3720,7 @@
   "peer_enabled": [
     {
       "text": "Ingeschakeld",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Uitgeschakelde peers worden niet benaderd voor transfers of doorgestuurde bewerkingen.",
@@ -3736,7 +3730,7 @@
   "zone_role": [
     {
       "text": "Rol",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Primaire zones worden hier bewerkt; secundaire zones worden gerepliceerd van hun eigenaar-peer.",
@@ -3746,7 +3740,7 @@
   "primary_peer": [
     {
       "text": "Eigenaar-peer",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Voor een secundaire zone: de peer die de zone bezit en recordbewerkingen ontvangt.",
@@ -3929,11 +3923,11 @@
   },
   "record_data": {
     "text": "Type-instellingen",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "dyndns_token": [
     { "text": "Dynamische DNS-token", "scope": "dns_record" },
-    { "text": "{$actor} maakte een bijwerktoken aan voor {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} maakte een bijwerktoken aan voor {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "dyndns_token_hint": {
     "text": "Maak een nieuw updatetoken voor dit record aan (maakt een eerder token ongeldig). Richt een dyndns2-client (router, ddclient) op {$url} en stuur het token als HTTP Basic-wachtwoord",
@@ -3945,7 +3939,7 @@
   },
   "dyndns_revoke": [
     { "text": "Dynamische DNS intrekken", "scope": "dns_record" },
-    { "text": "{$actor} trok het bijwerktoken van {$subject} in", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} trok het bijwerktoken van {$subject} in", "scope": "hohenheim", "target": "happened" }
   ],
   "dyndns_revoke_hint": {
     "text": "Verwijder het updatetoken van dit record; de dyndns-client werkt onmiddellijk niet meer",
@@ -3966,7 +3960,7 @@
   "jar_path": [
     {
       "text": "Jar-bestand",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Pad naar het fat/shadow-jar-bestand van de applicatie.",
@@ -3976,7 +3970,7 @@
   "java_binary": [
     {
       "text": "Java-binary",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Pad naar de java-launcher. Leeg gebruikt java uit PATH (bijv. bin/java van een jlink-image).",
@@ -3986,7 +3980,7 @@
   "jvm_args": [
     {
       "text": "JVM-argumenten",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Extra argumenten voor de JVM voor -jar, bijv. -Xmx512m.",
@@ -3996,7 +3990,7 @@
   "app_args": [
     {
       "text": "Applicatie-argumenten",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Argumenten voor de applicatie na het jar-bestand.",
@@ -4006,7 +4000,7 @@
   "cert_nice_name": [
     {
       "text": "Naam",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Een herkenbare naam voor dit certificaat, bv. het hoofddomein dat het dekt.",
@@ -4016,7 +4010,7 @@
   "cert_certificate_pem": [
     {
       "text": "Certificaat (PEM)",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Plak het volledige PEM-gecodeerde certificaat, inclusief eventuele tussenliggende keten (de -----BEGIN CERTIFICATE----- blokken).",
@@ -4026,7 +4020,7 @@
   "cert_private_key_pem": [
     {
       "text": "Privé-sleutel (PEM)",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "De PEM-gecodeerde privé-sleutel die bij het certificaat hoort. Opgeslagen als geheim; laat bij het bewerken van een bestaand certificaat leeg om de opgeslagen sleutel te behouden.",
@@ -4036,7 +4030,7 @@
   "cert_auto_renew": [
     {
       "text": "Automatisch vernieuwen",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Geldt alleen voor Let's Encrypt-certificaten; opgeladen certificaten worden nooit automatisch vernieuwd.",
@@ -4046,7 +4040,7 @@
   "cert_challenge_type": [
     {
       "text": "Validatietype",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hoe Let's Encrypt dit certificaat valideerde. Ingesteld door de aanvraagpagina.",
@@ -4056,7 +4050,7 @@
   "cert_dns_publisher": [
     {
       "text": "DNS-publicatie",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hoe DNS-01 TXT-records gepubliceerd worden bij vernieuwing. Ingesteld door de aanvraagpagina.",
@@ -4065,19 +4059,19 @@
   ],
   "cert_renewal_error": {
     "text": "Laatste vernieuwingsfout",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "cert_error_count": {
     "text": "Mislukte pogingen",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "cert_next_attempt_at": {
     "text": "Volgende poging",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "cert_domain_names": {
     "text": "Domeinen",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "enable": [
     {
@@ -4141,7 +4135,7 @@
   },
   "security": {
     "text": "Beveiliging",
-    "scope": "nav"
+    "scope": "hohenheim_nav"
   },
   "lift": [
     {
@@ -4206,7 +4200,7 @@
   "ip": [
     {
       "text": "IP-adres",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "IP-adres",
@@ -4223,27 +4217,27 @@
   ],
   "ban_reason": {
     "text": "Reden",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "failure_reason": {
     "text": "Reden van mislukking",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "ban_source": {
     "text": "Bron",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "ban_duration": {
     "text": "Duur",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "event_type": {
     "text": "Gebeurtenistype",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "expires_at": {
     "text": "Vervalt",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "ban_ip_refused": {
     "text": "Dit IP-adres kan niet verbannen worden: {$reason}",
@@ -4315,7 +4309,7 @@
   },
   "ban_scope": {
     "text": "Bereik",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "ssh_watch": [
     {
@@ -4360,7 +4354,7 @@
     },
     {
       "text": "Runtime",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Runtime",
@@ -4811,12 +4805,12 @@
   },
   "capabilities": {
     "text": "Capabilities",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "command": [
     {
       "text": "Commando",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Overschrijft het standaardcommando van de image; een argument per rij.",
@@ -4838,7 +4832,7 @@
   "registry_server": [
     {
       "text": "Registry-server",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Registry-host voor privé-images, bv. ghcr.io. Laat leeg voor Docker Hub.",
@@ -4847,20 +4841,20 @@
   ],
   "registry_user": {
     "text": "Registry-gebruikersnaam",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "registry_password": {
     "text": "Registry-wachtwoord",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "mounts": {
     "text": "Mounts",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "ports": [
     {
       "text": "Gepubliceerde poorten",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Poortpublicatie",
@@ -4873,12 +4867,12 @@
   ],
   "depends_on": {
     "text": "Afhankelijk van",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "container_path": [
     {
       "text": "Pad in container",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Waar het volume in de container wordt gekoppeld.",
@@ -4887,12 +4881,12 @@
   ],
   "mount_external_name": {
     "text": "Externe volumenaam",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "host_port": [
     {
       "text": "Hostpoort",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Optionele vaste hostpoort; laat leeg om er automatisch een uit het geconfigureerde venster te kiezen. Een opgegeven poort wordt altijd vooraf geclaimd",
@@ -4901,16 +4895,16 @@
   ],
   "host_ip": {
     "text": "Hostadres",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "depends_service": {
     "text": "Service",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "health_cmd": [
     {
       "text": "Healthcheck-commando",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Shellcommando dat in de container draait; exit 0 = gezond. Laat leeg voor geen healthcheck.",
@@ -4919,28 +4913,28 @@
   ],
   "health_interval": {
     "text": "Healthcheck-interval",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "health_timeout": {
     "text": "Healthcheck-timeout",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "health_retries": {
     "text": "Healthcheck-pogingen",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "health_start_period": {
     "text": "Healthcheck-startperiode",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "restart_policy": {
     "text": "Herstartbeleid",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "file_content": [
     {
       "text": "Inhoud",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Versleuteld opgeslagen; wordt voor de start in de container geplaatst.",
@@ -4950,7 +4944,7 @@
   "file_mode": [
     {
       "text": "Bestandsmodus",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Octale permissies, bv. 0600 voor geheimen.",
@@ -5023,7 +5017,7 @@
   },
   "reclaim_images": [
     { "text": "Images opruimen", "scope": "stack" },
-    { "text": "{$actor} ruimde ongebruikte images op", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} ruimde ongebruikte images op", "scope": "hohenheim", "target": "happened" }
   ],
   "reclaim_images_hint": {
     "text": "Verwijder losse en vervangen images op elke host die een stack draait",
@@ -5186,7 +5180,7 @@
     },
     {
       "text": "Uitgeschakeld",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -5313,7 +5307,7 @@
     },
     {
       "text": "Gestopt",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -5495,15 +5489,15 @@
   ],
   "released_at": {
     "text": "Vrijgegeven",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "former_site": {
     "text": "Vorige site",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "former_owner": {
     "text": "Vorige eigenaar",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "lifted_toast": {
     "text": "Quarantaine opgeheven",
@@ -5528,7 +5522,7 @@
   "kind": [
     {
       "text": "Soort",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Soort",
@@ -5568,11 +5562,6 @@
     },
     {
       "text": "Aangemaakt",
-      "scope": "cms",
-      "target": "activity_action"
-    },
-    {
-      "text": "Aangemaakt",
       "scope": "app_overview"
     }
   ],
@@ -5597,7 +5586,7 @@
     },
     {
       "text": "Uitgerold",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -5652,7 +5641,7 @@
   "quota_subjects": [
     {
       "text": "Eigenaar-subjecten",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "De manage-grant-subjecten van de eigenaar, een \"type:id\"-token per regel (gesorteerd); laat leeg voor de operator",
@@ -5662,7 +5651,7 @@
   "max_instances": [
     {
       "text": "Max. instanties",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Limiet voor deze eigenaar; 0 weigert elke nieuwe instantie, leeg valt terug op de globale standaard",
@@ -5788,7 +5777,7 @@
   "posture": [
     {
       "text": "Houding",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hoe goed deze host tenants van elkaar scheidt. Enkel vertrouwd: geen vijandige tenants. Toegewijd aan een tenant: een tenant bezit de machine. Gedeelde containers: meerdere tenants delen een kernel, dus een container-uitbraak bereikt ze allemaal. VM-isolatie: elke workload draait in een eigen virtuele machine, de enige stand die bestand is tegen een vijandige root-tenant.",
@@ -5798,7 +5787,7 @@
   "admission": [
     {
       "text": "Toelating",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Of hier nieuwe workloads geplaatst mogen worden. Geblokkeerd tot een preflight slaagt; toegelaten aanvaardt plaatsing; afgegrendeld houdt wat al draait maar neemt niets nieuws aan. Wijzig dit met de acties Controleren en toelaten en Afgrendelen, nooit via dit formulier.",
@@ -5807,7 +5796,7 @@
   ],
   "remove_orphan": [
     { "text": "Wees verwijderen", "scope": "reconcile_finding" },
-    { "text": "{$actor} verwijderde restant {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} verwijderde restant {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "remove_orphan_confirm": {
     "text": "Deze verweesde resource stoppen en verwijderen bij de daemon? De data van een container gaat verloren; volumes zijn hier nooit verwijderbaar.",
@@ -5851,7 +5840,7 @@
   },
   "scan_host_key": [
     { "text": "Hostsleutel scannen", "scope": "server" },
-    { "text": "{$actor} las de SSH-hostsleutel van {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} las de SSH-hostsleutel van {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "scan_host_key_hint": {
     "text": "Lees de SSH-hostsleutel die deze machine aanbiedt en pin ze vast. Een sleutel die niet overeenkomt met de pin wordt hier nooit overgenomen.",
@@ -5867,7 +5856,7 @@
   },
   "confirm_host_key": [
     { "text": "Vingerafdruk bevestigen", "scope": "server" },
-    { "text": "{$actor} vertrouwde de SSH-hostsleutel van {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} vertrouwde de SSH-hostsleutel van {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "confirm_host_key_hint": {
     "text": "Leg vast dat je de vastgepinde vingerafdruk buiten dit kanaal om vergeleken hebt.",
@@ -5887,7 +5876,7 @@
   },
   "repin_host_key": [
     { "text": "Gewijzigde hostsleutel opnieuw vastpinnen", "scope": "server" },
-    { "text": "{$actor} vertrouwde de nieuwe SSH-hostsleutel van {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} vertrouwde de nieuwe SSH-hostsleutel van {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "repin_host_key_hint": {
     "text": "Neem de sleutel over die deze host nu aanbiedt. Doe dit pas als je weet waarom ze veranderd is.",
@@ -5931,7 +5920,7 @@
   },
   "trust_notice": {
     "text": "Wat je toekent",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "host_key_mismatch": {
     "text": "{$name} bood een andere SSH-hostsleutel aan (vastgepind {$pinned}, aangeboden {$offered}). Er is niets opnieuw vastgepind en de host is geblokkeerd; verifieer buiten dit kanaal om voor je de nieuwe sleutel overneemt.",
@@ -6140,7 +6129,7 @@
     },
     {
       "text": "Momentopname gemaakt",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -6272,12 +6261,12 @@
   ],
   "backup_target": {
     "text": "Back-updoel",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "instance": [
     {
       "text": "Instantie",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Instantie",
@@ -6294,19 +6283,19 @@
   ],
   "note": {
     "text": "Notitie",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "directory": {
     "text": "Map",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "ssh_target": {
     "text": "SSH-doel",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "host_key": {
     "text": "Hostsleutel",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "backup_target_kind": {
     "text": "Waar back-upexports terechtkomen; of dat een ander faaldomein is, is een deploymentfeit dat jij beheert",
@@ -6443,7 +6432,8 @@
     "scope": "violations"
   },
   "variable_key_format": {
-    "text": "Variabelesleutels zijn UPPER_CASE-omgevingsnamen (A-Z, 0-9, underscores)"
+    "text": "Variabelesleutels zijn UPPER_CASE-omgevingsnamen (A-Z, 0-9, underscores)",
+    "scope": "violations"
   },
   "import": {
     "text": "Sjabloon importeren",
@@ -6488,7 +6478,7 @@
   "template": [
     {
       "text": "Sjabloon",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Sjabloon",
@@ -6498,7 +6488,7 @@
   "template_version": [
     {
       "text": "Versie",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Verhoog bij wijzigingen aan het sjabloon; reist mee met export en import",
@@ -6508,7 +6498,7 @@
   "install_image": [
     {
       "text": "Installatie-image",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Image waarin het installatiescript draait; leeg gebruikt de image van het sjabloon zelf",
@@ -6518,7 +6508,7 @@
   "install_script": [
     {
       "text": "Installatiescript",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Shellscript dat eenmalig draait met de volumes van de instantie gekoppeld en haar variabelen als omgeving",
@@ -6528,7 +6518,7 @@
   "reinstall_policy": [
     {
       "text": "Herinstallatiebeleid",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Wat een herinstallatie met bestaande gegevens doet: behouden laat de volumes staan, wissen maakt ze leeg na een getypte bevestiging",
@@ -6538,7 +6528,7 @@
   "readiness_line": [
     {
       "text": "Gereedheidsregel",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Consoleregel die aangeeft dat de workload klaar is; wordt alleen gelezen als Klaar wanneer op Consoleregel staat",
@@ -6548,7 +6538,7 @@
   "stop_command": [
     {
       "text": "Stopcommando",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Consolecommando voor een nette stop; gebruikt door de console-matchergolf, nu al opgeslagen en geëxporteerd",
@@ -6557,16 +6547,16 @@
   ],
   "approved_at": {
     "text": "Goedgekeurd",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "template_source": {
     "text": "Bron",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "variable_key": [
     {
       "text": "Sleutel",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "UPPER_CASE-omgevingsnaam; ook het \\{\\{KEY\\}\\}-token in commando en configuratiebestanden",
@@ -6576,7 +6566,7 @@
   "variable_label": [
     {
       "text": "Label",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Getoond boven het invoerveld op het aanmaakformulier",
@@ -6586,7 +6576,7 @@
   "variable_type": [
     {
       "text": "Type",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Het getypeerde veld waarmee een ingediende waarde gevalideerd wordt",
@@ -6595,12 +6585,12 @@
   ],
   "variable_required": {
     "text": "Verplicht",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "variable_default": [
     {
       "text": "Standaardwaarde",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Vooraf ingevuld op het aanmaakformulier; gebruikt wanneer het veld leeg blijft",
@@ -6610,7 +6600,7 @@
   "variable_pattern": [
     {
       "text": "Patroon",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Reguliere expressie waaraan een ingediende waarde moet voldoen",
@@ -6619,20 +6609,20 @@
   ],
   "variable_max_length": {
     "text": "Maximale lengte",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "variable_min": {
     "text": "Minimum",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "variable_max": {
     "text": "Maximum",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "variable_options": [
     {
       "text": "Opties",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "De gesloten verzameling toegelaten waarden",
@@ -6642,7 +6632,7 @@
   "variable_generate": [
     {
       "text": "Genereren indien leeg",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Genereer een willekeurig token wanneer het aanmaakformulier dit geheim leeg laat",
@@ -6651,15 +6641,15 @@
   ],
   "variable_generate_bytes": {
     "text": "Gegenereerde entropie (bytes)",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "variable_value": {
     "text": "Waarde",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "variable_secret_value": {
     "text": "Geheime waarde",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "template_description": {
     "text": "Getoond aan wie dit sjabloon als instantiebron kiest",
@@ -6950,7 +6940,7 @@
   "crash_policy": [
     {
       "text": "Crashbeleid",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Wat er gebeurt als de workload stopt zonder waargenomen stop: herstarten rolt hem opnieuw uit (elke exitcode telt als crash), geen registreert enkel de stop.",
@@ -7100,13 +7090,13 @@
     },
     {
       "text": "Consoleopdracht verstuurd",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
   "expire_preview": [
     { "text": "Preview laten vervallen", "scope": "schedule_action" },
-    { "text": "{$actor} beëindigde preview {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} beëindigde preview {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "power": [
     {
@@ -7121,13 +7111,13 @@
   "exec_command": [
     {
       "text": "Uit te voeren commando",
-      "scope": "field"
+      "scope": "hohenheim_field"
     }
   ],
   "console_line": [
     {
       "text": "Consolecommando",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Consoleregel",
@@ -7136,11 +7126,11 @@
   ],
   "power_operation": {
     "text": "Actie",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "snapshot_note": {
     "text": "Snapshotnotitie",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "unknown_instance": {
     "text": "Onbekende instantie",
@@ -7165,7 +7155,7 @@
   "port_protocol": [
     {
       "text": "Poortprotocol",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "TCP of UDP; een UDP-poort krijgt altijd vooraf een vaste hostpoort toegewezen voor de workload start",
@@ -7175,7 +7165,7 @@
   "port_exposure": [
     {
       "text": "Poortblootstelling",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Loopback houdt de poort enkel bereikbaar vanaf deze host (de veilige standaard); publiek bindt hem op elke interface voor spelers, op een stabiele vooraf toegewezen hostpoort",
@@ -7185,7 +7175,7 @@
   "public_ipv4": [
     {
       "text": "Publiek IPv4-adres",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Het opgegeven publieke IPv4 van deze host; gegenereerde DNS A-records voor gamedomeinen nemen het letterlijk over. Laat leeg om geen A-records te genereren",
@@ -7195,7 +7185,7 @@
   "public_ipv6": [
     {
       "text": "Publiek IPv6-adres",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Het opgegeven publieke IPv6 van deze host; gegenereerde DNS AAAA-records nemen het letterlijk over. Laat leeg om geen AAAA-records te genereren",
@@ -7335,7 +7325,7 @@
     },
     {
       "text": "Bestand geschreven",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -7600,7 +7590,7 @@
   "health_path": [
     {
       "text": "Healthpad",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Pad dat de release-gezondheidscontrole bevraagt op de gepubliceerde poort voor een nieuwe release verkeer mag krijgen. Standaard /; een volledig HTTP-antwoord met een 2xx- of 3xx-status telt.",
@@ -7655,20 +7645,20 @@
   },
   "project_name": {
     "text": "Projectnaam",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "project_description": {
     "text": "Beschrijving",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "environment_name": {
     "text": "Omgevingsnaam",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "project": [
     {
       "text": "Project",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Project",
@@ -7677,7 +7667,7 @@
   ],
   "environment": {
     "text": "Omgeving",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "project_member_required": {
     "text": "Je bent geen lid van dat project",
@@ -7794,12 +7784,12 @@
   },
   "provider_name": {
     "text": "Naam",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "provider_kind": [
     {
       "text": "Soort",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Het API-dialect van de provider: GitHub, GitLab of Gitea.",
@@ -7809,7 +7799,7 @@
   "provider_base_url": [
     {
       "text": "Basis-URL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Leeg voor de publieke host (github.com, gitlab.com); verplicht voor Gitea en voor zelfgehoste installaties.",
@@ -7819,7 +7809,7 @@
   "provider_access_token": [
     {
       "text": "Toegangstoken",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Persoonlijk of deploy-toegangstoken; de terugval wanneer geen App is geconfigureerd. Versleuteld opgeslagen.",
@@ -7829,7 +7819,7 @@
   "provider_app_id": [
     {
       "text": "App-id",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "GitHub App-id. Met installatie-id en privésleutel worden kortlevende installatietokens per operatie gemunt.",
@@ -7839,7 +7829,7 @@
   "provider_app_installation_id": [
     {
       "text": "App-installatie-id",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "De installatie van de App op het account waarvan de repositories gebruikt worden.",
@@ -7849,7 +7839,7 @@
   "provider_app_private_key": [
     {
       "text": "App-privésleutel",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "De RSA-privésleutel van de App (PEM). Versleuteld opgeslagen.",
@@ -7858,12 +7848,12 @@
   ],
   "provider_settings": {
     "text": "Instellingen per soort",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "provider_shared": [
     {
       "text": "Gedeeld",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Bied deze provider aan in de keuzelijsten van elke tenant. Laat uit om hem bij de beheerders ervan te houden.",
@@ -7903,7 +7893,7 @@
   "git_provider": [
     {
       "text": "Git-provider",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Indien ingesteld komen de clone-URL en de credentials van deze provider en Repository hieronder.",
@@ -7913,7 +7903,7 @@
   "repository": [
     {
       "text": "Repository",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Repository bij de provider, als eigenaar/naam.",
@@ -7923,7 +7913,7 @@
   "previews_enabled": [
     {
       "text": "Preview-deployments",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Pull-request-webhookgebeurtenissen maken, verversen en verwijderen previewomgevingen met beperkte levensduur.",
@@ -7933,7 +7923,7 @@
   "preview_environment_variables": [
     {
       "text": "Preview-omgeving",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "De ENIGE runtimevariabelen die een preview krijgt; productievariabelen, databasecredentials en volumes worden nooit geerfd.",
@@ -7942,7 +7932,7 @@
   ],
   "preview_ref": {
     "text": "Ref",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "destroy_now": {
     "text": "Nu verwijderen",
@@ -7979,7 +7969,7 @@
   "incus_url": [
     {
       "text": "Incus-URL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "https://host:8443 voor een externe daemon (TLS-clientcertificaat + vastgepind servercertificaat), of unix:// voor de lokale socket.",
@@ -7989,7 +7979,7 @@
   "incus_trust_token": [
     {
       "text": "Incus-vertrouwenstoken",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Eenmalig token uit 'incus config trust add' op de host. Plakken schrijft het clientcertificaat van Hohenheim in op de daemon; het token zelf wordt nooit opgeslagen. Je kunt het getoonde clientcertificaat daar ook installeren met 'incus config trust add-certificate'.",
@@ -8029,7 +8019,7 @@
   "incus_image": [
     {
       "text": "Image-alias",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Een alias op images.linuxcontainers.org (simplestreams), bijv. debian/13 of alpine/3.22.",
@@ -8039,7 +8029,7 @@
   "incus_privileged": [
     {
       "text": "Geprivilegieerde container",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "GEVAAR: de root-gebruiker van een geprivilegieerde container valt samen met root op de HOST. Een systeemcontainer is zelfs ongeprivilegieerd geen veiligheidsgrens tegen een vastberaden root-gebruiker; geprivilegieerde modus haalt het meeste van wat overblijft weg. Laat uit tenzij de werklast er echt niet zonder kan.",
@@ -8049,7 +8039,7 @@
   "update_script": [
     {
       "text": "Updatescript",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Script voor in-place app-updates, uitgevoerd in de draaiende instantie via de community-functiebibliotheek",
@@ -8083,7 +8073,7 @@
     },
     {
       "text": "App-update mislukt",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -8144,7 +8134,7 @@
   "vm_image": [
     {
       "text": "Image-alias",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Een VM-image-alias op images.linuxcontainers.org (simplestreams). Gebruik een /cloud-variant zodat cloud-init draait, bv. alpine/3.22/cloud of debian/13/cloud.",
@@ -8154,7 +8144,7 @@
   "cloud_init": [
     {
       "text": "Cloud-init user-data",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Provisionering bij eerste opstart (#cloud-config). \\{\\{KEY\\}\\}-plaatshouders worden ingevuld met de variabelen van de instantie, geheime variabelen inbegrepen.",
@@ -8164,7 +8154,7 @@
   "image_origin": [
     {
       "text": "Image-herkomst",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Waar het image vandaan komt: opgehaald uit de publieke catalogus, of een voorbereid image dat een operator al gepubliceerd heeft in de eigen image-opslag van de host.",
@@ -8192,7 +8182,7 @@
   "secure_boot": [
     {
       "text": "Secure Boot",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Of het image Secure Boot vereist. Catalogus-Linux-images zijn ongesigneerd en hebben dit uit nodig; een voorbereid image (bv. door Microsoft gesigneerde Windows-media) kan dit aan vereisen.",
@@ -8202,7 +8192,7 @@
   "guest_agent": [
     {
       "text": "Guest agent",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Of het image een incus guest agent bevat die commando's kan uitvoeren. Zet uit voor een voorbereid image zonder agent; installatie- en app-updateacties weigeren dan in plaats van te wachten op een opstart die nooit komt.",
@@ -8211,12 +8201,12 @@
   ],
   "device_size_gb": {
     "text": "Grootte (GB)",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "max_disk_gb": [
     {
       "text": "Max schijf (GB)",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Limiet op de totale aangekoppelde schijfgrootte van deze eigenaar; 0 weigert elke schijf, leeg valt terug op het globale standaardmaximum",
@@ -8226,7 +8216,7 @@
   "max_nics": [
     {
       "text": "Max extra NIC's",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Limiet op de extra NIC's van deze eigenaar; 0 weigert elke NIC, leeg valt terug op het globale standaardmaximum",
@@ -8258,7 +8248,7 @@
   "device_source_media": [
     {
       "text": "Installatiemedia (ISO-volume)",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Naam van een ISO-volume dat op de host van de instantie is gepubliceerd (zie het tabblad Installatiemedia van het hostrecord). Alleen installatiemedia-apparaten gebruiken dit.",
@@ -8268,7 +8258,7 @@
   "network_limit_mbit": [
     {
       "text": "Netwerklimiet",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Bandbreedteplafond voor elke NIC van deze werklast. Laat leeg voor onbeperkt.",
@@ -8278,7 +8268,7 @@
   "root_disk_gb": [
     {
       "text": "Rootschijf",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Grootte van de eigen rootschijf van de workload in GB. Laat leeg om de grootte van de image over te nemen. Ze kan enkel groeien, en enkel wanneer de workload gestopt is.",
@@ -8339,7 +8329,7 @@
   },
   "scan_incus_cert": [
     { "text": "Servercertificaat scannen", "scope": "server" },
-    { "text": "{$actor} las het Incus-certificaat van {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} las het Incus-certificaat van {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "scan_incus_cert_hint": {
     "text": "Lees het TLS-certificaat dat deze Incus-daemon aanbiedt en pin het vast. Een certificaat dat niet overeenkomt met de pin wordt hier nooit overgenomen.",
@@ -8355,7 +8345,7 @@
   },
   "confirm_incus_cert": [
     { "text": "Vingerafdruk van certificaat bevestigen", "scope": "server" },
-    { "text": "{$actor} vertrouwde het Incus-certificaat van {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} vertrouwde het Incus-certificaat van {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "confirm_incus_cert_hint": {
     "text": "Leg vast dat je de vastgepinde vingerafdruk buiten dit kanaal om vergeleken hebt.",
@@ -8375,7 +8365,7 @@
   },
   "repin_incus_cert": [
     { "text": "Gewijzigd certificaat opnieuw vastpinnen", "scope": "server" },
-    { "text": "{$actor} vertrouwde het nieuwe Incus-certificaat van {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} vertrouwde het nieuwe Incus-certificaat van {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "repin_incus_cert_hint": {
     "text": "Neem het certificaat over dat deze daemon nu aanbiedt. Doe dit pas als je weet waarom het veranderd is.",
@@ -8427,7 +8417,7 @@
   },
   "capture_template": [
     { "text": "Vastleggen als sjabloon", "scope": "instance" },
-    { "text": "{$actor} bewaarde {$subject} als sjabloon", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} bewaarde {$subject} als sjabloon", "scope": "hohenheim", "target": "happened" }
   ],
   "capture_template_hint": {
     "text": "Publiceer de huidige staat van deze gestopte instantie als voorbereide image en maak er een niet-goedgekeurd sjabloon van",
@@ -8512,7 +8502,7 @@
     },
     {
       "text": "Media opgehaald",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -8523,7 +8513,7 @@
     },
     {
       "text": "Media opgeladen",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -8554,7 +8544,7 @@
     },
     {
       "text": "Media verwijderd",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -8644,7 +8634,7 @@
   },
   "reap_controller_objects": [
     { "text": "Objecten van andere controllers opruimen", "scope": "server" },
-    { "text": "{$actor} ruimde restanten op op {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} ruimde restanten op op {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "reap_controller_objects_confirm": {
     "text": "Verwijdert de isolatie-ACL, de extra-NIC-brug en de aanwezigheidsmarkering die ANDERE hohenheim-controllers op deze Incus-daemon achterlieten -- ook objecten waarvan de controller helemaal geen aanwezigheidsmarkering achterliet, die de geplande veegbeurt nooit aanraakt. Objecten van deze controller zijn nooit kandidaat, en de daemon zelf weigert een object te verwijderen waar nog een werklast naar verwijst.",
@@ -9166,7 +9156,7 @@
     },
     {
       "text": "Opdracht uitgevoerd",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -9441,7 +9431,7 @@
   "max_memory_mb": [
     {
       "text": "Max geheugen (MB)",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Limiet op het totale werklastgeheugen van deze eigenaar; 0 weigert elke werklast, leeg valt terug op het globale standaardmaximum",
@@ -9455,7 +9445,7 @@
   "max_sites": [
     {
       "text": "Max sites",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Limiet op de actieve sites van deze eigenaar; 0 weigert elke nieuwe site, leeg valt terug op het globale standaardmaximum",
@@ -9465,7 +9455,7 @@
   "max_databases": [
     {
       "text": "Max databanken",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Limiet op de beheerde databanken van deze eigenaar; 0 weigert elke nieuwe, leeg valt terug op het globale standaardmaximum",
@@ -9487,7 +9477,7 @@
   "preview_branches": [
     {
       "text": "Preview-branches",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Branch-patronen (exact of met *) waarvan pushes per-branch previews aanmaken. Leeg betekent enkel pull-request-previews; de productiebranch krijgt er nooit een.",
@@ -10173,7 +10163,7 @@
     },
     {
       "text": "Wie wat heeft gewijzigd, en wanneer, in de hele installatie.",
-      "scope": "activity"
+      "scope": "hohenheim"
     },
     {
       "text": "Elke instelbare waarde van deze installatie, gegroepeerd per subsysteem.",
@@ -10290,19 +10280,19 @@
   ],
   "slug": {
     "text": "Slug",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "remote_key": {
     "text": "Externe sleutel",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "generated_by": {
     "text": "Gegenereerd door",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "satisfy": {
     "text": "Voldoen aan",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "events": {
     "text": "Gebeurtenissen",
@@ -10319,7 +10309,7 @@
   "transfer_status": [
     {
       "text": "Overdrachtsstatus",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Resultaat van de laatste zoneoverdracht van de primaire peer. Alleen voor secundaire zones.",
@@ -10329,7 +10319,7 @@
   "transfer_message": [
     {
       "text": "Overdrachtsdetail",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "De fout of opmerking die de laatste overdrachtspoging heeft vastgelegd.",
@@ -10339,7 +10329,7 @@
   "last_transfer_at": [
     {
       "text": "Laatste overdracht",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Wanneer de records voor het laatst met succes van de primaire peer zijn opgehaald.",
@@ -10460,11 +10450,6 @@
     {
       "text": "Regel verwijderd",
       "scope": "access_rule"
-    },
-    {
-      "text": "Verwijderd",
-      "scope": "cms",
-      "target": "activity_action"
     }
   ],
   "summary_group_any": {
@@ -10526,7 +10511,7 @@
   "rule_type": [
     {
       "text": "Soort regel",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Wat deze regel controleert. Als je dit wijzigt vervangen de instellingen hieronder.",
@@ -10535,12 +10520,12 @@
   ],
   "rule_data": {
     "text": "Instellingen",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "rule_enabled": [
     {
       "text": "Aan",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Een regel die uit staat telt niet mee, precies alsof ze verwijderd was.",
@@ -10550,7 +10535,7 @@
   "rule_network": [
     {
       "text": "Netwerk",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Eén IP-adres of CIDR-netwerk, bijvoorbeeld 203.0.113.8 of 10.0.0.0/8.",
@@ -10560,7 +10545,7 @@
   "rule_provider": [
     {
       "text": "Aanmeldbron",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "De ingestelde aanmeldbron waarlangs een bezoeker aangemeld moet zijn.",
@@ -10569,7 +10554,7 @@
   ],
   "rule_access_list": {
     "text": "Toegangslijst",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "rule_satisfy": {
     "text": "Of één regel in deze groep volstaat, of ze allemaal nodig zijn.",
@@ -10597,7 +10582,7 @@
   },
   "reissue_certificate": [
     { "text": "Certificaat aanpassen & opnieuw uitgeven", "scope": "certificate_request" },
-    { "text": "{$actor} liet certificaat {$subject} opnieuw uitgeven", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} liet certificaat {$subject} opnieuw uitgeven", "scope": "hohenheim", "target": "happened" }
   ],
   "reissue_submit": {
     "text": "Certificaat opnieuw uitgeven",
@@ -10622,7 +10607,7 @@
   "peer_type": [
     {
       "text": "Soort peer",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hohenheim-peers aanvaarden ook doorgestuurde recordwijzigingen via hun beheer-API; elke andere nameserver wisselt enkel zones uit.",
@@ -10710,7 +10695,7 @@
     },
     {
       "text": "Applicatie",
-      "scope": "field"
+      "scope": "hohenheim_field"
     }
   ],
   "btrfs": {
@@ -10882,7 +10867,7 @@
   "build_context": [
     {
       "text": "Bouwmap",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Map in de repository met de Dockerfile van deze image; elke host bouwt de image daar lokaal uit.",
@@ -10892,7 +10877,7 @@
   "builtin": [
     {
       "text": "Ingebouwd",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Ingebouwde images horen bij de code: aanpassingen en verwijderingen worden bij de volgende start hersteld. Kopieer er een om te variëren.",
@@ -10902,7 +10887,7 @@
   "console_kind": [
     {
       "text": "Console",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Welke console het hoofdproces van de workload krijgt. Een interactieve terminal geeft het een echte pseudo-terminal: toetsaanslagen, echo en herschalen op het consoletabblad, wat een schermvullende TUI zoals Janeway van Alchemy nodig heeft.",
@@ -10912,7 +10897,7 @@
   "default_build_command": [
     {
       "text": "Standaard bouwcommando",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Wordt in de container uitgevoerd voor een herstart; leeg betekent dat deze image niets bouwt.",
@@ -10922,7 +10907,7 @@
   "default_command": [
     {
       "text": "Standaardcommando",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Wordt gestart als hoofdproces van de workload; een instantie kan dit overschrijven.",
@@ -10932,7 +10917,7 @@
   "default_port": [
     {
       "text": "Standaardpoort",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "De poort waarop het standaardcommando van de image luistert.",
@@ -10942,7 +10927,7 @@
   "docker_image": [
     {
       "text": "Docker-image",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "De lokale image-tag waarnaar deze runtime-image bouwt. Er is geen registry: hosts bouwen hem zelf.",
@@ -10952,7 +10937,7 @@
   "runtime_incus_image": [
     {
       "text": "Incus-image",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "De Incus-alias of vingerafdruk van deze image; leeg betekent dat hij nog niet op een Incus-host kan draaien.",
@@ -10962,7 +10947,7 @@
   "exclusive_volume": [
     {
       "text": "Exclusief",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Twee releases mogen dit volume niet tegelijk gebruiken, dus een uitrol stopt de oude container voor de nieuwe start.",
@@ -10971,16 +10956,16 @@
   ],
   "host_path": {
     "text": "Hostpad",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "icon": {
     "text": "Pictogram",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "instance_port": [
     {
       "text": "Instantiepoort",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Welke opgegeven poort van de instantie geserveerd wordt; leeg gebruikt de enige gepubliceerde poort.",
@@ -10990,7 +10975,7 @@
   "keep_releases": [
     {
       "text": "Aantal releases bewaren",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hoeveel release-containers bewaard blijven: de actieve plus de terugrolopties.",
@@ -11000,7 +10985,7 @@
   "quota_bytes": [
     {
       "text": "Groottelimiet",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Afgedwongen groottelimiet voor dit volume; alleen een host met een quota-backend kan die nakomen.",
@@ -11010,7 +10995,7 @@
   "readiness_kind": [
     {
       "text": "Klaar wanneer",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hoe wordt bepaald dat de workload verkeer aankan.",
@@ -11020,7 +11005,7 @@
   "readiness_target": [
     {
       "text": "Doel van de gereedheidscontrole",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Het HTTP-pad of de poortnaam die de gereedheidscontrole test; een consoleregel gebruikt in plaats daarvan de gereedheidsregel.",
@@ -11029,12 +11014,12 @@
   ],
   "runtime_image": {
     "text": "Runtime-image",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "shell": [
     {
       "text": "Shell",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Shell",
@@ -11052,7 +11037,7 @@
   "stop_grace_seconds": [
     {
       "text": "Respijt bij stoppen",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hoelang een nette stop mag duren voordat de workload wordt afgebroken.",
@@ -11062,7 +11047,7 @@
   "stop_kind": [
     {
       "text": "Stoppen met",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hoe de workload gevraagd wordt te stoppen voordat het respijt verstrijkt.",
@@ -11072,7 +11057,7 @@
   "uid_mode": [
     {
       "text": "Gebruikers-id-modus",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hoe de procesidentiteit van de workload wordt afgeleid; vandaag bestaan alleen toegewezen host-uids.",
@@ -11082,7 +11067,7 @@
   "volume_backend": [
     {
       "text": "Volume-backend",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Gedetecteerd op de volumemap van deze host: bepaalt of een quota afgedwongen en een momentopname gemaakt kan worden.",
@@ -11096,7 +11081,7 @@
   "volume_name": [
     {
       "text": "Volumenaam",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Beheerdersnaam voor dit volume; hij benoemt de hostmap en wordt nooit vertaald.",
@@ -11105,11 +11090,11 @@
   ],
   "volume_root": {
     "text": "Volumemap",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "workdir": {
     "text": "Werkmap",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "instance_runtime_image": {
     "text": "Waarin deze werkplek of applicatie draait.",
@@ -11198,7 +11183,7 @@
   "home_quota": [
     {
       "text": "Limiet home (MB)",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Maximale grootte van het /home/site-volume van de workspace; leeg is geen limiet.",
@@ -11291,7 +11276,7 @@
   },
   "quota_mb": {
     "text": "Groottelimiet",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "volume_quota_mb": {
     "text": "Maximale grootte van dit volume in megabytes. Laat leeg voor geen limiet.",
@@ -11527,7 +11512,7 @@
   },
   "cert_expires_on": {
     "text": "Verloopt op",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "managed_by_project": {
     "text": "Beheerd door project {$name}; wordt met het project verwijderd",
@@ -11691,7 +11676,7 @@
   },
   "rule_search_text": {
     "text": "Regel",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "rule": {
     "text": "Regel",
@@ -11716,7 +11701,7 @@
   "access_list_shared": [
     {
       "text": "Gedeeld",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Bied deze lijst aan in elke keuzelijst; alleen de eigenaars en admins kunnen ze nog bewerken.",
@@ -11999,11 +11984,11 @@
   },
   "lifted_at": {
     "text": "Opgeheven",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "lifted_by": {
     "text": "Opgeheven door",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "matches": {
     "text": "Delegatie klopt",
@@ -12108,7 +12093,7 @@
   "delegation_status": [
     {
       "text": "Delegatie",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Ernstigste bevinding van de laatste delegatiecontrole tegen de bovenliggende zone. Alleen voor primaire zones.",
@@ -12118,7 +12103,7 @@
   "delegation_detail": [
     {
       "text": "Delegatiebevindingen",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Een regel per bevinding van de laatste delegatiecontrole.",
@@ -12128,7 +12113,7 @@
   "delegation_checked_at": [
     {
       "text": "Delegatie gecontroleerd",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Wanneer de delegatie voor het laatst met de bovenliggende zone vergeleken werd.",
@@ -12287,238 +12272,233 @@
     "text": "De records zijn eigendom van {$peer}, de primary waarvan deze zone overdraagt, en komen binnen via AXFR, dus hier kan geen zonebestand geimporteerd worden. Importeer het op {$peer}.",
     "scope": "dns_zone"
   },
-  "updated": {
-    "text": "Bijgewerkt",
-    "scope": "cms",
-    "target": "activity_action"
-  },
   "reaped_controller_objects": {
     "text": "Controllerobjecten opgeruimd",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "removed_orphan": {
     "text": "Verweesd object verwijderd",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "backup_downloaded": {
     "text": "Back-up gedownload",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "dyndns_update": {
     "text": "Dynamische DNS bijgewerkt",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "released_hostname_disabled": {
     "text": "Vrijgegeven hostnaam uitgeschakeld",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "imported": {
     "text": "Geïmporteerd",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "rolled_back": {
     "text": "Teruggerold",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "volumes_purged": {
     "text": "Volumes gewist",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "variable_set": {
     "text": "Variabele ingesteld",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "variable_deleted": {
     "text": "Variabele verwijderd",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "domain_added": {
     "text": "Domein toegevoegd",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "domain_removed": {
     "text": "Domein verwijderd",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "cloned": {
     "text": "Gekloond",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "preview_triggered": {
     "text": "Preview gestart",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "dyndns_token_minted": {
     "text": "Dynamische-DNS-token aangemaakt",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "dyndns_token_revoked": {
     "text": "Dynamische-DNS-token ingetrokken",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "tested": {
     "text": "Getest",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "device_attached": {
     "text": "Apparaat gekoppeld",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "device_resized": {
     "text": "Apparaatgrootte aangepast",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "device_detached": {
     "text": "Apparaat losgekoppeld",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "approved": {
     "text": "Goedgekeurd",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "unapproved": {
     "text": "Goedkeuring ingetrokken",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "volume_declared": {
     "text": "Volume vastgelegd",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "volume_redeclared": {
     "text": "Volume opnieuw vastgelegd",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "quarantine_lifted": {
     "text": "Quarantaine opgeheven",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "requested": {
     "text": "Aangevraagd",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "reissued": {
     "text": "Opnieuw uitgegeven",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "files_save": {
     "text": "Bestand opgeslagen",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "files_upload": {
     "text": "Bestand opgeladen",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "files_mkdir": {
     "text": "Map aangemaakt",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "files_rename": {
     "text": "Bestand hernoemd",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "files_delete": {
     "text": "Bestand verwijderd",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "restored_backup": {
     "text": "Back-up teruggezet",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "restored_snapshot": {
     "text": "Momentopname teruggezet",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "settled_interrupted": {
     "text": "Onderbroken run afgehandeld",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "deleted_data": {
     "text": "Gegevens verwijderd",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "template_captured": {
     "text": "Sjabloon vastgelegd",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "reconciled": {
     "text": "Afgestemd",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "drained": {
     "text": "Leeggehaald",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "migrated": {
     "text": "Gemigreerd",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "shell_open": {
     "text": "Shell geopend",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "shell_close": {
     "text": "Shell gesloten",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "app_updated": {
     "text": "App bijgewerkt",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "people_only": {
     "text": "Alleen personen",
-    "scope": "activity"
+    "scope": "hohenheim"
   },
   "placement": {
     "text": "Plaatsing",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "database_engine": [
     {
       "text": "Gedeelde engine",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Laat leeg voor de engine van dat soort op deze host, die dan bij het aanmaken wordt gemaakt.",
@@ -12531,11 +12511,11 @@
   ],
   "root_user": {
     "text": "Rootgebruiker",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "root_password": {
     "text": "Rootwachtwoord",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "database_placement": {
     "text": "Een eigen enginecontainer, of een logische database op een engine die deze host deelt. Redis- en tmpfs-databases zijn altijd toegewijd.",
@@ -12621,10 +12601,17 @@
     "text": "Het opruimen van engine '{$name}' kon niet bevestigd worden: {$reason}. Het record blijft bestaan; forceer de verwijdering zodra de host weer bereikbaar is.",
     "scope": "violations"
   },
-  "move_shared": {
-    "text": "Naar gedeelde engine verplaatsen",
-    "scope": "database"
-  },
+  "move_shared": [
+    {
+      "text": "Naar gedeelde engine verplaatsen",
+      "scope": "database"
+    },
+    {
+      "text": "Naar een gedeelde engine verplaatst",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    }
+  ],
   "move_shared_hint": {
     "text": "Verplaats deze database naar de gedeelde engine van de host, als logische database met een eigen gebruiker.",
     "scope": "database"
@@ -13113,7 +13100,7 @@
   "https_forced": [
     {
       "text": "HTTPS ingeschakeld",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     },
     {
@@ -13219,7 +13206,7 @@
   },
   "cert_dns_records": {
     "text": "Te publiceren DNS-records",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "access_list_admits_everyone": {
     "text": "{$list} laat elke bezoeker door: geen van de regels staat aan. Voeg er eerst een regel aan toe en kies hem dan hier.",
@@ -13547,7 +13534,7 @@
   },
   "check_host": [
     { "text": "Host controleren", "scope": "app_health" },
-    { "text": "{$actor} controleerde {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} controleerde {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "on_host": {
     "text": "op {$host}",
@@ -13953,10 +13940,16 @@
     "text": "Door zich aan te melden",
     "scope": "protect_path"
   },
-  "username": {
-    "text": "Gebruikersnaam",
-    "scope": "protect_path"
-  },
+  "username": [
+    {
+      "text": "Gebruikersnaam",
+      "scope": "protect_path"
+    },
+    {
+      "text": "Gebruikersnaam",
+      "scope": "hohenheim_field"
+    }
+  ],
   "networks": {
     "text": "Netwerken",
     "scope": "protect_path"
@@ -14035,100 +14028,100 @@
       "scope": "protect_path"
     }
   ],
-  "test_channel": { "text": "{$actor} stuurde een test via {$subject}", "scope": "activity", "target": "happened" },
-  "test_backup_target": { "text": "{$actor} testte de verbinding met {$subject}", "scope": "activity", "target": "happened" },
-  "access_rule_toggle": { "text": "{$actor} zette regel {$subject} aan of uit", "scope": "activity", "target": "happened" },
-  "delete_access_rule": { "text": "{$actor} verwijderde regel {$subject}", "scope": "activity", "target": "happened" },
-  "access_rule_move_up": { "text": "{$actor} schoof regel {$subject} omhoog", "scope": "activity", "target": "happened" },
-  "access_rule_move_down": { "text": "{$actor} schoof regel {$subject} omlaag", "scope": "activity", "target": "happened" },
-  "delete_project": { "text": "{$actor} verwijderde project {$subject}", "scope": "activity", "target": "happened" },
-  "spamservice_mark_spam": { "text": "{$actor} markeerde {$subject} als spam", "scope": "activity", "target": "happened" },
-  "spamservice_mark_ham": { "text": "{$actor} markeerde {$subject} als geen spam", "scope": "activity", "target": "happened" },
-  "spamservice_rescore": { "text": "{$actor} beoordeelde {$subject} opnieuw", "scope": "activity", "target": "happened" },
-  "deploy_stack": { "text": "{$actor} rolde {$subject} uit", "scope": "activity", "target": "happened" },
-  "stop_stack": { "text": "{$actor} stopte {$subject}", "scope": "activity", "target": "happened" },
-  "rollback_stack": { "text": "{$actor} zette {$subject} terug", "scope": "activity", "target": "happened" },
-  "purge_stack_volumes": { "text": "{$actor} leegde de volumes van {$subject}", "scope": "activity", "target": "happened" },
-  "refresh_stack": { "text": "{$actor} vernieuwde de status van {$subject}", "scope": "activity", "target": "happened" },
-  "delete_stack": { "text": "{$actor} verwijderde {$subject}", "scope": "activity", "target": "happened" },
-  "delete_stack_service": { "text": "{$actor} verwijderde dienst {$subject}", "scope": "activity", "target": "happened" },
-  "delete_server": { "text": "{$actor} verwijderde host {$subject}", "scope": "activity", "target": "happened" },
-  "update_site": { "text": "{$actor} wijzigde {$subject}", "scope": "activity", "target": "happened" },
-  "manage_update_site": { "text": "{$actor} wijzigde {$subject}", "scope": "activity", "target": "happened" },
-  "delete_site": { "text": "{$actor} verwijderde {$subject}", "scope": "activity", "target": "happened" },
-  "delete_runtime_image": { "text": "{$actor} verwijderde runtime-image {$subject}", "scope": "activity", "target": "happened" },
-  "spamservice_test": { "text": "{$actor} testte de verbinding met de spamfilter", "scope": "activity", "target": "happened" },
-  "spamservice_start": { "text": "{$actor} startte de spamfilter", "scope": "activity", "target": "happened" },
-  "spamservice_stop": { "text": "{$actor} stopte de spamfilter", "scope": "activity", "target": "happened" },
-  "spamservice_restart": { "text": "{$actor} herstartte de spamfilter", "scope": "activity", "target": "happened" },
-  "delete_database": { "text": "{$actor} verwijderde database {$subject}", "scope": "activity", "target": "happened" },
-  "move_database_shared": { "text": "{$actor} verhuisde database {$subject} naar een gedeelde engine", "scope": "activity", "target": "happened" },
-  "force_delete_database": { "text": "{$actor} verwijderde database {$subject} geforceerd", "scope": "activity", "target": "happened" },
-  "delete_database_engine": { "text": "{$actor} verwijderde database-engine {$subject}", "scope": "activity", "target": "happened" },
-  "force_delete_database_engine": { "text": "{$actor} verwijderde database-engine {$subject} geforceerd", "scope": "activity", "target": "happened" },
-  "acknowledge_posture": { "text": "{$actor} aanvaardde de beveiligingsstatus van {$subject}", "scope": "activity", "target": "happened" },
-  "probe_server": { "text": "{$actor} controleerde of {$subject} antwoordt", "scope": "activity", "target": "happened" },
-  "cordon_server": { "text": "{$actor} hield nieuwe apps tegen op {$subject}", "scope": "activity", "target": "happened" },
-  "drain_server": { "text": "{$actor} verhuisde de apps weg van {$subject}", "scope": "activity", "target": "happened" },
-  "uncordon_server": { "text": "{$actor} liet {$subject} weer nieuwe apps aannemen", "scope": "activity", "target": "happened" },
-  "request_domain_certificate": { "text": "{$actor} vroeg een certificaat aan voor {$subject}", "scope": "activity", "target": "happened" },
-  "continue_dns_order": { "text": "{$actor} zette de DNS-controle van {$subject} voort", "scope": "activity", "target": "happened" },
-  "lift_ban": { "text": "{$actor} hief de blokkering van {$subject} op", "scope": "activity", "target": "happened" },
-  "lift_quarantine": { "text": "{$actor} gaf adres {$subject} vrij", "scope": "activity", "target": "happened" },
-  "delete_dns_zone": { "text": "{$actor} verwijderde DNS-zone {$subject}", "scope": "activity", "target": "happened" },
-  "delete_dns_record": { "text": "{$actor} verwijderde DNS-record {$subject}", "scope": "activity", "target": "happened" },
-  "delete_dns_peer": { "text": "{$actor} verwijderde DNS-peer {$subject}", "scope": "activity", "target": "happened" },
-  "check_dns_health": { "text": "{$actor} controleerde de gezondheid van {$subject}", "scope": "activity", "target": "happened" },
-  "negotiate_transfer_key": { "text": "{$actor} sprak een transfersleutel af met {$subject}", "scope": "activity", "target": "happened" },
-  "spamservice_key_create": { "text": "{$actor} maakte spamfilter-clientsleutel {$subject} aan", "scope": "activity", "target": "happened" },
-  "spamservice_key_enable": { "text": "{$actor} schakelde spamfilter-clientsleutel {$subject} in", "scope": "activity", "target": "happened" },
-  "spamservice_key_revoke": { "text": "{$actor} trok spamfilter-clientsleutel {$subject} in", "scope": "activity", "target": "happened" },
-  "restore_snapshot": { "text": "{$actor} herstelde momentopname {$subject}", "scope": "activity", "target": "happened" },
-  "delete_snapshot": { "text": "{$actor} verwijderde momentopname {$subject}", "scope": "activity", "target": "happened" },
-  "create_instance_from_template": { "text": "{$actor} maakte een app aan vanuit sjabloon {$subject}", "scope": "activity", "target": "happened" },
-  "approve_template": { "text": "{$actor} keurde sjabloon {$subject} goed", "scope": "activity", "target": "happened" },
-  "unapprove_template": { "text": "{$actor} trok de goedkeuring van sjabloon {$subject} in", "scope": "activity", "target": "happened" },
-  "restore_backup": { "text": "{$actor} herstelde back-up {$subject}", "scope": "activity", "target": "happened" },
-  "delete_backup": { "text": "{$actor} verwijderde back-up {$subject}", "scope": "activity", "target": "happened" },
-  "detach_device": { "text": "{$actor} koppelde apparaat {$subject} los", "scope": "activity", "target": "happened" },
-  "delete_instance_database": { "text": "{$actor} koppelde database {$subject} los", "scope": "activity", "target": "happened" },
-  "run_schedule": { "text": "{$actor} voerde schema {$subject} uit", "scope": "activity", "target": "happened" },
-  "delete_schedule": { "text": "{$actor} verwijderde schema {$subject}", "scope": "activity", "target": "happened" },
-  "delete_schedule_step": { "text": "{$actor} verwijderde schemastap {$subject}", "scope": "activity", "target": "happened" },
-  "start_instance": { "text": "{$actor} startte {$subject}", "scope": "activity", "target": "happened" },
-  "stop_instance": { "text": "{$actor} stopte {$subject}", "scope": "activity", "target": "happened" },
-  "restart_instance": { "text": "{$actor} herstartte {$subject}", "scope": "activity", "target": "happened" },
-  "backup_instance": { "text": "{$actor} maakte een back-up van {$subject}", "scope": "activity", "target": "happened" },
-  "snapshot_instance": { "text": "{$actor} maakte een momentopname van {$subject}", "scope": "activity", "target": "happened" },
-  "console_command_instance": { "text": "{$actor} stuurde een consoleopdracht naar {$subject}", "scope": "activity", "target": "happened" },
-  "exec_instance": { "text": "{$actor} voerde een opdracht uit in {$subject}", "scope": "activity", "target": "happened" },
-  "rollback_instance": { "text": "{$actor} zette {$subject} terug", "scope": "activity", "target": "happened" },
-  "install_instance": { "text": "{$actor} installeerde {$subject}", "scope": "activity", "target": "happened" },
-  "reinstall_instance": { "text": "{$actor} installeerde {$subject} opnieuw", "scope": "activity", "target": "happened" },
-  "destroy_instance_data": { "text": "{$actor} verwijderde {$subject} met zijn gegevens", "scope": "activity", "target": "happened" },
-  "delete_instance": { "text": "{$actor} verwijderde {$subject}", "scope": "activity", "target": "happened" },
-  "refresh_instance_overview": { "text": "{$actor} vernieuwde de status van {$subject}", "scope": "activity", "target": "happened" },
-  "migrate_instance": { "text": "{$actor} verhuisde {$subject} naar een andere host", "scope": "activity", "target": "happened" },
-  "open_shell": { "text": "{$actor} opende een shell in {$subject}", "scope": "activity", "target": "happened" },
-  "open_framebuffer": { "text": "{$actor} opende het scherm van {$subject}", "scope": "activity", "target": "happened" },
-  "app_update_instance": { "text": "{$actor} werkte de app in {$subject} bij", "scope": "activity", "target": "happened" },
-  "declare_volume": { "text": "{$actor} voegde volume {$subject} toe", "scope": "activity", "target": "happened" },
-  "redeclare_volume": { "text": "{$actor} wijzigde volume {$subject}", "scope": "activity", "target": "happened" },
-  "destroy_volume": { "text": "{$actor} vernietigde volume {$subject}", "scope": "activity", "target": "happened" },
-  "create_game_domain": { "text": "{$actor} voegde game-adres {$subject} toe", "scope": "activity", "target": "happened" },
-  "update_game_domain": { "text": "{$actor} wijzigde game-adres {$subject}", "scope": "activity", "target": "happened" },
-  "delete_game_domain": { "text": "{$actor} verwijderde game-adres {$subject}", "scope": "activity", "target": "happened" },
-  "enable_site": { "text": "{$actor} zette {$subject} aan", "scope": "activity", "target": "happened" },
-  "disable_site": { "text": "{$actor} zette {$subject} uit", "scope": "activity", "target": "happened" },
-  "clone_site": { "text": "{$actor} kloonde {$subject}", "scope": "activity", "target": "happened" },
-  "rollback_release": { "text": "{$actor} zette {$subject} terug naar de vorige release", "scope": "activity", "target": "happened" },
-  "test_git_provider": { "text": "{$actor} testte de verbinding met {$subject}", "scope": "activity", "target": "happened" },
+  "test_channel": { "text": "{$actor} stuurde een test via {$subject}", "scope": "hohenheim", "target": "happened" },
+  "test_backup_target": { "text": "{$actor} testte de verbinding met {$subject}", "scope": "hohenheim", "target": "happened" },
+  "access_rule_toggle": { "text": "{$actor} zette regel {$subject} aan of uit", "scope": "hohenheim", "target": "happened" },
+  "delete_access_rule": { "text": "{$actor} verwijderde regel {$subject}", "scope": "hohenheim", "target": "happened" },
+  "access_rule_move_up": { "text": "{$actor} schoof regel {$subject} omhoog", "scope": "hohenheim", "target": "happened" },
+  "access_rule_move_down": { "text": "{$actor} schoof regel {$subject} omlaag", "scope": "hohenheim", "target": "happened" },
+  "delete_project": { "text": "{$actor} verwijderde project {$subject}", "scope": "hohenheim", "target": "happened" },
+  "spamservice_mark_spam": { "text": "{$actor} markeerde {$subject} als spam", "scope": "hohenheim", "target": "happened" },
+  "spamservice_mark_ham": { "text": "{$actor} markeerde {$subject} als geen spam", "scope": "hohenheim", "target": "happened" },
+  "spamservice_rescore": { "text": "{$actor} beoordeelde {$subject} opnieuw", "scope": "hohenheim", "target": "happened" },
+  "deploy_stack": { "text": "{$actor} rolde {$subject} uit", "scope": "hohenheim", "target": "happened" },
+  "stop_stack": { "text": "{$actor} stopte {$subject}", "scope": "hohenheim", "target": "happened" },
+  "rollback_stack": { "text": "{$actor} zette {$subject} terug", "scope": "hohenheim", "target": "happened" },
+  "purge_stack_volumes": { "text": "{$actor} leegde de volumes van {$subject}", "scope": "hohenheim", "target": "happened" },
+  "refresh_stack": { "text": "{$actor} vernieuwde de status van {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_stack": { "text": "{$actor} verwijderde {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_stack_service": { "text": "{$actor} verwijderde dienst {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_server": { "text": "{$actor} verwijderde host {$subject}", "scope": "hohenheim", "target": "happened" },
+  "update_site": { "text": "{$actor} wijzigde {$subject}", "scope": "hohenheim", "target": "happened" },
+  "manage_update_site": { "text": "{$actor} wijzigde {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_site": { "text": "{$actor} verwijderde {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_runtime_image": { "text": "{$actor} verwijderde runtime-image {$subject}", "scope": "hohenheim", "target": "happened" },
+  "spamservice_test": { "text": "{$actor} testte de verbinding met de spamfilter", "scope": "hohenheim", "target": "happened" },
+  "spamservice_start": { "text": "{$actor} startte de spamfilter", "scope": "hohenheim", "target": "happened" },
+  "spamservice_stop": { "text": "{$actor} stopte de spamfilter", "scope": "hohenheim", "target": "happened" },
+  "spamservice_restart": { "text": "{$actor} herstartte de spamfilter", "scope": "hohenheim", "target": "happened" },
+  "delete_database": { "text": "{$actor} verwijderde database {$subject}", "scope": "hohenheim", "target": "happened" },
+  "move_database_shared": { "text": "{$actor} verhuisde database {$subject} naar een gedeelde engine", "scope": "hohenheim", "target": "happened" },
+  "force_delete_database": { "text": "{$actor} verwijderde database {$subject} geforceerd", "scope": "hohenheim", "target": "happened" },
+  "delete_database_engine": { "text": "{$actor} verwijderde database-engine {$subject}", "scope": "hohenheim", "target": "happened" },
+  "force_delete_database_engine": { "text": "{$actor} verwijderde database-engine {$subject} geforceerd", "scope": "hohenheim", "target": "happened" },
+  "acknowledge_posture": { "text": "{$actor} aanvaardde de beveiligingsstatus van {$subject}", "scope": "hohenheim", "target": "happened" },
+  "probe_server": { "text": "{$actor} controleerde of {$subject} antwoordt", "scope": "hohenheim", "target": "happened" },
+  "cordon_server": { "text": "{$actor} hield nieuwe apps tegen op {$subject}", "scope": "hohenheim", "target": "happened" },
+  "drain_server": { "text": "{$actor} verhuisde de apps weg van {$subject}", "scope": "hohenheim", "target": "happened" },
+  "uncordon_server": { "text": "{$actor} liet {$subject} weer nieuwe apps aannemen", "scope": "hohenheim", "target": "happened" },
+  "request_domain_certificate": { "text": "{$actor} vroeg een certificaat aan voor {$subject}", "scope": "hohenheim", "target": "happened" },
+  "continue_dns_order": { "text": "{$actor} zette de DNS-controle van {$subject} voort", "scope": "hohenheim", "target": "happened" },
+  "lift_ban": { "text": "{$actor} hief de blokkering van {$subject} op", "scope": "hohenheim", "target": "happened" },
+  "lift_quarantine": { "text": "{$actor} gaf adres {$subject} vrij", "scope": "hohenheim", "target": "happened" },
+  "delete_dns_zone": { "text": "{$actor} verwijderde DNS-zone {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_dns_record": { "text": "{$actor} verwijderde DNS-record {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_dns_peer": { "text": "{$actor} verwijderde DNS-peer {$subject}", "scope": "hohenheim", "target": "happened" },
+  "check_dns_health": { "text": "{$actor} controleerde de gezondheid van {$subject}", "scope": "hohenheim", "target": "happened" },
+  "negotiate_transfer_key": { "text": "{$actor} sprak een transfersleutel af met {$subject}", "scope": "hohenheim", "target": "happened" },
+  "spamservice_key_create": { "text": "{$actor} maakte spamfilter-clientsleutel {$subject} aan", "scope": "hohenheim", "target": "happened" },
+  "spamservice_key_enable": { "text": "{$actor} schakelde spamfilter-clientsleutel {$subject} in", "scope": "hohenheim", "target": "happened" },
+  "spamservice_key_revoke": { "text": "{$actor} trok spamfilter-clientsleutel {$subject} in", "scope": "hohenheim", "target": "happened" },
+  "restore_snapshot": { "text": "{$actor} herstelde momentopname {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_snapshot": { "text": "{$actor} verwijderde momentopname {$subject}", "scope": "hohenheim", "target": "happened" },
+  "create_instance_from_template": { "text": "{$actor} maakte een app aan vanuit sjabloon {$subject}", "scope": "hohenheim", "target": "happened" },
+  "approve_template": { "text": "{$actor} keurde sjabloon {$subject} goed", "scope": "hohenheim", "target": "happened" },
+  "unapprove_template": { "text": "{$actor} trok de goedkeuring van sjabloon {$subject} in", "scope": "hohenheim", "target": "happened" },
+  "restore_backup": { "text": "{$actor} herstelde back-up {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_backup": { "text": "{$actor} verwijderde back-up {$subject}", "scope": "hohenheim", "target": "happened" },
+  "detach_device": { "text": "{$actor} koppelde apparaat {$subject} los", "scope": "hohenheim", "target": "happened" },
+  "delete_instance_database": { "text": "{$actor} koppelde database {$subject} los", "scope": "hohenheim", "target": "happened" },
+  "run_schedule": { "text": "{$actor} voerde schema {$subject} uit", "scope": "hohenheim", "target": "happened" },
+  "delete_schedule": { "text": "{$actor} verwijderde schema {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_schedule_step": { "text": "{$actor} verwijderde schemastap {$subject}", "scope": "hohenheim", "target": "happened" },
+  "start_instance": { "text": "{$actor} startte {$subject}", "scope": "hohenheim", "target": "happened" },
+  "stop_instance": { "text": "{$actor} stopte {$subject}", "scope": "hohenheim", "target": "happened" },
+  "restart_instance": { "text": "{$actor} herstartte {$subject}", "scope": "hohenheim", "target": "happened" },
+  "backup_instance": { "text": "{$actor} maakte een back-up van {$subject}", "scope": "hohenheim", "target": "happened" },
+  "snapshot_instance": { "text": "{$actor} maakte een momentopname van {$subject}", "scope": "hohenheim", "target": "happened" },
+  "console_command_instance": { "text": "{$actor} stuurde een consoleopdracht naar {$subject}", "scope": "hohenheim", "target": "happened" },
+  "exec_instance": { "text": "{$actor} voerde een opdracht uit in {$subject}", "scope": "hohenheim", "target": "happened" },
+  "rollback_instance": { "text": "{$actor} zette {$subject} terug", "scope": "hohenheim", "target": "happened" },
+  "install_instance": { "text": "{$actor} installeerde {$subject}", "scope": "hohenheim", "target": "happened" },
+  "reinstall_instance": { "text": "{$actor} installeerde {$subject} opnieuw", "scope": "hohenheim", "target": "happened" },
+  "destroy_instance_data": { "text": "{$actor} verwijderde {$subject} met zijn gegevens", "scope": "hohenheim", "target": "happened" },
+  "delete_instance": { "text": "{$actor} verwijderde {$subject}", "scope": "hohenheim", "target": "happened" },
+  "refresh_instance_overview": { "text": "{$actor} vernieuwde de status van {$subject}", "scope": "hohenheim", "target": "happened" },
+  "migrate_instance": { "text": "{$actor} verhuisde {$subject} naar een andere host", "scope": "hohenheim", "target": "happened" },
+  "open_shell": { "text": "{$actor} opende een shell in {$subject}", "scope": "hohenheim", "target": "happened" },
+  "open_framebuffer": { "text": "{$actor} opende het scherm van {$subject}", "scope": "hohenheim", "target": "happened" },
+  "app_update_instance": { "text": "{$actor} werkte de app in {$subject} bij", "scope": "hohenheim", "target": "happened" },
+  "declare_volume": { "text": "{$actor} voegde volume {$subject} toe", "scope": "hohenheim", "target": "happened" },
+  "redeclare_volume": { "text": "{$actor} wijzigde volume {$subject}", "scope": "hohenheim", "target": "happened" },
+  "destroy_volume": { "text": "{$actor} vernietigde volume {$subject}", "scope": "hohenheim", "target": "happened" },
+  "create_game_domain": { "text": "{$actor} voegde game-adres {$subject} toe", "scope": "hohenheim", "target": "happened" },
+  "update_game_domain": { "text": "{$actor} wijzigde game-adres {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_game_domain": { "text": "{$actor} verwijderde game-adres {$subject}", "scope": "hohenheim", "target": "happened" },
+  "enable_site": { "text": "{$actor} zette {$subject} aan", "scope": "hohenheim", "target": "happened" },
+  "disable_site": { "text": "{$actor} zette {$subject} uit", "scope": "hohenheim", "target": "happened" },
+  "clone_site": { "text": "{$actor} kloonde {$subject}", "scope": "hohenheim", "target": "happened" },
+  "rollback_release": { "text": "{$actor} zette {$subject} terug naar de vorige release", "scope": "hohenheim", "target": "happened" },
+  "test_git_provider": { "text": "{$actor} testte de verbinding met {$subject}", "scope": "hohenheim", "target": "happened" },
   "wordpress": { "text": "Een WordPress-site met een eigen database.", "scope": "put_online", "target": "card" },
   "minecraft_server": { "text": "Een Minecraftserver voor je netwerk, achter zijn proxy.", "scope": "put_online", "target": "card" },
   "velocity_proxy": { "text": "De ingang waarmee spelers verbinden, voor je Minecraftservers.", "scope": "put_online", "target": "card" },
-  "rotate_incus_cert": { "text": "{$actor} gaf {$subject} een nieuwe Incus-clientidentiteit", "scope": "activity", "target": "happened" },
-  "rotate_host_key": { "text": "{$actor} gaf {$subject} een nieuwe SSH-clientidentiteit", "scope": "activity", "target": "happened" },
-  "edit_remote_dns_record": { "text": "{$actor} wijzigde een record van {$subject} op de primaire server", "scope": "activity", "target": "happened" },
+  "rotate_incus_cert": { "text": "{$actor} gaf {$subject} een nieuwe Incus-clientidentiteit", "scope": "hohenheim", "target": "happened" },
+  "rotate_host_key": { "text": "{$actor} gaf {$subject} een nieuwe SSH-clientidentiteit", "scope": "hohenheim", "target": "happened" },
+  "edit_remote_dns_record": { "text": "{$actor} wijzigde een record van {$subject} op de primaire server", "scope": "hohenheim", "target": "happened" },
   "live_from_branch": {
     "text": "Live: commit {$commit} van {$branch}",
     "scope": "deployments"

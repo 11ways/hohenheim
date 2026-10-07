@@ -23,8 +23,8 @@
     {% if volumes %}
     <pl-table>
         <pl-table-header><pl-table-row>
-            <pl-table-head>{{ t("name", scope: "field") }}</pl-table-head>
-            <pl-table-head>{{ t("container_path", scope: "field") }}</pl-table-head>
+            <pl-table-head>{{ t("name", scope: "hohenheim_field") }}</pl-table-head>
+            <pl-table-head>{{ t("container_path", scope: "hohenheim_field") }}</pl-table-head>
             <pl-table-head>{{ t("usage", scope: "instance_volume") }}</pl-table-head>
             <pl-table-head>{{ t("quota", scope: "instance_volume") }}</pl-table-head>
             <pl-table-head></pl-table-head>

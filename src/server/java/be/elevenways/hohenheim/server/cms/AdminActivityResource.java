@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.activity.ActivityRecordCell;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -94,14 +95,14 @@ public final class AdminActivityResource {
      */
     public static @NonNull PanelResource<Row> admin() {
         return ActivityAdmin.builder(NavGroup.SYSTEM, 90)
-            .description(Microcopy.of("nav_hint").withFilter("scope", "activity"))
+            .description(CmsSupport.navHint(HohenheimMicrocopy.SCOPE))
             .reads(ActivityAdmin.reads(AdminActivityResource::cell))
             .list(ActivityAdmin.list(TABLE)
                 .chrome(CmsSupport.WIDE_LIST)
                 .defaultFilter(ActivityAdmin.defaultFilter().with(ActivityModel.ORIGIN.getName(),
                         HIDE_BACKGROUND_EXPRESSION),
                     filter -> ActivityModel.ORIGIN.getName().equals(filter)
-                        ? Microcopy.of("people_only").withFilter("scope", "activity")
+                        ? Microcopy.of("people_only").withFilter("scope", HohenheimMicrocopy.SCOPE)
                         : ActivityAdmin.defaultFilterChip(filter))
                 .build())
             .build();

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
@@ -66,18 +67,18 @@ public final class HohenheimPanel extends Panel {
      *  built from. Servers are deliberately NOT here: a host is not a workload, it is the
      *  installation itself, so it sits in the ungrouped top block beside the dashboard. */
     public static final NavGroup DEPLOY_GROUP =
-        NavGroup.of("deploy", Microcopy.of("deploy").withFilter("scope", "nav"), 150, Icon.of("rocket"));
+        NavGroup.of("deploy", HohenheimFormCopy.navGroup("deploy"), 150, Icon.of("rocket"));
 
     /** Networking group: how traffic REACHES those workloads -- DNS, certificates, access
      *  control, and the cooldown that holds a released hostname out of circulation. */
     public static final NavGroup NETWORK_GROUP =
-        NavGroup.of("networking", Microcopy.of("networking").withFilter("scope", "nav"), 200,
+        NavGroup.of("networking", HohenheimFormCopy.navGroup("networking"), 200,
             Icon.of("network-wired"));
 
     /** Security group: who may act and who is refused -- users, roles, abuse protection,
      *  IP bans; opens the background tail. */
     public static final NavGroup SECURITY_GROUP =
-        NavGroup.of("security", Microcopy.of("security").withFilter("scope", "nav"), 800, Icon.of("shield-halved"))
+        NavGroup.of("security", HohenheimFormCopy.navGroup("security"), 800, Icon.of("shield-halved"))
             .withSeparatorBefore(true);
 
     public HohenheimPanel() {

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.VariableTypeRegistry;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -42,7 +43,7 @@ public class InstanceTemplateVariableModel extends Model {
     // config-file content. Uppercase env spelling enforced by a typed validator.
     public static final StringField KEY = SCHEMA.addField(StringField.builder().name("key")
         .required()
-        .validator(Regex.of("^[A-Z][A-Z0-9_]*$", "variable_key_format"))
+        .validator(Regex.of("^[A-Z][A-Z0-9_]*$", HohenheimViolations.text("variable_key_format")))
         .label(HohenheimFormCopy.label("variable_key"))
         .help(HohenheimFormCopy.help("variable_key"))
         .build());

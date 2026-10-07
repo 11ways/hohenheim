@@ -165,7 +165,7 @@
   "api_keys": [
     {
       "text": "API keys",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Keys accepted by the managed process API. Only a digest is stored, so a key is never shown again: leave this empty to keep the stored keys, add a row to adopt a key you already hold, or use the row action to generate one.",
@@ -175,7 +175,7 @@
   "auto_deploy": [
     {
       "text": "Deploy automatically",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Deploy each new revision the repository's push webhook reports for this branch.",
@@ -185,7 +185,7 @@
   "autoindex": [
     {
       "text": "Directory listing",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Show a directory listing when no index file exists.",
@@ -195,7 +195,7 @@
   "basic_auth_user": [
     {
       "text": "Basic Auth username",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Optional username required in addition to the IP rules.",
@@ -205,7 +205,7 @@
   "basic_auth_password": [
     {
       "text": "Basic Auth password",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Leave blank on edit to keep the stored password; its value is never sent back to the browser.",
@@ -215,7 +215,7 @@
   "auth_provider_name": [
     {
       "text": "Name",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "A recognizable name used when assigning this provider to a site.",
@@ -225,7 +225,7 @@
   "auth_provider_type": [
     {
       "text": "Provider type",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The authentication method this provider uses.",
@@ -235,7 +235,7 @@
   "auth_provider_config": [
     {
       "text": "Credentials and connection",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Settings required by the selected provider type.",
@@ -245,7 +245,7 @@
   "required_permission": [
     {
       "text": "Required permission",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "A single permission name, e.g. \"site.internal\", checked against the identity's permission claims. Only used by claims-based providers such as Proteus (HTTP Basic Auth ignores it). Leave blank to demand hohenheim.site.<slug>, the permission named after the protected site.",
@@ -255,7 +255,7 @@
   "credentials": [
     {
       "text": "Credentials",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "One Basic Auth username and password per row. Passwords are stored hashed and never shown: leave a password blank to keep it, type one to replace it.",
@@ -272,21 +272,11 @@
   ],
   "key": [
     {
-      "text": "Username",
-      "scope": "forms",
-      "field": "credentials"
-    },
-    {
       "text": "Key",
       "scope": "template_contents"
     }
   ],
   "value": [
-    {
-      "text": "Password",
-      "scope": "forms",
-      "field": "credentials"
-    },
     {
       "text": "Value",
       "scope": "instance_provisioning"
@@ -299,7 +289,7 @@
   "proteus_endpoint": [
     {
       "text": "Endpoint",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Base URL of the Proteus identity service.",
@@ -309,7 +299,7 @@
   "proteus_realm_client": [
     {
       "text": "Realm client",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Client identifier registered in the Proteus realm.",
@@ -319,7 +309,7 @@
   "proteus_access_key": [
     {
       "text": "Access key",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Secret access key used to call the Proteus realm.",
@@ -329,7 +319,7 @@
   "proteus_authenticator": [
     {
       "text": "Authenticator",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Slug of one specific Proteus sign-in method to force. Leave blank to let visitors choose from all sign-in methods the realm has enabled.",
@@ -339,7 +329,7 @@
   "branch": [
     {
       "text": "Branch",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Git branch to check out. Leave blank to use the repository default.",
@@ -349,7 +339,7 @@
   "build_command": [
     {
       "text": "Build command",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Shell command run after checkout and before a deployment becomes active.",
@@ -359,7 +349,7 @@
   "build_directory": [
     {
       "text": "Build directory",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Working directory for the build command, relative to the repository root.",
@@ -369,7 +359,7 @@
   "build_environment_variables": [
     {
       "text": "Build environment",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Environment variables available only while building the repository.",
@@ -379,7 +369,7 @@
   "build_timeout": [
     {
       "text": "Build timeout",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Maximum build duration in seconds before the deployment is cancelled; the host's build time quota still applies.",
@@ -389,7 +379,7 @@
   "container_command": [
     {
       "text": "Container command",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Optional command that overrides the image's default command.",
@@ -399,7 +389,7 @@
   "container_port": [
     {
       "text": "Container port",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "TCP port on which the application listens inside the container.",
@@ -409,7 +399,7 @@
   "connect_timeout": [
     {
       "text": "Connect timeout",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Maximum seconds allowed to establish the TCP connection to the passthrough backend.",
@@ -419,7 +409,7 @@
   "cpu_limit": [
     {
       "text": "CPU limit",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Maximum CPU cores available to the container. Leave blank for no limit.",
@@ -429,7 +419,7 @@
   "delay": [
     {
       "text": "Response delay",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Artificial delay in milliseconds before handling each request.",
@@ -439,7 +429,7 @@
   "dockerfile": [
     {
       "text": "Dockerfile",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Path to the Dockerfile, relative to the repository root.",
@@ -453,7 +443,7 @@
   "builder": [
     {
       "text": "Builder",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "How a git checkout becomes an image. Nixpacks detects the language and needs no Dockerfile in the repository.",
@@ -463,7 +453,7 @@
   "build_arguments": [
     {
       "text": "Build arguments",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Values passed to the Dockerfile at BUILD time only. The runtime environment variables are deliberately not available to the build, so a build log can never leak them; a build argument does end up in the image history, so never put a secret here.",
@@ -473,7 +463,7 @@
   "environment_variables": [
     {
       "text": "Environment variables",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Variables passed to each application process at runtime.",
@@ -483,7 +473,7 @@
   "fallback_file": [
     {
       "text": "Fallback file",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "File served when the requested path does not exist, for example index.html for an SPA.",
@@ -493,7 +483,7 @@
   "forward_host": [
     {
       "text": "Upstream host",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hostname or IP address of the HTTP upstream.",
@@ -503,7 +493,7 @@
   "forward_port": [
     {
       "text": "Upstream port",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "TCP port of the upstream. Defaults to 80 for HTTP and 443 for HTTPS.",
@@ -513,7 +503,7 @@
   "forward_scheme": [
     {
       "text": "Protocol",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "http or https: how Hohenheim connects to where requests go.",
@@ -523,7 +513,7 @@
   "proxy_protocol_v2": [
     {
       "text": "Send PROXY protocol v2",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Prepend the binary PROXY v2 header so the backend receives the original client and destination addresses.",
@@ -533,7 +523,7 @@
   "tls_forward_host": [
     {
       "text": "TLS backend host",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hostname or IP address that receives the original, still-encrypted TLS stream.",
@@ -547,7 +537,7 @@
   "ignore_certificates": [
     {
       "text": "Ignore TLS errors",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Accept an invalid or self-signed certificate from the upstream.",
@@ -557,7 +547,7 @@
   "image": [
     {
       "text": "Container image",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Image name to run when no Dockerfile build is used.",
@@ -575,7 +565,7 @@
   "image_tag": [
     {
       "text": "Image tag",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Tag applied to a locally built image.",
@@ -585,7 +575,7 @@
   "indexes": [
     {
       "text": "Index files",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Serve conventional index files such as index.html from directories.",
@@ -595,7 +585,7 @@
   "maximum_processes": [
     {
       "text": "Maximum processes",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Upper scaling limit for concurrently running application processes.",
@@ -605,7 +595,7 @@
   "memory_limit": [
     {
       "text": "Memory limit",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Maximum container memory in megabytes. Leave blank for no limit.",
@@ -615,7 +605,7 @@
   "minimum_processes": [
     {
       "text": "Minimum processes",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Number of warm application processes Hohenheim keeps running.",
@@ -625,7 +615,7 @@
   "node_runtime": [
     {
       "text": "Node.js runtime",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Discovered Node.js version used to start this site.",
@@ -635,7 +625,7 @@
   "poll_interval": [
     {
       "text": "Poll interval",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Seconds between repository checks when polling is enabled.",
@@ -645,7 +635,7 @@
   "port_argument": [
     {
       "text": "Port argument",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Command-line argument placed before the allocated port number.",
@@ -655,7 +645,7 @@
   "preserve_path": [
     {
       "text": "Preserve path",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Append the original request path and query string to the redirect target.",
@@ -665,7 +655,7 @@
   "redirect_status": [
     {
       "text": "Redirect status",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "HTTP status code returned for the redirect.",
@@ -675,7 +665,7 @@
   "repository_url": [
     {
       "text": "Repository URL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Git clone URL. SSH authentication uses the host's configured SSH keys.",
@@ -685,7 +675,7 @@
   "request_timeout": [
     {
       "text": "Request timeout",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Maximum request lifetime in seconds, from 0 to {$max}. 0 removes the limit for streaming, gRPC and WebSocket backends.",
@@ -695,7 +685,7 @@
   "rewrite_location": [
     {
       "text": "Rewrite Location headers",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Rewrite upstream redirects so they keep using the public site hostname.",
@@ -705,7 +695,7 @@
   "upstream_protocol": [
     {
       "text": "HTTP version",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "HTTP/2 is required for gRPC backends. Cleartext upstreams then use prior-knowledge h2c.",
@@ -715,7 +705,7 @@
   "root_path": [
     {
       "text": "Document root",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Directory containing the files to serve; a relative path resolves against the Hohenheim working directory.",
@@ -725,7 +715,7 @@
   "run_as_user": [
     {
       "text": "Run as user",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "System account used for the child process, including its uid, gid and home directory.",
@@ -735,7 +725,7 @@
   "script": [
     {
       "text": "Script",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Application entry script, relative to the working directory.",
@@ -745,7 +735,7 @@
   "server": [
     {
       "text": "Host",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Host on which the container will run.",
@@ -755,7 +745,7 @@
   "shallow_clone": [
     {
       "text": "Shallow clone",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Fetch only the latest history to reduce checkout time and disk use.",
@@ -765,7 +755,7 @@
   "show_hidden_files": [
     {
       "text": "Show hidden files",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Allow files whose names start with a dot to be served or listed.",
@@ -775,7 +765,7 @@
   "source": [
     {
       "text": "Source",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Use files already on this server or deploy them from a Git repository.",
@@ -793,7 +783,7 @@
   "start_command": [
     {
       "text": "Start command",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Executable and arguments used to start each application process.",
@@ -803,7 +793,7 @@
   "submodules": [
     {
       "text": "Git submodules",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Initialize and update repository submodules after checkout.",
@@ -813,7 +803,7 @@
   "target_url": [
     {
       "text": "Target URL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Absolute URL or root-relative path to which requests are redirected.",
@@ -823,7 +813,7 @@
   "upstream_socket": [
     {
       "text": "Upstream Unix socket",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Unix socket path. When set, it takes precedence over host and port.",
@@ -833,7 +823,7 @@
   "use_ports": [
     {
       "text": "Use TCP ports",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Allocate a loopback TCP port instead of the default Unix socket transport.",
@@ -843,7 +833,7 @@
   "volumes": [
     {
       "text": "Volumes",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Container bind mounts in host-path:container-path form.",
@@ -857,7 +847,7 @@
   "wait_for_ready": [
     {
       "text": "Wait for ready signal",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Route traffic only after the child reports that startup completed.",
@@ -867,7 +857,7 @@
   "webhook_secret": [
     {
       "text": "Webhook secret",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Secret used to verify signed repository webhook requests.",
@@ -877,7 +867,7 @@
   "websocket_upgrade": [
     {
       "text": "Allow WebSockets",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Forward WebSocket upgrade requests to the upstream.",
@@ -887,7 +877,7 @@
   "working_directory": [
     {
       "text": "Working directory",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Directory in which the application command is started.",
@@ -939,7 +929,7 @@
   "active": [
     {
       "text": "Active",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Active",
@@ -1013,7 +1003,7 @@
     },
     {
       "text": "Certificate",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "TLS certificate served for this hostname. Blank lets the platform pick or request one.",
@@ -1139,7 +1129,7 @@
   "deploy": [
     {
       "text": "Deploy",
-      "scope": "nav"
+      "scope": "hohenheim_nav"
     },
     {
       "text": "Deploy of {$name}",
@@ -1287,7 +1277,7 @@
     },
     {
       "text": "Engine",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Database engine. Fixed after creation; destroy and recreate to change it.",
@@ -1305,7 +1295,7 @@
     },
     {
       "text": "Env prefix",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Names the injected variable family: DB gives DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME and DB_URL. The site's first attachment also provides DATABASE_URL.",
@@ -1361,7 +1351,7 @@
   "hostname": [
     {
       "text": "Hostname",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The Host header to match. Wildcard mode allows * and ? inside a label, a leading *. for exactly one label and **. for one or more; regex mode takes a full regular expression.",
@@ -1383,7 +1373,7 @@
   "match_type": [
     {
       "text": "Match type",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "How the hostname is compared: exact, wildcard, or regular expression.",
@@ -1434,6 +1424,10 @@
     {
       "text": "Password",
       "scope": "protect_path"
+    },
+    {
+      "text": "Password",
+      "scope": "hohenheim_field"
     }
   ],
   "payload_url": {
@@ -1493,7 +1487,7 @@
       "text": "Request Let's Encrypt certificate",
       "scope": "certificate_request"
     },
-    { "text": "{$actor} requested a certificate for {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} requested a certificate for {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "restore": [
     {
@@ -1658,7 +1652,7 @@
     },
     {
       "text": "Status",
-      "scope": "field"
+      "scope": "hohenheim_field"
     }
   ],
   "stored_log": {
@@ -1758,7 +1752,7 @@
     },
     {
       "text": "Description",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Live output of this instance's workload. Commands are sent with the form below.",
@@ -1805,7 +1799,7 @@
     },
     {
       "text": "Name",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Owner name relative to the zone: @ for the zone itself, www for a subdomain, * for a wildcard",
@@ -1819,7 +1813,7 @@
     },
     {
       "text": "Value",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "A/AAAA: an IP address. CNAME/NS/MX/SRV: a hostname. TXT: the text. CAA: flags tag value, e.g. 0 issue letsencrypt.org",
@@ -1853,7 +1847,7 @@
     },
     {
       "text": "Name",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Name",
@@ -2578,13 +2572,13 @@
     },
     {
       "text": "Backup made",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
   "networking": {
     "text": "Networking",
-    "scope": "nav"
+    "scope": "hohenheim_nav"
   },
   "test": [
     {
@@ -2771,7 +2765,7 @@
   "upstream_kind": [
     {
       "text": "Upstream",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "What this hostname resolves to: static files, a redirect, an address, an instance you manage, ...",
@@ -2781,7 +2775,7 @@
   "enabled": [
     {
       "text": "Enabled",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Disabled sites are not routed; requests get the offline page.",
@@ -2797,14 +2791,14 @@
     },
     {
       "text": "Enabled",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
   "settings": [
     {
       "text": "Settings",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Settings",
@@ -2817,12 +2811,12 @@
   ],
   "source_settings": {
     "text": "Source settings",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "access_list": [
     {
       "text": "Access list",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Optional rule tree (addresses, passwords, sign-in) applied before requests reach the site.",
@@ -2832,7 +2826,7 @@
   "auth_provider": [
     {
       "text": "Auth provider",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Optional identity provider visitors must authenticate with before reaching the site.",
@@ -2846,7 +2840,7 @@
   "listen_on": [
     {
       "text": "Listen address",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Only serve this domain on the selected local IP address. Blank means all interfaces.",
@@ -2856,7 +2850,7 @@
   "path_prefix": [
     {
       "text": "Path prefix",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Only requests whose path starts with this prefix use this entry. Blank matches everything.",
@@ -2866,7 +2860,7 @@
   "strip_path": [
     {
       "text": "Strip path",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Remove the matched path prefix before forwarding the request upstream.",
@@ -2876,7 +2870,7 @@
   "force_ssl": [
     {
       "text": "Force SSL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Send visitors to HTTPS. Without a working certificate for this address they get an error page instead. A new address switches this on by itself once its certificate works.",
@@ -2886,7 +2880,7 @@
   "hsts_enabled": [
     {
       "text": "HSTS",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Send the Strict-Transport-Security header so browsers refuse plain HTTP for this host.",
@@ -2896,7 +2890,7 @@
   "hsts_subdomains": [
     {
       "text": "HSTS subdomains",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Extend HSTS to all subdomains (includeSubDomains).",
@@ -2906,7 +2900,7 @@
   "custom_headers": [
     {
       "text": "Request headers",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Headers set on the request before it is forwarded upstream. An empty value removes the header.",
@@ -2916,7 +2910,7 @@
   "response_headers": [
     {
       "text": "Response headers",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Headers set on the response sent to the client. An empty value removes the header.",
@@ -2926,7 +2920,7 @@
   "exclude_from_letsencrypt": [
     {
       "text": "Exclude from Let's Encrypt",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Leave this hostname out when requesting Let's Encrypt certificates for the site.",
@@ -2944,7 +2938,7 @@
   "db_user": [
     {
       "text": "Database user",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Username created in the database container and injected into attached sites.",
@@ -2954,7 +2948,7 @@
   "db_password": [
     {
       "text": "Database password",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Password for the database user. Leave blank to generate one.",
@@ -2964,7 +2958,7 @@
   "db_name": [
     {
       "text": "Database name",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Name of the initial database created inside the engine.",
@@ -2974,7 +2968,7 @@
   "ephemeral": [
     {
       "text": "Ephemeral",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Store data in a RAM-backed tmpfs: fast, but ALL data is lost when the container restarts.",
@@ -2996,7 +2990,7 @@
   "origin": [
     {
       "text": "Zone origin",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The domain this zone is authoritative for, e.g. example.com (no trailing dot)",
@@ -3006,7 +3000,7 @@
   "soa_primary_ns": [
     {
       "text": "Primary name server",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hostname of the primary name server (the MNAME in the SOA record); leave empty for ns1.<zone>",
@@ -3016,7 +3010,7 @@
   "soa_contact": [
     {
       "text": "Contact email",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Administrative contact for the zone; leave empty for hostmaster@<zone>",
@@ -3026,7 +3020,7 @@
   "serial": [
     {
       "text": "Serial",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The SOA serial. Hohenheim bumps it on every change; secondary servers compare it to decide whether to pull the zone again.",
@@ -3036,7 +3030,7 @@
   "default_ttl": [
     {
       "text": "Default TTL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Seconds resolvers may cache records that set no explicit TTL (3600 = 1 hour)",
@@ -3046,7 +3040,7 @@
   "negative_ttl": [
     {
       "text": "Negative TTL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Seconds resolvers may cache name-does-not-exist answers (300 = 5 minutes)",
@@ -3056,7 +3050,7 @@
   "soa_refresh": [
     {
       "text": "SOA refresh",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Seconds before a secondary name server re-checks this zone (7200 = 2 hours)",
@@ -3066,7 +3060,7 @@
   "soa_retry": [
     {
       "text": "SOA retry",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Seconds a secondary waits after a failed refresh before retrying (3600 = 1 hour)",
@@ -3076,7 +3070,7 @@
   "soa_expire": [
     {
       "text": "SOA expire",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Seconds after which a secondary that cannot reach this server stops answering (1209600 = 2 weeks)",
@@ -3086,7 +3080,7 @@
   "zone_enabled": [
     {
       "text": "Enabled",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Disabled zones are not served and their names get REFUSED answers",
@@ -3096,7 +3090,7 @@
   "record_zone": [
     {
       "text": "Zone",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The authoritative zone this record belongs to.",
@@ -3106,7 +3100,7 @@
   "record_type": [
     {
       "text": "Type",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The record type; MX and SRV also need a priority, SRV also needs a port",
@@ -3116,7 +3110,7 @@
   "record_ttl": [
     {
       "text": "TTL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Seconds resolvers may cache this record; leave empty to use the zone default",
@@ -3126,7 +3120,7 @@
   "record_priority": [
     {
       "text": "Priority",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Required for MX and SRV records; lower numbers are tried first",
@@ -3136,7 +3130,7 @@
   "record_weight": [
     {
       "text": "Weight",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "SRV only: relative weight for records with the same priority (0 when unsure)",
@@ -3146,7 +3140,7 @@
   "record_port": [
     {
       "text": "Port",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "SRV only: the TCP/UDP port the service listens on",
@@ -3156,7 +3150,7 @@
   "record_enabled": [
     {
       "text": "Enabled",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Disabled records stay stored but are not served",
@@ -3166,7 +3160,7 @@
   "managed_by": [
     {
       "text": "Managed by",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Managed by",
@@ -3188,7 +3182,7 @@
   "dnssec_enabled": [
     {
       "text": "Sign this zone (DNSSEC)",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Generate a signing key on first use and serve signed answers. Requires lodging the DS record (shown on the Zone file tab) with your registrar.",
@@ -3436,7 +3430,7 @@
   "game_domain": [
     {
       "text": "Domain",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The exact-hostname domain record players connect to.",
@@ -3446,7 +3440,7 @@
   "game_backend": [
     {
       "text": "Backend instance",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The game server the proxy forwards this domain to.",
@@ -3456,7 +3450,7 @@
   "game_proxy": [
     {
       "text": "Velocity proxy",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The proxy instance whose forced-hosts config is generated from this mapping.",
@@ -3466,7 +3460,7 @@
   "game_backend_port": [
     {
       "text": "Backend port",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Game port inside the backend container (Minecraft default 25565).",
@@ -3508,7 +3502,7 @@
   "trusted_upstream": [
     {
       "text": "Trusted upstream",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Let this site reach the upstream you configured even when a tenant manages it and the target is loopback, a private network address, a unix socket or a host directory. Tenants can never change this setting or the upstream itself.",
@@ -3632,7 +3626,7 @@
   "registration_token": [
     {
       "text": "Registration token",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Secret that remote dev servers present when they register. Generated automatically when left blank; paste it into the dev machine's zenit-dev config.",
@@ -3646,7 +3640,7 @@
   "peer_name": [
     {
       "text": "Name",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "A recognizable name for this DNS peer.",
@@ -3656,7 +3650,7 @@
   "peer_base_url": [
     {
       "text": "Admin base URL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "HTTPS URL of a Hohenheim peer's admin server, for forwarding edits of zones it owns.",
@@ -3666,7 +3660,7 @@
   "peer_api_key": [
     {
       "text": "API key",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "znit_ API key used to call the peer's admin for edit forwarding.",
@@ -3676,7 +3670,7 @@
   "peer_transfer_host": [
     {
       "text": "Transfer host",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Address of the peer's DNS server for AXFR/NOTIFY.",
@@ -3686,7 +3680,7 @@
   "peer_transfer_port": [
     {
       "text": "Transfer port",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "DNS port used for AXFR and NOTIFY; normally 53.",
@@ -3696,7 +3690,7 @@
   "peer_tsig_key_name": [
     {
       "text": "TSIG key name",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Shared key name authenticating zone transfers with this peer.",
@@ -3706,7 +3700,7 @@
   "peer_tsig_algorithm": [
     {
       "text": "TSIG algorithm",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "HMAC algorithm, e.g. hmac-sha256.",
@@ -3716,7 +3710,7 @@
   "peer_tsig_secret": [
     {
       "text": "TSIG secret",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Base64 shared secret for the TSIG key.",
@@ -3726,7 +3720,7 @@
   "peer_enabled": [
     {
       "text": "Enabled",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Disabled peers are not contacted for transfers or forwarded edits.",
@@ -3736,7 +3730,7 @@
   "zone_role": [
     {
       "text": "Role",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Primary zones are edited here; secondary zones are replicated from their owning peer.",
@@ -3746,7 +3740,7 @@
   "primary_peer": [
     {
       "text": "Owning peer",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "For a secondary zone, the peer that owns the zone and receives record edits.",
@@ -3929,11 +3923,11 @@
   },
   "record_data": {
     "text": "Type settings",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "dyndns_token": [
     { "text": "Dynamic DNS token", "scope": "dns_record" },
-    { "text": "{$actor} created an update token for {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} created an update token for {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "dyndns_token_hint": {
     "text": "Mint a new update token for this record (invalidates any previous one). Point a dyndns2 client (router, ddclient) at {$url} and send the token as the HTTP Basic password",
@@ -3945,7 +3939,7 @@
   },
   "dyndns_revoke": [
     { "text": "Revoke dynamic DNS", "scope": "dns_record" },
-    { "text": "{$actor} revoked the update token of {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} revoked the update token of {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "dyndns_revoke_hint": {
     "text": "Delete this record's update token; its dyndns client stops working immediately",
@@ -3966,7 +3960,7 @@
   "jar_path": [
     {
       "text": "Jar file",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Path to the application's fat/shadow jar.",
@@ -3976,7 +3970,7 @@
   "java_binary": [
     {
       "text": "Java binary",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Path to the java launcher. Blank uses java from PATH (e.g. a jlink image's bin/java).",
@@ -3986,7 +3980,7 @@
   "jvm_args": [
     {
       "text": "JVM arguments",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Extra arguments passed to the JVM before -jar, e.g. -Xmx512m.",
@@ -3996,7 +3990,7 @@
   "app_args": [
     {
       "text": "Application arguments",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Arguments passed to the application after the jar.",
@@ -4006,7 +4000,7 @@
   "cert_nice_name": [
     {
       "text": "Name",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "A recognizable name for this certificate, e.g. the main domain it covers.",
@@ -4016,7 +4010,7 @@
   "cert_certificate_pem": [
     {
       "text": "Certificate (PEM)",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Paste the full PEM-encoded certificate, including any intermediate chain (the -----BEGIN CERTIFICATE----- blocks).",
@@ -4026,7 +4020,7 @@
   "cert_private_key_pem": [
     {
       "text": "Private key (PEM)",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The PEM-encoded private key matching the certificate. Stored as a secret; when editing an existing certificate, leave it blank to keep the stored key.",
@@ -4036,7 +4030,7 @@
   "cert_auto_renew": [
     {
       "text": "Auto-renew",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Only applies to Let's Encrypt certificates; uploaded certificates are never renewed automatically.",
@@ -4046,7 +4040,7 @@
   "cert_challenge_type": [
     {
       "text": "Challenge type",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "How Let's Encrypt validated this certificate. Set by the request flow.",
@@ -4056,7 +4050,7 @@
   "cert_dns_publisher": [
     {
       "text": "DNS publisher",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "How DNS-01 TXT records are published on renewal. Set by the request flow.",
@@ -4065,19 +4059,19 @@
   ],
   "cert_renewal_error": {
     "text": "Last renewal error",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "cert_error_count": {
     "text": "Failed attempts",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "cert_next_attempt_at": {
     "text": "Next attempt",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "cert_domain_names": {
     "text": "Domains",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "enable": [
     {
@@ -4141,7 +4135,7 @@
   },
   "security": {
     "text": "Security",
-    "scope": "nav"
+    "scope": "hohenheim_nav"
   },
   "lift": [
     {
@@ -4206,7 +4200,7 @@
   "ip": [
     {
       "text": "IP address",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "IP address",
@@ -4223,27 +4217,27 @@
   ],
   "ban_reason": {
     "text": "Reason",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "failure_reason": {
     "text": "Failure reason",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "ban_source": {
     "text": "Source",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "ban_duration": {
     "text": "Duration",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "event_type": {
     "text": "Event type",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "expires_at": {
     "text": "Expires",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "ban_ip_refused": {
     "text": "This IP cannot be banned: {$reason}",
@@ -4315,7 +4309,7 @@
   },
   "ban_scope": {
     "text": "Scope",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "ssh_watch": [
     {
@@ -4360,7 +4354,7 @@
     },
     {
       "text": "Runtime",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Runtime",
@@ -4811,12 +4805,12 @@
   },
   "capabilities": {
     "text": "Capabilities",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "command": [
     {
       "text": "Command",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Overrides the image's default command; one argument per row.",
@@ -4838,7 +4832,7 @@
   "registry_server": [
     {
       "text": "Registry server",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Registry host for private images, e.g. ghcr.io. Leave blank for Docker Hub.",
@@ -4847,20 +4841,20 @@
   ],
   "registry_user": {
     "text": "Registry username",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "registry_password": {
     "text": "Registry password",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "mounts": {
     "text": "Mounts",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "ports": [
     {
       "text": "Published ports",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Port publishing",
@@ -4873,12 +4867,12 @@
   ],
   "depends_on": {
     "text": "Depends on",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "container_path": [
     {
       "text": "Container path",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Where the volume is mounted inside the container.",
@@ -4887,12 +4881,12 @@
   ],
   "mount_external_name": {
     "text": "External volume name",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "host_port": [
     {
       "text": "Host port",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Optional fixed host port; leave blank to auto-allocate one from the configured window. Declaring one always pre-allocates it",
@@ -4901,16 +4895,16 @@
   ],
   "host_ip": {
     "text": "Host address",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "depends_service": {
     "text": "Service",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "health_cmd": [
     {
       "text": "Health check command",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Shell command run inside the container; exit 0 = healthy. Leave blank for no health check.",
@@ -4919,28 +4913,28 @@
   ],
   "health_interval": {
     "text": "Health interval",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "health_timeout": {
     "text": "Health timeout",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "health_retries": {
     "text": "Health retries",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "health_start_period": {
     "text": "Health start period",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "restart_policy": {
     "text": "Restart policy",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "file_content": [
     {
       "text": "Content",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Stored encrypted at rest; uploaded into the container before start.",
@@ -4950,7 +4944,7 @@
   "file_mode": [
     {
       "text": "File mode",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Octal permissions, e.g. 0600 for secrets.",
@@ -5023,7 +5017,7 @@
   },
   "reclaim_images": [
     { "text": "Reclaim images", "scope": "stack" },
-    { "text": "{$actor} cleaned up unused images", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} cleaned up unused images", "scope": "hohenheim", "target": "happened" }
   ],
   "reclaim_images_hint": {
     "text": "Remove dangling and superseded images on every host that runs a stack",
@@ -5186,7 +5180,7 @@
     },
     {
       "text": "Disabled",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -5313,7 +5307,7 @@
     },
     {
       "text": "Stopped",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -5495,15 +5489,15 @@
   ],
   "released_at": {
     "text": "Released",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "former_site": {
     "text": "Former site",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "former_owner": {
     "text": "Former owner",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "lifted_toast": {
     "text": "Quarantine lifted",
@@ -5528,7 +5522,7 @@
   "kind": [
     {
       "text": "Kind",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Kind",
@@ -5568,11 +5562,6 @@
     },
     {
       "text": "Created",
-      "scope": "cms",
-      "target": "activity_action"
-    },
-    {
-      "text": "Created",
       "scope": "app_overview"
     }
   ],
@@ -5597,7 +5586,7 @@
     },
     {
       "text": "Deployed",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -5652,7 +5641,7 @@
   "quota_subjects": [
     {
       "text": "Owner subjects",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The owner's manage-grant subjects, one \"type:id\" token per line (sorted); leave empty for the operator",
@@ -5662,7 +5651,7 @@
   "max_instances": [
     {
       "text": "Max instances",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Cap for this owner; 0 refuses every new instance, empty falls back to the global default",
@@ -5788,7 +5777,7 @@
   "posture": [
     {
       "text": "Posture",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "How well this host separates tenants. Trusted only: no hostile tenants at all. Dedicated: one tenant owns the machine. Shared containers: several tenants share one kernel, so a container escape reaches all of them. VM isolated: every workload runs in its own virtual machine, the only posture rated against a hostile root tenant.",
@@ -5798,7 +5787,7 @@
   "admission": [
     {
       "text": "Admission",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Whether new workloads may be placed here. Blocked until a preflight passes; admitted accepts placement; cordoned keeps what already runs but takes nothing new. Changed with the Check and admit and Cordon actions, never by editing this form.",
@@ -5807,7 +5796,7 @@
   ],
   "remove_orphan": [
     { "text": "Remove orphan", "scope": "reconcile_finding" },
-    { "text": "{$actor} removed leftover {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} removed leftover {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "remove_orphan_confirm": {
     "text": "Stop and remove this orphaned resource at the daemon? The stored data of a container is lost; volumes are never removable here.",
@@ -5851,7 +5840,7 @@
   },
   "scan_host_key": [
     { "text": "Scan host key", "scope": "server" },
-    { "text": "{$actor} read the SSH host key of {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} read the SSH host key of {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "scan_host_key_hint": {
     "text": "Read the SSH host key this machine presents and pin it. A key that disagrees with the pin is never adopted here.",
@@ -5867,7 +5856,7 @@
   },
   "confirm_host_key": [
     { "text": "Confirm fingerprint", "scope": "server" },
-    { "text": "{$actor} trusted the SSH host key of {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} trusted the SSH host key of {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "confirm_host_key_hint": {
     "text": "Record that you compared the pinned fingerprint out of band.",
@@ -5887,7 +5876,7 @@
   },
   "repin_host_key": [
     { "text": "Re-pin changed host key", "scope": "server" },
-    { "text": "{$actor} trusted the new SSH host key of {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} trusted the new SSH host key of {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "repin_host_key_hint": {
     "text": "Adopt the key this host now presents. Only do this once you know why it changed.",
@@ -5931,7 +5920,7 @@
   },
   "trust_notice": {
     "text": "What you are granting",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "host_key_mismatch": {
     "text": "{$name} presented a different SSH host key (pinned {$pinned}, offered {$offered}). Nothing was re-pinned and the host is blocked; verify out of band before adopting the new key.",
@@ -6140,7 +6129,7 @@
     },
     {
       "text": "Snapshot made",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -6272,12 +6261,12 @@
   ],
   "backup_target": {
     "text": "Backup target",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "instance": [
     {
       "text": "Instance",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Instance",
@@ -6294,19 +6283,19 @@
   ],
   "note": {
     "text": "Note",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "directory": {
     "text": "Directory",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "ssh_target": {
     "text": "SSH target",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "host_key": {
     "text": "Host key",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "backup_target_kind": {
     "text": "Where backup exports are written; whether it is a different failure domain is a deployment fact you own",
@@ -6443,7 +6432,8 @@
     "scope": "violations"
   },
   "variable_key_format": {
-    "text": "Variable keys are UPPER_CASE environment names (A-Z, 0-9, underscores)"
+    "text": "Variable keys are UPPER_CASE environment names (A-Z, 0-9, underscores)",
+    "scope": "violations"
   },
   "import": {
     "text": "Import template",
@@ -6488,7 +6478,7 @@
   "template": [
     {
       "text": "Template",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Template",
@@ -6498,7 +6488,7 @@
   "template_version": [
     {
       "text": "Version",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Bump when the template changes; carried through export and import",
@@ -6508,7 +6498,7 @@
   "install_image": [
     {
       "text": "Install image",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Image the install script runs in; empty uses the template's own image",
@@ -6518,7 +6508,7 @@
   "install_script": [
     {
       "text": "Install script",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Shell script run once with the instance's volumes mounted and its variables as environment",
@@ -6528,7 +6518,7 @@
   "reinstall_policy": [
     {
       "text": "Reinstall policy",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "What a reinstall does with existing data: preserve keeps the volumes, clear wipes them after a typed confirmation",
@@ -6538,7 +6528,7 @@
   "readiness_line": [
     {
       "text": "Readiness line",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Console line marking the workload ready; only read when Ready when is Console line",
@@ -6548,7 +6538,7 @@
   "stop_command": [
     {
       "text": "Stop command",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Console command for a graceful stop; consumed by the console-matcher wave, stored and exported now",
@@ -6557,16 +6547,16 @@
   ],
   "approved_at": {
     "text": "Approved",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "template_source": {
     "text": "Source",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "variable_key": [
     {
       "text": "Key",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "UPPER_CASE environment name; also the \\{\\{KEY\\}\\} token in command and config files",
@@ -6576,7 +6566,7 @@
   "variable_label": [
     {
       "text": "Label",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Shown above the input on the create-instance form",
@@ -6586,7 +6576,7 @@
   "variable_type": [
     {
       "text": "Type",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The typed field a submitted value is validated through",
@@ -6595,12 +6585,12 @@
   ],
   "variable_required": {
     "text": "Required",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "variable_default": [
     {
       "text": "Default value",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Prefilled on the create-instance form; used when the submit leaves the field blank",
@@ -6610,7 +6600,7 @@
   "variable_pattern": [
     {
       "text": "Pattern",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Regular expression a submitted value must match",
@@ -6619,20 +6609,20 @@
   ],
   "variable_max_length": {
     "text": "Maximum length",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "variable_min": {
     "text": "Minimum",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "variable_max": {
     "text": "Maximum",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "variable_options": [
     {
       "text": "Options",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The closed set of allowed values",
@@ -6642,7 +6632,7 @@
   "variable_generate": [
     {
       "text": "Generate when blank",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Mint a random token when the create form leaves this secret blank",
@@ -6651,15 +6641,15 @@
   ],
   "variable_generate_bytes": {
     "text": "Generated entropy (bytes)",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "variable_value": {
     "text": "Value",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "variable_secret_value": {
     "text": "Secret value",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "template_description": {
     "text": "Shown to whoever picks this template as an instance source",
@@ -6950,7 +6940,7 @@
   "crash_policy": [
     {
       "text": "Crash policy",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "What happens when the workload exits without an observed stop: restart redeploys it (any exit code counts as a crash), none records the exit.",
@@ -7100,13 +7090,13 @@
     },
     {
       "text": "Console command sent",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
   "expire_preview": [
     { "text": "Expire preview", "scope": "schedule_action" },
-    { "text": "{$actor} ended preview {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} ended preview {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "power": [
     {
@@ -7121,13 +7111,13 @@
   "exec_command": [
     {
       "text": "Command to run",
-      "scope": "field"
+      "scope": "hohenheim_field"
     }
   ],
   "console_line": [
     {
       "text": "Console command",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Console line",
@@ -7136,11 +7126,11 @@
   ],
   "power_operation": {
     "text": "Operation",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "snapshot_note": {
     "text": "Snapshot note",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "unknown_instance": {
     "text": "Unknown instance",
@@ -7165,7 +7155,7 @@
   "port_protocol": [
     {
       "text": "Port protocol",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "TCP or UDP; a UDP port always pre-allocates a fixed host port before the workload starts",
@@ -7175,7 +7165,7 @@
   "port_exposure": [
     {
       "text": "Port exposure",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Loopback keeps the port reachable from this host only (the safe default); public binds it on every interface for players to reach, on a stable pre-allocated host port",
@@ -7185,7 +7175,7 @@
   "public_ipv4": [
     {
       "text": "Public IPv4 address",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The declared public IPv4 of this host; generated DNS A records for game domains carry it verbatim. Leave blank to generate no A records",
@@ -7195,7 +7185,7 @@
   "public_ipv6": [
     {
       "text": "Public IPv6 address",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The declared public IPv6 of this host; generated DNS AAAA records carry it verbatim. Leave blank to generate no AAAA records",
@@ -7335,7 +7325,7 @@
     },
     {
       "text": "File written",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -7600,7 +7590,7 @@
   "health_path": [
     {
       "text": "Health path",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Path the release health gate probes on the published port before a new release may take traffic. Defaults to /; a complete HTTP response with a 2xx or 3xx status passes.",
@@ -7655,20 +7645,20 @@
   },
   "project_name": {
     "text": "Project name",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "project_description": {
     "text": "Description",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "environment_name": {
     "text": "Environment name",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "project": [
     {
       "text": "Project",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Project",
@@ -7677,7 +7667,7 @@
   ],
   "environment": {
     "text": "Environment",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "project_member_required": {
     "text": "You are not a member of that project",
@@ -7794,12 +7784,12 @@
   },
   "provider_name": {
     "text": "Name",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "provider_kind": [
     {
       "text": "Kind",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The provider API dialect: GitHub, GitLab or Gitea.",
@@ -7809,7 +7799,7 @@
   "provider_base_url": [
     {
       "text": "Base URL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Leave blank for the public host (github.com, gitlab.com); required for Gitea and for self-hosted installations.",
@@ -7819,7 +7809,7 @@
   "provider_access_token": [
     {
       "text": "Access token",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Personal or deploy access token; the fallback when no App is configured. Stored encrypted.",
@@ -7829,7 +7819,7 @@
   "provider_app_id": [
     {
       "text": "App id",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "GitHub App id. With the installation id and private key set, short-lived installation tokens are minted per operation.",
@@ -7839,7 +7829,7 @@
   "provider_app_installation_id": [
     {
       "text": "App installation id",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The installation of the App on the account whose repositories are used.",
@@ -7849,7 +7839,7 @@
   "provider_app_private_key": [
     {
       "text": "App private key",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The App's RSA private key (PEM). Stored encrypted.",
@@ -7858,12 +7848,12 @@
   ],
   "provider_settings": {
     "text": "Kind settings",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "provider_shared": [
     {
       "text": "Shared",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Offer this provider to every tenant's pickers. Leave off to keep it to the people who manage it.",
@@ -7903,7 +7893,7 @@
   "git_provider": [
     {
       "text": "Git provider",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "When set, the clone URL and credentials come from this provider and Repository below.",
@@ -7913,7 +7903,7 @@
   "repository": [
     {
       "text": "Repository",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Repository at the provider, as owner/name.",
@@ -7923,7 +7913,7 @@
   "previews_enabled": [
     {
       "text": "Preview deployments",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Pull-request webhook events create, update and destroy bounded-lifetime preview environments.",
@@ -7933,7 +7923,7 @@
   "preview_environment_variables": [
     {
       "text": "Preview environment",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The ONLY runtime variables a preview receives; production variables, database credentials and volumes are never inherited.",
@@ -7942,7 +7932,7 @@
   ],
   "preview_ref": {
     "text": "Ref",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "destroy_now": {
     "text": "Destroy now",
@@ -7979,7 +7969,7 @@
   "incus_url": [
     {
       "text": "Incus URL",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "https://host:8443 for a remote daemon (TLS client certificate + pinned server certificate), or unix:// for the local socket.",
@@ -7989,7 +7979,7 @@
   "incus_trust_token": [
     {
       "text": "Incus trust token",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "One-use token minted with 'incus config trust add' on the host. Pasting it enrolls Hohenheim's client certificate on the daemon; the token itself is never stored. Alternatively install the shown client certificate there with 'incus config trust add-certificate'.",
@@ -8029,7 +8019,7 @@
   "incus_image": [
     {
       "text": "Image alias",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "An alias on images.linuxcontainers.org (simplestreams), e.g. debian/13 or alpine/3.22.",
@@ -8039,7 +8029,7 @@
   "incus_privileged": [
     {
       "text": "Privileged container",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "DANGER: a privileged container's root user maps onto the HOST's root user. A system container is not a security boundary against a determined root user even unprivileged; privileged mode removes most of what remains. Leave off unless the workload genuinely cannot run without it.",
@@ -8049,7 +8039,7 @@
   "update_script": [
     {
       "text": "Update script",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "In-place app update script, run inside the running instance through the community function library",
@@ -8083,7 +8073,7 @@
     },
     {
       "text": "App update failed",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -8144,7 +8134,7 @@
   "vm_image": [
     {
       "text": "Image alias",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "A VM image alias on images.linuxcontainers.org (simplestreams). Use a /cloud variant so cloud-init runs, e.g. alpine/3.22/cloud or debian/13/cloud.",
@@ -8154,7 +8144,7 @@
   "cloud_init": [
     {
       "text": "Cloud-init user-data",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "First-boot provisioning (#cloud-config). \\{\\{KEY\\}\\} placeholders resolve against the instance's variables, secret variables included.",
@@ -8164,7 +8154,7 @@
   "image_origin": [
     {
       "text": "Image origin",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Where the image comes from: fetched from the public catalog, or a prepared image an operator already published into the host's own image store.",
@@ -8192,7 +8182,7 @@
   "secure_boot": [
     {
       "text": "Secure Boot",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Whether the image requires Secure Boot. Catalog Linux images are unsigned and need this off; a prepared image (e.g. Microsoft-signed Windows media) can require it on.",
@@ -8202,7 +8192,7 @@
   "guest_agent": [
     {
       "text": "Guest agent",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Whether the image carries an incus guest agent capable of running commands. Turn off for a prepared image with no agent; install and app-update actions refuse instead of waiting on a bring-up that will never happen.",
@@ -8211,12 +8201,12 @@
   ],
   "device_size_gb": {
     "text": "Size (GB)",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "max_disk_gb": [
     {
       "text": "Max disk (GB)",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Cap on this owner's total attached-disk size; 0 refuses every disk, empty falls back to the global default",
@@ -8226,7 +8216,7 @@
   "max_nics": [
     {
       "text": "Max extra NICs",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Cap on this owner's extra NICs; 0 refuses every NIC, empty falls back to the global default",
@@ -8258,7 +8248,7 @@
   "device_source_media": [
     {
       "text": "Install media (ISO volume)",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Name of an ISO volume published on the instance's host (see the host record's Install media tab). Only install-media devices use it.",
@@ -8268,7 +8258,7 @@
   "network_limit_mbit": [
     {
       "text": "Network limit",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Bandwidth ceiling for every NIC of this workload. Leave blank for unshaped.",
@@ -8278,7 +8268,7 @@
   "root_disk_gb": [
     {
       "text": "Root disk",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Size of the workload's own root disk in GB. Leave blank to inherit the image size. It can only grow, and only while the workload is stopped.",
@@ -8339,7 +8329,7 @@
   },
   "scan_incus_cert": [
     { "text": "Scan server certificate", "scope": "server" },
-    { "text": "{$actor} read the Incus certificate of {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} read the Incus certificate of {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "scan_incus_cert_hint": {
     "text": "Read the TLS certificate this Incus daemon presents and pin it. A certificate that disagrees with the pin is never adopted here.",
@@ -8355,7 +8345,7 @@
   },
   "confirm_incus_cert": [
     { "text": "Confirm certificate fingerprint", "scope": "server" },
-    { "text": "{$actor} trusted the Incus certificate of {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} trusted the Incus certificate of {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "confirm_incus_cert_hint": {
     "text": "Record that you compared the pinned certificate fingerprint out of band.",
@@ -8375,7 +8365,7 @@
   },
   "repin_incus_cert": [
     { "text": "Re-pin changed certificate", "scope": "server" },
-    { "text": "{$actor} trusted the new Incus certificate of {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} trusted the new Incus certificate of {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "repin_incus_cert_hint": {
     "text": "Adopt the certificate this daemon now presents. Only do this once you know why it changed.",
@@ -8427,7 +8417,7 @@
   },
   "capture_template": [
     { "text": "Capture as template", "scope": "instance" },
-    { "text": "{$actor} saved {$subject} as a template", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} saved {$subject} as a template", "scope": "hohenheim", "target": "happened" }
   ],
   "capture_template_hint": {
     "text": "Publish this stopped instance's current state as a prepared image and create an unapproved template from it",
@@ -8512,7 +8502,7 @@
     },
     {
       "text": "Media fetched",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -8523,7 +8513,7 @@
     },
     {
       "text": "Media uploaded",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -8554,7 +8544,7 @@
     },
     {
       "text": "Media deleted",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -8644,7 +8634,7 @@
   },
   "reap_controller_objects": [
     { "text": "Reap other controllers' objects", "scope": "server" },
-    { "text": "{$actor} cleaned up leftovers on {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} cleaned up leftovers on {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "reap_controller_objects_confirm": {
     "text": "Removes the isolation ACL, extra-NIC bridge and presence marker that OTHER hohenheim controllers left on this Incus daemon -- including objects whose controller left no presence stamp at all, which the scheduled sweep never touches. Objects this controller owns are never candidates, and the daemon itself refuses to remove one a workload still references.",
@@ -9166,7 +9156,7 @@
     },
     {
       "text": "Command executed",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     }
   ],
@@ -9441,7 +9431,7 @@
   "max_memory_mb": [
     {
       "text": "Max memory (MB)",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Cap on this owner's total workload memory; 0 refuses every workload, empty falls back to the global default",
@@ -9455,7 +9445,7 @@
   "max_sites": [
     {
       "text": "Max sites",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Cap on this owner's live sites; 0 refuses every new site, empty falls back to the global default",
@@ -9465,7 +9455,7 @@
   "max_databases": [
     {
       "text": "Max databases",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Cap on this owner's managed databases; 0 refuses every new one, empty falls back to the global default",
@@ -9487,7 +9477,7 @@
   "preview_branches": [
     {
       "text": "Preview branches",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Branch patterns (exact or with *) whose pushes create per-branch previews. Empty means pull-request previews only; the production branch never gets one.",
@@ -10173,7 +10163,7 @@
     },
     {
       "text": "Who changed what, and when, across the whole installation.",
-      "scope": "activity"
+      "scope": "hohenheim"
     },
     {
       "text": "Every configurable value of this installation, grouped by subsystem.",
@@ -10290,19 +10280,19 @@
   ],
   "slug": {
     "text": "Slug",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "remote_key": {
     "text": "Remote key",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "generated_by": {
     "text": "Generated by",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "satisfy": {
     "text": "Satisfy",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "events": {
     "text": "Events",
@@ -10319,7 +10309,7 @@
   "transfer_status": [
     {
       "text": "Transfer status",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Outcome of the last zone transfer from the primary peer. Secondary zones only.",
@@ -10329,7 +10319,7 @@
   "transfer_message": [
     {
       "text": "Transfer detail",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The error or note recorded by the last transfer attempt.",
@@ -10339,7 +10329,7 @@
   "last_transfer_at": [
     {
       "text": "Last transfer",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "When records were last pulled successfully from the primary peer.",
@@ -10460,11 +10450,6 @@
     {
       "text": "Rule deleted",
       "scope": "access_rule"
-    },
-    {
-      "text": "Deleted",
-      "scope": "cms",
-      "target": "activity_action"
     }
   ],
   "summary_group_any": {
@@ -10526,7 +10511,7 @@
   "rule_type": [
     {
       "text": "Rule type",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "What this rule checks. Changing it replaces the settings below.",
@@ -10535,12 +10520,12 @@
   ],
   "rule_data": {
     "text": "Rule settings",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "rule_enabled": [
     {
       "text": "Switched on",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "A rule that is off is ignored, exactly as if it had been deleted.",
@@ -10550,7 +10535,7 @@
   "rule_network": [
     {
       "text": "Network",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "One IP address or CIDR network, for example 203.0.113.8 or 10.0.0.0/8.",
@@ -10560,7 +10545,7 @@
   "rule_provider": [
     {
       "text": "Auth provider",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The configured auth provider a visitor must be signed in through.",
@@ -10569,7 +10554,7 @@
   ],
   "rule_access_list": {
     "text": "Access list",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "rule_satisfy": {
     "text": "Whether one rule inside this group is enough, or all of them are needed.",
@@ -10597,7 +10582,7 @@
   },
   "reissue_certificate": [
     { "text": "Modify & re-issue certificate", "scope": "certificate_request" },
-    { "text": "{$actor} reissued certificate {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} reissued certificate {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "reissue_submit": {
     "text": "Re-issue certificate",
@@ -10622,7 +10607,7 @@
   "peer_type": [
     {
       "text": "Peer type",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Hohenheim peers also accept forwarded record edits over their admin API; any other nameserver only exchanges zones.",
@@ -10710,7 +10695,7 @@
     },
     {
       "text": "Application",
-      "scope": "field"
+      "scope": "hohenheim_field"
     }
   ],
   "btrfs": {
@@ -10882,7 +10867,7 @@
   "build_context": [
     {
       "text": "Build context",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Repository-relative directory holding this image's Dockerfile; every host builds the image from it locally.",
@@ -10892,7 +10877,7 @@
   "builtin": [
     {
       "text": "Built in",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Built-in images are code-owned: edits and deletions revert on the next boot. Copy one to make a variant.",
@@ -10902,7 +10887,7 @@
   "console_kind": [
     {
       "text": "Console",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Which console the workload's main process gets. An interactive terminal gives it a real pseudo-terminal: keystrokes, echo and resize on the console tab, which is what a full-screen TUI such as Alchemy's Janeway needs.",
@@ -10912,7 +10897,7 @@
   "default_build_command": [
     {
       "text": "Default build command",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Run inside the container before a restart; empty means this image builds nothing.",
@@ -10922,7 +10907,7 @@
   "default_command": [
     {
       "text": "Default command",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Started as the workload's main process; an instance may override it.",
@@ -10932,7 +10917,7 @@
   "default_port": [
     {
       "text": "Default port",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The port the image's default command listens on.",
@@ -10942,7 +10927,7 @@
   "docker_image": [
     {
       "text": "Docker image",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The local image tag this runtime image builds to. There is no registry: hosts build it themselves.",
@@ -10952,7 +10937,7 @@
   "runtime_incus_image": [
     {
       "text": "Incus image",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The Incus alias or fingerprint of this image; empty means it cannot run on an Incus host yet.",
@@ -10962,7 +10947,7 @@
   "exclusive_volume": [
     {
       "text": "Exclusive",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "No two releases may hold this volume at once, so a deploy stops the old container before starting the new one.",
@@ -10971,16 +10956,16 @@
   ],
   "host_path": {
     "text": "Host path",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "icon": {
     "text": "Icon",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "instance_port": [
     {
       "text": "Instance port",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Which declared port of the instance to serve; empty uses its single published port.",
@@ -10990,7 +10975,7 @@
   "keep_releases": [
     {
       "text": "Releases to keep",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "How many release containers to keep: the serving one plus the rollback targets.",
@@ -11000,7 +10985,7 @@
   "quota_bytes": [
     {
       "text": "Size limit",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Enforced size cap for this volume; only a host with a quota-capable backend can honour it.",
@@ -11010,7 +10995,7 @@
   "readiness_kind": [
     {
       "text": "Ready when",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "How the workload is judged ready to take traffic.",
@@ -11020,7 +11005,7 @@
   "readiness_target": [
     {
       "text": "Readiness target",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "The HTTP path or port name the readiness check probes; a console line uses the readiness line instead.",
@@ -11029,12 +11014,12 @@
   ],
   "runtime_image": {
     "text": "Runtime image",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "shell": [
     {
       "text": "Shell",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Shell",
@@ -11052,7 +11037,7 @@
   "stop_grace_seconds": [
     {
       "text": "Stop grace period",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "How long a graceful stop may take before the workload is killed.",
@@ -11062,7 +11047,7 @@
   "stop_kind": [
     {
       "text": "Stop with",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "How the workload is asked to stop before the grace period runs out.",
@@ -11072,7 +11057,7 @@
   "uid_mode": [
     {
       "text": "User id mode",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "How the workload's process identity is derived; only mapped host uids exist today.",
@@ -11082,7 +11067,7 @@
   "volume_backend": [
     {
       "text": "Volume backend",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Detected from this host's volume root: it decides whether a quota can be enforced and a snapshot taken.",
@@ -11096,7 +11081,7 @@
   "volume_name": [
     {
       "text": "Volume name",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Operator identifier for this volume; it names the host directory and is never translated.",
@@ -11105,11 +11090,11 @@
   ],
   "volume_root": {
     "text": "Volume root",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "workdir": {
     "text": "Working directory",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "instance_runtime_image": {
     "text": "What this workspace or application runs inside.",
@@ -11198,7 +11183,7 @@
   "home_quota": [
     {
       "text": "Home size limit (MB)",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Size cap of the workspace's /home/site volume; blank leaves it uncapped.",
@@ -11291,7 +11276,7 @@
   },
   "quota_mb": {
     "text": "Size limit",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "volume_quota_mb": {
     "text": "Maximum size of this volume in megabytes. Leave blank for no limit.",
@@ -11527,7 +11512,7 @@
   },
   "cert_expires_on": {
     "text": "Expires on",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "managed_by_project": {
     "text": "Managed by project {$name}; deleted with the project",
@@ -11691,7 +11676,7 @@
   },
   "rule_search_text": {
     "text": "Rule",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "rule": {
     "text": "Rule",
@@ -11716,7 +11701,7 @@
   "access_list_shared": [
     {
       "text": "Shared",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Offer this list to every picker; only its owners and admins can still edit it.",
@@ -11999,11 +11984,11 @@
   },
   "lifted_at": {
     "text": "Lifted",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "lifted_by": {
     "text": "Lifted by",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "matches": {
     "text": "Delegation matches",
@@ -12108,7 +12093,7 @@
   "delegation_status": [
     {
       "text": "Delegation",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Worst finding of the last delegation check against the parent zone. Primary zones only.",
@@ -12118,7 +12103,7 @@
   "delegation_detail": [
     {
       "text": "Delegation findings",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "One line per finding of the last delegation check.",
@@ -12128,7 +12113,7 @@
   "delegation_checked_at": [
     {
       "text": "Delegation checked",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "When the delegation was last compared with the parent zone.",
@@ -12287,238 +12272,233 @@
     "text": "Its records are owned by {$peer}, the primary this zone transfers from, and arrive over AXFR, so a zone file cannot be imported here. Import it on {$peer} instead.",
     "scope": "dns_zone"
   },
-  "updated": {
-    "text": "Updated",
-    "scope": "cms",
-    "target": "activity_action"
-  },
   "reaped_controller_objects": {
     "text": "Controller objects cleaned up",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "removed_orphan": {
     "text": "Orphan removed",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "backup_downloaded": {
     "text": "Backup downloaded",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "dyndns_update": {
     "text": "Dynamic DNS updated",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "released_hostname_disabled": {
     "text": "Released hostname disabled",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "imported": {
     "text": "Imported",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "rolled_back": {
     "text": "Rolled back",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "volumes_purged": {
     "text": "Volumes purged",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "variable_set": {
     "text": "Variable set",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "variable_deleted": {
     "text": "Variable deleted",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "domain_added": {
     "text": "Domain added",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "domain_removed": {
     "text": "Domain removed",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "cloned": {
     "text": "Cloned",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "preview_triggered": {
     "text": "Preview triggered",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "dyndns_token_minted": {
     "text": "Dynamic DNS token created",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "dyndns_token_revoked": {
     "text": "Dynamic DNS token revoked",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "tested": {
     "text": "Tested",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "device_attached": {
     "text": "Device attached",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "device_resized": {
     "text": "Device resized",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "device_detached": {
     "text": "Device detached",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "approved": {
     "text": "Approved",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "unapproved": {
     "text": "Approval withdrawn",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "volume_declared": {
     "text": "Volume declared",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "volume_redeclared": {
     "text": "Volume redeclared",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "quarantine_lifted": {
     "text": "Quarantine lifted",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "requested": {
     "text": "Requested",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "reissued": {
     "text": "Reissued",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "files_save": {
     "text": "File saved",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "files_upload": {
     "text": "File uploaded",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "files_mkdir": {
     "text": "Folder created",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "files_rename": {
     "text": "File renamed",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "files_delete": {
     "text": "File deleted",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "restored_backup": {
     "text": "Backup restored",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "restored_snapshot": {
     "text": "Snapshot restored",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "settled_interrupted": {
     "text": "Interrupted run settled",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "deleted_data": {
     "text": "Data deleted",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "template_captured": {
     "text": "Template captured",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "reconciled": {
     "text": "Reconciled",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "drained": {
     "text": "Drained",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "migrated": {
     "text": "Migrated",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "shell_open": {
     "text": "Shell opened",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "shell_close": {
     "text": "Shell closed",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "app_updated": {
     "text": "App updated",
-    "scope": "cms",
+    "scope": "hohenheim",
     "target": "activity_action"
   },
   "people_only": {
     "text": "People only",
-    "scope": "activity"
+    "scope": "hohenheim"
   },
   "placement": {
     "text": "Placement",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "database_engine": [
     {
       "text": "Shared engine",
-      "scope": "field"
+      "scope": "hohenheim_field"
     },
     {
       "text": "Leave blank for this host's engine of that kind, which is created on demand.",
@@ -12531,11 +12511,11 @@
   ],
   "root_user": {
     "text": "Root user",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "root_password": {
     "text": "Root password",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "database_placement": {
     "text": "Its own engine container, or a logical database on an engine this host shares. Redis and tmpfs databases are always dedicated.",
@@ -12621,10 +12601,17 @@
     "text": "Destroy of engine '{$name}' could not verify its teardown: {$reason}. The record is kept; force delete it once the host is reachable again.",
     "scope": "violations"
   },
-  "move_shared": {
-    "text": "Move to shared engine",
-    "scope": "database"
-  },
+  "move_shared": [
+    {
+      "text": "Move to shared engine",
+      "scope": "database"
+    },
+    {
+      "text": "Moved to a shared engine",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    }
+  ],
   "move_shared_hint": {
     "text": "Move this database onto the host's shared engine, as a logical database with its own user.",
     "scope": "database"
@@ -13113,7 +13100,7 @@
   "https_forced": [
     {
       "text": "HTTPS switched on",
-      "scope": "cms",
+      "scope": "hohenheim",
       "target": "activity_action"
     },
     {
@@ -13219,7 +13206,7 @@
   },
   "cert_dns_records": {
     "text": "DNS records to publish",
-    "scope": "field"
+    "scope": "hohenheim_field"
   },
   "access_list_admits_everyone": {
     "text": "{$list} lets every visitor through: none of its rules is switched on. Add a rule to it first, then pick it here.",
@@ -13547,7 +13534,7 @@
   },
   "check_host": [
     { "text": "Check the host", "scope": "app_health" },
-    { "text": "{$actor} checked {$subject}", "scope": "activity", "target": "happened" }
+    { "text": "{$actor} checked {$subject}", "scope": "hohenheim", "target": "happened" }
   ],
   "on_host": {
     "text": "on {$host}",
@@ -13953,10 +13940,16 @@
     "text": "By signing in",
     "scope": "protect_path"
   },
-  "username": {
-    "text": "Username",
-    "scope": "protect_path"
-  },
+  "username": [
+    {
+      "text": "Username",
+      "scope": "protect_path"
+    },
+    {
+      "text": "Username",
+      "scope": "hohenheim_field"
+    }
+  ],
   "networks": {
     "text": "Networks",
     "scope": "protect_path"
@@ -14035,100 +14028,100 @@
       "scope": "protect_path"
     }
   ],
-  "test_channel": { "text": "{$actor} sent a test through {$subject}", "scope": "activity", "target": "happened" },
-  "test_backup_target": { "text": "{$actor} tested the connection to {$subject}", "scope": "activity", "target": "happened" },
-  "access_rule_toggle": { "text": "{$actor} switched rule {$subject} on or off", "scope": "activity", "target": "happened" },
-  "delete_access_rule": { "text": "{$actor} deleted rule {$subject}", "scope": "activity", "target": "happened" },
-  "access_rule_move_up": { "text": "{$actor} moved rule {$subject} up", "scope": "activity", "target": "happened" },
-  "access_rule_move_down": { "text": "{$actor} moved rule {$subject} down", "scope": "activity", "target": "happened" },
-  "delete_project": { "text": "{$actor} deleted project {$subject}", "scope": "activity", "target": "happened" },
-  "spamservice_mark_spam": { "text": "{$actor} marked {$subject} as spam", "scope": "activity", "target": "happened" },
-  "spamservice_mark_ham": { "text": "{$actor} marked {$subject} as not spam", "scope": "activity", "target": "happened" },
-  "spamservice_rescore": { "text": "{$actor} scored {$subject} again", "scope": "activity", "target": "happened" },
-  "deploy_stack": { "text": "{$actor} deployed {$subject}", "scope": "activity", "target": "happened" },
-  "stop_stack": { "text": "{$actor} stopped {$subject}", "scope": "activity", "target": "happened" },
-  "rollback_stack": { "text": "{$actor} rolled {$subject} back", "scope": "activity", "target": "happened" },
-  "purge_stack_volumes": { "text": "{$actor} emptied the volumes of {$subject}", "scope": "activity", "target": "happened" },
-  "refresh_stack": { "text": "{$actor} refreshed the status of {$subject}", "scope": "activity", "target": "happened" },
-  "delete_stack": { "text": "{$actor} deleted {$subject}", "scope": "activity", "target": "happened" },
-  "delete_stack_service": { "text": "{$actor} deleted service {$subject}", "scope": "activity", "target": "happened" },
-  "delete_server": { "text": "{$actor} deleted host {$subject}", "scope": "activity", "target": "happened" },
-  "update_site": { "text": "{$actor} changed {$subject}", "scope": "activity", "target": "happened" },
-  "manage_update_site": { "text": "{$actor} changed {$subject}", "scope": "activity", "target": "happened" },
-  "delete_site": { "text": "{$actor} deleted {$subject}", "scope": "activity", "target": "happened" },
-  "delete_runtime_image": { "text": "{$actor} deleted runtime image {$subject}", "scope": "activity", "target": "happened" },
-  "spamservice_test": { "text": "{$actor} tested the spam filter connection", "scope": "activity", "target": "happened" },
-  "spamservice_start": { "text": "{$actor} started the spam filter", "scope": "activity", "target": "happened" },
-  "spamservice_stop": { "text": "{$actor} stopped the spam filter", "scope": "activity", "target": "happened" },
-  "spamservice_restart": { "text": "{$actor} restarted the spam filter", "scope": "activity", "target": "happened" },
-  "delete_database": { "text": "{$actor} deleted database {$subject}", "scope": "activity", "target": "happened" },
-  "move_database_shared": { "text": "{$actor} moved database {$subject} to a shared engine", "scope": "activity", "target": "happened" },
-  "force_delete_database": { "text": "{$actor} force-deleted database {$subject}", "scope": "activity", "target": "happened" },
-  "delete_database_engine": { "text": "{$actor} deleted database engine {$subject}", "scope": "activity", "target": "happened" },
-  "force_delete_database_engine": { "text": "{$actor} force-deleted database engine {$subject}", "scope": "activity", "target": "happened" },
-  "acknowledge_posture": { "text": "{$actor} accepted the security posture of {$subject}", "scope": "activity", "target": "happened" },
-  "probe_server": { "text": "{$actor} checked whether {$subject} answers", "scope": "activity", "target": "happened" },
-  "cordon_server": { "text": "{$actor} stopped new apps on {$subject}", "scope": "activity", "target": "happened" },
-  "drain_server": { "text": "{$actor} moved the apps off {$subject}", "scope": "activity", "target": "happened" },
-  "uncordon_server": { "text": "{$actor} let {$subject} take new apps again", "scope": "activity", "target": "happened" },
-  "request_domain_certificate": { "text": "{$actor} requested a certificate for {$subject}", "scope": "activity", "target": "happened" },
-  "continue_dns_order": { "text": "{$actor} continued the DNS check of {$subject}", "scope": "activity", "target": "happened" },
-  "lift_ban": { "text": "{$actor} lifted the ban on {$subject}", "scope": "activity", "target": "happened" },
-  "lift_quarantine": { "text": "{$actor} released address {$subject}", "scope": "activity", "target": "happened" },
-  "delete_dns_zone": { "text": "{$actor} deleted DNS zone {$subject}", "scope": "activity", "target": "happened" },
-  "delete_dns_record": { "text": "{$actor} deleted DNS record {$subject}", "scope": "activity", "target": "happened" },
-  "delete_dns_peer": { "text": "{$actor} deleted DNS peer {$subject}", "scope": "activity", "target": "happened" },
-  "check_dns_health": { "text": "{$actor} checked the health of {$subject}", "scope": "activity", "target": "happened" },
-  "negotiate_transfer_key": { "text": "{$actor} agreed a transfer key with {$subject}", "scope": "activity", "target": "happened" },
-  "spamservice_key_create": { "text": "{$actor} created spam filter client key {$subject}", "scope": "activity", "target": "happened" },
-  "spamservice_key_enable": { "text": "{$actor} enabled spam filter client key {$subject}", "scope": "activity", "target": "happened" },
-  "spamservice_key_revoke": { "text": "{$actor} revoked spam filter client key {$subject}", "scope": "activity", "target": "happened" },
-  "restore_snapshot": { "text": "{$actor} restored snapshot {$subject}", "scope": "activity", "target": "happened" },
-  "delete_snapshot": { "text": "{$actor} deleted snapshot {$subject}", "scope": "activity", "target": "happened" },
-  "create_instance_from_template": { "text": "{$actor} created an app from template {$subject}", "scope": "activity", "target": "happened" },
-  "approve_template": { "text": "{$actor} approved template {$subject}", "scope": "activity", "target": "happened" },
-  "unapprove_template": { "text": "{$actor} withdrew the approval of template {$subject}", "scope": "activity", "target": "happened" },
-  "restore_backup": { "text": "{$actor} restored backup {$subject}", "scope": "activity", "target": "happened" },
-  "delete_backup": { "text": "{$actor} deleted backup {$subject}", "scope": "activity", "target": "happened" },
-  "detach_device": { "text": "{$actor} detached device {$subject}", "scope": "activity", "target": "happened" },
-  "delete_instance_database": { "text": "{$actor} detached database {$subject}", "scope": "activity", "target": "happened" },
-  "run_schedule": { "text": "{$actor} ran schedule {$subject}", "scope": "activity", "target": "happened" },
-  "delete_schedule": { "text": "{$actor} deleted schedule {$subject}", "scope": "activity", "target": "happened" },
-  "delete_schedule_step": { "text": "{$actor} deleted schedule step {$subject}", "scope": "activity", "target": "happened" },
-  "start_instance": { "text": "{$actor} started {$subject}", "scope": "activity", "target": "happened" },
-  "stop_instance": { "text": "{$actor} stopped {$subject}", "scope": "activity", "target": "happened" },
-  "restart_instance": { "text": "{$actor} restarted {$subject}", "scope": "activity", "target": "happened" },
-  "backup_instance": { "text": "{$actor} backed up {$subject}", "scope": "activity", "target": "happened" },
-  "snapshot_instance": { "text": "{$actor} took a snapshot of {$subject}", "scope": "activity", "target": "happened" },
-  "console_command_instance": { "text": "{$actor} sent a console command to {$subject}", "scope": "activity", "target": "happened" },
-  "exec_instance": { "text": "{$actor} ran a command in {$subject}", "scope": "activity", "target": "happened" },
-  "rollback_instance": { "text": "{$actor} rolled {$subject} back", "scope": "activity", "target": "happened" },
-  "install_instance": { "text": "{$actor} installed {$subject}", "scope": "activity", "target": "happened" },
-  "reinstall_instance": { "text": "{$actor} reinstalled {$subject}", "scope": "activity", "target": "happened" },
-  "destroy_instance_data": { "text": "{$actor} deleted {$subject} with its data", "scope": "activity", "target": "happened" },
-  "delete_instance": { "text": "{$actor} deleted {$subject}", "scope": "activity", "target": "happened" },
-  "refresh_instance_overview": { "text": "{$actor} refreshed the status of {$subject}", "scope": "activity", "target": "happened" },
-  "migrate_instance": { "text": "{$actor} moved {$subject} to another host", "scope": "activity", "target": "happened" },
-  "open_shell": { "text": "{$actor} opened a shell in {$subject}", "scope": "activity", "target": "happened" },
-  "open_framebuffer": { "text": "{$actor} opened the screen of {$subject}", "scope": "activity", "target": "happened" },
-  "app_update_instance": { "text": "{$actor} updated the app in {$subject}", "scope": "activity", "target": "happened" },
-  "declare_volume": { "text": "{$actor} added volume {$subject}", "scope": "activity", "target": "happened" },
-  "redeclare_volume": { "text": "{$actor} changed volume {$subject}", "scope": "activity", "target": "happened" },
-  "destroy_volume": { "text": "{$actor} destroyed volume {$subject}", "scope": "activity", "target": "happened" },
-  "create_game_domain": { "text": "{$actor} added game address {$subject}", "scope": "activity", "target": "happened" },
-  "update_game_domain": { "text": "{$actor} changed game address {$subject}", "scope": "activity", "target": "happened" },
-  "delete_game_domain": { "text": "{$actor} deleted game address {$subject}", "scope": "activity", "target": "happened" },
-  "enable_site": { "text": "{$actor} switched {$subject} on", "scope": "activity", "target": "happened" },
-  "disable_site": { "text": "{$actor} switched {$subject} off", "scope": "activity", "target": "happened" },
-  "clone_site": { "text": "{$actor} cloned {$subject}", "scope": "activity", "target": "happened" },
-  "rollback_release": { "text": "{$actor} rolled {$subject} back to its previous release", "scope": "activity", "target": "happened" },
-  "test_git_provider": { "text": "{$actor} tested the connection to {$subject}", "scope": "activity", "target": "happened" },
+  "test_channel": { "text": "{$actor} sent a test through {$subject}", "scope": "hohenheim", "target": "happened" },
+  "test_backup_target": { "text": "{$actor} tested the connection to {$subject}", "scope": "hohenheim", "target": "happened" },
+  "access_rule_toggle": { "text": "{$actor} switched rule {$subject} on or off", "scope": "hohenheim", "target": "happened" },
+  "delete_access_rule": { "text": "{$actor} deleted rule {$subject}", "scope": "hohenheim", "target": "happened" },
+  "access_rule_move_up": { "text": "{$actor} moved rule {$subject} up", "scope": "hohenheim", "target": "happened" },
+  "access_rule_move_down": { "text": "{$actor} moved rule {$subject} down", "scope": "hohenheim", "target": "happened" },
+  "delete_project": { "text": "{$actor} deleted project {$subject}", "scope": "hohenheim", "target": "happened" },
+  "spamservice_mark_spam": { "text": "{$actor} marked {$subject} as spam", "scope": "hohenheim", "target": "happened" },
+  "spamservice_mark_ham": { "text": "{$actor} marked {$subject} as not spam", "scope": "hohenheim", "target": "happened" },
+  "spamservice_rescore": { "text": "{$actor} scored {$subject} again", "scope": "hohenheim", "target": "happened" },
+  "deploy_stack": { "text": "{$actor} deployed {$subject}", "scope": "hohenheim", "target": "happened" },
+  "stop_stack": { "text": "{$actor} stopped {$subject}", "scope": "hohenheim", "target": "happened" },
+  "rollback_stack": { "text": "{$actor} rolled {$subject} back", "scope": "hohenheim", "target": "happened" },
+  "purge_stack_volumes": { "text": "{$actor} emptied the volumes of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "refresh_stack": { "text": "{$actor} refreshed the status of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_stack": { "text": "{$actor} deleted {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_stack_service": { "text": "{$actor} deleted service {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_server": { "text": "{$actor} deleted host {$subject}", "scope": "hohenheim", "target": "happened" },
+  "update_site": { "text": "{$actor} changed {$subject}", "scope": "hohenheim", "target": "happened" },
+  "manage_update_site": { "text": "{$actor} changed {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_site": { "text": "{$actor} deleted {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_runtime_image": { "text": "{$actor} deleted runtime image {$subject}", "scope": "hohenheim", "target": "happened" },
+  "spamservice_test": { "text": "{$actor} tested the spam filter connection", "scope": "hohenheim", "target": "happened" },
+  "spamservice_start": { "text": "{$actor} started the spam filter", "scope": "hohenheim", "target": "happened" },
+  "spamservice_stop": { "text": "{$actor} stopped the spam filter", "scope": "hohenheim", "target": "happened" },
+  "spamservice_restart": { "text": "{$actor} restarted the spam filter", "scope": "hohenheim", "target": "happened" },
+  "delete_database": { "text": "{$actor} deleted database {$subject}", "scope": "hohenheim", "target": "happened" },
+  "move_database_shared": { "text": "{$actor} moved database {$subject} to a shared engine", "scope": "hohenheim", "target": "happened" },
+  "force_delete_database": { "text": "{$actor} force-deleted database {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_database_engine": { "text": "{$actor} deleted database engine {$subject}", "scope": "hohenheim", "target": "happened" },
+  "force_delete_database_engine": { "text": "{$actor} force-deleted database engine {$subject}", "scope": "hohenheim", "target": "happened" },
+  "acknowledge_posture": { "text": "{$actor} accepted the security posture of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "probe_server": { "text": "{$actor} checked whether {$subject} answers", "scope": "hohenheim", "target": "happened" },
+  "cordon_server": { "text": "{$actor} stopped new apps on {$subject}", "scope": "hohenheim", "target": "happened" },
+  "drain_server": { "text": "{$actor} moved the apps off {$subject}", "scope": "hohenheim", "target": "happened" },
+  "uncordon_server": { "text": "{$actor} let {$subject} take new apps again", "scope": "hohenheim", "target": "happened" },
+  "request_domain_certificate": { "text": "{$actor} requested a certificate for {$subject}", "scope": "hohenheim", "target": "happened" },
+  "continue_dns_order": { "text": "{$actor} continued the DNS check of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "lift_ban": { "text": "{$actor} lifted the ban on {$subject}", "scope": "hohenheim", "target": "happened" },
+  "lift_quarantine": { "text": "{$actor} released address {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_dns_zone": { "text": "{$actor} deleted DNS zone {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_dns_record": { "text": "{$actor} deleted DNS record {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_dns_peer": { "text": "{$actor} deleted DNS peer {$subject}", "scope": "hohenheim", "target": "happened" },
+  "check_dns_health": { "text": "{$actor} checked the health of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "negotiate_transfer_key": { "text": "{$actor} agreed a transfer key with {$subject}", "scope": "hohenheim", "target": "happened" },
+  "spamservice_key_create": { "text": "{$actor} created spam filter client key {$subject}", "scope": "hohenheim", "target": "happened" },
+  "spamservice_key_enable": { "text": "{$actor} enabled spam filter client key {$subject}", "scope": "hohenheim", "target": "happened" },
+  "spamservice_key_revoke": { "text": "{$actor} revoked spam filter client key {$subject}", "scope": "hohenheim", "target": "happened" },
+  "restore_snapshot": { "text": "{$actor} restored snapshot {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_snapshot": { "text": "{$actor} deleted snapshot {$subject}", "scope": "hohenheim", "target": "happened" },
+  "create_instance_from_template": { "text": "{$actor} created an app from template {$subject}", "scope": "hohenheim", "target": "happened" },
+  "approve_template": { "text": "{$actor} approved template {$subject}", "scope": "hohenheim", "target": "happened" },
+  "unapprove_template": { "text": "{$actor} withdrew the approval of template {$subject}", "scope": "hohenheim", "target": "happened" },
+  "restore_backup": { "text": "{$actor} restored backup {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_backup": { "text": "{$actor} deleted backup {$subject}", "scope": "hohenheim", "target": "happened" },
+  "detach_device": { "text": "{$actor} detached device {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_instance_database": { "text": "{$actor} detached database {$subject}", "scope": "hohenheim", "target": "happened" },
+  "run_schedule": { "text": "{$actor} ran schedule {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_schedule": { "text": "{$actor} deleted schedule {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_schedule_step": { "text": "{$actor} deleted schedule step {$subject}", "scope": "hohenheim", "target": "happened" },
+  "start_instance": { "text": "{$actor} started {$subject}", "scope": "hohenheim", "target": "happened" },
+  "stop_instance": { "text": "{$actor} stopped {$subject}", "scope": "hohenheim", "target": "happened" },
+  "restart_instance": { "text": "{$actor} restarted {$subject}", "scope": "hohenheim", "target": "happened" },
+  "backup_instance": { "text": "{$actor} backed up {$subject}", "scope": "hohenheim", "target": "happened" },
+  "snapshot_instance": { "text": "{$actor} took a snapshot of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "console_command_instance": { "text": "{$actor} sent a console command to {$subject}", "scope": "hohenheim", "target": "happened" },
+  "exec_instance": { "text": "{$actor} ran a command in {$subject}", "scope": "hohenheim", "target": "happened" },
+  "rollback_instance": { "text": "{$actor} rolled {$subject} back", "scope": "hohenheim", "target": "happened" },
+  "install_instance": { "text": "{$actor} installed {$subject}", "scope": "hohenheim", "target": "happened" },
+  "reinstall_instance": { "text": "{$actor} reinstalled {$subject}", "scope": "hohenheim", "target": "happened" },
+  "destroy_instance_data": { "text": "{$actor} deleted {$subject} with its data", "scope": "hohenheim", "target": "happened" },
+  "delete_instance": { "text": "{$actor} deleted {$subject}", "scope": "hohenheim", "target": "happened" },
+  "refresh_instance_overview": { "text": "{$actor} refreshed the status of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "migrate_instance": { "text": "{$actor} moved {$subject} to another host", "scope": "hohenheim", "target": "happened" },
+  "open_shell": { "text": "{$actor} opened a shell in {$subject}", "scope": "hohenheim", "target": "happened" },
+  "open_framebuffer": { "text": "{$actor} opened the screen of {$subject}", "scope": "hohenheim", "target": "happened" },
+  "app_update_instance": { "text": "{$actor} updated the app in {$subject}", "scope": "hohenheim", "target": "happened" },
+  "declare_volume": { "text": "{$actor} added volume {$subject}", "scope": "hohenheim", "target": "happened" },
+  "redeclare_volume": { "text": "{$actor} changed volume {$subject}", "scope": "hohenheim", "target": "happened" },
+  "destroy_volume": { "text": "{$actor} destroyed volume {$subject}", "scope": "hohenheim", "target": "happened" },
+  "create_game_domain": { "text": "{$actor} added game address {$subject}", "scope": "hohenheim", "target": "happened" },
+  "update_game_domain": { "text": "{$actor} changed game address {$subject}", "scope": "hohenheim", "target": "happened" },
+  "delete_game_domain": { "text": "{$actor} deleted game address {$subject}", "scope": "hohenheim", "target": "happened" },
+  "enable_site": { "text": "{$actor} switched {$subject} on", "scope": "hohenheim", "target": "happened" },
+  "disable_site": { "text": "{$actor} switched {$subject} off", "scope": "hohenheim", "target": "happened" },
+  "clone_site": { "text": "{$actor} cloned {$subject}", "scope": "hohenheim", "target": "happened" },
+  "rollback_release": { "text": "{$actor} rolled {$subject} back to its previous release", "scope": "hohenheim", "target": "happened" },
+  "test_git_provider": { "text": "{$actor} tested the connection to {$subject}", "scope": "hohenheim", "target": "happened" },
   "wordpress": { "text": "A WordPress site with its own database.", "scope": "put_online", "target": "card" },
   "minecraft_server": { "text": "A Minecraft server for your network, behind its proxy.", "scope": "put_online", "target": "card" },
   "velocity_proxy": { "text": "The entrance players connect to, in front of your Minecraft servers.", "scope": "put_online", "target": "card" },
-  "rotate_incus_cert": { "text": "{$actor} gave {$subject} a new Incus client identity", "scope": "activity", "target": "happened" },
-  "rotate_host_key": { "text": "{$actor} gave {$subject} a new SSH client identity", "scope": "activity", "target": "happened" },
-  "edit_remote_dns_record": { "text": "{$actor} changed a record of {$subject} on its primary", "scope": "activity", "target": "happened" },
+  "rotate_incus_cert": { "text": "{$actor} gave {$subject} a new Incus client identity", "scope": "hohenheim", "target": "happened" },
+  "rotate_host_key": { "text": "{$actor} gave {$subject} a new SSH client identity", "scope": "hohenheim", "target": "happened" },
+  "edit_remote_dns_record": { "text": "{$actor} changed a record of {$subject} on its primary", "scope": "hohenheim", "target": "happened" },
   "live_from_branch": {
     "text": "Live: commit {$commit} from {$branch}",
     "scope": "deployments"

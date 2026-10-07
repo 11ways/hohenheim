@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -81,7 +82,7 @@ public final class DnsZonePeerParts {
             .column(ColumnSpec.fromField(DnsZonePeerModel.ZONE_ID)
                 .relation(RelationPick.of(DnsZonePeerModel.ZONE_ID, DnsZoneModel.MODEL_ID).build())
                 .build())
-            .column(ColumnSpec.virtual(PEER_NAME, Microcopy.of("peer_name").withFilter("scope", "field")).build())
+            .column(ColumnSpec.virtual(PEER_NAME, HohenheimFormCopy.label("peer_name")).build())
             .build();
         return PanelResource.builder(HohenheimIds.id("dns_zone_peer"), SLUG,
                 SubjectType.record(DnsZonePeerModel.MODEL_ID))

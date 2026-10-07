@@ -42,7 +42,7 @@
             <pl-card-content>
                 <pl-table>
                     <pl-table-header><pl-table-row>
-                        <pl-table-head>{{ t("name", scope: "field") }}</pl-table-head>
+                        <pl-table-head>{{ t("name", scope: "hohenheim_field") }}</pl-table-head>
                         <pl-table-head>{{ t("fetch_state", scope: "server_media") }}</pl-table-head>
                         <pl-table-head></pl-table-head>
                     </pl-table-row></pl-table-header>
@@ -75,8 +75,8 @@
         {% if shown.media %}
         <pl-table id="media-table">
             <pl-table-header><pl-table-row>
-                <pl-table-head>{{ t("name", scope: "field") }}</pl-table-head>
-                <pl-table-head>{{ t("description", scope: "field") }}</pl-table-head>
+                <pl-table-head>{{ t("name", scope: "hohenheim_field") }}</pl-table-head>
+                <pl-table-head>{{ t("description", scope: "hohenheim_field") }}</pl-table-head>
                 <pl-table-head></pl-table-head>
             </pl-table-row></pl-table-header>
             <pl-table-body>
