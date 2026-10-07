@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.activity.ActivityRecordCell;
+import be.elevenways.hohenheim.server.HohenheimActivity;
+import be.elevenways.hohenheim.server.host.HostProbe;
+import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -22,10 +25,14 @@ import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.orm.activity.ActivityActions;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ActivityVisibility;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.ZenitPrincipalKind;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.Test;
@@ -285,8 +292,8 @@ class AdminActivityListTest extends HohenheimTestBase {
             .as("step 7: the link reads as the stored record title")
             .isEqualTo(OPERATOR_TITLE);
         assertThat(linkedCell.url())
-            .as("step 7: and points at that record's admin page")
-            .isEqualTo("/admin/servers/" + OPERATOR_RECORD_ID);
+            .as("step 7: and points at that record's front door, which opens its landing tab")
+            .isEqualTo("/admin/servers/" + OPERATOR_RECORD_ID + "/open");
 
         // 7b. A model BOTH panels mount (sites: the admin resource and its /manage narrowing)
         //     still links into THIS panel: the admin activity list never sends an operator to
@@ -295,7 +302,7 @@ class AdminActivityListTest extends HohenheimTestBase {
             rowFor(SITE_RECORD_ID), column(resource, ActivityModel.RECORD_ID.getName()));
         assertThat(siteCell.url())
             .as("step 7b: a site row links to the admin site page")
-            .isEqualTo("/admin/sites/" + SITE_RECORD_ID);
+            .isEqualTo("/admin/sites/" + SITE_RECORD_ID + "/open");
         assertThat(defaultList.body())
             .as("step 7b: and the rendered list carries that /admin link")
             .contains("/admin/sites/" + SITE_RECORD_ID)
@@ -322,6 +329,83 @@ class AdminActivityListTest extends HohenheimTestBase {
             .as("step 9: and nothing else is")
             .doesNotContain(OPERATOR_TITLE)
             .doesNotContain(UNLINKABLE_TITLE);
+    }
+
+    @Test
+    void peopleOnlyLeavesPlumbingAndSeedsBehindTheToggleOnTheListAndTheDashboard() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        String person = "hh-people-person-" + suffix;
+        String seeded = "hh-people-seeded-" + suffix;
+        String plumbing = "hh-people-plumbing-" + suffix;
+
+        // 1. Hohenheim's plumbing models are declared internal; a model people also write is not.
+        for (var model : HohenheimActivity.INTERNAL) {
+            assertThat(ActivityLog.visibilityFor(model))
+                .as("step 1: " + model + " is declared internal").isEqualTo(ActivityVisibility.INTERNAL);
+        }
+        assertThat(ActivityLog.visibilityFor(PortAllocationModel.MODEL_ID))
+            .as("step 1: port claims are plumbing").isEqualTo(ActivityVisibility.INTERNAL);
+        assertThat(ActivityLog.internalModelTokens())
+            .as("step 1: zenit-auth's grants are declared internal in this runtime too")
+            .contains("zenit:grant", "zenit:record_grant");
+        assertThat(ActivityLog.visibilityFor(ServerModel.MODEL_ID))
+            .as("step 1: hosts stay listed, operators admit and edit them").isEqualTo(ActivityVisibility.LISTED);
+
+        // 2. A heartbeat is bookkeeping, never activity: a probe success writes no row for its host.
+        String hostName = "hh-heartbeat-" + suffix;
+        ServerModel servers = Models.get(ServerModel.class);
+        Row host = servers.createEmptyRow();
+        host.set(ServerModel.NAME, hostName);
+        host.set(ServerModel.MODE, ServerModel.MODE_SSH);
+        host.set(ServerModel.SSH_TARGET, "operator@" + hostName + ".invalid");
+        host.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
+        servers.save(host);
+        String hostId = String.valueOf((Object) host.get(ServerModel.ID));
+        long before = activityCount(ServerModel.MODEL_ID.toString(), hostId);
+        HostProbe.recordSuccess(hostName);
+        assertThat(servers.findByName(hostName).get(ServerModel.LAST_SEEN_AT))
+            .as("step 2: the probe did record when the host was seen").isNotNull();
+        assertThat(activityCount(ServerModel.MODEL_ID.toString(), hostId))
+            .as("step 2: and wrote no activity row for it").isEqualTo(before);
+
+        // 3. The list opens on what a person did: a seed row and an internal row are not on it.
+        write(SiteModel.MODEL_ID.toString(), person, person, "updated",
+            Accountability.ORIGIN_WEB, Instant.parse("2999-02-01T00:00:03Z"));
+        write(SiteModel.MODEL_ID.toString(), seeded, seeded, "created",
+            AccountabilityOrigin.SEED.token(), Instant.parse("2999-02-01T00:00:02Z"));
+        write(PortAllocationModel.MODEL_ID.toString(), plumbing, plumbing, "created",
+            Accountability.ORIGIN_WEB, Instant.parse("2999-02-01T00:00:01Z"));
+        String opening = adminGet("/admin/activity").body();
+        assertThat(opening).as("step 3: a person's row opens the list").contains(person);
+        assertThat(opening).as("step 3: a seed row does not").doesNotContain(seeded);
+        assertThat(opening).as("step 3: an internal row does not").doesNotContain(plumbing);
+
+        // 4. The framework's internal toggle brings the plumbing back, still searchable.
+        assertThat(adminGet("/admin/activity?filter.internal=true&filter.record_id=" + plumbing).body())
+            .as("step 4: internal records are one toggle away").contains(plumbing);
+
+        // 5. The dashboard's recent activity reads the SAME scope as the list's opening. An empty install shows no
+        //    activity band at all, so the journey puts one app online first.
+        SiteModel sites = Models.get(SiteModel.class);
+        Row site = sites.createEmptyRow();
+        site.set(SiteModel.NAME, "People Only Site " + suffix);
+        site.set(SiteModel.SLUG, "people-only-site-" + suffix);
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
+        site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
+        site.set(SiteModel.STATUS, "active");
+        site.set(SiteModel.ENABLED, true);
+        sites.save(site);
+        String dashboard = adminGet("/admin/dashboard").body();
+        assertThat(dashboard).as("step 5: the dashboard shows what a person did").contains(person);
+        assertThat(dashboard).as("step 5: and neither seeds nor plumbing")
+            .doesNotContain(seeded).doesNotContain(plumbing);
+    }
+
+    private static long activityCount(String model, String recordId) {
+        return new ActivityModel().find()
+            .where(ActivityModel.MODEL.eq(model))
+            .where(ActivityModel.RECORD_ID.eq(recordId))
+            .all().size();
     }
 
     /** The panel's own activity log, viewed as its caller sees it -- never a fresh one, the registered one. */

@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -117,7 +118,8 @@ public final class DnsSecondaryFreshness {
                     "served", served != null ? served : -1, "primary", ourSerial));
             }
         }
-        Models.get(DnsZonePeerModel.class).save(link);
+        // A freshness probe is bookkeeping; a stale secondary reaches operators as an alert above.
+        ActivityLog.suppressed(() -> Models.get(DnsZonePeerModel.class).save(link));
         return new Outcome(link, peer, served, error, current);
     }
 

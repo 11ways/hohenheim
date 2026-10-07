@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.task;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
@@ -103,7 +104,8 @@ public class UpdateSystemUsers extends ScheduledTask {
                 }
             } else {
                 apply(existing, pu, now);
-                model.save(existing);
+                // Re-reading /etc/passwd every pass is a mirror refresh, never activity: see HohenheimActivity.
+                ActivityLog.suppressed(() -> model.save(existing));
             }
         }
 
