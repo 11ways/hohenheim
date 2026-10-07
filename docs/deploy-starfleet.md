@@ -1788,3 +1788,37 @@ daystrom: still NOT deployed from this workstation (no target, key refused); run
 
 ROLLBACK: restore `/root/hohenheim-m011-crash-20261007/hohenheim.db`, then `tools/deploy-host.sh --rollback starfleet
 --preflight /root/hohenheim-preflight-20261006-233512`.
+
+## Deploy 2026-10-07 (starfleet, night): 73e78352, W5b/W5c, boot reconciles stored ids, settings sections
+
+Swapped starfleet from c34d9e79 to the pushed hohenheim 73e78352 (jar sha256 `177bb619...4f763e33a9`, 280243682
+bytes, 15 stamp rows clean; zenit 0c87d1c3, zenit-cms bf4a9e42, zenit-forms 0ae568e3, zenit-auth 59d37f1c, plumage
+c100eb30, spamservice d0f18d63). Ships W5c (put-online journey stepper, HTTPS summary, dashboard glyphs and worded
+attention actions), W5b (plumbing activity internal, Protect a path in place), D5 (boot runs
+`MigrationRunner.migrateAndReconcile()`), W5b2/W5b3 (operator settings sections, Framework (advanced), task tabs).
+No Hohenheim migration since c34d9e79.
+
+Before: own byte copy `/root/hohenheim-dep6-20261007/hohenheim.db` (integrity ok); `zenit_stored_id_reconciliation`
+empty; 131 `zenit-auth:*` tokens, all in `zenit_activity.model` (user 103, password 12, permission_group 5, api_key 4,
+record_grant 4, grant 2, email_verification 1). Lane `zenit-dev deploy starfleet --pushed`: rehearsal green, 104
+migrations before and after (none applied), healthy after both restarts (02:39 UTC), `zenit-dev deployed starfleet`
+= current 15/15, no RESTART PENDING. 0 journal errors since the restart. Preflight
+`/root/hohenheim-preflight-20261007-023728/`.
+
+Stored-id reconcile at the first boot: `zenit.stored_ids.reconciled rewrites=84` ("Stored ids reconciled 84
+rewritten"), second boot 0. After: 0 `zenit-auth:*` tokens; the ledger holds 84 rows: the 7 `zenit-auth:*` models,
+`zenit-comms:*` models, legacy activity actions (`update` 27793 -> `zenit:update`, `create`, `login`, ...),
+`comms_deliveries` channels/notification keys, and `system_task`/`system_task_history` class names -> task ids.
+Both boots log `zenit.stored_ids.columns_unbound columns=server` (a stored-id column the reconciler cannot reach).
+
+Logged-in pass: dashboard (worded attention actions, Apps band with glyphs, Recent activity is people's actions),
+Activity (people only; still a table; every login comes with a "Web: Updated <user>" row; the filter chip reads
+"One row per action: One row per action"), Settings (operator sections, Framework (advanced) folded last; "Proxy"
+appears as section and as group), Starfleet Apex overview (Protect a path in the heading and on the Protection
+card), the Put something online chooser, tenant /manage (still the old grouped sidebar and a plain "Your instances"
+list). The "Unowned Docker resources on local" attention item carries no action. Nothing was put online or protected.
+
+daystrom: still NOT deployed from this workstation (no target, key refused); runs 27064da4; M011 step still owed.
+
+ROLLBACK: restore `/root/hohenheim-dep6-20261007/hohenheim.db` (pre-reconcile ids), then `tools/deploy-host.sh
+--rollback starfleet --preflight /root/hohenheim-preflight-20261007-023728`.
