@@ -16,7 +16,6 @@ import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
-import be.elevenways.hohenheim.server.docker.DockerReconciler;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.security.SshAuthWatcher;
@@ -47,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 
 import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
+import static be.elevenways.hohenheim.server.cms.AttentionItems.byHost;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 
@@ -116,7 +116,7 @@ public final class AttentionCollector {
             // the Reconcile findings list, which HohenheimPanel puts behind the very
             // same gate -- so a proxy-only node used to render Docker findings whose
             // link 404s and which no enabled role could ever act on.
-            items.addAll(DockerReconciler.attentionItems());
+            dockerFindings(items);
             dockerForeignResources(items);
             HostAttention.stuckReleasingPorts(items,
                 Now.instant().minus(HostAttention.RELEASING_STUCK_AFTER));
@@ -164,8 +164,37 @@ public final class AttentionCollector {
             copy("docker_foreign", "attention_title", "server", server),
             copy("docker_foreign", "attention_detail",
                 "count", count, "page", ReconcileFindingParts.LABEL),
-            foreignFindingsOf(server),
+            findingsOf(server, FOREIGN_BUCKETS),
             action("act_review_findings"))));
+    }
+
+    /** How many resource names a findings item spells out before eliding. */
+    private static final int FINDING_NAME_CAP = 3;
+
+    /**
+     * The reconciler's stored warnings, per host: one item for orphaned resources (attributed to us, record gone:
+     * volumes here are unreclaimed data) and one for name collisions (a same-named foreign resource is what the
+     * legacy replace paths would destroy), each leading to exactly the findings it counts. Foreign-known and owned
+     * rows never surface here.
+     */
+    public static void dockerFindings(@NonNull List<AttentionItem> items) {
+        dockerBucket(items, ReconcileFindingModel.BUCKET_ORPHANED, "docker_orphans");
+        dockerBucket(items, ReconcileFindingModel.BUCKET_FOREIGN_COLLIDING, "docker_colliding");
+    }
+
+    private static void dockerBucket(@NonNull List<AttentionItem> items, @NonNull String bucket, @NonNull String key) {
+        byHost(Models.get(ReconcileFindingModel.class).find().where(ReconcileFindingModel.BUCKET.eq(bucket)).all(),
+            row -> row.get(ReconcileFindingModel.SERVER_NAME),
+            row -> row.get(ReconcileFindingModel.KIND) + " " + row.get(ReconcileFindingModel.RESOURCE_NAME))
+            .forEach((server, names) -> {
+                String listed = String.join(", ", names.subList(0, Math.min(names.size(), FINDING_NAME_CAP)))
+                    + (names.size() > FINDING_NAME_CAP ? ", ..." : "");
+                items.add(item(AttentionSeverity.WARNING, "cubes",
+                    copy(key, "attention_title", "server", server),
+                    copy(key, "attention_detail", "count", names.size(), "names", listed),
+                    findingsOf(server, List.of(bucket)),
+                    action("act_review_findings")));
+            });
     }
 
     /**
@@ -187,10 +216,10 @@ public final class AttentionCollector {
      * TYPED rule text (zenit-cms's query box): two buckets are one {@code IN} test there,
      * readable and editable by the operator.
      */
-    private static @NonNull RouteTarget foreignFindingsOf(String server) {
+    private static @NonNull RouteTarget findingsOf(@NonNull String server, @NonNull List<String> buckets) {
         Condition tree = Condition.all(
             Condition.test(ReconcileFindingModel.SERVER_NAME.getName(), CoreTypes.EQUALS, Operand.of(server)),
-            Condition.test(ReconcileFindingModel.BUCKET.getName(), CoreTypes.IN, Operand.of(FOREIGN_BUCKETS)));
+            Condition.test(ReconcileFindingModel.BUCKET.getName(), CoreTypes.IN, Operand.of(buckets)));
         return CmsRoutes.list(ADMIN, "reconcile-findings").with(CmsEndpoints.LIST_QUERY_PARAM, RuleText.print(tree));
     }
 

@@ -10462,6 +10462,18 @@
     "text": "{$network}",
     "scope": "access_rule"
   },
+  "protection_password": {
+    "text": ".match {$count :number}\none {{Password, 1 person}}\n* {{Password, {$count} people}}",
+    "scope": "access_rule"
+  },
+  "protection_network": {
+    "text": ".match {$count :number}\none {{Network, 1 rule}}\n* {{Network, {$count} rules}}",
+    "scope": "access_rule"
+  },
+  "protection_sign_in": {
+    "text": "Sign-in with {$provider}",
+    "scope": "access_rule"
+  },
   "summary_basic_auth": {
     "text": "Username {$username}",
     "scope": "access_rule"
@@ -13029,7 +13041,7 @@
   "settings.hohenheim.storage.volume_uid_base.label": "Volume uid base",
   "settings.hohenheim.storage.volume_uid_base.help": "First host uid workspaces are mapped to, each workspace running as this number plus its instance id, which must stay below the subuid range Incus gives unprivileged containers (1000000).",
   "settings.hohenheim.label": "Hohenheim",
-  "settings.hohenheim.proxy.label": "Proxy",
+  "settings.hohenheim.proxy.label": "Ports and routing",
   "settings.hohenheim.proxy.help": "The reverse-proxy listeners and routing behaviour",
   "settings.hohenheim.roles.label": "Install roles",
   "settings.hohenheim.roles.help": "Which subsystems this installation runs; disabled roles do not start, declare no scheduled tasks and remove their admin surfaces",
@@ -13733,7 +13745,7 @@
     "scope": "put_online"
   },
   "outcome_live": {
-    "text": "Live at {$address}.",
+    "text": "Live at {$address}. HTTPS follows once the certificate is issued, which needs {$address} to point here.",
     "scope": "put_online"
   },
   "outcome_running": {

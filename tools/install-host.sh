@@ -854,12 +854,6 @@ seed_settings "$SETTINGS_DIR/local.dry" 0600 "{
     },
     \"debugging\": {
         \"expose_error_details\": false
-    },
-    \"brand\": {
-        \"name\": \"Hohenheim\"
-    },
-    \"activity\": {
-        \"enabled\": true
     }$LOCAL_AUTH_BLOCK$LOCAL_HOHENHEIM_BLOCK
 }
 "

@@ -77,18 +77,27 @@ public final class PutOnline {
 
     public static final StringField HTTPS = StringField.builder("https").label(copy("certificate")).build();
 
+    /* The journey's step names, one home: the chooser, the wizard's own steps and the run that ends it. */
+    static final Microcopy STEP_WHAT = copy("step_what");
+    static final Microcopy STEP_WHERE = copy("step_where");
+    static final Microcopy STEP_OPTIONS = copy("step_options");
+    static final Microcopy STEP_HTTPS = copy("step_https");
+    static final Microcopy STEP_LIVE = copy("step_live");
+
     /** The run's steps for a template: the app, its install, its website, its certificate, then live. */
     private static final OperationSteps APP_STEPS = OperationSteps.of(
         OperationSteps.step("app", copy("run_app")),
         OperationSteps.step("install", copy("run_install")),
         OperationSteps.step("website", copy("run_website")),
         OperationSteps.step("certificate", copy("run_certificate")),
-        OperationSteps.step("live", copy("run_live")));
+        OperationSteps.step("live", copy("run_live")))
+        .inJourney(List.of(STEP_WHAT, STEP_WHERE, STEP_OPTIONS, STEP_HTTPS), STEP_LIVE);
 
     /** The run's steps for an address: its website and its certificate. */
     private static final OperationSteps ADDRESS_STEPS = OperationSteps.of(
         OperationSteps.step("website", copy("run_website")),
-        OperationSteps.step("certificate", copy("run_certificate")));
+        OperationSteps.step("certificate", copy("run_certificate")))
+        .inJourney(List.of(STEP_WHAT, STEP_WHERE, STEP_HTTPS), STEP_LIVE);
 
     private static final FormSpec TEMPLATE_INPUT = FormSpec.builder()
         .add(InstanceTemplateOperations.NAME)
@@ -98,12 +107,12 @@ public final class PutOnline {
         .add(InstanceTemplateOperations.ENVIRONMENT_ID)
         .add(Nested.of(InstanceTemplateOperations.VARIABLES).subSpec(FormSpec.builder().build()).build())
         .add(httpsChoice())
-        .step(FormStep.of("where", copy("step_where"), InstanceTemplateOperations.NAME.getName(), HOSTNAME.getName(),
+        .step(FormStep.of("where", STEP_WHERE, InstanceTemplateOperations.NAME.getName(), HOSTNAME.getName(),
             InstanceTemplateOperations.SERVER_ID.getName(), InstanceTemplateOperations.PROJECT_ID.getName(),
             InstanceTemplateOperations.ENVIRONMENT_ID.getName()).describe(copy("step_where_lead")))
-        .step(new FormStep(InstanceTemplateOperations.VARIABLES, copy("step_options"), copy("step_options_lead"),
+        .step(new FormStep(InstanceTemplateOperations.VARIABLES, STEP_OPTIONS, copy("step_options_lead"),
             List.of(InstanceTemplateOperations.VARIABLES)))
-        .step(FormStep.of("https", copy("step_https"), HTTPS.getName()).describe(copy("step_https_lead"))
+        .step(FormStep.of("https", STEP_HTTPS, HTTPS.getName()).describe(copy("step_https_lead"))
             .summarizedBy(PutOnline::templateSummary))
         .build();
 
@@ -118,9 +127,9 @@ public final class PutOnline {
             .build())
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SETTINGS))
         .add(httpsChoice())
-        .step(FormStep.of("where", copy("step_where"), SiteModel.NAME.getName(), ADDRESS_HOSTNAME.getName(),
+        .step(FormStep.of("where", STEP_WHERE, SiteModel.NAME.getName(), ADDRESS_HOSTNAME.getName(),
             SiteModel.UPSTREAM_KIND.getName(), SiteModel.SETTINGS.getName()).describe(copy("step_where_lead")))
-        .step(FormStep.of("https", copy("step_https"), HTTPS.getName()).describe(copy("step_https_lead"))
+        .step(FormStep.of("https", STEP_HTTPS, HTTPS.getName()).describe(copy("step_https_lead"))
             .summarizedBy(PutOnline::addressSummary))
         .build();
 

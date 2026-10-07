@@ -295,9 +295,8 @@ always required.
 ## Layout (what the installer creates)
 
     /opt/hohenheim/
-      hohenheim-server.jar
+      hohenheim-server.jar     carries settings/default.dry (the shipped defaults, read first)
       public/cms.js            (+ cms.js.map, optional)
-      settings/default.dry     copy of the repo's settings/default.dry
       settings/local.dry       every setting; the role + security declaration under
                                hohenheim, see below (GITIGNORED in the repo -- it is
                                per-deployment; start from settings/local.dry.example)

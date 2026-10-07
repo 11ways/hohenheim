@@ -15,12 +15,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
+import static be.elevenways.hohenheim.server.cms.AttentionItems.byHost;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
@@ -94,21 +92,16 @@ public final class HostAttention {
      * parameter only so a test can prove the projection without forging timestamps.
      */
     public static void stuckReleasingPorts(List<AttentionItem> items, Instant threshold) {
-        Map<String, List<String>> stuckByServer = new LinkedHashMap<>();
-        List<Row> releasing = Models.get(PortAllocationModel.class).find()
+        List<Row> stuck = Models.get(PortAllocationModel.class).find()
             .where(PortAllocationModel.STATUS.eq(PortAllocationModel.STATUS_RELEASING))
-            .all();
-        for (Row claim : releasing) {
-            Instant parkedAt = claim.get(PortAllocationModel.UPDATED_AT);
-            if (parkedAt == null || parkedAt.isAfter(threshold)) {
-                continue;
-            }
-            stuckByServer.computeIfAbsent(serverNameOf(claim.get(PortAllocationModel.SERVER_ID)),
-                    k -> new ArrayList<>())
-                .add(claim.get(PortAllocationModel.PORT) + "/"
-                    + claim.get(PortAllocationModel.PROTOCOL));
-        }
-        stuckByServer.forEach((server, ports) -> items.add(item(AttentionSeverity.WARNING, "ethernet",
+            .all().stream()
+            .filter(claim -> {
+                Instant parkedAt = claim.get(PortAllocationModel.UPDATED_AT);
+                return parkedAt != null && !parkedAt.isAfter(threshold);
+            })
+            .toList();
+        byHost(stuck, claim -> serverNameOf(claim.get(PortAllocationModel.SERVER_ID)),
+            claim -> claim.get(PortAllocationModel.PORT) + "/" + claim.get(PortAllocationModel.PROTOCOL)).forEach((server, ports) -> items.add(item(AttentionSeverity.WARNING, "ethernet",
             copy("ports_releasing", "attention_title", "server", server),
             copy("ports_releasing", "attention_detail",
                 "count", ports.size(),

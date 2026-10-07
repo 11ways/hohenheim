@@ -184,11 +184,14 @@ final class AppOverview {
             for (Row path : Models.get(ProtectedPathModel.class).find()
                     .where(ProtectedPathModel.SITE_ID.eq(site.get(SiteModel.ID))).all()) {
                 boolean open = ProtectedPathInvariant.isOpen(path);
-                String list = listName(path.get(ProtectedPathModel.ACCESS_LIST_ID));
+                Integer listId = path.get(ProtectedPathModel.ACCESS_LIST_ID);
+                // How visitors get in, in words, when the list is plain; otherwise the list it follows, by name.
+                Microcopy how = open ? null : AccessRuleSummaries.protectionOf(listId);
                 rows.add(new AppProtection(lead + path.get(ProtectedPathModel.PATH),
                     CmsRoutes.detail(panelSlug, ProtectedPathParts.SLUG, path.get(ProtectedPathModel.ID)).toUrl(),
-                    Microcopy.of(open ? "list_admits_everyone" : "by_list").withFilter("scope", "app_overview")
-                        .withArg("list", list).resolve(locales, resolver),
+                    (how != null ? how : Microcopy.of(open ? "list_admits_everyone" : "by_list")
+                        .withFilter("scope", "app_overview").withArg("list", listName(listId)))
+                        .resolve(locales, resolver),
                     open, true));
             }
             Integer siteList = site.get(SiteModel.ACCESS_LIST_ID);

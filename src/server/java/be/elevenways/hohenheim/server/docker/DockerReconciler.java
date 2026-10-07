@@ -1,7 +1,5 @@
 package be.elevenways.hohenheim.server.docker;
 
-import be.elevenways.hohenheim.AttentionItem;
-import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.HostMode;
@@ -19,7 +17,6 @@ import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.util.PortProbe;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -591,49 +588,5 @@ public final class DockerReconciler {
             row.set(ReconcileFindingModel.DETAIL, finding.detail());
             model.save(row);
         }
-    }
-
-    // -- the attention projection ---------------------------------------------
-
-    /** How many resource names an attention detail line spells out before eliding. */
-    private static final int ATTENTION_NAME_CAP = 3;
-
-    /**
-     * The stored findings that deserve dashboard attention: per server one warning
-     * for orphaned resources (attributed to us, record gone -- volumes here are
-     * unreclaimed data) and one for name collisions (a same-named foreign resource
-     * is what the legacy replace paths would destroy). Foreign-known and owned rows
-     * never surface.
-     */
-    public static @NonNull List<AttentionItem> attentionItems() {
-        List<AttentionItem> items = new ArrayList<>();
-        appendBucketItems(items, ReconcileFindingModel.BUCKET_ORPHANED, "docker_orphans");
-        appendBucketItems(items, ReconcileFindingModel.BUCKET_FOREIGN_COLLIDING, "docker_colliding");
-        return items;
-    }
-
-    private static void appendBucketItems(List<AttentionItem> items, String bucket, String key) {
-        Map<String, List<String>> namesByServer = new LinkedHashMap<>();
-        List<Row> rows = Models.get(ReconcileFindingModel.class).find()
-            .where(ReconcileFindingModel.BUCKET.eq(bucket))
-            .all();
-        for (Row row : rows) {
-            namesByServer
-                .computeIfAbsent(row.get(ReconcileFindingModel.SERVER_NAME), k -> new ArrayList<>())
-                .add(row.get(ReconcileFindingModel.KIND) + " " + row.get(ReconcileFindingModel.RESOURCE_NAME));
-        }
-        namesByServer.forEach((server, names) -> {
-            String listed = String.join(", ", names.subList(0, Math.min(names.size(), ATTENTION_NAME_CAP)))
-                + (names.size() > ATTENTION_NAME_CAP ? ", ..." : "");
-            Microcopy title = Microcopy.of(key)
-                .withFilter("scope", "attention_title")
-                .withArg("server", server);
-            Microcopy detail = Microcopy.of(key)
-                .withFilter("scope", "attention_detail")
-                .withArg("count", names.size())
-                .withArg("names", listed);
-            // No destination: a reconciler finding names a HOST, not a record page.
-            items.add(new AttentionItem(AttentionSeverity.WARNING, "cubes", title, detail, null, null));
-        });
     }
 }

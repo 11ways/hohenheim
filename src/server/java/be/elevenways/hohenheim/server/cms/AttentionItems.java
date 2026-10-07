@@ -7,6 +7,12 @@ import be.elevenways.zenit.common.routing.RouteTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+
 /**
  * The construction helpers every dashboard attention collector shares.
  *
@@ -63,5 +69,19 @@ final class AttentionItems {
             copy = copy.withArg(String.valueOf(args[i]), args[i + 1]);
         }
         return copy;
+    }
+
+    /**
+     * Each row's label grouped under its host, hosts in first-seen order: a per-host finding reads as one attention
+     * item per host, naming what it counted there.
+     */
+    static <T> @NonNull Map<String, List<String>> byHost(@NonNull Iterable<T> rows,
+                                                        @NonNull Function<T, String> host,
+                                                        @NonNull Function<T, String> label) {
+        Map<String, List<String>> labels = new LinkedHashMap<>();
+        for (T row : rows) {
+            labels.computeIfAbsent(host.apply(row), k -> new ArrayList<>()).add(label.apply(row));
+        }
+        return labels;
     }
 }

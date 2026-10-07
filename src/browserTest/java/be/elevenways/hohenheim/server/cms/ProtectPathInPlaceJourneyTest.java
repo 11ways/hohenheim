@@ -72,6 +72,13 @@ class ProtectPathInPlaceJourneyTest extends HohenheimTestBase {
         assertThat((String) networkRules.getFirst().get(AccessRuleModel.TYPE)).as("step 2: an allow rule")
             .isEqualTo(AccessRuleModel.TYPE_IP_ALLOW);
 
+        // 2b. The Protection card says how each path lets visitors in, in words: a password for two people, a
+        //     network; never only the name of a list the operator never saw.
+        assertThat(AccessRuleSummaries.protectionOf(protectedByPassword.get(ProtectedPathModel.ACCESS_LIST_ID)).key())
+            .as("step 2b: the password path reads as a password for its people").isEqualTo("protection_password");
+        assertThat(AccessRuleSummaries.protectionOf(protectedByNetwork.get(ProtectedPathModel.ACCESS_LIST_ID)).key())
+            .as("step 2b: the network path reads as a network").isEqualTo("protection_network");
+
         // 3. An answer that names nobody is refused for every method, and nothing is written.
         long pathsBefore = paths(site);
         long listsBefore = Models.get(AccessListModel.class).find().count();

@@ -10,6 +10,7 @@ import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.RegistryMemberField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.storedid.StoredIdColumns;
 import be.elevenways.zenit.common.ui.BadgeColor;
 import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
@@ -51,6 +52,12 @@ public final class SshTargetKind implements BackupTargetKindHandler {
             .label(HohenheimFormCopy.label("directory"))
             .help(HohenheimFormCopy.help("backup_ssh_path"))
             .build());
+
+    static {
+        // The settings ride the target row's settings payload: the host key in it is read through the stored-id
+        // chains, never rewritten in place, and no table of its own exists to bind.
+        StoredIdColumns.payload(SETTINGS_SCHEMA);
+    }
 
     @Override
     public @NonNull Identifier typeId() { return ID; }

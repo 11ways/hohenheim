@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.site.ProtectPath;
 import be.elevenways.hohenheim.site.SiteOperations;
@@ -106,19 +107,27 @@ final class SiteActions {
     }
 
     /**
-     * Protect a path in place: the operation's form in a sheet on the site, which lands on the path it protected.
+     * Protect a path in place: the operation's form in a sheet on the site, which lands back on the site's overview,
+     * where the Protection card now lists the path in words.
      *
      * AIDEV-NOTE: a record action, not the Protection card's link: a placed operation opens its sheet from its own
      * button, and the card keeps linking to the site's protected paths, where the written path is listed.
      */
     private static @NonNull PanelAction<Row> protectPathAction() {
         return CmsSupport.opensWhatItMade(ProtectPath.OPERATION,
-                (panel, id) -> CmsRoutes.detail(panel, ProtectedPathParts.SLUG, id).toUrl(),
+                (panel, pathId) -> SiteParts.recordRoute(panel, siteOfPath(pathId)).toUrl(),
                 Microcopy.of("action").withFilter("scope", "protect_path"),
                 Microcopy.of("description").withFilter("scope", "protect_path"), null)
             .inlineOnRecord(true)
             .inSheet()
             .build();
+    }
+
+    /** The site a protected path guards. */
+    private static @NonNull Object siteOfPath(@NonNull Integer pathId) {
+        Row path = Objects.requireNonNull(Models.get(ProtectedPathModel.class).findById(pathId),
+            "the protected path was just written");
+        return Objects.requireNonNull(path.get(ProtectedPathModel.SITE_ID), "a protected path belongs to a site");
     }
 
     /** To the site's protected paths, for a path whose protection lets everyone in. */
