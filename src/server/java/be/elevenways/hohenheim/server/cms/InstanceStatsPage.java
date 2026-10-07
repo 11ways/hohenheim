@@ -1,9 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimStatsFunctions;
 import be.elevenways.hohenheim.HohenheimStatsFunctions.Metric;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.hohenheim.server.instance.InstanceResize;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -59,10 +62,22 @@ public final class InstanceStatsPage implements RecordTab.Rendered<Row> {
             sample -> Metric.CPU.scaled(sample.cpuPercent())));
         vars.put("memorySeed", seriesOf(history,
             sample -> Metric.MEMORY.scaled(sample.memoryBytes())));
-        vars.put("rxSeed", seriesOf(history,
-            sample -> Metric.RX.scaled(sample.rxBytes())));
-        vars.put("txSeed", seriesOf(history,
-            sample -> Metric.TX.scaled(sample.txBytes())));
+        // Received and sent are running totals on the wire; they plot as a rate, through the
+        // SAME rate the browser folds live samples with.
+        List<Map<String, Object>> wire = new ArrayList<>();
+        for (InstanceStats.Sample sample : history) {
+            wire.add(sample.toMap());
+        }
+        vars.put("rxSeed", ratesOf(wire, Metric.RX));
+        vars.put("txSeed", ratesOf(wire, Metric.TX));
+        // The two newest samples: the "now" readings render from them before the first
+        // live sample arrives, and the first live rate is taken against the newest.
+        vars.put("latestSeed", wire.isEmpty() ? null : wire.get(wire.size() - 1));
+        vars.put("previousSeed", wire.size() < 2 ? null : wire.get(wire.size() - 2));
+        Double cpus = ResourceLimits.fromSettings(InstanceResize.settingsOf(instance)).cpus();
+        boolean capped = cpus != null && cpus > 0;
+        vars.put("cpuLimit", capped ? cpus : null);
+        vars.put("cpuCores", capped ? coresText(cpus) : null);
         // The PERSISTED half, beside the live ring: the disk sweeper's stored observation
         // is the only number on this page that survives a restart, and on a runtime that
         // enforces no root quota there is deliberately none. Stating both is the point --
@@ -71,6 +86,25 @@ public final class InstanceStatsPage implements RecordTab.Rendered<Row> {
         vars.put("disk", InstanceOverview.diskViewOf(instance));
         vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_STATS, vars);
+    }
+
+    /** A configured core count as written: "1", "2", "1.5". */
+    static @NonNull String coresText(double cores) {
+        if (cores == Math.rint(cores)) {
+            return String.valueOf((long) cores);
+        }
+        return String.valueOf(Math.round(cores * 10d) / 10d);
+    }
+
+    private static @NonNull List<Object> ratesOf(@NonNull List<Map<String, Object>> wire, @NonNull Metric metric) {
+        List<Object> points = new ArrayList<>();
+        for (int i = 1; i < wire.size(); i++) {
+            double rate = HohenheimStatsFunctions.rateBetween(wire.get(i - 1), wire.get(i), metric);
+            if (rate >= 0) {
+                points.add(metric.scaled(rate));
+            }
+        }
+        return points;
     }
 
     private static @NonNull List<Object> seriesOf(@NonNull List<InstanceStats.Sample> history,

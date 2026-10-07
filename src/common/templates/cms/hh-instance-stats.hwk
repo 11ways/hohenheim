@@ -3,17 +3,33 @@
        instance-stats channel on mount, and folds every arriving sample into the series.
        The subscription belongs to THIS element (opened in @mount, closed by Cleanup.on),
        never to a render expression -- hydration revives values without re-running lets,
-       so a render-time subscription simply does not exist after a hard load. */
+       so a render-time subscription simply does not exist after a hard load.
+       Received and sent are running totals on the wire: they plot, and read, as a rate per
+       second taken between consecutive samples. */
     public required instanceId: Integer
     public cpuSeed: List = null
     public memorySeed: List = null
     public rxSeed: List = null
     public txSeed: List = null
+    public latestSeed: Map = null
+    public previousSeed: Map = null
+    public cpuLimit: Double = null
+    public cpuCores: String = null
 
     private transient cpu: List = null
     private transient memory: List = null
     private transient rx: List = null
     private transient tx: List = null
+    private transient latest: Map = null
+    private transient previous: Map = null
+
+    private computed now = latest{:} ?? latestSeed
+    private computed before = latest{:} != null ? previous{:} : previousSeed
+    private computed cpuShare = InstanceStats.cpuShare(now{:}, cpuLimit)
+    private computed memoryUsed = InstanceStats.memoryUsed(now{:})
+    private computed memoryLimit = InstanceStats.memoryLimit(now{:})
+    private computed rxRate = InstanceStats.rate(before{:}, now{:}, "rx")
+    private computed txRate = InstanceStats.rate(before{:}, now{:}, "tx")
 
     style {
         display: contents;
@@ -25,51 +41,106 @@
     }
 
     function apply(sample: Map) {
+        let prior = latest ?? latestSeed
         let nextCpu = InstanceStats.appended(cpu, cpuSeed, sample, "cpu")
         if nextCpu != null { cpu = nextCpu }
         let nextMemory = InstanceStats.appended(memory, memorySeed, sample, "memory")
         if nextMemory != null { memory = nextMemory }
-        let nextRx = InstanceStats.appended(rx, rxSeed, sample, "rx")
+        let nextRx = InstanceStats.appendedRate(rx, rxSeed, sample, prior, "rx")
         if nextRx != null { rx = nextRx }
-        let nextTx = InstanceStats.appended(tx, txSeed, sample, "tx")
+        let nextTx = InstanceStats.appendedRate(tx, txSeed, sample, prior, "tx")
         if nextTx != null { tx = nextTx }
+        previous = prior
+        latest = sample
     }
 
     template {
-        <pl-card>
-            <pl-card-header>
-                <pl-card-title>{{ t("cpu", scope: "instance_stats") }}</pl-card-title>
-                <pl-card-description>{{ t("cpu_description", scope: "instance_stats") }}</pl-card-description>
-            </pl-card-header>
-            <pl-card-content>
-                <pl-sparkline area={% true %}
-                              label={% t("cpu", scope: "instance_stats") %}
-                              points={% cpu{:} ?? cpuSeed %}></pl-sparkline>
-            </pl-card-content>
-        </pl-card>
+        <div class="hh-stats-grid">
+            <pl-card data-stats-metric="cpu">
+                <pl-card-header>
+                    <pl-card-title>{{ t("cpu", scope: "instance_stats") }}</pl-card-title>
+                    <pl-card-description>{{ t("cpu_description", scope: "instance_stats") }}</pl-card-description>
+                </pl-card-header>
+                <pl-card-content>
+                    <pl-sparkline size="block" area={% true %}
+                                  label={% t("cpu", scope: "instance_stats") %}
+                                  points={% cpu{:} ?? cpuSeed %}></pl-sparkline>
+                    <p class="hh-stats-now">
+                        <span>{{ t("now", scope: "instance_stats") }}</span>
+                        <strong data-stats-now="cpu">
+                            {% if cpuShare{:} == null %}
+                            {{ t("waiting", scope: "instance_stats") }}
+                            {% elseif cpuCores == null %}
+                            {{ t("cpu_now_unlimited", scope: "instance_stats", percent: cpuShare{:}) }}
+                            {% elseif cpuCores == "1" %}
+                            {{ t("cpu_now_one", scope: "instance_stats", percent: cpuShare{:}) }}
+                            {% else %}
+                            {{ t("cpu_now_cores", scope: "instance_stats", percent: cpuShare{:}, cores: cpuCores) }}
+                            {% /if %}
+                        </strong>
+                    </p>
+                </pl-card-content>
+            </pl-card>
 
-        <pl-card>
-            <pl-card-header>
-                <pl-card-title>{{ t("memory", scope: "instance_stats") }}</pl-card-title>
-                <pl-card-description>{{ t("memory_description", scope: "instance_stats") }}</pl-card-description>
-            </pl-card-header>
-            <pl-card-content>
-                <pl-sparkline area={% true %}
-                              label={% t("memory", scope: "instance_stats") %}
-                              points={% memory{:} ?? memorySeed %}></pl-sparkline>
-            </pl-card-content>
-        </pl-card>
+            <pl-card data-stats-metric="memory">
+                <pl-card-header>
+                    <pl-card-title>{{ t("memory", scope: "instance_stats") }}</pl-card-title>
+                    <pl-card-description>{{ t("memory_description", scope: "instance_stats") }}</pl-card-description>
+                </pl-card-header>
+                <pl-card-content>
+                    <pl-sparkline size="block" area={% true %}
+                                  label={% t("memory", scope: "instance_stats") %}
+                                  points={% memory{:} ?? memorySeed %}></pl-sparkline>
+                    <p class="hh-stats-now">
+                        <span>{{ t("now", scope: "instance_stats") }}</span>
+                        <strong data-stats-now="memory">
+                            {% if memoryUsed{:} == "" %}
+                            {{ t("waiting", scope: "instance_stats") }}
+                            {% elseif memoryLimit{:} == "" %}
+                            {{ t("used_no_limit", scope: "instance_stats", used: memoryUsed{:}) }}
+                            {% else %}
+                            {{ t("used_of_limit", scope: "instance_stats", used: memoryUsed{:}, limit: memoryLimit{:}) }}
+                            {% /if %}
+                        </strong>
+                    </p>
+                </pl-card-content>
+            </pl-card>
+        </div>
 
-        <pl-card>
+        <pl-card data-stats-metric="network">
             <pl-card-header>
                 <pl-card-title>{{ t("network", scope: "instance_stats") }}</pl-card-title>
                 <pl-card-description>{{ t("network_description", scope: "instance_stats") }}</pl-card-description>
             </pl-card-header>
             <pl-card-content>
-                <pl-sparkline label={% t("received", scope: "instance_stats") %}
-                              points={% rx{:} ?? rxSeed %}></pl-sparkline>
-                <pl-sparkline label={% t("transmitted", scope: "instance_stats") %}
-                              points={% tx{:} ?? txSeed %}></pl-sparkline>
+                <div class="hh-stats-grid">
+                    <div class="hh-stats-series">
+                        <span class="hh-stats-series-label">{{ t("received", scope: "instance_stats") }}</span>
+                        <pl-sparkline size="block" area={% true %}
+                                      label={% t("received", scope: "instance_stats") %}
+                                      points={% rx{:} ?? rxSeed %}></pl-sparkline>
+                        <strong data-stats-now="rx">
+                            {% if rxRate{:} == "" %}
+                            {{ t("waiting", scope: "instance_stats") }}
+                            {% else %}
+                            {{ t("per_second", scope: "instance_stats", amount: rxRate{:}) }}
+                            {% /if %}
+                        </strong>
+                    </div>
+                    <div class="hh-stats-series">
+                        <span class="hh-stats-series-label">{{ t("transmitted", scope: "instance_stats") }}</span>
+                        <pl-sparkline size="block" area={% true %}
+                                      label={% t("transmitted", scope: "instance_stats") %}
+                                      points={% tx{:} ?? txSeed %}></pl-sparkline>
+                        <strong data-stats-now="tx">
+                            {% if txRate{:} == "" %}
+                            {{ t("waiting", scope: "instance_stats") }}
+                            {% else %}
+                            {{ t("per_second", scope: "instance_stats", amount: txRate{:}) }}
+                            {% /if %}
+                        </strong>
+                    </div>
+                </div>
             </pl-card-content>
         </pl-card>
     }

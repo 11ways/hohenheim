@@ -7440,11 +7440,11 @@
     "scope": "instance_files"
   },
   "cpu_description": {
-    "text": "Percentage van een core, live",
+    "text": "Aandeel van de cores die deze app mag gebruiken.",
     "scope": "instance_stats"
   },
   "memory_description": {
-    "text": "Werkgeheugen in MiB, live",
+    "text": "Wat de app in het geheugen houdt, tegenover zijn limiet.",
     "scope": "instance_stats"
   },
   "network": [
@@ -7458,7 +7458,7 @@
     }
   ],
   "network_description": {
-    "text": "Cumulatieve KiB sinds de start van de workload",
+    "text": "Verkeer per seconde, in en uit.",
     "scope": "instance_stats"
   },
   "received": [
@@ -9969,7 +9969,7 @@
     "scope": "instance_files"
   },
   "live_only": {
-    "text": "Deze metingen zijn alleen live: er wordt niets bewaard, dus een grafiek begint leeg en vult zich terwijl deze pagina open staat. Het hoofdschijfcijfer hieronder is de enige bewaarde waarneming, en alleen een runtime die een schijfquotum handhaaft levert die.",
+    "text": "Elke paar seconden gemeten zolang deze pagina open staat. Er wordt niets bewaard, dus een gesloten pagina heeft geen geschiedenis.",
     "scope": "instance_stats"
   },
   "disk_description": {
@@ -11386,7 +11386,7 @@
     "scope": "form_section"
   },
   "forwarding": {
-    "text": "Doorstuuropties",
+    "text": "Verbinding",
     "scope": "form_section"
   },
   "audit_hint": {
@@ -14267,6 +14267,46 @@
   },
   "variables_description": {
     "text": "Wijzigingen gelden vanaf de volgende uitrol.",
+    "scope": "form_section"
+  },
+  "live": {
+    "text": "Live",
+    "scope": "instance_stats"
+  },
+  "now": {
+    "text": "Nu",
+    "scope": "instance_stats"
+  },
+  "cpu_now_one": {
+    "text": "{$percent}% van 1 core",
+    "scope": "instance_stats"
+  },
+  "cpu_now_cores": {
+    "text": "{$percent}% van {$cores} cores",
+    "scope": "instance_stats"
+  },
+  "cpu_now_unlimited": {
+    "text": "{$percent}% van één core, geen limiet",
+    "scope": "instance_stats"
+  },
+  "used_of_limit": {
+    "text": "{$used} van {$limit}",
+    "scope": "instance_stats"
+  },
+  "used_no_limit": {
+    "text": "{$used}, geen limiet",
+    "scope": "instance_stats"
+  },
+  "per_second": {
+    "text": "{$amount}/s",
+    "scope": "instance_stats"
+  },
+  "waiting": {
+    "text": "Wacht op de eerste meting",
+    "scope": "instance_stats"
+  },
+  "listing": {
+    "text": "Mapweergave",
     "scope": "form_section"
   }
 }

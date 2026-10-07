@@ -7440,11 +7440,11 @@
     "scope": "instance_files"
   },
   "cpu_description": {
-    "text": "Percent of one core, live",
+    "text": "Share of the cores this app may use.",
     "scope": "instance_stats"
   },
   "memory_description": {
-    "text": "Working set in MiB, live",
+    "text": "What the app holds in memory, against its limit.",
     "scope": "instance_stats"
   },
   "network": [
@@ -7458,7 +7458,7 @@
     }
   ],
   "network_description": {
-    "text": "Cumulative KiB since the workload started",
+    "text": "Traffic per second, in and out.",
     "scope": "instance_stats"
   },
   "received": [
@@ -7472,7 +7472,7 @@
     }
   ],
   "transmitted": {
-    "text": "Transmitted",
+    "text": "Sent",
     "scope": "instance_stats"
   },
   "files_upload_missing": {
@@ -9969,7 +9969,7 @@
     "scope": "instance_files"
   },
   "live_only": {
-    "text": "These readings are live only: nothing is stored, so a chart starts empty and fills in while this page is open. The root-disk figure below is the one persisted observation, and only a runtime that enforces a root quota produces it.",
+    "text": "Measured every few seconds while this page is open. Nothing is kept, so a closed page has no history.",
     "scope": "instance_stats"
   },
   "disk_description": {
@@ -11386,7 +11386,7 @@
     "scope": "form_section"
   },
   "forwarding": {
-    "text": "Forwarding options",
+    "text": "Connection",
     "scope": "form_section"
   },
   "audit_hint": {
@@ -14267,6 +14267,46 @@
   },
   "variables_description": {
     "text": "Changes apply at the next deploy.",
+    "scope": "form_section"
+  },
+  "live": {
+    "text": "Live",
+    "scope": "instance_stats"
+  },
+  "now": {
+    "text": "Now",
+    "scope": "instance_stats"
+  },
+  "cpu_now_one": {
+    "text": "{$percent}% of 1 core",
+    "scope": "instance_stats"
+  },
+  "cpu_now_cores": {
+    "text": "{$percent}% of {$cores} cores",
+    "scope": "instance_stats"
+  },
+  "cpu_now_unlimited": {
+    "text": "{$percent}% of one core, no limit",
+    "scope": "instance_stats"
+  },
+  "used_of_limit": {
+    "text": "{$used} of {$limit}",
+    "scope": "instance_stats"
+  },
+  "used_no_limit": {
+    "text": "{$used}, no limit",
+    "scope": "instance_stats"
+  },
+  "per_second": {
+    "text": "{$amount}/s",
+    "scope": "instance_stats"
+  },
+  "waiting": {
+    "text": "Waiting for the first reading",
+    "scope": "instance_stats"
+  },
+  "listing": {
+    "text": "Folder listings",
     "scope": "form_section"
   }
 }

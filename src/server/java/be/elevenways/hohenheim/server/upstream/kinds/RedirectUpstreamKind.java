@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.upstream.kinds;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.server.proxy.RequestPath;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
@@ -14,6 +15,7 @@ import be.elevenways.zenit.common.ui.BadgeColor;
 import be.elevenways.zenit.common.ui.ColorHue;
 import io.undertow.util.Headers;
 
+import java.util.List;
 import java.util.Map;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -45,6 +47,15 @@ public class RedirectUpstreamKind implements UpstreamKindHandler {
             .label(HohenheimFormCopy.label("preserve_path")).help(HohenheimFormCopy.help("preserve_path")).build());
 
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(UpstreamSettings.delay());
+
+    // The target, the status and whether the path is kept are the decision; the delay is
+    // right almost always, so its Connection section folds. AIDEV-NOTE: never the framework's
+    // generic "Advanced" here (the site form has its own); after the fields -- membership is
+    // validated eagerly.
+    static {
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.FORWARDING,
+            List.of(DELAY.getName())));
+    }
 
     @Override
     public Identifier typeId() { return ID; }

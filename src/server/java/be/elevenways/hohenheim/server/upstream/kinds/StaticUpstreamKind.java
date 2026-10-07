@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
@@ -23,6 +24,8 @@ import java.util.Map;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.PathKind;
 import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.util.List;
 
 /**
  * Serves static files from a directory.
@@ -56,6 +59,17 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
     public static final StringField FALLBACK_FILE = SETTINGS_SCHEMA.addField(
         PathField.builder().name("fallback_file").label(HohenheimFormCopy.label("fallback_file"))
             .help(HohenheimFormCopy.help("fallback_file")).build());
+
+    // The folder and the fallback file are the decision (board App-Config-Address); what a
+    // folder shows is the next thing changed, and the delay is right almost always so its
+    // Connection section folds. AIDEV-NOTE: never the framework's generic "Advanced" here (the site
+    // form has its own); after the fields -- membership is validated eagerly.
+    static {
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.open(HohenheimFormSections.LISTING,
+            List.of(AUTOINDEX.getName(), INDEXES.getName(), SHOW_HIDDEN_FILES.getName())));
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.FORWARDING,
+            List.of(DELAY.getName())));
+    }
 
     @Override
     public Identifier typeId() { return ID; }

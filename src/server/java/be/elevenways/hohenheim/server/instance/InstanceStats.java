@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimStatsFunctions;
 import be.elevenways.hohenheim.HohenheimStatsFunctions.Metric;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
@@ -59,10 +60,10 @@ public final class InstanceStats {
          * from the one vocabulary the browser folds them back out with. */
         public @NonNull Map<String, Object> toMap() {
             Map<String, Object> map = new LinkedHashMap<>();
-            map.put("at", this.at);
+            map.put(HohenheimStatsFunctions.AT_KEY, this.at);
             map.put(Metric.CPU.key(), this.cpuPercent);
             map.put(Metric.MEMORY.key(), this.memoryBytes);
-            map.put("memory_limit", this.memoryLimit);
+            map.put(HohenheimStatsFunctions.MEMORY_LIMIT_KEY, this.memoryLimit);
             map.put(Metric.RX.key(), this.rxBytes);
             map.put(Metric.TX.key(), this.txBytes);
             return map;
