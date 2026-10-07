@@ -374,18 +374,13 @@ final class InstanceActions {
      * ({@link InstanceTemplateCapture}).
      */
     private static @NonNull PanelAction<Row> captureTemplateAction() {
-        return PanelAction.<Row, Integer>places(InstanceOperations.CAPTURE_TEMPLATE, ActionPlacement.ROW,
-                // The operator panel: capture is admin-only, and the minted template opens there.
-                (request, result) -> CmsActionResult.redirect(new Uri(CmsRoutes.detail(HohenheimSlugs.ADMIN,
-                    HohenheimSlugs.INSTANCE_TEMPLATES, result.value()).toUrl())))
-            .inlineOnRecord(false)
-            .inlineInRow(false)
+        // The operator panel: capture is admin-only, and the minted template opens there.
+        return CmsSupport.opensWhatItMade(InstanceOperations.CAPTURE_TEMPLATE,
+                (panel, id) -> CmsRoutes.detail(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_TEMPLATES, id).toUrl(),
+                Microcopy.of("capture_template").withFilter("scope", "instance"),
+                Microcopy.of("capture_template_confirm").withFilter("scope", "instance"),
+                Microcopy.of("capture_template").withFilter("scope", "instance"))
             .description(Microcopy.of("capture_template_hint").withFilter("scope", "instance"))
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("capture_template").withFilter("scope", "instance"))
-                .body(Microcopy.of("capture_template_confirm").withFilter("scope", "instance"))
-                .confirmLabel(Microcopy.of("capture_template").withFilter("scope", "instance"))
-                .build())
             .build();
     }
 

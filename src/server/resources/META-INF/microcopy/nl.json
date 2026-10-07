@@ -1426,10 +1426,16 @@
       "scope": "site_tls"
     }
   ],
-  "password": {
-    "text": "Wachtwoord",
-    "scope": "database_tab"
-  },
+  "password": [
+    {
+      "text": "Wachtwoord",
+      "scope": "database_tab"
+    },
+    {
+      "text": "Wachtwoord",
+      "scope": "protect_path"
+    }
+  ],
   "payload_url": {
     "text": "Payload-URL",
     "scope": "deployments"
@@ -1769,6 +1775,10 @@
     {
       "text": "Een terminal in deze workspace, die draait als de eigen gebruiker ervan. Alles wat je typt draait in de container.",
       "scope": "instance_shell"
+    },
+    {
+      "text": "Vraag een wachtwoord, een netwerk of een aanmelding voordat iemand dit deel van de app bereikt.",
+      "scope": "protect_path"
     }
   ],
   "publish_records": {
@@ -6772,6 +6782,10 @@
     {
       "text": "Pad",
       "scope": "template_contents"
+    },
+    {
+      "text": "Pad",
+      "scope": "protect_path"
     }
   ],
   "mode": [
@@ -7048,6 +7062,10 @@
     {
       "text": "Actie",
       "scope": "instance_migrate"
+    },
+    {
+      "text": "Een pad beveiligen",
+      "scope": "protect_path"
     }
   ],
   "offset": {
@@ -13881,5 +13899,57 @@
   "reach_unknown": {
     "text": "Onbekend: deze host geeft geen publiek adres op, dus waar {$hostname} naartoe wijst kan niet gecontroleerd worden.",
     "scope": "put_online"
+  },
+  "path_help": {
+    "text": "Alles onder dit pad wordt beveiligd, bijvoorbeeld /wp-admin.",
+    "scope": "protect_path"
+  },
+  "method": {
+    "text": "Hoe bezoekers binnenkomen",
+    "scope": "protect_path"
+  },
+  "method_password": {
+    "text": "Met een wachtwoord",
+    "scope": "protect_path"
+  },
+  "method_network": {
+    "text": "Vanaf een netwerk",
+    "scope": "protect_path"
+  },
+  "method_sign_in": {
+    "text": "Door zich aan te melden",
+    "scope": "protect_path"
+  },
+  "username": {
+    "text": "Gebruikersnaam",
+    "scope": "protect_path"
+  },
+  "networks": {
+    "text": "Netwerken",
+    "scope": "protect_path"
+  },
+  "networks_help": {
+    "text": "Een adres of bereik per regel, bijvoorbeeld 203.0.113.0/24.",
+    "scope": "protect_path"
+  },
+  "provider": {
+    "text": "Aanmeldprovider",
+    "scope": "protect_path"
+  },
+  "protect_path_nobody": {
+    "text": "Voeg minstens een persoon toe met een gebruikersnaam en een wachtwoord.",
+    "scope": "violations"
+  },
+  "protect_path_no_network": {
+    "text": "Voeg minstens een netwerk toe.",
+    "scope": "violations"
+  },
+  "protect_path_no_provider": {
+    "text": "Kies een aanmeldprovider.",
+    "scope": "violations"
+  },
+  "protect_path_method": {
+    "text": "Kies hoe bezoekers binnenkomen.",
+    "scope": "violations"
   }
 }

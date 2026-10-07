@@ -1,5 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
+import java.util.List;
+import java.util.ArrayList;
+import be.elevenways.hohenheim.server.auth.BasicCredentials;
+import be.elevenways.hohenheim.model.ProtectedPathModel;
+import be.elevenways.hohenheim.model.AccessRuleModel;
+import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.site.ProtectPath;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -88,6 +95,11 @@ public final class SiteOperationHandlers {
             .authorize(reachesSite())
             .patchBase((site, access) -> manageInput(Objects.requireNonNull(site, "an edit has its site")))
             .handle(call -> updateDelegated(call));
+        // A passthrough site never sees a path (TLS is not terminated here), so it has nothing to protect.
+        OperationHandlers.attach(ProtectPath.OPERATION)
+            .applies(site -> live(site) && !SiteParts.tlsPassthrough(site))
+            .authorize(reachesSite())
+            .handle(call -> protectPath(call.subject(), Objects.requireNonNull(call.input(), "protecting has input")));
         // Deleting the panel's own site is the same outage as switching it off: dead, with the reason on screen.
         OperationHandlers.attach(SiteWrites.DELETE)
             .applies(SiteOperationHandlers::live)
@@ -97,6 +109,90 @@ public final class SiteOperationHandlers {
     }
 
     private SiteOperationHandlers() {
+    }
+
+    /**
+     * One dedicated (unshared) access list, its rules and the protected path, written in the operation's one command;
+     * the protected-path invariant inside the path's save refuses a list that would let everyone through.
+     */
+    private static @NonNull Integer protectPath(@NonNull Row site, ProtectPath.@NonNull Input input) {
+        List<ProtectionRule> rules = protectionRules(input);
+        AccessListModel lists = Models.get(AccessListModel.class);
+        Row list = lists.createEmptyRow();
+        list.set(AccessListModel.NAME, site.get(SiteModel.NAME) + " " + input.path());
+        list.set(AccessListModel.SATISFY, AccessListModel.SATISFY_ANY);
+        list.set(AccessListModel.SHARED, false);
+        lists.save(list);
+        AccessRuleModel ruleModel = Models.get(AccessRuleModel.class);
+        int sort = 0;
+        for (ProtectionRule rule : rules) {
+            Row row = ruleModel.createEmptyRow();
+            row.set(AccessRuleModel.ACCESS_LIST_ID, list.get(AccessListModel.ID));
+            row.set(AccessRuleModel.SORT, sort++);
+            row.set(AccessRuleModel.TYPE, rule.type());
+            row.set(AccessRuleModel.DATA, rule.data());
+            row.set(AccessRuleModel.ENABLED, true);
+            ruleModel.save(row);
+        }
+        ProtectedPathModel paths = Models.get(ProtectedPathModel.class);
+        Row path = paths.createEmptyRow();
+        path.set(ProtectedPathModel.SITE_ID, site.get(SiteModel.ID));
+        path.set(ProtectedPathModel.PATH, input.path());
+        path.set(ProtectedPathModel.ACCESS_LIST_ID, list.get(AccessListModel.ID));
+        paths.save(path);
+        return path.get(ProtectedPathModel.ID);
+    }
+
+    /**
+     * The rules the chosen method writes, each a type and its data; an answer that names nobody is refused on its own
+     * entry, before anything is written.
+     *
+     * @throws Violations when the chosen method's entry is empty
+     */
+    private static @NonNull List<ProtectionRule> protectionRules(ProtectPath.@NonNull Input input) {
+        List<ProtectionRule> rules = new ArrayList<>();
+        switch (input.method()) {
+            case ProtectPath.METHOD_PASSWORD -> {
+                for (Map<String, Object> person : input.people()) {
+                    String username = Texts.trimmedOrNull(person.get("username"));
+                    String password = Texts.trimmedOrNull(person.get("password"));
+                    if (username != null && password != null) {
+                        rules.add(new ProtectionRule(AccessRuleModel.TYPE_BASIC_AUTH, Map.<String, Object>of(
+                            AccessRuleModel.BASIC_AUTH_USERNAME.getName(), username,
+                            AccessRuleModel.BASIC_AUTH_PASSWORD.getName(),
+                            Objects.requireNonNull(BasicCredentials.hashIfNeeded(password)))));
+                    }
+                }
+                requireSome(rules, ProtectPath.PEOPLE.name(), "protect_path_nobody");
+            }
+            case ProtectPath.METHOD_NETWORK -> {
+                for (String network : input.networks()) {
+                    rules.add(new ProtectionRule(AccessRuleModel.TYPE_IP_ALLOW,
+                        Map.<String, Object>of(AccessRuleModel.NETWORK.getName(), network)));
+                }
+                requireSome(rules, ProtectPath.NETWORKS.getName(), "protect_path_no_network");
+            }
+            case ProtectPath.METHOD_SIGN_IN -> {
+                if (input.provider_id() != null) {
+                    rules.add(new ProtectionRule(AccessRuleModel.TYPE_AUTH_PROVIDER,
+                        Map.<String, Object>of(AccessRuleModel.PROVIDER_ID.getName(), input.provider_id())));
+                }
+                requireSome(rules, ProtectPath.PROVIDER_ID.getName(), "protect_path_no_provider");
+            }
+            default -> throw Violations.ofField(ProtectPath.METHOD.getName(), input.method(),
+                CmsSupport.violationText("protect_path_method"));
+        }
+        return rules;
+    }
+
+    /** One access rule the protection writes: its type token and its type-specific data. */
+    private record ProtectionRule(@NonNull String type, @NonNull Map<String, Object> data) {
+    }
+
+    private static void requireSome(@NonNull List<?> rules, @NonNull String entry, @NonNull String reason) {
+        if (rules.isEmpty()) {
+            throw Violations.ofField(entry, "", CmsSupport.violationText(reason));
+        }
     }
 
     /** Loads the class, attaching the handlers; idempotent. */
