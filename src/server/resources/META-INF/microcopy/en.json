@@ -784,6 +784,10 @@
     {
       "text": "Source",
       "scope": "template_import"
+    },
+    {
+      "text": "Source and build",
+      "scope": "form_section"
     }
   ],
   "start_command": [
@@ -1168,7 +1172,7 @@
   },
   "duration": [
     {
-      "text": "Duration",
+      "text": "Took",
       "scope": "deployments"
     },
     {
@@ -1182,7 +1186,7 @@
       "scope": "site_databases"
     },
     {
-      "text": "No deployments yet",
+      "text": "No deploys yet",
       "scope": "deployments"
     },
     {
@@ -1244,7 +1248,7 @@
       "scope": "site_domains"
     },
     {
-      "text": "Webhook, poll or manual deploys of this site will show up here.",
+      "text": "Deploy now, or push to the branch: every deploy shows up here.",
       "scope": "deployments"
     },
     {
@@ -1555,7 +1559,7 @@
   ],
   "rollback_confirm": [
     {
-      "text": "Activate the previous deploy slot? The current version stops serving.",
+      "text": "Go back to release {$commit}? The live release stops serving.",
       "scope": "deployments"
     },
     {
@@ -1601,7 +1605,7 @@
   ],
   "started": [
     {
-      "text": "Started",
+      "text": "When",
       "scope": "deployments"
     },
     {
@@ -1641,7 +1645,7 @@
       "scope": "site_databases"
     },
     {
-      "text": "Status",
+      "text": "State",
       "scope": "deployments"
     },
     {
@@ -1675,7 +1679,7 @@
   },
   "trigger": [
     {
-      "text": "Trigger",
+      "text": "What",
       "scope": "deployments"
     },
     {
@@ -1699,6 +1703,10 @@
     {
       "text": "Variables",
       "scope": "template_contents"
+    },
+    {
+      "text": "Variables",
+      "scope": "form_section"
     }
   ],
   "webhook": {
@@ -1715,7 +1723,7 @@
   },
   "title": [
     {
-      "text": "Deployments",
+      "text": "Deploys",
       "scope": "deployments"
     },
     {
@@ -5037,10 +5045,16 @@
     "text": "Image reclaim started; the result lands in the server log",
     "scope": "stack"
   },
-  "deploy_queued": {
-    "text": "Deploy queued",
-    "scope": "stack"
-  },
+  "deploy_queued": [
+    {
+      "text": "Deploy queued",
+      "scope": "stack"
+    },
+    {
+      "text": "Started a deploy",
+      "scope": "webhook_outcome"
+    }
+  ],
   "stop_queued": {
     "text": "Stop queued",
     "scope": "stack"
@@ -7447,10 +7461,16 @@
     "text": "Cumulative KiB since the workload started",
     "scope": "instance_stats"
   },
-  "received": {
-    "text": "Received",
-    "scope": "instance_stats"
-  },
+  "received": [
+    {
+      "text": "Received",
+      "scope": "instance_stats"
+    },
+    {
+      "text": "Received, still being handled",
+      "scope": "webhook_outcome"
+    }
+  ],
   "transmitted": {
     "text": "Transmitted",
     "scope": "instance_stats"
@@ -9320,7 +9340,7 @@
       "scope": "spamservice_sample"
     },
     {
-      "text": "{$name} - Deployments",
+      "text": "{$name} - Deploys",
       "scope": "deployments"
     },
     {
@@ -14108,5 +14128,145 @@
   "velocity_proxy": { "text": "The entrance players connect to, in front of your Minecraft servers.", "scope": "put_online", "target": "card" },
   "rotate_incus_cert": { "text": "{$actor} gave {$subject} a new Incus client identity", "scope": "activity", "target": "happened" },
   "rotate_host_key": { "text": "{$actor} gave {$subject} a new SSH client identity", "scope": "activity", "target": "happened" },
-  "edit_remote_dns_record": { "text": "{$actor} changed a record of {$subject} on its primary", "scope": "activity", "target": "happened" }
+  "edit_remote_dns_record": { "text": "{$actor} changed a record of {$subject} on its primary", "scope": "activity", "target": "happened" },
+  "live_from_branch": {
+    "text": "Live: commit {$commit} from {$branch}",
+    "scope": "deployments"
+  },
+  "live_commit": {
+    "text": "Live: commit {$commit}",
+    "scope": "deployments"
+  },
+  "live_since": {
+    "text": "Deployed",
+    "scope": "deployments"
+  },
+  "live_kept": {
+    "text": "The previous release, {$commit}, is kept so you can go back to it in one step.",
+    "scope": "deployments"
+  },
+  "live_nothing_kept": {
+    "text": "No previous release is kept yet.",
+    "scope": "deployments"
+  },
+  "rollback_to": {
+    "text": "Roll back to {$commit}",
+    "scope": "deployments"
+  },
+  "history_description": {
+    "text": "Every deploy builds a new release next to the live one; visitors move over only once it answers. One previous release is kept for rollback.",
+    "scope": "deployments"
+  },
+  "mark_live": {
+    "text": "Live",
+    "scope": "deployments"
+  },
+  "mark_kept": {
+    "text": "Kept for rollback",
+    "scope": "deployments"
+  },
+  "mark_replaced": {
+    "text": "Replaced",
+    "scope": "deployments"
+  },
+  "previews": {
+    "text": "Previews",
+    "scope": "deployments"
+  },
+  "previews_description": {
+    "text": "A temporary copy per branch or pull request.",
+    "scope": "deployments"
+  },
+  "preview_branch": {
+    "text": "Preview a branch",
+    "scope": "deployments"
+  },
+  "pull_request": {
+    "text": "Pull request #{$number}",
+    "scope": "deployments"
+  },
+  "preview_expires": {
+    "text": "Expires",
+    "scope": "deployments"
+  },
+  "preview_details": {
+    "text": "Details",
+    "scope": "deployments"
+  },
+  "previews_empty": {
+    "text": "No previews running.",
+    "scope": "deployments"
+  },
+  "automatic_deploys": {
+    "text": "Automatic deploys",
+    "scope": "deployments"
+  },
+  "source_line": {
+    "text": "{$repository}, branch {$branch}",
+    "scope": "deployments"
+  },
+  "auto_deploy_on": {
+    "text": "Every push to the branch deploys it.",
+    "scope": "deployments"
+  },
+  "auto_deploy_off": {
+    "text": "Pushes are recorded but not deployed: automatic deploys are off.",
+    "scope": "deployments"
+  },
+  "recent_pushes": {
+    "text": "Recent pushes",
+    "scope": "deployments"
+  },
+  "pushes_empty": {
+    "text": "No pushes received yet.",
+    "scope": "deployments"
+  },
+  "preview_queued": {
+    "text": "Started a preview",
+    "scope": "webhook_outcome"
+  },
+  "preview_teardown_queued": {
+    "text": "Removed a preview",
+    "scope": "webhook_outcome"
+  },
+  "repository_mismatch": {
+    "text": "Refused: it came from another repository",
+    "scope": "webhook_outcome"
+  },
+  "ignored_not_a_push": {
+    "text": "Ignored: not a push",
+    "scope": "webhook_outcome"
+  },
+  "ignored_deleted_ref": {
+    "text": "Ignored: the branch was deleted",
+    "scope": "webhook_outcome"
+  },
+  "ignored_invalid_ref": {
+    "text": "Ignored: not a usable branch name",
+    "scope": "webhook_outcome"
+  },
+  "ignored_branch": {
+    "text": "Ignored: not the deployed branch and not a preview branch",
+    "scope": "webhook_outcome"
+  },
+  "ignored_auto_deploy": {
+    "text": "Ignored: automatic deploys are off",
+    "scope": "webhook_outcome"
+  },
+  "ignored_previews_disabled": {
+    "text": "Ignored: previews are off",
+    "scope": "webhook_outcome"
+  },
+  "ignored_malformed_pr": {
+    "text": "Ignored: an incomplete pull request event",
+    "scope": "webhook_outcome"
+  },
+  "ignored_pr_action": {
+    "text": "Ignored: a pull request change that needs no preview",
+    "scope": "webhook_outcome"
+  },
+  "variables_description": {
+    "text": "Changes apply at the next deploy.",
+    "scope": "form_section"
+  }
 }

@@ -286,7 +286,7 @@ public class GitWebhookHandler {
         String payloadRepo = payloadRepository(payload);
         String boundRepo = boundRepositoryOf(sourceSettings);
         if (payloadRepo != null && boundRepo != null && !payloadRepo.equalsIgnoreCase(boundRepo)) {
-            WebhookDeliveries.stampAction(claimed, "repository_mismatch");
+            WebhookDeliveries.stampAction(claimed, WebhookOutcome.REPOSITORY_MISMATCH);
             sendJson(exchange, 422, "{\"error\":\"repository mismatch\"}");
             return;
         }
@@ -322,7 +322,7 @@ public class GitWebhookHandler {
         // merge-request mapping was added to fix, still open for every unmapped event on
         // all three providers. An unmodelled event is ignored, loudly and idempotently.
         if (pushedRef.isEmpty()) {
-            WebhookDeliveries.stampAction(claimed, "ignored_not_a_push");
+            WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_NOT_A_PUSH);
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"not a push\"}");
             return;
         }
@@ -340,11 +340,11 @@ public class GitWebhookHandler {
         if (deleted) {
             if (!production && !branch.isEmpty() && hasLivePreview(applicationId, branch)) {
                 queuePreviewTeardown(applicationId, branch, "branch_deleted");
-                WebhookDeliveries.stampAction(claimed, "preview_teardown_queued");
+                WebhookDeliveries.stampAction(claimed, WebhookOutcome.PREVIEW_TEARDOWN_QUEUED);
                 sendJson(exchange, 200, "{\"status\":\"preview_teardown_queued\"}");
                 return;
             }
-            WebhookDeliveries.stampAction(claimed, "ignored_deleted_ref");
+            WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_DELETED_REF);
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"deleted ref\"}");
             return;
         }
@@ -352,7 +352,7 @@ public class GitWebhookHandler {
         // A pushed branch name is the forge's text; one git could read as an option (or
         // that is no ref at all) never reaches a checkout.
         if (!production && !branch.isEmpty() && !GitRefNames.isValid(branch)) {
-            WebhookDeliveries.stampAction(claimed, "ignored_invalid_ref");
+            WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_INVALID_REF);
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"invalid ref\"}");
             return;
         }
@@ -374,19 +374,19 @@ public class GitWebhookHandler {
                         DeployTrigger.WEBHOOK)));
             ActivityLog.record(Models.get(InstanceModel.class), applicationId,
                 HohenheimActivityAction.PREVIEW_TRIGGERED, "webhook:" + branch);
-            WebhookDeliveries.stampAction(claimed, "preview_queued");
+            WebhookDeliveries.stampAction(claimed, WebhookOutcome.PREVIEW_QUEUED);
             sendJson(exchange, 200, "{\"status\":\"preview_queued\"}");
             return;
         }
 
         if (!production) {
-            WebhookDeliveries.stampAction(claimed, "ignored_branch");
+            WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_BRANCH);
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"branch\"}");
             return;
         }
 
         if (!Boolean.TRUE.equals(sourceSettings.get("auto_deploy"))) {
-            WebhookDeliveries.stampAction(claimed, "ignored_auto_deploy");
+            WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_AUTO_DEPLOY);
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"auto_deploy disabled\"}");
             return;
         }
@@ -414,7 +414,7 @@ public class GitWebhookHandler {
                     DeployTrigger.WEBHOOK);
             }
         }));
-        WebhookDeliveries.stampAction(claimed, "deploy_queued");
+        WebhookDeliveries.stampAction(claimed, WebhookOutcome.DEPLOY_QUEUED);
         Blast.log("GIT WEBHOOK: deploy queued for application",
             application.get(InstanceModel.NAME), "(id:", applicationId + ")");
         sendJson(exchange, 200, "{\"status\":\"queued\"}");
@@ -480,13 +480,13 @@ public class GitWebhookHandler {
                                           Map<String, Object> sourceSettings, Object payload,
                                           @Nullable String event) {
         if (!Boolean.TRUE.equals(sourceSettings.get("previews_enabled"))) {
-            WebhookDeliveries.stampAction(claimed, "ignored_previews_disabled");
+            WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_PREVIEWS_DISABLED);
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"previews disabled\"}");
             return;
         }
         PreviewEvent previewEvent = previewEventOf(event, payload);
         if (previewEvent == null) {
-            WebhookDeliveries.stampAction(claimed, "ignored_malformed_pr");
+            WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_MALFORMED_PR);
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"unrecognized payload\"}");
             return;
         }
@@ -495,7 +495,7 @@ public class GitWebhookHandler {
         String ref = previewEvent.ref();
         // A teardown runs no git and must still reach a preview whatever its ref says.
         if (previewEvent.intent() == PreviewIntent.DEPLOY && !GitRefNames.isValid(ref)) {
-            WebhookDeliveries.stampAction(claimed, "ignored_invalid_ref");
+            WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_INVALID_REF);
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"invalid ref\"}");
             return;
         }
@@ -507,7 +507,7 @@ public class GitWebhookHandler {
                     PreviewDeployments
                         .deployQuietly(applicationId, ref, previewEvent.sha(),
                             previewEvent.number(), DeployTrigger.WEBHOOK)));
-                WebhookDeliveries.stampAction(claimed, "preview_queued");
+                WebhookDeliveries.stampAction(claimed, WebhookOutcome.PREVIEW_QUEUED);
                 ActivityLog.record(Models.get(InstanceModel.class), applicationId,
                     HohenheimActivityAction.PREVIEW_TRIGGERED, "webhook:" + ref);
                 sendJson(exchange, 200, "{\"status\":\"preview_queued\"}");
@@ -516,11 +516,11 @@ public class GitWebhookHandler {
                 JobRunner.startVirtualThread(() -> withScope(datasource, () ->
                     PreviewDeployments
                         .destroyForRefQuietly(applicationId, ref, "pr_closed")));
-                WebhookDeliveries.stampAction(claimed, "preview_teardown_queued");
+                WebhookDeliveries.stampAction(claimed, WebhookOutcome.PREVIEW_TEARDOWN_QUEUED);
                 sendJson(exchange, 200, "{\"status\":\"preview_teardown_queued\"}");
             }
             case IGNORE -> {
-                WebhookDeliveries.stampAction(claimed, "ignored_pr_action");
+                WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_PR_ACTION);
                 sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"action\"}");
             }
         }

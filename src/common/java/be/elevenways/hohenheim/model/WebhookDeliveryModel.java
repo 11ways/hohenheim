@@ -2,12 +2,16 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.query.SortOrder;
+
+import java.util.List;
 
 /**
  * The webhook replay ledger: one row per ACCEPTED (signature-verified) delivery, keyed
@@ -39,6 +43,16 @@ public class WebhookDeliveryModel extends Model {
         DateTimeField.builder().name("received_at").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
+
+    /** One application's newest deliveries, newest first. */
+    public List<Row> findRecent(int instanceId, int limit) {
+        return find()
+            .where(INSTANCE_ID.eq(instanceId))
+            .orderBy(RECEIVED_AT, SortOrder.DESC)
+            .orderBy(ID, SortOrder.DESC)
+            .limit(limit)
+            .all();
+    }
 
     @Override public Identifier getModelId() { return MODEL_ID; }
     @Override public Field<?, ?> getPrimaryKeyField() { return ID; }

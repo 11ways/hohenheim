@@ -69,12 +69,12 @@ final class WebhookDeliveries {
     }
 
     /** Stamp what the delivery caused; diagnostics only, degrades to a log line. */
-    static void stampAction(@Nullable Row claimed, @NonNull String action) {
+    static void stampAction(@Nullable Row claimed, @NonNull WebhookOutcome outcome) {
         if (claimed == null) {
             return;
         }
         try {
-            claimed.set(WebhookDeliveryModel.ACTION, action);
+            claimed.set(WebhookDeliveryModel.ACTION, outcome.token());
             Models.get(WebhookDeliveryModel.class).save(claimed);
         } catch (RuntimeException e) {
             Blast.log("GIT WEBHOOK: could not stamp delivery action -", e.getMessage());

@@ -20,14 +20,14 @@ link hohenheim:game_domain at=2 lead=false target=/{panel}/game-domains
 link hohenheim:build_operation at=3 lead=false target=/{panel}/builds
 link hohenheim:release_operation at=4 lead=false target=/{panel}/releases
 tab overview at=0 landing=true view=false
-tab console at=1 landing=false view=false
-tab shell at=2 landing=false view=false
-tab exec at=3 landing=false view=false
-tab framebuffer at=4 landing=false view=false
-tab files at=5 landing=false view=false
-tab stats at=6 landing=false view=false
-tab backups at=7 landing=false view=false
-tab deployments at=8 landing=false view=false
+tab deployments at=1 landing=false view=false
+tab console at=2 landing=false view=false
+tab shell at=3 landing=false view=false
+tab exec at=4 landing=false view=false
+tab framebuffer at=5 landing=false view=false
+tab files at=6 landing=false view=false
+tab stats at=7 landing=false view=false
+tab backups at=8 landing=false view=false
 tab provisioning at=9 landing=false view=false
 tab devices at=10 landing=false view=false
 tab volumes at=11 landing=false view=false
@@ -469,13 +469,13 @@ column kind at=1 shown=false hidden=true sortable=false filterable=false copyabl
 column status at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext=install_state relation=false
 column install_state at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 tab overview at=0 landing=true view=false
-tab console at=1 landing=false view=false
-tab shell at=2 landing=false view=false
-tab framebuffer at=3 landing=false view=false
-tab files at=4 landing=false view=false
-tab stats at=5 landing=false view=false
-tab backups at=6 landing=false view=false
-tab deployments at=7 landing=false view=false
+tab deployments at=1 landing=false view=false
+tab console at=2 landing=false view=false
+tab shell at=3 landing=false view=false
+tab framebuffer at=4 landing=false view=false
+tab files at=5 landing=false view=false
+tab stats at=6 landing=false view=false
+tab backups at=7 landing=false view=false
 tab provisioning at=8 landing=false view=false
 tab devices at=9 landing=false view=false
 tab volumes at=10 landing=false view=false

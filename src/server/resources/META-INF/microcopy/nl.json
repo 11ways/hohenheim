@@ -784,6 +784,10 @@
     {
       "text": "Bron",
       "scope": "template_import"
+    },
+    {
+      "text": "Bron en build",
+      "scope": "form_section"
     }
   ],
   "start_command": [
@@ -1182,7 +1186,7 @@
       "scope": "site_databases"
     },
     {
-      "text": "Nog geen deployments",
+      "text": "Nog geen uitrol",
       "scope": "deployments"
     },
     {
@@ -1244,7 +1248,7 @@
       "scope": "site_domains"
     },
     {
-      "text": "Deployments via webhook, polling of handmatige start verschijnen hier.",
+      "text": "Rol nu uit of push naar de branch: elke uitrol verschijnt hier.",
       "scope": "deployments"
     },
     {
@@ -1555,7 +1559,7 @@
   ],
   "rollback_confirm": [
     {
-      "text": "De vorige deploymentsleuf activeren? De huidige versie stopt met serveren.",
+      "text": "Terug naar release {$commit}? De live release stopt met serveren.",
       "scope": "deployments"
     },
     {
@@ -1601,7 +1605,7 @@
   ],
   "started": [
     {
-      "text": "Gestart",
+      "text": "Wanneer",
       "scope": "deployments"
     },
     {
@@ -1641,7 +1645,7 @@
       "scope": "site_databases"
     },
     {
-      "text": "Status",
+      "text": "Toestand",
       "scope": "deployments"
     },
     {
@@ -1675,7 +1679,7 @@
   },
   "trigger": [
     {
-      "text": "Trigger",
+      "text": "Wat",
       "scope": "deployments"
     },
     {
@@ -1699,6 +1703,10 @@
     {
       "text": "Variabelen",
       "scope": "template_contents"
+    },
+    {
+      "text": "Variabelen",
+      "scope": "form_section"
     }
   ],
   "webhook": {
@@ -1715,7 +1723,7 @@
   },
   "title": [
     {
-      "text": "Deployments",
+      "text": "Uitrollen",
       "scope": "deployments"
     },
     {
@@ -5037,10 +5045,16 @@
     "text": "Images opruimen gestart; het resultaat verschijnt in de serverlog",
     "scope": "stack"
   },
-  "deploy_queued": {
-    "text": "Deploy in wachtrij",
-    "scope": "stack"
-  },
+  "deploy_queued": [
+    {
+      "text": "Deploy in wachtrij",
+      "scope": "stack"
+    },
+    {
+      "text": "Startte een uitrol",
+      "scope": "webhook_outcome"
+    }
+  ],
   "stop_queued": {
     "text": "Stop in wachtrij",
     "scope": "stack"
@@ -7447,10 +7461,16 @@
     "text": "Cumulatieve KiB sinds de start van de workload",
     "scope": "instance_stats"
   },
-  "received": {
-    "text": "Ontvangen",
-    "scope": "instance_stats"
-  },
+  "received": [
+    {
+      "text": "Ontvangen",
+      "scope": "instance_stats"
+    },
+    {
+      "text": "Ontvangen, wordt nog verwerkt",
+      "scope": "webhook_outcome"
+    }
+  ],
   "transmitted": {
     "text": "Verzonden",
     "scope": "instance_stats"
@@ -9320,7 +9340,7 @@
       "scope": "spamservice_sample"
     },
     {
-      "text": "{$name} - Deployments",
+      "text": "{$name} - Uitrollen",
       "scope": "deployments"
     },
     {
@@ -14108,5 +14128,145 @@
   "velocity_proxy": { "text": "De ingang waarmee spelers verbinden, voor je Minecraftservers.", "scope": "put_online", "target": "card" },
   "rotate_incus_cert": { "text": "{$actor} gaf {$subject} een nieuwe Incus-clientidentiteit", "scope": "activity", "target": "happened" },
   "rotate_host_key": { "text": "{$actor} gaf {$subject} een nieuwe SSH-clientidentiteit", "scope": "activity", "target": "happened" },
-  "edit_remote_dns_record": { "text": "{$actor} wijzigde een record van {$subject} op de primaire server", "scope": "activity", "target": "happened" }
+  "edit_remote_dns_record": { "text": "{$actor} wijzigde een record van {$subject} op de primaire server", "scope": "activity", "target": "happened" },
+  "live_from_branch": {
+    "text": "Live: commit {$commit} van {$branch}",
+    "scope": "deployments"
+  },
+  "live_commit": {
+    "text": "Live: commit {$commit}",
+    "scope": "deployments"
+  },
+  "live_since": {
+    "text": "Uitgerold",
+    "scope": "deployments"
+  },
+  "live_kept": {
+    "text": "De vorige release, {$commit}, blijft bewaard zodat je er in één stap naar terug kunt.",
+    "scope": "deployments"
+  },
+  "live_nothing_kept": {
+    "text": "Er is nog geen vorige release bewaard.",
+    "scope": "deployments"
+  },
+  "rollback_to": {
+    "text": "Terugrollen naar {$commit}",
+    "scope": "deployments"
+  },
+  "history_description": {
+    "text": "Elke uitrol bouwt een nieuwe release naast de live versie; bezoekers schakelen pas over als die antwoordt. Eén vorige release blijft bewaard om terug te rollen.",
+    "scope": "deployments"
+  },
+  "mark_live": {
+    "text": "Live",
+    "scope": "deployments"
+  },
+  "mark_kept": {
+    "text": "Bewaard om terug te rollen",
+    "scope": "deployments"
+  },
+  "mark_replaced": {
+    "text": "Vervangen",
+    "scope": "deployments"
+  },
+  "previews": {
+    "text": "Previews",
+    "scope": "deployments"
+  },
+  "previews_description": {
+    "text": "Een tijdelijke kopie per branch of pull request.",
+    "scope": "deployments"
+  },
+  "preview_branch": {
+    "text": "Een branch voorvertonen",
+    "scope": "deployments"
+  },
+  "pull_request": {
+    "text": "Pull request #{$number}",
+    "scope": "deployments"
+  },
+  "preview_expires": {
+    "text": "Verloopt",
+    "scope": "deployments"
+  },
+  "preview_details": {
+    "text": "Details",
+    "scope": "deployments"
+  },
+  "previews_empty": {
+    "text": "Er draaien geen previews.",
+    "scope": "deployments"
+  },
+  "automatic_deploys": {
+    "text": "Automatische uitrol",
+    "scope": "deployments"
+  },
+  "source_line": {
+    "text": "{$repository}, branch {$branch}",
+    "scope": "deployments"
+  },
+  "auto_deploy_on": {
+    "text": "Elke push naar de branch wordt uitgerold.",
+    "scope": "deployments"
+  },
+  "auto_deploy_off": {
+    "text": "Pushes worden genoteerd maar niet uitgerold: automatische uitrol staat uit.",
+    "scope": "deployments"
+  },
+  "recent_pushes": {
+    "text": "Recente pushes",
+    "scope": "deployments"
+  },
+  "pushes_empty": {
+    "text": "Nog geen pushes ontvangen.",
+    "scope": "deployments"
+  },
+  "preview_queued": {
+    "text": "Startte een preview",
+    "scope": "webhook_outcome"
+  },
+  "preview_teardown_queued": {
+    "text": "Verwijderde een preview",
+    "scope": "webhook_outcome"
+  },
+  "repository_mismatch": {
+    "text": "Geweigerd: kwam van een andere repository",
+    "scope": "webhook_outcome"
+  },
+  "ignored_not_a_push": {
+    "text": "Genegeerd: geen push",
+    "scope": "webhook_outcome"
+  },
+  "ignored_deleted_ref": {
+    "text": "Genegeerd: de branch werd verwijderd",
+    "scope": "webhook_outcome"
+  },
+  "ignored_invalid_ref": {
+    "text": "Genegeerd: geen bruikbare branchnaam",
+    "scope": "webhook_outcome"
+  },
+  "ignored_branch": {
+    "text": "Genegeerd: niet de uitgerolde branch en geen previewbranch",
+    "scope": "webhook_outcome"
+  },
+  "ignored_auto_deploy": {
+    "text": "Genegeerd: automatische uitrol staat uit",
+    "scope": "webhook_outcome"
+  },
+  "ignored_previews_disabled": {
+    "text": "Genegeerd: previews staan uit",
+    "scope": "webhook_outcome"
+  },
+  "ignored_malformed_pr": {
+    "text": "Genegeerd: een onvolledig pull-requestbericht",
+    "scope": "webhook_outcome"
+  },
+  "ignored_pr_action": {
+    "text": "Genegeerd: een pull-requestwijziging die geen preview nodig heeft",
+    "scope": "webhook_outcome"
+  },
+  "variables_description": {
+    "text": "Wijzigingen gelden vanaf de volgende uitrol.",
+    "scope": "form_section"
+  }
 }

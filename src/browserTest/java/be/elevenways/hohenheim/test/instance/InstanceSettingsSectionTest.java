@@ -111,22 +111,30 @@ class InstanceSettingsSectionTest {
             .containsExactly("auto_deploy", "poll_interval", "webhook_secret",
                 "previews_enabled", "preview_branches", "preview_environment_variables");
 
-        // 3. An application answers the same question with its own extra vocabulary: the
-        //    builder detail joins the shared git build fold, health and retention join
-        //    delivery.
+        // 3. An application's Configuration reads as the App-Git-Config board: an open source-and-build section
+        //    (where the code comes from, what it builds into, deploy-on-push and previews), the variables per lane
+        //    open beside it, and only what has a working default folded.
         assertThat(visibleRun(ApplicationKind.SETTINGS_SCHEMA))
-            .as("step 3: an application leads with source, artifact and port")
-            .containsExactly("repository_url", "provider_id", "repository", "branch",
-                "build_command", "image", "tag", "container_port");
-        assertThat(sectionMembers(ApplicationKind.SETTINGS_SCHEMA, HohenheimFormSections.BUILD))
-            .as("step 3: its build fold owns both halves, its own first")
-            .containsExactly("builder", "dockerfile", "build_arguments", "build_directory",
-                "build_timeout", "build_environment_variables", "shallow_clone", "submodules");
-        assertThat(sectionMembers(ApplicationKind.SETTINGS_SCHEMA, HohenheimFormSections.DEPLOYMENT))
-            .as("step 3: and its deployment fold carries the release gate and the previews")
-            .containsExactly("auto_deploy", "poll_interval", "webhook_secret",
-                "health_path", "keep_releases", "previews_enabled", "preview_branches",
+            .as("step 3: every application field belongs to a named section").isEmpty();
+        assertThat(ApplicationKind.SETTINGS_SCHEMA.getSections()).extracting(FormSection::id)
+            .as("step 3: source and variables lead, the folds follow")
+            .containsExactly(HohenheimFormSections.SOURCE, HohenheimFormSections.VARIABLES,
+                HohenheimFormSections.BUILD, HohenheimFormSections.DEPLOYMENT, HohenheimFormSections.RUNTIME);
+        assertThat(ApplicationKind.SETTINGS_SCHEMA.getSections()).extracting(FormSection::startsCollapsed)
+            .as("step 3: the two decisions are open, the rest folded")
+            .containsExactly(false, false, true, true, true);
+        assertThat(sectionMembers(ApplicationKind.SETTINGS_SCHEMA, HohenheimFormSections.SOURCE))
+            .as("step 3: the source section carries the repository, the build, the artifact and deploy-on-push")
+            .containsExactly("repository_url", "provider_id", "repository", "branch", "builder", "build_command",
+                "build_directory", "image", "tag", "container_port", "auto_deploy", "previews_enabled",
+                "preview_branches");
+        assertThat(sectionMembers(ApplicationKind.SETTINGS_SCHEMA, HohenheimFormSections.VARIABLES))
+            .as("step 3: the variables per lane: running, building, previews only")
+            .containsExactly("environment_variables", "build_environment_variables",
                 "preview_environment_variables");
+        assertThat(sectionMembers(ApplicationKind.SETTINGS_SCHEMA, HohenheimFormSections.DEPLOYMENT))
+            .as("step 3: and the deployment fold keeps the webhook secret, the release gate and retention")
+            .containsExactly("webhook_secret", "poll_interval", "health_path", "keep_releases");
 
         // 4. FALSIFICATION: a schema-declared section that does not survive derivation
         //    folds nothing, because the rendered form is built from the DERIVED spec.
