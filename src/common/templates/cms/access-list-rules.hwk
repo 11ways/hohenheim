@@ -11,6 +11,8 @@
 {% declare typeOptions: List<AccessRuleOption> %}
 {% declare addTarget: RouteTarget %}
 {% declare head: RecordHeadState = null %}
+{% declare protects: List<Object> = null %}
+{% declare shared: Boolean = false %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
@@ -52,6 +54,23 @@
                 <pl-empty-state-title>{{ t("empty", scope: "access_rule") }}</pl-empty-state-title>
                 <pl-empty-state-description>{{ t("empty_hint", scope: "access_rule") }}</pl-empty-state-description>
             </pl-empty-state>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+
+    {#- Where the list is used: the Access-List board's "Protects" card. -#}
+    <pl-card data-access-list-protects>
+        <pl-card-header>
+            <pl-card-title>{{ t("protects_column", scope: "access_list") }}</pl-card-title>
+            {% if shared %}<pl-card-description>{{ t("shared_note", scope: "access_list") }}</pl-card-description>{% /if %}
+        </pl-card-header>
+        <pl-card-content>
+            {% if protects %}
+            <ul class="hh-access-list-uses">
+                {% each protects as use %}<li data-access-list-use>{{ use }}</li>{% /each %}
+            </ul>
+            {% else %}
+            <p class="hh-muted">{{ t("protects_none", scope: "access_list") }}</p>
             {% /if %}
         </pl-card-content>
     </pl-card>

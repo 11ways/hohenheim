@@ -35,6 +35,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * The site auth providers' parts: the admin resource over the shared authentication declarations sites point at.
@@ -65,6 +66,18 @@ public final class AuthProviderParts {
     private AuthProviderParts() {
     }
 
+    /** The list's "used by" column. */
+    private static final String USED_BY_COLUMN = "used_by";
+
+    /** How many places use a provider, in words: the rules naming it plus the sites it gates. */
+    private static @NonNull Microcopy usedBy(@Nullable Integer providerId) {
+        long uses = DeleteImpact.rulesNamingAuthProvider(providerId)
+            + DeleteImpact.sitesGatedByAuthProvider(providerId).size();
+        return uses == 0
+            ? Microcopy.of("used_by_nothing").withFilter("scope", "auth_provider")
+            : Microcopy.of("used_by_count").withFilter("scope", "auth_provider").withArg("count", uses);
+    }
+
     /** @return the admin auth-provider resource */
     public static @NonNull PanelResource<Row> admin() {
         // The derived spec would render the type-discriminated CONFIG blob; these columns are what an operator
@@ -74,7 +87,10 @@ public final class AuthProviderParts {
                 .subtext("required_permission").build())
             .column(ColumnSpec.fromField(SiteAuthProviderModel.REQUIRED_PERMISSION).hidden().build())
             .column(ColumnSpec.fromField(SiteAuthProviderModel.PROVIDER_TYPE).filterable().build())
-            .column(ColumnSpec.fromField(SiteAuthProviderModel.CREATED_AT).build())
+            // Where it is used, the Access board's "used by" line: access-list rules naming it plus sites it gates.
+            .column(ColumnSpec.virtual(USED_BY_COLUMN, Microcopy.of("used_by_column").withFilter("scope",
+                "auth_provider")).build())
+            .column(ColumnSpec.fromField(SiteAuthProviderModel.CREATED_AT).hidden().build())
             .filter(FilterSpec.leaf(SiteAuthProviderModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(SiteAuthProviderModel.NAME)).build())
             .build();
@@ -91,10 +107,14 @@ public final class AuthProviderParts {
             .icon(Icon.of("key"))
             .navGroup(HohenheimPanel.NETWORK_GROUP)
             .navOrder(50)
-            .showInNav(false)
+            // A member of the Access cluster (HohenheimPanel): the cluster stands in for it in the sidebar, and a
+            // member hidden from nav would drop out of the cluster's tabs too.
             .reads(ResourceReads.rows())
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
-                .search(SiteAuthProviderModel.NAME, SiteAuthProviderModel.REQUIRED_PERMISSION).build())
+                .search(SiteAuthProviderModel.NAME, SiteAuthProviderModel.REQUIRED_PERMISSION)
+                .computed(Objects.requireNonNull(table.column(USED_BY_COLUMN)),
+                    (provider, request) -> usedBy(provider.get(SiteAuthProviderModel.ID)))
+                .build())
             .form(ResourceForm.<Row>of(form).build())
             .writes(ResourceMutations.rows()
                 .create(call -> {

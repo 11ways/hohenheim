@@ -28,6 +28,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
+import java.util.Objects;
+import java.util.function.UnaryOperator;
 
 /**
  * The access lists' shared parts, and the admin access-list resource and its /manage twin built from them.
@@ -45,6 +47,12 @@ public final class AccessListParts {
 
     private static final SubjectType<Row> SUBJECT = SubjectType.record(AccessListModel.MODEL_ID);
 
+    /** The list's "lets in" column: its rules in a few words. */
+    private static final String LETS_IN_COLUMN = "lets_in";
+
+    /** The list's "protects" column: how many sites and paths it gates. */
+    private static final String PROTECTS_COLUMN = "protects";
+
     private AccessListParts() {
     }
 
@@ -52,11 +60,15 @@ public final class AccessListParts {
     public static @NonNull PanelResource<Row> admin() {
         // AIDEV-NOTE: an explicit spec. The rules themselves live in their own table, so "which list holds
         // 10.0.0.5" is answered by the rule search, not by a column here.
+        // The Access-List board reads a list by what it lets in and where it is used; how its root group combines
+        // rules and when it was made stay in the picker.
         TableSpec<Row> table = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(AccessListModel.NAME).filterable().build())
-            .column(ColumnSpec.fromField(AccessListModel.SATISFY).filterable().build())
+            .column(ColumnSpec.virtual(LETS_IN_COLUMN, listText("lets_in_column")).build())
+            .column(ColumnSpec.virtual(PROTECTS_COLUMN, listText("protects_column")).build())
             .column(ColumnSpec.fromField(AccessListModel.SHARED).filterable().build())
-            .column(ColumnSpec.fromField(AccessListModel.CREATED_AT).build())
+            .column(ColumnSpec.fromField(AccessListModel.SATISFY).filterable().hidden().build())
+            .column(ColumnSpec.fromField(AccessListModel.CREATED_AT).hidden().build())
             .filter(FilterSpec.leaf(AccessListModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(AccessListModel.NAME)).build())
             .filter(FilterSpec.leaf(AccessListModel.SATISFY, CoreTypes.EQUALS)
@@ -71,7 +83,11 @@ public final class AccessListParts {
             // writer (the GitProviderParts shape).
             .add(AccessListModel.SHARED)
             .build();
-        return entry("access_list", table, form)
+        return entry("access_list", table, form, list -> list
+                .computed(Objects.requireNonNull(table.column(LETS_IN_COLUMN)),
+                    (row, request) -> AccessRuleSummaries.letsInOf(row.get(AccessListModel.ID)))
+                .computed(Objects.requireNonNull(table.column(PROTECTS_COLUMN)),
+                    (row, request) -> protectsCount(row.get(AccessListModel.ID))))
             .writes(ResourceMutations.rows().create().update().delete().build())
             .tabs(ResourceTabs.<Row>of(List.of(new AccessListRulesPage())).withHistory().withContributions())
             .build();
@@ -87,7 +103,7 @@ public final class AccessListParts {
             .add(AccessListModel.NAME)
             .add(AccessListModel.SATISFY)
             .build();
-        return entry("manage_access_list", table, form)
+        return entry("manage_access_list", table, form, list -> list)
             // Admins see every list; everyone else only the ones the walk confirms manage on, so an unowned id reads
             // as MISSING (zenit-cms 404s an out-of-scope load).
             .scope(TenantScopes.MANAGED_ACCESS_LISTS)
@@ -110,7 +126,8 @@ public final class AccessListParts {
 
     /** The identity, nav placement, reads, list chrome, form part and delete dialog both twins share. */
     private static PanelResource.@NonNull Builder<Row> entry(@NonNull String id, @NonNull TableSpec<Row> table,
-                                                             @NonNull FormSpec form) {
+                                                             @NonNull FormSpec form,
+                                                             @NonNull UnaryOperator<ResourceList.Builder<Row>> cells) {
         return PanelResource.builder(HohenheimIds.id(id), HohenheimSlugs.ACCESS_LISTS, SUBJECT)
             .label(Microcopy.of("plural").withFilter("scope", "access_list"))
             .recordLabel(Microcopy.of("singular").withFilter("scope", "access_list"))
@@ -119,8 +136,8 @@ public final class AccessListParts {
             .navGroup(HohenheimPanel.NETWORK_GROUP)
             .navOrder(30)
             .reads(ResourceReads.rows())
-            .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
-                .search(AccessListModel.NAME).build())
+            .list(cells.apply(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
+                .search(AccessListModel.NAME)).build())
             // AIDEV-NOTE: the quick-add bar is a NAME only: a list created empty is INERT, not a lockout
             // (AccessListGate allows when a list carries no rules and no credential). The name is the one inline
             // cell: SATISFY is the AND/OR of the request-time gate, so a cell edit would change on the next request
@@ -131,6 +148,16 @@ public final class AccessListParts {
                 .build())
             .deleteConfirmation(DeleteConfirmation.<Row>of(deleteBody(null))
                 .forRow((list, request) -> deleteBody(list)));
+    }
+
+    /** How many places a list gates, in words; "nothing yet" for a list no site or path names. */
+    private static @NonNull Microcopy protectsCount(@Nullable Integer listId) {
+        int uses = DeleteImpact.usesOfAccessList(listId).size();
+        return uses == 0 ? listText("protects_nothing") : listText("protects_count").withArg("count", uses);
+    }
+
+    static @NonNull Microcopy listText(@NonNull String key) {
+        return Microcopy.of(key).withFilter("scope", "access_list");
     }
 
     /**

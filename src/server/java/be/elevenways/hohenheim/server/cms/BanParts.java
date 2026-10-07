@@ -24,6 +24,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.resource.RowWriteCall;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
+import be.elevenways.zenit.cms.common.schema.FilterState;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.edit.FieldAccess;
@@ -125,18 +126,21 @@ public final class BanParts {
         // AIDEV-NOTE: the classification columns are filters too: "which active auto-bans came from the login probe"
         // was a question only answerable by paging.
         TableSpec<Row> table = TableSpec.<Row>builder()
-            .column(ColumnSpec.fromField(BanModel.IP).filterable().subtext("reason").copyable().build())
+            // The Access-Blocked board reads a ban as the address and why, who blocked it, and until when; which
+            // traffic it refuses, the event that tripped it and when it began stay in the picker and the filters.
+            .column(ColumnSpec.fromField(BanModel.IP).label(banText("address_column"))
+                .filterable().subtext("reason").copyable().build())
             .column(ColumnSpec.fromField(BanModel.REASON).hidden().build())
-            .column(ColumnSpec.fromField(BanModel.SOURCE).filterable().build())
+            .column(ColumnSpec.fromField(BanModel.SOURCE).label(banText("by_column")).filterable().build())
             // WHICH traffic the ban refuses: an SSH ban and a web ban are different rows.
-            .column(ColumnSpec.fromField(BanModel.SCOPE).filterable().build())
+            .column(ColumnSpec.fromField(BanModel.SCOPE).filterable().hidden().build())
             // ONE state badge (active / lifted / expired); the `active` filter keeps answering "still enforced?".
             .column(ColumnSpec.virtual(STATE_COLUMN, Microcopy.of("state").withFilter("scope", "ban"))
                 .renderer(HohenheimTemplateIds.CELL_BAN_STATE).build())
             .column(ColumnSpec.fromField(BanModel.ACTIVE).hidden().build())
-            .column(ColumnSpec.fromField(BanModel.EVENT_TYPE).filterable().build())
-            .column(ColumnSpec.fromField(BanModel.EXPIRES_AT).build())
-            .column(ColumnSpec.fromField(BanModel.CREATED_AT).build())
+            .column(ColumnSpec.fromField(BanModel.EXPIRES_AT).label(banText("until_column")).build())
+            .column(ColumnSpec.fromField(BanModel.EVENT_TYPE).filterable().hidden().build())
+            .column(ColumnSpec.fromField(BanModel.CREATED_AT).hidden().build())
             .filter(FilterSpec.leaf(BanModel.IP, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(BanModel.IP)).build())
             .filter(FilterSpec.leaf(BanModel.SOURCE, CoreTypes.EQUALS)
@@ -174,6 +178,9 @@ public final class BanParts {
                 BanModel.EVENT_TYPE.getName().equals(column.name()) ? eventLabel(ban) : null))
             .list(ResourceList.rows(table).chrome(CmsSupport.FILTERABLE_LIST).facets().ruleFilters()
                 .search(BanModel.IP, BanModel.REASON)
+                // Opens on what is blocked NOW: a default the reader removes to see lifted and expired bans.
+                .defaultFilter(FilterState.empty().with(BanModel.ACTIVE.getName(), Boolean.TRUE.toString()),
+                    filter -> BanModel.ACTIVE.getName().equals(filter) ? banText("blocked_now") : null)
                 .computed(Objects.requireNonNull(table.column(STATE_COLUMN)), (ban, request) ->
                     BanStateCell.of(Boolean.TRUE.equals(ban.get(BanModel.ACTIVE)),
                         ban.get(BanModel.LIFTED_AT), ban.get(BanModel.EXPIRES_AT), Now.instant()))
@@ -215,6 +222,10 @@ public final class BanParts {
                     .acrossRecords(ctx -> FieldAccess.Decision.READONLY)));
         }
         return bindings;
+    }
+
+    private static @NonNull Microcopy banText(@NonNull String key) {
+        return Microcopy.of(key).withFilter("scope", "ban");
     }
 
     private static @Nullable String eventLabel(@NonNull Row ban) {

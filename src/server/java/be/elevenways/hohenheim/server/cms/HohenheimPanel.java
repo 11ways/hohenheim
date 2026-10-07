@@ -218,8 +218,10 @@ public final class HohenheimPanel extends Panel {
             present(peers, PutOnlinePage.SLUG).isEmpty() ? null : PutOnlinePage.SLUG));
         addCluster(peers, cluster("domain_names", DOMAINS_CLUSTER, "globe", 50), DomainParts.SLUG,
             HohenheimSlugs.DNS_ZONES, HohenheimSlugs.CERTIFICATES, ReleasedClaimParts.SLUG);
+        // In the Access board's tab order: lists, blocked addresses, people (users and roles), sign-in providers.
         addCluster(peers, cluster("access", ACCESS_CLUSTER, "shield-halved", 60), HohenheimSlugs.ACCESS_LISTS,
-            AuthAdminParts.USERS_SLUG, AuthAdminParts.ROLES_SLUG, BanParts.SLUG, SpamserviceOverviewPage.SLUG);
+            BanParts.SLUG, AuthAdminParts.USERS_SLUG, AuthAdminParts.ROLES_SLUG, AuthProviderParts.SLUG,
+            SpamserviceOverviewPage.SLUG);
         addCluster(peers, cluster("activity", ACTIVITY_CLUSTER, "clock-rotate-left", 70),
             activity.slug(), inbox.slug(), deliveries.slug());
         addCluster(peers, cluster("settings", SETTINGS_CLUSTER, "gear", 80), SettingsPage.DEFAULT_SLUG,

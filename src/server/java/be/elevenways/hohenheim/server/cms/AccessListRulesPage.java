@@ -106,6 +106,15 @@ public final class AccessListRulesPage implements RecordTab.Rendered<Row> {
             ? HohenheimEndpoints.ACCESS_RULES_ADD
             : HohenheimEndpoints.MANAGE_ACCESS_RULES_ADD)
             .with(HohenheimEndpoints.ACCESS_LIST_ID, listId));
+        // Where the list is used, the Access-List board's "Protects" card: a whole app, or one path on an app.
+        List<Microcopy> protects = new ArrayList<>();
+        for (DeleteImpact.AccessListUse use : DeleteImpact.usesOfAccessList(listId)) {
+            protects.add(use.path() == null
+                ? AccessListParts.listText("protects_site").withArg("site", use.site())
+                : AccessListParts.listText("protects_path").withArg("path", use.path()).withArg("site", use.site()));
+        }
+        vars.put("protects", protects);
+        vars.put("shared", Boolean.TRUE.equals(list.get(AccessListModel.SHARED)));
         vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.ACCESS_LIST_RULES, vars);
     }

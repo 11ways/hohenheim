@@ -42,12 +42,12 @@ chrome - views=false advanced=true search=true columns=false rail=false selectio
 column ip at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=reason relation=false
 column reason at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column source at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column scope at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column scope at=3 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column state at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column active at=5 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column event_type at=6 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column expires_at at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=8 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column expires_at at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column event_type at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column created_at at=8 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 filter ip at=0 kind=TEXT facet=false param=filter.ip
 filter source at=1 kind=SELECT facet=true param=filter.source
 filter scope at=2 kind=SELECT facet=true param=filter.scope
@@ -123,12 +123,12 @@ chrome - views=false advanced=true search=true columns=false rail=false selectio
 column ip at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=reason relation=false
 column reason at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column source at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column scope at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column scope at=3 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column state at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column active at=5 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column event_type at=6 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column expires_at at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=8 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column expires_at at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column event_type at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column created_at at=8 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 filter ip at=0 kind=TEXT facet=false param=filter.ip
 filter source at=1 kind=SELECT facet=true param=filter.source
 filter scope at=2 kind=SELECT facet=true param=filter.scope
@@ -154,12 +154,12 @@ chrome - views=false advanced=true search=true columns=false rail=false selectio
 column ip at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=reason relation=false
 column reason at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column source at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column scope at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column scope at=3 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column state at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column active at=5 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column event_type at=6 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column expires_at at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=8 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column expires_at at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column event_type at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column created_at at=8 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 filter ip at=0 kind=TEXT facet=false param=filter.ip
 filter source at=1 kind=SELECT facet=true param=filter.source
 filter scope at=2 kind=SELECT facet=true param=filter.scope

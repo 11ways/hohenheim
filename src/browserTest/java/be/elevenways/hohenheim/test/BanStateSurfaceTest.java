@@ -73,7 +73,8 @@ class BanStateSurfaceTest extends HohenheimTestBase {
             .as("step 4: the record names who lifted it")
             .contains("data-path=\"lifted_by\"")
             .contains("qa-operator");
-        HttpResponse<String> listAfter = adminGet("/admin/bans");
+        // The list opens on what is blocked NOW; the lifted ban shows under the explicit "not active" filter.
+        HttpResponse<String> listAfter = adminGet("/admin/bans?filter.active=false");
         assertThat(listAfter.body())
             .as("step 4: the list shows the lifted state")
             .contains("data-ban-state=\"" + BanStateCell.LIFTED + "\"");

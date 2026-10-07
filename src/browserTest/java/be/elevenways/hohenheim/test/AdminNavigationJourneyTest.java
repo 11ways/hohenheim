@@ -46,7 +46,8 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
     /** Each cluster's members, in the order its tabs show them. */
     private static final Map<String, List<String>> EXPECTED_CLUSTERS = Map.of(
         HohenheimPanel.DOMAINS_CLUSTER, List.of("domains", "dns-zones", "certificates", "released-claims"),
-        HohenheimPanel.ACCESS_CLUSTER, List.of("access-lists", "users", "roles", "bans", "spamservice"),
+        HohenheimPanel.ACCESS_CLUSTER, List.of("access-lists", "bans", "users", "roles", "auth-providers",
+            "spamservice"),
         HohenheimPanel.ACTIVITY_CLUSTER, List.of("activity", "inbox", "deliveries"),
         HohenheimPanel.SETTINGS_CLUSTER, List.of("settings", "instance-templates", "runtime-images", "git-providers",
             "database-engines", "notifications", "backup-targets", "task-schedules", "task-runs", "build-info"));

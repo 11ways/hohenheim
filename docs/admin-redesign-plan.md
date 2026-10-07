@@ -641,3 +641,24 @@ Order: W6 as planned. G5 needs nothing from W1-W5 except the `put_online` operat
 - Needs building: the "Paths on this address" card (routes sharing the hostname), per-path redirect rules (OPEN), one
   request page merging the challenge and publisher into the board's three choices, "Read the certificate" before an
   upload saves, and an inline Reissue on a failing row (the action is in the row's menu).
+
+## 17. W8b decisions (fork W8b, 2026-10-07)
+
+- "Points here" is bounded: one reader waits at most `HostnameReach.LOOKUP_WAIT_MS` (1.5 s), the cells of one
+  Addresses page share `DomainParts.REACH_RENDER_BUDGET_MS` (2 s, a request attribute set by the first cell), and a
+  name not answered in time reads "Checking" while its lookup keeps running on a virtual thread into the one-minute
+  cache. Lookups are single-flight per name and capped at 64 at once. The certificate pre-check keeps the unbounded
+  `HostnameReach.of`: it acts on the answer.
+- Access area tabs follow the board: Access lists, Blocked addresses, Users, Roles, Sign-in providers, then Abuse
+  protection. Sign-in providers stay out of the sidebar (cluster member) and keep their Sites-list header link.
+- Access lists read by what they let in ("Password, 2 people", else "N rules") and how many places use them; how the
+  root group combines and when it was made move to the picker. The Rules tab gains a "Protects" card (every app or path
+  on an app the list gates) and the shared note. The rule tree stays the existing editor.
+- Blocked addresses open on "Blocked now" (a removable default filter on `active`); columns read Address (with why),
+  By, Until; scope, event and created-at move to the picker and filters. Never-block stays a setting (Settings >
+  Blocking), not repeated on this page.
+- Users show two-step sign-in (On/Off) from zenit-auth `TwoStepSignIn.isOn`, the same check the login routing reads.
+  Sign-in providers show where they are used (rules naming them plus sites they gate).
+- Needs building: recent misses on the Blocked page (security events live in spamservice; a domain-miss list needs a
+  local store or the spamservice feed filtered), the never-block list shown in place, a Role column and a selected
+  person's app access on People, and "Signed in to protected sites" (Node clause 28, OPEN).
