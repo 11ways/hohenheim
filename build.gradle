@@ -104,9 +104,6 @@ tasks.named('processServerResources') {
     dependsOn 'runtimeImageManifest'
     from('images') { into 'hohenheim-images' }
     from(runtimeImageManifest) { into 'hohenheim-images' }
-    // The shipped defaults ride the jar: zenit reads classpath settings/default.dry first, so a deploy (which
-    // replaces only the jar) keeps every install on the defaults it was built with.
-    from('settings') { include 'default.dry'; into 'settings' }
 }
 
 // --- JAR Tasks ---
