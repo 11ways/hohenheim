@@ -512,11 +512,11 @@
   ],
   "forward_scheme": [
     {
-      "text": "Upstream protocol",
+      "text": "Protocol",
       "scope": "field"
     },
     {
-      "text": "Protocol used to connect to the upstream.",
+      "text": "http or https: how Hohenheim connects to where requests go.",
       "scope": "help"
     }
   ],
