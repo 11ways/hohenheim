@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.site.ProtectPath;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -57,7 +58,7 @@ final class SiteActions {
     static @NonNull List<PanelAction<Row>> operator() {
         return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl, AppHealth.sites(false)), enableAction(),
             disableAction(), cloneAction(),
-            rollbackAction(), fixHttpsAction(), addAddressAction(), fixProtectionAction());
+            rollbackAction(), protectPathAction(), fixHttpsAction(), addAddressAction(), fixProtectionAction());
     }
 
     /**
@@ -66,7 +67,7 @@ final class SiteActions {
      */
     static @NonNull List<PanelAction<Row>> delegated() {
         return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl, AppHealth.sites(true)), enableAction(),
-            disableAction(), fixHttpsAction(), addAddressAction(), fixProtectionAction());
+            disableAction(), protectPathAction(), fixHttpsAction(), addAddressAction(), fixProtectionAction());
     }
 
     /**
@@ -102,6 +103,22 @@ final class SiteActions {
     /** To the site's addresses, for a site visitors cannot reach because it answers on no name. */
     private static @NonNull PanelAction<Row> addAddressAction() {
         return fixLink(ADD_ADDRESS, "add_address", "plus", SiteParts.DOMAINS_TAB, AppHealth::needsAddress);
+    }
+
+    /**
+     * Protect a path in place: the operation's form in a sheet on the site, which lands on the path it protected.
+     *
+     * AIDEV-NOTE: a record action, not the Protection card's link: a placed operation opens its sheet from its own
+     * button, and the card keeps linking to the site's protected paths, where the written path is listed.
+     */
+    private static @NonNull PanelAction<Row> protectPathAction() {
+        return CmsSupport.opensWhatItMade(ProtectPath.OPERATION,
+                (panel, id) -> CmsRoutes.detail(panel, ProtectedPathParts.SLUG, id).toUrl(),
+                Microcopy.of("action").withFilter("scope", "protect_path"),
+                Microcopy.of("description").withFilter("scope", "protect_path"), null)
+            .inlineOnRecord(true)
+            .inSheet()
+            .build();
     }
 
     /** To the site's protected paths, for a path whose protection lets everyone in. */
@@ -174,16 +191,9 @@ final class SiteActions {
 
     /** The record-creating clone; the form opens on {@link #freeCloneName}, and the copy's page is where it lands. */
     private static @NonNull PanelAction<Row> cloneAction() {
-        return PanelAction.<Row, Integer>places(SiteOperations.CLONE, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.redirect(new Uri(SiteParts.recordRoute(
-                    request.request().panelSlug(), Objects.requireNonNull(result.value(),
-                        "a clone answers the copy's id")).toUrl())))
-            .inlineOnRecord(false)
-            .inlineInRow(false)
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("clone").withFilter("scope", "site"))
-                .body(Microcopy.of("clone_confirm").withFilter("scope", "site"))
-                .build())
+        return CmsSupport.opensWhatItMade(SiteOperations.CLONE, (panel, id) -> SiteParts.recordRoute(panel, id).toUrl(),
+                Microcopy.of("clone").withFilter("scope", "site"),
+                Microcopy.of("clone_confirm").withFilter("scope", "site"), null)
             .inputValues((site, request) -> Map.of(SiteOperations.CLONE_NAME.getName(), freeCloneName(site)))
             .build();
     }

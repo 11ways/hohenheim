@@ -1426,10 +1426,16 @@
       "scope": "site_tls"
     }
   ],
-  "password": {
-    "text": "Password",
-    "scope": "database_tab"
-  },
+  "password": [
+    {
+      "text": "Password",
+      "scope": "database_tab"
+    },
+    {
+      "text": "Password",
+      "scope": "protect_path"
+    }
+  ],
   "payload_url": {
     "text": "Payload URL",
     "scope": "deployments"
@@ -1769,6 +1775,10 @@
     {
       "text": "A terminal inside this workspace, running as its own user. Everything you type runs in the container.",
       "scope": "instance_shell"
+    },
+    {
+      "text": "Ask for a password, a network or a sign-in before anyone reaches this part of the app.",
+      "scope": "protect_path"
     }
   ],
   "publish_records": {
@@ -6772,6 +6782,10 @@
     {
       "text": "Path",
       "scope": "template_contents"
+    },
+    {
+      "text": "Path",
+      "scope": "protect_path"
     }
   ],
   "mode": [
@@ -7048,6 +7062,10 @@
     {
       "text": "Action",
       "scope": "instance_migrate"
+    },
+    {
+      "text": "Protect a path",
+      "scope": "protect_path"
     }
   ],
   "offset": {
@@ -13881,5 +13899,57 @@
   "reach_unknown": {
     "text": "Unknown: this host declares no public address, so where {$hostname} points cannot be checked.",
     "scope": "put_online"
+  },
+  "path_help": {
+    "text": "Everything under this path is protected, for example /wp-admin.",
+    "scope": "protect_path"
+  },
+  "method": {
+    "text": "How visitors get in",
+    "scope": "protect_path"
+  },
+  "method_password": {
+    "text": "With a password",
+    "scope": "protect_path"
+  },
+  "method_network": {
+    "text": "From a network",
+    "scope": "protect_path"
+  },
+  "method_sign_in": {
+    "text": "By signing in",
+    "scope": "protect_path"
+  },
+  "username": {
+    "text": "Username",
+    "scope": "protect_path"
+  },
+  "networks": {
+    "text": "Networks",
+    "scope": "protect_path"
+  },
+  "networks_help": {
+    "text": "One address or range per line, for example 203.0.113.0/24.",
+    "scope": "protect_path"
+  },
+  "provider": {
+    "text": "Sign-in provider",
+    "scope": "protect_path"
+  },
+  "protect_path_nobody": {
+    "text": "Add at least one person with a username and a password.",
+    "scope": "violations"
+  },
+  "protect_path_no_network": {
+    "text": "Add at least one network.",
+    "scope": "violations"
+  },
+  "protect_path_no_provider": {
+    "text": "Choose a sign-in provider.",
+    "scope": "violations"
+  },
+  "protect_path_method": {
+    "text": "Choose how visitors get in.",
+    "scope": "violations"
   }
 }

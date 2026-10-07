@@ -520,3 +520,24 @@ Order: W6 as planned. G5 needs nothing from W1-W5 except the `put_online` operat
   target, so the compiler finds every targeted item that lacks words.
 - The template summary names no template: the operation's input form is shared by every template, and the chosen
   template already heads the page in its card.
+
+## 12. W5b decisions (fork W5b, 2026-10-07)
+
+- Activity: plumbing is decided per MODEL (`ActivityLog.setVisibility`), so a model people also write (hosts, zones,
+  sites) stays listed and its bookkeeping writers run under `ActivityLog.suppressed` instead: host probes
+  (`HostProbe`), the system-user mirror refresh (`UpdateSystemUsers`), the delegation probe (`DnsDelegationHealth`) and
+  the secondary freshness probe (`DnsSecondaryFreshness`). Starfleet's log was 22k secondary-freshness rows, 3.9k
+  system-user rows and 1.9k host rows before this; each now reaches operators through its alert or attention item.
+- Internal models are declared once in `HohenheimActivity` (port claims, quotas, released claims, reconcile findings,
+  proxy sessions, controller identities, install-media fetches, webhook deliveries, system users); grants are
+  declared internal at their own home in zenit-auth (`ZenitAuth.registerDefaults`), per G4's examples.
+- "What a person did" is one scope, `AdminActivityResource.peopleOnly()`: origin neither system nor seed (or unknown),
+  and no internal model. The list opens on it and the dashboard's recent activity reads it. Its internal half is
+  spelled over `model`, because the dashboards' `zenit.activity` source derives its vocabulary from its projection
+  and has no `internal` variable; both read `ActivityLog.internalModelTokens()`.
+- Protect a path: one `protect_path` operation (`ProtectPath`) on the site, placed as a record action in a sheet, that
+  writes a dedicated (unshared) access list, its rules and the protected path. The people are a zenit-forms `ItemList`
+  inside the operation's input, which coerces there as it does in a form (gap G6 not needed). An empty answer is
+  refused on its own entry before anything is written; the protected-path invariant still refuses an open list for
+  every writer. The Protection card keeps linking to the site's protected paths: a placed operation opens its sheet
+  from its own button, and the invoke route is POST-only.

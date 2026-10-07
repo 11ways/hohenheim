@@ -1,5 +1,13 @@
 package be.elevenways.hohenheim.server.cms;
 
+import java.util.function.BiFunction;
+import java.util.Objects;
+import be.elevenways.protoblast.common.http.Uri;
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
+import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.ServerMain;
@@ -173,6 +181,27 @@ public final class CmsSupport {
         Microcopy label = declared == null ? null : declared.getLabel();
         String resolved = label == null ? null : resolvedText(label);
         return resolved != null ? resolved : value;
+    }
+
+    /**
+     * A placed record operation that asks input under a titled form and answers the id of the record it made, which
+     * the panel then opens; the caller adds what differs (sheet, row inlining, prefill).
+     *
+     * @param landing the URL of the made record, from the panel slug and its id
+     */
+    static PanelAction.@NonNull OperationBuilder<Row, Integer> opensWhatItMade(
+            @NonNull Operation<?, ?, Integer> operation, @NonNull BiFunction<String, Integer, String> landing,
+            @NonNull Microcopy title, @NonNull Microcopy body, @Nullable Microcopy confirmLabel) {
+        ConfirmationSpec.Builder confirmation = ConfirmationSpec.builder().title(title).body(body);
+        if (confirmLabel != null) {
+            confirmation = confirmation.confirmLabel(confirmLabel);
+        }
+        return PanelAction.<Row, Integer>places(operation, ActionPlacement.ROW,
+                (request, result) -> CmsActionResult.redirect(new Uri(landing.apply(request.request().panelSlug(),
+                    Objects.requireNonNull(result.value(), "the operation answers the record it made")))))
+            .inlineOnRecord(false)
+            .inlineInRow(false)
+            .confirmation(confirmation.build());
     }
 
     /** A violation-scoped microcopy message (catalog entries carry {@code scope=violations}). */
