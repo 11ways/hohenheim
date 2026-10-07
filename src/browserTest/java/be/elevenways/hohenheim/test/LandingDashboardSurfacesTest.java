@@ -2,14 +2,19 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
+import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.RecordGrantModel;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.panel.CmsSurfaceAddress;
 import be.elevenways.zenit.cms.common.panel.Panel;
@@ -142,22 +147,28 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
         ServerMain.adoptDnsServer(dnsServer);
     }
 
-    /** Seed a fixed mixed-provenance history instead of capturing boot seeders and the host's OS accounts. */
+    /**
+     * Seed a fixed mixed-provenance history instead of capturing boot seeders and the host's OS accounts.
+     *
+     * AIDEV-NOTE: each row names its model by the model's own id, never a literal token: the literals spelled the
+     * pre-sweep 'zenit-auth:' namespace, so the role grant escaped the activity scope's internal models and the
+     * baseline recorded a row production no longer shows.
+     */
     private static void seedRecentActivity() {
         Model activity = Models.get(ActivityModel.class);
         activity.find().delete();
         var now = Now.instant();
         String[][] records = {
-            {"zenit-auth:record_grant", "manage", "system"},
-            {"hohenheim:site", "landing-site", "system"},
-            {"hohenheim:quota", "", "system"},
-            {"zenit-auth:user", "Landing Outsider", "system"},
-            {"zenit-auth:user", "Landing Tenant", "system"},
-            {"zenit-auth:grant", "*", "unattributed"},
-            {"zenit-auth:user", "Test Admin", "unattributed"},
-            {"hohenheim:system_user", "skerit", "system"},
-            {"hohenheim:system_user", "nobody", "system"},
-            {"hohenheim:system_user", "root", "system"}
+            {RecordGrantModel.MODEL_ID.toString(), "manage", "system"},
+            {SiteModel.MODEL_ID.toString(), "landing-site", "system"},
+            {InstanceQuotaModel.MODEL_ID.toString(), "", "system"},
+            {UserModel.MODEL_ID.toString(), "Landing Outsider", "system"},
+            {UserModel.MODEL_ID.toString(), "Landing Tenant", "system"},
+            {GrantModel.MODEL_ID.toString(), "*", "unattributed"},
+            {UserModel.MODEL_ID.toString(), "Test Admin", "unattributed"},
+            {SystemUserModel.MODEL_ID.toString(), "skerit", "system"},
+            {SystemUserModel.MODEL_ID.toString(), "nobody", "system"},
+            {SystemUserModel.MODEL_ID.toString(), "root", "system"}
         };
         for (int index = 0; index < records.length; index++) {
             String[] fixture = records[index];

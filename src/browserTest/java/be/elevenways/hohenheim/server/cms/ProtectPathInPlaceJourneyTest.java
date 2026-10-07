@@ -5,12 +5,18 @@ import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.site.ProtectPath;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.server.operation.OperationRequest;
 import org.junit.jupiter.api.Test;
@@ -83,6 +89,28 @@ class ProtectPathInPlaceJourneyTest extends HohenheimTestBase {
         assertThat(OperationPipeline.offer(ProtectPath.OPERATION, TenantConduits.operator(), passthrough))
             .as("step 4: a passthrough site is not offered protection")
             .isInstanceOf(OperationPipeline.Offer.Hidden.class);
+
+        // 5. A tenant managing the site protects a path: the dedicated list answers to that tenant, so it can open and
+        //    edit it later; another tenant cannot reach it.
+        Row tenantSite = site("protect-tenant-" + suffix, "hohenheim:static");
+        int tenantId = ApiSupport.user("protect-tenant-" + suffix + "@hohenheim.local", "Protect Tenant");
+        int outsiderId = ApiSupport.user("protect-outsider-" + suffix + "@hohenheim.local", "Protect Outsider");
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, tenantSite.get(SiteModel.ID),
+            HohenheimAccess.MANAGE, true);
+        AccessContext tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(tenantId, "Protect Tenant")));
+        AccessContext outsider = AccessContext.of(TenantConduits.stubFor(
+            new UserPrincipal(outsiderId, "Protect Outsider")));
+        Map<String, Object> tenantForm = form("/members", ProtectPath.METHOD_NETWORK);
+        tenantForm.put(ProtectPath.NETWORKS.getName(), List.of("198.51.100.0/24"));
+        Row protectedByTenant = protect(tenantSite, tenantForm, tenant);
+        Integer tenantList = protectedByTenant.get(ProtectedPathModel.ACCESS_LIST_ID);
+        assertThat(HohenheimAccess.reachesRecord(tenant, AccessListModel.MODEL_ID, tenantList, HohenheimAccess.MANAGE))
+            .as("step 5: the tenant manages the list it created").isTrue();
+        assertThat(HohenheimAccess.reachesRecord(outsider, AccessListModel.MODEL_ID, tenantList,
+                HohenheimAccess.MANAGE))
+            .as("step 5: another tenant does not").isFalse();
+        assertThat(HohenheimAccess.manageSubjectsOf(AccessListModel.MODEL_ID, list.get(AccessListModel.ID)))
+            .as("step 5: an operator's list stays operator-owned (no grant planted)").isEmpty();
     }
 
     private static Map<String, Object> form(String path, String method) {
@@ -93,8 +121,12 @@ class ProtectPathInPlaceJourneyTest extends HohenheimTestBase {
     }
 
     private static Row protect(Row site, Map<String, Object> form) {
+        return protect(site, form, TenantConduits.operator());
+    }
+
+    private static Row protect(Row site, Map<String, Object> form, AccessContext caller) {
         OperationPipeline.invoke(OperationRequest.of(ProtectPath.OPERATION, CmsPlacementSurface.ADMIN_ACTION)
-            .caller(TenantConduits.operator()).subjects(List.of(site)).form(form));
+            .caller(caller).subjects(List.of(site)).form(form));
         return Models.get(ProtectedPathModel.class).find()
             .where(ProtectedPathModel.SITE_ID.eq(site.get(SiteModel.ID)))
             .where(ProtectedPathModel.PATH.eq((String) form.get(ProtectPath.PATH.getName())))
