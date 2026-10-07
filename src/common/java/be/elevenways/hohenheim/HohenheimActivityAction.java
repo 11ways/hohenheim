@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.activity.ActivityAction;
 import be.elevenways.zenit.common.orm.activity.ActivityActions;
@@ -79,7 +78,7 @@ public enum HohenheimActivityAction implements ActivityAction {
     HTTPS_FORCED("https_forced");
 
     static {
-        ActivityActions.register(values());
+        ActivityActions.register(HohenheimMicrocopy.SCOPE, values());
         // Each member's spelling before ids, a legacy key of the activity registry alone.
         for (HohenheimActivityAction action : values()) {
             ActivityActions.legacyKey(action.value, action);
@@ -91,24 +90,15 @@ public enum HohenheimActivityAction implements ActivityAction {
 
     private final @NonNull String value;
     private final @NonNull Identifier id;
-    private final @NonNull Microcopy label;
 
     HohenheimActivityAction(@NonNull String value) {
         this.value = value;
         this.id = HohenheimIds.id(value);
-        // The one verb without copy of its own reads as its former spelling.
-        this.label = "move_shared".equals(value) ? Microcopy.literal(value)
-            : Microcopy.of(value).withFilter("scope", "cms").withFilter("target", "activity_action");
     }
 
     @Override
     public @NonNull Identifier id() {
         return this.id;
-    }
-
-    @Override
-    public @NonNull Microcopy label() {
-        return this.label;
     }
 
     @Override

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
@@ -89,7 +90,7 @@ public final class BanParts {
         .value("permanent", v -> v.displayName("Permanent")
             .label(Microcopy.of("duration_permanent").withFilter("scope", "ban")))
         .defaultValue("24h")
-        .label(Microcopy.of("ban_duration").withFilter("scope", "field"))
+        .label(HohenheimFormCopy.label("ban_duration"))
         .build();
 
     /** The entries a RECORD shows (read-only) and the create form does not. */

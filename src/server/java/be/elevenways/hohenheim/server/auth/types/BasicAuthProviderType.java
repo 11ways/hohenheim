@@ -49,6 +49,8 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
         CONFIG_SCHEMA.addField(StringMapField.builder(CREDENTIALS)
             .label(HohenheimFormCopy.label(CREDENTIALS))
             .help(HohenheimFormCopy.help(CREDENTIALS))
+            .keyLabel(HohenheimFormCopy.label("username"))
+            .valueLabel(HohenheimFormCopy.label("password"))
             .secret()
             .build());
     }

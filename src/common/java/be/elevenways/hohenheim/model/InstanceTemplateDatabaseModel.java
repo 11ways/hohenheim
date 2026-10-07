@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -59,7 +60,8 @@ public class InstanceTemplateDatabaseModel extends Model {
     public static final StringField ENV_PREFIX = SCHEMA.addField(
         StringField.builder().name("env_prefix")
             .required()
-            .validator(Regex.of("^" + InstanceDatabaseModel.PREFIX_PATTERN + "$", "prefix_format"))
+            .validator(Regex.of("^" + InstanceDatabaseModel.PREFIX_PATTERN + "$",
+                HohenheimViolations.text("prefix_format")))
             .label(HohenheimFormCopy.label("env_prefix"))
             .help(HohenheimFormCopy.help("template_database_prefix"))
             .build());

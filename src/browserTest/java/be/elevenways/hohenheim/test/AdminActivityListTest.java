@@ -277,7 +277,7 @@ class AdminActivityListTest extends HohenheimTestBase {
             .isInstanceOf(Microcopy.class);
         assertThat(((Microcopy) verbCell).key())
             .as("step 5: the label is the core create verb's")
-            .isEqualTo(ZenitActivityAction.CREATE.label().key());
+            .isEqualTo(ActivityActions.label(ZenitActivityAction.CREATE).key());
 
         // 6. An undeclared verb reads as the one unknown label, never as its raw text and
         //    never as a blank cell.

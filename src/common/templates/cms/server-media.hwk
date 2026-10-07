@@ -31,7 +31,7 @@
         <pl-card-content>
             <form id="media-upload-form" use:CmsUpload.to={% uploadUrl %}>
                 <pl-field>
-                    <pl-label target="media-upload-name">{{ t("name", scope: "field") }}</pl-label>
+                    <pl-label target="media-upload-name">{{ t("name", scope: "hohenheim_field") }}</pl-label>
                     <pl-input inputId="media-upload-name" name="name" required></pl-input>
                 </pl-field>
                 <pl-field>
@@ -54,7 +54,7 @@
         <pl-card-content>
             <form use:Zenit.form={% fetchTarget %} id="media-fetch-form">
                 <pl-field>
-                    <pl-label target="media-name">{{ t("name", scope: "field") }}</pl-label>
+                    <pl-label target="media-name">{{ t("name", scope: "hohenheim_field") }}</pl-label>
                     <pl-input inputId="media-name" name="name" required></pl-input>
                 </pl-field>
                 <pl-field>
