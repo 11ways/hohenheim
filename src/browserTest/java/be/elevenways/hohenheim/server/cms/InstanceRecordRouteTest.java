@@ -32,7 +32,8 @@ class InstanceRecordRouteTest {
         // 1. An authored instance links to itself, or to the subpage asked for.
         Row authored = row(5, "hohenheim:docker_container", null, null);
         assertThat(InstanceParts.recordRoute("admin", authored, null).toUrl())
-            .as("step 1: an instance links to its own record").isEqualTo("/admin/instances/5");
+            .as("step 1: an instance links to its own record, landing on its overview")
+            .isEqualTo("/admin/instances/5/page/overview");
         assertThat(InstanceParts.recordRoute("admin", authored, InstanceConsolePage.SLUG).toUrl())
             .as("step 1: or to the subpage the caller names")
             .isEqualTo("/admin/instances/5/page/console");
@@ -57,9 +58,10 @@ class InstanceRecordRouteTest {
         List<String> operator = ids(InstanceParts.admin().actions());
         List<String> delegated = ids(InstanceParts.manage().actions());
 
-        // 1. The delegated panel offers exactly power, the two artifacts, the app update and the console line.
+        // 1. The delegated panel offers exactly the app's own address, power, the two artifacts, the app update and
+        //    the console line.
         assertThat(delegated).as("step 1: the delegated instance verbs")
-            .containsExactly("start_instance", "stop_instance", "snapshot_instance",
+            .containsExactly("instance_open_site", "start_instance", "stop_instance", "snapshot_instance",
                 "backup_instance", "app_update_instance", "console_command_instance");
 
         // 2. Every one of them is an operator verb too: one builder, two panels.
