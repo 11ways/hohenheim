@@ -591,3 +591,27 @@ Order: W6 as planned. G5 needs nothing from W1-W5 except the `put_online` operat
 - Needs building (shown on the boards, left out): who or what started a release (operations record no trigger), the
   ref and commit of a push (deliveries record only event and outcome), per-variable secret values and variables
   derived from attached databases or projects, the variables as lane tabs.
+
+## 15. W7b decisions (fork W7b, 2026-10-07)
+
+- App-Metrics: the Metrics tab keeps the existing live lane (the hub's ring seeds the page, the mounted
+  `hh-instance-stats` element's channel link keeps it live; no polling, no new socket). Charts are plumage
+  `pl-sparkline size="block"`, a new size slot that takes the container's width at 7.5rem tall; the inline default is
+  unchanged for every other consumer. CPU and memory sit side by side, received and sent side by side in the network
+  card, one column on a narrow screen.
+- Received and sent are running totals on the wire. They used to be plotted as cumulative KiB (a line that only ever
+  rises); they now plot and read as a rate per second taken between consecutive samples. One home for the rate:
+  `HohenheimStatsFunctions.Metric.perSecond` / `rateBetween`, used by the server's seed and the browser's fold alike.
+- Every reading is in words under its chart ("Now 50% of 2 cores", "512.0 MB of 1.0 GB", "1.4 MB/s"): CPU against the
+  configured `cpu_limit` (or of one core when none), memory against the cap the runtime reports in the sample, sizes
+  through zenit's `ByteText`. The page states the live-only contract on every instance, and the root-disk card (the one
+  stored figure) moved under the live charts and reads in words.
+- App-Config-Address: an address app's Configuration leads with where requests go (scheme, host, port or socket,
+  unsectioned), then "Connection" (the former folded "Forwarding options", now open: websocket, rewrite redirects,
+  accept any certificate, give up after, wait before forwarding, the protocol pin last). Static files: folder and
+  fallback file, then "Folder listings" (open), then "Connection" folded (the delay). Redirect: target, status, keep
+  path, then "Connection" folded (the delay). Never the framework's generic `FormSection.advanced` in a site's
+  settings sub-form: the site form around it already has its own "Advanced" card, and two would be indistinguishable.
+  Field declaration order is unchanged, so stored data and baselines' control order are too.
+- Needs building (shown on the boards, left out): "Test the connection" for an address app (no such operation), and
+  the board's kind cards at the top of the Configuration tab (the site form's existing kind picker stays).

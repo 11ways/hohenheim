@@ -9,6 +9,10 @@
 {% declare memorySeed: List %}
 {% declare rxSeed: List %}
 {% declare txSeed: List %}
+{% declare latestSeed: Map = null %}
+{% declare previousSeed: Map = null %}
+{% declare cpuLimit: Double = null %}
+{% declare cpuCores: String = null %}
 {% declare disk: InstanceDiskView %}
 {% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
@@ -17,10 +21,36 @@
 <section class="cms-resource-list-page">
     {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
 
-    {#- The CONTRACT, stated rather than implied: the rings below are live-only (nothing
-        is stored, by decision), and the one PERSISTED figure -- the disk sweeper's
-        observation -- exists only on a runtime that enforces a root quota. -#}
-    <pl-alert variant="default" data-stats-contract="1">{{ t("live_only", scope: "instance_stats") }}</pl-alert>
+    {#- The CONTRACT, stated rather than implied: the readings below are live-only (nothing
+        is stored, by decision); the one PERSISTED figure, the disk sweeper's observation,
+        sits under them and exists only on a runtime that enforces a root quota. -#}
+    <p class="hh-stats-live" data-stats-contract="1">
+        {% if running %}
+        <pl-status-dot status="online"></pl-status-dot>
+        <strong>{{ t("live", scope: "instance_stats") }}</strong>
+        {% /if %}
+        <span>{{ t("live_only", scope: "instance_stats") }}</span>
+    </p>
+
+    {% if running %}
+    {#- The element owns the whole live half: seeds render server-side, the channel link
+        is opened in its @mount and closed by its Cleanup.on, so hard loads, soft
+        navigations and navigations AWAY all do the right thing with no script tag. -#}
+    <hh-instance-stats instanceId={% instanceId %}
+                       cpuSeed={% cpuSeed %}
+                       memorySeed={% memorySeed %}
+                       rxSeed={% rxSeed %}
+                       txSeed={% txSeed %}
+                       latestSeed={% latestSeed %}
+                       previousSeed={% previousSeed %}
+                       cpuLimit={% cpuLimit %}
+                       cpuCores={% cpuCores %}></hh-instance-stats>
+    {% else %}
+    <pl-empty-state icon="chart-line">
+        <pl-empty-state-title>{{ t("not_running", scope: "instance_stats") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("not_running_description", scope: "instance_stats") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
 
     <pl-card>
         <pl-card-header>
@@ -30,7 +60,7 @@
         {% if disk.measured && disk.enforced %}
         <pl-card-content data-disk-state="measured">
             <pl-usage-bar value={% disk.percent %} max={% 100 %} showLabel={% true %}></pl-usage-bar>
-            <p>{{ disk.usedBytes }} B / {{ disk.limitBytes }} B</p>
+            <p>{{ t("used_of_limit", scope: "instance_stats", used: ByteText.human(disk.usedBytes), limit: ByteText.human(disk.limitBytes)) }}</p>
         </pl-card-content>
         {% else %}
         <pl-card-content data-disk-state="not-measured">
@@ -41,21 +71,5 @@
         </pl-card-content>
         {% /if %}
     </pl-card>
-
-    {% if running %}
-    {#- The element owns the whole live half: seeds render server-side, the channel link
-        is opened in its @mount and closed by its Cleanup.on, so hard loads, soft
-        navigations and navigations AWAY all do the right thing with no script tag. -#}
-    <hh-instance-stats instanceId={% instanceId %}
-                       cpuSeed={% cpuSeed %}
-                       memorySeed={% memorySeed %}
-                       rxSeed={% rxSeed %}
-                       txSeed={% txSeed %}></hh-instance-stats>
-    {% else %}
-    <pl-empty-state icon="chart-line">
-        <pl-empty-state-title>{{ t("not_running", scope: "instance_stats") }}</pl-empty-state-title>
-        <pl-empty-state-description>{{ t("not_running_description", scope: "instance_stats") }}</pl-empty-state-description>
-    </pl-empty-state>
-    {% /if %}
 </section>
 {% /block %}

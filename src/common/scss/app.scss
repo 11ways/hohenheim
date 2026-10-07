@@ -528,6 +528,57 @@
         gap: var(--pl-space-xs);
     }
 
+    // The Metrics tab (hh-instance-stats.hwk): the live line, CPU and memory side by side, the network card's
+    // received and sent halves side by side; one column on a narrow screen.
+    .hh-stats-live {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--pl-space-xs) var(--pl-space-sm);
+        margin: 0 0 var(--pl-space-md);
+
+        > span {
+            color: var(--pl-color-text-muted);
+        }
+    }
+
+    .hh-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--pl-space-md);
+        margin-block-end: var(--pl-space-md);
+
+        @media (max-width: 48rem) {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        &:has(> .hh-stats-series) {
+            margin-block-end: 0;
+        }
+    }
+
+    .hh-stats-now {
+        display: flex;
+        align-items: baseline;
+        gap: var(--pl-space-sm);
+        margin: var(--pl-space-sm) 0 0;
+
+        > span {
+            color: var(--pl-color-text-muted);
+        }
+    }
+
+    .hh-stats-series {
+        display: flex;
+        flex-direction: column;
+        gap: var(--pl-space-xs);
+        min-width: 0;
+
+        > .hh-stats-series-label {
+            color: var(--pl-color-text-muted);
+        }
+    }
+
     .hh-host-state {
         display: inline-flex;
         align-items: center;

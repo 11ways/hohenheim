@@ -90,14 +90,16 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
 
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(UpstreamSettings.delay());
 
-    // The decision is WHERE to forward: scheme, host, port, or a unix socket instead.
-    // How the hop behaves once that is answered has six defaults that are right almost
-    // always, so they fold. AIDEV-NOTE: after the fields -- membership is validated eagerly.
+    // The decision is WHERE to forward: scheme, host, port, or a unix socket instead (board
+    // App-Config-Address). How the connection behaves is the next thing an operator comes to
+    // change, so it stays open, the protocol pin last. AIDEV-NOTE: never the framework's generic
+    // "Advanced" section here: the site form around this sub-form has its own, and two folded
+    // "Advanced" cards on one page cannot be told apart. Membership is validated eagerly, so the
+    // section is declared after the fields.
     static {
-        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.FORWARDING,
-            List.of(UPSTREAM_PROTOCOL.getName(), REQUEST_TIMEOUT.getName(),
-                WEBSOCKET_UPGRADE.getName(), IGNORE_CERTIFICATES.getName(),
-                REWRITE_LOCATION.getName(), DELAY.getName())));
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.open(HohenheimFormSections.FORWARDING,
+            List.of(WEBSOCKET_UPGRADE.getName(), REWRITE_LOCATION.getName(), IGNORE_CERTIFICATES.getName(),
+                REQUEST_TIMEOUT.getName(), DELAY.getName(), UPSTREAM_PROTOCOL.getName())));
     }
 
     @Override

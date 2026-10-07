@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterAll;
@@ -71,15 +72,21 @@ class InstanceStatsChartPlotTest extends HohenheimTestBase {
         //    replayed to whoever attaches, which is what the page renders from.
         List<InstanceStats.Sample> seen = new CopyOnWriteArrayList<>();
         InstanceStats.Subscription viewer = InstanceStats.subscribe(instanceId, seen::add);
+        Duration offset = Now.offset();
         try {
             FakeNativeDaemons.ScriptedStream stream = FakeNativeDaemons.STATS_STREAMS.get(handle);
             assertThat(stream)
                 .as("step 1: the hub opened the driver's stats lane")
                 .isNotNull();
-            stream.push(sample(1_000_000_000L, 10_000_000_000L, 300, 400) + "\n");
-            stream.push(sample(1_100_000_000L, 10_400_000_000L, 500, 600) + "\n");
-            stream.push(sample(1_200_000_000L, 10_800_000_000L, 700, 800) + "\n");
-            Poll.until("step 1: three samples reached the ring", WAIT, () -> seen.size() >= 3);
+            // Received and sent plot as a rate between consecutive samples, so each sample
+            // lands a second after the one before it.
+            for (int i = 0; i < 3; i++) {
+                Now.setOffset(Now.offset().plus(Duration.ofSeconds(1)));
+                stream.push(sample(1_000_000_000L + i * 100_000_000L, 10_000_000_000L + i * 400_000_000L,
+                    300 + i * 200, 400 + i * 200) + "\n");
+                int expected = i + 1;
+                Poll.until("step 1: sample " + expected + " reached the ring", WAIT, () -> seen.size() >= expected);
+            }
             assertThat(InstanceStats.history(instanceId))
                 .as("step 1: and the ring retained them for the next reader")
                 .hasSizeGreaterThanOrEqualTo(3);
@@ -107,7 +114,7 @@ class InstanceStatsChartPlotTest extends HohenheimTestBase {
                 .isNotNull()
                 .isNotEmpty();
             assertThat(lineOf(3))
-                .as("step 3: and transmitted")
+                .as("step 3: and sent")
                 .isNotNull()
                 .isNotEmpty();
 
@@ -115,11 +122,13 @@ class InstanceStatsChartPlotTest extends HohenheimTestBase {
             //    can only happen through the channel link the mounted element opened, so a
             //    changed path proves socket, admission, fold and repaint in one assertion.
             String before = lineOf(0);
+            Now.setOffset(Now.offset().plus(Duration.ofSeconds(1)));
             stream.push(sample(2_000_000_000L, 12_000_000_000L, 900, 1000) + "\n");
             Poll.until("step 4: the pushed sample repainted the cpu series", WAIT,
                 () -> !before.equals(lineOf(0)));
         } finally {
             viewer.close();
+            Now.setOffset(offset);
         }
     }
 
@@ -137,8 +146,8 @@ class InstanceStatsChartPlotTest extends HohenheimTestBase {
         page.evaluate("() => { window.__statsJourney = 'same document'; }");
 
         // 2. A soft navigation away disconnects the element, and that alone releases the link.
-        page.locator("pl-app-sidebar a[href='/admin/sites']").click();
-        page.waitForCondition(() -> page.url().endsWith("/admin/sites"));
+        page.locator("pl-app-sidebar a[href='/admin/apps']").click();
+        page.waitForCondition(() -> page.url().endsWith("/admin/apps"));
         assertThat(page.evaluate("() => window.__statsJourney"))
             .as("step 2: an in-place navigation, so no page unload closed the socket").isEqualTo("same document");
         Poll.until("step 2: the departed element's link was released", WAIT,

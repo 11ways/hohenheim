@@ -45,8 +45,11 @@ public final class HohenheimFormSections {
     /** Values a generator owns: shown so they are not invisible, folded so they are not noise. */
     public static final String MANAGED = "managed";
 
-    /** How a request is forwarded once the upstream is chosen. */
+    /** How a request is forwarded once the upstream is chosen: websockets, redirects, certificates, timing. */
     public static final String FORWARDING = "forwarding";
+
+    /** What a static site does with folders: index files, listings, hidden files. */
+    public static final String LISTING = "listing";
 
     /** The values a workload reads from its environment, per lane (running, building, previews). */
     public static final String VARIABLES = "variables";
