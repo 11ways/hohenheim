@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
@@ -74,6 +75,7 @@ public final class NotificationChannelParts {
 
     /** Sends a test message through one channel; the outcome says whether it was delivered or only handed off. */
     public static final Operation<Row, Void, NotifyOutcome> TEST = Operation.declare(HohenheimIds.id("test_channel"))
+        .happened(OperationSentences.of("test_channel"))
         .label(Microcopy.of("test").withFilter("scope", "notification_channel"))
         .icon(Icon.of("paper-plane"))
         .one(SUBJECT)

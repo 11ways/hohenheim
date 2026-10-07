@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
@@ -68,6 +69,7 @@ public final class ReleasedClaimParts {
 
     /** Removes a quarantine before its window ends, freeing the hostname for any owner. */
     public static final Operation<Row, Void, Void> LIFT = Operation.declare(HohenheimIds.id("lift_quarantine"))
+        .happened(OperationSentences.of("lift_quarantine"))
         .label(Microcopy.of("lift").withFilter("scope", "released_claim"))
         .icon(Icon.of("unlock"))
         .one(SUBJECT)

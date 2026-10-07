@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.preview;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
@@ -33,6 +34,7 @@ public final class PreviewOperations {
 
     /** The full verified reclaim at the deadline; a destroy the daemon cannot confirm throws, so the step retries. */
     public static final Operation<Row, Void, String> EXPIRE = Operation.declare(HohenheimIds.id("expire_preview"))
+        .happened(OperationSentences.of("expire_preview"))
         .label(Microcopy.of("expire_preview").withFilter("scope", "schedule_action").withFallback("Expire preview"))
         .icon(Icon.of("hourglass-end"))
         .one(PREVIEW)

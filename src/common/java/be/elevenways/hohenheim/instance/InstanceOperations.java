@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.hohenheim.HohenheimFormCopy;
@@ -55,6 +56,7 @@ public final class InstanceOperations {
     public static final SubjectType<Row> INSTANCE = SubjectType.record(InstanceModel.MODEL_ID);
 
     public static final Operation<Row, Void, PowerResult> START = Operation.declare(HohenheimIds.id("start_instance"))
+        .happened(OperationSentences.of("start_instance"))
         .label(label("start", "power_operation", "Start"))
         .icon(Icon.of("play"))
         .one(INSTANCE)
@@ -65,6 +67,7 @@ public final class InstanceOperations {
         .register();
 
     public static final Operation<Row, Void, PowerResult> STOP = Operation.declare(HohenheimIds.id("stop_instance"))
+        .happened(OperationSentences.of("stop_instance"))
         .label(label("stop", "power_operation", "Stop"))
         .icon(Icon.of("stop"))
         .one(INSTANCE)
@@ -76,6 +79,7 @@ public final class InstanceOperations {
 
     public static final Operation<Row, Void, PowerResult> RESTART =
         Operation.declare(HohenheimIds.id("restart_instance"))
+            .happened(OperationSentences.of("restart_instance"))
             .label(label("restart", "power_operation", "Restart"))
             .icon(Icon.of("rotate-right"))
             .one(INSTANCE)
@@ -86,6 +90,7 @@ public final class InstanceOperations {
             .register();
 
     public static final Operation<Row, Void, Integer> BACKUP = Operation.declare(HohenheimIds.id("backup_instance"))
+        .happened(OperationSentences.of("backup_instance"))
         .label(label("backup", "schedule_action", "Backup"))
         .icon(Icon.of("box-archive"))
         .one(INSTANCE)
@@ -102,6 +107,7 @@ public final class InstanceOperations {
 
     public static final Operation<Row, SnapshotInput, Integer> SNAPSHOT =
         Operation.declare(HohenheimIds.id("snapshot_instance"))
+            .happened(OperationSentences.of("snapshot_instance"))
             .label(label("snapshot", "schedule_action", "Snapshot"))
             .icon(Icon.of("camera"))
             .one(INSTANCE)
@@ -129,6 +135,7 @@ public final class InstanceOperations {
      */
     public static final Operation<Row, ConsoleCommandInput, String> CONSOLE_COMMAND =
         Operation.declare(HohenheimIds.id("console_command_instance"))
+            .happened(OperationSentences.of("console_command_instance"))
             .label(label("console_command", "schedule_action", "Console command"))
             .icon(Icon.of("terminal"))
             .one(INSTANCE)
@@ -159,6 +166,7 @@ public final class InstanceOperations {
      */
     public static final Operation<Row, ExecInput, ExecRun> EXEC =
         Operation.declare(HohenheimIds.id("exec_instance"))
+            .happened(OperationSentences.of("exec_instance"))
             .label(label("run", "instance_exec", "Run"))
             .icon(Icon.of("code"))
             .one(INSTANCE)
@@ -173,6 +181,7 @@ public final class InstanceOperations {
     /** Roll a release-managed instance back to its retained release; POWER on the record. */
     public static final Operation<Row, Void, Void> ROLLBACK =
         Operation.declare(HohenheimIds.id("rollback_instance"))
+            .happened(OperationSentences.of("rollback_instance"))
             .label(label("rollback", "instance", "Roll back"))
             .icon(Icon.of("clock-rotate-left"))
             .one(INSTANCE)
@@ -187,6 +196,7 @@ public final class InstanceOperations {
      */
     public static final Operation<Row, Void, Void> INSTALL =
         Operation.declare(HohenheimIds.id("install_instance"))
+            .happened(OperationSentences.of("install_instance"))
             .label(label("install", "instance", "Install"))
             .icon(Icon.of("wand-magic-sparkles"))
             .one(INSTANCE)
@@ -201,6 +211,7 @@ public final class InstanceOperations {
      */
     public static final Operation<Row, Void, Void> REINSTALL =
         Operation.declare(HohenheimIds.id("reinstall_instance"))
+            .happened(OperationSentences.of("reinstall_instance"))
             .label(label("reinstall", "instance", "Reinstall"))
             .icon(Icon.of("rotate"))
             .one(INSTANCE)
@@ -215,6 +226,7 @@ public final class InstanceOperations {
      */
     public static final Operation<Row, Void, Integer> CAPTURE_TEMPLATE =
         Operation.declare(HohenheimIds.id("capture_template"))
+            .happened(OperationSentences.of("capture_template"))
             .label(label("capture_template", "instance", "Capture as template"))
             .icon(Icon.of("box-archive"))
             .one(INSTANCE)
@@ -230,6 +242,7 @@ public final class InstanceOperations {
      */
     public static final Operation<Row, Void, Void> DESTROY_WITH_DATA =
         Operation.declare(HohenheimIds.id("destroy_instance_data"))
+            .happened(OperationSentences.of("destroy_instance_data"))
             .label(label("delete_with_data", "instance", "Delete with data"))
             .icon(Icon.of("trash-can"))
             .one(INSTANCE)
@@ -246,6 +259,7 @@ public final class InstanceOperations {
      * teardown funnel's own refusal, so the button and the POST answer with one decision and one text.
      */
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_instance"))
+        .happened(OperationSentences.of("delete_instance"))
         .label(Microcopy.of("delete").withFilter("scope", "cms"))
         .icon(Icon.TRASH)
         .one(INSTANCE)
@@ -258,6 +272,7 @@ public final class InstanceOperations {
     /** Re-reads one instance's stored evidence: the overview surface's refresh control. */
     public static final Operation<Row, Void, Void> REFRESH_OVERVIEW =
         Operation.declare(HohenheimIds.id("refresh_instance_overview"))
+            .happened(OperationSentences.of("refresh_instance_overview"))
             .label(label("refresh", "instance_overview", "Refresh"))
             .icon(Icon.REFRESH)
             .one(INSTANCE)
@@ -280,6 +295,7 @@ public final class InstanceOperations {
      */
     public static final Operation<Row, MigrateInput, Integer> MIGRATE =
         Operation.declare(HohenheimIds.id("migrate_instance"))
+            .happened(OperationSentences.of("migrate_instance"))
             .label(label("migrate", "instance_migrate", "Migrate"))
             .icon(Icon.of("truck-fast"))
             .one(INSTANCE)
@@ -317,6 +333,7 @@ public final class InstanceOperations {
      * the gate, the generated-instance applicability and the authorization of every other instance operation.
      */
     public static final Operation<Row, Void, Void> OPEN_SHELL = Operation.declare(HohenheimIds.id("open_shell"))
+        .happened(OperationSentences.of("open_shell"))
         .label(label("shell", "instance", "Shell"))
         .icon(Icon.of("terminal"))
         .one(INSTANCE)
@@ -327,6 +344,7 @@ public final class InstanceOperations {
     /** Watch and drive a virtual machine's screen: the framebuffer tab and socket, the {@link #OPEN_SHELL} shape. */
     public static final Operation<Row, Void, Void> OPEN_FRAMEBUFFER =
         Operation.declare(HohenheimIds.id("open_framebuffer"))
+            .happened(OperationSentences.of("open_framebuffer"))
             .label(label("framebuffer", "instance", "Framebuffer"))
             .icon(Icon.of("display"))
             .one(INSTANCE)
@@ -337,6 +355,7 @@ public final class InstanceOperations {
     /** The template's in-place update script, run inside the running workload; it changes what runs: config. */
     public static final Operation<Row, Void, String> APP_UPDATE =
         Operation.declare(HohenheimIds.id("app_update_instance"))
+            .happened(OperationSentences.of("app_update_instance"))
             .label(label("app_update", "schedule_action", "App update"))
             .icon(Icon.of("arrow-up-from-bracket"))
             .one(INSTANCE)

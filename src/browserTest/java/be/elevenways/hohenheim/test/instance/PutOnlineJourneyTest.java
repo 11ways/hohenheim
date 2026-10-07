@@ -122,6 +122,28 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
             .contains("data-hh-put-online-group=\"machine\"").contains("instance:hohenheim:vm")
             .contains("data-hh-put-online-group=\"code\"").contains("kind:hohenheim:static")
             .contains("data-hh-put-online-steps");
+        // 1b. A family Hohenheim ships reads its short card line, not its catalogue description; a template the
+        //     operator wrote keeps its own words.
+        Row starter = Models.get(InstanceTemplateModel.class).createEmptyRow();
+        starter.set(InstanceTemplateModel.NAME, "WordPress (PHP 99.9)");
+        starter.set(InstanceTemplateModel.DESCRIPTION, "Catalogue form: official Apache image, PHP 99.9, a docroot volume");
+        starter.set(InstanceTemplateModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
+        starter.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "fake/image")));
+        starter.set(InstanceTemplateModel.SOURCE, InstanceTemplateModel.SOURCE_STARTER);
+        starter.set(InstanceTemplateModel.APPROVED_AT, Now.instant());
+        starter.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
+        Models.get(InstanceTemplateModel.class).save(starter);
+        try {
+            String shipped = adminGet("/admin/" + PutOnlinePage.SLUG).body();
+            assertThat(shipped).as("step 1b: the shipped WordPress family reads its short line")
+                .contains("A WordPress site with its own database.")
+                .doesNotContain("Catalogue form: official Apache image, PHP 99.9");
+            assertThat(shipped).as("step 1b: the operator's own template keeps its description")
+                .contains("A shop that sells nothing");
+        } finally {
+            HardDeletes.row(Models.get(InstanceTemplateModel.class), starter);
+        }
+
         HttpResponse<String> picked = adminGet("/admin/" + PutOnlinePage.SLUG + "?choice=kind:hohenheim:redirect");
         assertThat(picked.headers().firstValue("location").orElse(""))
             .as("step 1: Continue with a card opens that card's flow")

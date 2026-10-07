@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -174,6 +175,7 @@ public final class DatabaseParts {
      * Demands {@code destroy} on the record; offered dead while a live workload still holds its credentials.
      */
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_database"))
+        .happened(OperationSentences.of("delete_database"))
         .label(Microcopy.of("delete").withFilter("scope", "cms"))
         .icon(Icon.TRASH)
         .one(DATABASE)
@@ -186,6 +188,7 @@ public final class DatabaseParts {
     /** Moves a dedicated database onto its host's shared engine, in the background. */
     public static final Operation<Row, Void, Void> MOVE_TO_SHARED =
         Operation.declare(HohenheimIds.id("move_database_shared"))
+            .happened(OperationSentences.of("move_database_shared"))
             .label(Microcopy.of("move_shared").withFilter("scope", "database"))
             .description(Microcopy.of("move_shared_hint").withFilter("scope", "database"))
             .icon(Icon.of("layer-group"))
@@ -197,6 +200,7 @@ public final class DatabaseParts {
     /** The recorded escape hatch once a normal destroy failed: the record goes, the host may keep orphans. */
     public static final Operation<Row, Void, Void> FORCE_DELETE =
         Operation.declare(HohenheimIds.id("force_delete_database"))
+            .happened(OperationSentences.of("force_delete_database"))
             .label(Microcopy.of("force_delete").withFilter("scope", "database"))
             .description(Microcopy.of("force_delete_hint").withFilter("scope", "database"))
             .icon(Icon.of("triangle-exclamation"))
@@ -209,6 +213,7 @@ public final class DatabaseParts {
     /** Destroys an engine: its container and the volume every database sat on; offered dead while one still does. */
     public static final Operation<Row, Void, Integer> DELETE_ENGINE =
         Operation.declare(HohenheimIds.id("delete_database_engine"))
+            .happened(OperationSentences.of("delete_database_engine"))
             .label(Microcopy.of("delete").withFilter("scope", "cms"))
             .icon(Icon.TRASH)
             .one(ENGINE)
@@ -221,6 +226,7 @@ public final class DatabaseParts {
     /** The engine's recorded escape hatch once a normal destroy failed. */
     public static final Operation<Row, Void, Void> FORCE_DELETE_ENGINE =
         Operation.declare(HohenheimIds.id("force_delete_database_engine"))
+            .happened(OperationSentences.of("force_delete_database_engine"))
             .label(Microcopy.of("force_delete").withFilter("scope", "database_engine"))
             .description(Microcopy.of("force_delete_hint").withFilter("scope", "database_engine"))
             .icon(Icon.of("triangle-exclamation"))

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
@@ -33,6 +34,7 @@ public final class InstanceAttachmentOperations {
     /** Detaches the device; the daemon deletes its backing volume, verified, before the row goes. */
     public static final Operation<Row, Void, Integer> DETACH_DEVICE =
         Operation.declare(HohenheimIds.id("detach_device"))
+            .happened(OperationSentences.of("detach_device"))
             .label(Microcopy.of("delete").withFilter("scope", "cms"))
             .icon(Icon.TRASH)
             .one(DEVICE)
@@ -45,6 +47,7 @@ public final class InstanceAttachmentOperations {
     /** Removes the attachment: reachability is revoked at the daemon, the variable family at the next deploy. */
     public static final Operation<Row, Void, Integer> DELETE_DATABASE_LINK =
         Operation.declare(HohenheimIds.id("delete_instance_database"))
+            .happened(OperationSentences.of("delete_instance_database"))
             .label(Microcopy.of("delete").withFilter("scope", "cms"))
             .icon(Icon.TRASH)
             .one(DATABASE_LINK)

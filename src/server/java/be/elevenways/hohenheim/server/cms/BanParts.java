@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.BanModel;
@@ -97,6 +98,7 @@ public final class BanParts {
 
     /** Lifts an enforced ban: the kernel set drops the address and the row records who lifted it and when. */
     public static final Operation<Row, Void, Void> LIFT = Operation.declare(HohenheimIds.id("lift_ban"))
+        .happened(OperationSentences.of("lift_ban"))
         .label(Microcopy.of("lift").withFilter("scope", "ban"))
         .icon(Icon.of("unlock"))
         .one(SUBJECT)

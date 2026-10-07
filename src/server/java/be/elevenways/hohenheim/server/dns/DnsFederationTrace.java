@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -37,7 +38,7 @@ public final class DnsFederationTrace {
         if (link != null) {
             link.set(DnsZonePeerModel.LAST_AXFR_AT, Now.instant());
             link.set(DnsZonePeerModel.LAST_AXFR_SERIAL, (int) zone.getSerial());
-            Models.get(DnsZonePeerModel.class).save(link);
+            stamp(link);
         }
     }
 
@@ -57,7 +58,18 @@ public final class DnsFederationTrace {
         link.set(DnsZonePeerModel.LAST_NOTIFY_SERIAL, (int) serial);
         link.set(DnsZonePeerModel.LAST_NOTIFY_OUTCOME,
             outcome.length() > 255 ? outcome.substring(0, 255) : outcome);
-        Models.get(DnsZonePeerModel.class).save(link);
+        stamp(link);
+    }
+
+    /**
+     * Saves a trace stamp without an activity entry.
+     *
+     * AIDEV-NOTE: a trace stamp is bookkeeping, like {@link DnsSecondaryFreshness}'s probe; the AXFR responder runs on
+     * the DNS server's own thread with no identity, so its save read as "Unattributed changed Dns zone peer" in the
+     * activity log. The structured log line above is the trace.
+     */
+    private static void stamp(@NonNull Row link) {
+        ActivityLog.suppressed(() -> Models.get(DnsZonePeerModel.class).save(link));
     }
 
     /** @return the zone's link to the enabled peer holding the TSIG key, or null */

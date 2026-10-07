@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.operation.Operation;
@@ -37,6 +38,7 @@ public final class InstanceScheduleOperations {
     /** Fires the chain now; offered on an enabled schedule. The result is the run's status. */
     public static final Operation<Row, Void, String> RUN_SCHEDULE =
         Operation.declare(HohenheimIds.id("run_schedule"))
+            .happened(OperationSentences.of("run_schedule"))
             .label(Microcopy.of("run_now").withFilter("scope", "instance_schedule"))
             .icon(Icon.of("play"))
             .one(SCHEDULE)
@@ -48,6 +50,7 @@ public final class InstanceScheduleOperations {
     /** Removes the schedule with its chain and run history. */
     public static final Operation<Row, Void, Integer> DELETE_SCHEDULE =
         Operation.declare(HohenheimIds.id("delete_schedule"))
+            .happened(OperationSentences.of("delete_schedule"))
             .label(Microcopy.of("delete").withFilter("scope", "cms"))
             .icon(Icon.TRASH)
             .one(SCHEDULE)
@@ -59,6 +62,7 @@ public final class InstanceScheduleOperations {
     /** Removes one chain step; the chain now runs under the authority of whoever removed it. */
     public static final Operation<Row, Void, Integer> DELETE_STEP =
         Operation.declare(HohenheimIds.id("delete_schedule_step"))
+            .happened(OperationSentences.of("delete_schedule_step"))
             .label(Microcopy.of("delete").withFilter("scope", "cms"))
             .icon(Icon.TRASH)
             .one(STEP)

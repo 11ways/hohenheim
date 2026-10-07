@@ -127,7 +127,7 @@ public final class WordPressTemplateSeeder implements Seeder {
         // front page; both are "below 500", which is what the http probe asks.
         row.set(InstanceTemplateModel.READINESS_KIND, ReadinessKind.HTTP.token());
         row.set(InstanceTemplateModel.READINESS_TARGET, "/");
-        row.set(InstanceTemplateModel.SOURCE, "hohenheim:starter");
+        row.set(InstanceTemplateModel.SOURCE, InstanceTemplateModel.SOURCE_STARTER);
         model.save(row);
         int templateId = row.get(InstanceTemplateModel.ID);
 

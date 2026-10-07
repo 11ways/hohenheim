@@ -1492,7 +1492,8 @@
     {
       "text": "Request Let's Encrypt certificate",
       "scope": "certificate_request"
-    }
+    },
+    { "text": "{$actor} requested a certificate for {$subject}", "scope": "activity", "target": "happened" }
   ],
   "restore": [
     {
@@ -3926,10 +3927,10 @@
     "text": "Type settings",
     "scope": "field"
   },
-  "dyndns_token": {
-    "text": "Dynamic DNS token",
-    "scope": "dns_record"
-  },
+  "dyndns_token": [
+    { "text": "Dynamic DNS token", "scope": "dns_record" },
+    { "text": "{$actor} created an update token for {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "dyndns_token_hint": {
     "text": "Mint a new update token for this record (invalidates any previous one). Point a dyndns2 client (router, ddclient) at {$url} and send the token as the HTTP Basic password",
     "scope": "dns_record"
@@ -3938,10 +3939,10 @@
     "text": "Update token generated. Copy it now; it will not be shown again: {$token}",
     "scope": "dns_record"
   },
-  "dyndns_revoke": {
-    "text": "Revoke dynamic DNS",
-    "scope": "dns_record"
-  },
+  "dyndns_revoke": [
+    { "text": "Revoke dynamic DNS", "scope": "dns_record" },
+    { "text": "{$actor} revoked the update token of {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "dyndns_revoke_hint": {
     "text": "Delete this record's update token; its dyndns client stops working immediately",
     "scope": "dns_record"
@@ -5016,10 +5017,10 @@
     "text": "Volume purge queued",
     "scope": "stack"
   },
-  "reclaim_images": {
-    "text": "Reclaim images",
-    "scope": "stack"
-  },
+  "reclaim_images": [
+    { "text": "Reclaim images", "scope": "stack" },
+    { "text": "{$actor} cleaned up unused images", "scope": "activity", "target": "happened" }
+  ],
   "reclaim_images_hint": {
     "text": "Remove dangling and superseded images on every host that runs a stack",
     "scope": "stack"
@@ -5794,10 +5795,10 @@
       "scope": "help"
     }
   ],
-  "remove_orphan": {
-    "text": "Remove orphan",
-    "scope": "reconcile_finding"
-  },
+  "remove_orphan": [
+    { "text": "Remove orphan", "scope": "reconcile_finding" },
+    { "text": "{$actor} removed leftover {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "remove_orphan_confirm": {
     "text": "Stop and remove this orphaned resource at the daemon? The stored data of a container is lost; volumes are never removable here.",
     "scope": "reconcile_finding"
@@ -5838,10 +5839,10 @@
     "text": "Removal refused by the daemon: {$name}",
     "scope": "violations"
   },
-  "scan_host_key": {
-    "text": "Scan host key",
-    "scope": "server"
-  },
+  "scan_host_key": [
+    { "text": "Scan host key", "scope": "server" },
+    { "text": "{$actor} read the SSH host key of {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "scan_host_key_hint": {
     "text": "Read the SSH host key this machine presents and pin it. A key that disagrees with the pin is never adopted here.",
     "scope": "server"
@@ -5854,10 +5855,10 @@
     "text": "The host still presents the pinned key ({$fingerprint}).",
     "scope": "server"
   },
-  "confirm_host_key": {
-    "text": "Confirm fingerprint",
-    "scope": "server"
-  },
+  "confirm_host_key": [
+    { "text": "Confirm fingerprint", "scope": "server" },
+    { "text": "{$actor} trusted the SSH host key of {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "confirm_host_key_hint": {
     "text": "Record that you compared the pinned fingerprint out of band.",
     "scope": "server"
@@ -5874,10 +5875,10 @@
     "text": "Host key of {$name} confirmed.",
     "scope": "server"
   },
-  "repin_host_key": {
-    "text": "Re-pin changed host key",
-    "scope": "server"
-  },
+  "repin_host_key": [
+    { "text": "Re-pin changed host key", "scope": "server" },
+    { "text": "{$actor} trusted the new SSH host key of {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "repin_host_key_hint": {
     "text": "Adopt the key this host now presents. Only do this once you know why it changed.",
     "scope": "server"
@@ -7093,10 +7094,10 @@
       "target": "activity_action"
     }
   ],
-  "expire_preview": {
-    "text": "Expire preview",
-    "scope": "schedule_action"
-  },
+  "expire_preview": [
+    { "text": "Expire preview", "scope": "schedule_action" },
+    { "text": "{$actor} ended preview {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "power": [
     {
       "text": "Power action",
@@ -8320,10 +8321,10 @@
     "text": "Detaching '{$device}' from {$name} failed: {$reason}",
     "scope": "violations"
   },
-  "scan_incus_cert": {
-    "text": "Scan server certificate",
-    "scope": "server"
-  },
+  "scan_incus_cert": [
+    { "text": "Scan server certificate", "scope": "server" },
+    { "text": "{$actor} read the Incus certificate of {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "scan_incus_cert_hint": {
     "text": "Read the TLS certificate this Incus daemon presents and pin it. A certificate that disagrees with the pin is never adopted here.",
     "scope": "server"
@@ -8336,10 +8337,10 @@
     "text": "The daemon still presents the pinned certificate ({$fingerprint}).",
     "scope": "server"
   },
-  "confirm_incus_cert": {
-    "text": "Confirm certificate fingerprint",
-    "scope": "server"
-  },
+  "confirm_incus_cert": [
+    { "text": "Confirm certificate fingerprint", "scope": "server" },
+    { "text": "{$actor} trusted the Incus certificate of {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "confirm_incus_cert_hint": {
     "text": "Record that you compared the pinned certificate fingerprint out of band.",
     "scope": "server"
@@ -8356,10 +8357,10 @@
     "text": "Server certificate of {$name} confirmed.",
     "scope": "server"
   },
-  "repin_incus_cert": {
-    "text": "Re-pin changed certificate",
-    "scope": "server"
-  },
+  "repin_incus_cert": [
+    { "text": "Re-pin changed certificate", "scope": "server" },
+    { "text": "{$actor} trusted the new Incus certificate of {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "repin_incus_cert_hint": {
     "text": "Adopt the certificate this daemon now presents. Only do this once you know why it changed.",
     "scope": "server"
@@ -8408,10 +8409,10 @@
     "text": "Click the screen to capture keyboard input; input is sent to the VM.",
     "scope": "instance_framebuffer"
   },
-  "capture_template": {
-    "text": "Capture as template",
-    "scope": "instance"
-  },
+  "capture_template": [
+    { "text": "Capture as template", "scope": "instance" },
+    { "text": "{$actor} saved {$subject} as a template", "scope": "activity", "target": "happened" }
+  ],
   "capture_template_hint": {
     "text": "Publish this stopped instance's current state as a prepared image and create an unapproved template from it",
     "scope": "instance"
@@ -8625,10 +8626,10 @@
     "text": "The device was not attached and no row was kept",
     "scope": "violations"
   },
-  "reap_controller_objects": {
-    "text": "Reap other controllers' objects",
-    "scope": "server"
-  },
+  "reap_controller_objects": [
+    { "text": "Reap other controllers' objects", "scope": "server" },
+    { "text": "{$actor} cleaned up leftovers on {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "reap_controller_objects_confirm": {
     "text": "Removes the isolation ACL, extra-NIC bridge and presence marker that OTHER hohenheim controllers left on this Incus daemon -- including objects whose controller left no presence stamp at all, which the scheduled sweep never touches. Objects this controller owns are never candidates, and the daemon itself refuses to remove one a workload still references.",
     "scope": "server"
@@ -10578,10 +10579,10 @@
     "text": "Modify & re-issue",
     "scope": "certificate"
   },
-  "reissue_certificate": {
-    "text": "Modify & re-issue certificate",
-    "scope": "certificate_request"
-  },
+  "reissue_certificate": [
+    { "text": "Modify & re-issue certificate", "scope": "certificate_request" },
+    { "text": "{$actor} reissued certificate {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "reissue_submit": {
     "text": "Re-issue certificate",
     "scope": "certificate_request"
@@ -13528,10 +13529,10 @@
     "text": "Fix protection",
     "scope": "app_health"
   },
-  "check_host": {
-    "text": "Check the host",
-    "scope": "app_health"
-  },
+  "check_host": [
+    { "text": "Check the host", "scope": "app_health" },
+    { "text": "{$actor} checked {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "on_host": {
     "text": "on {$host}",
     "scope": "app_overview"
@@ -14013,5 +14014,99 @@
       "text": "{$actor} protected {$subject}",
       "scope": "protect_path"
     }
-  ]
+  ],
+  "test_channel": { "text": "{$actor} sent a test through {$subject}", "scope": "activity", "target": "happened" },
+  "test_backup_target": { "text": "{$actor} tested the connection to {$subject}", "scope": "activity", "target": "happened" },
+  "access_rule_toggle": { "text": "{$actor} switched rule {$subject} on or off", "scope": "activity", "target": "happened" },
+  "delete_access_rule": { "text": "{$actor} deleted rule {$subject}", "scope": "activity", "target": "happened" },
+  "access_rule_move_up": { "text": "{$actor} moved rule {$subject} up", "scope": "activity", "target": "happened" },
+  "access_rule_move_down": { "text": "{$actor} moved rule {$subject} down", "scope": "activity", "target": "happened" },
+  "delete_project": { "text": "{$actor} deleted project {$subject}", "scope": "activity", "target": "happened" },
+  "spamservice_mark_spam": { "text": "{$actor} marked {$subject} as spam", "scope": "activity", "target": "happened" },
+  "spamservice_mark_ham": { "text": "{$actor} marked {$subject} as not spam", "scope": "activity", "target": "happened" },
+  "spamservice_rescore": { "text": "{$actor} scored {$subject} again", "scope": "activity", "target": "happened" },
+  "deploy_stack": { "text": "{$actor} deployed {$subject}", "scope": "activity", "target": "happened" },
+  "stop_stack": { "text": "{$actor} stopped {$subject}", "scope": "activity", "target": "happened" },
+  "rollback_stack": { "text": "{$actor} rolled {$subject} back", "scope": "activity", "target": "happened" },
+  "purge_stack_volumes": { "text": "{$actor} emptied the volumes of {$subject}", "scope": "activity", "target": "happened" },
+  "refresh_stack": { "text": "{$actor} refreshed the status of {$subject}", "scope": "activity", "target": "happened" },
+  "delete_stack": { "text": "{$actor} deleted {$subject}", "scope": "activity", "target": "happened" },
+  "delete_stack_service": { "text": "{$actor} deleted service {$subject}", "scope": "activity", "target": "happened" },
+  "delete_server": { "text": "{$actor} deleted host {$subject}", "scope": "activity", "target": "happened" },
+  "update_site": { "text": "{$actor} changed {$subject}", "scope": "activity", "target": "happened" },
+  "manage_update_site": { "text": "{$actor} changed {$subject}", "scope": "activity", "target": "happened" },
+  "delete_site": { "text": "{$actor} deleted {$subject}", "scope": "activity", "target": "happened" },
+  "delete_runtime_image": { "text": "{$actor} deleted runtime image {$subject}", "scope": "activity", "target": "happened" },
+  "spamservice_test": { "text": "{$actor} tested the spam filter connection", "scope": "activity", "target": "happened" },
+  "spamservice_start": { "text": "{$actor} started the spam filter", "scope": "activity", "target": "happened" },
+  "spamservice_stop": { "text": "{$actor} stopped the spam filter", "scope": "activity", "target": "happened" },
+  "spamservice_restart": { "text": "{$actor} restarted the spam filter", "scope": "activity", "target": "happened" },
+  "delete_database": { "text": "{$actor} deleted database {$subject}", "scope": "activity", "target": "happened" },
+  "move_database_shared": { "text": "{$actor} moved database {$subject} to a shared engine", "scope": "activity", "target": "happened" },
+  "force_delete_database": { "text": "{$actor} force-deleted database {$subject}", "scope": "activity", "target": "happened" },
+  "delete_database_engine": { "text": "{$actor} deleted database engine {$subject}", "scope": "activity", "target": "happened" },
+  "force_delete_database_engine": { "text": "{$actor} force-deleted database engine {$subject}", "scope": "activity", "target": "happened" },
+  "acknowledge_posture": { "text": "{$actor} accepted the security posture of {$subject}", "scope": "activity", "target": "happened" },
+  "probe_server": { "text": "{$actor} checked whether {$subject} answers", "scope": "activity", "target": "happened" },
+  "cordon_server": { "text": "{$actor} stopped new apps on {$subject}", "scope": "activity", "target": "happened" },
+  "drain_server": { "text": "{$actor} moved the apps off {$subject}", "scope": "activity", "target": "happened" },
+  "uncordon_server": { "text": "{$actor} let {$subject} take new apps again", "scope": "activity", "target": "happened" },
+  "request_domain_certificate": { "text": "{$actor} requested a certificate for {$subject}", "scope": "activity", "target": "happened" },
+  "continue_dns_order": { "text": "{$actor} continued the DNS check of {$subject}", "scope": "activity", "target": "happened" },
+  "lift_ban": { "text": "{$actor} lifted the ban on {$subject}", "scope": "activity", "target": "happened" },
+  "lift_quarantine": { "text": "{$actor} released address {$subject}", "scope": "activity", "target": "happened" },
+  "delete_dns_zone": { "text": "{$actor} deleted DNS zone {$subject}", "scope": "activity", "target": "happened" },
+  "delete_dns_record": { "text": "{$actor} deleted DNS record {$subject}", "scope": "activity", "target": "happened" },
+  "delete_dns_peer": { "text": "{$actor} deleted DNS peer {$subject}", "scope": "activity", "target": "happened" },
+  "check_dns_health": { "text": "{$actor} checked the health of {$subject}", "scope": "activity", "target": "happened" },
+  "negotiate_transfer_key": { "text": "{$actor} agreed a transfer key with {$subject}", "scope": "activity", "target": "happened" },
+  "spamservice_key_create": { "text": "{$actor} created spam filter client key {$subject}", "scope": "activity", "target": "happened" },
+  "spamservice_key_enable": { "text": "{$actor} enabled spam filter client key {$subject}", "scope": "activity", "target": "happened" },
+  "spamservice_key_revoke": { "text": "{$actor} revoked spam filter client key {$subject}", "scope": "activity", "target": "happened" },
+  "restore_snapshot": { "text": "{$actor} restored snapshot {$subject}", "scope": "activity", "target": "happened" },
+  "delete_snapshot": { "text": "{$actor} deleted snapshot {$subject}", "scope": "activity", "target": "happened" },
+  "create_instance_from_template": { "text": "{$actor} created an app from template {$subject}", "scope": "activity", "target": "happened" },
+  "approve_template": { "text": "{$actor} approved template {$subject}", "scope": "activity", "target": "happened" },
+  "unapprove_template": { "text": "{$actor} withdrew the approval of template {$subject}", "scope": "activity", "target": "happened" },
+  "restore_backup": { "text": "{$actor} restored backup {$subject}", "scope": "activity", "target": "happened" },
+  "delete_backup": { "text": "{$actor} deleted backup {$subject}", "scope": "activity", "target": "happened" },
+  "detach_device": { "text": "{$actor} detached device {$subject}", "scope": "activity", "target": "happened" },
+  "delete_instance_database": { "text": "{$actor} detached database {$subject}", "scope": "activity", "target": "happened" },
+  "run_schedule": { "text": "{$actor} ran schedule {$subject}", "scope": "activity", "target": "happened" },
+  "delete_schedule": { "text": "{$actor} deleted schedule {$subject}", "scope": "activity", "target": "happened" },
+  "delete_schedule_step": { "text": "{$actor} deleted schedule step {$subject}", "scope": "activity", "target": "happened" },
+  "start_instance": { "text": "{$actor} started {$subject}", "scope": "activity", "target": "happened" },
+  "stop_instance": { "text": "{$actor} stopped {$subject}", "scope": "activity", "target": "happened" },
+  "restart_instance": { "text": "{$actor} restarted {$subject}", "scope": "activity", "target": "happened" },
+  "backup_instance": { "text": "{$actor} backed up {$subject}", "scope": "activity", "target": "happened" },
+  "snapshot_instance": { "text": "{$actor} took a snapshot of {$subject}", "scope": "activity", "target": "happened" },
+  "console_command_instance": { "text": "{$actor} sent a console command to {$subject}", "scope": "activity", "target": "happened" },
+  "exec_instance": { "text": "{$actor} ran a command in {$subject}", "scope": "activity", "target": "happened" },
+  "rollback_instance": { "text": "{$actor} rolled {$subject} back", "scope": "activity", "target": "happened" },
+  "install_instance": { "text": "{$actor} installed {$subject}", "scope": "activity", "target": "happened" },
+  "reinstall_instance": { "text": "{$actor} reinstalled {$subject}", "scope": "activity", "target": "happened" },
+  "destroy_instance_data": { "text": "{$actor} deleted {$subject} with its data", "scope": "activity", "target": "happened" },
+  "delete_instance": { "text": "{$actor} deleted {$subject}", "scope": "activity", "target": "happened" },
+  "refresh_instance_overview": { "text": "{$actor} refreshed the status of {$subject}", "scope": "activity", "target": "happened" },
+  "migrate_instance": { "text": "{$actor} moved {$subject} to another host", "scope": "activity", "target": "happened" },
+  "open_shell": { "text": "{$actor} opened a shell in {$subject}", "scope": "activity", "target": "happened" },
+  "open_framebuffer": { "text": "{$actor} opened the screen of {$subject}", "scope": "activity", "target": "happened" },
+  "app_update_instance": { "text": "{$actor} updated the app in {$subject}", "scope": "activity", "target": "happened" },
+  "declare_volume": { "text": "{$actor} added volume {$subject}", "scope": "activity", "target": "happened" },
+  "redeclare_volume": { "text": "{$actor} changed volume {$subject}", "scope": "activity", "target": "happened" },
+  "destroy_volume": { "text": "{$actor} destroyed volume {$subject}", "scope": "activity", "target": "happened" },
+  "create_game_domain": { "text": "{$actor} added game address {$subject}", "scope": "activity", "target": "happened" },
+  "update_game_domain": { "text": "{$actor} changed game address {$subject}", "scope": "activity", "target": "happened" },
+  "delete_game_domain": { "text": "{$actor} deleted game address {$subject}", "scope": "activity", "target": "happened" },
+  "enable_site": { "text": "{$actor} switched {$subject} on", "scope": "activity", "target": "happened" },
+  "disable_site": { "text": "{$actor} switched {$subject} off", "scope": "activity", "target": "happened" },
+  "clone_site": { "text": "{$actor} cloned {$subject}", "scope": "activity", "target": "happened" },
+  "rollback_release": { "text": "{$actor} rolled {$subject} back to its previous release", "scope": "activity", "target": "happened" },
+  "test_git_provider": { "text": "{$actor} tested the connection to {$subject}", "scope": "activity", "target": "happened" },
+  "wordpress": { "text": "A WordPress site with its own database.", "scope": "put_online", "target": "card" },
+  "minecraft_server": { "text": "A Minecraft server for your network, behind its proxy.", "scope": "put_online", "target": "card" },
+  "velocity_proxy": { "text": "The entrance players connect to, in front of your Minecraft servers.", "scope": "put_online", "target": "card" },
+  "rotate_incus_cert": { "text": "{$actor} gave {$subject} a new Incus client identity", "scope": "activity", "target": "happened" },
+  "rotate_host_key": { "text": "{$actor} gave {$subject} a new SSH client identity", "scope": "activity", "target": "happened" },
+  "edit_remote_dns_record": { "text": "{$actor} changed a record of {$subject} on its primary", "scope": "activity", "target": "happened" }
 }

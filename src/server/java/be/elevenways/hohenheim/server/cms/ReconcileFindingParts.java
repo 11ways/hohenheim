@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
@@ -51,6 +52,7 @@ public final class ReconcileFindingParts {
     public static final String SLUG = "reconcile-findings";
     public static final Microcopy LABEL = Microcopy.of("plural").withFilter("scope", "reconcile_finding");
     public static final Operation<Row, Void, Void> REMOVE = Operation.declare(HohenheimIds.id("remove_orphan"))
+        .happened(OperationSentences.of("remove_orphan"))
         .label(Microcopy.of("remove_orphan").withFilter("scope", "reconcile_finding"))
         .one(SubjectType.record(ReconcileFindingModel.MODEL_ID)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE).command(CmsCommands.EXTERNAL).register();

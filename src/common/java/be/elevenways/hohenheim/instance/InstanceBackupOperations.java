@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
@@ -34,6 +35,7 @@ public final class InstanceBackupOperations {
     /** Restores the backup as a NEW instance; the source keeps running, so it confirms without a typed phrase. */
     public static final Operation<Row, Void, Restored> RESTORE_BACKUP =
         Operation.declare(HohenheimIds.id("restore_backup"))
+            .happened(OperationSentences.of("restore_backup"))
             .label(Microcopy.of("restore_new").withFilter("scope", "instance_backup"))
             .icon(Icon.of("clone"))
             .one(BACKUP)
@@ -51,6 +53,7 @@ public final class InstanceBackupOperations {
      */
     public static final Operation<Row, Void, Integer> DELETE_BACKUP =
         Operation.declare(HohenheimIds.id("delete_backup"))
+            .happened(OperationSentences.of("delete_backup"))
             .label(Microcopy.of("delete").withFilter("scope", "cms"))
             .icon(Icon.TRASH)
             .one(BACKUP)

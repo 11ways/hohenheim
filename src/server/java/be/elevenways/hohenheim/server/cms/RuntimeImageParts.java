@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -44,6 +45,7 @@ public final class RuntimeImageParts {
 
     public static final String SLUG = "runtime-images";
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_runtime_image"))
+        .happened(OperationSentences.of("delete_runtime_image"))
         .label(Microcopy.of("delete").withFilter("scope", "cms"))
         .one(SubjectType.record(RuntimeImageModel.MODEL_ID))
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))

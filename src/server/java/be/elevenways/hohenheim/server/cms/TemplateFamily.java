@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -13,6 +14,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -60,6 +62,28 @@ record TemplateFamily(@NonNull String name, @NonNull List<Row> members) {
     @NonNull String description() {
         Object description = this.current().get(InstanceTemplateModel.DESCRIPTION);
         return description == null ? "" : String.valueOf(description);
+    }
+
+    /**
+     * The card's one line: a starter family (one Hohenheim ships) reads its shipped line, keyed by the family name;
+     * every other family reads its current member's own description.
+     *
+     * AIDEV-NOTE: a starter template's stored description is the catalogue's long form (images, ports, volumes) and
+     * stays as stored; seeders only add rows, so a shipped line keyed by the family reaches existing installs without
+     * rewriting their templates. A starter family whose line is missing reads its description, and the chooser test
+     * pins that the shipped families have one.
+     */
+    @NonNull Microcopy cardLine() {
+        if (InstanceTemplateModel.SOURCE_STARTER.equals(this.current().get(InstanceTemplateModel.SOURCE))) {
+            return Microcopy.of(cardKey(this.name)).withFilter("scope", "put_online").withFilter("target", "card")
+                .withFallback(this.description());
+        }
+        return Microcopy.literal(this.description());
+    }
+
+    /** @return the catalogue key of a starter family's card line: its name in lower snake case */
+    static @NonNull String cardKey(@NonNull String familyName) {
+        return familyName.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "_").replaceAll("^_|_$", "");
     }
 
     /** @return whether a template of this id is one of the members */

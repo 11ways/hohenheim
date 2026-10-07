@@ -154,7 +154,8 @@ public final class PutOnlinePage extends PanelPage {
             InstanceKindInfo kindInfo = InstanceKindRegistry.REGISTRY.get(
                 Identifier.tryParse(String.valueOf((Object) template.get(InstanceTemplateModel.KIND))));
             card(cards, targets, PutOnlineGroup.TEMPLATE, "template:" + family.name(),
-                kindInfo == null ? "cube" : kindInfo.getIcon().name(), family.name(), family.description(),
+                kindInfo == null ? "cube" : kindInfo.getIcon().name(), family.name(),
+                resolve(family.cardLine(), request),
                 CmsRoutes.list(request.panelSlug(), SLUG)
                     .with(HohenheimParams.FROM_TEMPLATE_TEMPLATE, template.get(InstanceTemplateModel.ID)));
         }

@@ -215,6 +215,9 @@ public class InstanceTemplateModel extends Model {
     public static final LongField APPROVED_BY_USER_ID = SCHEMA.addField(
         LongField.builder("approved_by_user_id").filterable(false).build());
 
+    /** The {@link #SOURCE} the starter seeders stamp on the templates Hohenheim ships. */
+    public static final String SOURCE_STARTER = "hohenheim:starter";
+
     /** Where an imported template came from (operator-supplied origin note); null = authored here. */
     public static final StringField SOURCE = SCHEMA.addField(
         StringField.builder().name("source")

@@ -289,6 +289,13 @@ on these two installs (SQLite cannot alter a default without a rebuild); every w
 so only a raw insert would notice. Rollback: restore that backup, then the usual `--rollback`.
 DONE on starfleet 2026-10-07 (see that entry); still PENDING on daystrom.
 
+PENDING at the next starfleet deploy (2026-10-07, stale settings keys): starfleet's `/opt/hohenheim/settings/local.dry`
+still sets `hohenheim.proxy.first_port` and `hohenheim.database.engine`, which no Hohenheim setting declares any more,
+so every boot logs `settings.unknown_key` for both. With the old jar still running: copy `local.dry` beside the
+deploy's other backups, remove exactly those two keys (nothing else in the file), confirm the result still parses
+(the next boot's journal shows no `settings.unknown_key`), then run the lane. Daystrom: check its `local.dry` for the
+same keys when its deploy target is reachable again. Rollback: put the copied `local.dry` back.
+
 `/api/health` is public on every deployed jar today, which is why the script
 probes it. `/health` is an alias of the same endpoint and is public from the
 NEXT deployed jar onward; until every box carries that jar, do not point a

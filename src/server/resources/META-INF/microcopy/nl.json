@@ -1492,7 +1492,8 @@
     {
       "text": "Let's Encrypt-certificaat aanvragen",
       "scope": "certificate_request"
-    }
+    },
+    { "text": "{$actor} vroeg een certificaat aan voor {$subject}", "scope": "activity", "target": "happened" }
   ],
   "restore": [
     {
@@ -3926,10 +3927,10 @@
     "text": "Type-instellingen",
     "scope": "field"
   },
-  "dyndns_token": {
-    "text": "Dynamische DNS-token",
-    "scope": "dns_record"
-  },
+  "dyndns_token": [
+    { "text": "Dynamische DNS-token", "scope": "dns_record" },
+    { "text": "{$actor} maakte een bijwerktoken aan voor {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "dyndns_token_hint": {
     "text": "Maak een nieuw updatetoken voor dit record aan (maakt een eerder token ongeldig). Richt een dyndns2-client (router, ddclient) op {$url} en stuur het token als HTTP Basic-wachtwoord",
     "scope": "dns_record"
@@ -3938,10 +3939,10 @@
     "text": "Update-token gegenereerd. Kopieer het nu; het wordt niet opnieuw getoond: {$token}",
     "scope": "dns_record"
   },
-  "dyndns_revoke": {
-    "text": "Dynamische DNS intrekken",
-    "scope": "dns_record"
-  },
+  "dyndns_revoke": [
+    { "text": "Dynamische DNS intrekken", "scope": "dns_record" },
+    { "text": "{$actor} trok het bijwerktoken van {$subject} in", "scope": "activity", "target": "happened" }
+  ],
   "dyndns_revoke_hint": {
     "text": "Verwijder het updatetoken van dit record; de dyndns-client werkt onmiddellijk niet meer",
     "scope": "dns_record"
@@ -5016,10 +5017,10 @@
     "text": "Volumes wissen staat in de wachtrij",
     "scope": "stack"
   },
-  "reclaim_images": {
-    "text": "Images opruimen",
-    "scope": "stack"
-  },
+  "reclaim_images": [
+    { "text": "Images opruimen", "scope": "stack" },
+    { "text": "{$actor} ruimde ongebruikte images op", "scope": "activity", "target": "happened" }
+  ],
   "reclaim_images_hint": {
     "text": "Verwijder losse en vervangen images op elke host die een stack draait",
     "scope": "stack"
@@ -5794,10 +5795,10 @@
       "scope": "help"
     }
   ],
-  "remove_orphan": {
-    "text": "Wees verwijderen",
-    "scope": "reconcile_finding"
-  },
+  "remove_orphan": [
+    { "text": "Wees verwijderen", "scope": "reconcile_finding" },
+    { "text": "{$actor} verwijderde restant {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "remove_orphan_confirm": {
     "text": "Deze verweesde resource stoppen en verwijderen bij de daemon? De data van een container gaat verloren; volumes zijn hier nooit verwijderbaar.",
     "scope": "reconcile_finding"
@@ -5838,10 +5839,10 @@
     "text": "Verwijdering geweigerd door de daemon: {$name}",
     "scope": "violations"
   },
-  "scan_host_key": {
-    "text": "Hostsleutel scannen",
-    "scope": "server"
-  },
+  "scan_host_key": [
+    { "text": "Hostsleutel scannen", "scope": "server" },
+    { "text": "{$actor} las de SSH-hostsleutel van {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "scan_host_key_hint": {
     "text": "Lees de SSH-hostsleutel die deze machine aanbiedt en pin ze vast. Een sleutel die niet overeenkomt met de pin wordt hier nooit overgenomen.",
     "scope": "server"
@@ -5854,10 +5855,10 @@
     "text": "De host biedt nog altijd de vastgepinde sleutel aan ({$fingerprint}).",
     "scope": "server"
   },
-  "confirm_host_key": {
-    "text": "Vingerafdruk bevestigen",
-    "scope": "server"
-  },
+  "confirm_host_key": [
+    { "text": "Vingerafdruk bevestigen", "scope": "server" },
+    { "text": "{$actor} vertrouwde de SSH-hostsleutel van {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "confirm_host_key_hint": {
     "text": "Leg vast dat je de vastgepinde vingerafdruk buiten dit kanaal om vergeleken hebt.",
     "scope": "server"
@@ -5874,10 +5875,10 @@
     "text": "Hostsleutel van {$name} bevestigd.",
     "scope": "server"
   },
-  "repin_host_key": {
-    "text": "Gewijzigde hostsleutel opnieuw vastpinnen",
-    "scope": "server"
-  },
+  "repin_host_key": [
+    { "text": "Gewijzigde hostsleutel opnieuw vastpinnen", "scope": "server" },
+    { "text": "{$actor} vertrouwde de nieuwe SSH-hostsleutel van {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "repin_host_key_hint": {
     "text": "Neem de sleutel over die deze host nu aanbiedt. Doe dit pas als je weet waarom ze veranderd is.",
     "scope": "server"
@@ -7093,10 +7094,10 @@
       "target": "activity_action"
     }
   ],
-  "expire_preview": {
-    "text": "Preview laten vervallen",
-    "scope": "schedule_action"
-  },
+  "expire_preview": [
+    { "text": "Preview laten vervallen", "scope": "schedule_action" },
+    { "text": "{$actor} beëindigde preview {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "power": [
     {
       "text": "Stroomactie",
@@ -8320,10 +8321,10 @@
     "text": "Afkoppelen van '{$device}' van {$name} is mislukt: {$reason}",
     "scope": "violations"
   },
-  "scan_incus_cert": {
-    "text": "Servercertificaat scannen",
-    "scope": "server"
-  },
+  "scan_incus_cert": [
+    { "text": "Servercertificaat scannen", "scope": "server" },
+    { "text": "{$actor} las het Incus-certificaat van {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "scan_incus_cert_hint": {
     "text": "Lees het TLS-certificaat dat deze Incus-daemon aanbiedt en pin het vast. Een certificaat dat niet overeenkomt met de pin wordt hier nooit overgenomen.",
     "scope": "server"
@@ -8336,10 +8337,10 @@
     "text": "De daemon biedt nog steeds het vastgepinde certificaat aan ({$fingerprint}).",
     "scope": "server"
   },
-  "confirm_incus_cert": {
-    "text": "Vingerafdruk van certificaat bevestigen",
-    "scope": "server"
-  },
+  "confirm_incus_cert": [
+    { "text": "Vingerafdruk van certificaat bevestigen", "scope": "server" },
+    { "text": "{$actor} vertrouwde het Incus-certificaat van {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "confirm_incus_cert_hint": {
     "text": "Leg vast dat je de vastgepinde vingerafdruk buiten dit kanaal om vergeleken hebt.",
     "scope": "server"
@@ -8356,10 +8357,10 @@
     "text": "Servercertificaat van {$name} bevestigd.",
     "scope": "server"
   },
-  "repin_incus_cert": {
-    "text": "Gewijzigd certificaat opnieuw vastpinnen",
-    "scope": "server"
-  },
+  "repin_incus_cert": [
+    { "text": "Gewijzigd certificaat opnieuw vastpinnen", "scope": "server" },
+    { "text": "{$actor} vertrouwde het nieuwe Incus-certificaat van {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "repin_incus_cert_hint": {
     "text": "Neem het certificaat over dat deze daemon nu aanbiedt. Doe dit pas als je weet waarom het veranderd is.",
     "scope": "server"
@@ -8408,10 +8409,10 @@
     "text": "Klik op het scherm om toetsenbordinvoer op te vangen; invoer gaat naar de VM.",
     "scope": "instance_framebuffer"
   },
-  "capture_template": {
-    "text": "Vastleggen als sjabloon",
-    "scope": "instance"
-  },
+  "capture_template": [
+    { "text": "Vastleggen als sjabloon", "scope": "instance" },
+    { "text": "{$actor} bewaarde {$subject} als sjabloon", "scope": "activity", "target": "happened" }
+  ],
   "capture_template_hint": {
     "text": "Publiceer de huidige staat van deze gestopte instantie als voorbereide image en maak er een niet-goedgekeurd sjabloon van",
     "scope": "instance"
@@ -8625,10 +8626,10 @@
     "text": "Het apparaat is niet aangekoppeld en er is geen rij bewaard",
     "scope": "violations"
   },
-  "reap_controller_objects": {
-    "text": "Objecten van andere controllers opruimen",
-    "scope": "server"
-  },
+  "reap_controller_objects": [
+    { "text": "Objecten van andere controllers opruimen", "scope": "server" },
+    { "text": "{$actor} ruimde restanten op op {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "reap_controller_objects_confirm": {
     "text": "Verwijdert de isolatie-ACL, de extra-NIC-brug en de aanwezigheidsmarkering die ANDERE hohenheim-controllers op deze Incus-daemon achterlieten -- ook objecten waarvan de controller helemaal geen aanwezigheidsmarkering achterliet, die de geplande veegbeurt nooit aanraakt. Objecten van deze controller zijn nooit kandidaat, en de daemon zelf weigert een object te verwijderen waar nog een werklast naar verwijst.",
     "scope": "server"
@@ -10578,10 +10579,10 @@
     "text": "Aanpassen & opnieuw uitgeven",
     "scope": "certificate"
   },
-  "reissue_certificate": {
-    "text": "Certificaat aanpassen & opnieuw uitgeven",
-    "scope": "certificate_request"
-  },
+  "reissue_certificate": [
+    { "text": "Certificaat aanpassen & opnieuw uitgeven", "scope": "certificate_request" },
+    { "text": "{$actor} liet certificaat {$subject} opnieuw uitgeven", "scope": "activity", "target": "happened" }
+  ],
   "reissue_submit": {
     "text": "Certificaat opnieuw uitgeven",
     "scope": "certificate_request"
@@ -13528,10 +13529,10 @@
     "text": "Beveiliging herstellen",
     "scope": "app_health"
   },
-  "check_host": {
-    "text": "Host controleren",
-    "scope": "app_health"
-  },
+  "check_host": [
+    { "text": "Host controleren", "scope": "app_health" },
+    { "text": "{$actor} controleerde {$subject}", "scope": "activity", "target": "happened" }
+  ],
   "on_host": {
     "text": "op {$host}",
     "scope": "app_overview"
@@ -14013,5 +14014,99 @@
       "text": "{$actor} beveiligde {$subject}",
       "scope": "protect_path"
     }
-  ]
+  ],
+  "test_channel": { "text": "{$actor} stuurde een test via {$subject}", "scope": "activity", "target": "happened" },
+  "test_backup_target": { "text": "{$actor} testte de verbinding met {$subject}", "scope": "activity", "target": "happened" },
+  "access_rule_toggle": { "text": "{$actor} zette regel {$subject} aan of uit", "scope": "activity", "target": "happened" },
+  "delete_access_rule": { "text": "{$actor} verwijderde regel {$subject}", "scope": "activity", "target": "happened" },
+  "access_rule_move_up": { "text": "{$actor} schoof regel {$subject} omhoog", "scope": "activity", "target": "happened" },
+  "access_rule_move_down": { "text": "{$actor} schoof regel {$subject} omlaag", "scope": "activity", "target": "happened" },
+  "delete_project": { "text": "{$actor} verwijderde project {$subject}", "scope": "activity", "target": "happened" },
+  "spamservice_mark_spam": { "text": "{$actor} markeerde {$subject} als spam", "scope": "activity", "target": "happened" },
+  "spamservice_mark_ham": { "text": "{$actor} markeerde {$subject} als geen spam", "scope": "activity", "target": "happened" },
+  "spamservice_rescore": { "text": "{$actor} beoordeelde {$subject} opnieuw", "scope": "activity", "target": "happened" },
+  "deploy_stack": { "text": "{$actor} rolde {$subject} uit", "scope": "activity", "target": "happened" },
+  "stop_stack": { "text": "{$actor} stopte {$subject}", "scope": "activity", "target": "happened" },
+  "rollback_stack": { "text": "{$actor} zette {$subject} terug", "scope": "activity", "target": "happened" },
+  "purge_stack_volumes": { "text": "{$actor} leegde de volumes van {$subject}", "scope": "activity", "target": "happened" },
+  "refresh_stack": { "text": "{$actor} vernieuwde de status van {$subject}", "scope": "activity", "target": "happened" },
+  "delete_stack": { "text": "{$actor} verwijderde {$subject}", "scope": "activity", "target": "happened" },
+  "delete_stack_service": { "text": "{$actor} verwijderde dienst {$subject}", "scope": "activity", "target": "happened" },
+  "delete_server": { "text": "{$actor} verwijderde host {$subject}", "scope": "activity", "target": "happened" },
+  "update_site": { "text": "{$actor} wijzigde {$subject}", "scope": "activity", "target": "happened" },
+  "manage_update_site": { "text": "{$actor} wijzigde {$subject}", "scope": "activity", "target": "happened" },
+  "delete_site": { "text": "{$actor} verwijderde {$subject}", "scope": "activity", "target": "happened" },
+  "delete_runtime_image": { "text": "{$actor} verwijderde runtime-image {$subject}", "scope": "activity", "target": "happened" },
+  "spamservice_test": { "text": "{$actor} testte de verbinding met de spamfilter", "scope": "activity", "target": "happened" },
+  "spamservice_start": { "text": "{$actor} startte de spamfilter", "scope": "activity", "target": "happened" },
+  "spamservice_stop": { "text": "{$actor} stopte de spamfilter", "scope": "activity", "target": "happened" },
+  "spamservice_restart": { "text": "{$actor} herstartte de spamfilter", "scope": "activity", "target": "happened" },
+  "delete_database": { "text": "{$actor} verwijderde database {$subject}", "scope": "activity", "target": "happened" },
+  "move_database_shared": { "text": "{$actor} verhuisde database {$subject} naar een gedeelde engine", "scope": "activity", "target": "happened" },
+  "force_delete_database": { "text": "{$actor} verwijderde database {$subject} geforceerd", "scope": "activity", "target": "happened" },
+  "delete_database_engine": { "text": "{$actor} verwijderde database-engine {$subject}", "scope": "activity", "target": "happened" },
+  "force_delete_database_engine": { "text": "{$actor} verwijderde database-engine {$subject} geforceerd", "scope": "activity", "target": "happened" },
+  "acknowledge_posture": { "text": "{$actor} aanvaardde de beveiligingsstatus van {$subject}", "scope": "activity", "target": "happened" },
+  "probe_server": { "text": "{$actor} controleerde of {$subject} antwoordt", "scope": "activity", "target": "happened" },
+  "cordon_server": { "text": "{$actor} hield nieuwe apps tegen op {$subject}", "scope": "activity", "target": "happened" },
+  "drain_server": { "text": "{$actor} verhuisde de apps weg van {$subject}", "scope": "activity", "target": "happened" },
+  "uncordon_server": { "text": "{$actor} liet {$subject} weer nieuwe apps aannemen", "scope": "activity", "target": "happened" },
+  "request_domain_certificate": { "text": "{$actor} vroeg een certificaat aan voor {$subject}", "scope": "activity", "target": "happened" },
+  "continue_dns_order": { "text": "{$actor} zette de DNS-controle van {$subject} voort", "scope": "activity", "target": "happened" },
+  "lift_ban": { "text": "{$actor} hief de blokkering van {$subject} op", "scope": "activity", "target": "happened" },
+  "lift_quarantine": { "text": "{$actor} gaf adres {$subject} vrij", "scope": "activity", "target": "happened" },
+  "delete_dns_zone": { "text": "{$actor} verwijderde DNS-zone {$subject}", "scope": "activity", "target": "happened" },
+  "delete_dns_record": { "text": "{$actor} verwijderde DNS-record {$subject}", "scope": "activity", "target": "happened" },
+  "delete_dns_peer": { "text": "{$actor} verwijderde DNS-peer {$subject}", "scope": "activity", "target": "happened" },
+  "check_dns_health": { "text": "{$actor} controleerde de gezondheid van {$subject}", "scope": "activity", "target": "happened" },
+  "negotiate_transfer_key": { "text": "{$actor} sprak een transfersleutel af met {$subject}", "scope": "activity", "target": "happened" },
+  "spamservice_key_create": { "text": "{$actor} maakte spamfilter-clientsleutel {$subject} aan", "scope": "activity", "target": "happened" },
+  "spamservice_key_enable": { "text": "{$actor} schakelde spamfilter-clientsleutel {$subject} in", "scope": "activity", "target": "happened" },
+  "spamservice_key_revoke": { "text": "{$actor} trok spamfilter-clientsleutel {$subject} in", "scope": "activity", "target": "happened" },
+  "restore_snapshot": { "text": "{$actor} herstelde momentopname {$subject}", "scope": "activity", "target": "happened" },
+  "delete_snapshot": { "text": "{$actor} verwijderde momentopname {$subject}", "scope": "activity", "target": "happened" },
+  "create_instance_from_template": { "text": "{$actor} maakte een app aan vanuit sjabloon {$subject}", "scope": "activity", "target": "happened" },
+  "approve_template": { "text": "{$actor} keurde sjabloon {$subject} goed", "scope": "activity", "target": "happened" },
+  "unapprove_template": { "text": "{$actor} trok de goedkeuring van sjabloon {$subject} in", "scope": "activity", "target": "happened" },
+  "restore_backup": { "text": "{$actor} herstelde back-up {$subject}", "scope": "activity", "target": "happened" },
+  "delete_backup": { "text": "{$actor} verwijderde back-up {$subject}", "scope": "activity", "target": "happened" },
+  "detach_device": { "text": "{$actor} koppelde apparaat {$subject} los", "scope": "activity", "target": "happened" },
+  "delete_instance_database": { "text": "{$actor} koppelde database {$subject} los", "scope": "activity", "target": "happened" },
+  "run_schedule": { "text": "{$actor} voerde schema {$subject} uit", "scope": "activity", "target": "happened" },
+  "delete_schedule": { "text": "{$actor} verwijderde schema {$subject}", "scope": "activity", "target": "happened" },
+  "delete_schedule_step": { "text": "{$actor} verwijderde schemastap {$subject}", "scope": "activity", "target": "happened" },
+  "start_instance": { "text": "{$actor} startte {$subject}", "scope": "activity", "target": "happened" },
+  "stop_instance": { "text": "{$actor} stopte {$subject}", "scope": "activity", "target": "happened" },
+  "restart_instance": { "text": "{$actor} herstartte {$subject}", "scope": "activity", "target": "happened" },
+  "backup_instance": { "text": "{$actor} maakte een back-up van {$subject}", "scope": "activity", "target": "happened" },
+  "snapshot_instance": { "text": "{$actor} maakte een momentopname van {$subject}", "scope": "activity", "target": "happened" },
+  "console_command_instance": { "text": "{$actor} stuurde een consoleopdracht naar {$subject}", "scope": "activity", "target": "happened" },
+  "exec_instance": { "text": "{$actor} voerde een opdracht uit in {$subject}", "scope": "activity", "target": "happened" },
+  "rollback_instance": { "text": "{$actor} zette {$subject} terug", "scope": "activity", "target": "happened" },
+  "install_instance": { "text": "{$actor} installeerde {$subject}", "scope": "activity", "target": "happened" },
+  "reinstall_instance": { "text": "{$actor} installeerde {$subject} opnieuw", "scope": "activity", "target": "happened" },
+  "destroy_instance_data": { "text": "{$actor} verwijderde {$subject} met zijn gegevens", "scope": "activity", "target": "happened" },
+  "delete_instance": { "text": "{$actor} verwijderde {$subject}", "scope": "activity", "target": "happened" },
+  "refresh_instance_overview": { "text": "{$actor} vernieuwde de status van {$subject}", "scope": "activity", "target": "happened" },
+  "migrate_instance": { "text": "{$actor} verhuisde {$subject} naar een andere host", "scope": "activity", "target": "happened" },
+  "open_shell": { "text": "{$actor} opende een shell in {$subject}", "scope": "activity", "target": "happened" },
+  "open_framebuffer": { "text": "{$actor} opende het scherm van {$subject}", "scope": "activity", "target": "happened" },
+  "app_update_instance": { "text": "{$actor} werkte de app in {$subject} bij", "scope": "activity", "target": "happened" },
+  "declare_volume": { "text": "{$actor} voegde volume {$subject} toe", "scope": "activity", "target": "happened" },
+  "redeclare_volume": { "text": "{$actor} wijzigde volume {$subject}", "scope": "activity", "target": "happened" },
+  "destroy_volume": { "text": "{$actor} vernietigde volume {$subject}", "scope": "activity", "target": "happened" },
+  "create_game_domain": { "text": "{$actor} voegde game-adres {$subject} toe", "scope": "activity", "target": "happened" },
+  "update_game_domain": { "text": "{$actor} wijzigde game-adres {$subject}", "scope": "activity", "target": "happened" },
+  "delete_game_domain": { "text": "{$actor} verwijderde game-adres {$subject}", "scope": "activity", "target": "happened" },
+  "enable_site": { "text": "{$actor} zette {$subject} aan", "scope": "activity", "target": "happened" },
+  "disable_site": { "text": "{$actor} zette {$subject} uit", "scope": "activity", "target": "happened" },
+  "clone_site": { "text": "{$actor} kloonde {$subject}", "scope": "activity", "target": "happened" },
+  "rollback_release": { "text": "{$actor} zette {$subject} terug naar de vorige release", "scope": "activity", "target": "happened" },
+  "test_git_provider": { "text": "{$actor} testte de verbinding met {$subject}", "scope": "activity", "target": "happened" },
+  "wordpress": { "text": "Een WordPress-site met een eigen database.", "scope": "put_online", "target": "card" },
+  "minecraft_server": { "text": "Een Minecraftserver voor je netwerk, achter zijn proxy.", "scope": "put_online", "target": "card" },
+  "velocity_proxy": { "text": "De ingang waarmee spelers verbinden, voor je Minecraftservers.", "scope": "put_online", "target": "card" },
+  "rotate_incus_cert": { "text": "{$actor} gaf {$subject} een nieuwe Incus-clientidentiteit", "scope": "activity", "target": "happened" },
+  "rotate_host_key": { "text": "{$actor} gaf {$subject} een nieuwe SSH-clientidentiteit", "scope": "activity", "target": "happened" },
+  "edit_remote_dns_record": { "text": "{$actor} wijzigde een record van {$subject} op de primaire server", "scope": "activity", "target": "happened" }
 }

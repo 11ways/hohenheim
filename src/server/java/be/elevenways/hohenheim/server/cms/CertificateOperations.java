@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -104,6 +105,7 @@ public final class CertificateOperations {
 
     /** A new certificate for the names the operator lists; the certificate list's header action. */
     public static final Operation<Void, Order, Integer> REQUEST = Operation.declare(HohenheimIds.id("request_certificate"))
+        .happened(OperationSentences.of("request_certificate"))
         .label(copy("request"))
         .description(copy("uses_production"))
         .icon(Icon.of("lock"))
@@ -119,6 +121,7 @@ public final class CertificateOperations {
     /** A new certificate for one domain row's hostname, prefilled; the domain rows' action. */
     public static final Operation<Row, Order, Integer> REQUEST_FOR_DOMAIN =
         Operation.declare(HohenheimIds.id("request_domain_certificate"))
+            .happened(OperationSentences.of("request_domain_certificate"))
             .label(copy("get_certificate"))
             .description(copy("uses_production"))
             .icon(Icon.of("lock"))
@@ -133,6 +136,7 @@ public final class CertificateOperations {
 
     /** A new order written back into an existing Let's Encrypt certificate: how names or the challenge change. */
     public static final Operation<Row, Order, Integer> REISSUE = Operation.declare(HohenheimIds.id("reissue_certificate"))
+        .happened(OperationSentences.of("reissue_certificate"))
         .label(Microcopy.of("reissue").withFilter("scope", "certificate"))
         .description(copy("uses_production"))
         .icon(Icon.of("rotate"))
@@ -147,6 +151,7 @@ public final class CertificateOperations {
 
     /** Finishes a manual DNS-01 order after its TXT records are published. */
     public static final Operation<Row, Void, Integer> CONTINUE_DNS = Operation.declare(HohenheimIds.id("continue_dns_order"))
+        .happened(OperationSentences.of("continue_dns_order"))
         .label(copy("verify_dns"))
         .description(copy("verify_dns_hint"))
         .icon(Icon.of("circle-check"))

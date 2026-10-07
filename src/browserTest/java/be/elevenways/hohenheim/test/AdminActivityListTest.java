@@ -7,7 +7,11 @@ import be.elevenways.zenit.cms.common.render.activity.ActivitySentenceCell;
 import be.elevenways.hohenheim.activity.ActivityRecordCell;
 import be.elevenways.hohenheim.server.HohenheimActivity;
 import be.elevenways.hohenheim.server.host.HostProbe;
+import be.elevenways.hohenheim.model.DnsPeerModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
+import be.elevenways.hohenheim.server.dns.DnsFederationTrace;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -401,17 +405,46 @@ class AdminActivityListTest extends HohenheimTestBase {
         assertThat(activityCount(ServerModel.MODEL_ID.toString(), hostId))
             .as("step 2: and wrote no activity row for it").isEqualTo(before);
 
-        // 3. The list opens on what a person did: a seed row and an internal row are not on it.
+        // 2b. The DNS server's own trace stamps (a NOTIFY sent, an AXFR served) are bookkeeping too: on starfleet the
+        //     AXFR responder's identityless save read as "Unattributed changed Dns zone peer #1".
+        Row peer = Models.get(DnsPeerModel.class).createEmptyRow();
+        peer.set(DnsPeerModel.NAME, "hh-trace-peer-" + suffix);
+        peer.set(DnsPeerModel.TRANSFER_HOST, "192.0.2.10");
+        Models.get(DnsPeerModel.class).save(peer);
+        Row zone = Models.get(DnsZoneModel.class).createEmptyRow();
+        zone.set(DnsZoneModel.ORIGIN, "trace-" + suffix + ".test.");
+        zone.set(DnsZoneModel.ROLE, DnsZoneModel.ROLE_PRIMARY);
+        zone.set(DnsZoneModel.ENABLED, true);
+        Models.get(DnsZoneModel.class).save(zone);
+        Row link = Models.get(DnsZonePeerModel.class).createEmptyRow();
+        link.set(DnsZonePeerModel.ZONE_ID, zone.get(DnsZoneModel.ID));
+        link.set(DnsZonePeerModel.PEER_ID, peer.get(DnsPeerModel.ID));
+        Models.get(DnsZonePeerModel.class).save(link);
+        String linkId = String.valueOf((Object) link.get(DnsZonePeerModel.ID));
+        long linkRows = activityCount(DnsZonePeerModel.MODEL_ID.toString(), linkId);
+        DnsFederationTrace.notifySent(link, peer, "trace-" + suffix + ".test.", 7, "ok");
+        assertThat(Models.get(DnsZonePeerModel.class).findById(link.get(DnsZonePeerModel.ID))
+            .get(DnsZonePeerModel.LAST_NOTIFY_SERIAL))
+            .as("step 2b: the trace did stamp the link").isEqualTo(7);
+        assertThat(activityCount(DnsZonePeerModel.MODEL_ID.toString(), linkId))
+            .as("step 2b: and wrote no activity row for it").isEqualTo(linkRows);
+
+        // 3. The list opens on what a person did: a seed row, an internal row and a row written by work that declared
+        //    no identity at all are not on it.
+        String unattributed = "hh-people-unattributed-" + suffix;
         write(SiteModel.MODEL_ID.toString(), person, person, "updated",
             Accountability.ORIGIN_WEB, Instant.parse("2999-02-01T00:00:03Z"));
         write(SiteModel.MODEL_ID.toString(), seeded, seeded, "created",
             AccountabilityOrigin.SEED.token(), Instant.parse("2999-02-01T00:00:02Z"));
         write(PortAllocationModel.MODEL_ID.toString(), plumbing, plumbing, "created",
             Accountability.ORIGIN_WEB, Instant.parse("2999-02-01T00:00:01Z"));
+        write(SiteModel.MODEL_ID.toString(), unattributed, unattributed, "updated",
+            Accountability.ORIGIN_UNATTRIBUTED, Instant.parse("2999-02-01T00:00:04Z"));
         String opening = adminGet("/admin/activity").body();
         assertThat(opening).as("step 3: a person's row opens the list").contains(person);
         assertThat(opening).as("step 3: a seed row does not").doesNotContain(seeded);
         assertThat(opening).as("step 3: an internal row does not").doesNotContain(plumbing);
+        assertThat(opening).as("step 3: an unattributed row is not a person's either").doesNotContain(unattributed);
 
         // 4. The framework's internal toggle brings the plumbing back, still searchable.
         assertThat(adminGet("/admin/activity?filter.internal=true&filter.record_id=" + plumbing).body())
@@ -430,8 +463,8 @@ class AdminActivityListTest extends HohenheimTestBase {
         sites.save(site);
         String dashboard = adminGet("/admin/dashboard").body();
         assertThat(dashboard).as("step 5: the dashboard shows what a person did").contains(person);
-        assertThat(dashboard).as("step 5: and neither seeds nor plumbing")
-            .doesNotContain(seeded).doesNotContain(plumbing);
+        assertThat(dashboard).as("step 5: and neither seeds, plumbing nor unattributed work")
+            .doesNotContain(seeded).doesNotContain(plumbing).doesNotContain(unattributed);
     }
 
     private static long activityCount(String model, String recordId) {

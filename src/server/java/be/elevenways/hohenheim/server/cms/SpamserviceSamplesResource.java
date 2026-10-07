@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -72,6 +73,7 @@ public final class SpamserviceSamplesResource {
 
     public static final Operation<SampleSummary, Void, Void> MARK_SPAM = Operation.declare(
             HohenheimIds.id("spamservice_mark_spam"))
+        .happened(OperationSentences.of("spamservice_mark_spam"))
         .label(words("mark_spam"))
         .icon(Icon.of("triangle-exclamation"))
         .one(SAMPLE)
@@ -81,6 +83,7 @@ public final class SpamserviceSamplesResource {
 
     public static final Operation<SampleSummary, Void, Void> MARK_HAM = Operation.declare(
             HohenheimIds.id("spamservice_mark_ham"))
+        .happened(OperationSentences.of("spamservice_mark_ham"))
         .label(words("mark_ham"))
         .icon(Icon.of("check"))
         .one(SAMPLE)
@@ -91,6 +94,7 @@ public final class SpamserviceSamplesResource {
     /** Answers the new score as its text. */
     public static final Operation<SampleSummary, Void, String> RESCORE = Operation.declare(
             HohenheimIds.id("spamservice_rescore"))
+        .happened(OperationSentences.of("spamservice_rescore"))
         .label(words("rescore"))
         .icon(Icon.of("rotate"))
         .one(SAMPLE)
