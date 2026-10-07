@@ -26,6 +26,11 @@ blastApp {
             libs.zenit.cms, libs.zenit.comms, libs.zenit.media
 }
 
+blastGuards {
+    nonAuthored 'data', 'Runtime state (live git repositories, checkouts, volumes) the controller writes;' +
+            ' machine-produced, and its broken symlinks would abort a walk.'
+}
+
 hawkeye {
     elementPrefix = 'hh'
     scss {
