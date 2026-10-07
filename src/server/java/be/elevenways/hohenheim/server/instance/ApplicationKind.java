@@ -158,23 +158,34 @@ public final class ApplicationKind implements InstanceKindHandler {
             .label(HohenheimFormCopy.label("cpu_limit"))
             .help(HohenheimFormCopy.help("cpu_limit")).build());
 
-    // The create decisions are where the code comes from, what image it ends up as and
-    // which port it serves; how it is built, when it is deployed, whether previews exist
-    // and what it may consume all have defaults, so they fold under headers that say what
-    // is inside. AIDEV-NOTE: declared after the fields -- Schema.addSection validates
-    // membership against the fields declared so far.
+    // What a reader of a running app comes to change -- its variables per lane, and where the
+    // code comes from with how it builds, deploys and previews -- stays open; the build and
+    // deploy details and the runtime ceilings all have defaults, so they fold under headers
+    // that say what is inside. AIDEV-NOTE: declared after the fields -- Schema.addSection
+    // validates membership against the fields declared so far.
     static {
-        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.BUILD,
-            HohenheimFormSections.join(
-                List.of(BUILDER.getName(), DOCKERFILE.getName(), BUILD_ARGUMENTS.getName()),
-                GitSourceSchema.BUILD_DETAIL)));
-        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.DEPLOYMENT,
-            HohenheimFormSections.join(GitSourceSchema.DELIVERY,
-                List.of(HEALTH_PATH.getName(), KEEP_RELEASES.getName()),
-                GitSourceSchema.PREVIEWS)));
+        // The record's Configuration reads as the board's two decisions first: where the code comes from with how it
+        // builds, deploys and previews, then the variables per lane. AIDEV-NOTE: source before variables (the board
+        // draws variables first) because this one schema also renders the CREATE form, where the repository is the
+        // first decision and no variable can be meaningful yet.
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.open(HohenheimFormSections.SOURCE, List.of(
+            GitSourceSchema.REPOSITORY_URL, GitSourceSchema.PROVIDER_ID, GitSourceSchema.REPOSITORY,
+            GitSourceSchema.BRANCH, BUILDER.getName(), GitSourceSchema.BUILD_COMMAND, GitSourceSchema.BUILD_DIRECTORY,
+            IMAGE.getName(), TAG.getName(), CONTAINER_PORT.getName(),
+            GitSourceSchema.AUTO_DEPLOY, GitSourceSchema.PREVIEWS_ENABLED, GitSourceSchema.PREVIEW_BRANCHES)));
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.open(HohenheimFormSections.VARIABLES,
+            HohenheimFormCopy.section("variables_description"), List.of(
+            ENVIRONMENT_VARIABLES.getName(), GitSourceSchema.BUILD_ENVIRONMENT_VARIABLES,
+            GitSourceSchema.PREVIEW_ENVIRONMENT_VARIABLES)));
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.BUILD, List.of(
+            DOCKERFILE.getName(), BUILD_ARGUMENTS.getName(), GitSourceSchema.BUILD_TIMEOUT,
+            GitSourceSchema.SHALLOW_CLONE, GitSourceSchema.SUBMODULES)));
+        SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.DEPLOYMENT, List.of(
+            GitSourceSchema.WEBHOOK_SECRET, GitSourceSchema.POLL_INTERVAL, HEALTH_PATH.getName(),
+            KEEP_RELEASES.getName())));
         SETTINGS_SCHEMA.addSection(
             HohenheimFormSections.collapsed(HohenheimFormSections.RUNTIME, List.of(
-                ENVIRONMENT_VARIABLES.getName(), MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName(),
+                MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName(),
                 CONSOLE_KIND.getName(), COMMAND.getName(), WORKDIR.getName())));
     }
 

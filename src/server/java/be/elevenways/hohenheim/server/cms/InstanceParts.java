@@ -420,19 +420,20 @@ public final class InstanceParts {
     }
 
     /**
-     * The operator's record tabs, in the strip's order: the overview (the landing), the console with its modes, files,
-     * metrics and backups stay visible beside the framework's edit tab; the rest sit in "More".
+     * The operator's record tabs, in the strip's order: the overview (the landing), the deploys of an app built from
+     * source, the console with its modes, files, metrics and backups stay visible beside the framework's edit tab; the
+     * rest sit in "More".
      */
     private static @NonNull List<RecordTab<Row>> adminTabs() {
         List<RecordTab<Row>> tabs = new ArrayList<>();
         tabs.add(InstanceOverview.tab());
+        tabs.add(new InstanceDeploymentsPage());
         // The console's hub tab first, then its modes (shell, the one-off command, a VM's screen), each routed and
         // gated as its own page and reached through the console's mode switch (ConsoleModes).
         tabs.addAll(ConsoleModes.operator().tabs());
         tabs.add(new InstanceFilesPage());
         tabs.add(new InstanceStatsPage());
         tabs.add(backupsTab());
-        tabs.add(new InstanceDeploymentsPage());
         tabs.add(new InstanceProvisioningPage());
         tabs.add(new InstanceDevicesPage());
         tabs.add(new InstanceVolumesTab());
@@ -446,6 +447,7 @@ public final class InstanceParts {
     private static @NonNull List<RecordTab<Row>> manageTabs() {
         List<RecordTab<Row>> tabs = new ArrayList<>();
         tabs.add(InstanceOverview.tab());
+        tabs.add(new InstanceDeploymentsPage());
         // The shell is a delegable tenant verb bounded to a workload that runs as its own non-root uid; the one-off
         // command is ADMIN-sensitivity with deliberately no /manage surface (ConsoleModes.delegated()).
         tabs.addAll(ConsoleModes.delegated().tabs());
@@ -454,7 +456,6 @@ public final class InstanceParts {
         // The sections read THIS panel's entries: the backup twin places no restore-to-new, which is how it stays
         // operator-only here too.
         tabs.add(backupsTab());
-        tabs.add(new InstanceDeploymentsPage());
         tabs.add(new InstanceProvisioningPage());
         tabs.add(new InstanceDevicesPage());
         tabs.add(new InstanceVolumesTab());

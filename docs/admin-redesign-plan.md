@@ -565,3 +565,29 @@ Order: W6 as planned. G5 needs nothing from W1-W5 except the `put_online` operat
   scheduler's own permissions.
 - Notifications: channels already carry "Send a test" and list each channel's subscribed events; the board's
   event-by-channel matrix is not built.
+
+## 14. W7a decisions (fork W7a, 2026-10-07)
+
+- App-Deploys is the existing `InstanceDeploymentsPage`, reshaped in place (slug `deployments` kept so every link and
+  test route stays): no framework part composes a live band, a release history with logs and a push ledger, so it
+  stays a product-rendered record tab. It now sits right after Overview and is no longer a secondary tab.
+- The live band reads the instances' roles (`ownedServing`, `newestRetired`), never the operation status; a history
+  row is marked Live, Kept for rollback or Replaced from the same roles (`ReleaseMark`, a closed enum). A release
+  operation records no commit of its own: the commit is read from its candidate release instance's stored settings,
+  trashed instances included.
+- Rollback moved from the card into the live band as "Roll back to <commit>", offered only with a kept release and
+  nothing in flight. "Deploy now" stays on the history card (the heading also offers Deploy).
+- Previews: the application's live previews with their own row actions through `PanelActionOffers.rowsForRender`
+  over the previews entry (the access-list rules page precedent), "Details" through the record front door, and
+  "Preview a branch" opening the previews create form with the application preset (`HohenheimParams.PREVIEW_APPLICATION`
+  read by `PreviewParts.createDefaults`; the queue still asks MANAGE on it).
+- Recent pushes read `webhook_deliveries` through `WebhookDeliveryModel.findRecent`; what a delivery caused is now one
+  vocabulary, `WebhookOutcome` (stored tokens unchanged), with a sentence per outcome. The push address and secret stay
+  operator-only.
+- App-Git-Config: the application kind's settings sections are Source and build (open), Variables (open, "Changes
+  apply at the next deploy."), then Build details, Deployment and Runtime folded. Source comes BEFORE variables (the
+  board draws variables first) because the same schema renders the create form, where the repository is the first
+  decision. Field declaration order is unchanged, so stored data and surface baselines' control order are too.
+- Needs building (shown on the boards, left out): who or what started a release (operations record no trigger), the
+  ref and commit of a push (deliveries record only event and outcome), per-variable secret values and variables
+  derived from attached databases or projects, the variables as lane tabs.

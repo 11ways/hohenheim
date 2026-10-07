@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.edit.FormSection;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -47,6 +48,12 @@ public final class HohenheimFormSections {
     /** How a request is forwarded once the upstream is chosen. */
     public static final String FORWARDING = "forwarding";
 
+    /** The values a workload reads from its environment, per lane (running, building, previews). */
+    public static final String VARIABLES = "variables";
+
+    /** Where the code comes from and how it becomes a release: repository, branch, builder, deploy-on-push, previews. */
+    public static final String SOURCE = "source";
+
     private HohenheimFormSections() {}
 
     /**
@@ -57,6 +64,23 @@ public final class HohenheimFormSections {
      */
     public static @NonNull FormSection collapsed(@NonNull String id, @NonNull List<String> entryNames) {
         return new FormSection(id, HohenheimFormCopy.section(id), null, null, true, entryNames);
+    }
+
+    /**
+     * An open section carrying this id's shared label: the decisions a reader of the record comes to change, still
+     * foldable by the viewer.
+     *
+     * @param id         one of the constants above; it is also the microcopy key
+     * @param entryNames the fields it claims, in render order
+     */
+    public static @NonNull FormSection open(@NonNull String id, @NonNull List<String> entryNames) {
+        return new FormSection(id, HohenheimFormCopy.section(id), null, null, false, entryNames);
+    }
+
+    /** An open section with a line under its label saying when its values take effect. */
+    public static @NonNull FormSection open(@NonNull String id, @NonNull Microcopy description,
+                                            @NonNull List<String> entryNames) {
+        return new FormSection(id, HohenheimFormCopy.section(id), description, null, false, entryNames);
     }
 
     /** @return one list, so a section can name a shared group plus its own members */

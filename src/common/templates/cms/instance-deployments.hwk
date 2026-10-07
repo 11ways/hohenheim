@@ -1,6 +1,7 @@
 {#- Deploys tab on a record whose deploy has a history: an application's releases or a
-    source-declared workspace's checkouts and builds, with their captured logs, plus
-    deploy-now and (releases only) rollback controls. -#}
+    source-declared workspace's checkouts and builds. For an application: the live release
+    and the one kept for rollback first, then the history with each release's log, the
+    previews, and where the deploys come from with what the last pushes did. -#}
 {% declare title: String %}
 {% declare instanceId: Integer %}
 {% declare instanceName: String %}
@@ -11,7 +12,16 @@
 {#- How many columns the history table has, so the detail row spans all of them. -#}
 {% declare columnCount: Integer = 5 %}
 {% declare currentCommit: String = "" %}
+{% declare keptCommit: String = "" %}
+{% declare liveSinceIso: String = "" %}
 {% declare deployments: List %}
+{% declare previewsShown: Boolean = false %}
+{% declare previews: List = null %}
+{% declare previewCreateUrl: String = "" %}
+{% declare sourceRepository: String = "" %}
+{% declare sourceBranch: String = "" %}
+{% declare autoDeploy: Boolean = false %}
+{% declare pushes: List = null %}
 {% declare returnUrl: String = "" %}
 {#- ReturnTarget.PARAM, supplied by the page: ReturnTarget lives in zenit's SERVER
     source set, so a common template cannot reach the constant (nor its
@@ -27,59 +37,74 @@
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
-<section class="cms-resource-list-page">
+<section class="cms-resource-list-page hh-deploys">
     {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
+
+    {% if showTrigger and currentCommit != "" %}
+    {#- The live release first, as the record overview leads with its verdict: what serves
+        now, and the one-step way back when a previous release is kept. -#}
+    <pl-alert class="cms-record-health" variant={% "success" %} data-hh-live-release>
+        <pl-alert-title>{% if sourceBranch != "" %}{{ t("live_from_branch", scope: "deployments", commit: currentCommit, branch: sourceBranch) }}{% else %}{{ t("live_commit", scope: "deployments", commit: currentCommit) }}{% /if %}</pl-alert-title>
+        <pl-alert-description>
+            {% if liveSinceIso != "" %}<span>{{ t("live_since", scope: "deployments") }} <pl-relative-time datetime={% liveSinceIso %} wording={% timeWording %} title={% liveSinceIso %}></pl-relative-time>.</span>{% /if %}
+            {% if keptCommit != "" %}{{ t("live_kept", scope: "deployments", commit: keptCommit) }}{% else %}{{ t("live_nothing_kept", scope: "deployments") }}{% /if %}
+        </pl-alert-description>
+        {% if canRollback %}
+        <div class="cms-record-health-fixes">
+            <form use:Zenit.form={% rollbackTarget %} use:CmsConfirm.destructive={% t("rollback_confirm", scope: "deployments", commit: keptCommit) %}>
+                <input type="hidden" name={% returnParam %} value={% returnUrl %}>
+                <pl-button variant={% "secondary" %} type={% "submit" %} data-hh-rollback>{{ t("rollback_to", scope: "deployments", commit: keptCommit) }}</pl-button>
+            </form>
+        </div>
+        {% /if %}
+    </pl-alert>
+    {% /if %}
 
     <pl-card>
         <pl-card-header>
             <pl-card-title>{{ t("title", scope: "deployments") }}</pl-card-title>
-            {% if currentCommit != "" %}
+            {% if showTrigger %}
+            <pl-card-description>{{ t("history_description", scope: "deployments") }}</pl-card-description>
+            {% elseif currentCommit != "" %}
             <pl-card-description>{{ t("current_commit", scope: "deployments", commit: currentCommit) }}</pl-card-description>
             {% /if %}
-        </pl-card-header>
-        <pl-card-content>
-            <div class="cms-form-actions">
+            <pl-card-header-actions>
                 {#- _return: the framework return target (zenit ReturnTarget) --
                     the handler redirects back to whichever panel rendered this
                     page (/admin or /manage); forged values fall back to /admin. -#}
                 <form use:Zenit.form={% deployTarget %}>
                     <input type="hidden" name={% returnParam %} value={% returnUrl %}>
-                    <pl-button variant={% "primary" %} type={% "submit" %} disabled={% isDeploying %}>{{ t("deploy_now", scope: "deployments") }}</pl-button>
+                    <pl-button variant={% "secondary" %} type={% "submit" %} disabled={% isDeploying %}>{{ t("deploy_now", scope: "deployments") }}</pl-button>
                 </form>
-                {% if canRollback %}
-                <form use:Zenit.form={% rollbackTarget %} use:CmsConfirm.destructive={% t("rollback_confirm", scope: "deployments") %}>
-                    <input type="hidden" name={% returnParam %} value={% returnUrl %}>
-                    <pl-button variant={% "destructive" %} type={% "submit" %}>{{ t("rollback", scope: "deployments") }}</pl-button>
-                </form>
-                {% /if %}
-            </div>
-
+            </pl-card-header-actions>
+        </pl-card-header>
+        <pl-card-content>
             {% if deployments %}
-            <pl-table striped={% true %}>
+            <pl-table>
                 <pl-table-header><pl-table-row>
-                    <pl-table-head>{{ t("started", scope: "deployments") }}</pl-table-head>
-                    <pl-table-head>{{ t("status", scope: "deployments") }}</pl-table-head>
+                    <pl-table-head>{{ t("commit", scope: "deployments") }}</pl-table-head>
                     {% if showTrigger %}
                     <pl-table-head>{{ t("trigger", scope: "deployments") }}</pl-table-head>
                     {% /if %}
-                    <pl-table-head>{{ t("commit", scope: "deployments") }}</pl-table-head>
+                    <pl-table-head>{{ t("status", scope: "deployments") }}</pl-table-head>
+                    <pl-table-head>{{ t("started", scope: "deployments") }}</pl-table-head>
                     <pl-table-head>{{ t("duration", scope: "deployments") }}</pl-table-head>
                 </pl-table-row></pl-table-header>
                 <pl-table-body>
                     {% each deployments as index, deploy %}
-                    <pl-table-row>
+                    <pl-table-row data-hh-release-mark={% deploy.get("mark") %}>
+                        <pl-table-cell><code>{{ deploy.get("commit") }}</code></pl-table-cell>
+                        {% if showTrigger %}
+                        <pl-table-cell>{{ deploy.get("kindLabel") }}</pl-table-cell>
+                        {% /if %}
+                        <pl-table-cell>
+                            {% if deploy.get("mark") == "live" %}<pl-badge variant={% "success" %}>{{ deploy.get("statusLabel") }}</pl-badge>{% elseif deploy.get("mark") == "kept" %}<pl-badge variant={% "info" %}>{{ deploy.get("statusLabel") }}</pl-badge>{% elseif deploy.get("mark") == "replaced" %}<pl-badge variant={% "secondary" %}>{{ deploy.get("statusLabel") }}</pl-badge>{% elseif deploy.get("statusKnown") == true %}<pl-badge variant={% deploy.get("statusVariant") %} colorSet={% deploy.get("statusColorSet") %}>{% if deploy.get("statusLabel") != null %}{{ deploy.get("statusLabel") }}{% else %}{{ deploy.get("status") }}{% /if %}</pl-badge>{% else %}{{ deploy.get("status") }}{% /if %}
+                        </pl-table-cell>
                         <pl-table-cell>
                             {% if deploy.get("startedAtIso") != "" %}
                             <pl-relative-time datetime={% deploy.get("startedAtIso") %} wording={% timeWording %} title={% deploy.get("startedAtIso") %}></pl-relative-time>
                             {% /if %}
                         </pl-table-cell>
-                        <pl-table-cell>
-                            {% if deploy.get("statusKnown") == true %}<pl-badge variant={% deploy.get("statusVariant") %} colorSet={% deploy.get("statusColorSet") %}>{{ deploy.get("status") }}</pl-badge>{% else %}{{ deploy.get("status") }}{% /if %}
-                        </pl-table-cell>
-                        {% if showTrigger %}
-                        <pl-table-cell>{{ deploy.get("reason") }}</pl-table-cell>
-                        {% /if %}
-                        <pl-table-cell><code>{{ deploy.get("commit") }}</code></pl-table-cell>
                         <pl-table-cell>{{ deploy.get("duration") }}</pl-table-cell>
                     </pl-table-row>
                     {% if deploy.get("error") != "" or deploy.get("hasLog") == true %}
@@ -97,13 +122,60 @@
         </pl-card-content>
     </pl-card>
 
-    {% if webhookSecret != "" %}
-    <pl-card class="hh-webhook-card">
+    {% if previewsShown %}
+    <pl-card data-hh-previews>
         <pl-card-header>
-            <pl-card-title>{{ t("webhook", scope: "deployments") }}</pl-card-title>
-            <pl-card-description>{{ t("webhook_description", scope: "deployments") }}</pl-card-description>
+            <pl-card-title>{{ t("previews", scope: "deployments") }}</pl-card-title>
+            <pl-card-description>{{ t("previews_description", scope: "deployments") }}</pl-card-description>
+            {% if previewCreateUrl != "" %}
+            <pl-card-header-actions>
+                <pl-button variant={% "secondary" %} href={% previewCreateUrl %} icon="plus">{{ t("preview_branch", scope: "deployments") }}</pl-button>
+            </pl-card-header-actions>
+            {% /if %}
         </pl-card-header>
         <pl-card-content>
+            {% if previews %}
+            <pl-table>
+                <pl-table-body>
+                    {% each previews as preview %}
+                    <pl-table-row data-hh-preview={% preview.get("ref") %}>
+                        <pl-table-cell>
+                            <strong>{{ preview.get("ref") }}</strong>
+                            {% if preview.get("pullRequest") != "" %}<div class="hh-deploys-sub">{{ t("pull_request", scope: "deployments", number: preview.get("pullRequest")) }}</div>{% /if %}
+                        </pl-table-cell>
+                        <pl-table-cell><pl-badge variant={% preview.get("statusVariant") %} colorSet={% preview.get("statusColorSet") %}>{{ preview.get("statusLabel") }}</pl-badge></pl-table-cell>
+                        <pl-table-cell>
+                            {% if preview.get("running") == true %}<a href={% preview.get("liveUrl") %} target="_blank" rel="noopener">{{ preview.get("hostname") }}</a>{% else %}{{ preview.get("hostname") }}{% /if %}
+                            {% if preview.get("expiresIso") != "" %}<div class="hh-deploys-sub">{{ t("preview_expires", scope: "deployments") }} <pl-relative-time datetime={% preview.get("expiresIso") %} wording={% timeWording %} title={% preview.get("expiresIso") %}></pl-relative-time></div>{% /if %}
+                        </pl-table-cell>
+                        <pl-table-cell class="hh-deploys-actions">
+                            <pl-button variant={% "ghost" %} href={% preview.get("openUrl") %}>{{ t("preview_details", scope: "deployments") }}</pl-button>
+                            {% each preview.get("invokes") as invoke %}
+                            {% render "zenitcms:action/invoke" var:action=invoke %}
+                            {% /each %}
+                        </pl-table-cell>
+                    </pl-table-row>
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+            {% else %}
+            <p class="hh-deploys-sub">{{ t("previews_empty", scope: "deployments") }}</p>
+            {% /if %}
+        </pl-card-content>
+    </pl-card>
+    {% /if %}
+
+    {% if showTrigger %}
+    <pl-card class="hh-webhook-card" data-hh-automatic-deploys>
+        <pl-card-header>
+            <pl-card-title>{{ t("automatic_deploys", scope: "deployments") }}</pl-card-title>
+            {% if sourceRepository != "" %}
+            <pl-card-description>{% if sourceBranch != "" %}{{ t("source_line", scope: "deployments", repository: sourceRepository, branch: sourceBranch) }}{% else %}{{ sourceRepository }}{% /if %}</pl-card-description>
+            {% /if %}
+        </pl-card-header>
+        <pl-card-content>
+            <p>{% if autoDeploy %}{{ t("auto_deploy_on", scope: "deployments") }}{% else %}{{ t("auto_deploy_off", scope: "deployments") }}{% /if %}</p>
+            {% if webhookSecret != "" %}
             <dl class="hh-webhook-fields">
                 <dt>{{ t("payload_url", scope: "deployments") }}</dt>
                 <dd>
@@ -118,6 +190,22 @@
             </dl>
             {% if !webhookAutoDeploy %}
             <pl-alert variant="warning">{{ t("auto_deploy_disabled", scope: "deployments") }}</pl-alert>
+            {% /if %}
+            {% /if %}
+            <h3 class="hh-deploys-heading">{{ t("recent_pushes", scope: "deployments") }}</h3>
+            {% if pushes %}
+            <ul class="hh-deploys-pushes" data-hh-pushes>
+                {% each pushes as push %}
+                <li data-hh-push-acted={% push.get("acted") %}>
+                    <pl-icon name={% push.get("acted") == true ? "circle-check" : "ban" %}></pl-icon>
+                    <span>{{ push.get("outcome") }}</span>
+                    {% if push.get("event") != "" %}<span class="hh-deploys-event">{{ push.get("event") }}</span>{% /if %}
+                    {% if push.get("receivedIso") != "" %}<pl-relative-time datetime={% push.get("receivedIso") %} wording={% timeWording %} title={% push.get("receivedIso") %}></pl-relative-time>{% /if %}
+                </li>
+                {% /each %}
+            </ul>
+            {% else %}
+            <p class="hh-deploys-sub">{{ t("pushes_empty", scope: "deployments") }}</p>
             {% /if %}
         </pl-card-content>
     </pl-card>

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
@@ -16,6 +17,7 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceAuthority;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
@@ -80,13 +82,31 @@ public final class PreviewParts {
             .recordLabel(Microcopy.of("singular").withFilter("scope", "preview_deployment"))
             .description(CmsSupport.navHint("preview_deployment"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP).icon(Icon.of("flask"))
-            .form(ResourceForm.<Row>of(form).bindings(bindings).build())
+            .form(ResourceForm.<Row>of(form).bindings(bindings).createDefaults(PreviewParts::createDefaults).build())
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL)
                 .search(PreviewDeploymentModel.HOSTNAME, PreviewDeploymentModel.REF, PreviewDeploymentModel.HEAD_SHA).build())
             .reads(ResourceReads.rows())
             .writes(ResourceMutations.rows().create(call -> queue(call.values(), call.access(), requireApplicationManage))
                 .scopeVerifiedBeforeWrite().ownsWriteEnvelope(ResourceVerb.CREATE).build())
             .actions(List.of(destroy()));
+    }
+
+    /**
+     * The create form opened from an application's Deploys tab names that application; the queue still asks the
+     * viewer's MANAGE on it, so a forged parameter only prefills a form that refuses.
+     */
+    private static @NonNull Map<String, Object> createDefaults(@NonNull PanelRequest request) {
+        Map<String, Object> values = new java.util.LinkedHashMap<>(formSpec().defaultValues());
+        Integer application;
+        try {
+            application = CmsSupport.prefill(request.conduit(), HohenheimParams.PREVIEW_APPLICATION);
+        } catch (RuntimeException notANumber) {
+            application = null;
+        }
+        if (application != null) {
+            values.put(PreviewDeploymentModel.APPLICATION_ID.getName(), application);
+        }
+        return Map.copyOf(values);
     }
 
     static @NonNull FormSpec formSpec() {

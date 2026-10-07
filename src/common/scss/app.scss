@@ -310,6 +310,65 @@
         }
     }
 
+    // Deploys tab: the live band, history, previews and recent pushes stand apart as the record overview's cards do
+    .hh-deploys {
+        display: flex;
+        flex-direction: column;
+        gap: var(--pl-space-lg);
+    }
+
+    .hh-deploys-sub {
+        margin: var(--pl-space-2xs, 2px) 0 0;
+        font-size: var(--pl-font-size-sm);
+        color: var(--pl-color-text-muted, inherit);
+    }
+
+    .hh-deploys-actions {
+        white-space: nowrap;
+
+        > * {
+            display: inline-flex;
+            vertical-align: middle;
+        }
+    }
+
+    .hh-deploys-event {
+        font-family: var(--pl-font-mono, monospace);
+        font-size: var(--pl-font-size-xs);
+        color: var(--pl-color-text-muted, inherit);
+    }
+
+    .hh-deploys-heading {
+        margin: var(--pl-space-lg) 0 var(--pl-space-sm);
+        font-size: var(--pl-font-size-sm);
+        font-weight: var(--pl-font-weight-semibold, 600);
+    }
+
+    .hh-deploys-pushes {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+
+        li {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: var(--pl-space-sm);
+            padding: var(--pl-space-sm) 0;
+            border-block-end: 1px solid var(--pl-color-surface-border);
+        }
+
+        li:last-child {
+            border-block-end: 0;
+        }
+
+        pl-relative-time {
+            margin-inline-start: auto;
+            color: var(--pl-color-text-muted, inherit);
+            font-size: var(--pl-font-size-sm);
+        }
+    }
+
     // Push-webhook config card (site Deployments tab)
     .hh-webhook-fields {
         display: grid;
