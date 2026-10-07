@@ -71,6 +71,7 @@ public final class HohenheimTemplateIds {
     public static final String CELL_ACTIVITY_RECORD = "hohenheim:cms/cell/activity-record";
     public static final String CELL_BAN_STATE = "hohenheim:cms/cell/ban-state";
     public static final String CELL_DOMAIN_CERTIFICATE = "hohenheim:cms/cell/domain-certificate";
+    public static final String CELL_STATE_LINE = "hohenheim:cms/cell/state-line";
     public static final String CELL_HOST_STATUS = "hohenheim:cms/cell/host-status";
     public static final String CELL_MANAGED_BY = "hohenheim:cms/cell/managed-by";
     public static final String CELL_INSTALL_STATE = "hohenheim:cms/cell/install-state";

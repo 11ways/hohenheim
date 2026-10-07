@@ -5,17 +5,21 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectArity;
 import be.elevenways.zenit.common.operation.SubjectType;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.server.operation.RowDeleteOperations;
 import be.elevenways.protoblast.common.time.RelativeTime;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
@@ -59,6 +63,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.ByteArrayInputStream;
 import java.io.StringReader;
 import java.security.cert.CertificateFactory;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -67,6 +72,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -86,6 +92,9 @@ public final class CertificateParts {
     /** Canonical O2 delete: the same model removal and hooks as the generated legacy verb. */
     public static final Operation<Row, Void, Integer> DELETE = RowDeleteOperations.delete(CertificateModel.class,
         SubjectArity.ONE, OperationGate.permission(HohenheimSources.ADMIN_ACCESS));
+
+    /** The certificate list's state column. */
+    static final String STATE_COLUMN = "state";
 
     private CertificateParts() {}
     /**
@@ -158,7 +167,10 @@ public final class CertificateParts {
             .subtext("domain_names_text").build())
         .column(ColumnSpec.fromField(CertificateModel.DOMAIN_NAMES_TEXT).filterable().hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.PROVIDER).filterable().build())
-        .column(ColumnSpec.fromField(CertificateModel.STATUS).filterable().subtext("renewal_error").build())
+        // The state in words (failing, waiting for a DNS record, works and for how long), the column an operator
+        // scans first; the stored status stays in the picker and the filter strip.
+        .column(stateColumn())
+        .column(ColumnSpec.fromField(CertificateModel.STATUS).filterable().hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.RENEWAL_ERROR).filterable().hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.CHALLENGE_TYPE).filterable().hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.DNS_PUBLISHER).hidden().build())
@@ -192,6 +204,62 @@ public final class CertificateParts {
         .defaultSort(SortSpec.asc(CertificateModel.EXPIRES_ON.getName()))
         .build();
 
+    /** The certificate's state column: a word and a line, {@link #stateCell}. */
+    private static @NonNull ColumnSpec stateColumn() {
+        return ColumnSpec.virtual(STATE_COLUMN, Microcopy.of("state_column").withFilter("scope", "certificate"))
+            .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build();
+    }
+
+    /**
+     * What a certificate's state means to an operator, in a word and a line: a failing renewal and how long the
+     * certificate still holds, a manual DNS order waiting for its record, or that it works and until when.
+     *
+     * AIDEV-NOTE: a renewal that failed is "failing" even while the old certificate still serves (status active with
+     * an error count): that is the one an operator must act on before it expires. Its last error rides along as the
+     * cell's note, so the list answers why without opening the certificate.
+     */
+    static @NonNull StateLineCell stateCell(@NonNull Row cert) {
+        String status = cert.get(CertificateModel.STATUS);
+        Integer errorCount = cert.get(CertificateModel.ERROR_COUNT);
+        int errors = errorCount == null ? 0 : errorCount;
+        Instant expires = cert.get(CertificateModel.EXPIRES_ON);
+        Long days = expires == null ? null : Duration.between(Now.instant(), expires).toDays();
+        if (CertificateModel.STATUS_ERROR.equals(status) || errors > 0) {
+            Microcopy detail = days == null
+                ? Microcopy.of("state_failing_unissued").withFilter("scope", "certificate")
+                    .withArg("count", String.valueOf(Math.max(errors, 1)))
+                : Microcopy.of("state_failing_detail").withFilter("scope", "certificate")
+                    .withArg("count", String.valueOf(Math.max(errors, 1))).withArg("days", String.valueOf(days));
+            String error = cert.get(CertificateModel.RENEWAL_ERROR);
+            return new StateLineCell("renewal_failing", BadgeVariant.DESTRUCTIVE,
+                Microcopy.of("state_failing").withFilter("scope", "certificate"), detail,
+                error == null || error.isBlank() ? null : error);
+        }
+        if (CertificateModel.STATUS_PENDING.equals(status)) {
+            boolean manualDns = CertificateModel.CHALLENGE_DNS.equals(cert.get(CertificateModel.CHALLENGE_TYPE))
+                && CertificateModel.DNS_PUBLISHER_MANUAL.equals(cert.get(CertificateModel.DNS_PUBLISHER));
+            return manualDns
+                ? new StateLineCell("waiting_dns", BadgeVariant.WARNING,
+                    Microcopy.of("state_waiting_dns").withFilter("scope", "certificate"),
+                    Microcopy.of("state_waiting_dns_detail").withFilter("scope", "certificate"), null)
+                : new StateLineCell("issuing", BadgeVariant.WARNING,
+                    Microcopy.of("state_issuing").withFilter("scope", "certificate"), null, null);
+        }
+        if (days != null && days < 0) {
+            return new StateLineCell("expired", BadgeVariant.DESTRUCTIVE,
+                Microcopy.of("state_expired").withFilter("scope", "certificate"), null, null);
+        }
+        Microcopy valid = days == null ? null
+            : Boolean.TRUE.equals(cert.get(CertificateModel.AUTO_RENEW))
+                && CertificateModel.PROVIDER_LETSENCRYPT.equals(cert.get(CertificateModel.PROVIDER))
+                ? Microcopy.of("state_renews_detail").withFilter("scope", "certificate")
+                    .withArg("days", String.valueOf(days))
+                : Microcopy.of("state_valid_detail").withFilter("scope", "certificate")
+                    .withArg("days", String.valueOf(days));
+        return new StateLineCell("works", BadgeVariant.SUCCESS,
+            Microcopy.of("state_works").withFilter("scope", "certificate"), valid, null);
+    }
+
     /**
      * A sortable date column reading absolute-first: the framework's own
      * datetime cell with {@code ColumnSpec.dateStyle(ABSOLUTE)} -- these
@@ -215,7 +283,9 @@ public final class CertificateParts {
                 CHALLENGE_DISPLAY.getName(), DNS_PUBLISHER_DISPLAY.getName(), RENEWAL_ERROR_DISPLAY.getName(),
                 NEXT_ATTEMPT_DISPLAY.getName()), CertificateParts::displayValues))
             .list(ResourceList.rows(ADMIN_TABLE).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()
-                .search(CertificateModel.NICE_NAME, CertificateModel.DOMAIN_NAMES_TEXT).build())
+                .search(CertificateModel.NICE_NAME, CertificateModel.DOMAIN_NAMES_TEXT)
+                .computed(Objects.requireNonNull(ADMIN_TABLE.column(STATE_COLUMN)), (row, request) -> stateCell(row))
+                .build())
             .form(ResourceForm.<Row>of(ADMIN_FORM).bindings(fieldBindings()).wideRecordPages()
                 .landingTab(RecordOverview.SLUG).build())
             .writes(ResourceMutations.rows().create(call -> create(call.values()))
@@ -239,7 +309,8 @@ public final class CertificateParts {
         TableSpec<Row> table = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(CertificateModel.NICE_NAME).subtext("domain_names_text").build())
             .column(ColumnSpec.fromField(CertificateModel.DOMAIN_NAMES_TEXT).hidden().build())
-            .column(ColumnSpec.fromField(CertificateModel.STATUS).subtext("renewal_error").build())
+            .column(stateColumn())
+            .column(ColumnSpec.fromField(CertificateModel.STATUS).hidden().build())
             .column(ColumnSpec.fromField(CertificateModel.RENEWAL_ERROR).hidden().build())
             .column(ColumnSpec.fromField(CertificateModel.EXPIRES_ON).build())
             .defaultSort(SortSpec.desc(CertificateModel.EXPIRES_ON.getName())).build();
@@ -252,6 +323,7 @@ public final class CertificateParts {
             .scope(TenantScopes.CERTIFICATES).reads(ResourceReads.rows())
             .list(ResourceList.rows(table).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()
                 .search(CertificateModel.NICE_NAME, CertificateModel.DOMAIN_NAMES_TEXT)
+                .computed(Objects.requireNonNull(table.column(STATE_COLUMN)), (row, request) -> stateCell(row))
                 .build())
             .hasInScopeRecords(access -> HohenheimAccess.isAdmin(access) || access.principalId() != null
                 || HohenheimAccess.reachesAny(access, CertificateModel.MODEL_ID, HohenheimAccess.VIEW))
@@ -367,7 +439,8 @@ public final class CertificateParts {
         return CmsSupport.resolvedTextOrDefault(Microcopy.of(key).withFilter("scope", "certificate"));
     }
 
-    private static @NonNull Object create(@NonNull Map<String, Object> submitted) {
+    /** An uploaded certificate: refused unless its certificate and key both parse; reachable from tests. */
+    static @NonNull Object create(@NonNull Map<String, Object> submitted) {
         Map<String, Object> values = CmsSupport.mutable(submitted);
         validatePems(values, null);
         Row row = Models.get(CertificateModel.class).createEmptyRow();

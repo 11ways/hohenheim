@@ -1008,10 +1008,6 @@
   },
   "certificate": [
     {
-      "text": "Certificaat",
-      "scope": "site_domains"
-    },
-    {
       "text": "Certificaat {$name}",
       "scope": "attention_title"
     },
@@ -14308,5 +14304,113 @@
   "listing": {
     "text": "Mapweergave",
     "scope": "form_section"
+  },
+  "address_column": {
+    "text": "Adres",
+    "scope": "site_domains"
+  },
+  "app_column": {
+    "text": "App",
+    "scope": "site_domains"
+  },
+  "points_here_column": {
+    "text": "Wijst hierheen",
+    "scope": "site_domains"
+  },
+  "https_column": {
+    "text": "HTTPS",
+    "scope": "site_domains"
+  },
+  "points_here_yes": {
+    "text": "Ja",
+    "scope": "site_domains"
+  },
+  "points_here_no": {
+    "text": "Nee",
+    "scope": "site_domains"
+  },
+  "points_here_unresolved": {
+    "text": "Nog niet",
+    "scope": "site_domains"
+  },
+  "points_here_unknown": {
+    "text": "Onbekend",
+    "scope": "site_domains"
+  },
+  "points_elsewhere_detail": {
+    "text": "Wijst naar {$addresses}, niet naar deze proxy",
+    "scope": "site_domains"
+  },
+  "points_unresolved_detail": {
+    "text": "De naam verwijst nog nergens naar",
+    "scope": "site_domains"
+  },
+  "points_unknown_detail": {
+    "text": "Deze host geeft geen publiek adres op om mee te vergelijken",
+    "scope": "site_domains"
+  },
+  "address_requests": {
+    "text": "Welke verzoeken",
+    "scope": "form_section"
+  },
+  "address_https": {
+    "text": "HTTPS",
+    "scope": "form_section"
+  },
+  "address_headers": {
+    "text": "Headers",
+    "scope": "form_section"
+  },
+  "address_lead": {
+    "text": "Adres van {$app} · wijst hierheen: {$reach} · HTTPS: {$https}",
+    "scope": "site_domains"
+  },
+  "address_lead_pattern": {
+    "text": "Adres van {$app} · een patroon, dus geen enkele naam om na te gaan",
+    "scope": "site_domains"
+  },
+  "state_column": {
+    "text": "Status",
+    "scope": "certificate"
+  },
+  "state_failing": {
+    "text": "Vernieuwen mislukt",
+    "scope": "certificate"
+  },
+  "state_failing_detail": {
+    "text": "{$count} keer mislukt · nog {$days} dagen geldig",
+    "scope": "certificate"
+  },
+  "state_failing_unissued": {
+    "text": "{$count} keer mislukt; nog niet uitgegeven",
+    "scope": "certificate"
+  },
+  "state_waiting_dns": {
+    "text": "Wacht op een DNS-record",
+    "scope": "certificate"
+  },
+  "state_waiting_dns_detail": {
+    "text": "Publiceer het TXT-record en controleer dan de DNS via de acties van de rij",
+    "scope": "certificate"
+  },
+  "state_issuing": {
+    "text": "Wordt uitgegeven",
+    "scope": "certificate"
+  },
+  "state_expired": {
+    "text": "Verlopen",
+    "scope": "certificate"
+  },
+  "state_works": {
+    "text": "Werkt",
+    "scope": "certificate"
+  },
+  "state_renews_detail": {
+    "text": "Nog {$days} dagen geldig, vernieuwt zichzelf",
+    "scope": "certificate"
+  },
+  "state_valid_detail": {
+    "text": "Nog {$days} dagen geldig",
+    "scope": "certificate"
   }
 }

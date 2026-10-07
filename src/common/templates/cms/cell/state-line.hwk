@@ -1,0 +1,10 @@
+{#- A word and a line: the answer as a badge, and what it means underneath (an address's "Points here", a
+    certificate's state). Blank when the column has no answer for the row. -#}
+{% declare value: StateLineCell %}
+{% if value != null %}
+<span class="hh-state-line" attr:data-state={% value.state %}>
+    <pl-badge variant={% value.variant %}>{{ value.label }}</pl-badge>
+    {% if value.detail != null %}<span class="hh-state-line-detail">{{ value.detail }}</span>{% /if %}
+    {% if value.note != null %}<span class="hh-state-line-detail">{{ value.note }}</span>{% /if %}
+</span>
+{% /if %}

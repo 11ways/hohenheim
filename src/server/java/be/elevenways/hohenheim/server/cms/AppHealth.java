@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.CertCoverage;
+import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceStatus;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
@@ -254,6 +256,34 @@ final class AppHealth {
             }
         }
         return null;
+    }
+
+    /**
+     * What HTTPS gives the visitors of one address: the one per-name answer the Addresses list, a site's Addresses tab
+     * and the app overview's Addresses card all read.
+     *
+     * AIDEV-NOTE: a name forced to HTTPS that no working certificate covers is ERROR whatever its certificate's own
+     * status says, the same rule {@link #forcedWithoutCertificate} turns into the app's broken verdict.
+     *
+     * @param passthrough whether the name belongs to a TLS passthrough site, which terminates nothing here
+     * @param working     the names a working certificate covers ({@code CertificateCoverage.activeNames()})
+     * @return the coverage, null for a pattern (no single name to judge)
+     */
+    static @Nullable CertCoverage httpsOf(@NonNull Row domain, boolean passthrough, @NonNull Set<String> working) {
+        if (passthrough) {
+            return CertCoverage.NOT_USED;
+        }
+        if (!exact(domain)) {
+            return null;
+        }
+        String hostname = domain.get(SiteDomainModel.HOSTNAME);
+        if (CertificateCoverage.covers(working, hostname)) {
+            return CertCoverage.ACTIVE;
+        }
+        Row cert = CertificateCoverage.coveringCertificate(hostname);
+        CertCoverage coverage = CertCoverage.ofCertificateStatus(cert == null ? null : cert.get(CertificateModel.STATUS));
+        return Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)) && coverage != CertCoverage.ACTIVE
+            ? CertCoverage.ERROR : coverage;
     }
 
     /** @return the first of these paths whose protection admits everyone, null when none does */

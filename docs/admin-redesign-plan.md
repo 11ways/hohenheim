@@ -615,3 +615,29 @@ Order: W6 as planned. G5 needs nothing from W1-W5 except the `put_online` operat
   Field declaration order is unchanged, so stored data and baselines' control order are too.
 - Needs building (shown on the boards, left out): "Test the connection" for an address app (no such operation), and
   the board's kind cards at the top of the Configuration tab (the site form's existing kind picker stays).
+
+## 16. W8a decisions (fork W8a, 2026-10-07)
+
+- One per-name HTTPS rule: `AppHealth.httpsOf(domain, passthrough, working)` answers what HTTPS gives one exact name
+  (forced without a working certificate is ERROR whatever the certificate's own status says). The Addresses list, a
+  site's Addresses tab and the app overview's Addresses card all read it; before, the tab read only the covering
+  certificate's status, so a forced name without one could read "pending" there and "Not working" on the overview.
+- The Addresses list (board Domains) is the domain entry's own list, so the site's Addresses tab inherits it: Address
+  (hostname, path under it), App, Points here, HTTPS (badge, covering certificate linked for who may open it, expiry).
+  The child list's private certificate column is deleted; its replacement is the list's own HTTPS column. Match type
+  and Force SSL stay in the picker and the filter strip.
+- "Points here" reads `HostnameReach.recent` (cached a minute per name), so a render resolves each name at most once a
+  minute; a pattern gets no answer. The list renders the HTTPS badge and the certificate in one cell rather than two
+  columns, because the certificate line is what the badge is about.
+- One list cell for "a word and a line" (`StateLineCell`, `cms/cell/state-line.hwk`): the address's "Points here" and
+  the certificate's state both render through it.
+- The address page (board Address-Edit): sections Which requests, HTTPS, Headers (folded), replacing the one generic
+  Advanced section; the app it serves heads the form. Its heading's lead says what it serves, whether the name points
+  here and what HTTPS gives it, the same answers as its list row. Field labels keep their current wording (copy pass).
+- Certificates (board Certificates): a State column in words replaces the raw status (failing renewal with its count
+  and days left, waiting for a DNS record, being issued, expired, works and for how long); the stored status stays in
+  the picker and the filters. The list keeps sorting by expiry: a failing renewal is the soonest to expire in practice,
+  and the table has one sort key.
+- Needs building: the "Paths on this address" card (routes sharing the hostname), per-path redirect rules (OPEN), one
+  request page merging the challenge and publisher into the board's three choices, "Read the certificate" before an
+  upload saves, and an inline Reissue on a failing row (the action is in the row's menu).
