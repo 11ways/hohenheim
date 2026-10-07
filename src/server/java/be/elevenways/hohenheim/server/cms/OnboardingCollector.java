@@ -138,17 +138,19 @@ public final class OnboardingCollector {
     }
 
     /**
-     * Done once something is online: a running app, or an enabled website (a redirect or a proxy put online needs no
+     * Done once something was put online: a running app, or any website (a redirect or a proxy put online needs no
      * workload). "Put something online" creates and starts it in one flow, so the former "create an instance" and
      * "deploy it" steps are this one step.
+     *
+     * AIDEV-NOTE: a website switched off still counts. This is a first-run checklist ("you know how to put something
+     * online"), not a health check: a switched-off app reads as off on its own row, and reopening this step told an
+     * operator who had done it to do it again. A trashed site does not count (the soft-delete scope).
      */
     private static OnboardingStep firstAppOnline() {
         boolean online = Models.get(InstanceModel.class).find()
             .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_RUNNING))
             .count() > 0
-            || Models.get(SiteModel.class).find()
-            .where(SiteModel.ENABLED.eq(true))
-            .count() > 0;
+            || Models.get(SiteModel.class).find().count() > 0;
 
         return new OnboardingStep(
             online ? OnboardingState.DONE : OnboardingState.TODO,

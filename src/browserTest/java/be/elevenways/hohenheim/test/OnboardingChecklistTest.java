@@ -77,7 +77,7 @@ class OnboardingChecklistTest {
     @Test
     void anAddressPutOnlineCompletesThePutOnlineStepWithoutAWorkload() {
         Db.run(datasource, () -> {
-            // 1. Nothing runs and no website is enabled: putting the first app online is still to do.
+            // 1. Nothing runs and no website exists: putting the first app online is still to do.
             assertThat(putOnlineStep().state())
                 .as("step 1: an empty install has nothing online").isEqualTo(OnboardingState.TODO);
 
@@ -94,6 +94,12 @@ class OnboardingChecklistTest {
             try {
                 assertThat(putOnlineStep().state())
                     .as("step 2: an enabled website completes the put-online step").isEqualTo(OnboardingState.DONE);
+
+                // 3. Switching that website off later does not reopen the first-run step.
+                site.set(SiteModel.ENABLED, false);
+                sites.save(site);
+                assertThat(putOnlineStep().state())
+                    .as("step 3: a switched-off website still counts as put online").isEqualTo(OnboardingState.DONE);
             } finally {
                 sites.delete(site);
             }

@@ -512,11 +512,11 @@
   ],
   "forward_scheme": [
     {
-      "text": "Upstream-protocol",
+      "text": "Protocol",
       "scope": "field"
     },
     {
-      "text": "Protocol waarmee de upstream wordt benaderd.",
+      "text": "http of https: hoe Hohenheim verbinding maakt met waar verzoeken heen gaan.",
       "scope": "help"
     }
   ],

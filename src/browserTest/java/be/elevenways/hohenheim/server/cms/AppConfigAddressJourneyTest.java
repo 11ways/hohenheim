@@ -63,9 +63,8 @@ class AppConfigAddressJourneyTest extends HohenheimTestBase {
 
         List<Runnable> cleanup = new ArrayList<>();
         try {
-            // The settings a site created through the form stores: every key, defaults included.
-            // AIDEV-NOTE: a row whose settings LACK websocket_upgrade did not keep the toggle off on save (W7b,
-            // 2026-10-07): that absent-key case is a separate open finding, not what this journey pins.
+            // The settings a site created through the form stores: every key, defaults included (step 4 covers a
+            // row that lacks one).
             Map<String, Object> settings = new LinkedHashMap<>();
             settings.put("forward_scheme", "http");
             settings.put("forward_host", "10.0.0.12");
@@ -103,6 +102,32 @@ class AppConfigAddressJourneyTest extends HohenheimTestBase {
                 .getAttribute("aria-checked")).as("step 3: WebSockets is off after the save").isEqualTo("false");
             assertThat(page.locator("pl-input[name='settings.forward_host'] input").inputValue())
                 .as("step 3: the target is kept").isEqualTo("10.0.0.12");
+
+            // 4. A row whose stored settings LACK the switch (written before the field existed, or by another
+            //    writer) shows its declared default on, and turning it off stores an explicit false.
+            Map<String, Object> sparse = new LinkedHashMap<>();
+            sparse.put("forward_scheme", "http");
+            sparse.put("forward_host", "10.0.0.13");
+            sparse.put("forward_port", 3001);
+            Row older = row(cleanup, sparse, "w7b-config-sparse");
+            navigateToApp("/admin/sites/" + older.get(SiteModel.ID));
+            waitForHydration();
+            String toggle = "pl-switch[name='settings.websocket_upgrade'] button[role='switch']";
+            assertThat(page.locator(toggle).getAttribute("aria-checked"))
+                .as("step 4: an absent switch shows its declared default").isEqualTo("true");
+            page.locator(toggle).click();
+            var request = page.waitForRequest(r -> "POST".equals(r.method()),
+                () -> page.click(".cms-form-actions pl-button[type='submit']"));
+            page.waitForSelector("text=have been saved");
+            Row stored = Models.get(SiteModel.class).findById(older.get(SiteModel.ID));
+            assertThat(((Map<?, ?>) stored.get(SiteModel.SETTINGS)).get("websocket_upgrade"))
+                .as("step 4: turning an absent switch off stores false (posted: %s; stored: %s)",
+                    request.postData(), stored.get(SiteModel.SETTINGS))
+                .isEqualTo(false);
+            navigateToApp("/admin/sites/" + older.get(SiteModel.ID));
+            waitForHydration();
+            assertThat(page.locator(toggle).getAttribute("aria-checked"))
+                .as("step 4: and the reloaded tab shows it off").isEqualTo("false");
         } finally {
             cleanup.forEach(Runnable::run);
         }
@@ -132,10 +157,14 @@ class AppConfigAddressJourneyTest extends HohenheimTestBase {
     }
 
     private static Row row(List<Runnable> cleanup, Map<String, Object> settings) {
+        return row(cleanup, settings, "w7b-config-proxy");
+    }
+
+    private static Row row(List<Runnable> cleanup, Map<String, Object> settings, String slug) {
         SiteModel sites = Models.get(SiteModel.class);
         Row row = sites.createEmptyRow();
-        row.set(SiteModel.NAME, "w7b-config-proxy");
-        row.set(SiteModel.SLUG, "w7b-config-proxy");
+        row.set(SiteModel.NAME, slug);
+        row.set(SiteModel.SLUG, slug);
         row.set(SiteModel.UPSTREAM_KIND, AddressUpstreamKind.ID.toString());
         row.set(SiteModel.SETTINGS, new LinkedHashMap<>(settings));
         row.set(SiteModel.ENABLED, true);
