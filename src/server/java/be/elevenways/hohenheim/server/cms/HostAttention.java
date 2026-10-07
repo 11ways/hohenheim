@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
@@ -56,7 +57,8 @@ public final class HostAttention {
         return item(AttentionSeverity.ERROR, "cubes",
             copy("docker_unreachable", "attention_title"),
             literal(health.problem()),
-            CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG));
+            CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG),
+            action("act_open_settings"));
     }
 
     /**
@@ -77,7 +79,8 @@ public final class HostAttention {
                 copy("host_not_admitted", "attention_title",
                     "name", server.get(ServerModel.NAME)),
                 copy("host_not_admitted", "attention_detail"),
-                CmsRoutes.detail(ADMIN, "servers", server.get(ServerModel.ID))));
+                CmsRoutes.detail(ADMIN, "servers", server.get(ServerModel.ID)),
+                action("act_check_admit")));
         }
     }
 
@@ -110,8 +113,7 @@ public final class HostAttention {
             copy("ports_releasing", "attention_detail",
                 "count", ports.size(),
                 "hours", RELEASING_STUCK_AFTER.toHours(),
-                "ports", String.join(", ", ports)),
-            null)));
+                "ports", String.join(", ", ports)))));
     }
 
     // A releasing claim can outlive its servers row (host removal parks claims and

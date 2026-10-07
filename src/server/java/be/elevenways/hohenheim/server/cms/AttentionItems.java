@@ -18,10 +18,30 @@ final class AttentionItems {
     private AttentionItems() {
     }
 
+    /** An item the operator can only read: nothing to open from it. */
+    static @NonNull AttentionItem item(@NonNull AttentionSeverity severity, @NonNull String icon,
+                                       @NonNull Microcopy title, @Nullable Microcopy detail) {
+        return new AttentionItem(severity, icon, title, detail, null, null);
+    }
+
+    /**
+     * An item that leads somewhere, saying what going there does.
+     *
+     * @param action the worded fix ("Check and admit"), from {@link #action}
+     */
     static @NonNull AttentionItem item(@NonNull AttentionSeverity severity, @NonNull String icon,
                                        @NonNull Microcopy title, @Nullable Microcopy detail,
-                                       @Nullable RouteTarget target) {
-        return new AttentionItem(severity, icon, title, detail, target);
+                                       @NonNull RouteTarget target, @NonNull Microcopy action) {
+        return new AttentionItem(severity, icon, title, detail, target, action);
+    }
+
+    /**
+     * An item's worded fix, a catalog key under the {@code attention_action} scope.
+     *
+     * @param args name/value pairs, in that order
+     */
+    static @NonNull Microcopy action(@NonNull String key, Object... args) {
+        return copy(key, "attention_action", args);
     }
 
     /** A verbatim detail (an error message, a reason); blank folds to no detail at all. */

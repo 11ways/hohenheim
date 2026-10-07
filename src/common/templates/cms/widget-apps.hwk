@@ -1,5 +1,6 @@
-{#- The dashboard's Apps band (board Main): every app by name, what it is and where, and whether HTTPS works for it,
-    read from the one App directory the Apps list reads. -#}
+{#- The dashboard's Apps band (board Main): every app with its health glyph, by name, what it is and where, and whether
+    HTTPS works for it, read from the one App directory the Apps list reads. The glyph is the same verdict (and the same
+    HealthCellState) the Apps list's health cell draws. -#}
 {% declare widget: WidgetInstance %}
 {% declare data: List<AppSummary> = null %}
 {% if data != null and data %}
@@ -8,6 +9,8 @@
     <pl-list variant="card" data-hh-dashboard-apps>
         {% each data as app %}
         <pl-list-item data-hh-dashboard-app={% app.name %}>
+            <pl-state-glyph slot="leading" icon={% app.health.icon %} variant={% app.health.variant %}
+                            label={% app.health.label %} data-cms-health={% app.health.tone %}></pl-state-glyph>
             <pl-list-item-title><a href={% app.url %} data-row-link>{{ app.name }}</a></pl-list-item-title>
             {% if app.detail != "" %}<pl-list-item-meta>{{ app.detail }}</pl-list-item-meta>{% /if %}
             <pl-list-item-trailing>{% render "hohenheim:cms/cell/site-tls" var:value=app.https %}</pl-list-item-trailing>

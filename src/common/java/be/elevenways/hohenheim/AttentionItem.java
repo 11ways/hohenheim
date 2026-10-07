@@ -8,6 +8,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** One typed operational issue rendered by the dashboard attention widget.
  *
+ * @param action what following {@code target} does, in words ("Check and admit"); null exactly when target is
  * @author Jelle De Loecker
  * @since 0.2.0
  */
@@ -17,6 +18,7 @@ public record AttentionItem(
         String icon,
         Microcopy title,
         @Nullable Microcopy detail,
-        @Nullable RouteTarget target
+        @Nullable RouteTarget target,
+        @Nullable Microcopy action
 ) {
 }

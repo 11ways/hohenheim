@@ -5,6 +5,7 @@
 {% declare lead: Microcopy %}
 {% declare document: PageFormState = null %}
 {% declare what: String = "" %}
+{% declare whatIcon: String = "" %}
 {% declare whatDescription: String = "" %}
 {% declare versions: List = null %}
 {% declare groups: List = null %}
@@ -18,6 +19,7 @@
 {% if document != null %}
 <pl-list variant="card" data-hh-put-online-what>
     <pl-list-item>
+        {% if whatIcon != "" %}<pl-icon slot="leading" name={% whatIcon %} data-hh-put-online-what-icon></pl-icon>{% /if %}
         <pl-list-item-title>{{ what }}</pl-list-item-title>
         {% if whatDescription != "" %}<pl-list-item-meta>{{ whatDescription }}</pl-list-item-meta>{% /if %}
         {% if versions != null && versions.size() > 0 %}

@@ -3,8 +3,10 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.tls.HostnameReach;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -17,6 +19,8 @@ import be.elevenways.zenit.common.edit.FormStep;
 import be.elevenways.zenit.common.edit.Nested;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.edit.StepAnswers;
+import be.elevenways.zenit.common.edit.SummaryLine;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.operation.OperationFact;
@@ -26,10 +30,12 @@ import be.elevenways.zenit.common.operation.OperationSteps;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -97,7 +103,8 @@ public final class PutOnline {
             InstanceTemplateOperations.ENVIRONMENT_ID.getName()).describe(copy("step_where_lead")))
         .step(new FormStep(InstanceTemplateOperations.VARIABLES, copy("step_options"), copy("step_options_lead"),
             List.of(InstanceTemplateOperations.VARIABLES)))
-        .step(FormStep.of("https", copy("step_https"), HTTPS.getName()).describe(copy("step_https_lead")))
+        .step(FormStep.of("https", copy("step_https"), HTTPS.getName()).describe(copy("step_https_lead"))
+            .summarizedBy(PutOnline::templateSummary))
         .build();
 
     private static final FormSpec ADDRESS_INPUT = FormSpec.builder()
@@ -113,7 +120,8 @@ public final class PutOnline {
         .add(httpsChoice())
         .step(FormStep.of("where", copy("step_where"), SiteModel.NAME.getName(), ADDRESS_HOSTNAME.getName(),
             SiteModel.UPSTREAM_KIND.getName(), SiteModel.SETTINGS.getName()).describe(copy("step_where_lead")))
-        .step(FormStep.of("https", copy("step_https"), HTTPS.getName()).describe(copy("step_https_lead")))
+        .step(FormStep.of("https", copy("step_https"), HTTPS.getName()).describe(copy("step_https_lead"))
+            .summarizedBy(PutOnline::addressSummary))
         .build();
 
     /** The template's own create (named as its form names it), its address and its HTTPS choice. */
@@ -182,6 +190,71 @@ public final class PutOnline {
         Identifier id = kind == null ? null : Identifier.tryParse(kind);
         UpstreamKindInfo info = id == null ? null : UpstreamKinds.REGISTRY.get(id);
         return info != null && info.offeredAsApp();
+    }
+
+    /** What a template's HTTPS step shows of Where and Options (board Online-3's summary). */
+    private static @NonNull List<SummaryLine> templateSummary(@NonNull StepAnswers answers) {
+        List<SummaryLine> lines = new ArrayList<>();
+        String name = answers.text(InstanceTemplateOperations.NAME.getName());
+        if (name != null) {
+            lines.add(new SummaryLine(copy("summary_name"), Microcopy.literal(name)));
+        }
+        String hostname = answers.text(HOSTNAME.getName());
+        lines.add(addressLine(hostname));
+        Integer serverId = answers.get(InstanceTemplateOperations.SERVER_ID.getName(), Integer.class);
+        lines.add(new SummaryLine(copy("summary_runs_on"),
+            serverId == null ? copy("summary_runs_on_auto") : Microcopy.literal(serverName(serverId))));
+        if (hostname != null) {
+            lines.add(reachLine(hostname));
+        }
+        return lines;
+    }
+
+    /** What an address's HTTPS step shows of Where: what it serves, its name and address, and where that points. */
+    private static @NonNull List<SummaryLine> addressSummary(@NonNull StepAnswers answers) {
+        List<SummaryLine> lines = new ArrayList<>();
+        String kind = answers.text(SiteModel.UPSTREAM_KIND.getName());
+        Identifier kindId = kind == null ? null : Identifier.tryParse(kind);
+        UpstreamKindInfo info = kindId == null ? null : UpstreamKinds.REGISTRY.get(kindId);
+        if (info != null) {
+            lines.add(new SummaryLine(copy("summary_serves"), info.getLabel()));
+        }
+        String name = answers.text(SiteModel.NAME.getName());
+        if (name != null) {
+            lines.add(new SummaryLine(copy("summary_name"), Microcopy.literal(name)));
+        }
+        String hostname = answers.text(ADDRESS_HOSTNAME.getName());
+        lines.add(addressLine(hostname));
+        if (hostname != null) {
+            lines.add(reachLine(hostname));
+        }
+        return lines;
+    }
+
+    private static @NonNull SummaryLine addressLine(@Nullable String hostname) {
+        return new SummaryLine(copy("summary_address"),
+            hostname == null ? copy("summary_address_none") : Microcopy.literal(hostname));
+    }
+
+    /**
+     * Whether the address points here yet: a notice, never a refusal. The certificate is ordered after the website
+     * exists and fails on its own when the name points elsewhere; this only says so before the operator commits.
+     */
+    private static @NonNull SummaryLine reachLine(@NonNull String hostname) {
+        HostnameReach.Reach reach = HostnameReach.recent(hostname);
+        Microcopy verdict = switch (reach.verdict()) {
+            case POINTS_HERE -> copy("reach_here");
+            case POINTS_ELSEWHERE -> copy("reach_elsewhere");
+            case UNRESOLVED -> copy("reach_unresolved");
+            case UNKNOWN -> copy("reach_unknown");
+        };
+        return new SummaryLine(copy("reach_label"), verdict.withArg("hostname", hostname)
+            .withArg("addresses", String.join(", ", reach.addresses())));
+    }
+
+    private static @NonNull String serverName(int serverId) {
+        Row server = Models.get(ServerModel.class).findById(serverId);
+        return server == null ? "#" + serverId : String.valueOf((Object) server.get(ServerModel.NAME));
     }
 
     private static @NonNull Select<String> httpsChoice() {

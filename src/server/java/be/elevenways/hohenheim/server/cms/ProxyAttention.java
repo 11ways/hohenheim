@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
@@ -57,13 +58,15 @@ public final class ProxyAttention {
             items.add(item(AttentionSeverity.ERROR, "sitemap",
                 copy("proxy_http_listener", "attention_title"),
                 literal(proxy.getHttpFailureReason()),
-                CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG)));
+                CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG),
+                action("act_open_settings")));
         }
         if (proxy.getHttpsState() == ProxyServer.State.FAILED) {
             items.add(item(AttentionSeverity.ERROR, "certificate",
                 copy("proxy_https_listener", "attention_title"),
                 literal(proxy.getHttpsFailureReason()),
-                CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES)));
+                CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES),
+                action("act_open_certificates")));
         } else if (proxy.getHttpsState() == ProxyServer.State.RUNNING
                 && proxy.getHttpsFailureReason() != null) {
             // Partial mode: passthrough listens but termination failed, so the listener
@@ -71,7 +74,8 @@ public final class ProxyAttention {
             items.add(item(AttentionSeverity.ERROR, "certificate",
                 copy("proxy_https_degraded", "attention_title"),
                 literal(proxy.getHttpsFailureReason()),
-                CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES)));
+                CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES),
+                action("act_open_certificates")));
         }
     }
 
@@ -95,7 +99,8 @@ public final class ProxyAttention {
         items.add(item(AttentionSeverity.ERROR, "certificate",
             copy("https_unavailable", "attention_title"),
             copy("https_unavailable", "attention_detail", "sites", String.join(", ", sites)),
-            CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES)));
+            CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES),
+            action("act_open_certificates")));
     }
 
     /**
@@ -128,7 +133,8 @@ public final class ProxyAttention {
             items.add(item(AttentionSeverity.ERROR, "lock",
                 copy("forced_without_certificate", "attention_title", "hostname", hostname),
                 copy("forced_without_certificate", "attention_detail"),
-                SiteParts.recordRoute(ADMIN, site.get(SiteModel.ID))));
+                SiteParts.recordRoute(ADMIN, site.get(SiteModel.ID)),
+                action("act_fix_on", "name", site.get(SiteModel.NAME))));
         }
     }
 
@@ -147,7 +153,8 @@ public final class ProxyAttention {
                 copy("open_protected_path", "attention_title", "path", path.get(ProtectedPathModel.PATH),
                     "site", site.get(SiteModel.NAME)),
                 copy("open_protected_path", "attention_detail"),
-                CmsRoutes.detail(ADMIN, ProtectedPathParts.SLUG, path.get(ProtectedPathModel.ID))));
+                CmsRoutes.detail(ADMIN, ProtectedPathParts.SLUG, path.get(ProtectedPathModel.ID)),
+                action("act_protect_path", "path", path.get(ProtectedPathModel.PATH))));
         }
     }
 
@@ -160,7 +167,8 @@ public final class ProxyAttention {
             items.add(item(AttentionSeverity.ERROR, "certificate",
                 copy("certificate", "attention_title", "name", row.get(CertificateModel.NICE_NAME)),
                 literal(row.get(CertificateModel.RENEWAL_ERROR)),
-                CmsRoutes.detail(ADMIN, HohenheimSlugs.CERTIFICATES, row.get(CertificateModel.ID))));
+                CmsRoutes.detail(ADMIN, HohenheimSlugs.CERTIFICATES, row.get(CertificateModel.ID)),
+                action("act_open_certificate")));
         }
     }
 
@@ -184,7 +192,8 @@ public final class ProxyAttention {
                     "globe",
                     copy("site", "attention_title", "name", site.get(SiteModel.NAME)),
                     copy(health == SiteHealth.DOWN ? "down" : "degraded", "attention_detail"),
-                    SiteParts.recordRoute(ADMIN, siteId)));
+                    SiteParts.recordRoute(ADMIN, siteId),
+                    action("act_fix_on", "name", site.get(SiteModel.NAME))));
             }
         }
     }
@@ -219,7 +228,8 @@ public final class ProxyAttention {
                 copy(unrouted ? "site_unrouted" : "site_refusing", "attention_title",
                     "name", problem.siteName()),
                 reasonOf(problem),
-                SiteParts.recordRoute(ADMIN, problem.siteId())));
+                SiteParts.recordRoute(ADMIN, problem.siteId()),
+                action("act_fix_on", "name", problem.siteName())));
         }
     }
 

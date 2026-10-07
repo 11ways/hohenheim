@@ -22,6 +22,7 @@ import org.xbill.DNS.Type;
 
 import java.util.List;
 
+import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
@@ -50,7 +51,8 @@ public final class DnsAttention {
             items.add(item(AttentionSeverity.ERROR, "sitemap",
                 copy("dns_listener", "attention_title"),
                 literal(reason),
-                CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG)));
+                CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG),
+                action("act_open_settings")));
         }
         for (DnsZoneSnapshot zone : DnsZoneStore.INSTANCE.zones()) {
             if (zone.getRrset(zone.getOrigin(), Type.NS) == null) {
@@ -58,7 +60,8 @@ public final class DnsAttention {
                     copy("dns_zone_no_ns", "attention_title", "origin", zone.getOriginString()),
                     copy("dns_zone_no_ns", "attention_detail"),
                     CmsRoutes.subpage(ADMIN, DnsZoneParts.SLUG, zone.getZoneId(),
-                        DnsZoneRecordsPage.SLUG)));
+                        DnsZoneRecordsPage.SLUG),
+                    action("act_add_ns")));
             }
         }
         staleDnsSecondaries(items);
@@ -95,7 +98,8 @@ public final class DnsAttention {
                     "peer", peer != null ? String.valueOf(peer.get(DnsPeerModel.NAME)) : "#" + peerId,
                     "origin", String.valueOf(zone.get(DnsZoneModel.ORIGIN))),
                 detail,
-                CmsRoutes.subpage(ADMIN, DnsZoneParts.SLUG, zoneId, "secondaries")));
+                CmsRoutes.subpage(ADMIN, DnsZoneParts.SLUG, zoneId, "secondaries"),
+                action("act_open_secondaries")));
         }
     }
 
@@ -113,7 +117,8 @@ public final class DnsAttention {
                 copy("dns_delegation_broken", "attention_title",
                     "origin", String.valueOf(zone.get(DnsZoneModel.ORIGIN))),
                 verdict.label(),
-                CmsRoutes.detail(ADMIN, DnsZoneParts.SLUG, zone.get(DnsZoneModel.ID))));
+                CmsRoutes.detail(ADMIN, DnsZoneParts.SLUG, zone.get(DnsZoneModel.ID)),
+                action("act_open_zone")));
         }
     }
 }

@@ -275,6 +275,13 @@
         overflow-wrap: anywhere;
     }
 
+    .hh-attention-action {
+        flex: none;
+        color: var(--pl-color-primary-strong);
+        font-weight: var(--pl-font-weight-medium);
+        white-space: nowrap;
+    }
+
     .hh-attention-chevron {
         display: inline-flex;
         align-items: center;

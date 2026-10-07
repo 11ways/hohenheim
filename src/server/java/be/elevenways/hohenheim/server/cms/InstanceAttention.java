@@ -19,6 +19,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
+import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
@@ -67,7 +68,8 @@ public final class InstanceAttention {
                 copy("instance_crashed", "attention_title",
                     "name", instance.get(InstanceModel.NAME)),
                 copy("instance_crashed", "attention_detail"),
-                InstanceParts.recordRoute(ADMIN, instance, InstanceConsolePage.SLUG)));
+                InstanceParts.recordRoute(ADMIN, instance, InstanceConsolePage.SLUG),
+                action("act_open_console")));
         }
     }
 
@@ -96,7 +98,8 @@ public final class InstanceAttention {
                 copy("instance_backup", "attention_title",
                     "name", instance.get(InstanceModel.NAME)),
                 literal(latest.get(InstanceBackupModel.ERROR)),
-                InstanceParts.recordRoute(ADMIN, instance, InstanceParts.BACKUPS_TAB)));
+                InstanceParts.recordRoute(ADMIN, instance, InstanceParts.BACKUPS_TAB),
+                action("act_open_backups")));
         }
     }
 
@@ -135,7 +138,8 @@ public final class InstanceAttention {
                     copy("instance_backup_never", "attention_title",
                         "name", instance.get(InstanceModel.NAME)),
                     copy("instance_backup_never", "attention_detail"),
-                    InstanceParts.recordRoute(ADMIN, instance, InstanceParts.BACKUPS_TAB)));
+                    InstanceParts.recordRoute(ADMIN, instance, InstanceParts.BACKUPS_TAB),
+                    action("act_open_backups")));
                 continue;
             }
             Instant completedAt = newestComplete.get(InstanceBackupModel.CREATED_AT);
@@ -146,7 +150,8 @@ public final class InstanceAttention {
                     copy("instance_backup_stale", "attention_title",
                         "name", instance.get(InstanceModel.NAME)),
                     copy("instance_backup_stale", "attention_detail", "days", age),
-                    InstanceParts.recordRoute(ADMIN, instance, InstanceParts.BACKUPS_TAB)));
+                    InstanceParts.recordRoute(ADMIN, instance, InstanceParts.BACKUPS_TAB),
+                    action("act_open_backups")));
             }
         }
     }
@@ -180,7 +185,8 @@ public final class InstanceAttention {
                 copy("instance_disk", "attention_detail",
                     "percent", Math.round(fraction * 100),
                     "limit", Math.round(limit / (1024.0 * 1024 * 1024))),
-                InstanceParts.recordRoute(ADMIN, instance, null)));
+                InstanceParts.recordRoute(ADMIN, instance, null),
+                action("act_open_app", "name", instance.get(InstanceModel.NAME))));
         }
     }
 
@@ -218,7 +224,8 @@ public final class InstanceAttention {
                         "name", application.get(InstanceModel.NAME)),
                     literal(operation.get(ReleaseOperationModel.FAILURE_REASON)),
                     CmsRoutes.subpage(ADMIN, InstanceParts.SLUG, applicationId,
-                        InstanceDeploymentsPage.SLUG)));
+                        InstanceDeploymentsPage.SLUG),
+                    action("act_see_deploy")));
             }
         }
     }

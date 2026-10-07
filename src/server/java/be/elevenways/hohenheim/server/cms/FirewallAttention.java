@@ -12,6 +12,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
+import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
@@ -54,7 +55,8 @@ public final class FirewallAttention {
             : copy("spamservice_not_ready", "attention_detail", "state", snapshot.state());
         return item(AttentionSeverity.WARNING, "shield",
             copy("not_ready", "spamservice"), detail,
-            CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG));
+            CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG),
+            action("act_open_settings"));
     }
 
     /**
@@ -77,6 +79,7 @@ public final class FirewallAttention {
             : copy("ssh_watch", "attention_detail");
         return item(AttentionSeverity.WARNING, "shield",
             copy("ssh_watch", "attention_title"), detail,
-            CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG));
+            CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG),
+            action("act_open_settings"));
     }
 }

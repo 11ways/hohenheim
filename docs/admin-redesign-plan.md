@@ -507,3 +507,16 @@ Order: W6 as planned. G5 needs nothing from W1-W5 except the `put_online` operat
   and the empty-install card leads to the flow instead of the site form.
 - Not built here: the automatic subdomain (Online-2), the live "points here" notice on the Where step (the reach is
   checked by the certificate order itself), the dashboard's Apps mini-list.
+
+## 11. W5c2 decisions (fork W5c2, 2026-10-07)
+
+- The "points here" notice sits in the HTTPS step's summary, not under the address on Where: a step summary is resolved
+  on the server once Where validated (W5c1's `summarizedBy`), so the notice needs no live per-keystroke check. It reads
+  `HostnameReach.recent`, the one-minute cache at its home; the certificate pre-check keeps calling `HostnameReach.of`.
+- The chosen kind rides the address wizard as transport (zenit-cms now carries a single-field select as transport and
+  joins transport to every wizard step prefix), so the kind is never asked twice and the settings sub-form it
+  discriminates still validates on Where.
+- An attention item that leads somewhere names its fix (`AttentionItem.action`); the helper without an action has no
+  target, so the compiler finds every targeted item that lacks words.
+- The template summary names no template: the operation's input form is shared by every template, and the chosen
+  template already heads the page in its card.

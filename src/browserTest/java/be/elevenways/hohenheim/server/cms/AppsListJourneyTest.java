@@ -167,6 +167,11 @@ class AppsListJourneyTest extends HohenheimTestBase {
             }
             assertThat(list).as("step 6: the broken static site carries the broken glyph")
                 .contains("data-cms-health=\"broken\"");
+            String dashboard = adminGet("/admin/dashboard").body();
+            int row = dashboard.indexOf("data-hh-dashboard-app=\"" + PREFIX + "static\"");
+            assertThat(row).as("step 6: the dashboard's Apps band lists the broken static site").isNotNegative();
+            assertThat(dashboard.substring(row, dashboard.indexOf("</pl-list-item>", row)))
+                .as("step 6: with the same verdict's glyph as the list").contains("data-cms-health=\"broken\"");
             assertThat(list).as("step 6: a stack member is not listed")
                 .doesNotContain(PREFIX + "stack-web")
                 .doesNotContain(PREFIX + "database")

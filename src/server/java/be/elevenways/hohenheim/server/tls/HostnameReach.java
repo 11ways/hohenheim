@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.tls;
 
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.protoblast.common.cache.Cache;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.net.OutboundNetwork;
@@ -11,6 +12,7 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -46,7 +48,23 @@ public final class HostnameReach {
     public record Reach(@NonNull Verdict verdict, @NonNull List<String> addresses) {
     }
 
+    /** How long a looked-up answer is reused: long enough for a form's next step, short enough to see a DNS fix. */
+    private static final long RECENT_MS = 60_000;
+
+    /** The answers of the last minute, by lower-cased name (protoblast's Cache reads its clock from {@code Now}). */
+    private static final Cache<String, Reach> RECENT = new Cache<>(512, RECENT_MS);
+
     private HostnameReach() {
+    }
+
+    /**
+     * Where {@code hostname} points, reusing an answer from the last minute.
+     *
+     * AIDEV-NOTE: for what an operator READS (a wizard summary, a list cell), where a lookup per render would resolve
+     * DNS on every page. A decision that acts on the answer (the certificate order's pre-check) calls {@link #of}.
+     */
+    public static @NonNull Reach recent(@NonNull String hostname) {
+        return RECENT.getOrCompute(hostname.trim().toLowerCase(Locale.ROOT), HostnameReach::of);
     }
 
     /** @return where {@code hostname} points, judged against the controller host's declared public addresses */
