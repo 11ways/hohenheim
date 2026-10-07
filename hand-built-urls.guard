@@ -1,3 +1,0 @@
-Presence of this file opts the project into the protoblast plugin's checkHandBuiltUrls
-and checkHandBuiltUrlTemplates compile gates (URLs must be rendered from the Endpoint
-that declares them, never typed by hand; see CheckHandBuiltUrlsTask).

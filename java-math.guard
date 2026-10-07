@@ -1,4 +1,0 @@
-# Presence enables checkJavaMath over shared/browser Java sources.
-# Exact arithmetic belongs in protoblast Decimal. No per-line exemptions.
-# An exempt file requires: exempt: project/relative/File.java | unreachable/JVM-only reason
-# Source exemptions never permit reachable java.math in a TeaVM bundle.
