@@ -6,6 +6,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.protoblast.common.typed.rule.Condition;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -63,16 +64,17 @@ public final class AdminActivityResource {
      *
      * AIDEV-NOTE: the column list is COPIED from {@link ActivityAdmin#table()} rather than derived, because
      * {@code TableSpec} has no {@code toBuilder()}; the browser test asserts the two still describe the same columns.
+     * Like the framework's, it shows the time and the sentence and offers the rest in the column picker.
      */
     private static final TableSpec<Row> TABLE = TableSpec.<Row>builder()
         .column(ColumnSpec.fromField(ActivityModel.CREATED_AT).build())
         .column(ActivityAdmin.summaryColumn())
-        .column(ColumnSpec.fromField(ActivityModel.ACTOR).sortable().build())
-        .column(ColumnSpec.fromField(ActivityModel.ACTION).filterable().build())
-        .column(ColumnSpec.fromField(ActivityModel.MODEL).filterable().build())
+        .column(ColumnSpec.fromField(ActivityModel.ACTOR).sortable().hidden().build())
+        .column(ColumnSpec.fromField(ActivityModel.ACTION).filterable().hidden().build())
+        .column(ColumnSpec.fromField(ActivityModel.MODEL).filterable().hidden().build())
         .column(ColumnSpec.fromField(ActivityModel.RECORD_ID)
-            .renderer(RECORD_RENDERER).filterable().build())
-        .column(ColumnSpec.fromField(ActivityModel.ORIGIN).filterable().build())
+            .renderer(RECORD_RENDERER).filterable().hidden().build())
+        .column(ColumnSpec.fromField(ActivityModel.ORIGIN).filterable().hidden().build())
         .filter(FilterSpec.leaf(ActivityModel.MODEL, CoreTypes.CONTAINS).build())
         .filter(FilterSpec.leaf(ActivityModel.RECORD_ID, CoreTypes.CONTAINS).build())
         .filter(FilterSpec.leaf(ActivityModel.ACTION, CoreTypes.CONTAINS).build())
@@ -136,11 +138,25 @@ public final class AdminActivityResource {
     }
 
     /**
-     * The model token reads as its bare name and the record id becomes a link to the record it names; every other
-     * column keeps the framework's cell (its actor and verb names).
+     * The recent-activity feed of the dashboard: what a person did ({@link #peopleOnly()}), one row per action, the
+     * reading the activity list opens on.
+     *
+     * @return the rule tree the dashboard's recent activity reads
+     */
+    public static @NonNull Condition recentActions() {
+        return Condition.all(peopleOnly(), ActivitySources.onePerCommand());
+    }
+
+    /**
+     * The sentence links to the record it names inside /admin, the model token reads as its bare name and the record id
+     * becomes a link to the record it names; every other column keeps the framework's cell (its actor and verb names).
      */
     private static @Nullable Object cell(@NonNull Row row, @NonNull ColumnSpec column) {
         String name = column.name();
+        if (column.source() == null && ActivityAdmin.SUMMARY_COLUMN.equals(name)) {
+            return ActivityAdmin.sentenceCell(row,
+                AdminRecordLinks.detailForToken(row.get(ActivityModel.MODEL), row.get(ActivityModel.RECORD_ID)));
+        }
         if (ActivityModel.MODEL.getName().equals(name)) {
             String humanized = ActivityText.humanizeModelToken(row.get(ActivityModel.MODEL));
             return humanized.isEmpty() ? null : humanized;

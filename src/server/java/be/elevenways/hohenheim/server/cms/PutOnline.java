@@ -145,6 +145,7 @@ public final class PutOnline {
     public static final Operation<Row, FromTemplate, Integer> PUT_ONLINE =
         Operation.declare(HohenheimIds.id("put_online"))
             .label(copy("put_online"))
+            .happened(Microcopy.of("happened").withFilter("scope", "put_online"))
             .icon(Icon.of("rocket"))
             .one(InstanceTemplateOperations.TEMPLATE)
             .gate(OperationGate.open())
@@ -165,6 +166,7 @@ public final class PutOnline {
     public static final Operation<Void, Address, Integer> PUT_ADDRESS_ONLINE =
         Operation.declare(HohenheimIds.id("put_address_online"))
             .label(copy("put_online"))
+            .happened(Microcopy.of("happened").withFilter("scope", "put_online"))
             .icon(Icon.of("rocket"))
             .noSubject()
             .gate(OperationGate.open())

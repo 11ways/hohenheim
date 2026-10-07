@@ -116,6 +116,7 @@ public final class ProtectPath {
     public static final Operation<Row, Input, Integer> OPERATION = Operation.declare(HohenheimIds.id("protect_path"))
         .label(copy("action"))
         .description(copy("description"))
+        .happened(Microcopy.of("happened").withFilter("scope", "protect_path"))
         .icon(Icon.of("lock"))
         .one(SiteOperations.SITE)
         .gate(OperationGate.open())

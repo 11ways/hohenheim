@@ -13991,5 +13991,15 @@
   "section_proxy": {
     "text": "Proxy",
     "scope": "settings_section"
-  }
+  },
+  "happened": [
+    {
+      "text": "{$actor} put {$subject} online",
+      "scope": "put_online"
+    },
+    {
+      "text": "{$actor} protected {$subject}",
+      "scope": "protect_path"
+    }
+  ]
 }

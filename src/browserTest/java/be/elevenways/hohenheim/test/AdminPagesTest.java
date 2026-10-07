@@ -351,12 +351,10 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(firstEntry.locator("pl-relative-time.widget-record-time").innerText().trim())
             .isNotEmpty();
 
-        // The title is the LOCALIZED verb plus the captured record title
-        // ("Created · <name>"), never the raw token; the model token is
-        // humanized in the subtitle.
+        // The title is the row's sentence: who did what to the captured record title ("<actor> created <name>"),
+        // the verb in its own past tense, never the raw token; the model token is humanized in the subtitle.
         String titles = page.locator(".widget-record-title").allInnerTexts().toString();
-        assertThat(titles).contains("Created");
-        assertThat(titles).contains("·");
+        assertThat(titles).contains("created Audit Test Site");
         assertThat(titles).doesNotContain("hohenheim:site");
         String subtitles = page.locator(".widget-record-subtitle").allInnerTexts().toString();
         assertThat(subtitles).doesNotContain("hohenheim:site");
