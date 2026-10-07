@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
+import be.elevenways.hohenheim.server.tls.HostnameReach;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -51,15 +52,16 @@ class DomainsListJourneyTest extends HohenheimTestBase {
 
             // 1. Points here: a name resolving to this host's declared address says yes; one resolving elsewhere says
             //    no and names where it points; a pattern has no single name and no answer.
-            StateLineCell yes = DomainParts.reachCell(hereRow);
+            StateLineCell yes = DomainParts.reachCell(hereRow, HostnameReach.LOOKUP_WAIT_MS);
             assertThat(yes).as("step 1: an exact name gets an answer").isNotNull();
             assertThat(yes.state()).as("step 1: the name points here").isEqualTo("points_here");
-            StateLineCell no = DomainParts.reachCell(awayRow);
+            StateLineCell no = DomainParts.reachCell(awayRow, HostnameReach.LOOKUP_WAIT_MS);
             assertThat(no.state()).as("step 1: the other name points elsewhere").isEqualTo("points_elsewhere");
             assertThat(String.valueOf(no.detail().args().get("addresses")))
                 .as("step 1: naming the address it points to")
                 .isEqualTo(pointsAway.publicAddress().getHostAddress());
-            assertThat(DomainParts.reachCell(pattern)).as("step 1: a pattern has no answer").isNull();
+            assertThat(DomainParts.reachCell(pattern, HostnameReach.LOOKUP_WAIT_MS))
+                .as("step 1: a pattern has no answer").isNull();
 
             // 2. HTTPS: a name forced to HTTPS without a working certificate is the error page visitors get, a covered
             //    name works, an unforced name without one has none, and a pattern has no verdict.

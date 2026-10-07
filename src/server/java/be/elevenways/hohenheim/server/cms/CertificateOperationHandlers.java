@@ -231,7 +231,8 @@ final class CertificateOperationHandlers {
                 case POINTS_ELSEWHERE -> throw refused(error("does_not_point_here").withArg("hostname", hostname)
                     .withArg("addresses", String.join(", ", reach.addresses())));
                 case UNRESOLVED -> throw refused(error("does_not_resolve").withArg("hostname", hostname));
-                case POINTS_HERE, UNKNOWN -> {
+                // of() waits for the resolver, so CHECKING never comes from it; nobody is refused on it either way.
+                case POINTS_HERE, UNKNOWN, CHECKING -> {
                 }
             }
         }

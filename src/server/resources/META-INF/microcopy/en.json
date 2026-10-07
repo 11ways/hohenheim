@@ -13929,6 +13929,10 @@
     "text": "Unknown: this host declares no public address, so where {$hostname} points cannot be checked.",
     "scope": "put_online"
   },
+  "reach_checking": {
+    "text": "Still checking where {$hostname} points; the summary shows it once the lookup answers.",
+    "scope": "put_online"
+  },
   "path_help": {
     "text": "Everything under this path is protected, for example /wp-admin.",
     "scope": "protect_path"
@@ -14337,6 +14341,10 @@
     "text": "Unknown",
     "scope": "site_domains"
   },
+  "points_here_checking": {
+    "text": "Checking",
+    "scope": "site_domains"
+  },
   "points_elsewhere_detail": {
     "text": "Points to {$addresses}, not to this proxy",
     "scope": "site_domains"
@@ -14347,6 +14355,10 @@
   },
   "points_unknown_detail": {
     "text": "This host declares no public address to compare with",
+    "scope": "site_domains"
+  },
+  "points_checking_detail": {
+    "text": "The name is still being looked up; reload to see the answer",
     "scope": "site_domains"
   },
   "address_requests": {

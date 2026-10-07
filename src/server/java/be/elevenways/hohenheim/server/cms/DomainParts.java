@@ -16,6 +16,8 @@ import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
 import be.elevenways.hohenheim.site.DomainCertCell;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.key.IdentifierKey;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -201,19 +203,34 @@ public final class DomainParts {
             .search(SiteDomainModel.HOSTNAME, SiteDomainModel.PATH)
             // What an empty list (a new site's Domains tab above all: it routes nothing yet) tells the reader to do.
             .emptyDescription(Microcopy.of("empty_description").withFilter("scope", "site_domains"))
-            .computed(Objects.requireNonNull(table.column(REACH_COLUMN)), (row, request) -> reachCell(row))
+            .computed(Objects.requireNonNull(table.column(REACH_COLUMN)), DomainParts::reachCell)
             .computed(Objects.requireNonNull(table.column(CERTIFICATE_COLUMN)), DomainParts::certificateCell)
             .build();
     }
 
-    /** Whether an exact name points at this proxy, in a word, and what it does instead; null for a pattern. */
-    static @Nullable StateLineCell reachCell(@NonNull Row domain) {
+    /**
+     * Whether an exact name points at this proxy, in a word, and what it does instead; null for a pattern.
+     *
+     * AIDEV-NOTE: the rows of one page share ONE wait ({@link #REACH_RENDER_BUDGET_MS}, from the first cell drawn):
+     * cells are computed row after row, and a name the resolver does not answer in time reads "Checking" while its
+     * lookup keeps running into the cache for the next view. Without the shared budget a page of unanswered names
+     * waited one lookup timeout per row.
+     */
+    static @Nullable StateLineCell reachCell(@NonNull Row domain, @NonNull PanelRequest request) {
+        return reachCell(domain, reachWaitMs(request));
+    }
+
+    /** Whether an exact name points at this proxy, waiting at most {@code waitMs} for its lookup; null for a pattern. */
+    static @Nullable StateLineCell reachCell(@NonNull Row domain, long waitMs) {
         if (!AppHealth.exact(domain)) {
             return null;
         }
         String hostname = String.valueOf((Object) domain.get(SiteDomainModel.HOSTNAME));
-        HostnameReach.Reach reach = HostnameReach.recent(hostname);
+        HostnameReach.Reach reach = HostnameReach.recent(hostname, waitMs);
         return switch (reach.verdict()) {
+            case CHECKING -> new StateLineCell("checking", BadgeVariant.OUTLINE,
+                Microcopy.of("points_here_checking").withFilter("scope", "site_domains"),
+                Microcopy.of("points_checking_detail").withFilter("scope", "site_domains"), null);
             case POINTS_HERE -> new StateLineCell("points_here", BadgeVariant.SUCCESS,
                 Microcopy.of("points_here_yes").withFilter("scope", "site_domains"), null, null);
             case POINTS_ELSEWHERE -> new StateLineCell("points_elsewhere", BadgeVariant.WARNING,
@@ -227,6 +244,29 @@ public final class DomainParts {
                 Microcopy.of("points_here_unknown").withFilter("scope", "site_domains"),
                 Microcopy.of("points_unknown_detail").withFilter("scope", "site_domains"), null);
         };
+    }
+
+    /** How long the cells of one page may wait for name lookups together. */
+    static final long REACH_RENDER_BUDGET_MS = 2_000;
+
+    /** The moment this request's reach cells stop waiting for lookups, set by the first cell drawn. */
+    private static final IdentifierKey<Long> REACH_DEADLINE = IdentifierKey.of("hohenheim", "reach_render_deadline");
+
+    /** What this request's next reach cell may still wait: the rest of the page budget, at most one lookup's wait. */
+    private static long reachWaitMs(@NonNull PanelRequest request) {
+        long now = Now.millis();
+        Long deadline;
+        try {
+            deadline = request.conduit().getAttribute(REACH_DEADLINE);
+            if (deadline == null) {
+                deadline = now + REACH_RENDER_BUDGET_MS;
+                request.conduit().setAttribute(REACH_DEADLINE, deadline);
+            }
+        } catch (UnsupportedOperationException noAttributes) {
+            // A conduit without request attributes (a bare test double) still gets one lookup's bound per cell.
+            return HostnameReach.LOOKUP_WAIT_MS;
+        }
+        return Math.max(0, Math.min(HostnameReach.LOOKUP_WAIT_MS, deadline - now));
     }
 
     /**
@@ -292,7 +332,7 @@ public final class DomainParts {
         }
         Row site = Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID));
         String app = site == null ? "" : String.valueOf((Object) site.get(SiteModel.NAME));
-        StateLineCell reach = reachCell(domain);
+        StateLineCell reach = reachCell(domain, HostnameReach.LOOKUP_WAIT_MS);
         CertCoverage https = AppHealth.httpsOf(domain, SiteParts.tlsPassthrough(site),
             CertificateCoverage.activeNames());
         if (reach == null || https == null) {
