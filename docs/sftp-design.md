@@ -135,7 +135,7 @@ Same verbs as the browser (`FILES_UPLOAD` for a committed file, `FILES_MKDIR`, `
 one row per mutation so the audit is complete. To keep a 5000-file sync from flooding the list, all rows of one
 SFTP session share a display group: `ActivityModel.SESSION_ID` is already "an opaque display group"
 (`zenit/.../ActivityModel.java:57-58`), today written only by editing sessions (`ActivityLog.java:735-737`). W1
-verifies the activity list folds rows by it (if it only folds by `COMMAND_ID`, that is a zenit-cms change in W1).
+verified the activity read folds rows by `COMMAND_ID` only, so the `SESSION_ID` fold ships in W3 (section 8).
 Reads are not recorded, same as the browser. The sentence reads "Jelle uploaded 312 files to Survival over SFTP".
 
 ## 3. Authentication
@@ -151,7 +151,7 @@ Reads are not recorded, same as the browser. The sentence reads "Jelle uploaded 
      `:187`), minted by "Create an SFTP password" with scopes `cap:hohenheim:instance#files.read` and
      `#files.write` (grammar: `docs/paas-api.md:23-28`), labelled "SFTP", revocable and optionally expiring. It is
      an app password without a second store.
-  2. **SSH public key** registered on the account (new zenit-auth credential, W1). A key login yields
+  2. **SSH public key** registered on the account (zenit-auth `SshKeys`, landed in W1; the login lookup is W2). A key login yields
      `HostCredentialPrincipals.forAccount(userId, "SFTP key <label>", realm.keyScopes())`
      (`HostCredentialPrincipals.java:34`), so a key can do files and nothing else.
 - Tenants: no special case. A tenant's grant on an instance carries `files.read` / `files.write`
@@ -178,7 +178,7 @@ install is checked in W3 (`HohenheimRoles.Role` has no panel role, `HohenheimRol
 - The SSH ban set's ports (`security.nftables_ssh_ports`, `HohenheimSettings.java:738-746`, parsed at
   `NftService.java:208-211`) gain the SFTP port DERIVED from `hohenheim.sftp.port` while SFTP is enabled, never a
   second hand-kept list.
-- Per-IP lockout through the transport-neutral `FailureBudget` overload (W1), checked BEFORE verifying anything,
+- Per-IP lockout through the transport-neutral `FailureBudget` overload (W2), checked BEFORE verifying anything,
   as the HTTP lane does (`FailureBudget.java:15-28`).
 
 ### 4.3 Host key
@@ -237,15 +237,33 @@ add/list/remove plus revalidation. zenit: transport-neutral `FailureBudget`.
 
 ## 8. Waves (2-4 items each)
 
-- **SFTP-W1, framework prerequisites** (zenit-auth, zenit, zenit-cms if needed): account SSH public keys
-  (model, account page section, lookup, revalidation registration); `FailureBudget` overload keyed by an explicit
-  client address; activity list folds a `SESSION_ID` display group. Each with its journey and changelog entry.
+- **SFTP-W1, framework prerequisites: COMMITTED 2026-10-08, push pending the zenit push** (zenit, zenit-auth,
+  Hohenheim; changelog
+  `2026-10-08-account-ssh-keys.md`):
+  - zenit core `SshPublicKey` (strict parse, typed `Refusal`, the one `ssh-keygen -lf` fingerprint) and the
+    `SshKeyType` vocabulary with `hostKeyPreference()`. zemble `home` answered NEW_MECHANISM, home `apps`, only
+    because Hohenheim's `HostKeys` held the sole copy; with zenit-auth as a second consumer it moved to core, and
+    `HostKeys` now reads both facts instead of its own type list and digest.
+  - zenit-auth account SSH keys (`home` verdict NEW_MECHANISM, home zenit-auth, 0.73): `auth_ssh_keys` (M021,
+    fingerprint unique across ALL accounts so a key login names one account), `SshKeys` service, the owner's
+    `/account/ssh-keys` page (add, list, remove; only the owner adds), the operator's `zenit.remove_ssh_keys` row
+    verb plus the keys on the credential tab (all keys at once, like "reset second factor"; no per-key operator
+    removal), activity verbs with en/nl sentences.
+  - MOVED to W2, the wave of their first caller (nothing lands without a wired consumer): the account-by-key lookup
+    (`fingerprint` -> account, touching `last_used_at`, the column exists already), the key principal and its
+    `PrincipalRevalidation` registration (a removed key must end a live session, so the principal carries the key
+    id), and the transport-neutral `FailureBudget` overload.
+  - MOVED to W3: folding activity rows by `SESSION_ID`. Verified 2026-10-08: the activity read groups by
+    `COMMAND_ID` only (`ActivityLog.java` page grouping, `countGroups`); `SESSION_ID` is read only by
+    `EditingSessions`. The first writer of SFTP session rows is W3, so the fold (zenit core read plus zenit-cms list)
+    ships there with its journey.
 - **SFTP-W2, the module** (`zenit-sftp`, after Q1): MINA server lifecycle and host key store; auth bridge (API key
-  password, SSH key, username split, uniform refusal); `SftpRealm`/`SftpMount` with per-operation revalidation,
-  execution identity and status mapping; session registry; the module journey.
+  password, SSH key via the account-by-key lookup, username split, uniform refusal); the key principal and its
+  revalidation; `FailureBudget` overload; `SftpRealm`/`SftpMount` with per-operation revalidation, execution
+  identity and status mapping; session registry; the module journey.
 - **SFTP-W3, Hohenheim wiring**: streaming seam (`readFileTo`/`writeFileFrom`, plus `setMode`/`setModified`) on
   the Docker driver; `FileVerbs` shared by HTML, API and SFTP; `InstanceSftpRealm`, settings group, ban-port
-  derivation, ThreatScorer feed; `SftpJourneyTest`.
+  derivation, ThreatScorer feed; the `SESSION_ID` activity fold; `SftpJourneyTest`.
 - **SFTP-W4, UI**: the Files tab card and `/manage` twin, "Create an SFTP password", open sessions with End,
   `docs/deploy-native.md` port note; screenshots against `App-Files-SFTP`.
 - **SFTP-W5, Incus file lane**: `InstanceFileSupport` for LXC and VM over the Incus files API, which lights up the
