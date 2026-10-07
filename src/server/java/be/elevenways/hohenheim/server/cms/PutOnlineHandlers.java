@@ -142,6 +142,7 @@ final class PutOnlineHandlers {
         // 5. The first start. A refusal (no admitted host, databases still provisioning) leaves the app for its page.
         try {
             new InstanceService().deploy(instanceId, DeployTrigger.MANUAL);
+            // An order that went out still waits for its certificate: the outcome says what happens next.
             call.reportOutcome(note != null ? note : message(hostname == null ? "running" : "live")
                 .withArg("address", hostname == null ? "" : hostname));
         } catch (Violations | DomainRefusal notStarted) {

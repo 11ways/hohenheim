@@ -10462,6 +10462,18 @@
     "text": "{$network}",
     "scope": "access_rule"
   },
+  "protection_password": {
+    "text": ".match {$count :number}\none {{Wachtwoord, 1 persoon}}\n* {{Wachtwoord, {$count} personen}}",
+    "scope": "access_rule"
+  },
+  "protection_network": {
+    "text": ".match {$count :number}\none {{Netwerk, 1 regel}}\n* {{Netwerk, {$count} regels}}",
+    "scope": "access_rule"
+  },
+  "protection_sign_in": {
+    "text": "Aanmelden met {$provider}",
+    "scope": "access_rule"
+  },
   "summary_basic_auth": {
     "text": "Gebruikersnaam {$username}",
     "scope": "access_rule"
@@ -13029,7 +13041,7 @@
   "settings.hohenheim.storage.volume_uid_base.label": "Basis-uid voor volumes",
   "settings.hohenheim.storage.volume_uid_base.help": "Eerste host-uid waarop workspaces gemapt worden; een workspace draait als dit getal plus zijn instantie-id, en het moet onder het subuid-bereik blijven dat Incus aan onbevoorrechte containers geeft (1000000).",
   "settings.hohenheim.label": "Hohenheim",
-  "settings.hohenheim.proxy.label": "Proxy",
+  "settings.hohenheim.proxy.label": "Poorten en routering",
   "settings.hohenheim.proxy.help": "De reverse-proxylisteners en het routeringsgedrag",
   "settings.hohenheim.roles.label": "Installatierollen",
   "settings.hohenheim.roles.help": "Welke subsystemen deze installatie uitvoert; uitgeschakelde rollen starten niet, verklaren geen geplande taken en tonen hun beheerschermen niet",
@@ -13733,7 +13745,7 @@
     "scope": "put_online"
   },
   "outcome_live": {
-    "text": "Online op {$address}.",
+    "text": "Online op {$address}. HTTPS volgt zodra het certificaat is uitgereikt; daarvoor moet {$address} naar deze server wijzen.",
     "scope": "put_online"
   },
   "outcome_running": {

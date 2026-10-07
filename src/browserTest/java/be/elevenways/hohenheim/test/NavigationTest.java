@@ -2,9 +2,12 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.junit.jupiter.api.Test;
+
+import java.util.Map;
 import static org.assertj.core.api.Assertions.*;
 
 /**
@@ -103,6 +106,17 @@ class NavigationTest extends HohenheimTestBase {
         cert.set(CertificateModel.RENEWAL_ERROR, "boom");
         cert.set(CertificateModel.ERROR_COUNT, 3);
         certModel.save(cert);
+        // An app, so the dashboard is the running fleet's (attention, stat tiles, apps) rather than a fresh install's
+        // lead, which counts nothing on purpose.
+        var siteModel = Models.get(SiteModel.class);
+        Row site = siteModel.createEmptyRow();
+        site.set(SiteModel.NAME, "softnav-app");
+        site.set(SiteModel.SLUG, "softnav-app");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:static");
+        site.set(SiteModel.SETTINGS, Map.of("root_path", "/tmp"));
+        site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
+        site.set(SiteModel.ENABLED, true);
+        siteModel.save(site);
 
         try {
             navigateToApp("/admin/sites");
@@ -125,6 +139,7 @@ class NavigationTest extends HohenheimTestBase {
             assertThat(page.locator(".hh-attention-clear").count()).isZero();
         } finally {
             certModel.delete(cert);
+            siteModel.delete(site);
         }
     }
 }

@@ -393,11 +393,16 @@ class DockerReconcilerTest {
 
             // 2. Attention: one orphan item per server, one collision item for local;
             //    owned and foreign-known rows never surface.
-            List<AttentionItem> items = DockerReconciler.attentionItems();
+            List<AttentionItem> items = new ArrayList<>();
+            AttentionCollector.dockerFindings(items);
             assertThat(items).hasSize(3);
             assertThat(items).allSatisfy(item ->
                 assertThat(item.severity()).as("report-only findings warn, never error")
                     .isEqualTo(AttentionSeverity.WARNING));
+            assertThat(items).allSatisfy(item -> {
+                assertThat(item.target()).as("each warning leads to exactly the findings it counts").isNotNull();
+                assertThat(item.action().key()).as("and says what going there does").isEqualTo("act_review_findings");
+            });
             assertThat(items.stream().map(i -> i.title().key()))
                 .containsExactlyInAnyOrder("docker_orphans", "docker_orphans", "docker_colliding");
 
@@ -422,7 +427,8 @@ class DockerReconcilerTest {
             assertThat(after).hasSize(2);
             assertThat(after).extracting(row -> row.get(ReconcileFindingModel.SERVER_NAME))
                 .containsExactlyInAnyOrder("local", "edge-1");
-            List<AttentionItem> remaining = DockerReconciler.attentionItems();
+            List<AttentionItem> remaining = new ArrayList<>();
+            AttentionCollector.dockerFindings(remaining);
             assertThat(remaining).hasSize(1);
             assertThat(remaining.get(0).title().key()).isEqualTo("docker_orphans");
         });

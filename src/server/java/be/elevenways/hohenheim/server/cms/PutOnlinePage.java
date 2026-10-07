@@ -80,8 +80,8 @@ public final class PutOnlinePage extends PanelPage {
         .build();
 
     /** The journey's steps on other pages: the chooser before the wizard, the run page after it. */
-    private static final List<Microcopy> BEFORE_WIZARD = List.of(PutOnline.copy("step_what"));
-    private static final List<Microcopy> AFTER_WIZARD = List.of(PutOnline.copy("step_live"));
+    private static final List<Microcopy> BEFORE_WIZARD = List.of(PutOnline.STEP_WHAT);
+    private static final List<Microcopy> AFTER_WIZARD = List.of(PutOnline.STEP_LIVE);
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("put_online"); }
     @Override public @NonNull Microcopy label() { return PutOnline.copy("put_online"); }

@@ -176,6 +176,9 @@
 
     .hh-onboarding-action {
         margin-left: auto;
+        // Never squeezed by a body that wraps (a blocked step's long refusal): shrinking ate the gap before its
+        // chevron ("Open>").
+        flex-shrink: 0;
         display: inline-flex;
         align-items: center;
         gap: var(--pl-space-xs);

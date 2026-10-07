@@ -12,6 +12,7 @@ import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -114,6 +115,49 @@ final class AccessRuleSummaries {
 
     private static @NonNull String blank(@Nullable Object value) {
         return value == null ? "" : String.valueOf(value);
+    }
+
+    /**
+     * How a list lets visitors in, in a few words, when its enabled rules are all of one plain kind: a password for
+     * some people, a few networks, or one sign-in provider.
+     *
+     * @return the words, or null when the list mixes kinds or nests groups (the caller then names the list)
+     */
+    static @Nullable Microcopy protectionOf(@Nullable Integer listId) {
+        if (listId == null) {
+            return null;
+        }
+        List<Row> rules = Models.get(AccessRuleModel.class).find()
+            .where(AccessRuleModel.ACCESS_LIST_ID.eq(listId)).all().stream()
+            .filter(rule -> !Boolean.FALSE.equals(rule.get(AccessRuleModel.ENABLED))).toList();
+        if (rules.isEmpty()) {
+            return null;
+        }
+        int people = 0;
+        int networks = 0;
+        Row provider = null;
+        for (Row rule : rules) {
+            String type = rule.get(AccessRuleModel.TYPE);
+            switch (type == null ? "" : type) {
+                case AccessRuleModel.TYPE_BASIC_AUTH -> people++;
+                case AccessRuleModel.TYPE_IP_ALLOW, AccessRuleModel.TYPE_IP_DENY -> networks++;
+                case AccessRuleModel.TYPE_AUTH_PROVIDER -> provider = rule;
+                default -> {
+                    return null;
+                }
+            }
+        }
+        if (people == rules.size()) {
+            return ruleText("protection_password").withArg("count", people);
+        }
+        if (networks == rules.size()) {
+            return ruleText("protection_network").withArg("count", networks);
+        }
+        if (provider != null && rules.size() == 1) {
+            return ruleText("protection_sign_in").withArg("provider",
+                providerName(AccessRuleModel.dataOf(provider).get(AccessRuleModel.PROVIDER_ID.getName())));
+        }
+        return null;
     }
 
     static @NonNull Microcopy ruleText(@NonNull String key) {
