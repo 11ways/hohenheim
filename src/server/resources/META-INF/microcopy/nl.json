@@ -13991,5 +13991,15 @@
   "section_proxy": {
     "text": "Proxy",
     "scope": "settings_section"
-  }
+  },
+  "happened": [
+    {
+      "text": "{$actor} zette {$subject} online",
+      "scope": "put_online"
+    },
+    {
+      "text": "{$actor} beveiligde {$subject}",
+      "scope": "protect_path"
+    }
+  ]
 }

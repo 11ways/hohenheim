@@ -24,6 +24,7 @@ import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.OperationInput;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.operation.SubjectArity;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -158,6 +159,7 @@ public final class SiteWrites {
     public static final Operation<Void, CreateInput, Integer> CREATE =
         Operation.declare(HohenheimIds.id("create_site"))
             .label(Microcopy.of("create").withFilter("scope", "cms"))
+            .happened(ZenitActivityAction.CREATE.happened())
             .noSubject()
             .gate(OperationGate.open())
             .input(OperationInput.of(ADMIN_FORM, CreateInput.class, v -> new CreateInput(

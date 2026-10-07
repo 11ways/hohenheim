@@ -1,5 +1,9 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.site.ProtectPath;
+import be.elevenways.hohenheim.server.cms.PutOnline;
+import be.elevenways.zenit.common.orm.activity.ActivityText;
+import be.elevenways.zenit.cms.common.render.activity.ActivitySentenceCell;
 import be.elevenways.hohenheim.activity.ActivityRecordCell;
 import be.elevenways.hohenheim.server.HohenheimActivity;
 import be.elevenways.hohenheim.server.host.HostProbe;
@@ -329,6 +333,35 @@ class AdminActivityListTest extends HohenheimTestBase {
             .as("step 9: and nothing else is")
             .doesNotContain(OPERATOR_TITLE)
             .doesNotContain(UNLINKABLE_TITLE);
+
+        // 10. The list reads as sentences: the time and who did what to what are shown, the detail columns wait in the
+        //     column picker, and an anonymous web write reads as someone not signed in, never as "Web".
+        List<String> shown = PartsLists.tableSpec(resource).columns().stream()
+            .filter(column -> !column.hidden()).map(ColumnSpec::name).toList();
+        assertThat(shown).as("step 10: only the time and the sentence head the table")
+            .containsExactly(ActivityModel.CREATED_AT.getName(), ActivityAdmin.SUMMARY_COLUMN);
+        assertThat(defaultList.body())
+            .as("step 10: the operator row reads as one sentence")
+            .contains("Someone not signed in created " + OPERATOR_TITLE);
+
+        // 11. The sentence links to its record inside /admin, through the record's front door.
+        Object sentence = PartsReads.cellValue(null, resource, null, rowFor(SITE_RECORD_ID),
+            column(resource, ActivityAdmin.SUMMARY_COLUMN));
+        assertThat(sentence).as("step 11: the summary is the sentence cell").isInstanceOf(ActivitySentenceCell.class);
+        assertThat(((ActivitySentenceCell) sentence).url())
+            .as("step 11: and links to the admin site page")
+            .isEqualTo("/admin/sites/" + SITE_RECORD_ID + "/open");
+
+        // 12. Hohenheim's own operations tell what happened in their own words.
+        Row ran = rowFor(OPERATOR_RECORD_ID);
+        ran.set(ActivityModel.COMMAND_TYPE, PutOnline.PUT_ONLINE.id().toString());
+        assertThat(ActivityText.headline(ran).resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()))
+            .as("step 12: putting something online reads as such")
+            .isEqualTo("Someone not signed in put " + OPERATOR_TITLE + " online");
+        ran.set(ActivityModel.COMMAND_TYPE, ProtectPath.OPERATION.id().toString());
+        assertThat(ActivityText.headline(ran).resolve(LocaleChain.ofTags("nl"), new ShippedCatalogs()))
+            .as("step 12: protecting a path reads as such, in Dutch too")
+            .isEqualTo("Iemand die niet is aangemeld beveiligde " + OPERATOR_TITLE);
     }
 
     @Test
