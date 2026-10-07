@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.game;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.GameDomainModel;
@@ -65,6 +66,7 @@ public final class GameDomainOperations {
     /** Answers the new mapping's id. */
     public static final Operation<Void, MappingForm, Integer> CREATE =
         Operation.declare(HohenheimIds.id("create_game_domain"))
+            .happened(OperationSentences.of("create_game_domain"))
             .label(words("create"))
             .noSubject()
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
@@ -75,6 +77,7 @@ public final class GameDomainOperations {
 
     public static final Operation<Row, MappingForm, Void> UPDATE =
         Operation.declare(HohenheimIds.id("update_game_domain"))
+            .happened(OperationSentences.of("update_game_domain"))
             .label(words("save"))
             .one(MAPPING)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
@@ -84,6 +87,7 @@ public final class GameDomainOperations {
 
     public static final Operation<Row, Void, Void> DELETE =
         Operation.declare(HohenheimIds.id("delete_game_domain"))
+            .happened(OperationSentences.of("delete_game_domain"))
             .label(words("delete"))
             .one(MAPPING)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))

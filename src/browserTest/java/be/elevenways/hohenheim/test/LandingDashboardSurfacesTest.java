@@ -152,13 +152,15 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
      *
      * AIDEV-NOTE: each row names its model by the model's own id, never a literal token: the literals spelled the
      * pre-sweep 'zenit-auth:' namespace, so the role grant escaped the activity scope's internal models and the
-     * baseline recorded a row production no longer shows.
+     * baseline recorded a row production no longer shows. The one web row is the only person's action, so the band
+     * shows it and nothing else: "Unattributed created Test Admin" is work that declared no identity, no person's.
      */
     private static void seedRecentActivity() {
         Model activity = Models.get(ActivityModel.class);
         activity.find().delete();
         var now = Now.instant();
         String[][] records = {
+            {SiteModel.MODEL_ID.toString(), "Landing Shop", "web"},
             {RecordGrantModel.MODEL_ID.toString(), "manage", "system"},
             {SiteModel.MODEL_ID.toString(), "landing-site", "system"},
             {InstanceQuotaModel.MODEL_ID.toString(), "", "system"},

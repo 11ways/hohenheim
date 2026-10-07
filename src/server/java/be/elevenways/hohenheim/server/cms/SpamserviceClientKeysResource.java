@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentityKey;
@@ -123,6 +124,7 @@ public final class SpamserviceClientKeysResource {
      */
     public static final Operation<Void, KeyInput, SecretResult<String>> CREATE = Operation.declare(
             HohenheimIds.id("spamservice_key_create"))
+        .happened(OperationSentences.of("spamservice_key_create"))
         .label(words("create_key"))
         .noSubject()
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
@@ -138,6 +140,7 @@ public final class SpamserviceClientKeysResource {
 
     public static final Operation<ManagedClientKey, Void, Void> ENABLE = Operation.declare(
             HohenheimIds.id("spamservice_key_enable"))
+        .happened(OperationSentences.of("spamservice_key_enable"))
         .label(words("enable"))
         .icon(Icon.of("check"))
         .one(KEY)
@@ -147,6 +150,7 @@ public final class SpamserviceClientKeysResource {
 
     public static final Operation<ManagedClientKey, Void, Void> REVOKE = Operation.declare(
             HohenheimIds.id("spamservice_key_revoke"))
+        .happened(OperationSentences.of("spamservice_key_revoke"))
         .label(words("revoke"))
         .icon(Icon.of("xmark"))
         .one(KEY)

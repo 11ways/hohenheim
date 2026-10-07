@@ -19,7 +19,6 @@ import be.elevenways.zenit.common.orm.activity.ActivityText;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.query.rules.RuleText;
 import be.elevenways.zenit.common.routing.BoundEndpoint;
-import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -43,19 +42,19 @@ public final class AdminActivityResource {
     private static final String RECORD_RENDERER = HohenheimTemplateIds.CELL_ACTIVITY_RECORD;
 
     /**
-     * The default scope: everything a PERSON did, background writes excluded -- a RuleText expression on the origin
-     * TEXT filter, so the panel renders it as a removable chip and the framework owns every override/clear rule.
+     * The default scope: everything a PERSON did -- a RuleText expression on the origin TEXT filter, so the panel
+     * renders it as a removable chip and the framework owns every override/clear rule.
      *
      * AIDEV-NOTE: the discriminator is the ORIGIN, never the verb. Several verbs ("deployed", "stopped",
      * "reaped_controller_objects", "restored_backup", "app_updated") are written by BOTH the operator lane and a
-     * sweeper, so a verb denylist would hide real operator actions. The "is empty" arm keeps a row whose origin was
-     * never stamped visible: unknown provenance is not background provenance, and IS_EMPTY on a TEXT variable matches
-     * null as well as "".
+     * sweeper, so a verb denylist would hide real operator actions. The surfaces that act for a person are the origin
+     * vocabulary's own fact ({@link AccountabilityOrigin#actsForAPerson()}), so system work, seeds and work that
+     * declared no identity at all ("Unattributed") stay out without a list here. The "is empty" arm keeps a row whose
+     * origin was never stamped visible: unknown provenance is not background provenance, and IS_EMPTY on a TEXT
+     * variable matches null as well as "".
      */
-    private static final String HIDE_BACKGROUND_EXPRESSION =
-        ActivityModel.ORIGIN.getName() + " != \"" + Accountability.ORIGIN_SYSTEM + "\" and "
-            + ActivityModel.ORIGIN.getName() + " != \"" + AccountabilityOrigin.SEED.token() + "\" or "
-            + ActivityModel.ORIGIN.getName() + " is empty";
+    private static final String HIDE_BACKGROUND_EXPRESSION = ActivityModel.ORIGIN.getName() + " in "
+        + quotedList(AccountabilityOrigin.personTokens()) + " or " + ActivityModel.ORIGIN.getName() + " is empty";
 
 
     /**
@@ -123,13 +122,18 @@ public final class AdminActivityResource {
         StringBuilder text = new StringBuilder("(").append(HIDE_BACKGROUND_EXPRESSION).append(")");
         List<String> internal = ActivityLog.internalModelTokens();
         if (!internal.isEmpty()) {
-            text.append(" and ").append(ActivityModel.MODEL.getName()).append(" not in [");
-            for (int i = 0; i < internal.size(); i++) {
-                text.append(i == 0 ? "\"" : ", \"").append(internal.get(i)).append('"');
-            }
-            text.append(']');
+            text.append(" and ").append(ActivityModel.MODEL.getName()).append(" not in ").append(quotedList(internal));
         }
         return RuleText.parse(text.toString()).require();
+    }
+
+    /** @return the tokens as a RuleText list literal ({@code ["a", "b"]}) */
+    private static @NonNull String quotedList(@NonNull List<String> tokens) {
+        StringBuilder text = new StringBuilder("[");
+        for (int i = 0; i < tokens.size(); i++) {
+            text.append(i == 0 ? "\"" : ", \"").append(tokens.get(i)).append('"');
+        }
+        return text.append(']').toString();
     }
 
     /** @return the notice the activity page shows while recording is off, null while recording is on */

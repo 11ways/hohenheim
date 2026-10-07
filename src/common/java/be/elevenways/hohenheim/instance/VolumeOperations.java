@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -45,15 +46,18 @@ public final class VolumeOperations {
             values.get(InstanceVolumeModel.EXCLUSIVE)));
     private static final SubjectType<Row> SUBJECT = SubjectType.record(InstanceVolumeModel.MODEL_ID);
     public static final Operation<Void, Declaration, Integer> CREATE = Operation.declare(HohenheimIds.id("declare_volume"))
+        .happened(OperationSentences.of("declare_volume"))
         .label(Microcopy.of("singular").withFilter("scope", "instance_volume"))
         .noSubject().gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS)
             .parentCapability("instance_id", InstanceModel.MODEL_ID, HohenheimCapabilities.CONFIG))
         .input(INPUT).result(Integer.class).command(COMMAND.onDatasource("default")).register();
     public static final Operation<Row, Declaration, Void> UPDATE = Operation.declare(HohenheimIds.id("redeclare_volume"))
+        .happened(OperationSentences.of("redeclare_volume"))
         .label(Microcopy.of("singular").withFilter("scope", "instance_volume"))
         .one(SUBJECT).gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
         .input(INPUT).patchable().command(COMMAND).register();
     public static final Operation<Row, Void, Void> DESTROY = Operation.declare(HohenheimIds.id("destroy_volume"))
+        .happened(OperationSentences.of("destroy_volume"))
         .label(Microcopy.of("destroy").withFilter("scope", "instance_volume"))
         .icon(Icon.of("trash-can")).one(SUBJECT)
         .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))

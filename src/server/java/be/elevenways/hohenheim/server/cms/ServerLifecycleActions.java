@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
@@ -120,7 +121,8 @@ final class ServerLifecycleActions {
 
     static PanelAction.OperationBuilder<Row, Microcopy> place(String id, Microcopy label,
             Function<Row, Microcopy> handler, Predicate<Row> applies) {
-        Operation<Row, Void, Microcopy> operation = Operation.declare(HohenheimIds.id(id)).label(label)
+        Operation<Row, Void, Microcopy> operation = Operation.declare(HohenheimIds.id(id))
+            .happened(OperationSentences.of(id)).label(label)
             .one(SubjectType.record(ServerModel.MODEL_ID)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
             .command(CmsCommands.EXTERNAL)
             .result(Microcopy.class).register();

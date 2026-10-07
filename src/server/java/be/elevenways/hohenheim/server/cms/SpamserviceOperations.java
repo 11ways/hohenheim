@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -39,6 +40,7 @@ public final class SpamserviceOperations {
 
     /** Calls the management status endpoint; the result is the status the service reports. */
     public static final Operation<Void, Void, String> TEST = Operation.declare(HohenheimIds.id("spamservice_test"))
+        .happened(OperationSentences.of("spamservice_test"))
         .label(words("test"))
         .description(words("test_hint"))
         .icon(Icon.of("stethoscope"))
@@ -89,6 +91,7 @@ public final class SpamserviceOperations {
     private static @NonNull Operation<Void, Void, Void> lifecycle(@NonNull String name, @NonNull String icon,
                                                                  boolean destructive) {
         Operation.Builder<Void, Void, Void> builder = Operation.declare(HohenheimIds.id("spamservice_" + name))
+            .happened(OperationSentences.of("spamservice_" + name))
             .label(words(name))
             .description(words(name + "_hint"))
             .icon(Icon.of(icon))

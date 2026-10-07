@@ -111,7 +111,7 @@ public final class GameTemplateSeeder implements Seeder {
         }
         row.set(InstanceTemplateModel.READINESS_LINE, readinessLine);
         row.set(InstanceTemplateModel.STOP_COMMAND, stopCommand);
-        row.set(InstanceTemplateModel.SOURCE, "hohenheim:starter");
+        row.set(InstanceTemplateModel.SOURCE, InstanceTemplateModel.SOURCE_STARTER);
         model.save(row);
         return row.get(InstanceTemplateModel.ID);
     }

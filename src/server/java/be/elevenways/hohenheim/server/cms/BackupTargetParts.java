@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
@@ -55,6 +56,7 @@ public final class BackupTargetParts {
     /** Runs the target's health check against its real destination. */
     public static final Operation<Row, Void, TestOutcome> TEST =
         Operation.declare(HohenheimIds.id("test_backup_target"))
+            .happened(OperationSentences.of("test_backup_target"))
             .label(Microcopy.of("test_connection").withFilter("scope", "backup_target"))
             .icon(Icon.of("plug-circle-check"))
             .one(SUBJECT)

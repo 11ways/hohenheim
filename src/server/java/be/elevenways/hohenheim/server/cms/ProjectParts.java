@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ProjectModel;
@@ -51,6 +52,7 @@ public final class ProjectParts {
     public static final String SLUG = "projects";
     private static final SubjectType<Row> SUBJECT = SubjectType.record(ProjectModel.MODEL_ID);
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_project"))
+        .happened(OperationSentences.of("delete_project"))
         .label(Microcopy.of("delete").withFilter("scope", "cms"))
         .one(SUBJECT).gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();

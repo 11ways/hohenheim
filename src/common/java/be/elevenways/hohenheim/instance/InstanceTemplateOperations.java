@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -72,6 +73,7 @@ public final class InstanceTemplateOperations {
 
     public static final Operation<Row, CreateFromTemplate, Integer> CREATE_INSTANCE_FROM_TEMPLATE =
         Operation.declare(HohenheimIds.id("create_instance_from_template"))
+            .happened(OperationSentences.of("create_instance_from_template"))
             .label(Microcopy.of("create_instance").withFilter("scope", "instance_template"))
             .icon(Icon.of("plus"))
             .one(TEMPLATE)
@@ -93,6 +95,7 @@ public final class InstanceTemplateOperations {
      */
     public static final Operation<Row, Void, Void> APPROVE_TEMPLATE =
         Operation.declare(HohenheimIds.id("approve_template"))
+            .happened(OperationSentences.of("approve_template"))
             .label(Microcopy.of("approve").withFilter("scope", "instance_template"))
             .icon(Icon.of("circle-check"))
             .one(TEMPLATE)
@@ -103,6 +106,7 @@ public final class InstanceTemplateOperations {
     /** Withdraws an approval, so tenants can no longer select the template; applicable while it is approved. */
     public static final Operation<Row, Void, Void> UNAPPROVE_TEMPLATE =
         Operation.declare(HohenheimIds.id("unapprove_template"))
+            .happened(OperationSentences.of("unapprove_template"))
             .label(Microcopy.of("unapprove").withFilter("scope", "instance_template"))
             .icon(Icon.of("circle-xmark"))
             .one(TEMPLATE)

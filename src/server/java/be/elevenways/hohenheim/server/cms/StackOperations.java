@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
@@ -51,6 +52,7 @@ public final class StackOperations {
 
     /** Queues a deploy of the stack's desired state. */
     public static final Operation<Row, Void, Void> DEPLOY = Operation.declare(HohenheimIds.id("deploy_stack"))
+        .happened(OperationSentences.of("deploy_stack"))
         .label(words("deploy"))
         .icon(Icon.of("rocket"))
         .one(STACK)
@@ -61,6 +63,7 @@ public final class StackOperations {
 
     /** Queues stopping the stack's containers; applies to an active or degraded stack. */
     public static final Operation<Row, Void, Void> STOP = Operation.declare(HohenheimIds.id("stop_stack"))
+        .happened(OperationSentences.of("stop_stack"))
         .label(words("stop"))
         .icon(Icon.of("circle-stop"))
         .one(STACK)
@@ -71,6 +74,7 @@ public final class StackOperations {
 
     /** Queues redeploying the last successful deployment; applies when one exists. */
     public static final Operation<Row, Void, Void> ROLLBACK = Operation.declare(HohenheimIds.id("rollback_stack"))
+        .happened(OperationSentences.of("rollback_stack"))
         .label(words("rollback"))
         .icon(Icon.of("clock-rotate-left"))
         .one(STACK)
@@ -82,6 +86,7 @@ public final class StackOperations {
     /** Queues removing the stack's OWNED volumes; external volumes survive it. */
     public static final Operation<Row, Void, Void> PURGE_VOLUMES =
         Operation.declare(HohenheimIds.id("purge_stack_volumes"))
+            .happened(OperationSentences.of("purge_stack_volumes"))
             .label(words("purge_volumes"))
             .icon(Icon.of("hard-drive"))
             .one(STACK)
@@ -92,6 +97,7 @@ public final class StackOperations {
 
     /** Reads the stack's live state back into its status; the result is that status. */
     public static final Operation<Row, Void, String> REFRESH = Operation.declare(HohenheimIds.id("refresh_stack"))
+        .happened(OperationSentences.of("refresh_stack"))
         .label(words("refresh_status"))
         .icon(Icon.of("rotate"))
         .one(STACK)
@@ -104,6 +110,7 @@ public final class StackOperations {
     /** Starts the image reclaim sweep over every daemon, the nightly ReclaimDockerImages task's own. */
     public static final Operation<Void, Void, Void> RECLAIM_IMAGES =
         Operation.declare(HohenheimIds.id("reclaim_images"))
+            .happened(OperationSentences.of("reclaim_images"))
             .label(words("reclaim_images"))
             .icon(Icon.of("broom"))
             .noSubject()
@@ -114,6 +121,7 @@ public final class StackOperations {
 
     /** Removes the stack's owned containers and network (volumes stay), then the stack with its rows. */
     public static final Operation<Row, Void, Integer> DELETE_STACK = Operation.declare(HohenheimIds.id("delete_stack"))
+        .happened(OperationSentences.of("delete_stack"))
         .label(Microcopy.of("delete").withFilter("scope", "cms"))
         .icon(Icon.TRASH)
         .one(STACK)
@@ -126,6 +134,7 @@ public final class StackOperations {
     /** Removes the service's owned workload, then the service with its config files. */
     public static final Operation<Row, Void, Integer> DELETE_SERVICE =
         Operation.declare(HohenheimIds.id("delete_stack_service"))
+            .happened(OperationSentences.of("delete_stack_service"))
             .label(Microcopy.of("delete").withFilter("scope", "cms"))
             .icon(Icon.TRASH)
             .one(SERVICE)

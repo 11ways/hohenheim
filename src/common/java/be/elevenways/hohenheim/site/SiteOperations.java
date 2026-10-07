@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.site;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -38,6 +39,7 @@ public final class SiteOperations {
 
     /** Puts a disabled site's hostnames into the route table; the enable route invariant may refuse it. */
     public static final Operation<Row, Void, Void> ENABLE = Operation.declare(HohenheimIds.id("enable_site"))
+        .happened(OperationSentences.of("enable_site"))
         .label(label("enable", "Enable"))
         .icon(Icon.of("power-off"))
         .one(SITE)
@@ -48,6 +50,7 @@ public final class SiteOperations {
 
     /** Takes an enabled site's hostnames out of the route table. */
     public static final Operation<Row, Void, Void> DISABLE = Operation.declare(HohenheimIds.id("disable_site"))
+        .happened(OperationSentences.of("disable_site"))
         .label(label("disable", "Disable"))
         .icon(Icon.of("power-off"))
         .one(SITE)
@@ -64,6 +67,7 @@ public final class SiteOperations {
 
     /** Copies a site and its hostnames under a new name; the copy starts disabled. Its result is the copy's id. */
     public static final Operation<Row, CloneInput, Integer> CLONE = Operation.declare(HohenheimIds.id("clone_site"))
+        .happened(OperationSentences.of("clone_site"))
         .label(label("clone", "Clone"))
         .icon(Icon.of("copy"))
         .one(SITE)
@@ -81,6 +85,7 @@ public final class SiteOperations {
     /** Rolls a Docker-backed site back to its application's retained release, through the forward health gate. */
     public static final Operation<Row, Void, Void> ROLLBACK_RELEASE =
         Operation.declare(HohenheimIds.id("rollback_release"))
+            .happened(OperationSentences.of("rollback_release"))
             .label(label("rollback", "Roll back"))
             .icon(Icon.of("clock-rotate-left"))
             .one(SITE)

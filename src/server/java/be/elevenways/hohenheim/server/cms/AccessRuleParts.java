@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
@@ -83,6 +84,7 @@ public final class AccessRuleParts {
 
     /** Switches a rule on or off; switching one on runs the model's completeness hook. */
     public static final Operation<Row, Void, Void> TOGGLE = Operation.declare(HohenheimIds.id("access_rule_toggle"))
+        .happened(OperationSentences.of("access_rule_toggle"))
         .label(Microcopy.of("toggle").withFilter("scope", "access_rule"))
         .icon(Icon.of("power-off"))
         .one(SUBJECT)
@@ -94,6 +96,7 @@ public final class AccessRuleParts {
     /** Deletes a rule and, for a group, the subtree under it (the tree's delete policy). */
     public static final Operation<Row, Void, Integer> DELETE =
         Operation.declare(HohenheimIds.id("delete_access_rule"))
+            .happened(OperationSentences.of("delete_access_rule"))
             .label(Microcopy.of("delete").withFilter("scope", "cms"))
             .icon(Icon.TRASH)
             .one(SUBJECT)
@@ -216,6 +219,7 @@ public final class AccessRuleParts {
     private static @NonNull Operation<Row, Void, Void> move(@NonNull String id, @NonNull String copyKey,
                                                             @NonNull String icon) {
         return Operation.declare(HohenheimIds.id(id))
+            .happened(OperationSentences.of(id))
             .label(Microcopy.of(copyKey).withFilter("scope", "access_rule"))
             .icon(Icon.of(icon))
             .one(SUBJECT)

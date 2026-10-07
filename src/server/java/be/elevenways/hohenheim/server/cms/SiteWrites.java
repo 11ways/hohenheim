@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimPickRules;
@@ -174,6 +175,7 @@ public final class SiteWrites {
     /** The operator's edit, checked against the site's latest revision; patchable for a partial write. */
     public static final Operation<Row, EditInput, Void> UPDATE =
         Operation.declare(HohenheimIds.id("update_site"))
+            .happened(OperationSentences.of("update_site"))
             .label(Microcopy.of("save").withFilter("scope", "cms"))
             .one(SiteOperations.SITE)
             .gate(OperationGate.open())
@@ -189,6 +191,7 @@ public final class SiteWrites {
     /** The delegated edit: name, switch and description only, never the admin normalizers. */
     public static final Operation<Row, ManageInput, Void> MANAGE_UPDATE =
         Operation.declare(HohenheimIds.id("manage_update_site"))
+            .happened(OperationSentences.of("manage_update_site"))
             .label(Microcopy.of("save").withFilter("scope", "cms"))
             .one(SiteOperations.SITE)
             .gate(OperationGate.open())
@@ -203,6 +206,7 @@ public final class SiteWrites {
      * result is the number of sites deleted.
      */
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_site"))
+        .happened(OperationSentences.of("delete_site"))
         .label(Microcopy.of("delete").withFilter("scope", "cms"))
         .icon(Icon.TRASH)
         .one(SiteOperations.SITE)
