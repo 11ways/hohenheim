@@ -49,7 +49,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         HohenheimPanel.ACCESS_CLUSTER, List.of("access-lists", "users", "roles", "bans", "spamservice"),
         HohenheimPanel.ACTIVITY_CLUSTER, List.of("activity", "inbox", "deliveries"),
         HohenheimPanel.SETTINGS_CLUSTER, List.of("settings", "instance-templates", "runtime-images", "git-providers",
-            "database-engines", "notifications", "backup-targets", "build-info"));
+            "database-engines", "notifications", "backup-targets", "task-schedules", "task-runs", "build-info"));
 
     /**
      * Every peer demoted out of the sidebar, with the surface that adopted it. showInNav(false) removes an ENTRY,

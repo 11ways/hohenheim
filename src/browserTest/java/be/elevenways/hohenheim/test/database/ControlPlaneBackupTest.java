@@ -252,7 +252,7 @@ class ControlPlaneBackupTest {
                 .as("step 1: at error severity -- there is no backup at all").isEqualTo(AttentionSeverity.ERROR);
             assertThat(unconfigured.get(0).target().toUrl())
                 .as("step 1: pointing at the settings group where it is fixed")
-                .isEqualTo("/admin/settings?section=setting-app-database#setting-app-database");
+                .isEqualTo("/admin/settings?section=setting-backups-database#setting-backups-database");
 
             Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "somewhere");
