@@ -295,6 +295,7 @@ so every boot logs `settings.unknown_key` for both. With the old jar still runni
 deploy's other backups, remove exactly those two keys (nothing else in the file), confirm the result still parses
 (the next boot's journal shows no `settings.unknown_key`), then run the lane. Daystrom: check its `local.dry` for the
 same keys when its deploy target is reachable again. Rollback: put the copied `local.dry` back.
+DONE on starfleet 2026-10-08 (see that entry); still PENDING on daystrom.
 
 `/api/health` is public on every deployed jar today, which is why the script
 probes it. `/health` is an alias of the same endpoint and is public from the
@@ -1864,3 +1865,49 @@ the old grouped sidebar and a plain "Your instances" list. Nothing was put onlin
 daystrom: still NOT deployed from this workstation; runs 27064da4; M011 step still owed.
 
 ROLLBACK: `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20261007-043633`.
+
+## Deploy 2026-10-08 (starfleet): 2bbb17d5, W6-W8b, exact-numeric framework, zenit-auth M020
+
+Swapped starfleet from e94180a7 to the pushed hohenheim 2bbb17d5 (jar sha256 `806e6798...c3ccca0a`, 280810931 bytes,
+15 stamp rows clean; zenit afaa662b, zenit-cms 363655e2, zenit-forms f5e8f606, zenit-auth f5643044, plumage 968c2b9c,
+hawkeye 04aac327, protoblast 57c1283d, spamservice d5b8cdc7). Ships W6 (operation sentences), W7a (Deploys tab, git
+configuration), W7b (Metrics, address-app configuration), D6, W8a (Addresses with Points here, certificate states),
+W8b (Access pages, bounded DNS lookups) and the 2026-10-07 framework waves (exact Decimal values, setting authority,
+guards on by default, copy under owned scopes).
+
+The "restart at 23:05 UTC" `zenit-dev deployed` reported before this deploy was NOT a restart: `NRestarts=0`, pid
+3484155 had run since 04:38:28 UTC (`ps` etimes 66743) and kept logging through 23:08. zenit-dev's
+`tools/lib/deployed.js` reads the start time as `stat -c %Y /proc/$PID`, the procfs directory's inode time, which is
+not the process start; with a wrong, recent start time a pending restart (jar newer than the process) can read as none.
+
+Before: own byte copies `/root/hohenheim-dep8-20261008/hohenheim.db` (integrity ok, `PRAGMA foreign_key_check` on a
+copy: 0 rows) and `local.dry`. Stale keys removed with the old jar still running: exactly `hohenheim.proxy.first_port`
+and `hohenheim.database.engine` (1438 -> 1401 bytes, nothing else changed). Two lane blockers on the way, neither in
+hohenheim: the live maven-local held a protoblast plugin without `blastGuards()` (the lane reads build facts from the
+live checkout first; fixed by publishing the synced protoblast), and spamservice c833244e failed its own
+`checkBundleSize` after the framework growth (+17425 bytes raw over budget; re-measured in spamservice d5b8cdc7).
+Lane `zenit-dev deploy starfleet --pushed`: rehearsal green, boot applied zenit-auth `2026_10_07_090000
+group_sign_in_bookkeeping` (104 before, 105 after), healthy after both restarts (23:24/23:25 UTC). Step 10 read every
+framework repo current and hohenheim `local-ahead` only because the workstation held an unpushed docs commit beside
+the deployed 2bbb17d5. Preflight `/root/hohenheim-preflight-20261007-232059/`.
+
+Journal since the swap: 0 `-p err` entries over both boots, no `settings.unknown_key`, no
+`zenit.stored_ids.columns_unbound`, "Stored ids reconciled 0 rewritten". Still logged, harmless:
+`settings.source_missing` for `/opt/hohenheim/settings/default.dry` (the defaults ride the jar). A stale
+`/opt/hohenheim-rehearse-20260928-235235/new.jar` from an older lane is still on the host.
+
+Logged-in pass (screenshots in the git-ignored `docs/hohenheim-ux-mockups-2026-09-30/shots/dep8/` of the workspace):
+white sidebar `oklch(1 ...)` beside the `oklch(0.975 ...)` page; Metrics draws live CPU, memory and network; Activity
+reads as sentences. Defects seen: in the Apps list only the health glyph is a link, so clicking an app's name opens
+nothing; the app overview's problem band carries no fix action and its Recent card still reads "Jelle De Loecker:
+Deployed Instance #3"; the Deploys tab shows failed deploys' branch cut to "hohenhei" as the commit and raw
+`1 violation(s): -> ...` codes; the Memory chart is a flat line at the floor while reading 117.9 of 512 MB;
+comms.starfleet.life reads "Not working" without "Get a certificate" or a reason; Points here is Unknown everywhere
+because the local host declares no public address; Access tabs still read IP bans / Users / Roles / Auth providers and
+Access lists and IP bans keep "Quick add"; tenant /manage says "All clear" while the tenant's own app shows "Error
+page", keeps the old grouped sidebar and has no Put something online. Nothing was put online, protected or ordered.
+
+daystrom: still NOT deployed from this workstation; runs 27064da4; M011 step and the stale-keys check still owed.
+
+ROLLBACK: `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20261007-232059`; the
+removed keys are in `/root/hohenheim-dep8-20261008/local.dry`.
