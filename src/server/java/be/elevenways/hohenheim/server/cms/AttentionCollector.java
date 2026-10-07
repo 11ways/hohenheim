@@ -46,6 +46,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 
@@ -162,7 +163,8 @@ public final class AttentionCollector {
             copy("docker_foreign", "attention_title", "server", server),
             copy("docker_foreign", "attention_detail",
                 "count", count, "page", ReconcileFindingParts.LABEL),
-            foreignFindingsOf(server))));
+            foreignFindingsOf(server),
+            action("act_review_findings"))));
     }
 
     /**
@@ -203,7 +205,8 @@ public final class AttentionCollector {
             items.add(item(AttentionSeverity.ERROR, "box-archive",
                 copy("control_plane_backup", "attention_title"),
                 copy("control_plane_backup", "attention_detail"),
-                controlPlaneBackupTarget()));
+                controlPlaneBackupTarget(),
+                action("act_choose_backup_target")));
             return;
         }
         controlPlaneBackupFreshness(items);
@@ -248,7 +251,8 @@ public final class AttentionCollector {
                 copy("control_plane_backup_stale", "attention_title"),
                 copy("control_plane_backup_stale", "attention_detail",
                     "hours", CONTROL_PLANE_BACKUP_STALE_AFTER.toHours()),
-                CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG)));
+                CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG),
+                action("act_open_settings")));
         }
     }
 
@@ -275,8 +279,7 @@ public final class AttentionCollector {
                     latest.get(0).get(SystemTaskHistoryModel.STATUS))) {
                 items.add(item(AttentionSeverity.WARNING, "clock",
                     copy("task", "attention_title", "name", descriptor.typePath()),
-                    copy("last_run_failed", "attention_detail"),
-                    null));
+                    copy("last_run_failed", "attention_detail")));
             }
         }
     }

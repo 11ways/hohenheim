@@ -75,7 +75,13 @@ public final class PutOnlinePage extends PanelPage {
             (request, result) -> CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
                 HohenheimSlugs.SITES, result.value(), "overview").toUrl())))
         .confirmation(ConfirmationSpec.generic(PutOnline.copy("finish"), false))
+        // The chooser already answered what it serves: the kind rides the form as transport, never asked again.
+        .transport(SiteModel.UPSTREAM_KIND.getName())
         .build();
+
+    /** The journey's steps on other pages: the chooser before the wizard, the run page after it. */
+    private static final List<Microcopy> BEFORE_WIZARD = List.of(PutOnline.copy("step_what"));
+    private static final List<Microcopy> AFTER_WIZARD = List.of(PutOnline.copy("step_live"));
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("put_online"); }
     @Override public @NonNull Microcopy label() { return PutOnline.copy("put_online"); }
@@ -101,7 +107,10 @@ public final class PutOnlinePage extends PanelPage {
             PageActions.Opened opened = PageActions.open(request, this, FROM_TEMPLATE.id());
             if (opened instanceof PageActions.Form form) {
                 Row chosen = (Row) form.subject();
-                vars.put("document", form.state());
+                InstanceKindInfo kindInfo = InstanceKindRegistry.REGISTRY.get(
+                    Identifier.tryParse(String.valueOf((Object) chosen.get(InstanceTemplateModel.KIND))));
+                vars.put("document", form.state().withJourney(BEFORE_WIZARD, AFTER_WIZARD));
+                vars.put("whatIcon", kindInfo == null ? "cube" : kindInfo.getIcon().name());
                 vars.put("what", String.valueOf((Object) chosen.get(InstanceTemplateModel.NAME)));
                 Object description = chosen.get(InstanceTemplateModel.DESCRIPTION);
                 vars.put("whatDescription", description == null ? "" : String.valueOf(description));
@@ -112,7 +121,8 @@ public final class PutOnlinePage extends PanelPage {
                 Map.of(SiteModel.UPSTREAM_KIND.getName(), kind));
             if (opened instanceof PageActions.Form form) {
                 UpstreamKindInfo info = UpstreamKinds.REGISTRY.get(Identifier.tryParse(kind));
-                vars.put("document", form.state());
+                vars.put("document", form.state().withJourney(BEFORE_WIZARD, AFTER_WIZARD));
+                vars.put("whatIcon", info == null ? "globe" : info.getIcon().name());
                 vars.put("what", info == null ? kind : resolve(info.getLabel(), request));
                 vars.put("whatDescription", info == null ? "" : resolve(info.getDescription(), request));
             }

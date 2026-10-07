@@ -98,10 +98,6 @@
     "text": "Naam is verplicht",
     "scope": "violations"
   },
-  "open": {
-    "text": "Openen",
-    "scope": "attention"
-  },
   "prefix_format": {
     "text": "De env-prefix moet met een letter beginnen en mag enkel letters, cijfers en underscores bevatten",
     "scope": "violations"
@@ -13769,5 +13765,121 @@
   "point_address": {
     "text": "Een adres ergens anders heen sturen",
     "scope": "onboarding"
+  },
+  "act_open_settings": {
+    "text": "Instellingen openen",
+    "scope": "attention_action"
+  },
+  "act_open_certificates": {
+    "text": "Certificaten openen",
+    "scope": "attention_action"
+  },
+  "act_open_certificate": {
+    "text": "Certificaat bekijken",
+    "scope": "attention_action"
+  },
+  "act_fix_on": {
+    "text": "Oplossen bij {$name}",
+    "scope": "attention_action"
+  },
+  "act_protect_path": {
+    "text": "{$path} afschermen",
+    "scope": "attention_action"
+  },
+  "act_check_admit": {
+    "text": "Controleren en toelaten",
+    "scope": "attention_action"
+  },
+  "act_review_findings": {
+    "text": "Bekijken",
+    "scope": "attention_action"
+  },
+  "act_choose_backup_target": {
+    "text": "Back-updoel kiezen",
+    "scope": "attention_action"
+  },
+  "act_open_console": {
+    "text": "Console openen",
+    "scope": "attention_action"
+  },
+  "act_open_backups": {
+    "text": "Back-ups openen",
+    "scope": "attention_action"
+  },
+  "act_open_app": {
+    "text": "{$name} openen",
+    "scope": "attention_action"
+  },
+  "act_see_deploy": {
+    "text": "Uitrol bekijken",
+    "scope": "attention_action"
+  },
+  "act_add_ns": {
+    "text": "NS-records toevoegen",
+    "scope": "attention_action"
+  },
+  "act_open_secondaries": {
+    "text": "Secundaire servers openen",
+    "scope": "attention_action"
+  },
+  "act_open_zone": {
+    "text": "Zone openen",
+    "scope": "attention_action"
+  },
+  "act_open_database": {
+    "text": "Database openen",
+    "scope": "attention_action"
+  },
+  "act_open_engine": {
+    "text": "Engine openen",
+    "scope": "attention_action"
+  },
+  "act_open_databases": {
+    "text": "Databases openen",
+    "scope": "attention_action"
+  },
+  "summary_name": {
+    "text": "Naam",
+    "scope": "put_online"
+  },
+  "summary_address": {
+    "text": "Adres",
+    "scope": "put_online"
+  },
+  "summary_address_none": {
+    "text": "Nog geen adres; je kunt er later een toevoegen",
+    "scope": "put_online"
+  },
+  "summary_runs_on": {
+    "text": "Draait op",
+    "scope": "put_online"
+  },
+  "summary_runs_on_auto": {
+    "text": "Voor je gekozen: een toegelaten host met plaats ervoor",
+    "scope": "put_online"
+  },
+  "summary_serves": {
+    "text": "Wat",
+    "scope": "put_online"
+  },
+  "reach_label": {
+    "text": "Wijst hierheen",
+    "scope": "put_online"
+  },
+  "reach_here": {
+    "text": "Ja: {$hostname} wijst hierheen, dus HTTPS kan meteen.",
+    "scope": "put_online"
+  },
+  "reach_elsewhere": {
+    "text": "Nog niet: {$hostname} wijst naar {$addresses}. Het antwoordt hier zodra het hierheen wijst; dan kan HTTPS erbij.",
+    "scope": "put_online"
+  },
+  "reach_unresolved": {
+    "text": "Nog niet: {$hostname} bestaat nog niet in DNS. Het antwoordt hier zodra het hierheen wijst; dan kan HTTPS erbij.",
+    "scope": "put_online"
+  },
+  "reach_unknown": {
+    "text": "Onbekend: deze host geeft geen publiek adres op, dus waar {$hostname} naartoe wijst kan niet gecontroleerd worden.",
+    "scope": "put_online"
   }
 }

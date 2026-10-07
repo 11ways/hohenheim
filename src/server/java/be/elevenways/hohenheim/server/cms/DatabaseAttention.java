@@ -20,6 +20,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
+import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 
@@ -49,7 +50,8 @@ public final class DatabaseAttention {
                 reason == null || reason.isBlank()
                     ? copy("provisioning_failed", "attention_detail")
                     : copy("provisioning_failed_reason", "attention_detail", "reason", reason),
-                CmsRoutes.detail(ADMIN, "databases", row.get(DatabaseModel.ID))));
+                CmsRoutes.detail(ADMIN, "databases", row.get(DatabaseModel.ID)),
+                action("act_open_database")));
         }
         // An ACTIVE record carrying a reason is the one shape a status alone cannot show:
         // a failed move rolled the record back onto its untouched dedicated engine and
@@ -66,7 +68,8 @@ public final class DatabaseAttention {
             items.add(item(AttentionSeverity.WARNING, "database",
                 copy("database", "attention_title", "name", row.get(DatabaseModel.NAME)),
                 copy("database_operation_failed", "attention_detail", "reason", reason),
-                CmsRoutes.detail(ADMIN, "databases", row.get(DatabaseModel.ID))));
+                CmsRoutes.detail(ADMIN, "databases", row.get(DatabaseModel.ID)),
+                action("act_open_database")));
         }
         failedDatabaseEngines(items);
     }
@@ -85,7 +88,8 @@ public final class DatabaseAttention {
                     : copy("engine_provisioning_failed_reason", "attention_detail",
                         "reason", reason),
                 CmsRoutes.detail(ADMIN, DatabaseParts.ENGINES_SLUG,
-                    row.get(DatabaseEngineModel.ID))));
+                    row.get(DatabaseEngineModel.ID)),
+                action("act_open_engine")));
         }
     }
 
@@ -134,7 +138,8 @@ public final class DatabaseAttention {
                     copy("instance", "attention_title",
                         "name", instance.get(InstanceModel.NAME)),
                     detail,
-                    InstanceParts.recordRoute(ADMIN, instance, InstanceDatabasesPage.SLUG)));
+                    InstanceParts.recordRoute(ADMIN, instance, InstanceDatabasesPage.SLUG),
+                    action("act_open_databases")));
             }
         }
     }

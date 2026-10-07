@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -21,6 +22,11 @@ import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.FormStep;
+import be.elevenways.zenit.common.edit.StepAnswers;
+import be.elevenways.zenit.common.edit.StepSummary;
+import be.elevenways.zenit.common.edit.SummaryLine;
 import be.elevenways.zenit.common.operation.OperationResult;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -33,6 +39,7 @@ import be.elevenways.zenit.server.operation.OperationRequest;
 import be.elevenways.zenit.server.operation.OperationRun;
 import be.elevenways.zenit.common.operation.OperationRunStatus;
 import be.elevenways.zenit.server.operation.OperationRuns;
+import be.elevenways.zenit.test.support.OutboundFixture;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -134,6 +141,15 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
             .contains("nobody reaches by name");
         assertThat(addressWizard).as("step 2: an address kind has nothing to serve without one, so no such hint")
             .doesNotContain("nobody reaches by name").contains("You can add more addresses later.");
+        assertThat(addressWizard)
+            .as("step 2: the wizard's state carries the journey around it, What before it and Going live after")
+            .contains("step_what").contains("step_live");
+        assertThat(addressWizard).as("step 2: the chooser fixed what it serves: the kind rides along as transport")
+            .contains("type=\"hidden\" name=\"upstream_kind\" value=\"hohenheim:redirect\"");
+        assertThat(addressWizard.split("name=\"upstream_kind\"", -1).length - 1)
+            .as("step 2: and is never asked again").isEqualTo(1);
+        assertThat(addressWizard).as("step 2: the chosen kind's card carries its icon")
+            .contains("data-hh-put-online-what-icon");
 
         // 3. Putting the template online answers with a run at once; the run creates the app, its website and its
         //    address, starts it, and says HTTPS waits because Let's Encrypt is off.
@@ -244,6 +260,53 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
     }
 
     /** Polls until the run has ended, failing after twenty seconds. */
+    @Test
+    void theHttpsStepSummarizesWhatWillBeCreatedAndWhetherTheAddressPointsHere() {
+        var servers = Models.get(ServerModel.class);
+        Row local = servers.findById(ServerModel.localServerId());
+        String declared = local.get(ServerModel.PUBLIC_IPV4);
+        FormSpec form = PutOnline.PUT_ADDRESS_ONLINE.input().form();
+        StepSummary summary = form.steps().stream().filter(step -> step.id().equals("https")).findFirst()
+            .map(FormStep::summary).orElseThrow();
+        try (OutboundFixture here = OutboundFixture.route(PREFIX + "here.test", 9);
+             OutboundFixture elsewhere = OutboundFixture.route(PREFIX + "elsewhere.test", 9)) {
+            local.set(ServerModel.PUBLIC_IPV4, here.publicAddress().getHostAddress());
+            servers.save(local);
+
+            // 1. An address that points here: the summary names what it serves, its name and address, and says so.
+            List<SummaryLine> lines = summary.summarize(StepAnswers.of(form, Map.of(
+                SiteModel.NAME.getName(), "Old shop", SiteDomainModel.HOSTNAME.getName(), PREFIX + "here.test",
+                SiteModel.UPSTREAM_KIND.getName(), "hohenheim:redirect")));
+            assertThat(lines).as("step 1: what, name, address and where it points, in that order")
+                .extracting(line -> line.label().key())
+                .containsExactly("summary_serves", "summary_name", "summary_address", "reach_label");
+            assertThat(lines.get(1).value().key()).as("step 1: the name is the operator's own text")
+                .isEqualTo("Old shop");
+            assertThat(lines.get(3).value().key()).as("step 1: the address points here").isEqualTo("reach_here");
+
+            // 2. A name that resolves elsewhere is a notice, never a refusal: the summary says where it points.
+            List<SummaryLine> away = summary.summarize(StepAnswers.of(form, Map.of(
+                SiteDomainModel.HOSTNAME.getName(), PREFIX + "elsewhere.test",
+                SiteModel.UPSTREAM_KIND.getName(), "hohenheim:redirect")));
+            SummaryLine reach = away.get(away.size() - 1);
+            assertThat(reach.value().key()).as("step 2: it points elsewhere").isEqualTo("reach_elsewhere");
+            assertThat(String.valueOf(reach.value().args().get("addresses")))
+                .as("step 2: naming the address it points to")
+                .isEqualTo(elsewhere.publicAddress().getHostAddress());
+
+            // 3. A name that does not resolve at all reads as not pointing anywhere yet.
+            List<SummaryLine> nowhere = summary.summarize(StepAnswers.of(form, Map.of(
+                SiteDomainModel.HOSTNAME.getName(), PREFIX + "nowhere.invalid",
+                SiteModel.UPSTREAM_KIND.getName(), "hohenheim:redirect")));
+            assertThat(nowhere.get(nowhere.size() - 1).value().key()).as("step 3: it does not resolve")
+                .isEqualTo("reach_unresolved");
+        } finally {
+            local = servers.findById(ServerModel.localServerId());
+            local.set(ServerModel.PUBLIC_IPV4, declared);
+            servers.save(local);
+        }
+    }
+
     private static OperationRun ended(long runId, AccessContext viewer, String step) throws InterruptedException {
         long deadline = System.nanoTime() + 20_000_000_000L;
         BooleanSupplier done = () -> {

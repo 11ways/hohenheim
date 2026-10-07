@@ -25,6 +25,7 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelDashboard;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.render.table.HealthCellState;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -153,18 +154,20 @@ public final class AdminDashboard extends PanelDashboard {
         }
         // The board's lower half: the apps, read from the one App directory, beside what happened lately.
         widgets.add(section(columns(List.of(
-            new WidgetInstance(HohenheimWidgets.APPS.id(), Map.of()).withData(summaries(apps)),
+            new WidgetInstance(HohenheimWidgets.APPS.id(), Map.of()).withData(summaries(apps, accessContext)),
             new WidgetInstance(SectionWidget.ID, Map.of(), new WidgetTree(recentActivity(accessContext)))))));
         return new WidgetTree(widgets);
     }
 
-    /** The dashboard's Apps band rows: name, what and where, and whether HTTPS works. */
-    private static @NonNull List<AppSummary> summaries(@NonNull List<AppDirectory.App> apps) {
+    /** The dashboard's Apps band rows: health, name, what and where, and whether HTTPS works. */
+    private static @NonNull List<AppSummary> summaries(@NonNull List<AppDirectory.App> apps,
+                                                       @NonNull AccessContext access) {
         List<AppSummary> summaries = new ArrayList<>(apps.size());
         for (AppDirectory.App app : apps) {
             String detail = app.addressText() == null || app.addressText().isBlank()
                 ? app.kind() : app.kind() + " · " + app.addressText();
-            summaries.add(new AppSummary(app.name(), detail, app.target().toUrl(), app.https()));
+            summaries.add(new AppSummary(app.name(), detail, app.target().toUrl(), app.https(),
+                HealthCellState.of(app.health(), access)));
         }
         return summaries;
     }

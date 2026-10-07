@@ -816,6 +816,11 @@ class AdminPagesTest extends HohenheimTestBase {
                 + local.get(ServerModel.ID) + "']").count())
                 .as("step 1: and the item links to the host that has to be admitted")
                 .isEqualTo(1);
+            assertThat(blocked.get(0).action()).as("step 1: the item names its fix")
+                .isNotNull().extracting(Microcopy::key).isEqualTo("act_check_admit");
+            assertThat(page.locator(".hh-attention-item > a.hh-attention-target[href='/admin/servers/"
+                + local.get(ServerModel.ID) + "'] [data-attention-action]").innerText().trim())
+                .as("step 1: in words, beside the problem").isEqualTo("Check and admit");
 
             // 2. The blocked checklist step wears a warning marker, never a checkmark.
             var blockedStep = page.locator(".hh-onboarding-step[data-state='blocked']");

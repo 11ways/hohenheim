@@ -98,10 +98,6 @@
     "text": "Name is required",
     "scope": "violations"
   },
-  "open": {
-    "text": "Open",
-    "scope": "attention"
-  },
   "prefix_format": {
     "text": "The env prefix must start with a letter and contain only letters, digits, and underscores",
     "scope": "violations"
@@ -13769,5 +13765,121 @@
   "point_address": {
     "text": "Point an address somewhere else",
     "scope": "onboarding"
+  },
+  "act_open_settings": {
+    "text": "Open settings",
+    "scope": "attention_action"
+  },
+  "act_open_certificates": {
+    "text": "Open certificates",
+    "scope": "attention_action"
+  },
+  "act_open_certificate": {
+    "text": "Check the certificate",
+    "scope": "attention_action"
+  },
+  "act_fix_on": {
+    "text": "Fix on {$name}",
+    "scope": "attention_action"
+  },
+  "act_protect_path": {
+    "text": "Protect {$path}",
+    "scope": "attention_action"
+  },
+  "act_check_admit": {
+    "text": "Check and admit",
+    "scope": "attention_action"
+  },
+  "act_review_findings": {
+    "text": "Review them",
+    "scope": "attention_action"
+  },
+  "act_choose_backup_target": {
+    "text": "Choose a backup target",
+    "scope": "attention_action"
+  },
+  "act_open_console": {
+    "text": "Open the console",
+    "scope": "attention_action"
+  },
+  "act_open_backups": {
+    "text": "Open backups",
+    "scope": "attention_action"
+  },
+  "act_open_app": {
+    "text": "Open {$name}",
+    "scope": "attention_action"
+  },
+  "act_see_deploy": {
+    "text": "See the deploy",
+    "scope": "attention_action"
+  },
+  "act_add_ns": {
+    "text": "Add NS records",
+    "scope": "attention_action"
+  },
+  "act_open_secondaries": {
+    "text": "Open the secondaries",
+    "scope": "attention_action"
+  },
+  "act_open_zone": {
+    "text": "Open the zone",
+    "scope": "attention_action"
+  },
+  "act_open_database": {
+    "text": "Open the database",
+    "scope": "attention_action"
+  },
+  "act_open_engine": {
+    "text": "Open the engine",
+    "scope": "attention_action"
+  },
+  "act_open_databases": {
+    "text": "Open its databases",
+    "scope": "attention_action"
+  },
+  "summary_name": {
+    "text": "Name",
+    "scope": "put_online"
+  },
+  "summary_address": {
+    "text": "Address",
+    "scope": "put_online"
+  },
+  "summary_address_none": {
+    "text": "No address yet; you can add one later",
+    "scope": "put_online"
+  },
+  "summary_runs_on": {
+    "text": "Runs on",
+    "scope": "put_online"
+  },
+  "summary_runs_on_auto": {
+    "text": "Picked for you: an admitted host with room for it",
+    "scope": "put_online"
+  },
+  "summary_serves": {
+    "text": "What",
+    "scope": "put_online"
+  },
+  "reach_label": {
+    "text": "Points here",
+    "scope": "put_online"
+  },
+  "reach_here": {
+    "text": "Yes: {$hostname} points here, so HTTPS can be set up right away.",
+    "scope": "put_online"
+  },
+  "reach_elsewhere": {
+    "text": "Not yet: {$hostname} points to {$addresses}. It answers here once it points here; HTTPS can be added then.",
+    "scope": "put_online"
+  },
+  "reach_unresolved": {
+    "text": "Not yet: {$hostname} does not resolve. It answers here once it points here; HTTPS can be added then.",
+    "scope": "put_online"
+  },
+  "reach_unknown": {
+    "text": "Unknown: this host declares no public address, so where {$hostname} points cannot be checked.",
+    "scope": "put_online"
   }
 }

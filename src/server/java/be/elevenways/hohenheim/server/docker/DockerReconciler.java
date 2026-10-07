@@ -633,7 +633,7 @@ public final class DockerReconciler {
                 .withArg("count", names.size())
                 .withArg("names", listed);
             // No destination: a reconciler finding names a HOST, not a record page.
-            items.add(new AttentionItem(AttentionSeverity.WARNING, "cubes", title, detail, null));
+            items.add(new AttentionItem(AttentionSeverity.WARNING, "cubes", title, detail, null, null));
         });
     }
 }
