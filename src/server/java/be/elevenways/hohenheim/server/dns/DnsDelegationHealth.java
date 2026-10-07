@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -74,7 +75,8 @@ public final class DnsDelegationHealth {
         zone.set(DnsZoneModel.DELEGATION_STATUS, report.verdict().token());
         zone.set(DnsZoneModel.DELEGATION_DETAIL, report.detail());
         zone.set(DnsZoneModel.DELEGATION_CHECKED_AT, Now.instant());
-        Models.get(DnsZoneModel.class).save(zone);
+        // A delegation probe is bookkeeping; a broken delegation reaches operators as an alert below.
+        ActivityLog.suppressed(() -> Models.get(DnsZoneModel.class).save(zone));
 
         if (report.verdict().severity() != null && report.verdict() != previous) {
             Alerts.trySend(NotificationEvents.DNS_DELEGATION_BROKEN,

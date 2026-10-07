@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.activity.ActivityRecordCell;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.protoblast.common.typed.rule.Condition;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
@@ -11,13 +12,18 @@ import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.server.resource.ActivityAdmin;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ActivityText;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.query.rules.RuleText;
 import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.util.List;
 
 /**
  * The framework activity log composed for this panel: a hohenheim-authored sidebar description, a readable subject, a
@@ -46,8 +52,10 @@ public final class AdminActivityResource {
      * null as well as "".
      */
     private static final String HIDE_BACKGROUND_EXPRESSION =
-        ActivityModel.ORIGIN.getName() + " != \"" + Accountability.ORIGIN_SYSTEM + "\" or "
+        ActivityModel.ORIGIN.getName() + " != \"" + Accountability.ORIGIN_SYSTEM + "\" and "
+            + ActivityModel.ORIGIN.getName() + " != \"" + AccountabilityOrigin.SEED.token() + "\" or "
             + ActivityModel.ORIGIN.getName() + " is empty";
+
 
     /**
      * The framework's own columns with the record id given a renderer, and every filter an operator needs to reach
@@ -96,6 +104,30 @@ public final class AdminActivityResource {
                         : ActivityAdmin.defaultFilterChip(filter))
                 .build())
             .build();
+    }
+
+    /**
+     * What a person did, as one rule tree: the list's default origin scope plus the rows of models declared internal
+     * left out. The dashboard's recent activity reads THIS, so it never shows rows the list opens without.
+     *
+     * AIDEV-NOTE: the internal half is spelled over the MODEL variable, not the list's "internal" filter, because the
+     * dashboards' zenit.activity source derives its vocabulary from its projection and has no such variable; both
+     * read the same declarations ({@link ActivityLog#internalModelTokens}), resolved per call because they are made
+     * at class load of the modules that own the models.
+     *
+     * @return the rule tree selecting what a person did
+     */
+    public static @NonNull Condition peopleOnly() {
+        StringBuilder text = new StringBuilder("(").append(HIDE_BACKGROUND_EXPRESSION).append(")");
+        List<String> internal = ActivityLog.internalModelTokens();
+        if (!internal.isEmpty()) {
+            text.append(" and ").append(ActivityModel.MODEL.getName()).append(" not in [");
+            for (int i = 0; i < internal.size(); i++) {
+                text.append(i == 0 ? "\"" : ", \"").append(internal.get(i)).append('"');
+            }
+            text.append(']');
+        }
+        return RuleText.parse(text.toString()).require();
     }
 
     /** @return the notice the activity page shows while recording is off, null while recording is on */

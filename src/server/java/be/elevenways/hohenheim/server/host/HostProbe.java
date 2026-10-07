@@ -8,6 +8,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -117,7 +118,8 @@ public final class HostProbe {
         server.set(ServerModel.LAST_SEEN_AT, Now.instant());
         server.set(ServerModel.LAST_ERROR_KIND, null);
         server.set(ServerModel.LAST_ERROR, null);
-        Models.get(ServerModel.class).save(server);
+        // A heartbeat is bookkeeping, never activity: see HohenheimActivity.
+        ActivityLog.suppressed(() -> Models.get(ServerModel.class).save(server));
     }
 
     /**
@@ -142,7 +144,8 @@ public final class HostProbe {
         if (outcome.kind() == FailureKind.HOST_KEY_CHANGED) {
             quarantine(server, outcome.detail());
         }
-        Models.get(ServerModel.class).save(server);
+        // The failure reaches operators through the transition alert and the attention list, not the activity log.
+        ActivityLog.suppressed(() -> Models.get(ServerModel.class).save(server));
         if (previous == null || previous.isBlank()) {
             Alerts.trySend(NotificationEvents.HOST_UNREACHABLE,
                 "Host '" + serverName + "' stopped answering (" + outcome.kind().token + ")",
