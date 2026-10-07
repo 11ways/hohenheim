@@ -99,7 +99,8 @@ public final class SiteOperationHandlers {
         OperationHandlers.attach(ProtectPath.OPERATION)
             .applies(site -> live(site) && !SiteParts.tlsPassthrough(site))
             .authorize(reachesSite())
-            .handle(call -> protectPath(call.subject(), Objects.requireNonNull(call.input(), "protecting has input")));
+            .handle(call -> protectPath(call.subject(), Objects.requireNonNull(call.input(), "protecting has input"),
+                call.access()));
         // Deleting the panel's own site is the same outage as switching it off: dead, with the reason on screen.
         OperationHandlers.attach(SiteWrites.DELETE)
             .applies(SiteOperationHandlers::live)
@@ -113,9 +114,11 @@ public final class SiteOperationHandlers {
 
     /**
      * One dedicated (unshared) access list, its rules and the protected path, written in the operation's one command;
-     * the protected-path invariant inside the path's save refuses a list that would let everyone through.
+     * the protected-path invariant inside the path's save refuses a list that would let everyone through. The list
+     * answers to whoever created it (the access-list create's own ownership step), so a tenant can manage it later.
      */
-    private static @NonNull Integer protectPath(@NonNull Row site, ProtectPath.@NonNull Input input) {
+    private static @NonNull Integer protectPath(@NonNull Row site, ProtectPath.@NonNull Input input,
+                                                @Nullable AccessContext access) {
         List<ProtectionRule> rules = protectionRules(input);
         AccessListModel lists = Models.get(AccessListModel.class);
         Row list = lists.createEmptyRow();
@@ -123,6 +126,7 @@ public final class SiteOperationHandlers {
         list.set(AccessListModel.SATISFY, AccessListModel.SATISFY_ANY);
         list.set(AccessListModel.SHARED, false);
         lists.save(list);
+        HohenheimAccess.grantCreatorManage(AccessListModel.MODEL_ID, list.get(AccessListModel.ID), access);
         AccessRuleModel ruleModel = Models.get(AccessRuleModel.class);
         int sort = 0;
         for (ProtectionRule rule : rules) {
