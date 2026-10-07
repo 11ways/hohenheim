@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.HohenheimRoles;
@@ -14,9 +13,8 @@ import be.elevenways.zenit.cms.common.panel.PanelCluster;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.server.page.BuildInfoPage;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
-import be.elevenways.zenit.comms.CommsSettings;
+import be.elevenways.zenit.cms.server.task.TaskAdmin;
 import be.elevenways.zenit.comms.server.cms.CommsHubAdmin;
-import be.elevenways.zenit.comms.server.cms.CommsSettingsLabels;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -211,6 +209,10 @@ public final class HohenheimPanel extends Panel {
         if (settings != null) {
             peers.add(settings);
         }
+        // zenit's task admin: every scheduled task with Run now, and the live runs. Gated by the scheduler's own
+        // permissions (TaskOperations.VIEW/MANAGE), so an operator holding "*" sees them, a delegated admin only by grant.
+        peers.add(TaskAdmin.schedules(NavGroup.SYSTEM, 96));
+        peers.add(TaskAdmin.runs(NavGroup.SYSTEM, 97));
         peers.add(AppParts.admin(present(peers, HohenheimSlugs.SITES, InstanceParts.SLUG, StackParts.SLUG,
                 ProjectParts.SLUG),
             present(peers, PutOnlinePage.SLUG).isEmpty() ? null : PutOnlinePage.SLUG));
@@ -222,7 +224,8 @@ public final class HohenheimPanel extends Panel {
             activity.slug(), inbox.slug(), deliveries.slug());
         addCluster(peers, cluster("settings", SETTINGS_CLUSTER, "gear", 80), SettingsPage.DEFAULT_SLUG,
             HohenheimSlugs.INSTANCE_TEMPLATES, RuntimeImageParts.SLUG, HohenheimSlugs.GIT_PROVIDERS,
-            DatabaseParts.ENGINES_SLUG, NotificationChannelParts.SLUG, BackupTargetParts.SLUG, buildInfo.slug());
+            DatabaseParts.ENGINES_SLUG, NotificationChannelParts.SLUG, BackupTargetParts.SLUG,
+            TaskAdmin.SCHEDULES_SLUG, TaskAdmin.RUNS_SLUG, buildInfo.slug());
         return peers;
     }
 
@@ -277,18 +280,16 @@ public final class HohenheimPanel extends Panel {
     }
 
     /**
-     * The settings editor in the System group: Hohenheim's own group, zenit's framework mount, the comms transport
-     * chain (it and Hohenheim's group are groups of the framework file, which the framework mount then leaves out) and
-     * the spamservice backend. The file-backed mounts only appear when this boot loaded that file.
+     * The settings editor: Hohenheim's operator sections first (HohenheimSettingsSections, in the boards' order), then
+     * zenit's own settings behind "Framework (advanced)". A mount whose settings file this boot never loaded is left
+     * out.
      */
     private static @Nullable SettingsPage settingsPage() {
-        return SettingsPage.standard(HohenheimIds.id("settings"))
-            .mount(SettingsPage.frameworkGroup("app", Microcopy.literal("Hohenheim"), HohenheimSettings.HOHENHEIM))
-            .frameworkMount()
-            .mount(SettingsPage.frameworkGroup(CommsSettingsLabels.MOUNT_KEY, CommsSettingsLabels.mount(),
-                CommsSettings.ROOT))
-            .mount(new SettingsPage.Mount("spamservice", Microcopy.literal("Spamservice"),
-                new SpamserviceSettingsBackend()))
+        SettingsPage.Standard page = SettingsPage.standard(HohenheimIds.id("settings"));
+        for (HohenheimSettingsSections section : HohenheimSettingsSections.values()) {
+            page.mount(section.mount());
+        }
+        return page.frameworkAdvanced()
             // The page edits the operator-trusted endpoints (auth_proteus is fetched with any-address reach) and the
             // private-network opt-ins, so the delegable panel entry alone never reaches it.
             .requirePermission(HohenheimSources.ADMIN_SYSTEM)

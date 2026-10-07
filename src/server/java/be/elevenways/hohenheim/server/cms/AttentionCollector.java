@@ -73,8 +73,9 @@ public final class AttentionCollector {
      */
     private static final String ADMIN = HohenheimSlugs.ADMIN;
 
-    /** The settings anchor of the group holding the control-plane backup target ("app" mount, database group). */
-    static final String CONTROL_PLANE_BACKUP_SECTION = "setting-app-database";
+    /** The settings anchor of the group holding the control-plane backup target (the Backups section's database group). */
+    static final String CONTROL_PLANE_BACKUP_SECTION =
+        HohenheimSettingsSections.BACKUPS.anchorOf(HohenheimSettings.Database.GROUP);
 
     private AttentionCollector() {}
 

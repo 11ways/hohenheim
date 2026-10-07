@@ -541,3 +541,27 @@ Order: W6 as planned. G5 needs nothing from W1-W5 except the `put_online` operat
   refused on its own entry before anything is written; the protected-path invariant still refuses an open list for
   every writer. The Protection card keeps linking to the site's protected paths: a placed operation opens its sheet
   from its own button, and the invoke route is POST-only.
+
+## 13. W5b2 decisions (fork W5b2, 2026-10-07)
+
+- Recount before the change: the settings tree listed one "Hohenheim" mount of 22 groups, a "Framework" mount of about
+  44 groups (with duplicate labels: Storage, Database, Cms, Channels), Communication and Spamservice, about 70 rows.
+- Operator sections are mounts in one declaring home, `HohenheimSettingsSections` (General, HTTPS and certificates,
+  Backups, Notifications, Apps and deploys, Hosts, DNS server, Blocking and firewall, Abuse protection, Proxy). A section
+  of several groups is zenit-cms `SettingsPage.frameworkSection` (new: the groups' parent minus its other child
+  groups, so every setting keeps its stored path); a section of one group is `frameworkGroup`, headed by the section's
+  own name. `AdminSettingsMountsTest` pins that every Hohenheim group belongs to exactly one section.
+- zenit's own settings sit behind one "Framework (advanced)" disclosure: `SettingsPage.Standard.frameworkAdvanced()`
+  (new) marks the framework mount advanced, and its groups are listed once the reader opens it, searches, or deep-links
+  a group (`SettingsSearch.sectionShown`). The page never opens on a framework group.
+- The section key replaces the old `app` mount key in anchors and input names (`setting-backups-database`,
+  `backups.database.control_plane_backup_target`); stored setting paths are unchanged, and the anchor format has one
+  public home, `SettingsPage.anchor`.
+- The boards' resource sections (App templates, Runtime images, Git connections, Database engines, Notification
+  channels, Backup targets, Build info) are the Settings cluster's tabs, never duplicated as settings rows. Backup
+  targets are records on their own tab (added and edited there, saved immediately, Test connection in each row); the
+  control-plane destination picker reads them (`references`) and offers "create" when there is none.
+- Tasks: zenit-cms `TaskAdmin.schedules` (Run now) and `TaskAdmin.runs` are Settings cluster tabs, gated by the
+  scheduler's own permissions.
+- Notifications: channels already carry "Send a test" and list each channel's subscribed events; the board's
+  event-by-channel matrix is not built.

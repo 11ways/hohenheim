@@ -68,35 +68,36 @@ class AdminPagesTest extends HohenheimTestBase {
         // group's rows, so every group this journey touches is named in ?section=
         // (the JS-free expansion lane; the save's PRG redirect re-expands the same set).
         // This assertion set went red unnoticed when that landed -- nobody re-ran it.
-        navigateToApp("/admin/settings?section=setting-app-proxy,setting-app-security,"
-            + "setting-app-ssl,setting-app-storage,setting-app-auth_proteus,"
+        navigateToApp("/admin/settings?section=setting-proxy-proxy,setting-blocking,"
+            + "setting-https,setting-general-storage,setting-proxy-auth_proteus,"
             + "setting-framework-network,setting-framework-compression");
         waitForHydration();
 
         String content = page.content();
-        // Every hohenheim group renders (the old hand-rolled page only covered four).
+        // Every hohenheim group renders, under the operator section that holds it: a section of one group is headed
+        // by the section's own name, a section of several groups lists each group under it.
         assertThat(content).contains("Proxy");
         assertThat(content).contains("Logging");
-        assertThat(content).contains("Security");
-        assertThat(content).contains("SSL / TLS");
+        assertThat(content).contains("Blocking and firewall");
+        assertThat(content).contains("HTTPS and certificates");
         assertThat(content).contains("Storage");
         assertThat(content).contains("Proteus SSO");
         // Secret settings never render their value: a STORED secret renders plumage's
         // masked "secret" register, never the password control (which would opt the whole
         // settings form into the browser's password manager).
         assertThat(page.locator(
-            "[data-path='app.auth_proteus.access_key'] pl-input[type='secret']").count())
+            "[data-path='proxy.auth_proteus.access_key'] pl-input[type='secret']").count())
             .as("a stored secret renders the masked register").isEqualTo(1);
         assertThat(page.locator(
-            "[data-path='app.auth_proteus.access_key'] input[type='password']").count())
+            "[data-path='proxy.auth_proteus.access_key'] input[type='password']").count())
             .as("and never the credential control").isEqualTo(0);
         // A numeric setting edits through plumage's typed number control; its unit rides
         // the control's suffix slot rather than an input-group addon.
         assertThat(page.locator(
-            "[data-path='app.ssl.dns_propagation_seconds'] pl-number-input [slot='suffix']").innerText().trim())
+            "[data-path='https.dns_propagation_seconds'] pl-number-input [slot='suffix']").innerText().trim())
             .isEqualTo("s");
         assertThat(page.locator(
-            "[data-path='app.storage.data_path'] zf-path-input [data-zf-path-browse]").count()).isEqualTo(1);
+            "[data-path='general.storage.data_path'] zf-path-input [data-zf-path-browse]").count()).isEqualTo(1);
         for (String path : new String[] {
             "framework.network.request_body_size_limit",
             "framework.network.request_individual_file_size_limit",
@@ -108,15 +109,15 @@ class AdminPagesTest extends HohenheimTestBase {
                 .isEqualTo("B");
         }
         assertThat(page.locator(
-            ".cms-setting:has([data-path='app.auth_proteus.enabled']) .cms-setting-note-restart").count()).isEqualTo(1);
+            ".cms-setting:has([data-path='proxy.auth_proteus.enabled']) .cms-setting-note-restart").count()).isEqualTo(1);
         assertThat(page.locator(
-            ".cms-setting:has([data-path='app.auth_proteus.authenticator']) .cms-setting-note-restart").count()).isEqualTo(1);
+            ".cms-setting:has([data-path='proxy.auth_proteus.authenticator']) .cms-setting-note-restart").count()).isEqualTo(1);
 
         // AIDEV-NOTE: a non-secret string-list setting edits as CHIPS (pl-select's tags mode)
         // since zenit 8487f7f5 (SettingsForms.chips), never the zf-array rows editor: there is
         // no add button and no move controls, so the rows editor's directives are proven by
         // zenit-cms's ArrayAndKeyValueEditorBrowserTest, not here.
-        String neverBan = "pl-field[data-path='app.security.never_ban']";
+        String neverBan = "pl-field[data-path='blocking.never_ban']";
         assertThat(page.locator(neverBan + " pl-select").count())
             .as("the never-ban list is a chip input").isEqualTo(1);
         assertThat(page.locator(neverBan + " zf-array").count())
@@ -128,7 +129,7 @@ class AdminPagesTest extends HohenheimTestBase {
         try {
             for (String language : new String[] {"en", "nl"}) {
                 page.setExtraHTTPHeaders(Map.of("Accept-Language", language));
-                navigateToApp("/admin/settings?section=setting-app-security");
+                navigateToApp("/admin/settings?section=setting-blocking");
                 waitForHydration();
                 var field = page.locator(neverBan);
                 String fieldMarkup = (String) field.evaluate("el => el.outerHTML");
@@ -143,7 +144,7 @@ class AdminPagesTest extends HohenheimTestBase {
                     .as("step 1: the never-ban help resolves from the %s catalog", language)
                     .isEqualTo(Microcopy.of("settings.hohenheim.security.never_ban.help")
                         .resolve(LocaleChain.ofTags(language), catalogs));
-                assertThat(page.locator("#setting-app-security .cms-settings-section-description").innerText().trim())
+                assertThat(page.locator("#setting-blocking .cms-settings-section-description").innerText().trim())
                     .as("step 1: the declared security-group description renders in %s", language)
                     .isEqualTo(HohenheimSettings.Security.GROUP.displayDescription()
                         .resolve(LocaleChain.ofTags(language), catalogs));
@@ -153,13 +154,13 @@ class AdminPagesTest extends HohenheimTestBase {
         } finally {
             page.setExtraHTTPHeaders(Map.of());
         }
-        navigateToApp("/admin/settings?section=setting-app-proxy,setting-app-security,"
-            + "setting-app-ssl,setting-app-storage,setting-app-auth_proteus,"
+        navigateToApp("/admin/settings?section=setting-proxy-proxy,setting-blocking,"
+            + "setting-https,setting-general-storage,setting-proxy-auth_proteus,"
             + "setting-framework-network,setting-framework-compression");
         waitForHydration();
-        var fallback = page.locator("[data-path='app.proxy.fallback_address'] input");
+        var fallback = page.locator("[data-path='proxy.proxy.fallback_address'] input");
         fallback.fill("http://127.0.0.1:9999");
-        var threshold = page.locator("[data-path='app.security.domain_miss_threshold'] input");
+        var threshold = page.locator("[data-path='blocking.domain_miss_threshold'] input");
         threshold.fill("7");
         page.click(neverBan + " .pl-select-field");
         String chipInput = "he-bottom .pl-select-popup[data-open] .pl-select-search input";
@@ -208,7 +209,7 @@ class AdminPagesTest extends HohenheimTestBase {
         // client-side (the settings page's inline script, which clicked every remove
         // button, is gone). The write-back below is what proves the clear applied.
         String resetControl =
-            ".cms-setting:has([data-path='app.security.never_ban']) [data-cms-setting-reset]";
+            ".cms-setting:has([data-path='blocking.never_ban']) [data-cms-setting-reset]";
         page.click(resetControl + " pl-checkbox button");
         waitForReactiveIdle();
         assertThat(page.locator(resetControl + " pl-checkbox button").getAttribute("aria-checked"))
@@ -239,7 +240,7 @@ class AdminPagesTest extends HohenheimTestBase {
         // option is a CHILD of "/", and what this pins is that the option navigated into
         // is the directory the footer then chooses: a picker that chose something other
         // than where the operator is standing is the defect worth catching.
-        var pathField = page.locator("[data-path='app.storage.data_path']");
+        var pathField = page.locator("[data-path='general.storage.data_path']");
         pathField.locator("[data-zf-path-browse]").click();
         var dialog = page.locator("he-bottom .pl-dialog-modal[data-open]");
         dialog.waitFor();
@@ -274,7 +275,7 @@ class AdminPagesTest extends HohenheimTestBase {
         // violation instead of persisting anything.
         Integer before = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT);
         var response = adminPostForm("/admin/settings",
-            "app.proxy.http_port=not-a-port&app.proxy.http_port__base=" + before);
+            "proxy.proxy.http_port=not-a-port&proxy.proxy.http_port__base=" + before);
 
         // Validation failure rerenders the page (no PRG redirect).
         assertThat(response.statusCode()).isEqualTo(200);

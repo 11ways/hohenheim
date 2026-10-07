@@ -6051,7 +6051,7 @@
     "scope": "violations"
   },
   "backup_target_control_plane": {
-    "text": "Backup target {$name} receives this server's own recovery archives; pick another target for them in Settings, under Database, first",
+    "text": "Backup target {$name} receives this server's own recovery archives; pick another target for them in Settings, under Backups, first",
     "scope": "violations"
   },
   "backup_target_kind_unknown": {
@@ -9243,7 +9243,7 @@
       "scope": "attention_title"
     },
     {
-      "text": "This server's own recovery archives (its database and encryption keys) have nowhere to go. Pick a backup target for them in Settings, under Database.",
+      "text": "This server's own recovery archives (its database and encryption keys) have nowhere to go. Pick a backup target for them in Settings, under Backups.",
       "scope": "attention_detail"
     }
   ],
@@ -13951,5 +13951,45 @@
   "protect_path_method": {
     "text": "Choose how visitors get in.",
     "scope": "violations"
+  },
+  "section_general": {
+    "text": "General",
+    "scope": "settings_section"
+  },
+  "section_https": {
+    "text": "HTTPS and certificates",
+    "scope": "settings_section"
+  },
+  "section_backups": {
+    "text": "Backups",
+    "scope": "settings_section"
+  },
+  "section_notifications": {
+    "text": "Notifications",
+    "scope": "settings_section"
+  },
+  "section_apps": {
+    "text": "Apps and deploys",
+    "scope": "settings_section"
+  },
+  "section_hosts": {
+    "text": "Hosts",
+    "scope": "settings_section"
+  },
+  "section_dns": {
+    "text": "DNS server",
+    "scope": "settings_section"
+  },
+  "section_blocking": {
+    "text": "Blocking and firewall",
+    "scope": "settings_section"
+  },
+  "section_abuse": {
+    "text": "Abuse protection",
+    "scope": "settings_section"
+  },
+  "section_proxy": {
+    "text": "Proxy",
+    "scope": "settings_section"
   }
 }
