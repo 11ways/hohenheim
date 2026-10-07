@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.tls;
 
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.cache.Cache;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.net.OutboundNetwork;
@@ -14,6 +15,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Whether a hostname points at this proxy: its addresses compared with the public addresses the controller's own
@@ -38,7 +44,9 @@ public final class HostnameReach {
         /** The name does not resolve (yet). */
         UNRESOLVED,
         /** This host declares no public address, so nothing can be compared. */
-        UNKNOWN
+        UNKNOWN,
+        /** The lookup has not answered within the reader's wait; it keeps running and fills the cache. */
+        CHECKING
     }
 
     /**
@@ -51,20 +59,87 @@ public final class HostnameReach {
     /** How long a looked-up answer is reused: long enough for a form's next step, short enough to see a DNS fix. */
     private static final long RECENT_MS = 60_000;
 
+    /** The longest one reader waits for one name: the system resolver has no time limit of its own. */
+    public static final long LOOKUP_WAIT_MS = 1_500;
+
+    /** Lookups running at once; a name past it reads CHECKING until a running lookup frees a place. */
+    private static final int MAX_IN_FLIGHT = 64;
+
     /** The answers of the last minute, by lower-cased name (protoblast's Cache reads its clock from {@code Now}). */
     private static final Cache<String, Reach> RECENT = new Cache<>(512, RECENT_MS);
+
+    /** The lookup running for a name, so readers of the same name share one resolution. */
+    private static final ConcurrentHashMap<String, CompletableFuture<Reach>> IN_FLIGHT = new ConcurrentHashMap<>();
+
+    private static final Reach CHECKING = new Reach(Verdict.CHECKING, List.of());
 
     private HostnameReach() {
     }
 
     /**
-     * Where {@code hostname} points, reusing an answer from the last minute.
+     * Where {@code hostname} points, reusing an answer from the last minute, waiting at most {@link #LOOKUP_WAIT_MS}.
      *
      * AIDEV-NOTE: for what an operator READS (a wizard summary, a list cell), where a lookup per render would resolve
      * DNS on every page. A decision that acts on the answer (the certificate order's pre-check) calls {@link #of}.
      */
     public static @NonNull Reach recent(@NonNull String hostname) {
-        return RECENT.getOrCompute(hostname.trim().toLowerCase(Locale.ROOT), HostnameReach::of);
+        return recent(hostname, LOOKUP_WAIT_MS);
+    }
+
+    /**
+     * Where {@code hostname} points, waiting at most {@code waitMs} for an answer not in the cache.
+     *
+     * AIDEV-NOTE: a lookup that outlives the wait is NOT abandoned: it runs on a virtual thread, lands in the cache
+     * when the resolver answers, and the next reader gets it. A resolver that never answers holds one virtual thread
+     * per name (single-flight) and at most {@link #MAX_IN_FLIGHT} in total; past that a name reads CHECKING without
+     * starting another.
+     *
+     * @return the answer, or a {@link Verdict#CHECKING} reach when none arrived within the wait
+     */
+    public static @NonNull Reach recent(@NonNull String hostname, long waitMs) {
+        String name = hostname.trim().toLowerCase(Locale.ROOT);
+        Reach cached = RECENT.get(name);
+        if (cached != null) {
+            return cached;
+        }
+        CompletableFuture<Reach> lookup = IN_FLIGHT.get(name);
+        if (lookup == null) {
+            if (IN_FLIGHT.size() >= MAX_IN_FLIGHT) {
+                return CHECKING;
+            }
+            CompletableFuture<Reach> started = new CompletableFuture<>();
+            lookup = IN_FLIGHT.putIfAbsent(name, started);
+            if (lookup == null) {
+                lookup = started;
+                JobRunner.startVirtualThread(() -> resolveInto(name, started));
+            }
+        }
+        if (waitMs <= 0) {
+            return lookup.isDone() ? lookup.getNow(CHECKING) : CHECKING;
+        }
+        try {
+            return lookup.get(waitMs, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException stillResolving) {
+            return CHECKING;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return CHECKING;
+        } catch (ExecutionException failed) {
+            return new Reach(Verdict.UNKNOWN, List.of());
+        }
+    }
+
+    /** Resolves one name, caches the answer and releases the name's in-flight slot. */
+    private static void resolveInto(@NonNull String name, @NonNull CompletableFuture<Reach> lookup) {
+        try {
+            Reach reach = of(name);
+            RECENT.set(name, reach);
+            lookup.complete(reach);
+        } catch (RuntimeException failed) {
+            lookup.completeExceptionally(failed);
+        } finally {
+            IN_FLIGHT.remove(name, lookup);
+        }
     }
 
     /** @return where {@code hostname} points, judged against the controller host's declared public addresses */

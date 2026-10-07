@@ -13929,6 +13929,10 @@
     "text": "Onbekend: deze host geeft geen publiek adres op, dus waar {$hostname} naartoe wijst kan niet gecontroleerd worden.",
     "scope": "put_online"
   },
+  "reach_checking": {
+    "text": "Nog bezig met nagaan waar {$hostname} naartoe wijst; het overzicht toont het zodra het antwoord er is.",
+    "scope": "put_online"
+  },
   "path_help": {
     "text": "Alles onder dit pad wordt beveiligd, bijvoorbeeld /wp-admin.",
     "scope": "protect_path"
@@ -14337,6 +14341,10 @@
     "text": "Onbekend",
     "scope": "site_domains"
   },
+  "points_here_checking": {
+    "text": "Bezig met controleren",
+    "scope": "site_domains"
+  },
   "points_elsewhere_detail": {
     "text": "Wijst naar {$addresses}, niet naar deze proxy",
     "scope": "site_domains"
@@ -14347,6 +14355,10 @@
   },
   "points_unknown_detail": {
     "text": "Deze host geeft geen publiek adres op om mee te vergelijken",
+    "scope": "site_domains"
+  },
+  "points_checking_detail": {
+    "text": "De naam wordt nog opgezocht; laad opnieuw om het antwoord te zien",
     "scope": "site_domains"
   },
   "address_requests": {
