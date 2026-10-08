@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
+import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.options.ServerOptions;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -208,10 +209,9 @@ public final class ServerParts {
             case ServerModel.ADMISSION_CORDONED -> new StateLineCell(admission, BadgeVariant.SECONDARY, label,
                 listCopy("cordoned_detail"), null);
             default -> {
-                List<String> failed = HostAttention.failedRequiredChecks(server);
+                List<Microcopy> failed = HostAttention.failedRequiredChecks(server);
                 Microcopy detail = !failed.isEmpty()
-                    ? listCopy("checks_failed").withArg("count", failed.size())
-                        .withArg("checks", String.join(", ", failed))
+                    ? listCopy("checks_failed").withArg("count", failed.size()).withArg("checks", failed)
                     : server.get(ServerModel.PROBED_AT) == null ? listCopy("never_checked") : listCopy("checks_pass");
                 yield new StateLineCell(admission, BadgeVariant.WARNING, label, detail, null);
             }
@@ -302,7 +302,9 @@ public final class ServerParts {
         } catch (RuntimeException unbooted) { /* The stored cell is also readable before boot. */ }
         if (row.get(ServerModel.QUARANTINED_AT) != null) return new HostStatusCell(HostState.QUARANTINED, daemon, null, iso, wording);
         String error = row.get(ServerModel.LAST_ERROR_KIND);
-        if (error != null && !error.isBlank()) return new HostStatusCell(HostState.ERROR, daemon, error, iso, wording);
+        if (error != null && !error.isBlank()) {
+            return new HostStatusCell(HostState.ERROR, daemon, HostProbe.FailureKind.labelOf(error), iso, wording);
+        }
         if (seen == null) return new HostStatusCell(HostState.NEVER_PROBED, daemon, null, null, wording);
         try {
             HostAdmission.requireRecentContact(row);

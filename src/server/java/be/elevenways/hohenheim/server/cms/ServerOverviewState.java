@@ -315,7 +315,7 @@ public final class ServerOverviewState {
         List<PreflightCheckView> mustPass = new ArrayList<>();
         List<PreflightCheckView> advice = new ArrayList<>();
         for (PreflightCheckView check : preflightChecks(server)) {
-            (check.required() ? mustPass : advice).add(check.withFix(fixFor(check)));
+            (check.required() ? mustPass : advice).add(check.withLabel(checkLabel(check.name())).withFix(fixFor(check)));
         }
         // What blocks comes first; within each half the stored order stays.
         Comparator<PreflightCheckView> failingFirst = Comparator.comparing(check -> !check.notPassing());
@@ -334,15 +334,32 @@ public final class ServerOverviewState {
      * What an operator does about a check that did not pass, or null.
      *
      * AIDEV-NOTE: the check names are the batteries' own declarations (HostPreflight.DOCKER_BATTERY,
-     * IncusPreflight.BATTERY); HostCheckAndAdmitJourneyTest asserts every one of them has this copy in both
-     * shipped catalogs, so a new check fails the build until it says how to fix it.
+     * IncusPreflight.BATTERY); HostCheckAndAdmitJourneyTest asserts every one of them has this copy and its
+     * {@link #checkLabel} in both shipped catalogs, so a new check fails the build until it is named and says how to
+     * fix it.
      */
     static @Nullable Microcopy fixFor(@NonNull PreflightCheckView check) {
-        if (!check.notPassing() || !(HostPreflight.DOCKER_BATTERY.contains(check.name())
-                || IncusPreflight.BATTERY.contains(check.name()))) {
+        if (!check.notPassing() || !declaredCheck(check.name())) {
             return null;
         }
         return fixCopy(check.name());
+    }
+
+    /** @return whether a stored check name is one the batteries declare, which is what gives it words and a fix */
+    static boolean declaredCheck(@NonNull String checkName) {
+        return HostPreflight.DOCKER_BATTERY.contains(checkName) || IncusPreflight.BATTERY.contains(checkName);
+    }
+
+    /**
+     * A check's name in words, wherever a check is named: the host page, the host list, the attention item and the
+     * refusal of Check and admit.
+     *
+     * @return the declared check's label; a name no battery declares (an older stored report) keeps its spelling
+     */
+    static @NonNull Microcopy checkLabel(@NonNull String checkName) {
+        return declaredCheck(checkName)
+            ? Microcopy.of("check_" + checkName).withFilter("scope", "host_check")
+            : Microcopy.literal(checkName);
     }
 
     /** @return the how-to-fix sentence of one declared check */

@@ -1085,7 +1085,7 @@
     "scope": "routing_problem"
   },
   "handler_faulted": {
-    "text": "De verzoekafhandeling weigert elk verzoek: {$detail}",
+    "text": "Elke bezoeker wordt geweigerd: {$detail}",
     "scope": "routing_problem"
   },
   "duplicate_route": {
@@ -4145,7 +4145,7 @@
   },
   "lift": [
     {
-      "text": "Verbanning opheffen",
+      "text": "Opheffen",
       "scope": "ban"
     },
     {
@@ -9672,7 +9672,7 @@
     "scope": "server"
   },
   "state_error": {
-    "text": "peiling mislukt ({$kind})",
+    "text": "{$kind}",
     "scope": "server"
   },
   "state_silent": {
@@ -9684,7 +9684,7 @@
     "scope": "server"
   },
   "host_probe_failed": {
-    "text": "Peiling van {$name} mislukt: {$kind}",
+    "text": "Kon {$name} niet bereiken: {$kind}",
     "scope": "violations"
   },
   "quarantined_title": {
@@ -9782,11 +9782,11 @@
     "scope": "server_overview"
   },
   "verdict_passed": {
-    "text": "geslaagd",
+    "text": "Geslaagd",
     "scope": "server_overview"
   },
   "verdict_failed": {
-    "text": "mislukt",
+    "text": "Mislukt",
     "scope": "server_overview"
   },
   "never_preflighted": {
@@ -15065,5 +15065,169 @@
   "https_forced_excluded": {
     "text": "HTTPS is verplicht, maar geen werkend certificaat dekt deze naam en Let's Encrypt mag er nooit een aanvragen: upload er een, of zet HTTPS verplichten uit",
     "scope": "site_domains"
+  },
+  "check_daemon": {
+    "text": "Containerdaemon bereikbaar",
+    "scope": "host_check"
+  },
+  "check_api_version": {
+    "text": "Docker recent genoeg",
+    "scope": "host_check"
+  },
+  "check_container_kernel": {
+    "text": "Containers starten",
+    "scope": "host_check"
+  },
+  "check_cgroup_pids_controller": {
+    "text": "Proceslimieten beschikbaar",
+    "scope": "host_check"
+  },
+  "check_pids_limit_enforced": {
+    "text": "Proceslimieten afgedwongen",
+    "scope": "host_check"
+  },
+  "check_seccomp": {
+    "text": "Filter op systeemaanroepen",
+    "scope": "host_check"
+  },
+  "check_no_new_privs": {
+    "text": "Geen verhoging van rechten",
+    "scope": "host_check"
+  },
+  "check_userns_remap": {
+    "text": "Root in een container is geen root op de host",
+    "scope": "host_check"
+  },
+  "check_lsm": {
+    "text": "Containers afgeschermd (AppArmor of SELinux)",
+    "scope": "host_check"
+  },
+  "check_network_headroom": {
+    "text": "Ruimte voor containernetwerken",
+    "scope": "host_check"
+  },
+  "check_nftables": {
+    "text": "Beheer van de firewall",
+    "scope": "host_check"
+  },
+  "check_resources": {
+    "text": "Genoeg CPU en geheugen",
+    "scope": "host_check"
+  },
+  "check_trusted": {
+    "text": "Incus vertrouwt deze controller",
+    "scope": "host_check"
+  },
+  "check_driver_lxc": {
+    "text": "Containerdriver (LXC)",
+    "scope": "host_check"
+  },
+  "check_storage_pool": {
+    "text": "Opslagpool",
+    "scope": "host_check"
+  },
+  "check_managed_network": {
+    "text": "Beheerd netwerk",
+    "scope": "host_check"
+  },
+  "check_network_acl": {
+    "text": "Netwerkregels (ACL's)",
+    "scope": "host_check"
+  },
+  "check_kernel_isolation_lane": {
+    "text": "Afgeschermde kernel voor tenants",
+    "scope": "host_check"
+  },
+  "check_container_userns": {
+    "text": "Containers zonder rechten",
+    "scope": "host_check"
+  },
+  "check_container_seccomp": {
+    "text": "Filter op systeemaanroepen voor containers",
+    "scope": "host_check"
+  },
+  "verdict_pass": {
+    "text": "Geslaagd",
+    "scope": "host_check"
+  },
+  "verdict_warn": {
+    "text": "Advies",
+    "scope": "host_check"
+  },
+  "verdict_fail": {
+    "text": "Mislukt",
+    "scope": "host_check"
+  },
+  "probe_failure_unreachable": {
+    "text": "Niet bereikbaar",
+    "scope": "host_probe"
+  },
+  "probe_failure_dns": {
+    "text": "Zijn naam wordt niet gevonden",
+    "scope": "host_probe"
+  },
+  "probe_failure_ssh_auth": {
+    "text": "SSH-aanmelding geweigerd",
+    "scope": "host_probe"
+  },
+  "probe_failure_host_key_changed": {
+    "text": "Zijn hostsleutel is gewijzigd",
+    "scope": "host_probe"
+  },
+  "probe_failure_not_pinned": {
+    "text": "Zijn hostsleutel is nog niet vastgezet",
+    "scope": "host_probe"
+  },
+  "probe_failure_no_identity": {
+    "text": "Hohenheim heeft er geen SSH-sleutel voor",
+    "scope": "host_probe"
+  },
+  "probe_failure_docker_absent": {
+    "text": "Docker niet gevonden",
+    "scope": "host_probe"
+  },
+  "probe_failure_untrusted": {
+    "text": "Incus vertrouwt deze controller niet",
+    "scope": "host_probe"
+  },
+  "probe_failure_timeout": {
+    "text": "Antwoordde niet op tijd",
+    "scope": "host_probe"
+  },
+  "state_error_seen": {
+    "text": "{$kind}, laatst bereikt",
+    "scope": "server"
+  },
+  "site_misconfigured": {
+    "text": "Deze site is verkeerd ingesteld: {$reason}",
+    "scope": "site_fault"
+  },
+  "tenant_host_files": {
+    "text": "een site van een tenant mag geen bestanden van de schijf van deze server serveren",
+    "scope": "site_fault"
+  },
+  "no_instance": {
+    "text": "ze noemt geen app om te serveren",
+    "scope": "site_fault"
+  },
+  "tenant_socket": {
+    "text": "een site van een tenant mag niet doorsturen naar een unix-socket",
+    "scope": "site_fault"
+  },
+  "tenant_private_address": {
+    "text": "een site van een tenant mag enkel doorsturen naar een publiek adres",
+    "scope": "site_fault"
+  },
+  "routed_in_part": {
+    "text": "Niet alles wordt gerouteerd zoals ingesteld",
+    "scope": "app_health"
+  },
+  "until_lifted": {
+    "text": "Tot opgeheven",
+    "scope": "ban"
+  },
+  "lift_title": {
+    "text": "Deze blokkering opheffen",
+    "scope": "ban"
   }
 }

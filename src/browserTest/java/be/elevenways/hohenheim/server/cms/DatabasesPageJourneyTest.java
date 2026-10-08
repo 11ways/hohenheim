@@ -11,6 +11,8 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -119,6 +121,16 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
             list = adminGet("/admin/" + DatabaseParts.SLUG);
             assertThat(list.body()).as("step 5: an old newest dump says the nightly backup stopped")
                 .contains("1.0 KB; " + OVERDUE);
+
+            // 6. Back up now leads the heading by position; the once-in-a-lifetime move to a shared engine is neither
+            //    the primary button nor in the heading row, only in its More menu.
+            List<PanelAction<Row>> actions = DatabaseParts.admin().actions();
+            assertThat(actions.get(0).id()).as("step 6: Back up now comes first")
+                .isEqualTo(DatabaseParts.BACK_UP_NOW.id());
+            PanelAction<Row> move = actions.stream()
+                .filter(action -> action.id().equals(DatabaseParts.MOVE_TO_SHARED.id())).findFirst().orElseThrow();
+            assertThat(move.style()).as("step 6: the move is not the primary action").isEqualTo(ActionStyle.DEFAULT);
+            assertThat(move.inlineOnRecord()).as("step 6: and waits in the heading's More menu").isFalse();
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();

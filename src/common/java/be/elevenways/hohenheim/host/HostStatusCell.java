@@ -18,7 +18,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  *
  * @param state       the typed verdict; see {@link HostState} for why it is not a String
  * @param daemon      "Docker 27.1.1" / "Incus 7.3" -- the daemon plus its stored version
- * @param errorKind   the typed failure class when {@code state} is {@link HostState#ERROR}
+ * @param error       the failure class in words when {@code state} is {@link HostState#ERROR}
  * @param lastSeenIso last daemon contact, null when never reached
  * @param wording     request-independent relative-time wording (server default locale,
  *                    like every host stat computed without a conduit)
@@ -27,7 +27,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public record HostStatusCell(
     @NonNull HostState state,
     String daemon,
-    @Nullable String errorKind,
+    @Nullable Microcopy error,
     @Nullable String lastSeenIso,
     @Nullable RelativeTimeWording wording
 ) {
@@ -68,7 +68,10 @@ public record HostStatusCell(
     public @Nullable Microcopy stateText() {
         Microcopy wording = this.state.wording();
         if (wording != null && this.state == HostState.ERROR) {
-            return wording.withArg("kind", this.errorKind != null ? this.errorKind : "");
+            // The relative time after the words is the last contact: say so, or there is none to name.
+            Microcopy failed = this.lastSeenIso != null
+                ? Microcopy.of("state_error_seen").withFilter("scope", "server") : wording;
+            return failed.withArg("kind", this.error != null ? this.error : Microcopy.literal(""));
         }
         return wording;
     }

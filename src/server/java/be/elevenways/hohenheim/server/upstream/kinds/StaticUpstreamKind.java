@@ -131,7 +131,7 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
         if (TenantUpstreams.publicOnly(site)) {
             Integer siteId = site.get(SiteModel.ID);
             return new FaultedSiteHandler(siteId != null ? siteId : -1,
-                "a tenant-owned site may not serve files from the host");
+                Microcopy.of("tenant_host_files").withFilter("scope", "site_fault"));
         }
 
         return new StaticFileHandler(Path.of(rootPathStr), fallbackFile, autoindex,

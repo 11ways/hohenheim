@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -79,7 +80,7 @@ public final class WithheldFailure {
         if (reason == null || reason.isBlank()) {
             return "";
         }
-        return this.delegated ? this.withheld : reason;
+        return this.delegated ? this.withheld : HohenheimViolations.storedText(reason);
     }
 
     /** @return an operator-only text (a step log) as this panel may show it, null when withheld */

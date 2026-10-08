@@ -233,9 +233,9 @@ public final class ProxyAttention {
         }
     }
 
-    /** The localized sentence for a problem's reason, carrying its specific cause. */
+    /** The localized sentence for a problem's reason, carrying its specific cause (in words when it has them). */
     static @NonNull Microcopy reasonOf(@NonNull RoutingProblem problem) {
-        return copy(problem.reason().name().toLowerCase(Locale.ROOT), "routing_problem",
-            "detail", problem.detail() != null ? problem.detail() : "-");
+        Object cause = problem.cause() != null ? problem.cause() : problem.detail() != null ? problem.detail() : "-";
+        return copy(problem.reason().name().toLowerCase(Locale.ROOT), "routing_problem", "detail", cause);
     }
 }

@@ -1085,7 +1085,7 @@
     "scope": "routing_problem"
   },
   "handler_faulted": {
-    "text": "Its request handler refuses every request: {$detail}",
+    "text": "Every visitor is turned away: {$detail}",
     "scope": "routing_problem"
   },
   "duplicate_route": {
@@ -4145,7 +4145,7 @@
   },
   "lift": [
     {
-      "text": "Lift ban",
+      "text": "Lift",
       "scope": "ban"
     },
     {
@@ -9672,7 +9672,7 @@
     "scope": "server"
   },
   "state_error": {
-    "text": "probe failed ({$kind})",
+    "text": "{$kind}",
     "scope": "server"
   },
   "state_silent": {
@@ -9684,7 +9684,7 @@
     "scope": "server"
   },
   "host_probe_failed": {
-    "text": "Probe of {$name} failed: {$kind}",
+    "text": "Could not reach {$name}: {$kind}",
     "scope": "violations"
   },
   "quarantined_title": {
@@ -9782,11 +9782,11 @@
     "scope": "server_overview"
   },
   "verdict_passed": {
-    "text": "passed",
+    "text": "Passed",
     "scope": "server_overview"
   },
   "verdict_failed": {
-    "text": "failed",
+    "text": "Failed",
     "scope": "server_overview"
   },
   "never_preflighted": {
@@ -15065,5 +15065,169 @@
   "https_forced_excluded": {
     "text": "HTTPS is forced, but no working certificate covers this name and Let's Encrypt is told never to ask for one: upload one, or stop forcing HTTPS",
     "scope": "site_domains"
+  },
+  "check_daemon": {
+    "text": "Container daemon reachable",
+    "scope": "host_check"
+  },
+  "check_api_version": {
+    "text": "Docker recent enough",
+    "scope": "host_check"
+  },
+  "check_container_kernel": {
+    "text": "Containers start",
+    "scope": "host_check"
+  },
+  "check_cgroup_pids_controller": {
+    "text": "Process limits available",
+    "scope": "host_check"
+  },
+  "check_pids_limit_enforced": {
+    "text": "Process limits enforced",
+    "scope": "host_check"
+  },
+  "check_seccomp": {
+    "text": "System call filter",
+    "scope": "host_check"
+  },
+  "check_no_new_privs": {
+    "text": "No privilege escalation",
+    "scope": "host_check"
+  },
+  "check_userns_remap": {
+    "text": "Root in a container is not root on the host",
+    "scope": "host_check"
+  },
+  "check_lsm": {
+    "text": "Containers confined (AppArmor or SELinux)",
+    "scope": "host_check"
+  },
+  "check_network_headroom": {
+    "text": "Room for container networks",
+    "scope": "host_check"
+  },
+  "check_nftables": {
+    "text": "Firewall control",
+    "scope": "host_check"
+  },
+  "check_resources": {
+    "text": "Enough CPU and memory",
+    "scope": "host_check"
+  },
+  "check_trusted": {
+    "text": "Incus trusts this controller",
+    "scope": "host_check"
+  },
+  "check_driver_lxc": {
+    "text": "Container driver (LXC)",
+    "scope": "host_check"
+  },
+  "check_storage_pool": {
+    "text": "Storage pool",
+    "scope": "host_check"
+  },
+  "check_managed_network": {
+    "text": "Managed network",
+    "scope": "host_check"
+  },
+  "check_network_acl": {
+    "text": "Network rules (ACLs)",
+    "scope": "host_check"
+  },
+  "check_kernel_isolation_lane": {
+    "text": "Isolated kernel for tenants",
+    "scope": "host_check"
+  },
+  "check_container_userns": {
+    "text": "Unprivileged containers",
+    "scope": "host_check"
+  },
+  "check_container_seccomp": {
+    "text": "System call filter for containers",
+    "scope": "host_check"
+  },
+  "verdict_pass": {
+    "text": "Passed",
+    "scope": "host_check"
+  },
+  "verdict_warn": {
+    "text": "Advice",
+    "scope": "host_check"
+  },
+  "verdict_fail": {
+    "text": "Failed",
+    "scope": "host_check"
+  },
+  "probe_failure_unreachable": {
+    "text": "Cannot be reached",
+    "scope": "host_probe"
+  },
+  "probe_failure_dns": {
+    "text": "Its name does not resolve",
+    "scope": "host_probe"
+  },
+  "probe_failure_ssh_auth": {
+    "text": "SSH sign-in refused",
+    "scope": "host_probe"
+  },
+  "probe_failure_host_key_changed": {
+    "text": "Its host key changed",
+    "scope": "host_probe"
+  },
+  "probe_failure_not_pinned": {
+    "text": "Its host key is not pinned yet",
+    "scope": "host_probe"
+  },
+  "probe_failure_no_identity": {
+    "text": "Hohenheim has no SSH key for it",
+    "scope": "host_probe"
+  },
+  "probe_failure_docker_absent": {
+    "text": "Docker not found",
+    "scope": "host_probe"
+  },
+  "probe_failure_untrusted": {
+    "text": "Incus does not trust this controller",
+    "scope": "host_probe"
+  },
+  "probe_failure_timeout": {
+    "text": "Did not answer in time",
+    "scope": "host_probe"
+  },
+  "state_error_seen": {
+    "text": "{$kind}, last reached",
+    "scope": "server"
+  },
+  "site_misconfigured": {
+    "text": "This site is set up wrong: {$reason}",
+    "scope": "site_fault"
+  },
+  "tenant_host_files": {
+    "text": "a site a tenant owns may not serve files from this server's disk",
+    "scope": "site_fault"
+  },
+  "no_instance": {
+    "text": "it names no app to serve",
+    "scope": "site_fault"
+  },
+  "tenant_socket": {
+    "text": "a site a tenant owns may not forward to a unix socket",
+    "scope": "site_fault"
+  },
+  "tenant_private_address": {
+    "text": "a site a tenant owns may only forward to a public address",
+    "scope": "site_fault"
+  },
+  "routed_in_part": {
+    "text": "Not everything is routed as set up",
+    "scope": "app_health"
+  },
+  "until_lifted": {
+    "text": "Until lifted",
+    "scope": "ban"
+  },
+  "lift_title": {
+    "text": "Lift this block",
+    "scope": "ban"
   }
 }

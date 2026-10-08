@@ -76,6 +76,9 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
         legacy.set(BanModel.SOURCE, BanModel.SOURCE_AUTO);
         legacy.set(BanModel.EVENT_TYPE, SecurityEventTypes.DOMAIN_MISS);
         Models.get(BanModel.class).save(legacy);
+        Row permanent = ban("203.0.113.44", "Login attempts on /wp-admin", true);
+        permanent.set(BanModel.EXPIRES_AT, null);
+        Models.get(BanModel.class).save(permanent);
 
         // 1. The list opens on the addresses blocked NOW, a default the reader can remove.
         String now = adminGet("/admin/bans").body();
@@ -97,6 +100,10 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
         assertThat(now).as("step 3: the header action").contains("Block an address");
         assertThat(now).as("step 3: no quick-add bar").doesNotContain("data-cms-quick-add-open");
         assertThat(now).as("step 3: the old words are gone").doesNotContain("IP bans");
+
+        // 4. A block without an expiry holds until it is lifted, and says so; the row action is the board's "Lift".
+        assertThat(now).as("step 4: no expiry reads as until lifted").contains("Until lifted");
+        assertThat(now).as("step 4: the row action reads Lift").contains("Lift").doesNotContain("Lift ban");
     }
 
     @Test

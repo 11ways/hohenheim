@@ -15,8 +15,8 @@
     <pl-table-body>
         {% each checks as check %}
         <pl-table-row data-check={% check.name %}>
-            <pl-table-cell><code>{{ check.name }}</code></pl-table-cell>
-            <pl-table-cell><pl-badge variant={% check.statusVariant %}>{{ check.status }}</pl-badge></pl-table-cell>
+            <pl-table-cell>{{ check.label }}</pl-table-cell>
+            <pl-table-cell><pl-badge variant={% check.statusVariant %} attr:data-status={% check.status %}>{{ check.statusLabel }}</pl-badge></pl-table-cell>
             <pl-table-cell class="hh-check-detail">
                 {{ check.detail }}
                 {% if check.fix != null %}

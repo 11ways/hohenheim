@@ -134,7 +134,7 @@ filter source at=1 kind=SELECT facet=true param=filter.source
 filter scope at=2 kind=SELECT facet=true param=filter.scope
 filter active at=3 kind=BOOLEAN facet=false param=filter.active
 filter event_type at=4 kind=TEXT facet=false param=filter.event_type
-row hohenheim:lift_ban at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:lift%252Cscope%3Dban,body:lift_confirm%252Cscope%3Dban,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/lift_ban
+row hohenheim:lift_ban at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:lift_title%252Cscope%3Dban,body:lift_confirm%252Cscope%3Dban,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/lift_ban
 tab history at=0 landing=false view=false
 control CREATE%20ip at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20reason at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=

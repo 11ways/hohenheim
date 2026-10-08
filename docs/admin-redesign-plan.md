@@ -812,3 +812,43 @@ Order: W6 as planned. G5 needs nothing from W1-W5 except the `put_online` operat
 - Blocked on zenit-auth (its push waits on the arcana checkout, and the copy is zenit-auth's catalog): the Users and
   Roles tabs read "People" per the board, and the People list's Role column. Not done: "Recent misses" and the
   never-block list on the Blocked page (W8b's needs-building), "Lift" as the button word.
+
+## 22. D7d decisions (fork D7d, 2026-10-08)
+
+- A host check reads as words wherever it is named: the host page's report, the Hosts list's state line, the attention
+  item and the Check and admit refusal. One home: `ServerOverviewState.checkLabel` beside `fixCopy`, keyed
+  `check_<name>` (scope `host_check`) for every name the batteries declare; a name no battery declares (an older stored
+  report) keeps its stored spelling instead of reading as another check. The verdict badge reads "Passed", "Advice",
+  "Failed" from `PreflightStatus.label` (a fact on the member). `HostCheckAndAdmitJourneyTest` binds every declared
+  check, verdict and probe failure to copy in en and nl, so a new one fails the build until it is named.
+- A probe failure reads as words: `HostProbe.FailureKind.label` ("Docker not found"), with the last contact after it
+  when there is one ("Docker not found, last reached 6 minutes ago"), in the host cell and the Check now refusal. A
+  stored token this build does not know keeps its spelling. The W9a screenshot's `volume_backend`/`firewall` were the
+  journey's fake check names; the journey now seeds declared ones.
+- The database page's heading leads with Back up now by position; "Move to shared engine" is neither PRIMARY nor in the
+  heading row (`inlineOnRecord(false)`): a placement change done once in a database's life sits in the More menu. The
+  board's "Change password" stays needs-building (password rotation).
+- A site the proxy turns every visitor away from carries the proxy's OWN reason in its verdict. The faulted handler's
+  reason is copy (`FaultedSiteHandler` takes a `Microcopy`, scope `site_fault`); the route load records it on the
+  `RoutingProblem` (`cause`), and `AppHealth` reads the site's recorded problems: one whose reason
+  `refusesEveryVisitor` (unrouted kinds, a failed or faulted handler, an unbuildable auth provider: a fact on the
+  member) makes the verdict "Visitors get an error page" with that reason before any HTTPS or live check; a partial
+  one (a duplicate route, an unusable access rule) is an attention verdict "Not everything is routed as set up". The
+  visitor's 503 says the same words in the content locale. This replaces the generic "What it serves does not answer"
+  for D7a's seeded misconfigured site.
+- A stored failure reason written before D7b in Violations' debug rendering reads as its refusal's sentence at read
+  time (`HohenheimViolations.storedText`, applied in `WithheldFailure.shown`, the one reader of stored reasons on the
+  panel). Only ONE violation is parsed; a key the catalog does not hold, two violations or any other shape keep the
+  stored text. A message whose arguments changed since (the build failure took `code` where old rows stored
+  `reason`) reads as the row's one stored argument. Stored rows are not rewritten. The API's `failure_reason` stays the
+  stored text.
+- A block without an expiry reads "Until lifted": a column can now declare what its empty cell MEANS (zenit-cms
+  `ColumnSpec.absent(Microcopy)`, read by the translator before the field type's "None"). The row action reads "Lift",
+  its dialog "Lift this block".
+- "Created a minute from now" (D7a's walk) was the SQL seed, not a timestamp defect: a site created through the admin
+  form (fork D7d2, scratch server, 2026-10-08 03:04 UTC) stores `created_at` as `2026-10-08T03:04:08.773103Z` and its
+  Details read "2026-10-08 05:04 (Europe/Brussels)", the true local time. D7a's walk had hand-inserted the row.
+- The Hosts-list overflow fold (FW-ROWS, zenit-cms dbc3060d) checked on the real list (screenshots `shots/d7d/`): at
+  1440px the lane folds into the row menu and every column shows; at 1100px the lane is folded too but the table still
+  scrolls sideways ("Who may run here" off to the right, the compact lane over the Memory column's scroll edge). The
+  board draws hosts as cards; a narrow-width layout that wraps instead of scrolling stays open.
