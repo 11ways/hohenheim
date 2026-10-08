@@ -207,8 +207,7 @@ final class AppHealth {
         if (live == SiteHealth.DEGRADED) {
             return Verdict.serving(RecordHealth.attention(copy("degraded")).detail(copy("degraded_detail")));
         }
-        return Verdict.serving(RecordHealth.ok(copy("live_at")
-            .withArg("address", liveAddress(domains, facts.working, passthrough))));
+        return Verdict.serving(RecordHealth.ok(liveWords(domains, facts.working, passthrough)));
     }
 
     /**
@@ -337,8 +336,7 @@ final class AppHealth {
             for (Row site : sites) {
                 List<Row> domains = SiteParts.domainsOf(site);
                 if (!domains.isEmpty() && Boolean.TRUE.equals(site.get(SiteModel.ENABLED))) {
-                    return copy("live_at").withArg("address",
-                        liveAddress(domains, working, SiteParts.tlsPassthrough(site)));
+                    return liveWords(domains, working, SiteParts.tlsPassthrough(site));
                 }
             }
         }
@@ -443,10 +441,17 @@ final class AppHealth {
     // -- shared ----------------------------------------------------------------------
 
 
-    /** The address a visitor types: the first exact name, with the scheme that actually works for it. */
-    static @NonNull String liveAddress(@NonNull List<Row> domains, @NonNull Set<String> working, boolean passthrough) {
+    /**
+     * Where a serving site is live, in words: "Live at" the first exact name with the scheme that works for it, or,
+     * for a site answering only patterns (a catch-all), what it catches.
+     *
+     * AIDEV-NOTE: a pattern is never presented as an address to visit: "Live at **.starfleet.life" read like a link
+     * nobody can open (D10a).
+     */
+    static @NonNull Microcopy liveWords(@NonNull List<Row> domains, @NonNull Set<String> working, boolean passthrough) {
         String url = exactUrl(domains, working, passthrough);
-        return url != null ? url : String.valueOf((Object) domains.get(0).get(SiteDomainModel.HOSTNAME));
+        return url != null ? copy("live_at").withArg("address", url)
+            : copy("catches").withArg("pattern", String.valueOf((Object) domains.get(0).get(SiteDomainModel.HOSTNAME)));
     }
 
     /**

@@ -1167,3 +1167,59 @@ Places where the admin said something untrue on Starfleet (DEP9), each fixed at 
   admission step reads "Never checked yet" and links `/admin/servers/#/open`; an app without an address has no HTTPS
   badge). The push's duplicate gate then pointed the ban vocabulary at core's `RuleVocabulary.extend`; run 832
   (AccessPagesJourneyTest, BanStateSurfaceTest, RecordAwareQueryGateTest, SecurityAdminTest, 7 passed) proves it.
+
+## 28. D10a decisions (fork D10a, 2026-10-08)
+
+The admin dashboard and the Apps list brought closer to boards Main, Empty-Dashboard and Apps-List.
+
+- Checklist lifetime (decided by the orchestrator, board Main): the checklist retires once the first app is online,
+  whatever its other steps say. `OnboardingCollector.retired()` is the one rule (D7f's `AppHealth.anyOnline`, the
+  put-online step's own fact); `DashboardAttention.read(items, retired)` folds against an empty checklist once retired,
+  so the fold applies only while the step shows and what an open step stood for (backups that stay on this machine, a
+  host that takes no new apps) is the band's item from then on. This closes D8's open product decision. Its heading and
+  lead read board Empty-Dashboard's "Before your first app" / "Each step ticks itself off."
+- Host attention title (decided): a fact on the standing, `HostStanding.attentionTitle`: WAITING "<host> cannot run apps
+  yet", REFUSING and PAUSED "<host> takes no new apps" (`host_takes_no_new_apps`), and TAKING (raised only while the
+  gate refuses some apps placed on it) "<host> cannot run some of its apps" (`host_holds_apps_back`, the exhaustive
+  member's third wording; an assumption, no board draws it). en and nl.
+- Count tiles (board Main): Apps, Hosts, Certificates and Backups replace Sites, Certificates, Access lists and Active
+  bans. Hohenheim's own `HohenheimWidgets.STAT` (`DashboardStat`, `widget-stat.hwk`, pl-stat-card's description), built
+  by `DashboardStats` through the panel's own lists (`AppDirectory.listed`/`offers`): a tile exists where its list is
+  registered and admits the viewer. Lines are facts the counted list shows: Apps "2 live, 2 with a problem" (verdict
+  tones, UNKNOWN neither), Hosts "1 takes new apps, 1 refuses new apps, 1 waiting" (`HostStanding.tally`, declaration
+  order), Certificates "N need attention" (state cell not SUCCESS) else "Next expiry in N days", Backups "<ok> of
+  <total>" over workloads with a backup target, "Newest 8 hours ago, 4.2 GB", or "0" / "No app has a backup target".
+  `InstanceBackupModel.newestOf` is the one newest-backup read (InstanceAttention reuses it). The blocked-addresses count
+  is the Blocked addresses list's now (SecurityAdminTest updated).
+- Copy: the four dashboard details that read "(s)" (`docker_foreign`, `docker_orphans`, `docker_colliding`,
+  `ports_releasing`) are `.match` plurals in en and nl; a serving site with only patterns reads "Answers every address
+  matching **.example" (`catches`, `AppHealth.liveWords`), never "Live at <pattern>"; the Apps list's website runs on
+  the host of the instance serving it (`AppDirectory.servingInstancesOf`, operator panel only) and a website no instance
+  serves draws the board's dash (`ColumnSpec.absent`, `host_none`), never "None".
+- Needs building (no backing fact today): the board's "succeeded last night" (a backup row knows when it ran, not which
+  night's schedule it served); Backups counting managed database dumps and the control-plane archive (the tile counts
+  instance backups only); "1 renews in 12 days" (the renewal threshold is AcmeService's private
+  RENEWAL_THRESHOLD_DAYS, not a fact a reader can ask, so the tile says the next expiry); the Apps band's trailing
+  live facts ("23 players", "Deploying").
+- Walk (scratch server from the built jar, fresh database, `/setup`; then by SQL: local admitted with a fresh memory
+  reading and shared containers accepted, phoenix admitted with a 2026-08-29 reading, daystrom never checked, a Docker
+  app Shop on local with a site, Docs on phoenix with a site, a catch-all redirect on `**.d10a.test`, a redirect
+  example.org, one certificate, a backup target with one complete 4.2 GB backup, eight foreign and one orphaned Docker
+  finding): shots `docs/hohenheim-ux-mockups-2026-09-30/shots/d10a/` (workspace repo). 01 fresh install (board
+  Empty-Dashboard), 02 first app online: no checklist, "phoenix takes no new apps" (1 app waits for it), "daystrom
+  cannot run apps yet", the plural Docker details, "Backups stay on this machine" and the four tiles, 03 Apps list
+  (dash hosts for the redirects), 04 the catch-all's overview. The Shop container never existed, so the reconciler
+  marked it stopped after an error; the online apps of shot 02 are the two redirects.
+- Found, not fixed here: the "HTTPS is unavailable" item listed Catch-all and Shop as sites "that force SSL" though
+  neither name forces HTTPS in the seed; AppOverviewJourneyTest step 1 had been red since D7f/D9 (a stopped workload on
+  an unplaceable host cannot offer Open site), fixed in its fixture; fifteen violation sentences outside the dashboard
+  still read "(s)" (`server_in_use`, `template_in_use`, ...).
+- Proof: build runs 833 and 837; Hohenheim test run 834 (45 tests, 42 passed: the /manage dashboard NPE from
+  `Map.of().get(null)` in the new website host read, the dash assertion's markup, AppOverviewJourneyTest's stale
+  fixture), run 835 (8 tests, 7 passed: the host cell's whitespace in the new assertion) and run 836 (AppsListJourneyTest,
+  green). Journeys: DashboardAttentionJourneyTest (own database; steps 1/6 titles, 7 retirement, 8 tiles),
+  OnboardingChecklistTest (retired), AppsListJourneyTest (steps 9 host, 10 catch-all), HostsPageJourneyTest,
+  ForeignResourceAttentionTest (plurals en and nl), AdminPagesTest, NavigationTest, SecurityAdminTest,
+  DashboardVocabularyDriftTest, LandingDashboardSurfacesTest (baseline hand-edited: the checklist's board words and the
+  four tiles with their lines), ManagePanelJourneyTest, AppOverviewJourneyTest, InstanceAttentionTest and the four
+  microcopy gates.

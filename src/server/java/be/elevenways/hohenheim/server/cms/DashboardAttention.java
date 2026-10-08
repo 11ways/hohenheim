@@ -23,6 +23,10 @@ import java.util.Set;
  * that record's own item is shown, in the band or presented by a step; its root says what it holds back. An item
  * whose root is not shown stays, so a fold can never hide a problem nobody else names.
  *
+ * AIDEV-NOTE: the checklist retires once the first app is online (board Main), and the fold applies only while it
+ * shows: a retired checklist presents nothing, so the conditions its open steps stood for (backups that stay on this
+ * machine, a host that takes no new apps) are the band's items from then on.
+ *
  * @author Jelle De Loecker
  * @since  0.9.0
  */
@@ -41,8 +45,16 @@ final class DashboardAttention {
 
     /** @return the checklist and the band, folded */
     static @NonNull Reading read() {
-        List<AttentionItem> items = AttentionCollector.collect();
-        return fold(OnboardingCollector.collect(items), items);
+        return read(AttentionCollector.collect(), OnboardingCollector.retired());
+    }
+
+    /**
+     * @param items   every attention item, unfolded
+     * @param retired whether the checklist has retired ({@link OnboardingCollector#retired}: something is online)
+     * @return the checklist (empty once retired) and the band, folded
+     */
+    static @NonNull Reading read(@NonNull List<AttentionItem> items, boolean retired) {
+        return fold(retired ? List.of() : OnboardingCollector.collect(items, false), items);
     }
 
     /**

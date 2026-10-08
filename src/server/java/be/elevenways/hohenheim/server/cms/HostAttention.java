@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.host.HostStanding;
 import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -68,15 +69,16 @@ public final class HostAttention {
     /**
      * Every host that takes no new apps by its verdict ({@link HostVerdict}), and every host that holds apps back.
      *
-     * AIDEV-NOTE: ONE item per host, from the verdict the Hosts list and the host page word: a waiting host says why
-     * it waits ("Never checked yet", its failed required checks) with Check and admit; an ADMITTED host the gate
-     * refuses (a stale memory reading, a posture, a check that no longer passes) says the gate's own words with the
-     * remedy that clears them (Check again re-measures; a posture or a trust decision opens the host). DEP9 found
-     * Starfleet's local host refused by placement over a memory reading from 2026-08-29 while nothing raised it.
-     * A cordoned host is a deliberate state and raises nothing until an app waits on it (D8), and an item is the ROOT
-     * of what its host holds back: it names how many apps wait for it and the dashboard folds their own items under
-     * it. It states the checklist's admission stage, so while that step is open the step presents it. Gated on the
-     * same roles that put the Hosts list in the panel, so the link always exists.
+     * AIDEV-NOTE: ONE item per host, from the verdict the Hosts list and the host page word, titled by its standing
+     * ({@link HostStanding#attentionTitle}: "cannot run apps yet" before admission, "takes no new apps" after): a
+     * waiting host says why it waits ("Never checked yet", its failed required checks) with Check and admit; an
+     * ADMITTED host the gate refuses (a stale memory reading, a posture, a check that no longer passes) says the gate's
+     * own words with the remedy that clears them (Check again re-measures; a posture or a trust decision opens the
+     * host). DEP9 found Starfleet's local host refused by placement over a memory reading from 2026-08-29 while
+     * nothing raised it. A cordoned host is a deliberate state and raises nothing until an app waits on it (D8), and
+     * an item is the ROOT of what its host holds back: it names how many apps wait for it and the dashboard folds
+     * their own items under it. It states the checklist's admission stage, so while that step is open the step
+     * presents it. Gated on the same roles that put the Hosts list in the panel, so the link always exists.
      */
     public static void hostsTakingNoApps(List<AttentionItem> items) {
         hostsTakingNoApps(items, AppHealth.heldBackByHost());
@@ -93,8 +95,7 @@ public final class HostAttention {
                 continue;
             }
             Object name = server.get(ServerModel.NAME);
-            items.add(item(AttentionSeverity.WARNING, "server",
-                copy("host_not_admitted", "attention_title", "name", name),
+            items.add(item(AttentionSeverity.WARNING, "server", verdict.standing().attentionTitle(name),
                 raised ? verdict.reason() : held.reason(),
                 CmsRoutes.open(ADMIN, ServerParts.SLUG, id),
                 verdict.remedyAction(name))

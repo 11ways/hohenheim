@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.cms.ReconcileFindingParts;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -80,6 +82,9 @@ class ForeignResourceAttentionTest extends HohenheimTestBase {
             assertThat(row.detail().args().get("count"))
                 .as("step 2: the count is the two foreign rows, not all five findings")
                 .isEqualTo(2);
+            assertThat(row.detail().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 2: said in a real plural, never '(s)'")
+                .startsWith("2 Docker resources on this host were not created by Hohenheim.");
 
             // 3. The sentence names the page by the label that page actually carries --
             //    one declaring home, resolved in the reader's own locale.
@@ -115,6 +120,12 @@ class ForeignResourceAttentionTest extends HohenheimTestBase {
             assertThat(other).as("step 6: the second host gets its own row").isNotNull();
             assertThat(other.detail().args().get("count"))
                 .as("step 6: counting only its own foreign resource").isEqualTo(1);
+            assertThat(other.detail().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 6: in the singular")
+                .startsWith("1 Docker resource on this host was not created by Hohenheim.");
+            assertThat(other.detail().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 6: and in Dutch")
+                .startsWith("1 Docker-resource op deze host is niet door Hohenheim aangemaakt.");
             String elsewhere = adminGet(other.target().toUrl()).body();
             assertThat(elsewhere).as("step 6: which lands on that host's resource only")
                 .contains("attref-elsewhere")

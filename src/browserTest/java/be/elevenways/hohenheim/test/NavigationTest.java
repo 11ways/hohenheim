@@ -128,7 +128,7 @@ class NavigationTest extends HohenheimTestBase {
             // Stat tiles keep their localized titles AND their icons.
             page.waitForCondition(() -> page.locator("pl-stat-card .label").count() >= 3);
             var labels = page.locator("pl-stat-card .label").allInnerTexts();
-            assertThat(labels).anySatisfy(label -> assertThat(label).contains("Sites"));
+            assertThat(labels).anySatisfy(label -> assertThat(label).contains("Apps"));
             assertThat(labels).allSatisfy(label -> assertThat(label.trim()).isNotEmpty());
             assertThat(page.locator("pl-stat-card .stat-icon pl-icon").count())
                 .isGreaterThanOrEqualTo(3);

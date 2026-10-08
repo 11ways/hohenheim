@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The dashboard checklist reads one step per stage: enrolment is done once a host is stored, admission once one
- * accepts work, and neither repeats the other's sentence.
+ * accepts work, and neither repeats the other's sentence; it retires once the first app is online.
  */
 class OnboardingChecklistTest {
 
@@ -76,9 +76,11 @@ class OnboardingChecklistTest {
     @Test
     void anAddressPutOnlineCompletesThePutOnlineStepWithoutAWorkload() {
         Db.run(datasource, () -> {
-            // 1. Nothing runs and no website exists: putting the first app online is still to do.
+            // 1. Nothing runs and no website exists: putting the first app online is still to do, and the checklist
+            //    is shown.
             assertThat(putOnlineStep().state())
                 .as("step 1: an empty install has nothing online").isEqualTo(OnboardingState.TODO);
+            assertThat(OnboardingCollector.retired()).as("step 1: so the checklist is not retired").isFalse();
 
             // 2. A website with no address yet serves nobody: nothing is online.
             SiteModel sites = Models.get(SiteModel.class);
@@ -104,6 +106,8 @@ class OnboardingChecklistTest {
                 domains.save(domain);
                 assertThat(putOnlineStep().state())
                     .as("step 3: a serving website completes the put-online step").isEqualTo(OnboardingState.DONE);
+                assertThat(OnboardingCollector.retired())
+                    .as("step 3: and retires the whole checklist, other steps open or not (board Main)").isTrue();
 
                 // 4. Switched off, it serves nobody again, and the checklist says so (D7f: the step reflects an app
                 //    that serves or runs, never one that once existed).
@@ -111,6 +115,8 @@ class OnboardingChecklistTest {
                 sites.save(site);
                 assertThat(putOnlineStep().state())
                     .as("step 4: a switched-off website is not online").isEqualTo(OnboardingState.TODO);
+                assertThat(OnboardingCollector.retired())
+                    .as("step 4: so the checklist is back while nothing is online").isFalse();
             } finally {
                 if (domain != null) {
                     domains.delete(domain);

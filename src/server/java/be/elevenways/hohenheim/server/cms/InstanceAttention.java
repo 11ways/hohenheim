@@ -86,10 +86,7 @@ public final class InstanceAttention {
             if (id == null) {
                 continue;
             }
-            Row latest = backups.find()
-                .where(InstanceBackupModel.INSTANCE_ID.eq(id))
-                .orderBy(InstanceBackupModel.ID, SortOrder.DESC)
-                .first();
+            Row latest = backups.newestOf(id);
             if (latest == null || !InstanceBackupModel.STATUS_FAILED
                     .equals(latest.get(InstanceBackupModel.STATUS))) {
                 continue;

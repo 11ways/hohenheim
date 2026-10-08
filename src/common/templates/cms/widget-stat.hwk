@@ -1,0 +1,10 @@
+{#- One count tile of the admin dashboard (board Main): the count under what it counts, the line saying what the count
+    holds ("3 live, 1 with a problem") and the whole tile a link to the list it counts. The words arrive resolved
+    (DashboardStat); a tile with no fact behind a line draws none. -#}
+{% declare widget: WidgetInstance %}
+{% declare data: DashboardStat = null %}
+{% if data != null %}
+<pl-stat-card class="widget widget-stat widget-stat-link" attr:data-hh-stat={% data.key %} href={% data.url %}
+              label={% data.label %} value={% data.value %} description={% data.detail ?? "" %}
+              icon={% data.icon %}></pl-stat-card>
+{% /if %}

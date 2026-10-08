@@ -171,7 +171,8 @@ public final class AppParts {
             .column(ColumnSpec.fromField(ADDRESS_TEXT).hidden().build())
             .column(ColumnSpec.fromField(KIND).sortable().build());
         if (withHost) {
-            table.column(ColumnSpec.fromField(HOST).sortable().build());
+            // A website no instance serves runs on no host: the board's dash, never the framework's "None".
+            table.column(ColumnSpec.fromField(HOST).sortable().absent(copy("host_none")).build());
         }
         // The main address's HTTPS in the Addresses list's words and cell, never the app's overall verdict.
         table.column(ColumnSpec.virtual("https", copy("https")).renderer(HohenheimTemplateIds.CELL_DOMAIN_CERTIFICATE)

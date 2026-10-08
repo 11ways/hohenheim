@@ -11,24 +11,18 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.OnboardingStep;
 import be.elevenways.hohenheim.app.AppSummary;
+import be.elevenways.hohenheim.app.DashboardStat;
 import be.elevenways.hohenheim.app.AppsBand;
-import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.model.BanModel;
-import be.elevenways.hohenheim.model.CertificateModel;
-import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.typed.CoreTypes;
-import be.elevenways.protoblast.common.typed.rule.Condition;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelDashboard;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.render.table.HealthCellState;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.data.RecordSourceRegistry;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetInstance;
@@ -39,7 +33,6 @@ import be.elevenways.zenit.widget.common.builtin.ColumnSplit;
 import be.elevenways.zenit.widget.common.builtin.ColumnsWidget;
 import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
 import be.elevenways.zenit.widget.common.builtin.SectionWidget;
-import be.elevenways.zenit.widget.common.builtin.StatWidget;
 import be.elevenways.zenit.widget.common.data.NoticeData;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -49,8 +42,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The /admin landing dashboard: entity-count stat tiles plus the most
- * recent activity-log entries.
+ * The /admin landing dashboard (board Main): the readiness checklist until the first app is online, what needs
+ * attention, the count tiles, the apps and the most recent activity-log entries.
  */
 public final class AdminDashboard extends PanelDashboard {
 
@@ -90,40 +83,15 @@ public final class AdminDashboard extends PanelDashboard {
     /** Role-gated bands: a tile must not link to a resource this install has no route for. */
     @Override
     public @NonNull WidgetTree widgets(@NonNull AccessContext accessContext) {
-        boolean proxy = HohenheimRoles.enabled(Role.PROXY);
-        boolean firewall = HohenheimRoles.enabled(Role.FIREWALL);
-
-        // AIDEV-NOTE: ONE stat grid, whatever the role mix. The firewall tile used to be a
-        // band of its own with its own column count, so a proxy+firewall install rendered
-        // four tiles as a 3-wide grid followed by a lone half-width card underneath -- two
-        // grids the operator reads as two unrelated groups. Roles decide WHICH tiles exist,
-        // never how many grids there are.
-        List<WidgetInstance> tiles = new ArrayList<>();
-        if (proxy) {
-            tiles.add(stat("site", SiteModel.MODEL_ID, "sites", "globe"));
-            tiles.add(stat("certificate", CertificateModel.MODEL_ID, "certificates", "lock"));
-            tiles.add(stat("access_list", AccessListModel.MODEL_ID, "access-lists", "shield-halved"));
-        }
-        if (firewall) {
-            // The count of addresses blocked now, the Blocked addresses list's own default (event analytics live in
-            // spamservice now, so bans are the only security records here).
-            tiles.add(new WidgetInstance(StatWidget.ID, Map.of(
-                "label", HohenheimWidgetCopy.localized("active_bans", "dashboard"),
-                "source", sourceToken(BanModel.MODEL_ID),
-                "rules", Condition.all(Condition.test(BanModel.BLOCKED_NOW, CoreTypes.IS_TRUE)),
-                "icon", "ban",
-                // StatWidget's stored "link" is a String, so the typed target renders here.
-                "link", CmsRoutes.list(ADMIN, "bans").toUrl())));
-        }
-
         List<WidgetInstance> widgets = new ArrayList<>();
         Panel admin = PanelRegistry.getBySlug(ADMIN);
         List<AppDirectory.App> apps = admin == null ? List.of() : AppDirectory.read(admin, accessContext);
 
-        // The readiness checklist RETIRES ITSELF: no dismissed flag, it is simply absent once every step is done.
-        // Before it, nothing said a host must be checked and admitted before anything can run, so the first session's
-        // natural arc (create -> deploy -> silence) had no visible way forward. It and the attention band are read
-        // together, so a problem an open step presents, or a root already holds back, is drawn once.
+        // The readiness checklist RETIRES ITSELF: no dismissed flag, it is simply absent once the first app is online
+        // (or every step is done). Before it, nothing said a host must be checked and admitted before anything can
+        // run, so the first session's natural arc (create -> deploy -> silence) had no visible way forward. It and the
+        // attention band are read together, so a problem an open step presents, or a root already holds back, is
+        // drawn once; a retired checklist presents nothing, so what its steps stood for is the band's from then on.
         DashboardAttention.Reading reading = DashboardAttention.read();
         List<OnboardingStep> onboarding = reading.checklist();
         List<AttentionItem> attention = reading.attention();
@@ -161,13 +129,18 @@ public final class AdminDashboard extends PanelDashboard {
             widgets.add(section(new WidgetInstance(HohenheimWidgets.ATTENTION.id(), Map.of())
                 .withData(attention)));
         }
+        // AIDEV-NOTE: ONE stat grid, whatever the role mix: roles decide WHICH tiles exist (DashboardStats offers a
+        // tile only where its list does), never how many grids there are. The board's four are Apps, Hosts,
+        // Certificates and Backups; the Sites, Access lists and Active bans tiles were replaced by them (D10a), so the
+        // count of blocked addresses lives on the Blocked addresses list, as its trend always did.
+        List<WidgetInstance> tiles = new ArrayList<>(4);
+        if (admin != null) {
+            for (DashboardStat stat : DashboardStats.read(admin, apps, accessContext)) {
+                tiles.add(new WidgetInstance(HohenheimWidgets.STAT.id(), Map.of()).withData(stat));
+            }
+        }
         if (!tiles.isEmpty()) {
             widgets.add(section(columns(tiles)));
-            // AIDEV-NOTE: the 30-day bans chart used to live beside these and is deliberately
-            // gone. On any fleet that is not under attack it is an all-zero series, i.e. ~450px
-            // of flat line above the content an operator opened the page for. The count itself
-            // stays, as a tile. If the trend is wanted, it belongs on the firewall operator's
-            // own overview page, which they open on purpose.
         }
         // The board's lower half: the apps, read from the one App directory, beside what happened lately.
         widgets.add(section(columns(List.of(
@@ -237,24 +210,6 @@ public final class AdminDashboard extends PanelDashboard {
             "limit", 10)));
 
         return band;
-    }
-
-    /** The tile label resolves the model's "plural" microcopy per content locale. */
-    private static @NonNull WidgetInstance stat(@NonNull String modelScope, @NonNull Identifier modelId,
-                                                @NonNull String resourceSlug, @NonNull String icon) {
-        return new WidgetInstance(StatWidget.ID, Map.of(
-            "label", HohenheimWidgetCopy.localized("plural", modelScope),
-            "source", sourceToken(modelId),
-            "icon", icon,
-            "link", CmsRoutes.list(ADMIN, resourceSlug).toUrl()));
-    }
-
-    /**
-     * The token a tile names its source by: the source registered over the model (a default source's id IS
-     * its model's), spelled by that source, so a renamed model can never leave a tile counting nothing.
-     */
-    private static @NonNull String sourceToken(@NonNull Identifier modelId) {
-        return RecordSourceRegistry.INSTANCE.requireById(modelId).idToken();
     }
 
     /** A band claiming the widget grid's full width: the dashboards' bands and a list's attention band. */
