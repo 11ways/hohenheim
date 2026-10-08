@@ -5,6 +5,7 @@ import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
+import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.OnboardingStage;
@@ -24,6 +25,7 @@ import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.protoblast.common.typed.rule.Condition;
@@ -31,6 +33,7 @@ import be.elevenways.protoblast.common.typed.rule.Operand;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
+import be.elevenways.zenit.cms.server.task.TaskAdmin;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -91,6 +94,10 @@ public final class AttentionCollector {
      */
     public static @NonNull List<AttentionItem> collect() {
         List<AttentionItem> items = new ArrayList<>();
+        // What each workload or address keeps from its sites' visitors, read once: a root item says it.
+        Map<AttentionSubject, Integer> sitesHeld =
+            HohenheimRoles.enabled(Role.PROXY) || HohenheimRoles.enabled(Role.INSTANCES)
+                ? AppHealth.sitesHeldBack() : Map.of();
         if (HohenheimRoles.enabled(Role.PROXY)) {
             ProxyAttention.errorCertificates(items);
             ProxyAttention.failedProxyListeners(items);
@@ -99,7 +106,7 @@ public final class AttentionCollector {
             ProxyAttention.openProtectedPaths(items);
             ProxyAttention.unhealthySites(items);
             ProxyAttention.routingProblems(items);
-            InstanceAttention.failedDeployments(items);
+            InstanceAttention.failedDeployments(items, sitesHeld);
         }
         items.addAll(databases());
         items.addAll(hosts());
@@ -128,7 +135,7 @@ public final class AttentionCollector {
             }
         }
         if (HohenheimRoles.enabled(Role.INSTANCES)) {
-            InstanceAttention.crashedInstances(items);
+            InstanceAttention.crashedInstances(items, sitesHeld);
             InstanceAttention.failedInstanceBackups(items);
             InstanceAttention.staleInstanceBackups(items);
             InstanceAttention.instancesLowOnDisk(items);
@@ -310,8 +317,11 @@ public final class AttentionCollector {
         }
     }
 
-    /** Latest history row per DECLARED task type; failed ones surface (no task UI yet, so no url).
-     *  Public for the same reason the instance collectors are: a test proves the projection. */
+    /**
+     * Latest history row per DECLARED task type; a failed one surfaces by the task's worded name, with why it failed and
+     * the way to that run, whose page offers Run now. Public for the same reason the instance collectors are: a test
+     * proves the projection.
+     */
     public static void failedTasks(List<AttentionItem> items) {
         // The task system registers its datasource-scoped model at its own boot
         // stage; a boot without it (tests, tools) simply has no task news.
@@ -329,11 +339,14 @@ public final class AttentionCollector {
             if (latest.isEmpty()) {
                 continue;
             }
-            if (TaskStatus.FAILED.name().equals(
-                    latest.get(0).get(SystemTaskHistoryModel.STATUS))) {
+            Row run = latest.get(0);
+            if (TaskStatus.FAILED.name().equals(run.get(SystemTaskHistoryModel.STATUS))) {
+                Microcopy reason = TaskWords.failure(run.get(SystemTaskHistoryModel.ERROR));
                 items.add(item(AttentionSeverity.WARNING, "clock",
-                    copy("task", "attention_title", "name", descriptor.typePath()),
-                    copy("last_run_failed", "attention_detail")));
+                    copy("task_failed", "attention_title", "task", TaskWords.label(descriptor.id())),
+                    reason != null ? reason : copy("last_run_failed", "attention_detail"),
+                    CmsRoutes.open(ADMIN, TaskAdmin.RUNS_SLUG, run.get(SystemTaskHistoryModel.ID)),
+                    action("act_show_run")));
             }
         }
     }

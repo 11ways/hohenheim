@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.migration;
 
+import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -86,7 +87,7 @@ class ForeignKeyIntegrityTest {
         assertThat(refused.all().get(0).message().key())
             .as("step 2: the refusal is server_in_use").isEqualTo("server_in_use");
         assertThat(refused.all().get(0).message().args().get("engines"))
-            .as("step 2: and it counts the engine").isEqualTo(1L);
+            .as("step 2: and it counts the engine, as a counted phrase").isEqualTo(HohenheimCounts.of("engines", 1L));
         assertThat(Models.get(ServerModel.class).findById(serverId))
             .as("step 2: the host survives the refused delete").isNotNull();
 

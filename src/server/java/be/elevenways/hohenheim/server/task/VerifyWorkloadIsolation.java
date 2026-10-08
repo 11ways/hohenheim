@@ -183,7 +183,8 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
             // working, and the sweep says ON THE RECORD that it cannot verify them.
             List<String> errors = new ArrayList<>(inventoryErrors);
             errors.add("per-workload enforcement is off (security.nftables_enabled); "
-                + expected.size() + " workload network(s) can be neither verified nor repaired");
+                + (expected.size() == 1 ? "1 workload network" : expected.size() + " workload networks")
+                + " can be neither verified nor repaired");
             return new HostOutcome(name, false, List.of(), List.of(), List.of(),
                 List.copyOf(errors));
         }

@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.RoutingProblem;
+import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -19,6 +20,7 @@ import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.HashSet;
 import java.util.List;
@@ -51,7 +53,10 @@ public final class ProxyAttention {
      * A dead or degraded proxy listener, REGARDLESS of force_ssl population. The Aug 04
      * 2026 port-443 outage stayed invisible for six days partly because the only listener
      * attention item required force_ssl sites; this one fires on listener state alone.
-     * The force-SSL twin below stays because it names the affected sites.
+     *
+     * AIDEV-NOTE: a failed HTTPS listener is the ROOT of every site sent to HTTPS refusing plain HTTP: it says so as
+     * what it holds back, and {@link #httpsUnavailableWithForceSsl} stays silent while it does, so the one cause is
+     * one item.
      */
     public static void failedProxyListeners(List<AttentionItem> items) {
         var proxy = ServerMain.getProxyServer();
@@ -68,41 +73,76 @@ public final class ProxyAttention {
                 copy("proxy_https_listener", "attention_title"),
                 literal(proxy.getHttpsFailureReason()),
                 CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES),
-                action("act_open_certificates")));
-        } else if (proxy.getHttpsState() == ProxyServer.State.RUNNING
-                && proxy.getHttpsFailureReason() != null) {
+                action("act_open_certificates"))
+                .holding(refusedOverHttp(proxy)));
+        } else if (httpsDegraded(proxy)) {
             // Partial mode: passthrough listens but termination failed, so the listener
             // reads healthy while every force_ssl vhost answers 503.
             items.add(item(AttentionSeverity.ERROR, "certificate",
                 copy("proxy_https_degraded", "attention_title"),
                 literal(proxy.getHttpsFailureReason()),
                 CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES),
-                action("act_open_certificates")));
+                action("act_open_certificates"))
+                .holding(refusedOverHttp(proxy)));
         }
     }
 
+    /** @return whether the HTTPS listener runs while its termination failed (passthrough only) */
+    private static boolean httpsDegraded(@NonNull ProxyServer proxy) {
+        return proxy.getHttpsState() == ProxyServer.State.RUNNING && proxy.getHttpsFailureReason() != null;
+    }
+
     /**
-     * HTTPS termination is down while force-SSL routes exist: those sites answer plain
-     * HTTP with a 503 (the fail-closed force_ssl gate in SiteDispatcher), so the operator
-     * must SEE the inert control instead of a checkbox that silently stopped mattering.
+     * HTTPS cannot be served while sites are sent to HTTPS: those sites answer plain HTTP with an error page (the
+     * fail-closed force_ssl gate in SiteDispatcher), so the operator must SEE it instead of a control that silently
+     * stopped mattering. The detail says why nothing can be served; what it holds back names each site by what sends it
+     * to HTTPS (its own Force HTTPS, or the global setting), never claiming a site forces what the setting forces.
+     *
+     * AIDEV-NOTE: raised only while no listener item speaks: with the listener failed or degraded, that item is the
+     * root and names the same sites. What remains is a listener with nothing to terminate with: no certificate could
+     * be loaded.
      */
     public static void httpsUnavailableWithForceSsl(List<AttentionItem> items) {
         var proxy = ServerMain.getProxyServer();
         if (proxy == null || proxy.isHttpsTerminationAvailable()
-                || proxy.getHttpState() != ProxyServer.State.RUNNING) {
+                || proxy.getHttpState() != ProxyServer.State.RUNNING
+                || proxy.getHttpsState() == ProxyServer.State.FAILED || httpsDegraded(proxy)) {
             return;
         }
-        // The dispatcher's own forcing rule names the refusing sites (the global force_https included), so a fresh
-        // install with nothing forced raises nothing and the list is never empty.
-        List<String> sites = proxy.getDispatcher().forceSslSiteNames();
-        if (sites.isEmpty()) {
+        Microcopy refused = refusedOverHttp(proxy);
+        if (refused == null) {
             return;
         }
+        long active = Models.get(CertificateModel.class).find()
+            .where(CertificateModel.STATUS.eq(CertificateModel.STATUS_ACTIVE)).count();
         items.add(item(AttentionSeverity.ERROR, "certificate",
             copy("https_unavailable", "attention_title"),
-            copy("https_unavailable", "attention_detail", "sites", String.join(", ", sites)),
+            active == 0 ? copy("https_no_certificate", "attention_detail")
+                : copy("https_certificates_unloaded", "attention_detail", "count", active),
             CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES),
-            action("act_open_certificates")));
+            action("act_open_certificates"))
+            .holding(refused));
+    }
+
+    /**
+     * @return whose visitors get an error page over plain HTTP while HTTPS cannot be served, each named by what sends
+     *         it to HTTPS; null when no site is sent there or plain HTTP is not served at all
+     */
+    private static @Nullable Microcopy refusedOverHttp(@NonNull ProxyServer proxy) {
+        if (proxy.getHttpState() != ProxyServer.State.RUNNING) {
+            return null;
+        }
+        SiteDispatcher.ForcedSites forced = proxy.getDispatcher().forcedSites();
+        String own = String.join(", ", forced.own());
+        String bySetting = String.join(", ", forced.bySetting());
+        if (forced.isEmpty()) {
+            return null;
+        }
+        if (forced.bySetting().isEmpty()) {
+            return copy("https_refused_forced", "attention_detail", "sites", own);
+        }
+        return forced.own().isEmpty() ? copy("https_refused_setting", "attention_detail", "sites", bySetting)
+            : copy("https_refused_both", "attention_detail", "forced", own, "sent", bySetting);
     }
 
     /**
@@ -132,11 +172,13 @@ public final class ProxyAttention {
                     || site.get(SiteModel.DELETED_AT) != null) {
                 continue;
             }
+            // The address is the root of its site's error page (the site verdict's cause), so that item folds here.
             items.add(item(AttentionSeverity.ERROR, "lock",
                 copy("forced_without_certificate", "attention_title", "hostname", hostname),
                 copy("forced_without_certificate", "attention_detail"),
                 SiteParts.recordRoute(ADMIN, site.get(SiteModel.ID)),
-                action("act_fix_on", "name", site.get(SiteModel.NAME))));
+                action("act_fix_on", "name", site.get(SiteModel.NAME)))
+                .about(AttentionSubject.address(domain.get(SiteDomainModel.ID)), null));
         }
     }
 
@@ -181,8 +223,9 @@ public final class ProxyAttention {
      * AIDEV-NOTE: a site the proxy turns away over its settings is DOWN too, and its routing-problem item already says
      * so with the proxy's own reason; it is not drawn twice. A down site's detail is its verdict's reason
      * ({@link AppHealth}, an error page at that point), so the band and the site's problem band give the same reason;
-     * a verdict with no reason of its own, and a degraded site, read the item's plain sentence. A site whose app its host
-     * holds back names that host as its cause (the verdict's own cause half), so the dashboard folds it under the host.
+     * a verdict with no reason of its own, and a degraded site, read the item's plain sentence. A site names the cause
+     * its verdict names (the host holding its app back, its workload that does not run, its address forced to HTTPS
+     * without a certificate), so the dashboard folds it under that record's own item while that item is shown.
      */
     static void unhealthySites(List<AttentionItem> items) {
         var proxy = ServerMain.getProxyServer();
@@ -209,13 +252,12 @@ public final class ProxyAttention {
                 String key = down ? "site_down" : "site_degraded";
                 AppHealth.Verdict verdict = down ? AppHealth.siteReading(site) : null;
                 Microcopy reason = verdict != null ? verdict.health().detail() : null;
-                Integer heldBy = verdict != null ? verdict.heldBy() : null;
                 items.add(item(down ? AttentionSeverity.ERROR : AttentionSeverity.WARNING, "globe",
                     copy(key, "attention_title", "name", site.get(SiteModel.NAME)),
                     reason != null ? reason : copy(key, "attention_detail"),
                     SiteParts.recordRoute(ADMIN, siteId),
                     action("act_open_app", "name", site.get(SiteModel.NAME)))
-                    .causedBy(heldBy != null ? AttentionSubject.host(heldBy) : null));
+                    .causedBy(verdict != null ? verdict.cause() : null));
             }
         }
     }

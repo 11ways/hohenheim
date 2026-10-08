@@ -79,6 +79,8 @@ record HostVerdict(@NonNull HostStanding standing, @Nullable Microcopy reason,
         return switch (this.remedy) {
             case CHECK_AND_ADMIT -> action("act_check_admit");
             case CHECK_AGAIN -> action("act_check_again");
+            case CONFIRM_KEY -> action("act_confirm_host_key");
+            case REVIEW_KEY -> action("act_review_host_key");
             case OPEN_HOST -> action("act_open_app", "name", name);
         };
     }

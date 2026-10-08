@@ -6,12 +6,19 @@ import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.ReleaseOperationModel;
+import be.elevenways.hohenheim.model.RuntimeImageModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -23,16 +30,28 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.task.TaskCatalog;
+import be.elevenways.zenit.common.task.TaskDescriptor;
+import be.elevenways.zenit.common.task.TaskStatus;
+import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
+import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.addDomain;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupInstanceSite;
@@ -121,7 +140,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 AppHealth.Verdict verdict = AppHealth.siteReading(site);
                 assertThat(verdict.health().tone()).as("step 2: the site keeps its verdict: an error page")
                     .isEqualTo(HealthTone.BROKEN);
-                assertThat(verdict.heldBy()).as("step 2: caused by its host").isEqualTo(local);
+                assertThat(verdict.cause()).as("step 2: caused by its host").isEqualTo(localHost);
                 Row instance = Models.get(InstanceModel.class).findById(instances.get(i).get(InstanceModel.ID));
                 assertThat(say(AppHealth.instances(false).read(instance, TenantConduits.operator()).headline()))
                     .as("step 2: the app's own page still says it cannot start")
@@ -168,8 +187,9 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(done.detail().key()).as("step 5: in its own done words").isEqualTo("checklist_admit_done");
             assertThat(done.heldBack()).as("step 5: holding nothing back").isNull();
             assertThat(rootOf(AttentionCollector.collect(), localHost)).as("step 5: no item names the host").isNull();
-            assertThat(mine(admitted.attention())).as("step 5: each site is its own problem again").hasSize(2)
-                .allMatch(item -> item.causedBy() == null);
+            assertThat(mine(admitted.attention())).as("step 5: each site is its own app's problem again, caused by its "
+                    + "stopped workload, which raises no item of its own, so nothing folds it").hasSize(2)
+                .allMatch(item -> item.causedBy() != null && InstanceModel.MODEL_ID.equals(item.causedBy().model()));
 
             // 6. Its memory reading goes stale (measured 40 days ago, DEP9's Starfleet host): the chooser refuses it,
             //    so admission is open again and its step presents the host's item, with the fresh check that clears it
@@ -255,6 +275,303 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             }
             captured.restore();
         }
+    }
+
+    @Test
+    @Timeout(120)
+    void oneCauseIsOneItemCarryingItsRootsAction() throws Exception {
+        HostFixtures.LocalHostState captured = HostFixtures.captureLocal();
+        ProxyServer previous = ServerMain.getProxyServer();
+        Boolean forceHttps = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS);
+        ProxyServer proxy = null;
+        List<Row> instances = new ArrayList<>();
+        List<Row> sites = new ArrayList<>();
+        List<Row> hosts = new ArrayList<>();
+        SystemTaskHistoryModel registeredHistory = null;
+        try {
+            // Nothing holds an app back here: the local host takes new apps, so every root below is the app's own.
+            HostFixtures.makeLocalPlaceable(16L * 1024);
+            int local = ServerModel.localServerId();
+            Row crashed = instance(PREFIX + "crashed", local);
+            crashed.set(InstanceModel.STATUS, InstanceModel.STATUS_ERROR);
+            Models.get(InstanceModel.class).save(crashed);
+            instances.add(crashed);
+            Row shop = setupInstanceSite(PREFIX + "shop", PREFIX + "shop", crashed.get(InstanceModel.ID));
+            sites.add(shop);
+            addDomain(shop, "shop.d11.test", "exact", null, false);
+            Row application = application(PREFIX + "api", local);
+            instances.add(application);
+            Row api = setupInstanceSite(PREFIX + "api-site", PREFIX + "api-site", application.get(InstanceModel.ID));
+            sites.add(api);
+            addDomain(api, "api.d11.test", "exact", null, false);
+            failedRelease(application.get(InstanceModel.ID), "the health probe never answered on port 3000");
+            proxy = startProxy();
+            ServerMain.adoptProxyServer(proxy);
+            AttentionSubject workload = AttentionSubject.instance(crashed.get(InstanceModel.ID));
+
+            // 1. A crashed workload behind a website (D10a's Shop): the site's verdict names the workload as its
+            //    cause, so unfolded there are two items, the workload's (the root, saying what it keeps from its
+            //    site's visitors) and the site's (caused by it)...
+            assertThat(AppHealth.siteReading(fresh(shop)).cause())
+                .as("step 1: the site's verdict names its workload as the cause").isEqualTo(workload);
+            List<AttentionItem> unfolded = AttentionCollector.collect();
+            AttentionItem root = rootOf(unfolded, workload);
+            assertThat(root).as("step 1: the crashed workload is a root").isNotNull();
+            assertThat(say(root.title())).as("step 1: in the workload's own words")
+                .isEqualTo("Instance " + PREFIX + "crashed needs attention");
+            assertThat(say(root.action())).as("step 1: with the workload's action").isEqualTo("Open the console");
+            assertThat(say(root.heldBack())).as("step 1: saying what it keeps from its site's visitors")
+                .isEqualTo("Visitors of its site get an error page");
+            assertThat(causedBy(unfolded, workload)).as("step 1: unfolded, the site's item is caused by it")
+                .singleElement().satisfies(item -> assertThat(say(item.title()))
+                    .isEqualTo("Visitors of " + PREFIX + "shop get an error page"));
+
+            // 2. ...and folded, the band draws the cause once: the workload's item with its action, never the site's.
+            List<AttentionItem> band = DashboardAttention.read(unfolded, true).attention();
+            assertThat(rootOf(band, workload)).as("step 2: the band keeps the workload's item").isNotNull();
+            assertThat(causedBy(band, workload)).as("step 2: and folds the site's error page under it").isEmpty();
+            String dashboard = adminGet("/admin/dashboard").body();
+            assertThat(dashboard).as("step 2: the rendered dashboard says it once, at its root")
+                .contains("Visitors of its site get an error page")
+                .doesNotContain("Visitors of " + PREFIX + "shop get an error page");
+
+            // 3. A failed deploy of an application that does not run is the same shape: the deploy's item is the
+            //    root, with its way to the deploy, and the application's site folds under it.
+            AttentionSubject deployed = AttentionSubject.instance(application.get(InstanceModel.ID));
+            AttentionItem deploy = rootOf(unfolded, deployed);
+            assertThat(deploy).as("step 3: the failed deploy is a root").isNotNull();
+            assertThat(say(deploy.action())).as("step 3: with the deploy's action").isEqualTo("See the deploy");
+            assertThat(say(deploy.detail())).as("step 3: saying why it failed")
+                .isEqualTo("the health probe never answered on port 3000");
+            assertThat(causedBy(unfolded, deployed)).as("step 3: unfolded, its site's item names it").hasSize(1);
+            assertThat(causedBy(band, deployed)).as("step 3: folded, it does not").isEmpty();
+
+            // 4. A stopped workload raises no item of its own, so its site's error page is the only item, never
+            //    hidden: a fold needs a shown root.
+            crashed.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
+            Models.get(InstanceModel.class).save(crashed);
+            List<AttentionItem> stopped = DashboardAttention.read(AttentionCollector.collect(), true).attention();
+            assertThat(rootOf(stopped, workload)).as("step 4: a stopped workload is no item of its own").isNull();
+            assertThat(causedBy(stopped, workload)).as("step 4: so its site's error page stays, once").hasSize(1);
+
+            // 5. An address forced to HTTPS without a certificate is the root of its site's error page: the site's
+            //    verdict names that address, and the address's own item is about it.
+            Row docs = setupSite("hohenheim:static", PREFIX + "docs", PREFIX + "docs", Map.of("root_path", "/tmp"));
+            sites.add(docs);
+            Row forced = forcedDomain(docs, "docs.d11.test");
+            AttentionSubject address = AttentionSubject.address(forced.get(SiteDomainModel.ID));
+            assertThat(AppHealth.siteReading(fresh(docs)).cause())
+                .as("step 5: the site's verdict names the forced address as its cause").isEqualTo(address);
+            ServerMain.adoptProxyServer(null);
+            List<AttentionItem> forcedItems = new ArrayList<>();
+            ProxyAttention.forcedWithoutCertificate(forcedItems);
+            ServerMain.adoptProxyServer(proxy);
+            assertThat(rootOf(forcedItems, address)).as("step 5: the address's own item is that root").isNotNull();
+
+            // 6. HTTPS cannot be served at all (no certificate is stored): one item says why in words, and names
+            //    each site sent to HTTPS by what sends it there, never claiming a site forces what the setting
+            //    forces (D10a: a catch-all and a certified name listed as sites "that force SSL").
+            Row catchAll = setupSite("hohenheim:static", PREFIX + "catch-all", PREFIX + "catch-all",
+                Map.of("root_path", "/tmp"));
+            sites.add(catchAll);
+            addDomain(catchAll, "**.d11.test", "wildcard", null, false);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, true);
+            proxy.reload();
+            List<AttentionItem> https = new ArrayList<>();
+            ProxyAttention.httpsUnavailableWithForceSsl(https);
+            assertThat(https).as("step 6: HTTPS that cannot be served raises one item").hasSize(1);
+            assertThat(say(https.get(0).detail())).as("step 6: saying why in words")
+                .isEqualTo("No certificate is stored yet, so nothing can be answered over HTTPS.");
+            assertThat(say(https.get(0).heldBack())).as("step 6: naming each site by what sends it to HTTPS")
+                .isEqualTo("Visitors of " + PREFIX + "docs get an error page: their addresses force HTTPS. So do "
+                    + "visitors of " + PREFIX + "catch-all: the Force HTTPS setting sends them there.");
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, false);
+            List<AttentionItem> ownOnly = new ArrayList<>();
+            ProxyAttention.httpsUnavailableWithForceSsl(ownOnly);
+            assertThat(say(ownOnly.get(0).heldBack())).as("step 6: without the setting only the forcing site is named")
+                .isEqualTo("Visitors of " + PREFIX + "docs get an error page: their addresses force HTTPS.");
+
+            // 7. A failing task reads by its worded name, with why its last run failed (never a class name or a
+            //    stack trace) and the way to that run, whose page offers Run now.
+            if (Models.get(SystemTaskHistoryModel.MODEL_ID) == null) {
+                registeredHistory = new SystemTaskHistoryModel(Datasources.getDefault());
+                Models.registerInstance(registeredHistory);
+            }
+            Row run = failedRun(VerifyWorkloadIsolation.ID.toString(),
+                "be.elevenways.hohenheim.server.task.IsolationFindings$IsolationUnresolved: Workload isolation did "
+                    + "not come back clean: local: no Docker client\n    at be.elevenways.Example.run(Example.java:1)");
+            List<AttentionItem> tasks = new ArrayList<>();
+            AttentionCollector.failedTasks(tasks);
+            AttentionItem task = tasks.stream().filter(item -> item.target() != null && item.target().toUrl()
+                .equals("/admin/task-runs/" + run.get(SystemTaskHistoryModel.ID) + "/open")).findFirst().orElse(null);
+            assertThat(task).as("step 7: the failed run raises an item leading to that run").isNotNull();
+            assertThat(say(task.title())).as("step 7: titled by the task's worded name").isEqualTo("Check app isolation failed");
+            assertThat(task.title().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 7: in Dutch too").isEqualTo("Isolatie van apps controleren is mislukt");
+            assertThat(say(task.detail())).as("step 7: with the failure's own words")
+                .isEqualTo("Workload isolation did not come back clean: local: no Docker client");
+            assertThat(say(task.action())).as("step 7: and the way to the run").isEqualTo("Show the run");
+
+            // 8. A host whose key nobody confirmed takes no new apps: the refusal is worded (no quotes, no
+            //    jargon), in en and nl, and its remedy is the item's action, the host page's key confirmation.
+            Row phoenix = sshHost(PREFIX + "phoenix");
+            hosts.add(phoenix);
+            AttentionSubject phoenixHost = AttentionSubject.host(phoenix.get(ServerModel.ID));
+            List<AttentionItem> hostItems = new ArrayList<>();
+            HostAttention.hostsTakingNoApps(hostItems);
+            AttentionItem keyItem = rootOf(hostItems, phoenixHost);
+            assertThat(keyItem).as("step 8: the host is raised").isNotNull();
+            assertThat(keyItem.detail().key()).as("step 8: for its unconfirmed key").isEqualTo("host_key_unverified");
+            assertThat(say(keyItem.detail())).as("step 8: in words")
+                .isEqualTo("Nobody has confirmed the host key of " + PREFIX + "phoenix yet, so Hohenheim cannot be "
+                    + "sure it is talking to that machine; compare the key and confirm it first")
+                .doesNotContain("'");
+            assertThat(keyItem.detail().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 8: and in Dutch").contains("hostsleutel van " + PREFIX + "phoenix");
+            assertThat(say(keyItem.action())).as("step 8: its remedy is the action").isEqualTo("Confirm its host key");
+            assertThat(keyItem.target().toUrl()).as("step 8: on the host's page")
+                .isEqualTo("/admin/servers/" + phoenix.get(ServerModel.ID) + "/open");
+        } finally {
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, forceHttps);
+            ServerMain.adoptProxyServer(previous);
+            if (proxy != null) {
+                proxy.stop();
+            }
+            if (registeredHistory != null) {
+                Models.unregisterInstance(registeredHistory);
+            }
+            for (Row site : sites) {
+                HardDeletes.row(Models.get(SiteModel.class), Models.get(SiteModel.class).findById(site.get(SiteModel.ID)));
+            }
+            for (Row instance : instances) {
+                HardDeletes.row(Models.get(InstanceModel.class), instance);
+            }
+            for (Row host : hosts) {
+                HardDeletes.row(Models.get(ServerModel.class), host);
+            }
+            captured.restore();
+        }
+    }
+
+    @Test
+    void everyTaskAndEveryCountReadsInWords() throws Exception {
+        ShippedCatalogs catalogs = new ShippedCatalogs();
+
+        // 1. Every task the catalog holds, the framework's included, has a worded name in en and nl: a task
+        //    without one fails here, never on the dashboard as a raw id.
+        assertThat(TaskCatalog.get(VerifyWorkloadIsolation.ID)).as("step 1: the catalog is discovered").isNotNull();
+        Set<String> paths = new HashSet<>();
+        for (TaskDescriptor descriptor : TaskCatalog.all()) {
+            Microcopy label = TaskWords.label(descriptor.id());
+            for (String language : List.of("en", "nl")) {
+                assertThat(catalogs.resolveSource(label.key(), LocaleChain.ofTags(language), label.filters()))
+                    .as("step 1: task %s is named in %s", descriptor.typePath(), language).isNotNull();
+            }
+            assertThat(paths.add(descriptor.id().getPath()))
+                .as("step 1: task %s's name key is its own", descriptor.typePath()).isTrue();
+        }
+
+        // 2. A sentence counting things says real plurals, in en and nl, never "(s)".
+        Microcopy inUse = new ServerModel.References(1, 0, 0, 2, 1)
+            .describe(Microcopy.of("server_in_use").withFilter("scope", "violations").withArg("name", "local"));
+        assertThat(say(inUse)).as("step 2: each count in its own plural")
+            .isEqualTo("Host local is still used by 1 stack, 0 databases, 0 shared database engines, 2 instances "
+                + "and 1 port claim; remove or move them (release the claims) first");
+        assertThat(inUse.resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+            .as("step 2: in Dutch too").contains("1 stack, 0 databases, 0 gedeelde database-engines, 2 instanties "
+                + "en 1 poortclaim");
+        Microcopy template = Microcopy.of("template_in_use").withFilter("scope", "violations").withArg("name", "Blog");
+        assertThat(say(template.withArg("count", 1))).as("step 2: one").isEqualTo("Template Blog is still used by 1 instance");
+        assertThat(template.withArg("count", 3).resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+            .as("step 2: several, in Dutch").isEqualTo("Sjabloon Blog wordt nog gebruikt door 3 instanties");
+
+        // 3. No shipped sentence spells a pseudo-plural any more ("(s)", "(en)"); "http(s)" is a scheme, not a count.
+        Pattern pseudo = Pattern.compile("[A-Za-z]\\((s|en|e|n)\\)");
+        for (String language : List.of("en", "nl")) {
+            try (InputStream input = DashboardAttentionJourneyTest.class
+                    .getResourceAsStream("/META-INF/microcopy/" + language + ".json")) {
+                assertThat(input).as("step 3: the %s catalog ships", language).isNotNull();
+                String catalog = new String(input.readAllBytes(), StandardCharsets.UTF_8).replace("http(s)", "");
+                Matcher found = pseudo.matcher(catalog);
+                assertThat(found.find() ? catalog.substring(Math.max(0, found.start() - 60), found.end()) : null)
+                    .as("step 3: the %s catalog counts in real plurals", language).isNull();
+            }
+        }
+    }
+
+    private static List<AttentionItem> causedBy(List<AttentionItem> items, AttentionSubject root) {
+        return items.stream().filter(item -> root.equals(item.causedBy())).toList();
+    }
+
+    private static Row fresh(Row row) {
+        return Models.get(SiteModel.class).findById(row.get(SiteModel.ID));
+    }
+
+    private static Row application(String name, int serverId) {
+        Row app = Models.get(InstanceModel.class).createEmptyRow();
+        app.set(InstanceModel.NAME, name);
+        app.set(InstanceModel.KIND, "hohenheim:application");
+        app.set(InstanceModel.SERVER_ID, serverId);
+        app.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
+        app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of()));
+        InstanceKindHandler handler = InstanceKinds.getHandler("hohenheim:application");
+        if (handler != null && handler.requiresRuntimeImage()) {
+            Row image = Models.get(RuntimeImageModel.class).find()
+                .where(RuntimeImageModel.NAME.eq("node-22")).first();
+            app.set(InstanceModel.RUNTIME_IMAGE_ID, image == null ? null : image.get(RuntimeImageModel.ID));
+        }
+        Models.get(InstanceModel.class).save(app);
+        return app;
+    }
+
+    private static void failedRelease(int applicationId, String reason) {
+        Row row = Models.get(ReleaseOperationModel.class).createEmptyRow();
+        row.set(ReleaseOperationModel.KIND, ReleaseOperationModel.KIND_RELEASE);
+        row.set(ReleaseOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
+        row.set(ReleaseOperationModel.FOR_ID, applicationId);
+        row.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.STATUS_FAILED);
+        row.set(ReleaseOperationModel.IMAGE_ID, "d11-failed");
+        row.set(ReleaseOperationModel.FAILURE_REASON, reason);
+        row.set(ReleaseOperationModel.STARTED_AT, Now.instant().minusSeconds(60));
+        row.set(ReleaseOperationModel.FINISHED_AT, Now.instant());
+        Models.get(ReleaseOperationModel.class).save(row);
+    }
+
+    private static Row forcedDomain(Row site, String hostname) {
+        Row domain = Models.get(SiteDomainModel.class).createEmptyRow();
+        domain.set(SiteDomainModel.SITE_ID, site.get(SiteModel.ID));
+        domain.set(SiteDomainModel.HOSTNAME, hostname);
+        domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        domain.set(SiteDomainModel.FORCE_SSL, true);
+        Models.get(SiteDomainModel.class).save(domain);
+        return domain;
+    }
+
+    private static Row failedRun(String typePath, String error) {
+        SystemTaskHistoryModel history = Models.get(SystemTaskHistoryModel.class);
+        Row run = history.createEmptyRow();
+        run.set(SystemTaskHistoryModel.TASK_TYPE, typePath);
+        run.set(SystemTaskHistoryModel.STATUS, TaskStatus.FAILED.name());
+        run.set(SystemTaskHistoryModel.STARTED_AT, Now.instant());
+        run.set(SystemTaskHistoryModel.ENDED_AT, Now.instant());
+        run.set(SystemTaskHistoryModel.ERROR, error);
+        history.save(run);
+        return run;
+    }
+
+    /** A remote Docker host admitted with an accepted posture whose host key nobody confirmed. */
+    private static Row sshHost(String name) {
+        Row row = Models.get(ServerModel.class).createEmptyRow();
+        row.set(ServerModel.NAME, name);
+        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
+        row.set(ServerModel.MODE, ServerModel.MODE_SSH);
+        row.set(ServerModel.SSH_TARGET, "operator@" + name + ".invalid");
+        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+        Models.get(ServerModel.class).save(row);
+        Row saved = Models.get(ServerModel.class).findById(row.get(ServerModel.ID));
+        HostFixtures.acknowledgePosture(saved);
+        return Models.get(ServerModel.class).findById(row.get(ServerModel.ID));
     }
 
     /** @return the rendered count tile counting this, up to its end */

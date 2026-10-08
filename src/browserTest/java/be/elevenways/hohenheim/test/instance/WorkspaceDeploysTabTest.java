@@ -102,7 +102,7 @@ class WorkspaceDeploysTabTest extends HohenheimTestBase {
         //     changed its arguments since reads as the reason it stored.
         assertThat(body)
             .as("step 2b: an old stored refusal is its sentence")
-            .contains("Host local declares a trusted-only posture and refuses tenant instances")
+            .contains("local is set to Trusted only, so it takes no tenant apps")
             .as("step 2b: an old build failure reads as its stored reason")
             .contains("npm error code ERESOLVE, could not resolve");
 

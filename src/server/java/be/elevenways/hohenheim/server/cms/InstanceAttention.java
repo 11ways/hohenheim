@@ -2,22 +2,26 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
+import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 
 import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
@@ -61,16 +65,34 @@ public final class InstanceAttention {
      * protection).
      */
     public static void crashedInstances(List<AttentionItem> items) {
+        crashedInstances(items, AppHealth.sitesHeldBack());
+    }
+
+    /**
+     * AIDEV-NOTE: the crashed workload is the ROOT of what its sites' visitors get: each such site's verdict names the
+     * workload as its cause ({@link AppHealth}), so the dashboard folds their "error page" items under this one, which
+     * says how many sites it keeps from their visitors and keeps the workload's own action.
+     *
+     * @param sitesHeld what each record keeps from visitors ({@link AppHealth#sitesHeldBack}), read once for the tier
+     */
+    static void crashedInstances(List<AttentionItem> items, Map<AttentionSubject, Integer> sitesHeld) {
         for (Row instance : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_ERROR))
                 .all()) {
+            AttentionSubject subject = AttentionSubject.instance(instance.get(InstanceModel.ID));
             items.add(item(AttentionSeverity.ERROR, "box",
                 copy("instance_crashed", "attention_title",
                     "name", instance.get(InstanceModel.NAME)),
                 copy("instance_crashed", "attention_detail"),
                 InstanceParts.recordRoute(ADMIN, instance, InstanceConsolePage.SLUG),
-                action("act_open_console")));
+                action("act_open_console"))
+                .about(subject, sitesHeldText(sitesHeld.get(subject))));
         }
+    }
+
+    /** @return "Visitors of its site get an error page", null when the workload keeps no site from its visitors */
+    static @Nullable Microcopy sitesHeldText(@Nullable Integer sites) {
+        return sites == null || sites == 0 ? null : copy("sites_held_back", "attention_detail", "count", sites);
     }
 
     /**
@@ -196,6 +218,14 @@ public final class InstanceAttention {
      * table to keep in step with it.
      */
     static void failedDeployments(List<AttentionItem> items) {
+        failedDeployments(items, AppHealth.sitesHeldBack());
+    }
+
+    /**
+     * @param sitesHeld what each record keeps from visitors: an application whose deploy failed and does not run is
+     *                  the root of its sites' error pages, as a crashed workload is
+     */
+    static void failedDeployments(List<AttentionItem> items, Map<AttentionSubject, Integer> sitesHeld) {
         var instanceModel = Models.get(InstanceModel.class);
         var operations = Models.get(ReleaseOperationModel.class);
         if (instanceModel == null || operations == null) {
@@ -216,13 +246,15 @@ public final class InstanceAttention {
             Row operation = latest.get(0);
             if (ReleaseOperationModel.STATUS_FAILED.equals(
                     operation.get(ReleaseOperationModel.STATUS))) {
+                AttentionSubject subject = AttentionSubject.instance(applicationId);
                 items.add(item(AttentionSeverity.ERROR, "rocket",
                     copy("deploy", "attention_title",
                         "name", application.get(InstanceModel.NAME)),
                     literal(operation.get(ReleaseOperationModel.FAILURE_REASON)),
                     CmsRoutes.subpage(ADMIN, InstanceParts.SLUG, applicationId,
                         InstanceDeploymentsPage.SLUG),
-                    action("act_see_deploy")));
+                    action("act_see_deploy"))
+                    .about(subject, sitesHeldText(sitesHeld.get(subject))));
             }
         }
     }

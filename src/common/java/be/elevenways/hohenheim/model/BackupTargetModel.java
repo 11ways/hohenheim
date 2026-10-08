@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -136,8 +137,8 @@ public class BackupTargetModel extends Model {
             if (backups > 0 || instances > 0) {
                 throw Violations.ofForm(HohenheimViolations.text("backup_target_in_use")
                     .withArg("name", name)
-                    .withArg("backups", backups)
-                    .withArg("instances", instances));
+                    .withArg("backups", HohenheimCounts.of("backups", backups))
+                    .withArg("instances", HohenheimCounts.of("instances", instances)));
             }
             InstanceModel.detachTrashed(InstanceModel.BACKUP_TARGET_ID,
                 InstanceModel.BACKUP_TARGET_ID.eq(targetId));

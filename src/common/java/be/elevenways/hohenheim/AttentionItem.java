@@ -47,6 +47,12 @@ public record AttentionItem(
             this.causedBy, this.stage, heldBack);
     }
 
+    /** @return a copy saying what it holds back, for a root no record names (a proxy listener) */
+    public @NonNull AttentionItem holding(@Nullable Microcopy heldBack) {
+        return new AttentionItem(this.severity, this.icon, this.title, this.detail, this.target, this.action,
+            this.about, this.causedBy, this.stage, heldBack);
+    }
+
     /** @return a copy whose root is this record's own item */
     public @NonNull AttentionItem causedBy(@Nullable AttentionSubject root) {
         return new AttentionItem(this.severity, this.icon, this.title, this.detail, this.target, this.action,

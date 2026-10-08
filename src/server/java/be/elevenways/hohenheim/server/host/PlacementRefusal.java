@@ -18,8 +18,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public enum PlacementRefusal {
 
     NOT_ADMITTED(HohenheimViolations.text("host_not_admitted"), Remedy.CHECK_AND_ADMIT),
-    KEY_UNVERIFIED(HohenheimViolations.text("host_key_unverified"), Remedy.OPEN_HOST),
-    QUARANTINED(HohenheimViolations.text("host_quarantined"), Remedy.OPEN_HOST),
+    KEY_UNVERIFIED(HohenheimViolations.text("host_key_unverified"), Remedy.CONFIRM_KEY),
+    QUARANTINED(HohenheimViolations.text("host_quarantined"), Remedy.REVIEW_KEY),
     POSTURE_REFUSES(HohenheimViolations.text("host_posture_refuses"), Remedy.OPEN_HOST),
     POSTURE_REQUIRES_VM(HohenheimViolations.text("host_posture_requires_vm"), Remedy.OPEN_HOST),
     POSTURE_UNACKNOWLEDGED(HohenheimViolations.text("host_posture_unacknowledged"), Remedy.OPEN_HOST),
@@ -39,6 +39,12 @@ public enum PlacementRefusal {
 
         /** A fresh check re-measures or re-proves what is missing: Check again. */
         CHECK_AGAIN,
+
+        /** Nobody confirmed the key the host offers: compare it on the host page and confirm it. */
+        CONFIRM_KEY,
+
+        /** The host offers a key other than the confirmed one: compare the new key and re-pin it deliberately. */
+        REVIEW_KEY,
 
         /** A decision on the host page (posture, trust, cordon, contact): open the host. */
         OPEN_HOST

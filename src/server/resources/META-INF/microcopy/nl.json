@@ -1354,6 +1354,182 @@
     "text": "Laatste uitvoering mislukt",
     "scope": "attention_detail"
   },
+  "access_rules": {
+    "text": ".match {$count :number}\none {{1 toegangsregel}}\n* {{{$count} toegangsregels}}",
+    "scope": "count"
+  },
+  "templates": {
+    "text": ".match {$count :number}\none {{1 sjabloon}}\n* {{{$count} sjablonen}}",
+    "scope": "count"
+  },
+  "port_claims": {
+    "text": ".match {$count :number}\none {{1 poortclaim}}\n* {{{$count} poortclaims}}",
+    "scope": "count"
+  },
+  "engines": {
+    "text": ".match {$count :number}\none {{1 gedeelde database-engine}}\n* {{{$count} gedeelde database-engines}}",
+    "scope": "count"
+  },
+  "stacks": {
+    "text": ".match {$count :number}\none {{1 stack}}\n* {{{$count} stacks}}",
+    "scope": "count"
+  },
+  "act_review_host_key": {
+    "text": "Zijn nieuwe hostsleutel vergelijken",
+    "scope": "attention_action"
+  },
+  "act_confirm_host_key": {
+    "text": "Zijn hostsleutel bevestigen",
+    "scope": "attention_action"
+  },
+  "https_refused_both": {
+    "text": "Bezoekers van {$forced} krijgen een foutpagina: hun adressen dwingen HTTPS af. Bezoekers van {$sent} ook: de instelling HTTPS afdwingen stuurt ze daarheen.",
+    "scope": "attention_detail"
+  },
+  "https_refused_setting": {
+    "text": "Bezoekers van {$sites} krijgen een foutpagina: de instelling HTTPS afdwingen stuurt ze daarheen.",
+    "scope": "attention_detail"
+  },
+  "https_refused_forced": {
+    "text": "Bezoekers van {$sites} krijgen een foutpagina: hun adressen dwingen HTTPS af.",
+    "scope": "attention_detail"
+  },
+  "https_certificates_unloaded": {
+    "text": ".match {$count :number}\none {{Het actieve certificaat kon niet geladen worden, dus niets kan via HTTPS antwoorden.}}\n* {{Geen van de {$count} actieve certificaten kon geladen worden, dus niets kan via HTTPS antwoorden.}}",
+    "scope": "attention_detail"
+  },
+  "https_no_certificate": {
+    "text": "Er is nog geen certificaat opgeslagen, dus niets kan via HTTPS antwoorden.",
+    "scope": "attention_detail"
+  },
+  "watch_summary": {
+    "text": "Volgoverzichten versturen",
+    "scope": "task_label"
+  },
+  "run_record_schedules": {
+    "text": "Recordplanningen uitvoeren",
+    "scope": "task_label"
+  },
+  "publish_scheduled_content": {
+    "text": "Geplande inhoud publiceren",
+    "scope": "task_label"
+  },
+  "orphan_record_grant_prune": {
+    "text": "Deelrechten van verwijderde records verwijderen",
+    "scope": "task_label"
+  },
+  "orm_housekeeping": {
+    "text": "Database-onderhoud",
+    "scope": "task_label"
+  },
+  "expired_record_grant_prune": {
+    "text": "Verlopen deelrechten verwijderen",
+    "scope": "task_label"
+  },
+  "content_sweep": {
+    "text": "Ongebruikte bestanden opruimen",
+    "scope": "task_label"
+  },
+  "activity_prune": {
+    "text": "Oude activiteit opruimen",
+    "scope": "task_label"
+  },
+  "verify_workload_isolation": {
+    "text": "Isolatie van apps controleren",
+    "scope": "task_label"
+  },
+  "verify_incus_isolation": {
+    "text": "Isolatie van Incus-apps controleren",
+    "scope": "task_label"
+  },
+  "update_system_users": {
+    "text": "Gebruikers van deze machine zoeken",
+    "scope": "task_label"
+  },
+  "update_system_ip_addresses": {
+    "text": "IP-adressen van deze machine zoeken",
+    "scope": "task_label"
+  },
+  "supervise_proxy_listeners": {
+    "text": "Proxy-listeners bewaken",
+    "scope": "task_label"
+  },
+  "security_sweep": {
+    "text": "Beveiligingsronde",
+    "scope": "task_label"
+  },
+  "resign_dnssec_zones": {
+    "text": "DNSSEC-zones opnieuw ondertekenen",
+    "scope": "task_label"
+  },
+  "reconcile_instance_status": {
+    "text": "Controleren welke apps draaien",
+    "scope": "task_label"
+  },
+  "reconcile_engine_isolation": {
+    "text": "Isolatie van database-engines controleren",
+    "scope": "task_label"
+  },
+  "reconcile_docker_resources": {
+    "text": "Docker opruimen",
+    "scope": "task_label"
+  },
+  "reclaim_docker_images": {
+    "text": "Oude Docker-images verwijderen",
+    "scope": "task_label"
+  },
+  "reap_incus_controllers": {
+    "text": "Incus-controllers opruimen",
+    "scope": "task_label"
+  },
+  "probe_dns_secondaries": {
+    "text": "Secundaire DNS-servers controleren",
+    "scope": "task_label"
+  },
+  "observe_instance_disk": {
+    "text": "Schijfgebruik van apps meten",
+    "scope": "task_label"
+  },
+  "monitor_stacks": {
+    "text": "Stackgezondheid bewaken",
+    "scope": "task_label"
+  },
+  "clean_orphan_certificates": {
+    "text": "Ongebruikte certificaten opruimen",
+    "scope": "task_label"
+  },
+  "clean_old_instance_logs": {
+    "text": "Oude console-uitvoer opruimen",
+    "scope": "task_label"
+  },
+  "check_foreign_keys": {
+    "text": "De database controleren op verweesde rijen",
+    "scope": "task_label"
+  },
+  "check_dns_delegations": {
+    "text": "DNS-delegaties controleren",
+    "scope": "task_label"
+  },
+  "backup_databases": {
+    "text": "Databases back-uppen",
+    "scope": "task_label"
+  },
+  "backup_control_plane": {
+    "text": "Het controlepaneel back-uppen",
+    "scope": "task_label"
+  },
+  "act_show_run": {
+    "text": "De uitvoering tonen",
+    "scope": "attention_action"
+  },
+  "task_failed": {
+    "text": "{$task} is mislukt",
+    "scope": "attention_title"
+  },
+  "sites_held_back": {
+    "text": ".match {$count :number}\none {{Bezoekers van zijn site krijgen een foutpagina}}\n* {{Bezoekers van zijn {$count} sites krijgen een foutpagina}}",
+    "scope": "attention_detail"
+  },
   "lines": {
     "text": "Regels",
     "scope": "instance_console"
@@ -1650,10 +1826,6 @@
   "stored_logs": {
     "text": "Bewaarde consolelogs",
     "scope": "instance_console"
-  },
-  "task": {
-    "text": "Taak {$name}",
-    "scope": "attention_title"
   },
   "trigger": [
     {
@@ -2691,6 +2863,10 @@
     {
       "text": "Databanken",
       "scope": "tenant_usage"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 database}}\n* {{{$count} databases}}",
+      "scope": "count"
     }
   ],
   "clone_confirm": {
@@ -5602,15 +5778,15 @@
     "scope": "released_claim"
   },
   "route_quarantined": {
-    "text": "{$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days} dag(en) gereserveerd; een beheerder kan de quarantaine opheffen",
+    "text": ".match {$days :number}\none {{{$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog 1 dag gereserveerd; een beheerder kan de quarantaine opheffen}}\n* {{{$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days} dagen gereserveerd; een beheerder kan de quarantaine opheffen}}",
     "scope": "violations"
   },
   "enable_route_quarantined": {
-    "text": "Kan deze site niet inschakelen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days} dag(en) gereserveerd; een beheerder kan de quarantaine opheffen",
+    "text": ".match {$days :number}\none {{Kan deze site niet inschakelen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog 1 dag gereserveerd; een beheerder kan de quarantaine opheffen}}\n* {{Kan deze site niet inschakelen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days} dagen gereserveerd; een beheerder kan de quarantaine opheffen}}",
     "scope": "violations"
   },
   "restore_route_quarantined": {
-    "text": "Kan deze site niet herstellen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days} dag(en) gereserveerd; een beheerder kan de quarantaine opheffen",
+    "text": ".match {$days :number}\none {{Kan deze site niet herstellen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog 1 dag gereserveerd; een beheerder kan de quarantaine opheffen}}\n* {{Kan deze site niet herstellen: {$hostname} is onlangs vrijgegeven door een andere eigenaar en blijft nog {$days} dagen gereserveerd; een beheerder kan de quarantaine opheffen}}",
     "scope": "violations"
   },
   "kind": [
@@ -5767,7 +5943,7 @@
   },
   "host_not_admitted": [
     {
-      "text": "Host {$name} is niet toegelaten voor plaatsing; gebruik eerst Controleren en toelaten op de host",
+      "text": "{$name} is nog niet toegelaten om apps te draaien; kies eerst Controleren en toelaten",
       "scope": "violations"
     },
     {
@@ -5780,7 +5956,7 @@
     "scope": "violations"
   },
   "host_posture_refuses": {
-    "text": "Host {$name} heeft een trusted-only houding en weigert tenant-instanties",
+    "text": "{$name} staat op Enkel vertrouwd, dus het neemt geen tenant-apps aan",
     "scope": "violations"
   },
   "admit_needs_preflight": {
@@ -5788,7 +5964,7 @@
     "scope": "violations"
   },
   "server_in_use": {
-    "text": "Host {$name} wordt nog gebruikt door {$stacks} stack(s), {$databases} database(s), {$engines} gedeelde database-engine(s), {$instances} instantie(s) en {$ports} poortclaim(s); verwijder of verplaats die eerst (geef de claims vrij)",
+    "text": "Host {$name} wordt nog gebruikt door {$stacks}, {$databases}, {$engines}, {$instances} en {$ports}; verwijder of verplaats die eerst (geef de claims vrij)",
     "scope": "violations"
   },
   "preflight": {
@@ -6038,19 +6214,19 @@
     "scope": "violations"
   },
   "host_key_unverified": {
-    "text": "Host '{$name}' heeft geen bevestigde SSH-vingerafdruk; scan de hostsleutel en bevestig ze eerst",
+    "text": "Niemand heeft de hostsleutel van {$name} al bevestigd, dus Hohenheim weet niet zeker dat het met die machine praat; vergelijk de sleutel en bevestig hem eerst",
     "scope": "violations"
   },
   "host_quarantined": {
-    "text": "Host '{$name}' bood een SSH-hostsleutel aan die niet met zijn pin overeenkomt en staat in quarantaine; pin hem bewust opnieuw voor je hem weer gebruikt",
+    "text": "{$name} bood een andere hostsleutel aan dan de bevestigde, dus er gaat niets naartoe tot iemand de nieuwe sleutel vergelijkt en aanvaardt",
     "scope": "violations"
   },
   "host_kernel_lane_missing": {
-    "text": "Host '{$name}' aanvaardt tenant-workloads maar heeft geen kanaal om zijn eigen kernel te lezen, dus workload-isolatie valt er niet te verifiëren; geef hem een SSH-beheerkanaal en bevestig de hostsleutel, of zet zijn houding op trusted-only",
+    "text": "{$name} neemt tenant-apps aan maar kan zijn eigen firewall niet lezen, dus hun isolatie valt er niet te controleren; geef hem een SSH-beheerverbinding en bevestig zijn sleutel, of zet hem op Enkel vertrouwd",
     "scope": "violations"
   },
   "host_kernel_lane_unproven": {
-    "text": "Host '{$name}' heeft geen BEWEZEN kernelkanaal: de laatste preflight deed geen nftables-transactie op de daemonhost; draai preflight opnieuw en los de kernel_isolation_lane-check op",
+    "text": "{$name} heeft niet bewezen dat het de isolatie van zijn apps kan controleren: de laatste controle kon de firewall op die machine niet aanpassen. Los de controle {$check} op en kies dan Opnieuw controleren",
     "scope": "violations"
   },
   "host_preflight_check_now_required": {
@@ -6098,7 +6274,7 @@
     "scope": "violations"
   },
   "migrate_devices_present": {
-    "text": "Instantie {$name} heeft {$count} gekoppelde apparaten; hun volumes reizen niet mee in een volledige export, dus migreren zou ze stilzwijgend verliezen. Koppel de apparaten eerst los.",
+    "text": ".match {$count :number}\none {{Instantie {$name} heeft 1 gekoppeld apparaat; zijn volume reist niet mee in een volledige export, dus migreren zou het stilzwijgend verliezen. Koppel het apparaat eerst los.}}\n* {{Instantie {$name} heeft {$count} gekoppelde apparaten; hun volumes reizen niet mee in een volledige export, dus migreren zou ze stilzwijgend verliezen. Koppel de apparaten eerst los.}}",
     "scope": "violations"
   },
   "migrate_publication_present": {
@@ -6142,7 +6318,7 @@
     "scope": "violations"
   },
   "backup_target_in_use": {
-    "text": "Back-updoel {$name} bevat nog {$backups} back-up(s) en dient als doel voor {$instances} instantie(s); verwijder eerst die back-ups en wijs de instanties elders toe",
+    "text": "Back-updoel {$name} bevat nog {$backups} en dient als doel voor {$instances}; verwijder eerst die back-ups en wijs de instanties elders toe",
     "scope": "violations"
   },
   "backup_target_control_plane": {
@@ -6361,6 +6537,10 @@
     {
       "text": "Backups",
       "scope": "database_overview"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 back-up}}\n* {{{$count} back-ups}}",
+      "scope": "count"
     }
   ],
   "backup_target": {
@@ -6454,11 +6634,11 @@
     "scope": "violations"
   },
   "template_in_use": {
-    "text": "Sjabloon {$name} wordt nog gebruikt door {$count} instantie(s)",
+    "text": ".match {$count :number}\none {{Sjabloon {$name} wordt nog gebruikt door 1 instantie}}\n* {{Sjabloon {$name} wordt nog gebruikt door {$count} instanties}}",
     "scope": "violations"
   },
   "runtime_image_in_use": {
-    "text": "Image {$name} wordt nog gebruikt door {$instances} instantie(s) en {$templates} sjablo(o)n(en); wijs die eerst een andere image toe",
+    "text": "Image {$name} wordt nog gebruikt door {$instances} en {$templates}; wijs die eerst een andere image toe",
     "scope": "violations"
   },
   "stack_service_running": {
@@ -7829,11 +8009,11 @@
     }
   ],
   "dns_peer_in_use": {
-    "text": "Peer {$name} is nog de primaire van {$count} secundaire zone(s) zoals {$zone}; wijs ze eerst om of verwijder ze",
+    "text": ".match {$count :number}\none {{Peer {$name} is nog de primaire van 1 secundaire zone, {$zone}; wijs hem eerst om of verwijder hem}}\n* {{Peer {$name} is nog de primaire van {$count} secundaire zones zoals {$zone}; wijs ze eerst om of verwijder ze}}",
     "scope": "violations"
   },
   "auth_provider_in_use": {
-    "text": "Auth-provider {$name} bewaakt nog {$sites} site(s) en {$rules} toegangsregel(s) verwijzen ernaar; wijs ze eerst een andere provider toe",
+    "text": "Auth-provider {$name} bewaakt nog {$sites} en wordt genoemd door {$rules}; wijs ze eerst een andere provider toe",
     "scope": "violations"
   },
   "system_user_in_use": {
@@ -8787,7 +8967,7 @@
     "scope": "server"
   },
   "controller_objects_reaped": {
-    "text": "{$name}: {$removed} gedeeld(e) object(en) van vertrokken controllers verwijderd, {$refused} geweigerd",
+    "text": ".match {$removed :number}\none {{{$name}: 1 gedeeld object van vertrokken controllers verwijderd, {$refused} geweigerd}}\n* {{{$name}: {$removed} gedeelde objecten van vertrokken controllers verwijderd, {$refused} geweigerd}}",
     "scope": "server"
   },
   "singular": [
@@ -9549,16 +9729,10 @@
     "text": "HTTPS-terminatie is verstoord",
     "scope": "attention_title"
   },
-  "https_unavailable": [
-    {
-      "text": "HTTPS is niet beschikbaar",
-      "scope": "attention_title"
-    },
-    {
-      "text": "Er kan geen certificaat worden aangeboden, dus sites die SSL afdwingen weigeren gewoon HTTP: {$sites}",
-      "scope": "attention_detail"
-    }
-  ],
+  "https_unavailable": {
+    "text": "HTTPS is niet beschikbaar",
+    "scope": "attention_title"
+  },
   "access_satisfy_invalid": {
     "text": "Voldoen-aan moet 'any' of 'all' zijn",
     "scope": "violations"
@@ -9622,7 +9796,7 @@
     "scope": "violations"
   },
   "host_contact_lapsed": {
-    "text": "Host '{$name}' heeft {$minutes} minuten geleden voor het laatst geantwoord, voorbij de contactgrens; er wordt geen nieuwe workload geplaatst tot hij weer antwoordt",
+    "text": ".match {$minutes :number}\none {{{$name} antwoordde 1 minuut geleden voor het laatst, dus er komt geen nieuwe app op tot hij weer antwoordt}}\n* {{{$name} antwoordde {$minutes} minuten geleden voor het laatst, dus er komt geen nieuwe app op tot hij weer antwoordt}}",
     "scope": "violations"
   },
   "preview_branches": [
@@ -10126,15 +10300,15 @@
     "scope": "instance_stats"
   },
   "host_posture_unacknowledged": {
-    "text": "Host {$name} draait gedeelde containers en geen enkele operator heeft dat risico aanvaard; aanvaard de houding op de host voor er tenant-containers landen",
+    "text": "{$name} staat op Gedeelde containers en niemand heeft dat risico al aanvaard; aanvaard het eerst op de host",
     "scope": "violations"
   },
   "host_posture_requires_vm": {
-    "text": "Host {$name} belooft VM-isolatie en weigert een containerworkload, die zijn kernel met elke gast op de machine zou delen",
+    "text": "{$name} staat op VM-isolatie, dus het neemt geen container-app aan: een container zou zijn kernel delen met elke andere app daar",
     "scope": "violations"
   },
   "host_dedicated_to_other": {
-    "text": "Host {$name} is toegewezen aan de workloads van een andere eigenaar",
+    "text": "{$name} is toegewijd aan de apps van een andere eigenaar",
     "scope": "violations"
   },
   "posture_not_acknowledgeable": {
@@ -11723,7 +11897,7 @@
   },
   "delete_in_use": [
     {
-      "text": "{$workloads} records verwijzen nog naar deze host: {$instances} instantie(s), {$stacks} stack(s), {$databases} database(s), {$engines} gedeelde database-engine(s) en {$ports} poortclaim(s). Verwijder of verplaats ze eerst (geef de claims vrij), anders verwijzen hun records naar een host die niet meer bestaat.",
+      "text": ".match {$workloads :number}\none {{1 record verwijst nog naar deze host: {$instances}, {$stacks}, {$databases}, {$engines} en {$ports}. Verwijder of verplaats het eerst (geef de claim vrij), anders verwijst zijn record naar een host die niet meer bestaat.}}\n* {{{$workloads} records verwijzen nog naar deze host: {$instances}, {$stacks}, {$databases}, {$engines} en {$ports}. Verwijder of verplaats ze eerst (geef de claims vrij), anders verwijzen hun records naar een host die niet meer bestaat.}}",
       "scope": "server"
     },
     {
@@ -12230,7 +12404,7 @@
     "scope": "dns_zone"
   },
   "check_health_done": {
-    "text": "Delegatie: {$verdict}. {$secondaries} secundaire(n) gepeild, {$behind} achter.",
+    "text": ".match {$secondaries :number}\none {{Delegatie: {$verdict}. 1 secundaire gepeild, {$behind} achter.}}\n* {{Delegatie: {$verdict}. {$secondaries} secundaires gepeild, {$behind} achter.}}",
     "scope": "dns_zone"
   },
   "check_health_unserved": {
@@ -13250,15 +13424,15 @@
     "scope": "alert"
   },
   "isolation_contained_subject": {
-    "text": "{$sweep}: {$count} workload(s) ingeperkt",
+    "text": ".match {$count :number}\none {{{$sweep}: 1 workload ingeperkt}}\n* {{{$sweep}: {$count} workloads ingeperkt}}",
     "scope": "alert"
   },
   "isolation_unconfirmed_subject": {
-    "text": "{$sweep}: isolatie onbevestigd voor {$count} onderwerp(en)",
+    "text": ".match {$count :number}\none {{{$sweep}: isolatie onbevestigd voor 1 onderwerp}}\n* {{{$sweep}: isolatie onbevestigd voor {$count} onderwerpen}}",
     "scope": "alert"
   },
   "data_integrity_subject": {
-    "text": "Verweesde rijen in de controlevlakdatabase ({$count} tabelkoppeling(en))",
+    "text": ".match {$count :number}\none {{Verweesde rijen in de controlevlakdatabase (1 tabelkoppeling)}}\n* {{Verweesde rijen in de controlevlakdatabase ({$count} tabelkoppelingen)}}",
     "scope": "alert"
   },
   "data_integrity_body": {
@@ -15293,14 +15467,26 @@
     "text": "{$used} van {$limit}",
     "scope": "tenant_usage"
   },
-  "instances": {
-    "text": "Apps",
-    "scope": "tenant_usage"
-  },
-  "sites": {
-    "text": "Websites",
-    "scope": "tenant_usage"
-  },
+  "instances": [
+    {
+      "text": "Apps",
+      "scope": "tenant_usage"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 instantie}}\n* {{{$count} instanties}}",
+      "scope": "count"
+    }
+  ],
+  "sites": [
+    {
+      "text": "Websites",
+      "scope": "tenant_usage"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 site}}\n* {{{$count} sites}}",
+      "scope": "count"
+    }
+  ],
   "you_can": {
     "text": "Je kunt",
     "scope": "instance_overview"

@@ -260,8 +260,8 @@ class InstanceAttentionTest {
             }
             assertThat(raisedKeys(AttentionCollector::failedTasks))
                 .as("step 1: the nightly failure is judged by its OWN newest row, so 250"
-                    + " newer rows of a chattier task cannot scroll it out of sight")
-                .contains("task warning ");
+                    + " newer rows of a chattier task cannot scroll it out of sight, and links its run")
+                .singleElement().asString().startsWith("task_failed warning /admin/task-runs/").endsWith("/open");
 
             // 2. Freshness: a destination is configured but the newest COMPLETED backup
             //    run is 3 days old -- the observation item fires.

@@ -4,6 +4,7 @@ import be.elevenways.zenit.test.support.OutboundFixture;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
+import be.elevenways.hohenheim.server.cms.TaskWords;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusTransport;
@@ -192,8 +193,9 @@ class IsolationVisibilityTest {
         AttentionCollector.failedTasks(items);
         assertThat(items)
             .as("step 6: the failed isolation sweep must reach the dashboard")
-            .anySatisfy(item -> assertThat(item.title().args().get("name"))
-                .isEqualTo(VerifyWorkloadIsolation.ID.toString()));
+            .anySatisfy(item -> assertThat(item.title().args().get("task"))
+                .as("step 6: named by the task's worded label, never its id")
+                .isEqualTo(TaskWords.label(VerifyWorkloadIsolation.ID)));
     }
 
     /**

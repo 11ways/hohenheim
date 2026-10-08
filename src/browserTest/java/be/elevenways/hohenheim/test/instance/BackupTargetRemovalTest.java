@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -70,7 +71,7 @@ class BackupTargetRemovalTest {
                 .isEqualTo("backup_target_in_use");
             assertThat(((Violations) byBackup).all().get(0).message().args().get("instances"))
                 .as("step 2: and the refusal counts no instance -- the trashed one is history")
-                .isEqualTo(0L);
+                .isEqualTo(HohenheimCounts.of("instances", 0L));
 
             // 3. With only a FAILED backup left, the target goes: the trashed instance and the
             //    evidence row are kept, each with its pointer detached.
