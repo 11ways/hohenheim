@@ -11,6 +11,8 @@ import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.security.SshKeyType;
+import be.elevenways.zenit.server.security.SshPublicKey;
 import java.time.Duration;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -20,8 +22,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -52,11 +52,6 @@ import java.util.List;
  * {@code [host]:port} known_hosts formatting subtlety can turn a mismatch into a miss.
  */
 public final class HostKeys {
-
-    /** Host key types we are willing to pin, best first. */
-    private static final List<String> PREFERRED_TYPES = List.of(
-        "ssh-ed25519", "ecdsa-sha2-nistp521", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp256",
-        "ssh-rsa");
 
     private static final long SSH_KEYGEN_TIMEOUT_MILLIS = 20_000;
     private static final long SSH_KEYSCAN_TIMEOUT_MILLIS = 20_000;
@@ -256,14 +251,7 @@ public final class HostKeys {
 
     /** The digest {@code ssh-keygen -lf} prints for a public key line. */
     public static @NonNull String fingerprintOf(@NonNull String keyLine) {
-        String blob = keyLineOf(keyLine).split(" ")[1];
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                .digest(Base64.getDecoder().decode(blob));
-            return "SHA256:" + Base64.getEncoder().withoutPadding().encodeToString(digest);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 unavailable", e);
-        }
+        return SshPublicKey.fingerprint(Base64.getDecoder().decode(keyLineOf(keyLine).split(" ")[1]));
     }
 
     /**
@@ -311,8 +299,10 @@ public final class HostKeys {
             if (type == null || blob == null || !blob.startsWith("AAAA")) {
                 continue;
             }
-            int rank = PREFERRED_TYPES.indexOf(type);
-            if (rank >= 0 && rank < bestRank) {
+            // The pinnable types and their order are SshKeyType's facts; a type without a rank is never pinned.
+            SshKeyType known = SshKeyType.ofWireName(type);
+            Integer rank = known == null ? null : known.hostKeyPreference();
+            if (rank != null && rank < bestRank) {
                 bestRank = rank;
                 String keyLine = type + " " + blob;
                 best = new Offer(keyLine, fingerprintOf(keyLine));
