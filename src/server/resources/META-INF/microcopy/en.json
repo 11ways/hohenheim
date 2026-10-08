@@ -1412,121 +1412,110 @@
     "text": "No certificate is stored yet, so nothing can be answered over HTTPS.",
     "scope": "attention_detail"
   },
-  "watch_summary": {
-    "text": "Send watch summaries",
-    "scope": "task_label"
-  },
-  "run_record_schedules": {
-    "text": "Run record schedules",
-    "scope": "task_label"
-  },
-  "publish_scheduled_content": {
-    "text": "Publish scheduled content",
-    "scope": "task_label"
-  },
-  "orphan_record_grant_prune": {
-    "text": "Remove shares of deleted records",
-    "scope": "task_label"
-  },
-  "orm_housekeeping": {
-    "text": "Database housekeeping",
-    "scope": "task_label"
-  },
-  "expired_record_grant_prune": {
-    "text": "Remove expired shares",
-    "scope": "task_label"
-  },
-  "content_sweep": {
-    "text": "Clean unused files",
-    "scope": "task_label"
-  },
-  "activity_prune": {
-    "text": "Clean old activity",
-    "scope": "task_label"
-  },
   "verify_workload_isolation": {
     "text": "Check app isolation",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "verify_incus_isolation": {
     "text": "Check Incus app isolation",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "update_system_users": {
     "text": "Find this machine's users",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "update_system_ip_addresses": {
     "text": "Find this machine's IP addresses",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "supervise_proxy_listeners": {
     "text": "Watch the proxy listeners",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "security_sweep": {
     "text": "Security sweep",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "resign_dnssec_zones": {
     "text": "Re-sign DNSSEC zones",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "reconcile_instance_status": {
     "text": "Check which apps run",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "reconcile_engine_isolation": {
     "text": "Check database engine isolation",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "reconcile_docker_resources": {
     "text": "Tidy Docker",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "reclaim_docker_images": {
     "text": "Remove old Docker images",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "reap_incus_controllers": {
     "text": "Tidy Incus controllers",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "probe_dns_secondaries": {
     "text": "Check DNS secondaries",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "observe_instance_disk": {
     "text": "Measure app disk use",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "monitor_stacks": {
     "text": "Watch stack health",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "clean_orphan_certificates": {
     "text": "Clean unused certificates",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "clean_old_instance_logs": {
     "text": "Clean old console output",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "check_foreign_keys": {
     "text": "Check the database for orphaned rows",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "check_dns_delegations": {
     "text": "Check DNS delegations",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "backup_databases": {
     "text": "Back up databases",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "backup_control_plane": {
     "text": "Back up the control panel",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "act_show_run": {
     "text": "Show the run",

@@ -474,12 +474,13 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
     void everyTaskAndEveryCountReadsInWords() throws Exception {
         ShippedCatalogs catalogs = new ShippedCatalogs();
 
-        // 1. Every task the catalog holds, the framework's included, has a worded name in en and nl: a task
-        //    without one fails here, never on the dashboard as a raw id.
+        // 1. Every task the catalog holds, the framework's included, declares its worded name (core's task label),
+        //    shipped in en and nl: a task without one fails here, never on the dashboard as a raw id.
         assertThat(TaskCatalog.get(VerifyWorkloadIsolation.ID)).as("step 1: the catalog is discovered").isNotNull();
         Set<String> paths = new HashSet<>();
         for (TaskDescriptor descriptor : TaskCatalog.all()) {
-            Microcopy label = TaskWords.label(descriptor.id());
+            Microcopy label = descriptor.declaredLabel();
+            assertThat(label).as("step 1: task %s declares its label", descriptor.typePath()).isNotNull();
             for (String language : List.of("en", "nl")) {
                 assertThat(catalogs.resolveSource(label.key(), LocaleChain.ofTags(language), label.filters()))
                     .as("step 1: task %s is named in %s", descriptor.typePath(), language).isNotNull();

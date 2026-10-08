@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.notification.Alerts;
@@ -42,6 +43,12 @@ public class CheckForeignKeys extends ScheduledTask {
     @Override
     public @NonNull Identifier id() {
         return HohenheimIds.id("check_foreign_keys");
+    }
+
+    @Override
+    public @NonNull Microcopy label() {
+        return Microcopy.of("check_foreign_keys").withFilter("scope", HohenheimMicrocopy.SCOPE)
+            .withFilter("target", "task_label");
     }
 
     @Override

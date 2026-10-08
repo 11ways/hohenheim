@@ -43,7 +43,10 @@ import be.elevenways.zenit.common.task.TaskCatalog;
 import be.elevenways.zenit.common.task.TaskDescriptor;
 import be.elevenways.zenit.common.task.TaskStatus;
 import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
+import be.elevenways.zenit.server.task.TaskRunErrors;
+import be.elevenways.hohenheim.HohenheimViolations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -341,13 +344,24 @@ public final class AttentionCollector {
             }
             Row run = latest.get(0);
             if (TaskStatus.FAILED.name().equals(run.get(SystemTaskHistoryModel.STATUS))) {
-                Microcopy reason = TaskWords.failure(run.get(SystemTaskHistoryModel.ERROR));
+                Microcopy reason = failureOf(run.get(SystemTaskHistoryModel.ERROR));
                 items.add(item(AttentionSeverity.WARNING, "clock",
-                    copy("task_failed", "attention_title", "task", TaskWords.label(descriptor.id())),
+                    copy("task_failed", "attention_title", "task", descriptor.label()),
                     reason != null ? reason : copy("last_run_failed", "attention_detail"),
                     CmsRoutes.open(ADMIN, TaskAdmin.RUNS_SLUG, run.get(SystemTaskHistoryModel.ID)),
                     action("act_show_run")));
             }
         }
+    }
+
+    /**
+     * Why a run failed, in the words its failure carried: core's message without the exception or stack trace
+     * ({@link TaskRunErrors#message}), a stored refusal read back in its own words.
+     *
+     * @return the reason, null when the run stored none
+     */
+    private static @Nullable Microcopy failureOf(@Nullable String stored) {
+        String message = TaskRunErrors.message(stored);
+        return message == null ? null : Microcopy.literal(HohenheimViolations.storedText(message));
     }
 }

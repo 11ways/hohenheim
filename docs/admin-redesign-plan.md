@@ -1412,3 +1412,24 @@ Addresses and Databases brought closer to boards Domains and Databases, and thre
   DatabaseAdminTest, AdminPagesTest, SharedDatabaseEngineTest, DashboardVocabularyDriftTest. The walk's jar is the
   build after run 865's thrash refusal (`--thrash-override`, invocation 20261008-112652: the chain had moved under
   another session's zenit and zenit-cms work).
+
+## 32. CORE1 decisions (fork CORE1, 2026-10-08)
+
+The framework defects sections 19, 25 and 29 left open, fixed at their causes in zenit core and zenit-cms
+(changelog entries `2026-10-08-flash-worded-arguments`, `-activity-verb-visibility-and-subjects`, `-task-labels`).
+
+- Toasts: `FlashEncoding` carries a `Microcopy` argument, or a list of them, as itself (its DRY text), so Check and
+  admit's refusal reads the checks' words in the reader's locale instead of "[check_nftables]". An argument of any
+  other type is refused (`flash.encode_refused`), never its toString.
+- Sign-ins: `ActivityAction.visibility()` (core's LOGIN/LOGOUT INTERNAL); the list's internal filter hides them, and
+  `AdminActivityResource.peopleOnly` now reads core's `ActivityRules.listed()` (models AND verbs) instead of spelling
+  the internal model tokens, so the dashboard and record cards leave sign-ins out too. AdminActivityListTest steps
+  3 to 5 write a sign-in and prove it is off the list and the dashboard and one toggle away.
+- Activity text: a row without a stored title names its record by its current title, or "a removed <model>";
+  `ActivityText.headline` falls back to the verb's sentence when the operation has none.
+- Task labels: the label lives on core's task declaration (`ScheduledTask.label()`, `TaskDescriptor.label()`); the 21
+  Hohenheim tasks declare theirs (scope `hohenheim`, target `task_label`, the same words as D11), the framework's
+  tasks ship their own, and `TaskWords` is deleted (replacement: `TaskDescriptor.label()`; a run's failure reads
+  `TaskRunErrors.message` then `HohenheimViolations.storedText` in `AttentionCollector.failureOf`). zenit-cms's task
+  screens title and list runs by the label and show the failure without its stack trace (folded under "Technical
+  details").

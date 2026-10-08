@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.docker.DockerReconciler;
@@ -27,6 +29,12 @@ public class ReconcileDockerResources extends ScheduledTask {
     @Override
     public @NonNull Identifier id() {
         return HohenheimIds.id("reconcile_docker_resources");
+    }
+
+    @Override
+    public @NonNull Microcopy label() {
+        return Microcopy.of("reconcile_docker_resources").withFilter("scope", HohenheimMicrocopy.SCOPE)
+            .withFilter("target", "task_label");
     }
 
     @Override
