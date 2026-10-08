@@ -188,6 +188,8 @@ public final class InstanceParts {
      */
     public static @NonNull PanelResource<Row> manage() {
         return entry("manage_instance")
+            // Reached from the Apps list's toolbar (ManagePanel's sidebar note).
+            .showInNav(false)
             .health(AppHealth.instances(true))
             // Admins see every live instance; everyone else only the ones the walk confirms view on, which is what
             // makes an unowned id read as MISSING rather than forbidden. Generated (product-tier-owned) instances stay

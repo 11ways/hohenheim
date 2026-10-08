@@ -1384,6 +1384,10 @@
     {
       "text": "Geboekt geheugen",
       "scope": "instance_migrate"
+    },
+    {
+      "text": "Geheugen",
+      "scope": "tenant_usage"
     }
   ],
   "no_logs": {
@@ -1739,6 +1743,10 @@
     {
       "text": "Interactieve shell",
       "scope": "instance_shell"
+    },
+    {
+      "text": "Je verbruik",
+      "scope": "tenant_usage"
     }
   ],
   "description": [
@@ -2527,18 +2535,6 @@
       "scope": "manage"
     }
   ],
-  "blocked_instance": {
-    "text": "{$instance} kan nog niet uitgerold worden",
-    "scope": "manage_dashboard"
-  },
-  "blocked_instance_detail": {
-    "text": "Een voorwaarde buiten jouw controle is niet vervuld. Open de instance voor wat je zelf kan doen, of contacteer je beheerder.",
-    "scope": "manage_dashboard"
-  },
-  "your_instances": {
-    "text": "Jouw instances",
-    "scope": "manage_dashboard"
-  },
   "download": [
     {
       "text": "Downloaden",
@@ -2703,6 +2699,10 @@
     {
       "text": "Databases",
       "scope": "database_engine"
+    },
+    {
+      "text": "Databanken",
+      "scope": "tenant_usage"
     }
   ],
   "clone_confirm": {
@@ -8364,6 +8364,10 @@
     {
       "text": "Hoofdschijf",
       "scope": "instance_stats"
+    },
+    {
+      "text": "Schijf",
+      "scope": "tenant_usage"
     }
   ],
   "nic": {
@@ -14106,10 +14110,16 @@
     "text": "Sommige services zijn niet gezond.",
     "scope": "app_health"
   },
-  "lead": {
-    "text": "Maakt de app, het adres en het certificaat in een keer aan.",
-    "scope": "put_online"
-  },
+  "lead": [
+    {
+      "text": "Maakt de app, het adres en het certificaat in een keer aan.",
+      "scope": "put_online"
+    },
+    {
+      "text": "Limieten ingesteld door de beheerder van deze installatie.",
+      "scope": "tenant_usage"
+    }
+  ],
   "what_question": {
     "text": "Wat wil je online zetten?",
     "scope": "put_online"
@@ -14643,10 +14653,16 @@
     "text": "Vervangen",
     "scope": "deployments"
   },
-  "previews": {
-    "text": "Previews",
-    "scope": "deployments"
-  },
+  "previews": [
+    {
+      "text": "Previews",
+      "scope": "deployments"
+    },
+    {
+      "text": "Voorbeelden",
+      "scope": "tenant_usage"
+    }
+  ],
   "previews_description": {
     "text": "Een tijdelijke kopie per branch of pull request.",
     "scope": "deployments"
@@ -15229,5 +15245,65 @@
   "lift_title": {
     "text": "Deze blokkering opheffen",
     "scope": "ban"
+  },
+  "tenant_domains": [
+    {
+      "text": "Domeinen",
+      "scope": "nav_cluster"
+    },
+    {
+      "text": "Je adressen, DNS-records, certificaten en toegangslijsten.",
+      "scope": "nav_cluster_hint"
+    }
+  ],
+  "team": [
+    {
+      "text": "Team",
+      "scope": "nav_cluster"
+    },
+    {
+      "text": "De projecten waar je in zit en de mensen erin.",
+      "scope": "nav_cluster_hint"
+    }
+  ],
+  "need_more": {
+    "text": "Meer nodig? Vraag het aan de beheerder van deze installatie.",
+    "scope": "tenant_usage"
+  },
+  "of_count": {
+    "text": "{$used} van {$limit}",
+    "scope": "tenant_usage"
+  },
+  "of_size": {
+    "text": "{$used} van {$limit}",
+    "scope": "tenant_usage"
+  },
+  "instances": {
+    "text": "Apps",
+    "scope": "tenant_usage"
+  },
+  "sites": {
+    "text": "Websites",
+    "scope": "tenant_usage"
+  },
+  "you_can": {
+    "text": "Je kunt",
+    "scope": "instance_overview"
+  },
+  "you_can_look": {
+    "text": "Het bekijken; vraag de beheerder om meer",
+    "scope": "instance_overview"
+  },
+  "operator_decides": {
+    "text": "Aan de beheerder",
+    "scope": "instance_overview"
+  },
+  "operator_decides_detail": {
+    "text": "Deze app verwijderen en bepalen wie er toegang toe heeft.",
+    "scope": "instance_overview"
+  },
+  "your_part": {
+    "text": "Wat je hier kunt doen",
+    "scope": "instance_overview"
   }
 }

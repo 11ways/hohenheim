@@ -68,7 +68,16 @@ public final class AdminDashboard extends PanelDashboard {
     /** The board's primary way onward, offered where the instance tier can put something online. */
     @Override
     public @NonNull List<LinkActionState> headerLinks(@NonNull PanelRequest request) {
-        if (!HohenheimRoles.enabled(Role.INSTANCES) || !HohenheimAccess.isAdmin(request.access())) {
+        return putOnlineLinks(request, HohenheimAccess.isAdmin(request.access()));
+    }
+
+    /**
+     * Both dashboards' primary way onward: Put something online on this panel, where the instance tier exists.
+     *
+     * @param offered whether this viewer may start something there
+     */
+    static @NonNull List<LinkActionState> putOnlineLinks(@NonNull PanelRequest request, boolean offered) {
+        if (!HohenheimRoles.enabled(Role.INSTANCES) || !offered) {
             return List.of();
         }
         return List.of(new LinkActionState(HohenheimIds.id("dashboard_put_online"), PutOnline.copy("put_online"),
@@ -160,7 +169,7 @@ public final class AdminDashboard extends PanelDashboard {
     }
 
     /** The dashboard's Apps band rows: health, name, what and where, and whether HTTPS works. */
-    private static @NonNull List<AppSummary> summaries(@NonNull List<AppDirectory.App> apps,
+    static @NonNull List<AppSummary> summaries(@NonNull List<AppDirectory.App> apps,
                                                        @NonNull AccessContext access) {
         List<AppSummary> summaries = new ArrayList<>(apps.size());
         for (AppDirectory.App app : apps) {
@@ -172,7 +181,7 @@ public final class AdminDashboard extends PanelDashboard {
         return summaries;
     }
 
-    private static @NonNull WidgetInstance columns(@NonNull List<WidgetInstance> children) {
+    static @NonNull WidgetInstance columns(@NonNull List<WidgetInstance> children) {
         return new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", Math.min(children.size(), 4)),
             new WidgetTree(children));
     }

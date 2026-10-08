@@ -439,6 +439,9 @@ public final class DatabaseParts {
             .column(ColumnSpec.fromField(DatabaseModel.STATUS).filterable().build())
             .build();
         return entry("manage_database")
+            // A row of the tenant's sidebar, in the board's place (ManagePanel's sidebar note).
+            .navGroup(NavGroup.DEFAULT)
+            .navOrder(30)
             .scope(TenantScopes.DATABASES)
             // NAV-ONLY (zero granted databases hide the empty list); the route stays scoped. reachesAny, because an
             // id set cannot express every-record authority.

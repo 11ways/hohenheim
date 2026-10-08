@@ -62,6 +62,8 @@ public final class PreviewParts {
 
     public static @NonNull PanelResource<Row> manage() {
         return entry("manage_preview_deployment", true).navOrder(25).scope(TenantScopes.PREVIEWS)
+            // Reached from the Apps list's toolbar and an app's Deploys tab (ManagePanel's sidebar note).
+            .showInNav(false)
             .hasInScopeRecords(ManagePanel::hasManageScope)
             .tabs(ResourceTabs.<Row>none().withContributions()).build();
     }

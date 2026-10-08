@@ -83,6 +83,10 @@ public final class HohenheimWidgets {
     public static final DisplayWidget APPS = register("apps", HohenheimTemplateIds.WIDGET_APPS,
         Microcopy.of("apps").withFilter("scope", "dashboard"), "cubes");
 
+    /** The /manage landing's usage card (board Manage-Home): each capped budget of the tenant against its cap. */
+    public static final DisplayWidget TENANT_USAGE = register("tenant_usage", HohenheimTemplateIds.WIDGET_TENANT_USAGE,
+        Microcopy.of("title").withFilter("scope", "tenant_usage"), "gauge");
+
     private HohenheimWidgets() {
     }
 

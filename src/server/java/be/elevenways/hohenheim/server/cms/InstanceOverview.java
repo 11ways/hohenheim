@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -17,12 +18,15 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.KnownCapabilities;
+import be.elevenways.zenit.common.security.KnownCapability;
 import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.AlertVariant;
 import be.elevenways.zenit.widget.common.builtin.AlertWidget;
 import be.elevenways.zenit.widget.common.builtin.CardWidget;
+import be.elevenways.zenit.widget.common.builtin.FactListWidget;
 import be.elevenways.zenit.widget.common.data.NoticeData;
 import be.elevenways.zenit.widget.common.data.UsageData;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
@@ -120,6 +124,8 @@ public final class InstanceOverview {
         // LOG, not about this page: the log carries every operator's actions on every record.
         if (!delegated) {
             side.add(AppOverview.recent(Models.get(InstanceModel.class), instanceId));
+        } else {
+            side.add(yourPart(instanceId, accessContext, locales, resolver));
         }
         return AppOverview.compose(top, main, side);
     }
@@ -301,6 +307,31 @@ public final class InstanceOverview {
         }
         String v6 = server.get(ServerModel.PUBLIC_IPV6);
         return v6 != null && !v6.isBlank() ? v6 : "";
+    }
+
+    /**
+     * What this delegate may do here (board Manage-App), in the instance vocabulary's own labels, and what stays the
+     * operator's. It reads the same capability walk every tab and action is gated by, so it cannot promise a door
+     * that refuses.
+     */
+    private static @NonNull WidgetInstance yourPart(int instanceId, @NonNull AccessContext access,
+                                                    @NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
+        List<String> held = new ArrayList<>();
+        for (KnownCapability capability : KnownCapabilities.forModel(InstanceModel.MODEL_ID)) {
+            if (capability.label() != null && !HohenheimAccess.VIEW.equals(capability.capability())
+                && HohenheimAccess.hasInstanceCapability(access, instanceId, capability.capability())) {
+                held.add(capability.label().resolve(locales, resolver));
+            }
+        }
+        List<WidgetFact> facts = new ArrayList<>();
+        facts.add(WidgetFact.of(text("you_can", "instance_overview", locales, resolver),
+            held.isEmpty() ? text("you_can_look", "instance_overview", locales, resolver) : String.join(", ", held)));
+        if (!HohenheimAccess.hasInstanceCapability(access, instanceId, HohenheimAccess.MANAGE)) {
+            facts.add(WidgetFact.of(text("operator_decides", "instance_overview", locales, resolver),
+                text("operator_decides_detail", "instance_overview", locales, resolver)));
+        }
+        return CardWidget.of(Microcopy.of("your_part").withFilter("scope", "instance_overview"),
+            new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));
     }
 
     // -- helpers ---------------------------------------------------------------------

@@ -852,3 +852,42 @@ Order: W6 as planned. G5 needs nothing from W1-W5 except the `put_online` operat
   1440px the lane folds into the row menu and every column shows; at 1100px the lane is folded too but the table still
   scrolls sideways ("Who may run here" off to the right, the compact lane over the Memory column's scroll edge). The
   board draws hosts as cards; a narrow-width layout that wraps instead of scrolling stays open.
+
+## 23. W9b decisions (fork W9b, 2026-10-08)
+
+Boards Manage-Home and Manage-App: the tenant panel `/manage`.
+
+- The sidebar is the admin's shape cut to what a tenant holds: Overview, Apps, Databases, Domains, Team, in one
+  unlabelled block (no Deploy / Networking groups). Domains (addresses, DNS records, certificates, access lists) and
+  Team (projects, members) are `PanelCluster`s built by the admin's own helpers (`HohenheimPanel.cluster/addCluster`,
+  now package-private), so the two panels cannot shape clusters differently. Every other /manage entry is
+  `showInNav(false)` with a declared way in: Sites, Instances, Templates, Previews and Git connections from the Apps
+  list's toolbar (`AppParts.manage(related, putOnline)`, the admin twin's code), the rest from the record that owns
+  them. Domains on /manage is a cluster tab now, so its old "no Domains cluster here" hiding note is gone.
+  Access lists sit under Domains because the board has no tenant Access row and a list protects an address's path.
+- The landing's attention band is the tenant's own apps' verdicts (`AppHealth` through `AppDirectory`, the delegated
+  words that name no host): BROKEN is an error item, ATTENTION a warning, OK and UNKNOWN nothing, each with "Open
+  <app>". This is the cause of DEP8's "All clear" while the app read "Error page": the band used to ask only the
+  placement gate. That bespoke placement loop and its two copy keys are deleted; the instance verdict's "cannot start"
+  carries the same refusal in host-free words.
+- The landing's lower band is the admin dashboard's Apps band (`HohenheimWidgets.APPS`, `AdminDashboard.summaries`)
+  over the /manage directory, replacing the plain "Your instances" records list, beside the new usage card.
+- The usage card (`HohenheimWidgets.TENANT_USAGE`, `TenantUsage`) shows each budget the operator CAPPED for the
+  tenant's creation owner (`OwnerBudget.limitFor/usedBy` on `creationOwnerSubjects`): apps (instances), memory, disk,
+  websites, databases, previews; extra NICs are left out. An uncapped budget is not drawn, so an installation without
+  caps draws no card, and an operator sees none. A record the operator made and granted counts against the operator,
+  not the tenant: the card answers how much the tenant may still create. Which budgets show is an exhaustive switch
+  over `OwnerBudget` (no default), so a new budget breaks the build until it is worded or left out.
+- "Put something online" is offered on the landing and the Apps list to whoever may start something from the catalog
+  (`InstanceTemplateParts.offersTenantCatalog`, the catalog's own nav rule): an operator always, a tenant only with
+  the right to create instances and an approved template.
+- No Recent band on the landing: the activity log is the operator's audit trail, which /manage never shows
+  (ManageHistoryHiddenTest). A tenant-safe history needs its own read first (needs-building).
+- The tenant's app page was already the admin's overview composition (J1) with the delegated censoring; it gains the
+  board's "What you can do here" card: the instance vocabulary's own labels (`KnownCapabilities.forModel`) for every
+  capability the tenant holds on the record, read through the same walk every tab and action is gated by, and "Up to
+  the operator: removing this app and changing who has access" without MANAGE. Tabs and actions were already gated
+  per capability; `ManagePanelJourneyTest` now proves it (VIEW alone: no console or files door; with console and
+  files.read: both tabs).
+- Needs building: the board's players line and other live facts (Pterodactyl group), a tenant-safe Recent band, the
+  tenant Resources card (memory and CPU next to disk), the operator's name in "Need more? Ask ...".

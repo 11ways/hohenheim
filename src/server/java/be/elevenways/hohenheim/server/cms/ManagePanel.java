@@ -102,6 +102,11 @@ public final class ManagePanel extends Panel {
     }
 
     /**
+     * AIDEV-NOTE: the sidebar is the admin's shape cut to what a tenant holds (board Manage-Home, W9b): Overview, Apps,
+     * Databases, Domains and Team in one unlabelled block. Domains and Team are clusters like the admin's; every other
+     * entry is showInNav(false) and keeps a declared way in (Sites, Instances, Templates, Previews and Git connections
+     * from the Apps list's toolbar; the rest from the record that owns them). ManagePanelJourneyTest pins the rows.
+     *
      * AIDEV-NOTE: every tier's projection is gated on the SAME role its admin surface is
      * gated on ({@link HohenheimPanel#addIf}, one home). Until 2026-08-29 this list carried
      * no role predicate at all, so a proxy-only node answered /manage/instances and
@@ -125,8 +130,6 @@ public final class ManagePanel extends Panel {
         // accessible dashboard entry, so the landing is a real page (what needs
         // attention, then the principal's instances), never a contentless card grid.
         peers.add(new ManageDashboard());
-        // The tenant's apps: its sites and instances read as one list, through the two entries below (AppDirectory).
-        HohenheimPanel.addIf(peers, AppParts.manage(), Role.PROXY, Role.INSTANCES);
         HohenheimPanel.addIf(peers, SiteParts.manage(), SiteParts.ROLE);
         HohenheimPanel.addIf(peers, DomainParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, ManageDnsRecordParts.manage(), Role.DNS);
@@ -168,8 +171,21 @@ public final class ManagePanel extends Panel {
         HohenheimPanel.addIf(peers, AccessListParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, AccessRuleParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, ProtectedPathParts.manage(), Role.PROXY);
+        // The tenant's apps: its sites and instances read as one list (AppDirectory). Declared last, because its
+        // toolbar names the sibling entries this node registered.
+        HohenheimPanel.addIf(peers, AppParts.manage(HohenheimPanel.present(peers, HohenheimSlugs.SITES,
+                InstanceParts.SLUG, HohenheimSlugs.INSTANCE_TEMPLATES, PreviewParts.SLUG, HohenheimSlugs.GIT_PROVIDERS),
+            HohenheimPanel.present(peers, PutOnlinePage.SLUG).isEmpty() ? null : PutOnlinePage.SLUG),
+            Role.PROXY, Role.INSTANCES);
+        HohenheimPanel.addCluster(peers, HohenheimPanel.cluster("tenant_domains", HohenheimPanel.DOMAINS_CLUSTER,
+            "globe", 50), DomainParts.SLUG, DnsRecordParts.SLUG, HohenheimSlugs.CERTIFICATES, HohenheimSlugs.ACCESS_LISTS);
+        HohenheimPanel.addCluster(peers, HohenheimPanel.cluster("team", TEAM_CLUSTER, "users", 60), ProjectParts.SLUG,
+            ProjectMembershipParts.SLUG);
         return peers;
     }
+
+    /** The Team cluster's slug: the projects the principal is in and the people in them. */
+    public static final String TEAM_CLUSTER = "team";
 
     /**
      * THE SiteModel default source, serving the admin pickers AND the /manage

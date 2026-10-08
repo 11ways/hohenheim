@@ -58,9 +58,9 @@ public final class HohenheimPanel extends Panel {
     // role drops that role's members, and a cluster left with none is not added at all, since the panel refuses a
     // member slug naming no entry.
     //
-    // AIDEV-NOTE: the three groups below no longer shape this panel's sidebar (everything visible here sits in the
-    // unlabelled default block), but the /manage panel's entries share their builders with the admin twins, and its
-    // sidebar is still grouped by them.
+    // AIDEV-NOTE: the three groups below shape neither panel's sidebar any more: everything visible here sits in the
+    // unlabelled default block, and so does /manage (ManagePanel, board Manage-Home, W9b). They remain the declared
+    // group of the entries both twins share; a sidebar row of either panel sets NavGroup.DEFAULT or is clustered.
 
     /** Deploy group: everything an operator creates to make something RUN -- projects,
      *  sites, instances, stacks, databases, and the templates and git providers they are
@@ -238,8 +238,9 @@ public final class HohenheimPanel extends Panel {
     public static final String ACTIVITY_CLUSTER = "log";
     public static final String SETTINGS_CLUSTER = "configure";
 
-    private static PanelCluster.@NonNull Builder cluster(@NonNull String key, @NonNull String slug,
-                                                         @NonNull String icon, int navOrder) {
+    /** A sidebar cluster in the unlabelled default block, worded under {@code nav_cluster}; both panels build theirs here. */
+    static PanelCluster.@NonNull Builder cluster(@NonNull String key, @NonNull String slug,
+                                                 @NonNull String icon, int navOrder) {
         return PanelCluster.builder(HohenheimIds.id("cluster_" + key), slug,
                 Microcopy.of(key).withFilter("scope", "nav_cluster"))
             .description(Microcopy.of(key).withFilter("scope", "nav_cluster_hint"))
@@ -249,8 +250,8 @@ public final class HohenheimPanel extends Panel {
     }
 
     /** Adds the cluster over those of these members this node registered; nothing when it registered none. */
-    private static void addCluster(@NonNull List<PanelEntry> peers, PanelCluster.@NonNull Builder cluster,
-                                   @NonNull String... members) {
+    static void addCluster(@NonNull List<PanelEntry> peers, PanelCluster.@NonNull Builder cluster,
+                           @NonNull String... members) {
         List<String> registered = present(peers, members);
         if (!registered.isEmpty()) {
             peers.add(cluster.members(registered.toArray(String[]::new)).build());
@@ -258,7 +259,7 @@ public final class HohenheimPanel extends Panel {
     }
 
     /** @return those of these slugs an entry of {@code peers} carries, in the order given */
-    private static @NonNull List<String> present(@NonNull List<PanelEntry> peers, @NonNull String... slugs) {
+    static @NonNull List<String> present(@NonNull List<PanelEntry> peers, @NonNull String... slugs) {
         List<String> found = new ArrayList<>();
         for (String slug : slugs) {
             for (PanelEntry peer : peers) {
