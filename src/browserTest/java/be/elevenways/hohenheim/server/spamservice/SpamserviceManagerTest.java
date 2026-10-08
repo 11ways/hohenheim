@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.spamservice;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.process.ProcessGroupSupport;
 import be.elevenways.hohenheim.test.Poll;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.server.process.Subprocess;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -25,9 +26,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
@@ -317,9 +315,7 @@ class SpamserviceManagerTest {
     @Test
     void failedProcessGroupCleanupBlocksEveryRestart() throws Exception {
         List<List<String>> commands = new ArrayList<>();
-        ScheduledThreadPoolExecutor lifecycle = new ScheduledThreadPoolExecutor(1, runnable ->
-            Thread.ofPlatform().daemon().name("spamservice-manager-test").unstarted(runnable));
-        lifecycle.setRemoveOnCancelPolicy(true);
+        JobRunner lifecycle = scheduler();
         ProcessGroupSupport.Operator failedCleanup = new ProcessGroupSupport.Operator() {
             @Override public ProcessGroupSupport.SignalResult signal(SystemUsers.RunAsUser runAs,
                                                                       long processGroupId,
@@ -353,13 +349,13 @@ class SpamserviceManagerTest {
             manager.start();
             await(() -> "failed".equals(manager.snapshot().state()), 5_000);
             assertThat(manager.snapshot().pid()).isNotNull();
-            // "Nothing restarts" proven on the scheduler itself instead of after a fixed
-            // sleep: every restart rides a scheduled retry on this executor, so once the
-            // work already handed to it has run, an empty queue means none is pending.
-            lifecycle.submit(() -> { }).get(5, TimeUnit.SECONDS);
-            assertThat(lifecycle.getQueue())
+            // "Nothing restarts" proven on the lane itself instead of after a fixed sleep:
+            // every restart rides a scheduled retry on this lane, so once the work already
+            // handed to it has run, no pending retry means none will come.
+            lifecycle.runAsync(() -> { }).get(5, TimeUnit.SECONDS);
+            assertThat(manager.restartPending())
                 .as("a blocked cleanup leaves no restart scheduled")
-                .isEmpty();
+                .isFalse();
             assertThat(commands)
                 .as("only the migration and the one server launch ever ran")
                 .hasSize(2);
@@ -485,9 +481,8 @@ class SpamserviceManagerTest {
             new SystemUsers.RunAsUser("spamservice", 4242, 4242, this.temp.toString()), 256, key);
     }
 
-    private ScheduledExecutorService scheduler() {
-        return Executors.newSingleThreadScheduledExecutor(runnable ->
-            Thread.ofPlatform().daemon().name("spamservice-manager-test").unstarted(runnable));
+    private JobRunner scheduler() {
+        return JobRunner.createDaemonSerial("spamservice-manager-test");
     }
 
     private void ensureClient(HttpExchange exchange) throws IOException {

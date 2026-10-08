@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.security;
 
+import be.elevenways.protoblast.common.async.AsyncFailures;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -24,14 +25,6 @@ public final class IsolationUnenforceable extends IOException {
 
     /** @return whether this failure, or one it was caused by, is this refusal */
     public static boolean in(@Nullable Throwable failure) {
-        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
-            if (cause instanceof IsolationUnenforceable) {
-                return true;
-            }
-            if (cause.getCause() == cause) {
-                return false;
-            }
-        }
-        return false;
+        return failure != null && AsyncFailures.first(failure, IsolationUnenforceable.class) != null;
     }
 }

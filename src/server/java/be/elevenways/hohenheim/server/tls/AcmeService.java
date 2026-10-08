@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.tls;
 
+import be.elevenways.protoblast.common.async.AsyncFailures;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -38,8 +40,6 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -106,7 +106,7 @@ public class AcmeService {
     }
 
     private final CertificateStore certificateStore;
-    private final ScheduledExecutorService scheduler;
+    private final JobRunner scheduler;
 
     /**
      * Pending HTTP-01 challenges: token -> challenge entry with authorization and valid hostnames.
@@ -183,21 +183,27 @@ public class AcmeService {
     }
 
     public AcmeService(CertificateStore certificateStore) {
+        this(certificateStore, JobRunner.createDaemonSerial("acme-renewal"));
+    }
+
+    /** @param scheduler the lane renewal checks and manual DNS-01 expiry run on; a test fires its timers itself */
+    AcmeService(CertificateStore certificateStore, JobRunner scheduler) {
         this.certificateStore = certificateStore;
         DnsTxtPublishers.INSTANCE.register(new CommandDnsTxtPublisher());
         DnsTxtPublishers.INSTANCE.register(new InternalDnsTxtPublisher());
-        // Declared SYSTEM work: renewals and challenge expiry are the installation's own, and the
-        // DNS-01 records they publish would be judged and refused as work with no identity.
-        this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(() -> ExecutionIdentity.runAsSystem("acme", r), "acme-renewal");
-            t.setDaemon(true);
-            return t;
-        });
+        this.scheduler = scheduler;
+    }
+
+    /**
+     * Declared SYSTEM work: renewals and challenge expiry are the installation's own, and the DNS-01 records they
+     * publish would be judged and refused as work with no identity. Detached: never the scheduling caller's action.
+     */
+    private static Runnable asSystem(Runnable job) {
+        return () -> ExecutionIdentity.runDetachedAsSystem("acme", job);
     }
 
     public void start() {
-        scheduler.scheduleAtFixedRate(this::checkRenewals, RENEWAL_CHECK_HOURS,
-            RENEWAL_CHECK_HOURS, TimeUnit.HOURS);
+        scheduler.scheduleAtFixedRate(asSystem(this::checkRenewals), TimeUnit.HOURS.toMillis(RENEWAL_CHECK_HOURS));
         Blast.log("ACME renewal scheduler started (every", RENEWAL_CHECK_HOURS, "hours)");
     }
 
@@ -456,17 +462,10 @@ public class AcmeService {
     /** Preserves nested transport diagnostics that generic ACME exceptions hide. */
     static String failureReason(Throwable failure) {
         StringJoiner reason = new StringJoiner(": ");
-        Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-        Throwable current = failure;
-        while (current != null && seen.add(current)) {
-            String message = current.getMessage();
-            if (message != null && !message.isBlank()) {
-                reason.add(message);
-            } else {
-                reason.add(current.getClass().getSimpleName());
-            }
-            current = current.getCause();
-        }
+        AsyncFailures.forEachCause(failure, link -> {
+            String message = link.getMessage();
+            reason.add(message != null && !message.isBlank() ? message : link.getClass().getSimpleName());
+        });
         return reason.toString();
     }
 
@@ -537,8 +536,8 @@ public class AcmeService {
             PendingManualDnsOrder pending = new PendingManualDnsOrder(
                 certificateId, order, Now.instant(), orderKey, flight);
             manualDnsOrders.put(token, pending);
-            scheduler.schedule(() -> expireManualDnsOrder(token, pending),
-                MANUAL_DNS_ORDER_MINUTES, TimeUnit.MINUTES);
+            scheduler.schedule(asSystem(() -> expireManualDnsOrder(token, pending)),
+                TimeUnit.MINUTES.toMillis(MANUAL_DNS_ORDER_MINUTES));
             return manualRequest(token, manualDnsOrders.get(token));
         } catch (Exception e) {
             flight.result().completeExceptionally(e);

@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.net.AddressScope;
@@ -30,9 +31,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -66,7 +66,7 @@ public final class BanService {
     private static final long AUTO_BAN_WINDOW_MS = 3_600_000;
 
     /** How many distinct automatic bans may wait for the writer before new ones are dropped. */
-    private static final int WRITER_QUEUE_CAPACITY = 1024;
+    static final int WRITER_QUEUE_CAPACITY = 1024;
 
     private final NftService nft;
     private final LongSupplier clock;
@@ -137,10 +137,28 @@ public final class BanService {
      * whichever request tripped it, so every task runs detached as system.
      */
     static @NonNull Executor backgroundWriter() {
-        ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
-            new LinkedBlockingQueue<>(WRITER_QUEUE_CAPACITY),
-            runnable -> Thread.ofPlatform().daemon().name("ban-writer").unstarted(runnable));
-        return task -> executor.execute(() -> ExecutionIdentity.runDetachedAsSystem("ban-writer", task));
+        return backgroundWriter(JobRunner.createDaemonSerial("ban-writer"));
+    }
+
+    /** The ban writer over {@code lane}, a serial lane it owns from here on. */
+    static @NonNull Executor backgroundWriter(@NonNull JobRunner lane) {
+        // A waiting task holds a permit until it starts, so at most WRITER_QUEUE_CAPACITY wait behind the running one.
+        Semaphore room = new Semaphore(WRITER_QUEUE_CAPACITY);
+        // AIDEV-NOTE: the first task is the writer's own and never waits for room, as the first task of the one-thread
+        // pool this lane replaced was handed straight to its new worker: a cold burst admits one plus the queue.
+        AtomicBoolean firstTaken = new AtomicBoolean();
+        return task -> {
+            boolean waits = !firstTaken.compareAndSet(false, true);
+            if (waits && !room.tryAcquire()) {
+                throw new RejectedExecutionException("the ban writer queue is full");
+            }
+            lane.fireAndForget(() -> {
+                if (waits) {
+                    room.release();
+                }
+                ExecutionIdentity.runDetachedAsSystem("ban-writer", task);
+            });
+        };
     }
 
     NftService nft() {
