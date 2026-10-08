@@ -228,8 +228,13 @@ public final class ServerParts {
         }
         int percent = (int) Math.min(100, Math.round(100.0 * capacity.bookedMb() / capacity.budgetMb()));
         return new HostMemoryCell(true, percent, listCopy("memory_booked")
-            .withArg("booked", ByteText.human(capacity.bookedMb() * MEBIBYTE))
-            .withArg("budget", ByteText.human(capacity.budgetMb() * MEBIBYTE)));
+            .withArg("booked", sizeOfMegabytes(capacity.bookedMb()))
+            .withArg("budget", sizeOfMegabytes(capacity.budgetMb())));
+    }
+
+    /** @return a host ledger's megabyte count as a size, the one way the list and the host page say memory */
+    static @NonNull String sizeOfMegabytes(int megabytes) {
+        return ByteText.human(megabytes * MEBIBYTE);
     }
 
     /** How many apps and managed databases the host runs, counted once per rendered list. */

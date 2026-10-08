@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.PinnedImages;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.PreflightFinding;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -87,10 +88,10 @@ class HostPreflightTest {
             assertThat(report.check("pids_limit_enforced").status())
                 .as("step 3: the pids cap is really enforced by the kernel")
                 .isEqualTo(HostPreflight.STATUS_PASS);
-            assertThat(report.check("pids_limit_enforced").detail())
-                .as("step 3: and the detail carries the REAL cgroup value, proving the"
+            assertThat(report.check("pids_limit_enforced").found().args())
+                .as("step 3: and the finding carries the REAL cgroup value, proving the"
                     + " probe read the kernel and not the config")
-                .contains("'137'");
+                .containsEntry("read", "137");
             assertThat(report.check("seccomp").status())
                 .as("step 3: seccomp is filtering, not unconfined")
                 .isEqualTo(HostPreflight.STATUS_PASS);
@@ -129,11 +130,11 @@ class HostPreflightTest {
                 .isFalse();
             assertThat(report.check("lsm"))
                 .as("step 6: LSM posture is recorded").isNotNull();
-            assertThat(report.check("lsm").detail())
-                .withFailMessage("step 6: the LSM detail names neither a confinement label"
+            assertThat(report.check("lsm").found().finding())
+                .withFailMessage("step 6: the LSM finding names neither a confinement label"
                     + " nor its absence, so nothing was read from pid 1: '%s'",
                     report.check("lsm").detail())
-                .containsAnyOf("pid 1 runs under LSM confinement '", "pid 1 label: '");
+                .isIn(PreflightFinding.LSM_CONFINED, PreflightFinding.LSM_NONE, PreflightFinding.LSM_UNCONFINED);
             assertThat(report.check("lsm").required())
                 .as("step 6: LSM presence is a distribution fact, so it stays advisory")
                 .isFalse();

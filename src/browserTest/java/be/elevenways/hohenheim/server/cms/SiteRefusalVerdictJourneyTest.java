@@ -53,10 +53,12 @@ class SiteRefusalVerdictJourneyTest extends HohenheimTestBase {
         ProxyServer proxy = null;
         Row instance = instance();
         Row site = setupInstanceSite(PREFIX + "site", PREFIX + "site", instance.get(InstanceModel.ID));
+        Row down = setupInstanceSite(PREFIX + "down", PREFIX + "down", instance.get(InstanceModel.ID));
         try {
             // 1. A stored site whose app is gone: its upstream names no instance any more (written past validation,
             //    which refuses it, because this is a row an older state left behind).
             addDomain(site, "refusal.d7d.test", "exact", null, false);
+            addDomain(down, "down.d7d.test", "exact", null, false);
             Models.get(SiteModel.class).find().where(SiteModel.ID.eq(site.get(SiteModel.ID)))
                 .assign(SiteModel.INSTANCE_ID, null).bypassBehaviours().updateAll();
             proxy = startProxy();
@@ -75,6 +77,12 @@ class SiteRefusalVerdictJourneyTest extends HohenheimTestBase {
             assertThat(say(verdict.detail())).as("step 3: with the proxy's own reason")
                 .isEqualTo("Every visitor is turned away: it names no app to serve")
                 .as("step 3: never the generic one").doesNotContain("does not answer");
+            assertThat(verdict.fixes()).as("step 3: and offers the fix: the site's own configuration")
+                .containsExactly(SiteActions.CHANGE_CONFIGURATION);
+            assertThat(AppHealth.refusedBySettings(stored)).as("step 3: which its row action offers here").isTrue();
+            assertThat(AppHealth.sites(true).read(stored, operator()).fixes())
+                .as("step 3: /manage's form cannot change what a site serves, so its verdict offers no such fix")
+                .isEmpty();
 
             // 4. The attention item reads the same reason, from the same recorded problem.
             List<AttentionItem> items = new ArrayList<>();
@@ -82,12 +90,29 @@ class SiteRefusalVerdictJourneyTest extends HohenheimTestBase {
             assertThat(items).as("step 4: the dashboard names the same reason")
                 .anySatisfy(item -> assertThat(say(item.detail()))
                     .isEqualTo("Every visitor is turned away: it names no app to serve"));
+
+            // 5. A site whose app does not answer reads like every other item: what visitors get, why in the app's
+            //    own verdict, and the way to it; the refused site is not drawn a second time as merely "down".
+            List<AttentionItem> health = new ArrayList<>();
+            ProxyAttention.unhealthySites(health);
+            List<AttentionItem> mine = health.stream()
+                .filter(item -> say(item.title()).contains(PREFIX)).toList();
+            assertThat(mine).as("step 5: one item, for the site that does not answer").hasSize(1);
+            AttentionItem item = mine.get(0);
+            assertThat(say(item.title())).as("step 5: titled by what its visitors get")
+                .isEqualTo("Visitors of " + PREFIX + "down get an error page");
+            Row downRow = Models.get(SiteModel.class).findById(down.get(SiteModel.ID));
+            assertThat(say(item.detail())).as("step 5: with the app verdict's own reason")
+                .isEqualTo(say(AppHealth.siteHealth(downRow).detail()))
+                .as("step 5: never the bare word").isNotEqualTo("Down");
+            assertThat(say(item.action())).as("step 5: and the way there").isEqualTo("Open " + PREFIX + "down");
         } finally {
             ServerMain.adoptProxyServer(previous);
             if (proxy != null) {
                 proxy.stop();
             }
             HardDeletes.row(Models.get(SiteModel.class), Models.get(SiteModel.class).findById(site.get(SiteModel.ID)));
+            HardDeletes.row(Models.get(SiteModel.class), Models.get(SiteModel.class).findById(down.get(SiteModel.ID)));
             HardDeletes.row(Models.get(InstanceModel.class), instance);
         }
     }

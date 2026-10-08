@@ -5,14 +5,18 @@ import be.elevenways.hohenheim.host.HostPreflightReportView;
 import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.host.PreflightStatus;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.HostFact;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
+import be.elevenways.hohenheim.server.host.PreflightFinding;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -39,6 +43,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * @since  0.2.0
  */
 class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
+
+    private static final LocaleChain EN = LocaleChain.ofTags("en");
+    private static final LocaleChain NL = LocaleChain.ofTags("nl");
 
     @Test
     void aWaitingHostIsCheckedAndAdmittedThroughOneVerb() {
@@ -78,6 +85,17 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
         assertThat(first.label().key()).as("step 3: named in words").isEqualTo("check_daemon");
         assertThat(first.fix()).as("step 3: it says how to fix it").isNotNull();
         assertThat(first.fix().key()).isEqualTo("fix_daemon");
+        assertThat(first.detail().key()).as("step 3: what it found is a worded finding, never a probe token")
+            .isEqualTo(PreflightFinding.DAEMON_UNREACHABLE.copy().key());
+        Microcopy failure = HostProbe.FailureKind.labelOf(stored.get(ServerModel.LAST_ERROR_KIND));
+        assertThat(failure.isLiteral()).as("step 3: the probe failure is one this build words").isFalse();
+        assertThat(say(first.detail(), EN)).as("step 3: led by the probe failure in words")
+            .startsWith(say(failure, EN) + ": ");
+        assertThat(say(first.detail(), NL)).as("step 3: and in Dutch from the Dutch catalog")
+            .startsWith(say(failure, NL) + ": ")
+            .isNotEqualTo(say(first.detail(), EN));
+        assertThat(say(PreflightFinding.wordsOf("a_later_finding", null, "stored words"), EN))
+            .as("step 3: a finding this build does not know reads as its stored text").isEqualTo("stored words");
         assertThat(report.advice()).as("step 3: advice never holds a required check")
             .noneMatch(PreflightCheckView::required);
 
@@ -109,7 +127,20 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
                 assertThat(catalog).as("step 2: " + language + " words the probe failure " + kind)
                     .contains("\"" + kind.label().key() + "\"");
             }
+            // 3. Every finding a check can store and every fact a battery measures reads as words.
+            for (PreflightFinding finding : PreflightFinding.values()) {
+                assertThat(catalog).as("step 3: " + language + " words the finding " + finding)
+                    .contains("\"" + finding.copy().key() + "\"");
+            }
+            for (HostFact fact : HostFact.values()) {
+                assertThat(catalog).as("step 3: " + language + " names the fact " + fact)
+                    .contains("\"" + fact.label().key() + "\"");
+            }
         }
+    }
+
+    private static String say(Microcopy copy, LocaleChain locales) {
+        return copy.resolve(locales, Zenit.getMessageResolver());
     }
 
     private static PanelAction<Row> action(String id) {

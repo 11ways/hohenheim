@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.host;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -26,4 +28,19 @@ public record HostPreflightReportView(
     @NonNull List<HostFactView> facts,
     @Nullable String probedAtIso,
     boolean passed
-) {}
+) {
+
+    /** @return the overall verdict in the check vocabulary's own words ("Passed", "Failed") */
+    public Microcopy summaryLabel() {
+        return this.summary().label();
+    }
+
+    /** @return the overall verdict's badge variant, read off the same member as its words */
+    public BadgeVariant summaryVariant() {
+        return this.summary().badgeVariant();
+    }
+
+    private PreflightStatus summary() {
+        return this.passed ? PreflightStatus.PASS : PreflightStatus.FAIL;
+    }
+}

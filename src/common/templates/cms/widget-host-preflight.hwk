@@ -1,6 +1,7 @@
 {# The stored preflight report: the kernel-truth verdict, the checks that must pass before admission and the
-   advice that never blocks (each with what did not pass first, its own stamp and how to fix it), and the measured
-   facts. No live probe happens here -- this reads what the last check wrote. #}
+   advice that never blocks (each with what did not pass first, what it found in words, its own stamp and how to fix
+   it), and the measured facts in words with their units. The overall verdict sits in the header's action slot, apart
+   from the "Last preflight" line. No live probe happens here -- this reads what the last check wrote. #}
 {% declare widget: WidgetInstance %}
 {% declare data: HostPreflightReportView = null %}
 
@@ -41,12 +42,10 @@
         <pl-card-description>
             {{ t("last_preflight", scope: "server_overview") }}
             <pl-relative-time datetime={% data.probedAtIso %} title={% data.probedAtIso %}></pl-relative-time>
-            {% if data.passed %}
-            <pl-badge variant="success">{{ t("verdict_passed", scope: "server_overview") }}</pl-badge>
-            {% else %}
-            <pl-badge variant="destructive">{{ t("verdict_failed", scope: "server_overview") }}</pl-badge>
-            {% /if %}
         </pl-card-description>
+        <pl-card-header-actions>
+            <pl-badge variant={% data.summaryVariant %} data-preflight-verdict="1">{{ data.summaryLabel }}</pl-badge>
+        </pl-card-header-actions>
         {% /if %}
     </pl-card-header>
     <pl-card-content>
@@ -96,8 +95,8 @@
             </pl-table-row></pl-table-header>
             <pl-table-body>
                 {% each data.facts as fact %}
-                <pl-table-row>
-                    <pl-table-cell><code>{{ fact.name }}</code></pl-table-cell>
+                <pl-table-row data-fact={% fact.name %}>
+                    <pl-table-cell>{{ fact.label }}</pl-table-cell>
                     <pl-table-cell>{{ fact.value }}</pl-table-cell>
                     <pl-table-cell>
                         {% if fact.measuredAtIso != null %}

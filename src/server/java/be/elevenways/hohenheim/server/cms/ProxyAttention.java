@@ -19,6 +19,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -172,28 +173,44 @@ public final class ProxyAttention {
         }
     }
 
-    /** Enabled sites whose live handler reports DOWN or DEGRADED (the handler's own health, no probe). */
+    /**
+     * Enabled sites whose live handler reports DOWN or DEGRADED (the handler's own health, no probe), each worded like
+     * every other item: what visitors get, why in the app verdict's own words, and the way to the site.
+     *
+     * AIDEV-NOTE: a site the proxy turns away over its settings is DOWN too, and its routing-problem item already says
+     * so with the proxy's own reason; it is not drawn twice. A down site's detail is its verdict's reason
+     * ({@link AppHealth}, an error page at that point), so the band and the site's problem band give the same reason;
+     * a verdict with no reason of its own, and a degraded site, read the item's plain sentence.
+     */
     static void unhealthySites(List<AttentionItem> items) {
         var proxy = ServerMain.getProxyServer();
         if (proxy == null) {
             return;
+        }
+        Set<Integer> refused = new HashSet<>();
+        for (RoutingProblem problem : proxy.getDispatcher().routingProblems()) {
+            if (problem.reason().refusesEveryVisitor()) {
+                refused.add(problem.siteId());
+            }
         }
         List<Row> sites = Models.get(SiteModel.class).find()
             .where(SiteModel.ENABLED.eq(true))
             .all();
         for (Row site : sites) {
             Integer siteId = site.get(SiteModel.ID);
-            if (siteId == null) {
+            if (siteId == null || refused.contains(siteId)) {
                 continue;
             }
             SiteHealth health = proxy.getDispatcher().healthOf(siteId);
             if (health == SiteHealth.DOWN || health == SiteHealth.DEGRADED) {
-                items.add(item(health == SiteHealth.DOWN ? AttentionSeverity.ERROR : AttentionSeverity.WARNING,
-                    "globe",
-                    copy("site", "attention_title", "name", site.get(SiteModel.NAME)),
-                    copy(health == SiteHealth.DOWN ? "down" : "degraded", "attention_detail"),
+                boolean down = health == SiteHealth.DOWN;
+                String key = down ? "site_down" : "site_degraded";
+                Microcopy reason = down ? AppHealth.siteHealth(site).detail() : null;
+                items.add(item(down ? AttentionSeverity.ERROR : AttentionSeverity.WARNING, "globe",
+                    copy(key, "attention_title", "name", site.get(SiteModel.NAME)),
+                    reason != null ? reason : copy(key, "attention_detail"),
                     SiteParts.recordRoute(ADMIN, siteId),
-                    action("act_fix_on", "name", site.get(SiteModel.NAME))));
+                    action("act_open_app", "name", site.get(SiteModel.NAME))));
             }
         }
     }

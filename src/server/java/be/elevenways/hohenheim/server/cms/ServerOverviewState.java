@@ -18,10 +18,12 @@ import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.server.host.HostFact;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
+import be.elevenways.hohenheim.server.host.PreflightFinding;
 import be.elevenways.hohenheim.server.incus.IncusEndpoint;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusTrust;
@@ -367,7 +369,7 @@ public final class ServerOverviewState {
         return Microcopy.of("fix_" + checkName).withFilter("scope", "server_overview");
     }
 
-    /** Every stored check with its own status/required/detail/timestamp. */
+    /** Every stored check with its own status/required/timestamp and what it found in words. */
     private static @NonNull List<PreflightCheckView> preflightChecks(@NonNull Row server) {
         List<PreflightCheckView> checks = new ArrayList<>();
         if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)
@@ -378,17 +380,20 @@ public final class ServerOverviewState {
             if (!(entry.getValue() instanceof Map<?, ?> check)) {
                 continue;
             }
+            String detail = check.get("detail") != null ? String.valueOf(check.get("detail")) : "";
             checks.add(PreflightCheckView.of(
                 String.valueOf(entry.getKey()),
                 String.valueOf(check.get("status")),
                 Boolean.TRUE.equals(check.get("required")),
-                check.get("detail") != null ? String.valueOf(check.get("detail")) : "",
-                check.get("at") != null ? String.valueOf(check.get("at")) : null));
+                detail,
+                check.get("at") != null ? String.valueOf(check.get("at")) : null)
+                .withDetail(PreflightFinding.wordsOf(check.get(PreflightFinding.TOKEN_KEY),
+                    check.get(PreflightFinding.ARGS_KEY), detail)));
         }
         return checks;
     }
 
-    /** Every stored fact with its own measurement stamp. */
+    /** Every stored fact in words with its unit and its own measurement stamp; an undeclared one as stored. */
     private static @NonNull List<HostFactView> preflightFacts(@NonNull Row server) {
         List<HostFactView> facts = new ArrayList<>();
         if (!(server.get(ServerModel.CAPABILITIES) instanceof Map<?, ?> capabilities)) {
@@ -400,7 +405,10 @@ public final class ServerOverviewState {
                 continue;
             }
             Instant measuredAt = HostPreflight.factMeasuredAt(server, key);
-            facts.add(new HostFactView(key, String.valueOf(entry.getValue()),
+            HostFact fact = HostFact.ofToken(key);
+            facts.add(new HostFactView(key,
+                fact != null ? fact.label() : Microcopy.literal(key),
+                fact != null ? fact.valueText(entry.getValue()) : String.valueOf(entry.getValue()),
                 measuredAt != null ? measuredAt.toString() : null));
         }
         return facts;
@@ -430,7 +438,7 @@ public final class ServerOverviewState {
             return UsageData.unmeasured(reason);
         }
         return UsageData.measured(capacity.bookedMb(), capacity.budgetMb(),
-            megabytes(capacity.bookedMb()), megabytes(capacity.budgetMb()),
+            ServerParts.sizeOfMegabytes(capacity.bookedMb()), ServerParts.sizeOfMegabytes(capacity.budgetMb()),
             capacity.measuredAtIso());
     }
 
@@ -442,15 +450,11 @@ public final class ServerOverviewState {
         if (!capacity.measured()) {
             return facts;
         }
-        facts.add(WidgetFact.of(text("booked", locales, resolver), megabytes(capacity.bookedMb())));
-        facts.add(WidgetFact.of(text("budget", locales, resolver), megabytes(capacity.budgetMb())));
+        facts.add(WidgetFact.of(text("booked", locales, resolver), ServerParts.sizeOfMegabytes(capacity.bookedMb())));
+        facts.add(WidgetFact.of(text("budget", locales, resolver), ServerParts.sizeOfMegabytes(capacity.budgetMb())));
         facts.add(WidgetFact.of(text("bookable", locales, resolver),
-            megabytes(capacity.bookableMb())));
+            ServerParts.sizeOfMegabytes(capacity.bookableMb())));
         return facts;
-    }
-
-    private static @NonNull String megabytes(int value) {
-        return value + " MB";
     }
 
     // -- workloads -----------------------------------------------------------------

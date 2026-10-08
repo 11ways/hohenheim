@@ -15,8 +15,10 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.routing.UrlTarget;
 import be.elevenways.zenit.common.text.Slugs;
 import be.elevenways.zenit.common.ui.Icon;
@@ -26,6 +28,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -48,17 +51,21 @@ final class SiteActions {
     static final Identifier FIX_HTTPS = HohenheimIds.id("site_fix_https");
     static final Identifier ADD_ADDRESS = HohenheimIds.id("site_add_address");
     static final Identifier FIX_PROTECTION = HohenheimIds.id("site_fix_protection");
+    static final Identifier CHANGE_CONFIGURATION = HohenheimIds.id("site_change_configuration");
     static final Identifier OPEN_SITE = HohenheimIds.id("site_open");
 
     private SiteActions() {
     }
 
-    /** The operator panel's placed operations, in the order the legacy row actions had, then the health fixes. */
+    /**
+     * The operator panel's placed operations, in the order the legacy row actions had, then the health fixes; only the
+     * operator's form changes what a site serves, so only this family carries {@link #CHANGE_CONFIGURATION}.
+     */
     static @NonNull List<PanelAction<Row>> operator() {
         return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl, AppHealth::siteServes), enableAction(),
             disableAction(), cloneAction(),
             rollbackAction(), protectPathAction(), fixHttpsAction(), stopForcingHttpsAction(), addAddressAction(),
-            fixProtectionAction());
+            fixProtectionAction(), changeConfigurationAction());
     }
 
     /**
@@ -145,6 +152,15 @@ final class SiteActions {
         return Objects.requireNonNull(path.get(ProtectedPathModel.SITE_ID), "a protected path belongs to a site");
     }
 
+    /**
+     * To the site's Configuration (its record form), for a site the proxy turns every visitor away from because of its
+     * own settings: it names no app to serve, an upstream the proxy refuses, or a sign-in provider that cannot work.
+     */
+    private static @NonNull PanelAction<Row> changeConfigurationAction() {
+        return fixLink(CHANGE_CONFIGURATION, "change_configuration", "sliders", AppHealth::refusedBySettings,
+            (site, request) -> CmsRoutes.detail(request.panelSlug(), HohenheimSlugs.SITES, site.get(SiteModel.ID)));
+    }
+
     /** To the site's protected paths, for a path whose protection lets everyone in. */
     private static @NonNull PanelAction<Row> fixProtectionAction() {
         return fixLink(FIX_PROTECTION, "fix_protection", "lock", ProtectedPathParts.SLUG, AppHealth::hasOpenPath);
@@ -152,14 +168,21 @@ final class SiteActions {
 
     private static @NonNull PanelAction<Row> fixLink(@NonNull Identifier id, @NonNull String key, @NonNull String icon,
                                                      @NonNull String tab, @NonNull Predicate<Row> applies) {
+        return fixLink(id, key, icon, applies, (site, request) -> CmsRoutes.subpage(request.panelSlug(),
+            HohenheimSlugs.SITES, site.get(SiteModel.ID), tab));
+    }
+
+    /** A health fix that leads somewhere on the site, offered only where its verdict applies. */
+    private static @NonNull PanelAction<Row> fixLink(@NonNull Identifier id, @NonNull String key, @NonNull String icon,
+                                                     @NonNull Predicate<Row> applies,
+                                                     @NonNull BiFunction<Row, PanelRequest, RouteTarget> route) {
         return PanelAction.<Row>link(id, ActionPlacement.ROW)
             .label(Microcopy.of(key).withFilter("scope", "app_health"))
             .icon(Icon.of(icon))
             .inlineOnRecord(false)
             .inlineInRow(false)
             .shownWhen((site, access) -> applies.test(site))
-            .route((site, request) -> CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.SITES,
-                site.get(SiteModel.ID), tab))
+            .route(route)
             .build();
     }
 
