@@ -9401,11 +9401,11 @@
   ],
   "control_plane_backup": [
     {
-      "text": "No off-host backup destination",
+      "text": "Backups stay on this machine",
       "scope": "attention_title"
     },
     {
-      "text": "This server's own recovery archives (its database and encryption keys) have nowhere to go. Pick a backup target for them in Settings, under Backups.",
+      "text": "If this machine is lost, its own database and encryption keys are lost with it. Choose where copies go.",
       "scope": "attention_detail"
     }
   ],
@@ -9979,13 +9979,29 @@
     "text": "A host is the machine your workloads run on.",
     "scope": "onboarding_checklist"
   },
-  "checklist_host_pending": {
-    "text": "A host is enrolled but not admitted yet, so nothing can run on it.",
+  "checklist_host_enrolled": {
+    "text": "{$name}, {$runtime}",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_host_enrolled_more": {
+    "text": ".match {$more :number}\none {{{$name}, {$runtime} and 1 more}}\n* {{{$name}, {$runtime} and {$more} more}}",
     "scope": "onboarding_checklist"
   },
   "checklist_admit": {
-    "text": "Let the host accept workloads",
+    "text": "Let it run apps",
     "scope": "onboarding_checklist"
+  },
+  "checklist_admit_done": {
+    "text": "Its checks passed, so apps can run here.",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_backups_done": {
+    "text": "Copies go to {$target}.",
+    "scope": "onboarding_checklist"
+  },
+  "held_back": {
+    "text": ".match {$count :number}\none {{1 app waits for it}}\n* {{{$count} apps wait for it}}",
+    "scope": "attention_detail"
   },
   "checklist_admit_detail": {
     "text": "Open the host and use Check and admit.",

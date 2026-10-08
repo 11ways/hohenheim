@@ -2,7 +2,8 @@
    operator, or a quiet all-clear. The server collector attaches typed items
    as runtime widget data; WidgetTree transport carries them transparently.
    A row that leads somewhere says what going there does (its action), so the
-   link's name is the problem plus its fix and the chevron is decoration. #}
+   link's name is the problem plus its fix and the chevron is decoration. A
+   root says what it holds back (heldBack); the dashboard folded those items. #}
 {% declare widget: WidgetInstance %}
 {% declare data: List<AttentionItem> %}
 
@@ -14,6 +15,9 @@
     <span class="hh-attention-title">{{ item.title }}</span>
     {% if item.detail != null %}
     <span class="hh-attention-detail">{{ item.detail }}</span>
+    {% /if %}
+    {% if item.heldBack != null %}
+    <span class="hh-attention-detail" data-attention-held-back>{{ item.heldBack }}</span>
     {% /if %}
 </span>
 {% /snippet %}

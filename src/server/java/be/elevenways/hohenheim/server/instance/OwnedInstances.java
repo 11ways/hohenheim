@@ -240,12 +240,20 @@ public final class OwnedInstances {
             if (handler == null || !isPlacementGated(handler, instance)) {
                 return null;
             }
-            return HostAdmission.instancePlacementRefusal(
-                ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)),
-                handler.isolation(), instance.get(InstanceModel.QUOTA_BUCKET));
+            return HostAdmission.instancePlacementRefusal(placementHost(instance), handler.isolation(),
+                instance.get(InstanceModel.QUOTA_BUCKET));
         } catch (RuntimeException failed) {
             return null;
         }
+    }
+
+    /**
+     * The host {@link #placementRefusal} asks, so a refusal can name where it comes from.
+     *
+     * @throws IllegalArgumentException when the instance names a host that does not exist
+     */
+    public static int placementHost(@NonNull Row instance) {
+        return ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
     }
 
     /**

@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
@@ -11,6 +13,8 @@ import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.common.edit.FieldLabels;
+import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteTarget;
@@ -21,8 +25,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Builds the dashboard readiness checklist: enrol a host, make it accept workloads, create
- * an instance, deploy it.
+ * Builds the dashboard readiness checklist, one step per {@link OnboardingStage}: enrol a host, let it run apps,
+ * choose where backups go, put the first app online.
  *
  * AIDEV-NOTE: every step is DERIVED, never a restatement. The host step asks
  * {@link HostAdmission#instancePlacementRefusal} -- the very call the deploy lane makes --
@@ -57,6 +61,15 @@ public final class OnboardingCollector {
      * @return the ordered steps; a list whose every entry is done means there is nothing to show
      */
     public static @NonNull List<OnboardingStep> collect() {
+        return collect(AttentionCollector.collect());
+    }
+
+    /**
+     * The steps, each open one presenting the attention item that states its condition ({@link #presentedBy}).
+     *
+     * @param attention the dashboard's attention items, unfolded
+     */
+    static @NonNull List<OnboardingStep> collect(@NonNull List<AttentionItem> attention) {
 
         List<OnboardingStep> steps = new ArrayList<>(4);
 
@@ -74,7 +87,30 @@ public final class OnboardingCollector {
             steps.add(firstAppOnline());
         }
 
-        return steps;
+        List<OnboardingStep> presented = new ArrayList<>(steps.size());
+        for (OnboardingStep step : steps) {
+            AttentionItem item = presentedBy(step, attention);
+            presented.add(item != null ? step.presenting(item) : step);
+        }
+        return presented;
+    }
+
+    /**
+     * The attention item an open step presents: the first one stating that step's stage. The dashboard's fold asks the
+     * same question, so an item the checklist presents is never drawn a second time in the band.
+     *
+     * @return the item, null for a done step or a stage no item states
+     */
+    static @Nullable AttentionItem presentedBy(@NonNull OnboardingStep step, @NonNull List<AttentionItem> attention) {
+        if (step.isDone()) {
+            return null;
+        }
+        for (AttentionItem item : attention) {
+            if (item.stage() == step.stage()) {
+                return item;
+            }
+        }
+        return null;
     }
 
     /** True while any step still has something to do -- the dashboard's render condition. */
@@ -88,50 +124,60 @@ public final class OnboardingCollector {
     }
 
     /**
-     * Done only once a host is ADMITTED: an enrolled host that is still blocked has not
-     * been brought into the fleet, and a green first step above a blocked second one read
-     * as progress that had not happened.
+     * Done once a host is ENROLLED, naming it ("local, Docker"): admission is the next stage's step.
+     *
+     * AIDEV-NOTE: D8 reversed the "done only once admitted" rule. It made this step say "enrolled but not admitted yet"
+     * right above the admission step saying the same, one problem twice; the boards tick enrolment and leave admission
+     * to its own step, which is BLOCKED (warning tone) while no host accepts work, so nothing reads as false progress.
      */
     private static OnboardingStep hostEnrolled(List<Row> servers) {
-        boolean admitted = false;
-        for (Row server : servers) {
-            if (ServerModel.ADMISSION_ADMITTED.equals(server.get(ServerModel.ADMISSION))) {
-                admitted = true;
-                break;
-            }
+        if (servers.isEmpty()) {
+            return new OnboardingStep(OnboardingStage.HOST, OnboardingState.TODO, "server", copy("checklist_host"),
+                copy("checklist_host_detail"), listTarget("servers"));
         }
-        return new OnboardingStep(
-            admitted ? OnboardingState.DONE : OnboardingState.TODO,
-            "server",
-            copy("checklist_host"),
-            copy(!admitted && !servers.isEmpty() ? "checklist_host_pending" : "checklist_host_detail"),
+        Row first = servers.get(0);
+        EnumField.EnumValue runtime = ServerModel.RUNTIME.getValues().get(first.get(ServerModel.RUNTIME));
+        return new OnboardingStep(OnboardingStage.HOST, OnboardingState.DONE, "server", copy("checklist_host"),
+            copy(servers.size() > 1 ? "checklist_host_enrolled_more" : "checklist_host_enrolled")
+                .withArg("name", String.valueOf((Object) first.get(ServerModel.NAME)))
+                .withArg("runtime", runtime != null ? FieldLabels.labelFor(runtime)
+                    : Microcopy.literal(String.valueOf((Object) first.get(ServerModel.RUNTIME))))
+                .withArg("more", servers.size() - 1),
             listTarget("servers"));
     }
 
+    /**
+     * Done once some host accepts a workload. While none does, the dashboard has this step present the host's own
+     * attention item (its failed checks, what it holds back and Check and admit); without one, the gate's own words.
+     */
     private static OnboardingStep hostAcceptsWorkloads(boolean placeable, @Nullable Microcopy refusal) {
         return new OnboardingStep(
+            OnboardingStage.ADMISSION,
             placeable ? OnboardingState.DONE : OnboardingState.BLOCKED,
             // The step's SUBJECT, never its state -- the template picks the state marker.
             "shield-halved",
             copy("checklist_admit"),
             // The gate's OWN words when it refuses -- the operator reads the same sentence the
             // deploy would have produced, which is what makes this a route to the fix.
-            refusal != null ? refusal : copy("checklist_admit_detail"),
+            placeable ? copy("checklist_admit_done")
+                : refusal != null ? refusal : copy("checklist_admit_detail"),
             listTarget("servers"));
     }
 
     /**
-     * Done once the control-plane backup has an off-host destination: the same fact and the same place to fix it as the
-     * attention item (AttentionCollector.controlPlaneBackupDestination), so the two can never disagree. Offered with the
+     * Done once the control-plane backup has an off-host destination: the same fact as the attention item
+     * (AttentionCollector.controlPlaneBackupDestination), which this step presents while it is open. Offered with the
      * host steps: a node with no workload tier keeps no checklist, and the attention item alone says it there.
      */
     private static OnboardingStep backupDestination() {
-        boolean chosen = ControlPlaneBackups.configuredDestinationName() != null;
+        String destination = ControlPlaneBackups.configuredDestinationName();
         return new OnboardingStep(
-            chosen ? OnboardingState.DONE : OnboardingState.TODO,
+            OnboardingStage.BACKUPS,
+            destination != null ? OnboardingState.DONE : OnboardingState.TODO,
             "box-archive",
             copy("checklist_backups"),
-            copy("checklist_backups_detail"),
+            destination != null ? copy("checklist_backups_done").withArg("target", destination)
+                : copy("checklist_backups_detail"),
             AttentionCollector.controlPlaneBackupTarget());
     }
 
@@ -148,6 +194,7 @@ public final class OnboardingCollector {
         boolean online = AppHealth.anyOnline();
 
         return new OnboardingStep(
+            OnboardingStage.FIRST_APP,
             online ? OnboardingState.DONE : OnboardingState.TODO,
             "rocket",
             copy("checklist_put_online"),

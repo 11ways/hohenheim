@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
+import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
@@ -180,7 +181,8 @@ public final class ProxyAttention {
      * AIDEV-NOTE: a site the proxy turns away over its settings is DOWN too, and its routing-problem item already says
      * so with the proxy's own reason; it is not drawn twice. A down site's detail is its verdict's reason
      * ({@link AppHealth}, an error page at that point), so the band and the site's problem band give the same reason;
-     * a verdict with no reason of its own, and a degraded site, read the item's plain sentence.
+     * a verdict with no reason of its own, and a degraded site, read the item's plain sentence. A site whose app its host
+     * holds back names that host as its cause (the verdict's own cause half), so the dashboard folds it under the host.
      */
     static void unhealthySites(List<AttentionItem> items) {
         var proxy = ServerMain.getProxyServer();
@@ -205,12 +207,15 @@ public final class ProxyAttention {
             if (health == SiteHealth.DOWN || health == SiteHealth.DEGRADED) {
                 boolean down = health == SiteHealth.DOWN;
                 String key = down ? "site_down" : "site_degraded";
-                Microcopy reason = down ? AppHealth.siteHealth(site).detail() : null;
+                AppHealth.Verdict verdict = down ? AppHealth.siteReading(site) : null;
+                Microcopy reason = verdict != null ? verdict.health().detail() : null;
+                Integer heldBy = verdict != null ? verdict.heldBy() : null;
                 items.add(item(down ? AttentionSeverity.ERROR : AttentionSeverity.WARNING, "globe",
                     copy(key, "attention_title", "name", site.get(SiteModel.NAME)),
                     reason != null ? reason : copy(key, "attention_detail"),
                     SiteParts.recordRoute(ADMIN, siteId),
-                    action("act_open_app", "name", site.get(SiteModel.NAME))));
+                    action("act_open_app", "name", site.get(SiteModel.NAME)))
+                    .causedBy(heldBy != null ? AttentionSubject.host(heldBy) : null));
             }
         }
     }

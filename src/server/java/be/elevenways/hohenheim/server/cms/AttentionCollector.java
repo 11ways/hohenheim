@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -155,7 +156,9 @@ public final class AttentionCollector {
             }
         }
         if (HohenheimRoles.hostWorkloadsEnabled()) {
-            HostAttention.hostsNotAdmitted(items);
+            Map<Integer, AppHealth.HeldBack> heldBack = AppHealth.heldBackByHost();
+            HostAttention.hostsNotAdmitted(items, heldBack);
+            HostAttention.hostsHoldingAppsBack(items, heldBack);
             HostAttention.stuckReleasingPorts(items, Now.instant().minus(HostAttention.RELEASING_STUCK_AFTER));
         }
         return items;
@@ -259,7 +262,7 @@ public final class AttentionCollector {
                 copy("control_plane_backup", "attention_title"),
                 copy("control_plane_backup", "attention_detail"),
                 controlPlaneBackupTarget(),
-                action("act_choose_backup_target")));
+                action("act_choose_backup_target")).forStage(OnboardingStage.BACKUPS));
             return;
         }
         controlPlaneBackupFreshness(items);

@@ -834,15 +834,18 @@ class AdminPagesTest extends HohenheimTestBase {
             assertThat(page.locator(".hh-attention-clear").count())
                 .as("step 1: the dashboard never says 'All clear' while a host is blocked")
                 .isZero();
-            assertThat(page.locator(".hh-attention-item > a.hh-attention-target[href='/admin/servers/"
-                + local.get(ServerModel.ID) + "']").count())
-                .as("step 1: and the item links to the host that has to be admitted")
+            // Drawn ONCE (D8): by the open admission step that presents the item, or by the band when no step is
+            // open, never by both.
+            String host = "[href='/admin/servers/" + local.get(ServerModel.ID) + "']";
+            var hostLinks = page.locator(".hh-attention-item > a.hh-attention-target" + host
+                + ", .hh-onboarding-step a.hh-onboarding-action" + host);
+            assertThat(hostLinks.count())
+                .as("step 1: the host that has to be admitted is linked exactly once")
                 .isEqualTo(1);
             assertThat(blocked.get(0).action()).as("step 1: the item names its fix")
                 .isNotNull().extracting(Microcopy::key).isEqualTo("act_check_admit");
-            assertThat(page.locator(".hh-attention-item > a.hh-attention-target[href='/admin/servers/"
-                + local.get(ServerModel.ID) + "'] [data-attention-action]").innerText().trim())
-                .as("step 1: in words, beside the problem").isEqualTo("Check and admit");
+            assertThat(hostLinks.first().innerText())
+                .as("step 1: in words, beside the problem").contains("Check and admit");
 
             // 2. The blocked checklist step wears a warning marker, never a checkmark.
             var blockedStep = page.locator(".hh-onboarding-step[data-state='blocked']");

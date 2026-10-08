@@ -9401,11 +9401,11 @@
   ],
   "control_plane_backup": [
     {
-      "text": "Geen externe back-upbestemming",
+      "text": "Back-ups blijven op deze machine",
       "scope": "attention_title"
     },
     {
-      "text": "De eigen herstelarchieven van deze server (de database en de versleutelingssleutels) kunnen nergens heen. Kies er een back-updoel voor in Instellingen, onder Back-ups.",
+      "text": "Gaat deze machine verloren, dan gaan haar eigen database en versleutelingssleutels mee verloren. Kies waar kopies heen gaan.",
       "scope": "attention_detail"
     }
   ],
@@ -9979,13 +9979,29 @@
     "text": "Een host is de machine waarop je workloads draaien.",
     "scope": "onboarding_checklist"
   },
-  "checklist_host_pending": {
-    "text": "Er is een host toegevoegd, maar hij is nog niet toegelaten, dus er kan nog niets op draaien.",
+  "checklist_host_enrolled": {
+    "text": "{$name}, {$runtime}",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_host_enrolled_more": {
+    "text": ".match {$more :number}\none {{{$name}, {$runtime} en nog 1}}\n* {{{$name}, {$runtime} en nog {$more}}}",
     "scope": "onboarding_checklist"
   },
   "checklist_admit": {
-    "text": "Laat de host workloads aannemen",
+    "text": "Laat hem apps draaien",
     "scope": "onboarding_checklist"
+  },
+  "checklist_admit_done": {
+    "text": "De controles zijn geslaagd, dus hier kunnen apps draaien.",
+    "scope": "onboarding_checklist"
+  },
+  "checklist_backups_done": {
+    "text": "Kopies gaan naar {$target}.",
+    "scope": "onboarding_checklist"
+  },
+  "held_back": {
+    "text": ".match {$count :number}\none {{1 app wacht erop}}\n* {{{$count} apps wachten erop}}",
+    "scope": "attention_detail"
   },
   "checklist_admit_detail": {
     "text": "Open de host en gebruik Controleren en toelaten.",

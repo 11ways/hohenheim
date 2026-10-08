@@ -1,7 +1,9 @@
 {# The readiness checklist: the ordered steps between a fresh install and a running
    workload. Each step's state is DERIVED from the same gate the deploy lane asks, and a
    blocked step carries that gate's own refusal, so this can never disagree with what
-   pressing Deploy would do. The dashboard omits the whole band once every step is done. #}
+   pressing Deploy would do. An open step whose condition an attention item states
+   presents that item (its words, its one action), and the band leaves it out.
+   The dashboard omits the whole band once every step is done. #}
 {% declare widget: WidgetInstance %}
 {% declare data: List<OnboardingStep> %}
 
@@ -22,10 +24,13 @@
                 {% if step.detail != null %}
                 <span class="hh-onboarding-detail">{{ step.detail }}</span>
                 {% /if %}
+                {% if step.heldBack != null %}
+                <span class="hh-onboarding-detail" data-onboarding-held-back>{{ step.heldBack }}</span>
+                {% /if %}
             </span>
             {% if step.offersAction %}
             <a class="hh-onboarding-action" use:Zenit.route={% step.target %}>
-                {{ t("checklist_open", scope: "onboarding_checklist") }}
+                {% if step.action != null %}{{ step.action }}{% else %}{{ t("checklist_open", scope: "onboarding_checklist") }}{% /if %}
                 <pl-icon name="chevron-right" size="sm"></pl-icon>
             </a>
             {% /if %}
