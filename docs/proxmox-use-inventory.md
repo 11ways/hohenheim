@@ -549,46 +549,23 @@ speculatively is scaffolding.
 **IMPLEMENTED, both lanes.**
 
 - **Serial/text**: `/ws/instance-console/{id}`, read-only stream plus a separate
-  MANAGE-checked POST for commands (never raw keystrokes over the socket). Serves
+  CONSOLE-checked POST for commands (never raw keystrokes over the socket). Serves
   VMs as the text fallback. **[code]**
-- **Framebuffer rescue console**: hypervisor-side by construction. The proxy polls
-  the daemon's own VGA screenshot (PNG, digest-change-detected, 250ms active /
-  1s idle) and pushes BINARY websocket frames, while INPUT rides a real live SPICE
-  connection (REDQ link, RSA-OAEP empty ticket, MAIN for the session id, INPUTS
-  for AT-set-1 scancodes) over the existing socket -- never a second client.
-  Viewer is plumage's protocol-neutral `pl-framebuffer`. **[code]**
-  `server/instance/VmFramebufferHandler.java`, `server/incus/SpiceConsole.java`.
+- **VM screen (rescue console)**: hypervisor-side by construction. Each running VM
+  has one zenit-kvm screen session, fed by its SPICE server through Pepperglass
+  over the host's Incus VGA console, and viewed with `<kvm-screen>` (wrapped by
+  `hh-vm-screen`). Viewers share the session: the first drives, the others watch
+  and can "Ask for control", and the driver can "Give control back". **[code]**
+  `server/instance/VmScreens.java`, `server/instance/SpiceScreenSource.java`,
+  `server/incus/IncusSpice.java`.
 - Authorization is the framework seam end to end: `requiresLogin` at handshake,
-  per-record MANAGE in `onOpen` (1008), and `revalidate()` re-checking MANAGE under
-  core's default-on revalidator, so a REVOKED viewer's OPEN socket is closed
-  rather than merely refused later.
-  **CORRECTED 2026-08-12: both console lanes gate on CONSOLE, not MANAGE**
-  (`68927c22`, 2026-08-08). The framebuffer checks
-  `HohenheimAccess.CONSOLE` in `onOpen` (`VmFramebufferHandler.java:77`) and
-  re-checks the same verb in `revalidate()` (`:192`); the serial lane's
-  read (`InstanceConsoles.tail`, `:256`) and its command POST
-  (`InstanceConsoles.sendCommand`, `:314`) both demand `CONSOLE` too, so the
-  "separate MANAGE-checked POST" phrasing two bullets up is stale in the same
-  way. The seam and the revocation behaviour are unchanged and still correct;
-  only the verb moved. `CONSOLE` is `impliedBy(MANAGE)`, so nobody gained
-  authority -- but a CONSOLE-only grantee reaches the framebuffer.
-- CI: `VmFramebufferHandlerTest` (4), `VmFramebufferRevocationTest` (1, over a
-  real socket, counterfactual recorded in the plan). Live:
-  `VmFramebufferConsoleLiveTest`, and `IncusWindowsTemplateLiveTest` receives a
-  PNG frame while Windows is still booting -- i.e. before any guest agent exists.
-
-**ARCHITECTURE FINDING, recorded so nobody re-walks it:** qemu's SPICE server
-GLZ-compresses every display image regardless of the client's declared
-compression preference, so a live per-region SPICE display stream requires
-implementing SPICE's LZ/GLZ/QUIC image codecs. That is why display is the
-snapshot lane and input is the live lane. Named follow-up, not a gap in the gate.
-
-Mouse is best-effort: frames are carried, but qemu boots in server mouse mode and
-no mode negotiation is done. Keyboard is proven (the guest screen changed).
-
-**Test gap, named:** `SpiceConsole` and `SpiceScancodes` have no dedicated test;
-the handshake and scancode mapping are covered only incidentally by the live
-framebuffer tests. The serial console handler has no CI-only test either.
+  then the `OPEN_FRAMEBUFFER` operation's offer (`HohenheimAccess.CONSOLE`, which
+  MANAGE implies) at open and on every revalidation, so a REVOKED viewer's OPEN
+  socket is closed 1008. The serial lane's read and command POST demand CONSOLE too.
+- CI: `VmScreenJourneyTest` (real page and socket against a scripted SPICE
+  server, including revocation), `SpiceScreenSourceTest`, `IncusSpiceTest`. Live:
+  `VmScreenLiveTest`, and `IncusWindowsTemplateLiveTest` receives a screen frame
+  while Windows is still booting, before any guest agent exists.
 
 ## 10. Guest agent
 
@@ -1095,8 +1072,7 @@ What landed:
   `boot.priority=5` and raises the root disk to `10`, the
   prepare-windows-template step-5 finding (a CD booted first re-enters the
   installer after the first-phase reboot).
-- The interactive console this depends on already existed (the VGA framebuffer,
-  item 9's rescue lane).
+- The interactive console this depends on is item 9's VM screen.
 
 Tests: `InstallMediaSurfaceTest` (7 journeys: empty-VM source map, container
 refusal, resolve's blank-image gate, cdrom boot-order at the daemon, operator-only

@@ -261,8 +261,8 @@ sites, and the separation is pinned by a hermetic test.
   workload's STDIN, never an arbitrary program. Gated in
   `server/instance/InstanceConsoles.java:256` (`tail`) and `:314`
   (`sendCommand`), plus the websocket handshake
-  (`InstanceConsoleHandler.java:38`, `:68`), the framebuffer
-  (`VmFramebufferHandler.java:77`, `:192`) and the schedule action
+  (`InstanceConsoleHandler.java:38`, `:68`), the VM screen (`VmScreens`'s gate,
+  asked at open and on every revalidation) and the schedule action
   (`InstanceConsoleCommandAction.java:41`).
 - `power` (`:86`, registered `:274-277`) -- gated in
   `server/instance/InstanceService.java:111` (`deploy`) and `:212` (`stop`), i.e.

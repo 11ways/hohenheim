@@ -9,7 +9,7 @@ actually run.
 UPDATE 2026-08-14: the product now carries an in-panel counterpart for most of
 this. The server record's Install media tab fetches ISOs onto a host, an
 `image_origin=install_media` VM is created EMPTY, the ISO attaches as a cdrom
-device (boot order encoded from step 5's finding), the framebuffer console drives
+device (boot order encoded from step 5's finding), the VM's live screen console drives
 the interactive install, and the instance's "Capture as template" action replaces
 step 7's hand-run `incus publish` (unapproved template minted, host-pinned). The
 media REPACKING in steps 1-4 (virtio injection, noprompt boot, the answer-file CD)
@@ -77,7 +77,7 @@ About 60 seconds. It mounts both ISOs, modifies `boot.wim` indexes 1-2 and all f
 TRAP, and it costs a whole boot cycle to discover: the repacked media still boots
 through `cdboot.efi`, which prints "Press any key to boot from CD or DVD" and, with
 nobody to press one, TIMES OUT and falls through to PXE. Observed verbatim on the
-framebuffer console:
+VGA console:
 
 ```
 BdsDxe: failed to start Boot0002 "UEFI QEMU QEMU CD-ROM " ... : Time out
@@ -311,9 +311,10 @@ reporting a timeout as if the guest were broken.
 
 - Provisioning from the prepared image under the quota ledger, with owner labels, the
   image-fingerprint pin, and the shared isolation ACL verified in the host KERNEL.
-- The framebuffer rescue console. This is hypervisor-side and is the ONLY way in when
-  the guest has no network, no drivers or a failed boot -- exactly the Windows failure
-  modes. RDP is guest-side and is not a substitute for it.
+- The VM screen console (zenit-kvm over the VM's SPICE server). This is
+  hypervisor-side and is the ONLY way in when the guest has no network, no drivers or
+  a failed boot -- exactly the Windows failure modes. RDP is guest-side and is not a
+  substitute for it.
 - No `incus exec`, so no install script, no app update, no in-guest file operations.
   Every one of those refuses by name.
 - Nothing writes into the guest. If a tenant needs per-instance configuration inside

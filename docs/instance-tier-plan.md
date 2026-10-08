@@ -5192,6 +5192,11 @@ in that class the kernel-truth mechanism was INERT.
 STATUS (2026-08-06, framebuffer-console wave): the rescue console SHIPPED and both
 of its gate clauses are closed by tests that RAN (CI and live on daystrom).
 
+SUPERSEDED: the PNG console below is gone. A VM's screen is now one zenit-kvm
+screen session per VM, fed by its SPICE server through Pepperglass (`VmScreens`,
+`SpiceScreenSource`, `IncusSpice`), viewed with `<kvm-screen>` and shared by its
+viewers with one driver at a time; see `proxmox-use-inventory.md` section 9.
+
 - ARCHITECTURE FINDING that shaped the whole slice, measured live: qemu's SPICE
   server GLZ-compresses every display image REGARDLESS of the client's declared
   compression preference (SPICE_MSGC_DISPLAY_PREFERRED_COMPRESSION=OFF was sent
