@@ -12,5 +12,9 @@
 # Generated CMS +48948, plumage tags +42120, auth tags +34185 and DRY +33524. Class attribution includes CMS
 # HawkeyeClassSerializers +26412, Tpl_ZaRecordSharing +24465, auth HawkeyeClassSerializers +13691,
 # Parser +13161, Tpl_PlSelect +12079 and ZaRecordSharingImpl +9381. Keep the standard 5 percent headroom.
-cms.js.raw=7880854 measured=7505575
-cms.js.gzip=1868871 measured=1779877
+# 2026-10-08: a VM's console is a zenit-kvm screen (<kvm-screen>, hh-vm-screen) instead of plumage's
+# FramebufferWire, plus the template work since 2026-10-06: raw 7505575 -> 7829863, gzip 1779877 -> 1862955.
+# Generated templates +130904, unmapped +87242, zenit-kvm +64359 (ScreenMessage +25032, BrowserScreenViewer
+# +13667, ScreenCodec +9827); TeaVM's BigDecimal/BigInteger fell out (-19621). Standard 5 percent headroom.
+cms.js.raw=8221357 measured=7829863
+cms.js.gzip=1956103 measured=1862955
