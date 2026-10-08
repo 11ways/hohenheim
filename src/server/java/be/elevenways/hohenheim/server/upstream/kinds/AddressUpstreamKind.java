@@ -181,7 +181,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
         Integer siteId = site.get(SiteModel.ID);
         if (tenantOwned && socket != null) {
             return new FaultedSiteHandler(siteId != null ? siteId : -1,
-                "a tenant-owned site may not forward to a unix socket");
+                Microcopy.of("tenant_socket").withFilter("scope", "site_fault"));
         }
 
         // Socket mode takes precedence over url mode (matching the Node implementation). The unix
@@ -211,7 +211,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
             Boolean literalPublic = TenantUpstreams.literalIsPublic(host);
             if (Boolean.FALSE.equals(literalPublic)) {
                 return new FaultedSiteHandler(siteId != null ? siteId : -1,
-                    "a tenant-owned site may only forward to a public address");
+                    Microcopy.of("tenant_private_address").withFilter("scope", "site_fault"));
             }
             return new TenantAddressHandler(scheme, host, port, protocol, ignoreCertificates,
                 websocketEnabled, rewriteLocation);

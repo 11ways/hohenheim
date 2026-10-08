@@ -719,15 +719,16 @@ public final class DatabaseParts {
      * Offered only where the move can succeed: a dedicated, active record whose engine has logical databases at all.
      *
      * AIDEV-NOTE: not DESTRUCTIVE: the move keeps the dump AND the old data volume as two rollbacks, and painting it
-     * red beside a real delete devalues the red.
+     * red beside a real delete devalues the red. Not PRIMARY either, and in the heading's More menu: a placement change
+     * done once in a database's life never leads its page (board Databases); Back up now leads by position.
      */
     private static @NonNull PanelAction<Row> moveToShared() {
         return PanelAction.<Row, Void>places(MOVE_TO_SHARED, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("move_started")
                     .withFilter("scope", "database")
                     .withArg("name", request.subject().get(DatabaseModel.NAME))))
-            .style(ActionStyle.PRIMARY)
             .inlineInRow(false)
+            .inlineOnRecord(false)
             // The record-less fallback the framework requires beside a dynamic one.
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("move_shared").withFilter("scope", "database"))

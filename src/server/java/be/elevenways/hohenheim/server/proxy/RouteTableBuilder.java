@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.auth.SiteAuthDecision;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
@@ -252,7 +253,8 @@ final class RouteTableBuilder {
         }
         this.ownedHandlers.add(requestHandler);
         if (requestHandler instanceof FaultedSiteHandler faulted) {
-            problem(siteId, siteName, RoutingProblem.Reason.HANDLER_FAULTED, faulted.reason());
+            this.problems.add(new RoutingProblem(siteId != null ? siteId : -1, siteName != null ? siteName : "",
+                RoutingProblem.Reason.HANDLER_FAULTED, HohenheimViolations.textOf(faulted.reason()), faulted.reason()));
         }
 
         boolean siteRouteAdded = false;

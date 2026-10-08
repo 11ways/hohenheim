@@ -98,7 +98,7 @@ public final class InstanceUpstreamKind implements UpstreamKindHandler {
 
         if (instanceId == null) {
             return new FaultedSiteHandler(site.get(SiteModel.ID),
-                "this site names no instance to serve from");
+                Microcopy.of("no_instance").withFilter("scope", "site_fault"));
         }
 
         Object scheme = settings.get(SCHEME.getName());

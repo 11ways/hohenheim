@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostPostureAcknowledgement;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.incus.IncusReaper;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.task.ReapIncusControllers;
@@ -74,7 +75,7 @@ final class ServerLifecycleActions {
                 ServerService.Summary summary = new ServerService().probeAndStore(name);
                 if (summary == null || !summary.reachable()) throw Violations.ofForm(CmsSupport.violationText("host_probe_failed")
                     .withArg("name", name).withArg("kind", summary != null && summary.errorKind() != null
-                        ? summary.errorKind() : "unknown"));
+                        ? HostProbe.FailureKind.labelOf(summary.errorKind()) : HostProbe.FailureKind.UNREACHABLE.label()));
                 return serverCopy("host_probe_ok").withArg("name", name).withArg("summary", formatSummary(summary, label));
             }, row -> true).description(serverCopy("probe_now_hint")).icon(Icon.of("heart-pulse")).inlineInRow(false).build(),
             place("check_host", serverCopy("check_and_admit"), ServerLifecycleActions::checkHost, row -> true)
@@ -146,17 +147,17 @@ final class ServerLifecycleActions {
         HostPreflight.Report[] report = new HostPreflight.Report[1];
         ActivityLog.withAction(ZenitActivityAction.UPDATE, "preflight",
             () -> report[0] = HostPreflight.runAndStore(name));
-        String failed = report[0].checks().stream()
+        List<Microcopy> failed = report[0].checks().stream()
             .filter(check -> check.required() && check.failed())
-            .map(HostPreflight.Check::name)
-            .collect(Collectors.joining(", "));
+            .map(check -> ServerOverviewState.checkLabel(check.name()))
+            .toList();
         if (!awaitsAdmission(row)) {
             return failed.isEmpty() ? serverCopy("host_checked").withArg("name", name)
                 : serverCopy("host_checked_failing").withArg("name", name).withArg("checks", failed);
         }
         if (!failed.isEmpty() || !report[0].passed()) {
             throw Violations.ofForm(CmsSupport.violationText("host_check_failed").withArg("name", name)
-                .withArg("checks", failed.isEmpty() ? "-" : failed));
+                .withArg("checks", failed.isEmpty() ? (Object) "-" : failed));
         }
         // Admission reads what preflight just stored, never the subject loaded before it ran.
         Row stored = Models.get(ServerModel.class).findById(row.get(ServerModel.ID));

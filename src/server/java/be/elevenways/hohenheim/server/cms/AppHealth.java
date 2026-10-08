@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.hohenheim.server.proxy.RoutingProblem;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.instance.InstanceOperations;
@@ -42,7 +43,8 @@ import java.util.Set;
  * AIDEV-NOTE: the verdict READS the facts other surfaces already own, never a second copy of their rules: whether
  * HTTPS works is {@link CertificateCoverage} (the TLS cell's read), whether a path is open is
  * {@link ProtectedPathInvariant#isOpen}, why a workload cannot start is {@link OwnedInstances#placementRefusal} (the
- * power buttons' availability), and the live answer is the proxy handler's own {@link SiteHealth}. The order below is
+ * power buttons' availability), why the proxy turns visitors away is its {@link RoutingProblem} (the attention item's
+ * reason), and the live answer is the proxy handler's own {@link SiteHealth}. The order below is
  * the order a visitor would hit them: no answer at all, an error page, then what only the operator notices.
  *
  * @author Jelle De Loecker
@@ -98,6 +100,13 @@ final class AppHealth {
             return RecordHealth.attention(copy("no_address")).detail(copy("no_address_detail"))
                 .fixedBy(SiteActions.ADD_ADDRESS);
         }
+        List<RoutingProblem> problems = facts.problems.getOrDefault(siteId, List.of());
+        for (RoutingProblem problem : problems) {
+            // Its own refusal, never "does not answer": the proxy turns every visitor away and says why.
+            if (problem.reason().refusesEveryVisitor()) {
+                return RecordHealth.broken(copy("error_page")).detail(ProxyAttention.reasonOf(problem));
+            }
+        }
         boolean passthrough = SiteParts.tlsPassthrough(site);
         String forced = forcedWithoutCertificate(domains, facts.working, passthrough);
         if (forced != null) {
@@ -121,6 +130,9 @@ final class AppHealth {
             return RecordHealth.attention(copy("path_open").withArg("path", open.get(ProtectedPathModel.PATH)))
                 .detail(copy("path_open_detail"))
                 .fixedBy(SiteActions.FIX_PROTECTION);
+        }
+        if (!problems.isEmpty()) {
+            return RecordHealth.attention(copy("routed_in_part")).detail(ProxyAttention.reasonOf(problems.get(0)));
         }
         if (live == SiteHealth.DEGRADED) {
             return RecordHealth.attention(copy("degraded")).detail(copy("degraded_detail"));
@@ -415,7 +427,7 @@ final class AppHealth {
     /** Everything a page of site verdicts reads, read once for the page. */
     private record SiteFacts(@NonNull Map<Integer, List<Row>> domains, @NonNull Map<Integer, List<Row>> paths,
                              @NonNull Map<Integer, Row> instances, @NonNull Map<Integer, SiteHealth> live,
-                             @NonNull Set<String> working) {
+                             @NonNull Map<Integer, List<RoutingProblem>> problems, @NonNull Set<String> working) {
 
         static @NonNull SiteFacts of(@NonNull List<Row> sites) {
             List<Integer> siteIds = new ArrayList<>();
@@ -433,6 +445,7 @@ final class AppHealth {
                 siteIds);
             Map<Integer, Row> instances = new HashMap<>();
             Map<Integer, SiteHealth> live = new HashMap<>();
+            Map<Integer, List<RoutingProblem>> problems = new HashMap<>();
             if (!siteIds.isEmpty()) {
                 var proxy = ServerMain.getProxyServer();
                 if (proxy != null) {
@@ -440,6 +453,11 @@ final class AppHealth {
                         SiteHealth health = proxy.getDispatcher().healthOf(siteId);
                         if (health != null) {
                             live.put(siteId, health);
+                        }
+                    }
+                    for (RoutingProblem problem : proxy.getDispatcher().routingProblems()) {
+                        if (siteIds.contains(problem.siteId())) {
+                            problems.computeIfAbsent(problem.siteId(), id -> new ArrayList<>()).add(problem);
                         }
                     }
                 }
@@ -450,7 +468,7 @@ final class AppHealth {
                     instances.put(instance.get(InstanceModel.ID), instance);
                 }
             }
-            return new SiteFacts(domains, paths, instances, live, CertificateCoverage.activeNames());
+            return new SiteFacts(domains, paths, instances, live, problems, CertificateCoverage.activeNames());
         }
     }
 }

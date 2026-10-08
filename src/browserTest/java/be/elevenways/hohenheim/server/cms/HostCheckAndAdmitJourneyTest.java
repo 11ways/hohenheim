@@ -3,11 +3,14 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.host.HostPreflightReportView;
 import be.elevenways.hohenheim.host.PreflightCheckView;
+import be.elevenways.hohenheim.host.PreflightStatus;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.operation.Operation;
@@ -58,7 +61,9 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
             .isInstanceOfSatisfying(Violations.class, violations -> assertThat(violations.all())
                 .anySatisfy(violation -> {
                     assertThat(violation.message().key()).isEqualTo("host_check_failed");
-                    assertThat(String.valueOf(violation.message().args().asMap().get("checks"))).contains("daemon");
+                    assertThat((List<?>) violation.message().args().asMap().get("checks"))
+                        .as("step 2: the failed check by its words, never its code")
+                        .anySatisfy(named -> assertThat(((Microcopy) named).key()).isEqualTo("check_daemon"));
                 }));
         Row stored = Models.get(ServerModel.class).findById(host.get(ServerModel.ID));
         assertThat((String) stored.get(ServerModel.ADMISSION)).as("step 2: still waiting")
@@ -70,6 +75,7 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
         assertThat(report.mustPass()).as("step 3: the failed check leads Must pass").isNotEmpty();
         PreflightCheckView first = report.mustPass().get(0);
         assertThat(first.name()).as("step 3: the unreachable daemon leads").isEqualTo("daemon");
+        assertThat(first.label().key()).as("step 3: named in words").isEqualTo("check_daemon");
         assertThat(first.fix()).as("step 3: it says how to fix it").isNotNull();
         assertThat(first.fix().key()).isEqualTo("fix_daemon");
         assertThat(report.advice()).as("step 3: advice never holds a required check")
@@ -82,15 +88,26 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
     }
 
     @Test
-    void everyDeclaredCheckSaysHowToFixItInBothCatalogs() throws IOException {
+    void everyDeclaredCheckIsNamedAndSaysHowToFixItInBothCatalogs() throws IOException {
         Set<String> checks = new TreeSet<>(HostPreflight.DOCKER_BATTERY);
         checks.addAll(IncusPreflight.BATTERY);
         for (String language : List.of("en", "nl")) {
             String catalog = catalog(language);
-            // 1. One how-to-fix sentence per check the batteries can store, in every shipped language.
+            // 1. One name and one how-to-fix sentence per check the batteries can store, in every shipped language.
             for (String name : checks) {
                 assertThat(catalog).as("step 1: " + language + " says how to fix " + name)
                     .contains("\"fix_" + name + "\"");
+                assertThat(catalog).as("step 1: " + language + " names " + name)
+                    .contains("\"" + ServerOverviewState.checkLabel(name).key() + "\"");
+            }
+            // 2. Every verdict a check can carry, and every way a probe can fail, reads as words.
+            for (PreflightStatus status : PreflightStatus.values()) {
+                assertThat(catalog).as("step 2: " + language + " words the verdict " + status)
+                    .contains("\"" + status.label().key() + "\"");
+            }
+            for (HostProbe.FailureKind kind : HostProbe.FailureKind.values()) {
+                assertThat(catalog).as("step 2: " + language + " words the probe failure " + kind)
+                    .contains("\"" + kind.label().key() + "\"");
             }
         }
     }

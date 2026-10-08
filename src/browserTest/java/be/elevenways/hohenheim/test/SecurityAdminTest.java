@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.BanModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.BanParts;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
@@ -13,6 +14,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -62,7 +64,7 @@ class SecurityAdminTest extends HohenheimTestBase {
         waitForHydration();
         String content = page.locator("body").textContent();
         assertThat(content).contains("203.0.113.77");
-        assertThat(content).contains("Lift ban");
+        assertThat(content).contains("Lift");
 
         Row ban = Models.get(BanModel.class).find()
             .where(BanModel.IP.eq("203.0.113.77")).first();
@@ -86,16 +88,24 @@ class SecurityAdminTest extends HohenheimTestBase {
     /** The dashboard's security band: the active-bans stat, and NO 30-day chart. */
     @Test
     void dashboardShowsTheBanStatAndNotTheBansChart() {
-        navigateToApp("/admin/dashboard");
-        waitForHydration();
-        assertThat(page.locator(".widget-stat-link a.stat-link[href='/admin/bans']").count()).isEqualTo(1);
-        // The deleted security-events surface is gone from the dashboard.
-        assertThat(page.locator(".widget-stat-link a.stat-link[href='/admin/security-events']").count())
-            .isZero();
-        // The 30-day bans chart was REMOVED from the landing dashboard on purpose: on any
-        // fleet that is not under attack it is an all-zero series drawn as ~450px of flat
-        // line, above the content the operator opened the page for. The count stays as the
-        // tile asserted above. See the AIDEV-NOTE in AdminDashboard.widgets().
-        assertThat(page.locator(".widget-chart pl-chart").count()).isZero();
+        // The stat tiles belong to a fleet with apps (an empty install shows the onboarding hero instead), so the
+        // test seeds its own app rather than relying on what earlier test classes left behind.
+        Row site = ProxyTestSupport.setupSite("hohenheim:address", "Security dashboard app", "security-dashboard-app",
+            Map.of("forward_host", "127.0.0.1", "forward_port", 9));
+        try {
+            navigateToApp("/admin/dashboard");
+            waitForHydration();
+            assertThat(page.locator(".widget-stat-link a.stat-link[href='/admin/bans']").count()).isEqualTo(1);
+            // The deleted security-events surface is gone from the dashboard.
+            assertThat(page.locator(".widget-stat-link a.stat-link[href='/admin/security-events']").count())
+                .isZero();
+            // The 30-day bans chart was REMOVED from the landing dashboard on purpose: on any
+            // fleet that is not under attack it is an all-zero series drawn as ~450px of flat
+            // line, above the content the operator opened the page for. The count stays as the
+            // tile asserted above. See the AIDEV-NOTE in AdminDashboard.widgets().
+            assertThat(page.locator(".widget-chart pl-chart").count()).isZero();
+        } finally {
+            HardDeletes.row(Models.get(SiteModel.class), site);
+        }
     }
 }

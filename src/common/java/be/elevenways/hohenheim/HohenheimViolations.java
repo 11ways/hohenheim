@@ -84,6 +84,104 @@ public final class HohenheimViolations {
         return cause.getMessage() != null ? cause.getMessage() : cause.toString();
     }
 
+    /**
+     * A stored reason as text for its reader: what {@link #reasonOf} stores, or, for a reason stored before it existed,
+     * the refusal it debug-rendered ("1 violation(s):  -> workspace_build_failed {reason=...}") in its own words.
+     *
+     * AIDEV-NOTE: only ONE violation is read back, because a list of them joins entries AND args with ", " and cannot be
+     * split without guessing. A key this catalog does not hold, or any other shape, keeps the stored text: an old row
+     * reads as it was stored rather than as a different message. A message that changed its arguments since (the
+     * build failure took {@code code} where it stored {@code reason}) cannot be filled from the row: it reads as the
+     * row's one stored argument when there is exactly one, else as stored.
+     *
+     * @return the stored text, or the one refusal it renders in the installation's default content locale
+     */
+    public static @NonNull String storedText(@NonNull String stored) {
+        String prefix = "1 violation(s): ";
+        int arrow = stored.indexOf(" -> ");
+        if (!stored.startsWith(prefix) || arrow < prefix.length() - 1) {
+            return stored;
+        }
+        String entry = stored.substring(arrow + 4);
+        int space = entry.indexOf(' ');
+        String key = space < 0 ? entry : entry.substring(0, space);
+        if (!isToken(key)) {
+            return stored;
+        }
+        Microcopy message = text(key);
+        if (space >= 0) {
+            String args = entry.substring(space + 1);
+            if (!args.startsWith("{") || !args.endsWith("}")) {
+                return stored;
+            }
+            message = withStoredArgs(message, args.substring(1, args.length() - 1));
+            if (message == null) {
+                return stored;
+            }
+        }
+        LocaleChain locales = LocaleChain.of(ContentLocales.getDefault());
+        String text = message.tryResolve(locales, MessageResolvers.getDefault());
+        if (text == null) {
+            return stored;
+        }
+        String source = message.resolveSource(locales, MessageResolvers.getDefault());
+        int open = source.indexOf("{$");
+        while (open >= 0) {
+            int end = open + 2;
+            while (end < source.length() && isToken(source.substring(end, end + 1))) {
+                end++;
+            }
+            if (!message.args().asMap().containsKey(source.substring(open + 2, end))) {
+                return message.args().asMap().size() == 1
+                    ? String.valueOf(message.args().asMap().values().iterator().next()) : stored;
+            }
+            open = source.indexOf("{$", end);
+        }
+        return text;
+    }
+
+    /** @return the message with each "name=value" of a debug-rendered args map, or null when one is malformed */
+    private static @Nullable Microcopy withStoredArgs(@NonNull Microcopy message, @NonNull String body) {
+        Microcopy result = message;
+        int start = 0;
+        while (start < body.length()) {
+            int equals = body.indexOf('=', start);
+            if (equals < 0 || !isToken(body.substring(start, equals))) {
+                return null;
+            }
+            int end = nextArgument(body, equals + 1);
+            result = result.withArg(body.substring(start, equals), body.substring(equals + 1, end));
+            start = end < body.length() ? end + 2 : end;
+        }
+        return result;
+    }
+
+    /** @return where the next ", name=" begins after {@code from}, else the end: a value may itself hold ", " */
+    private static int nextArgument(@NonNull String body, int from) {
+        int comma = body.indexOf(", ", from);
+        while (comma >= 0) {
+            int equals = body.indexOf('=', comma + 2);
+            if (equals > comma + 2 && isToken(body.substring(comma + 2, equals))) {
+                return comma;
+            }
+            comma = body.indexOf(", ", comma + 2);
+        }
+        return body.length();
+    }
+
+    private static boolean isToken(@NonNull String text) {
+        if (text.isEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (!(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** @return the message resolved in the installation's default content locale */
     public static @NonNull String textOf(@NonNull Microcopy message) {
         return message.resolve(LocaleChain.of(ContentLocales.getDefault()), MessageResolvers.getDefault());

@@ -5,7 +5,9 @@ import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.host.HostMemoryCell;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -54,8 +56,8 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             cleanup.add(() -> deleteServer(waiting));
             HostPreflight.store(PREFIX + "waiting", new HostPreflight.Report(List.of(
                 new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
-                new HostPreflight.Check("volume_backend", HostPreflight.STATUS_FAIL, true, "no quota"),
-                new HostPreflight.Check("firewall", HostPreflight.STATUS_FAIL, false, "advice only")),
+                new HostPreflight.Check("nftables", HostPreflight.STATUS_FAIL, true, "nft missing"),
+                new HostPreflight.Check("lsm", HostPreflight.STATUS_FAIL, false, "advice only")),
                 Map.of(), false, Now.instant(), null));
             setAdmission(waiting, ServerModel.ADMISSION_BLOCKED);
             forgetMemoryReading(waiting);
@@ -70,8 +72,8 @@ class HostsPageJourneyTest extends HohenheimTestBase {
                 .isEqualTo("Apps already here keep running");
             StateLineCell held = ServerParts.stateCellOf(server(waiting));
             assertThat(say(held.label())).as("step 2: a blocked host waits").isEqualTo("Waiting for its checks");
-            assertThat(say(held.detail())).as("step 2: naming only the REQUIRED checks that failed")
-                .isEqualTo("1 required check failed: volume_backend");
+            assertThat(say(held.detail())).as("step 2: naming only the REQUIRED checks that failed, in words")
+                .isEqualTo("1 required check failed: Firewall control");
 
             // 3. The same failure leads the list and the dashboard, as one attention item with its fix.
             AttentionItem item = null;
@@ -82,7 +84,7 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             }
             assertThat(item).as("step 3: the host tier names the waiting host").isNotNull();
             assertThat(say(item.detail())).as("step 3: with the checks that keep it out")
-                .isEqualTo("1 required check failed: volume_backend. Check and admit runs it again.");
+                .isEqualTo("1 required check failed: Firewall control. Check and admit runs it again.");
             assertThat(AttentionCollector.collect()).as("step 3: the dashboard reads the same item")
                 .anySatisfy(found -> assertThat(say(found.title())).isEqualTo(PREFIX + "waiting cannot run apps yet"));
 
@@ -108,10 +110,30 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             assertThat(list.statusCode()).as("step 5: the Hosts list renders").isEqualTo(200);
             assertThat(list.body()).as("step 5: the admission in words")
                 .contains("Takes new apps", "Takes no new apps", "Waiting for its checks")
-                .as("step 5: why the waiting host waits").contains("1 required check failed: volume_backend")
+                .as("step 5: why the waiting host waits").contains("1 required check failed: Firewall control")
+                .as("step 5: never a check's code").doesNotContain("failed: nftables")
                 .as("step 5: what each host runs").contains("1 app, 0 databases").contains("Nothing yet")
                 .as("step 5: the attention band above the list").contains(PREFIX + "waiting cannot run apps yet")
                 .as("step 5: the memory bar").contains("hh-host-memory");
+
+            // 6. A host the last probe could not reach says why in words, and when it last answered; the host page
+            //    names its checks and their verdicts in words too.
+            Row unreachable = server(cordoned);
+            unreachable.set(ServerModel.LAST_ERROR_KIND, HostProbe.FailureKind.DOCKER_ABSENT.token);
+            unreachable.set(ServerModel.LAST_SEEN_AT, Now.instant());
+            Models.get(ServerModel.class).save(unreachable);
+            assertThat(say(ServerParts.statusCellOf(server(cordoned)).stateText()))
+                .as("step 6: the probe failure in words, with its last contact").isEqualTo("Docker not found, last reached");
+            unreachable = server(cordoned);
+            unreachable.set(ServerModel.LAST_SEEN_AT, null);
+            Models.get(ServerModel.class).save(unreachable);
+            assertThat(say(ServerParts.statusCellOf(server(cordoned)).stateText()))
+                .as("step 6: a host never reached names no last contact").isEqualTo("Docker not found");
+            assertThat(say(HostProbe.FailureKind.labelOf("a_later_kind")))
+                .as("step 6: a failure this build does not know keeps its stored spelling").isEqualTo("a_later_kind");
+            PreflightCheckView failing = ServerOverviewState.preflightReport(server(waiting)).mustPass().get(0);
+            assertThat(say(failing.label())).as("step 6: the host page names the check").isEqualTo("Firewall control");
+            assertThat(say(failing.statusLabel())).as("step 6: and its verdict").isEqualTo("Failed");
         } finally {
             for (Runnable step : cleanup) {
                 step.run();

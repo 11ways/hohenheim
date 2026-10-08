@@ -66,6 +66,12 @@ class WorkspaceDeploysTabTest extends HohenheimTestBase {
             HohenheimViolations.reasonOf(Violations.ofForm(
                 HohenheimViolations.text("source_checkout_failed").withArg("reason", "Remote branch not found"))),
             "[hohenheim] deploying hohenheim-rewrite\nfatal: Remote branch hohenheim-rewrite not found\n");
+        // Two rows stored before reasons were sentences, in Violations' debug rendering, as Starfleet holds them.
+        operation(readingWorkspaceId, BuildOperationModel.STATUS_FAILED, "hohenheim-rewrite",
+            "1 violation(s):  -> host_posture_refuses {name=local}", "[hohenheim] deploying hohenheim-rewrite\n");
+        operation(readingWorkspaceId, BuildOperationModel.STATUS_FAILED, "hohenheim",
+            "1 violation(s):  -> workspace_build_failed {reason=npm error code ERESOLVE, could not resolve}",
+            "[hohenheim] deploying hohenheim\n");
     }
 
     /**
@@ -91,6 +97,14 @@ class WorkspaceDeploysTabTest extends HohenheimTestBase {
             .contains("The source could not be checked out: Remote branch not found")
             .as("step 2: and never as a violation dump")
             .doesNotContain("violation(s)");
+
+        // 2b. A row stored in the old debug rendering reads as its refusal's sentence too; one whose message has
+        //     changed its arguments since reads as the reason it stored.
+        assertThat(body)
+            .as("step 2b: an old stored refusal is its sentence")
+            .contains("Host local declares a trusted-only posture and refuses tenant instances")
+            .as("step 2b: an old build failure reads as its stored reason")
+            .contains("npm error code ERESOLVE, could not resolve");
 
         // 3. States are the status vocabulary's words, capitalised.
         assertThat(body)
@@ -119,6 +133,14 @@ class WorkspaceDeploysTabTest extends HohenheimTestBase {
         assertThat(reason)
             .as("the build refusal names the exit code and points at the log, without the output")
             .isEqualTo("The build command stopped with exit code 1; its output is in the build log.");
+        assertThat(HohenheimViolations.storedText(reason)).as("a sentence reads as itself").isEqualTo(reason);
+        assertThat(HohenheimViolations.storedText("1 violation(s): name -> a_key_nobody_declares {x=1}"))
+            .as("a key the catalog does not hold keeps the stored text")
+            .isEqualTo("1 violation(s): name -> a_key_nobody_declares {x=1}");
+        assertThat(HohenheimViolations.storedText(
+                "2 violation(s):  -> host_posture_refuses {name=a},  -> host_posture_refuses {name=b}"))
+            .as("two refusals cannot be split without guessing: kept as stored")
+            .startsWith("2 violation(s)");
     }
 
     /**

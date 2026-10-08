@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -44,6 +45,30 @@ public final class HostProbe {
 
         FailureKind(String token) {
             this.token = token;
+        }
+
+        /** @return this failure in an operator's words, as the host list and the probe refusal say it */
+        public @NonNull Microcopy label() {
+            return Microcopy.of("probe_failure_" + this.token).withFilter("scope", "host_probe");
+        }
+
+        /** @return the member stored as this token, or null for a token this build does not know */
+        public static @Nullable FailureKind ofToken(@Nullable String token) {
+            for (FailureKind kind : values()) {
+                if (kind.token.equals(token)) {
+                    return kind;
+                }
+            }
+            return null;
+        }
+
+        /**
+         * A stored failure token in words; a token this build does not know (a later version's) keeps its stored
+         * spelling rather than reading as a different failure.
+         */
+        public static @NonNull Microcopy labelOf(@Nullable String token) {
+            FailureKind kind = ofToken(token);
+            return kind != null ? kind.label() : Microcopy.literal(token != null ? token : "");
         }
     }
 
