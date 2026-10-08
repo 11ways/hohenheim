@@ -1,13 +1,14 @@
-{#- The dashboard's Apps band (board Main): every app with its health glyph, by name, what it is and where, and whether
-    HTTPS works for it, read from the one App directory the Apps list reads. The glyph is the same verdict (and the same
-    HealthCellState) the Apps list's health cell draws. -#}
+{#- The dashboard's Apps band (boards Main and Manage-Home): every app with its health glyph, by name, what it is and
+    where, and whether HTTPS works for it, read from the one App directory the Apps list reads. The glyph is the same
+    verdict (and the same HealthCellState) the Apps list's health cell draws; the heading is the placement's own
+    (AppsBand). -#}
 {% declare widget: WidgetInstance %}
-{% declare data: List<AppSummary> = null %}
-{% if data != null and data %}
+{% declare data: AppsBand = null %}
+{% if data != null and data.apps %}
 <section data-hh-dashboard-apps-band>
-    <pl-section-header><h2>{{ t("apps", scope: "dashboard") }}</h2></pl-section-header>
+    <pl-section-header><h2>{{ data.heading }}</h2></pl-section-header>
     <pl-list variant="card" data-hh-dashboard-apps>
-        {% each data as app %}
+        {% each data.apps as app %}
         <pl-list-item data-hh-dashboard-app={% app.name %}>
             <pl-state-glyph slot="leading" icon={% app.health.icon %} variant={% app.health.variant %}
                             label={% app.health.label %} data-cms-health={% app.health.tone %}></pl-state-glyph>

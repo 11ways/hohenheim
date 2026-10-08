@@ -16,7 +16,14 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
+import be.elevenways.zenit.cms.server.panel.PanelGate;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.cms.server.panel.RecordTabGate;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ActivityRules;
@@ -80,7 +87,7 @@ final class AppOverview {
         addIfPresent(main, protection(List.of(site), access));
 
         List<WidgetInstance> side = new ArrayList<>();
-        side.add(details(siteFacts(site, conduit)));
+        side.add(details(siteFacts(site, access)));
         if (!delegated) {
             side.add(recent(Models.get(SiteModel.class), site.get(SiteModel.ID)));
         }
@@ -108,31 +115,33 @@ final class AppOverview {
     static @NonNull WidgetInstance addresses(@NonNull List<Row> sites, @NonNull AccessContext access) {
         Conduit conduit = access.conduit();
         String panelSlug = CmsSupport.panelSlug(conduit);
-        LocaleChain locales = conduit.getLocales();
-        MessageResolver resolver = conduit.getMessageResolver();
         Set<String> working = CertificateCoverage.activeNames();
         List<AppAddress> rows = new ArrayList<>();
         for (Row site : sites) {
             boolean passthrough = SiteParts.tlsPassthrough(site);
             boolean first = true;
             for (Row domain : SiteParts.domainsOf(site)) {
-                rows.add(address(domain, passthrough, first, working, panelSlug, locales, resolver));
+                rows.add(address(domain, passthrough, first, working, access));
                 first = false;
             }
         }
-        String addUrl = sites.size() == 1
-            ? CmsRoutes.subpage(panelSlug, HohenheimSlugs.SITES, sites.get(0).get(SiteModel.ID),
-                SiteParts.DOMAINS_TAB).toUrl()
+        Integer siteId = sites.size() == 1 ? sites.get(0).get(SiteModel.ID) : null;
+        String addUrl = siteId != null && opens(access, HohenheimSlugs.SITES, siteId, SiteParts.DOMAINS_TAB)
+            ? CmsRoutes.subpage(panelSlug, HohenheimSlugs.SITES, siteId, SiteParts.DOMAINS_TAB).toUrl()
             : null;
         return card(copy("addresses"), new WidgetInstance(HohenheimWidgets.APP_ADDRESSES.id(), Map.of()).withData(rows),
             copy("add_address"), addUrl, "plus");
     }
 
     private static @NonNull AppAddress address(@NonNull Row domain, boolean passthrough, boolean main,
-                                               @NonNull Set<String> working, @NonNull String panelSlug,
-                                               @NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
+                                               @NonNull Set<String> working, @NonNull AccessContext access) {
+        Conduit conduit = access.conduit();
+        LocaleChain locales = conduit.getLocales();
+        MessageResolver resolver = conduit.getMessageResolver();
         String hostname = String.valueOf((Object) domain.get(SiteDomainModel.HOSTNAME));
-        String url = CmsRoutes.detail(panelSlug, DomainParts.SLUG, domain.get(SiteDomainModel.ID)).toUrl();
+        Integer domainId = domain.get(SiteDomainModel.ID);
+        String url = opens(access, DomainParts.SLUG, domainId, null)
+            ? CmsRoutes.detail(CmsSupport.panelSlug(conduit), DomainParts.SLUG, domainId).toUrl() : null;
         List<String> notes = new ArrayList<>();
         if (main) {
             notes.add(text("main_address", locales, resolver));
@@ -181,8 +190,10 @@ final class AppOverview {
                 Integer listId = path.get(ProtectedPathModel.ACCESS_LIST_ID);
                 // How visitors get in, in words, when the list is plain; otherwise the list it follows, by name.
                 Microcopy how = open ? null : AccessRuleSummaries.protectionOf(listId);
+                Integer pathId = path.get(ProtectedPathModel.ID);
                 rows.add(new AppProtection(lead + path.get(ProtectedPathModel.PATH),
-                    CmsRoutes.detail(panelSlug, ProtectedPathParts.SLUG, path.get(ProtectedPathModel.ID)).toUrl(),
+                    opens(access, ProtectedPathParts.SLUG, pathId, null)
+                        ? CmsRoutes.detail(panelSlug, ProtectedPathParts.SLUG, pathId).toUrl() : null,
                     (how != null ? how : Microcopy.of(open ? "list_admits_everyone" : "by_list")
                         .withFilter("scope", "app_overview").withArg("list", listName(listId)))
                         .resolve(locales, resolver),
@@ -195,9 +206,9 @@ final class AppOverview {
                         .withArg("list", listName(siteList)).resolve(locales, resolver),
                 false, siteList != null));
         }
-        String protectUrl = served.size() == 1
-            ? CmsRoutes.subpage(panelSlug, HohenheimSlugs.SITES, served.get(0).get(SiteModel.ID),
-                ProtectedPathParts.SLUG).toUrl()
+        Integer siteId = served.size() == 1 ? served.get(0).get(SiteModel.ID) : null;
+        String protectUrl = siteId != null && opens(access, HohenheimSlugs.SITES, siteId, ProtectedPathParts.SLUG)
+            ? CmsRoutes.subpage(panelSlug, HohenheimSlugs.SITES, siteId, ProtectedPathParts.SLUG).toUrl()
             : null;
         return card(copy("protection"), new WidgetInstance(HohenheimWidgets.APP_PROTECTION.id(), Map.of()).withData(rows),
             copy("protect_path"), protectUrl, "lock");
@@ -233,7 +244,7 @@ final class AppOverview {
 
     /**
      * A titled framework card around one widget, with its header link (Add address, Protect a path) only when the
-     * caller resolved a url: a reader who may not follow it is not shown a door that refuses.
+     * caller resolved a url: a reader who may not follow it ({@link #opens}) is not shown a door that refuses.
      */
     private static @NonNull WidgetInstance card(@NonNull Microcopy title, @NonNull WidgetInstance body,
                                                 @NonNull Microcopy linkLabel, @Nullable String linkUrl,
@@ -269,7 +280,8 @@ final class AppOverview {
 
     // -- site facts -------------------------------------------------------------------
 
-    private static @NonNull List<WidgetFact> siteFacts(@NonNull Row site, @NonNull Conduit conduit) {
+    private static @NonNull List<WidgetFact> siteFacts(@NonNull Row site, @NonNull AccessContext access) {
+        Conduit conduit = access.conduit();
         LocaleChain locales = conduit.getLocales();
         MessageResolver resolver = conduit.getMessageResolver();
         String panelSlug = CmsSupport.panelSlug(conduit);
@@ -282,9 +294,11 @@ final class AppOverview {
         Integer instanceId = site.get(SiteModel.INSTANCE_ID);
         Row instance = instanceId == null ? null : Models.get(InstanceModel.class).findById(instanceId);
         if (instance != null) {
-            facts.add(WidgetFact.link(text("workload", locales, resolver),
-                Models.get(InstanceModel.class).getDisplayTitle(instance),
-                InstanceParts.recordRoute(panelSlug, instance, null).toUrl()));
+            String workload = Models.get(InstanceModel.class).getDisplayTitle(instance);
+            facts.add(opens(access, InstanceParts.SLUG, instanceId, null)
+                ? WidgetFact.link(text("workload", locales, resolver), workload,
+                    InstanceParts.recordRoute(panelSlug, instance, null).toUrl())
+                : WidgetFact.of(text("workload", locales, resolver), workload));
         }
         Instant created = site.get(SiteModel.CREATED_AT);
         if (created != null) {
@@ -294,6 +308,28 @@ final class AppOverview {
     }
 
     // -- helpers ----------------------------------------------------------------------
+
+    /**
+     * Whether this viewer may follow a door to a record of another entry of the panel rendering this overview: that
+     * entry's read reaches the record (the scope a tenant's grants draw), and the tab, when one is named, is open for
+     * it. A door that would answer "page not found" is not drawn: a tenant granted the instance alone reads the
+     * addresses of the site serving it, but neither the site nor its domains are theirs to open.
+     *
+     * @param tab the record tab the door opens, null for the record itself
+     */
+    private static boolean opens(@NonNull AccessContext access, @NonNull String entrySlug, @Nullable Object key,
+                                 @Nullable String tab) {
+        Conduit conduit = access.conduit();
+        Panel panel = key == null || conduit == null ? null : PanelRegistry.getBySlug(CmsSupport.panelSlug(conduit));
+        PanelResource<Row> entry = panel == null ? null : CmsSupport.declaredRowEntry(panel, entrySlug);
+        if (entry == null || !panel.admits(entry, access)) {
+            return false;
+        }
+        PanelRequest request = PanelGate.request(panel, access);
+        Row record = PartsReads.loadRow(request, entry, key, access);
+        return record != null && (tab == null
+            || RecordTabGate.judge(request, entry, record, tab) instanceof RecordTabGate.Verdict.Open<Row>);
+    }
 
     private static @NonNull String listName(@Nullable Integer accessListId) {
         Row list = accessListId == null ? null : Models.get(AccessListModel.class).findById(accessListId);

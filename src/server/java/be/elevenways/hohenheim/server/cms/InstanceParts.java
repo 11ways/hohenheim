@@ -226,7 +226,7 @@ public final class InstanceParts {
                 .beforeSave(InstanceParts::beforeSave)
                 .build())
             .authority(authority())
-            // Power without restart and the two artifact actions, placed operations gated by the record capability.
+            // Power and the two artifact actions, placed operations gated by the record capability.
             .actions(InstanceActions.placedDelegated())
             // The operator tabs a delegate needs, declared like the admin set (no contributions); never the admin
             // history. No related pages: the operator entry names sibling peers of the ADMIN panel, which this panel

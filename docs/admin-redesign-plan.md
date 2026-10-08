@@ -891,3 +891,57 @@ Boards Manage-Home and Manage-App: the tenant panel `/manage`.
   files.read: both tabs).
 - Needs building: the board's players line and other live facts (Pterodactyl group), a tenant-safe Recent band, the
   tenant Resources card (memory and CPU next to disk), the operator's name in "Need more? Ask ...".
+
+### W9b2: the real-app walk (fork W9b2, 2026-10-08)
+
+Scratch server (the built jar, fresh database, `/setup`), seeded through the admin UI: host `local` (not admitted
+here: the nft probe needs sudo and the data root is not btrfs, so no instance can run on this machine), instances
+Survival and Shop (both "cannot start yet"), a healthy redirect site Docs, the site Survival web serving Survival at
+`survival.play.example.test` (no grant for the tenant), a tenant with a grant on Survival (VIEW, then console and
+files, then power), the project Network with the tenant as member, and caps of 5 instances, 8 GB memory, 50 GB disk
+and 3 databases. Shots: `docs/hohenheim-ux-mockups-2026-09-30/shots/w9b/` (workspace repo), `before-*` and `after-*`.
+
+Seen against the boards, and what was done:
+
+- Manage-Home: flat sidebar (Overview, Apps, Domains, Team for the tenant; Databases too for an operator), the
+  attention band carries the tenant's blocked app in host-free words, the usage card bars, "Put something online"
+  for the operator and not for the tenant: as the board. The Apps band read "Apps": it now reads "Your apps" (the band
+  takes its heading from its placement as data, `AppsBand`, so the operator's dashboard keeps "Apps"). The two
+  columns were even: zenit-widget's columns widget gained a `split` (`ColumnSplit`, EVEN or LEAD, one declaring home,
+  an unknown token refused), and both dashboards' lower bands lead 3 to 2 as boards Main and Manage-Home draw them;
+  narrow screens still collapse to one column.
+- Manage-App: tabs follow the grant (VIEW: Overview, Configuration, Metrics, Backups, Access; console and files add
+  their tabs); no host name in any tenant page (checked by fetching every tab). Defects fixed: (1) the overview offered
+  "Add address", "Protect a path" and a link per address to a tenant who holds no grant on the serving site, each
+  answering "page not found"; every door of the app overview (`AppOverview.opens`) is now drawn only when the
+  panel's own read of that entry reaches the record and the tab is open for it (`PartsReads.loadRow`,
+  `RecordTabGate.judge`), so the operator keeps them and the tenant reads the address as text. (2) "What you can do
+  here" said changing access was up to the operator while the Access tab let the VIEW holder share it (every
+  instance capability is delegable): the card now asks the tab's own gate
+  (`GrantAdministration.mayAdministerRecordAccess`) and says "Share access" / "Removing this app." (3) The board's
+  Restart was missing on /manage ("power without restart" carried no reason): the delegated action set now places
+  Restart beside Deploy and Stop, gated by POWER like them, its refusal in the delegated words.
+- Cluster pages: Domains has four tabs for the operator (two for the tenant without a site grant: certificates and
+  access lists), Team has Projects and Members; the Apps toolbar's related-pages menu lists Sites, Instances, Instance
+  templates, Preview deployments, Git providers.
+
+Found, not fixed here (each its own issue):
+
+- zenit-auth: the sharing picker (`za-record-sharing`) throws `UnsupportedOperationException` in
+  `AuthCapabilityMatrix.addSubject` when the Access tab was reached by a client-side tab switch (the rows or removed
+  list arrive immutable); a full page load works. Not fixed: zenit-auth holds unpushed commits of another checkout.
+- The /manage instance list's rule-filter vocabulary carries `server_id` ("Host"), so a tenant can filter their own
+  instances by host id: the numeric host identity InstanceOverview censors.
+- Activity rows name records by id ("changed who may use Instance #1", "set the password of User #2").
+- On /manage an operator reads "Your operator has to clear this" about their own app (the delegated words assume a
+  tenant reader).
+- The /manage instance entry offers no delete, so a DESTROY grant is listed under "You can" with no door.
+- The admin dashboard's checklist ticks "Put your first app online" while nothing runs; "Site Survival web / Down" in
+  the admin attention band reads raw.
+- Needs building (no backing data): the players line, a tenant-safe Recent band, the tenant Resources card, the
+  operator's name in "Need more?", a running app's Restart/Stop on this machine (no admissible host here), the
+  board's "project Network" lead line on the app page.
+- Proof: zenit-widget run 811 (ColumnsWidgetTest, WidgetDisplayRenderTest, WidgetDisplayFunctionsTest); Hohenheim run
+  812 (nine classes, one red: InstanceRecordRouteTest pinned the delegated verbs without Restart, updated) and the
+  green run 814 (InstanceRecordRouteTest, ManagePanelJourneyTest, LandingDashboardSurfacesTest,
+  InstanceSurfacesBrowserTest).

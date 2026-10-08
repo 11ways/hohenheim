@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.OnboardingStep;
 import be.elevenways.hohenheim.app.AppSummary;
+import be.elevenways.hohenheim.app.AppsBand;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -34,6 +35,7 @@ import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.AlertVariant;
 import be.elevenways.zenit.widget.common.builtin.AlertWidget;
+import be.elevenways.zenit.widget.common.builtin.ColumnSplit;
 import be.elevenways.zenit.widget.common.builtin.ColumnsWidget;
 import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
 import be.elevenways.zenit.widget.common.builtin.SectionWidget;
@@ -163,14 +165,19 @@ public final class AdminDashboard extends PanelDashboard {
         }
         // The board's lower half: the apps, read from the one App directory, beside what happened lately.
         widgets.add(section(columns(List.of(
-            new WidgetInstance(HohenheimWidgets.APPS.id(), Map.of()).withData(summaries(apps, accessContext)),
-            new WidgetInstance(SectionWidget.ID, Map.of(), new WidgetTree(recentActivity(accessContext)))))));
+            new WidgetInstance(HohenheimWidgets.APPS.id(), Map.of()).withData(
+                appsBand(Microcopy.of("apps").withFilter("scope", "dashboard"), apps, accessContext)),
+            new WidgetInstance(SectionWidget.ID, Map.of(), new WidgetTree(recentActivity(accessContext)))),
+            ColumnSplit.LEAD)));
         return new WidgetTree(widgets);
     }
 
-    /** The dashboard's Apps band rows: health, name, what and where, and whether HTTPS works. */
-    static @NonNull List<AppSummary> summaries(@NonNull List<AppDirectory.App> apps,
-                                                       @NonNull AccessContext access) {
+    /**
+     * The dashboard's Apps band under the placement's heading, its rows: health, name, what and where, and whether
+     * HTTPS works.
+     */
+    static @NonNull AppsBand appsBand(@NonNull Microcopy heading, @NonNull List<AppDirectory.App> apps,
+                                      @NonNull AccessContext access) {
         List<AppSummary> summaries = new ArrayList<>(apps.size());
         for (AppDirectory.App app : apps) {
             String detail = app.addressText() == null || app.addressText().isBlank()
@@ -178,12 +185,17 @@ public final class AdminDashboard extends PanelDashboard {
             summaries.add(new AppSummary(app.name(), detail, app.target().toUrl(), app.https(),
                 HealthCellState.of(app.health(), access)));
         }
-        return summaries;
+        return new AppsBand(heading, summaries);
     }
 
     static @NonNull WidgetInstance columns(@NonNull List<WidgetInstance> children) {
-        return new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", Math.min(children.size(), 4)),
-            new WidgetTree(children));
+        return columns(children, ColumnSplit.EVEN);
+    }
+
+    /** @param split how the columns share the width; the boards' lower bands lead with the apps (3 to 2) */
+    static @NonNull WidgetInstance columns(@NonNull List<WidgetInstance> children, @NonNull ColumnSplit split) {
+        return new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", Math.min(children.size(), 4),
+            "split", split.token()), new WidgetTree(children));
     }
 
     /**

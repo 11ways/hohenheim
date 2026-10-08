@@ -2749,10 +2749,16 @@
     "text": "Alles in orde - niets vraagt aandacht.",
     "scope": "dashboard"
   },
-  "apps": {
-    "text": "Apps",
-    "scope": "dashboard"
-  },
+  "apps": [
+    {
+      "text": "Apps",
+      "scope": "dashboard"
+    },
+    {
+      "text": "Jouw apps",
+      "scope": "manage_dashboard"
+    }
+  ],
   "recent_activity": [
     {
       "text": "Recente activiteit",
@@ -15308,6 +15314,18 @@
   },
   "operator_decides_detail": {
     "text": "Deze app verwijderen en bepalen wie er toegang toe heeft.",
+    "scope": "instance_overview"
+  },
+  "operator_decides_removal": {
+    "text": "Deze app verwijderen.",
+    "scope": "instance_overview"
+  },
+  "you_can_look_share": {
+    "text": "Het bekijken en toegang delen; vraag de beheerder om meer",
+    "scope": "instance_overview"
+  },
+  "you_can_share": {
+    "text": "Toegang delen",
     "scope": "instance_overview"
   },
   "your_part": {

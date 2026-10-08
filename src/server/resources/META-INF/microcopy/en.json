@@ -2749,10 +2749,16 @@
     "text": "All clear - nothing needs attention.",
     "scope": "dashboard"
   },
-  "apps": {
-    "text": "Apps",
-    "scope": "dashboard"
-  },
+  "apps": [
+    {
+      "text": "Apps",
+      "scope": "dashboard"
+    },
+    {
+      "text": "Your apps",
+      "scope": "manage_dashboard"
+    }
+  ],
   "recent_activity": [
     {
       "text": "Recent activity",
@@ -15308,6 +15314,18 @@
   },
   "operator_decides_detail": {
     "text": "Removing this app and changing who has access to it.",
+    "scope": "instance_overview"
+  },
+  "operator_decides_removal": {
+    "text": "Removing this app.",
+    "scope": "instance_overview"
+  },
+  "you_can_look_share": {
+    "text": "Look at it and share access; ask the operator for more",
+    "scope": "instance_overview"
+  },
+  "you_can_share": {
+    "text": "Share access",
     "scope": "instance_overview"
   },
   "your_part": {
