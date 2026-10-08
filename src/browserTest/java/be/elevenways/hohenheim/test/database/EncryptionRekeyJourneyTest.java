@@ -8,6 +8,8 @@ import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.server.orm.SqliteDatasource;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.EncryptionRekey;
@@ -96,7 +98,8 @@ class EncryptionRekeyJourneyTest {
             // 3. Retirement is refused BY NAME, and it names the hohenheim columns at stake.
             assertThatThrownBy(() -> EncryptionRekey.retire(firstKey))
                 .as("step 3: the old key cannot be retired while real secrets still need it")
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOfSatisfying(DomainRefusal.class, refusal -> assertThat(refusal.is(ZenitRefusalReason.IN_USE))
+                    .as("step 3: an operator refusal, never the bug an IllegalStateException means").isTrue())
                 .hasMessageContaining(firstKey)
                 .hasMessageContaining("hohenheim:notification_channel.url")
                 .hasMessageContaining("hohenheim:dns_peer.tsig_secret")

@@ -15,11 +15,15 @@ import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.migration.Migration;
 import be.elevenways.zenit.server.ServerZenitRuntime;
+import be.elevenways.zenit.server.cli.EncryptionKeySurveyCommand;
 import be.elevenways.zenit.server.cli.HistorySecretSurveyCommand;
 import be.elevenways.zenit.server.cli.HostConsole;
 import be.elevenways.zenit.server.cli.OfflineCommandException;
 import be.elevenways.zenit.server.cli.OfflineCommands;
 import be.elevenways.zenit.server.cli.PurgeHistorySecretsCommand;
+import be.elevenways.zenit.server.cli.ReencryptSecretsCommand;
+import be.elevenways.zenit.server.cli.RetireEncryptionKeyCommand;
+import be.elevenways.zenit.server.cli.RotateEncryptionKeyCommand;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -108,10 +112,10 @@ class OfflineCommandLaneTest {
             .contains(BackupControlPlaneCommand.FLAG)
             .contains(RestoreControlPlaneCommand.FLAG)
             .contains(ListControlPlaneBackupsCommand.FLAG)
-            .contains(EncryptionKeyLane.ROTATE)
-            .contains(EncryptionKeyLane.REENCRYPT)
-            .contains(EncryptionKeyLane.SURVEY)
-            .contains(EncryptionKeyLane.RETIRE)
+            .contains(RotateEncryptionKeyCommand.FLAG)
+            .contains(ReencryptSecretsCommand.FLAG)
+            .contains(EncryptionKeySurveyCommand.FLAG)
+            .contains(RetireEncryptionKeyCommand.FLAG)
             .contains(HistorySecretSurveyCommand.FLAG)
             .contains(PurgeHistorySecretsCommand.FLAG);
 
@@ -167,18 +171,18 @@ class OfflineCommandLaneTest {
         //    decides, so one unguarded command (zenit-auth's --set-password) reopened the hole
         //    for every other, and a consumer could not close that from its own side.
         assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
-                EncryptionKeyLane.ROTATE, EncryptionKeyLane.REENCRYPT}, line -> { }))
+                RotateEncryptionKeyCommand.FLAG, ReencryptSecretsCommand.FLAG}, line -> { }))
             .as("step 5: two key-rotation steps in one invocation must refuse")
             .isInstanceOf(OfflineCommandException.class)
             .hasMessageContaining("Exactly ONE runs per invocation")
-            .hasMessageContaining(EncryptionKeyLane.ROTATE)
-            .hasMessageContaining(EncryptionKeyLane.REENCRYPT);
+            .hasMessageContaining(RotateEncryptionKeyCommand.FLAG)
+            .hasMessageContaining(ReencryptSecretsCommand.FLAG);
 
         // 5b. The SAME trap across lanes, which is why a per-lane guard was never enough:
         //     a pair spanning two lanes is picked apart by the very same discovery-order
         //     dispatch. Whichever of these wins discovery, the invocation is refused.
         assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
-                PurgeHistorySecretsCommand.FLAG, EncryptionKeyLane.ROTATE}, line -> { }))
+                PurgeHistorySecretsCommand.FLAG, RotateEncryptionKeyCommand.FLAG}, line -> { }))
             .as("step 5b: two commands from DIFFERENT lanes must refuse just as loudly")
             .isInstanceOf(OfflineCommandException.class)
             .hasMessageContaining("Exactly ONE runs per invocation");
