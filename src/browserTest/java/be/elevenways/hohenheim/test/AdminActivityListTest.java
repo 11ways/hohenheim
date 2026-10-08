@@ -439,8 +439,21 @@ class AdminActivityListTest extends HohenheimTestBase {
             Accountability.ORIGIN_WEB, Instant.parse("2999-02-01T00:00:01Z"));
         write(SiteModel.MODEL_ID.toString(), unattributed, unattributed, "updated",
             Accountability.ORIGIN_UNATTRIBUTED, Instant.parse("2999-02-01T00:00:04Z"));
+        // A sign-in is bookkeeping by its verb (core's LOGIN is internal): it reads "<who> signed in", so the marker is
+        // the actor's name.
+        String signedIn = "hh-people-signin-" + suffix;
+        ActivityModel activities = new ActivityModel();
+        Row signIn = activities.createEmptyRow();
+        signIn.set(ActivityModel.MODEL, SiteModel.MODEL_ID.toString());
+        signIn.set(ActivityModel.RECORD_ID, signedIn);
+        signIn.set(ActivityModel.ACTION, ZenitActivityAction.LOGIN.id().toString());
+        signIn.set(ActivityModel.ACTOR_LABEL, signedIn);
+        signIn.set(ActivityModel.ORIGIN, Accountability.ORIGIN_WEB);
+        signIn.set(ActivityModel.CREATED_AT, Instant.parse("2999-02-01T00:00:05Z"));
+        activities.save(signIn);
         String opening = adminGet("/admin/activity").body();
         assertThat(opening).as("step 3: a person's row opens the list").contains(person);
+        assertThat(opening).as("step 3: a sign-in does not").doesNotContain(signedIn);
         assertThat(opening).as("step 3: a seed row does not").doesNotContain(seeded);
         assertThat(opening).as("step 3: an internal row does not").doesNotContain(plumbing);
         assertThat(opening).as("step 3: an unattributed row is not a person's either").doesNotContain(unattributed);
@@ -448,6 +461,8 @@ class AdminActivityListTest extends HohenheimTestBase {
         // 4. The framework's internal toggle brings the plumbing back, still searchable.
         assertThat(adminGet("/admin/activity?filter.internal=true&filter.record_id=" + plumbing).body())
             .as("step 4: internal records are one toggle away").contains(plumbing);
+        assertThat(adminGet("/admin/activity?filter.internal=true&filter.record_id=" + signedIn).body())
+            .as("step 4: and so are sign-ins").contains(signedIn);
 
         // 5. The dashboard's recent activity reads the SAME scope as the list's opening. An empty install shows no
         //    activity band at all, so the journey puts one app online first.
@@ -463,7 +478,7 @@ class AdminActivityListTest extends HohenheimTestBase {
         String dashboard = adminGet("/admin/dashboard").body();
         assertThat(dashboard).as("step 5: the dashboard shows what a person did").contains(person);
         assertThat(dashboard).as("step 5: and neither seeds, plumbing nor unattributed work")
-            .doesNotContain(seeded).doesNotContain(plumbing).doesNotContain(unattributed);
+            .doesNotContain(seeded).doesNotContain(plumbing).doesNotContain(unattributed).doesNotContain(signedIn);
     }
 
     private static long activityCount(String model, String recordId) {

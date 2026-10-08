@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
-import be.elevenways.hohenheim.server.cms.TaskWords;
 import be.elevenways.zenit.microcopy.server.MicrocopyCatalogScope;
 import org.junit.jupiter.api.Test;
 
@@ -23,7 +22,7 @@ class MicrocopyCatalogScopeTest {
     void everyShippedVariantCarriesAScopeHohenheimOwns() {
         MicrocopyCatalogScope.ofOwnCatalogs()
             .owning(HohenheimFormCopy.FIELD_SCOPE, HohenheimFormCopy.NAV_SCOPE, HohenheimMicrocopy.SCOPE,
-                HohenheimViolations.SCOPE, HohenheimCounts.SCOPE, TaskWords.LABEL_SCOPE)
+                HohenheimViolations.SCOPE, HohenheimCounts.SCOPE)
             .owning(
                 "access_list", "access_rule", "access_rule_type", "access_satisfy", "admin", "admin_inbox", "alert",
                 "app", "app_health", "app_list", "app_overview", "attention_action", "attention_detail",

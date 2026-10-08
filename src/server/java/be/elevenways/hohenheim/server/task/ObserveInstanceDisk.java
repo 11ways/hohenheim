@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
@@ -51,6 +53,12 @@ public class ObserveInstanceDisk extends ScheduledTask {
     @Override
     public @NonNull Identifier id() {
         return HohenheimIds.id("observe_instance_disk");
+    }
+
+    @Override
+    public @NonNull Microcopy label() {
+        return Microcopy.of("observe_instance_disk").withFilter("scope", HohenheimMicrocopy.SCOPE)
+            .withFilter("target", "task_label");
     }
 
     @Override

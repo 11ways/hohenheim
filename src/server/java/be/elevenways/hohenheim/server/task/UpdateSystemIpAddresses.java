@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.hohenheim.server.HohenheimRoles;
@@ -28,6 +30,12 @@ public class UpdateSystemIpAddresses extends ScheduledTask {
     @Override
     public @NonNull Identifier id() {
         return HohenheimIds.id("update_system_ip_addresses");
+    }
+
+    @Override
+    public @NonNull Microcopy label() {
+        return Microcopy.of("update_system_ip_addresses").withFilter("scope", HohenheimMicrocopy.SCOPE)
+            .withFilter("target", "task_label");
     }
 
     @Override

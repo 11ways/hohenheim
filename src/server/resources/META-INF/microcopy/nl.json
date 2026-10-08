@@ -1412,121 +1412,110 @@
     "text": "Er is nog geen certificaat opgeslagen, dus niets kan via HTTPS antwoorden.",
     "scope": "attention_detail"
   },
-  "watch_summary": {
-    "text": "Volgoverzichten versturen",
-    "scope": "task_label"
-  },
-  "run_record_schedules": {
-    "text": "Recordplanningen uitvoeren",
-    "scope": "task_label"
-  },
-  "publish_scheduled_content": {
-    "text": "Geplande inhoud publiceren",
-    "scope": "task_label"
-  },
-  "orphan_record_grant_prune": {
-    "text": "Deelrechten van verwijderde records verwijderen",
-    "scope": "task_label"
-  },
-  "orm_housekeeping": {
-    "text": "Database-onderhoud",
-    "scope": "task_label"
-  },
-  "expired_record_grant_prune": {
-    "text": "Verlopen deelrechten verwijderen",
-    "scope": "task_label"
-  },
-  "content_sweep": {
-    "text": "Ongebruikte bestanden opruimen",
-    "scope": "task_label"
-  },
-  "activity_prune": {
-    "text": "Oude activiteit opruimen",
-    "scope": "task_label"
-  },
   "verify_workload_isolation": {
     "text": "Isolatie van apps controleren",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "verify_incus_isolation": {
     "text": "Isolatie van Incus-apps controleren",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "update_system_users": {
     "text": "Gebruikers van deze machine zoeken",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "update_system_ip_addresses": {
     "text": "IP-adressen van deze machine zoeken",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "supervise_proxy_listeners": {
     "text": "Proxy-listeners bewaken",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "security_sweep": {
     "text": "Beveiligingsronde",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "resign_dnssec_zones": {
     "text": "DNSSEC-zones opnieuw ondertekenen",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "reconcile_instance_status": {
     "text": "Controleren welke apps draaien",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "reconcile_engine_isolation": {
     "text": "Isolatie van database-engines controleren",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "reconcile_docker_resources": {
     "text": "Docker opruimen",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "reclaim_docker_images": {
     "text": "Oude Docker-images verwijderen",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "reap_incus_controllers": {
     "text": "Incus-controllers opruimen",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "probe_dns_secondaries": {
     "text": "Secundaire DNS-servers controleren",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "observe_instance_disk": {
     "text": "Schijfgebruik van apps meten",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "monitor_stacks": {
     "text": "Stackgezondheid bewaken",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "clean_orphan_certificates": {
     "text": "Ongebruikte certificaten opruimen",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "clean_old_instance_logs": {
     "text": "Oude console-uitvoer opruimen",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "check_foreign_keys": {
     "text": "De database controleren op verweesde rijen",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "check_dns_delegations": {
     "text": "DNS-delegaties controleren",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "backup_databases": {
     "text": "Databases back-uppen",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "backup_control_plane": {
     "text": "Het controlepaneel back-uppen",
-    "scope": "task_label"
+    "scope": "hohenheim",
+    "target": "task_label"
   },
   "act_show_run": {
     "text": "De uitvoering tonen",

@@ -14,7 +14,6 @@ import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.server.resource.ActivityAdmin;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ActivityRules;
 import be.elevenways.zenit.common.orm.activity.ActivityText;
@@ -111,23 +110,17 @@ public final class AdminActivityResource {
     }
 
     /**
-     * What a person did, as one rule tree: the list's default origin scope plus the rows of models declared internal
-     * left out. The dashboard's recent activity reads THIS, so it never shows rows the list opens without.
+     * What a person did, as one rule tree: the list's default origin scope plus the internal rows (a model or a verb
+     * declared internal, such as a sign-in) left out. The dashboard's recent activity reads THIS, so it never shows
+     * rows the list opens without.
      *
-     * AIDEV-NOTE: the internal half is spelled over the MODEL variable, not the list's "internal" filter, because the
-     * dashboards' zenit.activity source derives its vocabulary from its projection and has no such variable; both
-     * read the same declarations ({@link ActivityLog#internalModelTokens}), resolved per call because they are made
-     * at class load of the modules that own the models.
+     * AIDEV-NOTE: the internal half is core's feed rule ({@link ActivityRules#listed()}) over the zenit.activity
+     * source's own variables, the same declarations the list's "internal" filter reads (ActivityLog.internalRows).
      *
      * @return the rule tree selecting what a person did
      */
     public static @NonNull Condition peopleOnly() {
-        StringBuilder text = new StringBuilder("(").append(HIDE_BACKGROUND_EXPRESSION).append(")");
-        List<String> internal = ActivityLog.internalModelTokens();
-        if (!internal.isEmpty()) {
-            text.append(" and ").append(ActivityModel.MODEL.getName()).append(" not in ").append(quotedList(internal));
-        }
-        return RuleText.parse(text.toString()).require();
+        return Condition.all(RuleText.parse(HIDE_BACKGROUND_EXPRESSION).require(), ActivityRules.listed());
     }
 
     /**

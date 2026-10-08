@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
@@ -39,6 +41,12 @@ public class ReconcileEngineIsolation extends ScheduledTask {
     @Override
     public @NonNull Identifier id() {
         return HohenheimIds.id("reconcile_engine_isolation");
+    }
+
+    @Override
+    public @NonNull Microcopy label() {
+        return Microcopy.of("reconcile_engine_isolation").withFilter("scope", HohenheimMicrocopy.SCOPE)
+            .withFilter("target", "task_label");
     }
 
     @Override

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
@@ -35,6 +36,12 @@ public class BackupControlPlane extends ScheduledTask {
     @Override
     public @NonNull Identifier id() {
         return ID;
+    }
+
+    @Override
+    public @NonNull Microcopy label() {
+        return Microcopy.of("backup_control_plane").withFilter("scope", HohenheimMicrocopy.SCOPE)
+            .withFilter("target", "task_label");
     }
 
     @Override

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.dns.DnsSecondaryFreshness;
@@ -22,6 +24,12 @@ public class ProbeDnsSecondaries extends ScheduledTask {
     @Override
     public @NonNull Identifier id() {
         return HohenheimIds.id("probe_dns_secondaries");
+    }
+
+    @Override
+    public @NonNull Microcopy label() {
+        return Microcopy.of("probe_dns_secondaries").withFilter("scope", HohenheimMicrocopy.SCOPE)
+            .withFilter("target", "task_label");
     }
 
     @Override
