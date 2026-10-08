@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
+import be.elevenways.protoblast.common.async.AsyncFailures;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -382,12 +383,9 @@ class SftpJourneyTest {
 
     /** @return the SFTP status a client call failed with; a listing reports it wrapped in an unchecked exception */
     private static SftpException sftpRefusal(Throwable thrown) {
-        Throwable cause = thrown;
-        while (cause != null && !(cause instanceof SftpException)) {
-            cause = cause.getCause();
-        }
-        assertThat(cause).as("the call failed with an SFTP status").isInstanceOf(SftpException.class);
-        return (SftpException) cause;
+        SftpException refusal = thrown == null ? null : AsyncFailures.first(thrown, SftpException.class);
+        assertThat(refusal).as("the call failed with an SFTP status").isNotNull();
+        return refusal;
     }
 
     private static List<String> names(SftpClient sftp, String path) throws IOException {

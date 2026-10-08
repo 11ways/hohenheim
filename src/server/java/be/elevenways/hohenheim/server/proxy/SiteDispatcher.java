@@ -49,11 +49,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.net.ssl.SSLContext;
@@ -126,8 +121,8 @@ public class SiteDispatcher implements HttpHandler {
     private final UpstreamProxyClient proxyClient;
     private final ConcurrentHashMap<Integer, ProxyHandler> proxyHandlers = new ConcurrentHashMap<>();
 
-    private final ScheduledExecutorService delayScheduler;
-    private final ExecutorService retirementExecutor;
+    private final JobRunner delayScheduler;
+    private final JobRunner retirementRunner;
 
     // ACME service for Let's Encrypt challenge responses (nullable)
     private final AcmeService acmeService;
@@ -159,20 +154,12 @@ public class SiteDispatcher implements HttpHandler {
         this.acmeService = acmeService;
         this.certificates = certificates;
         this.proxySessionStore = proxySessionStore;
-        this.delayScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread thread = new Thread(r, "site-dispatch-delay");
-            thread.setDaemon(true);
-            return thread;
-        });
-        this.retirementExecutor = Executors.newSingleThreadExecutor(r -> {
-            Thread thread = new Thread(r, "site-dispatch-retirement");
-            thread.setDaemon(true);
-            return thread;
-        });
+        this.delayScheduler = JobRunner.createDaemonSerial("site-dispatch-delay");
+        this.retirementRunner = JobRunner.createDaemonSerial("site-dispatch-retirement");
         this.proxyClient = new UpstreamProxyClient();
         // The round itself blocks on connects, so it runs on a virtual thread and never on the delay scheduler.
-        this.delayScheduler.scheduleWithFixedDelay(() -> JobRunner.startVirtualThread(this::probeUpstreams),
-            UPSTREAM_PROBE_INTERVAL_MS, UPSTREAM_PROBE_INTERVAL_MS, TimeUnit.MILLISECONDS);
+        this.delayScheduler.scheduleRepeating(() -> JobRunner.startVirtualThread(this::probeUpstreams),
+            UPSTREAM_PROBE_INTERVAL_MS);
     }
 
     /**
@@ -635,7 +622,7 @@ public class SiteDispatcher implements HttpHandler {
             if (!exchange.isComplete()) {
                 exchange.dispatch(dispatch);
             }
-        }, entry.requestDelayMs, TimeUnit.MILLISECONDS);
+        }, entry.requestDelayMs);
     }
 
     /**
@@ -803,9 +790,7 @@ public class SiteDispatcher implements HttpHandler {
             destroyHandlers(generation);
             return;
         }
-        try {
-            retirementExecutor.execute(() -> destroyHandlers(generation));
-        } catch (RejectedExecutionException ignored) {
+        if (!retirementRunner.offer(() -> destroyHandlers(generation))) {
             destroyHandlers(generation);
         }
     }
@@ -934,9 +919,9 @@ public class SiteDispatcher implements HttpHandler {
             previous.retired = true;
         }
         destroyIfUnused(previous, false);
-        retirementExecutor.shutdown();
+        retirementRunner.shutdown();
         try {
-            while (!retirementExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
+            while (!retirementRunner.awaitTermination(30_000L)) {
                 Blast.log("SiteDispatcher: waiting for retired route handlers to stop");
             }
         } catch (InterruptedException e) {

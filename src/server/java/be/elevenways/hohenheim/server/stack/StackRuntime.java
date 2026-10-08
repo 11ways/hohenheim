@@ -15,7 +15,7 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
@@ -39,8 +39,6 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -75,7 +73,7 @@ public class StackRuntime {
 
     private static final StackRuntime INSTANCE = new StackRuntime();
 
-    private final ConcurrentHashMap<Integer, ExecutorService> workers = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Integer, JobRunner> workers = new ConcurrentHashMap<>();
 
     /** The stack id whose worker the current thread IS, for re-entrant onWorker calls. */
     private static final ThreadLocal<Integer> CURRENT_STACK = new ThreadLocal<>();
@@ -213,10 +211,10 @@ public class StackRuntime {
      * removed them.
      *
      * The worker is deliberately NOT retired: removing it from the map opens a
-     * window where a concurrent submission mints a SECOND executor (two threads
-     * mutating the same Docker resources) or hits RejectedExecutionException
-     * after a queue-time status claim (a permanently wedged "deploying" row). A
-     * parked virtual thread per ever-touched stack id is the cheaper bug.
+     * window where a concurrent submission mints a SECOND lane (two threads
+     * mutating the same Docker resources) or is refused by a stopped one after
+     * a queue-time status claim (a permanently wedged "deploying" row). An idle
+     * lane per ever-touched stack id holds no thread, so keeping it costs nothing.
      */
     public void destroy(int stackId, boolean removeVolumes) throws IOException {
         onWorker(stackId, () -> {
@@ -273,7 +271,7 @@ public class StackRuntime {
         Object[] result = new Object[1];
         Exception[] failure = new Exception[1];
         try {
-            workerFor(stackId).submit(onLane(() -> {
+            workerFor(stackId).runAsync(onLane(() -> {
                 CURRENT_STACK.set(stackId);
                 try {
                     result[0] = body.call();
@@ -923,7 +921,7 @@ public class StackRuntime {
      * @param recordId the deployment row this work must settle, null when it has none
      */
     private void submitAsync(int stackId, @NonNull Runnable body, @Nullable Integer recordId) {
-        workerFor(stackId).submit(onLane(() -> {
+        workerFor(stackId).fireAndForget(onLane(() -> {
             CURRENT_STACK.set(stackId);
             try {
                 body.run();
@@ -945,17 +943,16 @@ public class StackRuntime {
     }
 
     /**
-     * Bind lane work to the DISPATCHING thread's execution context and raise it to system
-     * authority there, so a tenant's stack operation stays attributed to the tenant.
+     * Raise lane work to system authority inside the DISPATCHING thread's execution context, so a
+     * tenant's stack operation stays attributed to the tenant.
      *
-     * AIDEV-NOTE: the context is captured HERE, on the caller's thread: a lane is a plain
-     * executor whose threads carry nothing of their own, and a stack operation was gated
-     * where it was asked for, so it runs as system work on that caller's behalf
-     * ({@code ExecutionIdentity.onBehalfOf}). Adoption and boot recovery dispatch from
-     * system threads and stay the system's.
+     * AIDEV-NOTE: the lane's JobRunner entry point captures the context on the caller's thread
+     * and re-enters it around the work, and a stack operation was gated where it was asked for,
+     * so it runs as system work on that caller's behalf ({@code ExecutionIdentity.onBehalfOf}).
+     * Adoption and boot recovery dispatch from system threads and stay the system's.
      */
     private static @NonNull Runnable onLane(@NonNull Runnable work) {
-        return ExecutionContext.wrap(() -> ExecutionIdentity.runAsSystem("stack", work));
+        return () -> ExecutionIdentity.runAsSystem("stack", work);
     }
 
     /** Record a SETTLED stack operation on the stack record, on the worker's datasource. */
@@ -966,12 +963,11 @@ public class StackRuntime {
         });
     }
 
-    private ExecutorService workerFor(int stackId) {
-        // Virtual threads: lanes are never retired (see destroy), so a parked lane per
-        // ever-touched stack id must cost next to nothing.
-        // Its threads carry nothing: every task declares its own context (onLane).
-        return workers.computeIfAbsent(stackId, id -> Executors.newSingleThreadExecutor(
-            Thread.ofVirtual().name("stack-" + id).factory()));
+    private JobRunner workerFor(int stackId) {
+        // Lanes are never retired (see destroy): an idle serial lane lets its thread time out,
+        // so a lane per ever-touched stack id costs next to nothing, and a daemon one never
+        // holds the JVM open.
+        return workers.computeIfAbsent(stackId, id -> JobRunner.createDaemonSerial("stack-" + id));
     }
 
     /** A scoped body that may fail the way the daemon work it wraps fails. */

@@ -5,6 +5,9 @@ import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.host.PrivilegedHelper;
 import be.elevenways.hohenheim.server.security.SecurityReportEnv;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.thread.ScheduledJob;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
@@ -46,10 +49,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.UnaryOperator;
@@ -101,7 +100,7 @@ public final class SpamserviceManager {
     private final RuntimeRoot runtimeRoot;
     private final ReporterReconciler reporterReconciler;
     private final PortPreflight portPreflight;
-    private final ScheduledExecutorService lifecycle;
+    private final JobRunner lifecycle;
 
     private volatile boolean booted;
     private volatile boolean shuttingDown;
@@ -119,7 +118,8 @@ public final class SpamserviceManager {
     private volatile long readyAtMs;
     private long generation;
     private boolean cleanupBlocked;
-    private @Nullable ScheduledFuture<?> retry;
+    /** The pending restart, cleared when it runs or is cancelled. */
+    private @Nullable ScheduledJob retry;
 
     private SpamserviceManager() {
         this(new OrmInstallationStore(), SpamserviceManager::openNestedArtifact,
@@ -139,7 +139,7 @@ public final class SpamserviceManager {
                        @NonNull RuntimeRoot runtimeRoot,
                        @NonNull ReporterReconciler reporterReconciler,
                        @NonNull PortPreflight portPreflight,
-                       @NonNull ScheduledExecutorService lifecycle) {
+                       @NonNull JobRunner lifecycle) {
         this.store = store;
         this.artifactSource = artifactSource;
         this.processLauncher = processLauncher;
@@ -294,6 +294,13 @@ public final class SpamserviceManager {
         return new Snapshot(this.configurationPresent, this.configurationEnabled, this.state.token(),
             current != null ? current.pid() : null, this.baseUrl, this.artifactHash,
             this.consecutiveCrashes, this.lastError);
+    }
+
+    /** @return whether a restart is scheduled and has neither run nor been cancelled */
+    boolean restartPending() {
+        synchronized (this.lock) {
+            return this.retry != null;
+        }
     }
 
     private void reconcileGeneration(long requested, boolean forceRestart) {
@@ -506,22 +513,27 @@ public final class SpamserviceManager {
     }
 
     private void scheduleRetryLocked(long requested, boolean crash) {
-        if (this.retry != null && !this.retry.isDone()) {
+        if (this.retry != null) {
             return;
         }
         if (crash) {
             this.consecutiveCrashes++;
         }
         long delay = RESTART.delayAfter(Math.max(1, this.consecutiveCrashes)).toMillis();
-        this.retry = this.lifecycle.schedule(() -> {
+        // The job reads its own handle under the lock this method holds until the handle is stored.
+        ScheduledJob[] scheduled = new ScheduledJob[1];
+        scheduled[0] = this.lifecycle.schedule(lifecycleWork(() -> {
             synchronized (this.lock) {
+                if (this.retry == scheduled[0]) {
+                    this.retry = null;
+                }
                 if (this.generation != requested || !this.desiredRunning || this.shuttingDown) {
                     return;
                 }
-                this.retry = null;
             }
             reconcileGeneration(requested, false);
-        }, delay, TimeUnit.MILLISECONDS);
+        }), delay);
+        this.retry = scheduled[0];
     }
 
     private void stopGeneration(long requested, SpamserviceState nextState) {
@@ -605,7 +617,7 @@ public final class SpamserviceManager {
 
     private void cancelRetryLocked() {
         if (this.retry != null) {
-            this.retry.cancel(false);
+            this.retry.cancel();
             this.retry = null;
         }
     }
@@ -629,11 +641,13 @@ public final class SpamserviceManager {
     }
 
     private void submit(Runnable task) {
-        try {
-            this.lifecycle.execute(task);
-        } catch (RejectedExecutionException ignored) {
-            // Shutdown won the race with an on-exit callback or queued request.
-        }
+        // A refusal means shutdown won the race with an on-exit callback or queued request.
+        this.lifecycle.offer(lifecycleWork(task));
+    }
+
+    /** Lifecycle work is the installation's own, never the asking caller's: it runs with no carried context. */
+    private static Runnable lifecycleWork(Runnable task) {
+        return () -> ExecutionContext.detached().run(task);
     }
 
     static @NonNull RuntimePaths prepareRuntimePaths(@NonNull Path configuredDataRoot,
@@ -957,9 +971,8 @@ public final class SpamserviceManager {
         }
     }
 
-    private static ScheduledExecutorService newLifecycleExecutor() {
-        return Executors.newSingleThreadScheduledExecutor(runnable ->
-            Thread.ofPlatform().daemon().name("spamservice-manager").unstarted(runnable));
+    private static JobRunner newLifecycleExecutor() {
+        return JobRunner.createDaemonSerial("spamservice-manager");
     }
 
     /** The artifact's digest, read WITHOUT following a symlink planted in its place. */

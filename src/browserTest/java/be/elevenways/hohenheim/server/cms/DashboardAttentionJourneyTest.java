@@ -671,6 +671,11 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 new IsolationUnenforceable("REFUSED to deploy 'x-net'")))).as("step 1: the refusal is typed").isTrue();
             assertThat(IsolationUnenforceable.in(new IOException("pull failed")))
                 .as("step 1: any other failure is not it").isFalse();
+            IOException first = new IOException("first");
+            IOException second = new IOException("second", first);
+            first.initCause(second);
+            assertThat(IsolationUnenforceable.in(first)).as("step 1: a two-link cause cycle is read once, not forever")
+                .isFalse();
 
             // 2. An app whose start local refused for it reads "could not be started", says why in words (never the
             //    refusal's setting keys), and names local as its root; its own verdict reads the same.

@@ -17,6 +17,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.*;
@@ -420,6 +422,41 @@ class SiteDispatcherTest {
         assertThat(rawRequest(httpPort(proxy), "eu1.wild.test", "/")).contains("200");
         // ? is exactly one character: a two-character suffix must miss.
         assertThat(rawRequest(httpPort(proxy), "eu12.wild.test", "/")).contains("404");
+    }
+
+    /**
+     * A route's request delay holds each request on the dispatcher's delay lane for at least that long, then still
+     * forwards it.
+     */
+    @Test
+    void aDelayedRouteForwardsOnlyOnceItsDelayPassed() throws Exception {
+        resetDatabase();
+        long delayMs = 300;
+        AtomicLong reachedAt = new AtomicLong();
+        upstream = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        upstream.createContext("/", ex -> {
+            reachedAt.set(System.nanoTime());
+            byte[] body = "delayed-ok".getBytes(StandardCharsets.UTF_8);
+            ex.sendResponseHeaders(200, body.length);
+            ex.getResponseBody().write(body);
+            ex.close();
+        });
+        upstream.start();
+        setupSiteWithDomain("hohenheim:address", "delay.test", "exact",
+            Map.of("forward_host", "127.0.0.1", "forward_port", upstream.getAddress().getPort(),
+                "delay", (int) delayMs));
+        proxy = startProxy();
+
+        // 1. The delayed request is still forwarded and answered.
+        long sentAt = System.nanoTime();
+        assertThat(rawRequest(httpPort(proxy), "delay.test", "/"))
+            .as("step 1: the delayed request reached the upstream")
+            .contains("200").contains("delayed-ok");
+
+        // 2. It left the proxy no sooner than its delay.
+        assertThat(TimeUnit.NANOSECONDS.toMillis(reachedAt.get() - sentAt))
+            .as("step 2: the upstream saw it only after the route's delay")
+            .isGreaterThanOrEqualTo(delayMs);
     }
 
     /**

@@ -8,6 +8,9 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.tls.FakeAcmeServer;
 import be.elevenways.hohenheim.test.tls.RecordingTxtPublisher;
+import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.protoblast.common.thread.ScheduledJob;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -22,10 +25,14 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -42,7 +49,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * This lives in the service's own package because the renewal entry point is package-private
  * and "renewal thereafter uses the NEW names" is the assertion that makes the same-row write
- * mean anything.
+ * mean anything; the service's timers are fired through its package-private lane seam.
  */
 class AcmeReissueContractTest {
 
@@ -275,7 +282,183 @@ class AcmeReissueContractTest {
         });
     }
 
+    /**
+     * The service's lane carries its two timers: the renewal sweep every six hours at a fixed rate, and a manual
+     * DNS-01 order's expiry thirty minutes after it was prepared. Each fires here on the test's word, never after
+     * real time passed.
+     */
+    @Test
+    void theRenewalSweepAndTheManualDnsExpiryFireFromTheServiceLane() {
+        Db.run(datasource, () -> {
+            var certModel = Models.get(CertificateModel.class);
+            RecordedTimers timers = new RecordedTimers();
+            AcmeService timed = new AcmeService(new CertificateStore(), timers);
+            ca.validateHttpWith((token, identifier) -> timed.getChallengeResponse(token, identifier) != null);
+            int siteId = site("timer-owned");
+            domain(siteId, "renewed." + ZONE);
+            domain(siteId, "manual." + ZONE);
+            try {
+                // 1. Starting the service arms one sweep, repeating at a fixed rate every six hours.
+                timed.start();
+                assertThat(timers.armed()).as("step 1: the one renewal sweep")
+                    .containsExactly(new Armed(TimeUnit.HOURS.toMillis(6), true));
+
+                // 2. A certificate inside the renewal window is renewed when the sweep fires.
+                AcmeService.RequestOutcome ordered = timed.requestCertificate(List.of("renewed." + ZONE),
+                    "Timer renewal", null, CertificateAuthority.Requester.SYSTEM);
+                assertThat(ordered.issued()).as("step 2: there is a certificate to renew").isTrue();
+                int renewedId = ordered.certificateId();
+                Row due = certModel.findById(renewedId);
+                String firstPem = due.get(CertificateModel.CERTIFICATE_PEM);
+                Instant dueOn = Now.instant().plus(1, ChronoUnit.DAYS);
+                due.set(CertificateModel.EXPIRES_ON, dueOn);
+                certModel.save(due);
+                timers.fire(0);
+                Row renewed = certModel.findById(renewedId);
+                String renewedPem = renewed.get(CertificateModel.CERTIFICATE_PEM);
+                Instant renewedUntil = renewed.get(CertificateModel.EXPIRES_ON);
+                assertThat(renewedPem).as("step 2: the sweep renewed it").isNotEqualTo(firstPem);
+                assertThat(renewedUntil).as("step 2: past its old expiry").isAfter(dueOn);
+
+                // 3. Preparing a manual DNS-01 order arms its expiry thirty minutes out.
+                AcmeService.ManualDnsRequest manual = prepareManual(timed, "Timer manual");
+                assertThat(timers.armed()).as("step 3: the sweep and the order's expiry")
+                    .containsExactly(new Armed(TimeUnit.HOURS.toMillis(6), true),
+                        new Armed(TimeUnit.MINUTES.toMillis(30), false));
+                assertThat(timed.manualDnsRequestFor(manual.certificateId())).as("step 3: the order waits")
+                    .isNotNull();
+
+                // 4. When the expiry fires the order is gone, its row says why, and the names are free again.
+                timers.fire(1);
+                assertThat(timed.manualDnsRequestFor(manual.certificateId())).as("step 4: the order expired")
+                    .isNull();
+                Row expired = certModel.findById(manual.certificateId());
+                String status = expired.get(CertificateModel.STATUS);
+                String reason = expired.get(CertificateModel.RENEWAL_ERROR);
+                assertThat(status).as("step 4: the row failed").isEqualTo(CertificateModel.STATUS_ERROR);
+                assertThat(reason).as("step 4: saying it expired").contains("Manual DNS challenge expired");
+                assertThat(prepareManual(timed, "Timer manual again"))
+                    .as("step 4: the expired order no longer holds its names").isNotNull();
+            } finally {
+                timed.stop();
+            }
+        });
+    }
+
     // -- fixture plumbing -----------------------------------------------------
+
+    /** A manual DNS-01 order for {@code manual.<ZONE>} that the fake CA is expected to prepare. */
+    private static AcmeService.ManualDnsRequest prepareManual(AcmeService acme, String niceName) {
+        try {
+            return acme.prepareManualDnsCertificate(List.of("manual." + ZONE), niceName, null,
+                CertificateAuthority.Requester.SYSTEM);
+        } catch (Exception refused) {
+            throw new AssertionError("the manual DNS-01 order could not be prepared", refused);
+        }
+    }
+
+    /** One timer a {@link RecordedTimers} holds: its delay or period, and whether it repeats. */
+    private record Armed(long delayMs, boolean fixedRate) {}
+
+    /**
+     * A lane that runs nothing by itself: it holds every timer armed on it, in arming order, until the test fires
+     * one on its own thread. Only the timer entry points AcmeService uses exist; any other refuses.
+     */
+    private static final class RecordedTimers extends JobRunner {
+
+        private final List<Armed> armed = new ArrayList<>();
+        private final List<Runnable> jobs = new ArrayList<>();
+        private boolean shutdown;
+
+        RecordedTimers() {
+            super("recorded-acme-timers");
+        }
+
+        synchronized List<Armed> armed() {
+            return List.copyOf(this.armed);
+        }
+
+        /** Run the timer armed at this index once, as its due time would. */
+        void fire(int index) {
+            Runnable job;
+            synchronized (this) {
+                job = this.jobs.get(index);
+            }
+            job.run();
+        }
+
+        private synchronized ScheduledJob arm(Runnable job, long delayMs, boolean fixedRate) {
+            this.armed.add(new Armed(delayMs, fixedRate));
+            this.jobs.add(job);
+            return () -> { };
+        }
+
+        @Override
+        protected ScheduledJob doSchedule(Runnable bound, long delayMs) {
+            return this.arm(bound, delayMs, false);
+        }
+
+        @Override
+        protected ScheduledJob doScheduleAtFixedRate(Runnable bound, long periodMs) {
+            return this.arm(bound, periodMs, true);
+        }
+
+        @Override
+        protected ScheduledJob doScheduleRepeating(Runnable bound, long intervalMs) {
+            throw new UnsupportedOperationException("AcmeService arms no fixed-delay timer");
+        }
+
+        @Override
+        protected CompletableFuture<Void> doRunAsync(Runnable bound) {
+            throw new UnsupportedOperationException("AcmeService queues no work on its lane");
+        }
+
+        @Override
+        protected void doFireAndForget(Runnable bound) {
+            throw new UnsupportedOperationException("AcmeService queues no work on its lane");
+        }
+
+        @Override
+        protected Thread doStartThread(Runnable bound) {
+            throw new UnsupportedOperationException("AcmeService starts no thread on its lane");
+        }
+
+        @Override
+        protected Thread doStartBlockingThread(Runnable bound) {
+            throw new UnsupportedOperationException("AcmeService starts no thread on its lane");
+        }
+
+        @Override
+        public synchronized void shutdown() {
+            this.shutdown = true;
+        }
+
+        @Override
+        public void flushAndShutdown() {
+            this.shutdown();
+        }
+
+        @Override
+        public void shutdownNow() {
+            this.shutdown();
+        }
+
+        @Override
+        public synchronized boolean isShutdown() {
+            return this.shutdown;
+        }
+
+        @Override
+        public boolean awaitTermination(long timeoutMs) {
+            return true;
+        }
+
+        @Override
+        public boolean ownsCurrentThread() {
+            return false;
+        }
+    }
+
 
     /** The CA validates by asking the product's own HTTP-01 responder. */
     private static void answerHttpChallenges() {
