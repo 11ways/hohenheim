@@ -92,7 +92,7 @@ public class VerifyIncusIsolation extends ScheduledTask {
 
     @Override
     public void executor(TaskContext ctx) {
-        report(sweep()).publish();
+        report(sweep()).publish(ctx);
     }
 
     /**
@@ -104,9 +104,10 @@ public class VerifyIncusIsolation extends ScheduledTask {
     public static @NonNull IsolationFindings report(@NonNull List<HostOutcome> outcomes) {
         IsolationFindings findings = new IsolationFindings(SWEEP);
         for (HostOutcome outcome : outcomes) {
-            findings.host("INCUS ISOLATION:", " (no nft lane to the daemon's host)", outcome.server(),
-                outcome.verifiable(), outcome.enforced(), outcome.repaired(), "STOPPED", outcome.stopped(),
-                outcome.errors());
+            // An Incus host is unverifiable for one reason: nothing reads the firewall of its daemon's machine.
+            findings.host("INCUS ISOLATION:", " (no nft lane to the daemon's host)",
+                IsolationFindings.noFirewallLane(), outcome.server(), outcome.verifiable(), outcome.enforced(),
+                outcome.repaired(), "STOPPED", outcome.stopped(), outcome.errors());
         }
         return findings;
     }

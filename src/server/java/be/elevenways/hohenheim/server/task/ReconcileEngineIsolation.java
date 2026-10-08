@@ -60,7 +60,7 @@ public class ReconcileEngineIsolation extends ScheduledTask {
 
     @Override
     public void executor(TaskContext ctx) {
-        sweep().publish();
+        sweep().publish(ctx);
     }
 
     /**

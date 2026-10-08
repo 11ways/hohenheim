@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import java.util.function.BiFunction;
+import java.util.function.Supplier;
 import java.util.Objects;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.zenit.common.operation.Operation;
@@ -13,6 +14,7 @@ import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
@@ -176,11 +178,14 @@ public final class CmsSupport {
         if (token == null) {
             return null;
         }
-        String value = String.valueOf(token);
-        EnumField.EnumValue declared = field.getValues().get(value);
-        Microcopy label = declared == null ? null : declared.getLabel();
-        String resolved = label == null ? null : resolvedText(label);
-        return resolved != null ? resolved : value;
+        String resolved = resolvedText(enumValueLabel(field, token));
+        return resolved != null ? resolved : String.valueOf(token);
+    }
+
+    /** @return the declared label of ONE enum value as copy, the raw token as words where the value declares none */
+    public static @NonNull Microcopy enumValueLabel(@NonNull EnumField field, @NonNull Object token) {
+        EnumField.EnumValue declared = field.getValues().get(String.valueOf(token));
+        return declared != null ? declared.getLabel() : Microcopy.literal(String.valueOf(token));
     }
 
     /**
@@ -309,6 +314,23 @@ public final class CmsSupport {
     public static @NonNull String panelSlug(@NonNull Conduit conduit) {
         String slug = conduit.getParameter(CmsEndpoints.PANEL_PARAM);
         return slug != null && !slug.isBlank() ? slug : HohenheimSlugs.ADMIN;
+    }
+
+    /**
+     * A per-request read: computed once per rendered list, again per row on an attribute-less conduit.
+     */
+    public static <V> @NonNull V memo(@NonNull Conduit conduit, @NonNull IdentifierKey<V> key,
+                                      @NonNull Supplier<V> read) {
+        V value = conduit.getAttribute(key);
+        if (value == null) {
+            value = read.get();
+            try {
+                conduit.setAttribute(key, value);
+            } catch (UnsupportedOperationException attributeless) {
+                // An attribute-less conduit reads again per row.
+            }
+        }
+        return value;
     }
 
     /**

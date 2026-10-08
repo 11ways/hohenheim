@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.task.IsolationFindings;
 import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -58,6 +59,7 @@ import static be.elevenways.hohenheim.test.ProxyTestSupport.setupInstanceSite;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupSite;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.startProxy;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * The admin dashboard shows each problem once, at its root, with its one action: an open checklist step presents the
@@ -317,8 +319,10 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             List<AttentionItem> unfolded = AttentionCollector.collect();
             AttentionItem root = rootOf(unfolded, workload);
             assertThat(root).as("step 1: the crashed workload is a root").isNotNull();
-            assertThat(say(root.title())).as("step 1: in the workload's own words")
-                .isEqualTo("Instance " + PREFIX + "crashed needs attention");
+            assertThat(say(root.title())).as("step 1: titled by what happened, in the verdict's words")
+                .isEqualTo(PREFIX + "crashed stopped after an error");
+            assertThat(root.title().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 1: in Dutch too").isEqualTo(PREFIX + "crashed is gestopt na een fout");
             assertThat(say(root.action())).as("step 1: with the workload's action").isEqualTo("Open the console");
             assertThat(say(root.heldBack())).as("step 1: saying what it keeps from its site's visitors")
                 .isEqualTo("Visitors of its site get an error page");
@@ -340,6 +344,8 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             AttentionSubject deployed = AttentionSubject.instance(application.get(InstanceModel.ID));
             AttentionItem deploy = rootOf(unfolded, deployed);
             assertThat(deploy).as("step 3: the failed deploy is a root").isNotNull();
+            assertThat(say(deploy.title())).as("step 3: titled by what happened")
+                .isEqualTo(PREFIX + "api's last deploy failed");
             assertThat(say(deploy.action())).as("step 3: with the deploy's action").isEqualTo("See the deploy");
             assertThat(say(deploy.detail())).as("step 3: saying why it failed")
                 .isEqualTo("the health probe never answered on port 3000");
@@ -397,9 +403,16 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 registeredHistory = new SystemTaskHistoryModel(Datasources.getDefault());
                 Models.registerInstance(registeredHistory);
             }
-            Row run = failedRun(VerifyWorkloadIsolation.ID.toString(),
-                "be.elevenways.hohenheim.server.task.IsolationFindings$IsolationUnresolved: Workload isolation did "
-                    + "not come back clean: local: no Docker client\n    at be.elevenways.Example.run(Example.java:1)");
+            // The run's error is what the scheduler stores of a real sweep failure: its class, message and trace.
+            IsolationFindings.IsolationUnresolved unresolved = catchThrowableOfType(
+                IsolationFindings.IsolationUnresolved.class,
+                () -> VerifyWorkloadIsolation.report(List.of(new VerifyWorkloadIsolation.HostOutcome("local", false,
+                    List.of(), List.of(), List.of(), List.of("per-workload enforcement is off "
+                        + "(security.nftables_enabled); 1 workload network can be neither verified nor repaired"),
+                    IsolationFindings.enforcementOff(1)))).publish());
+            IsolationFindings.forgetTransitionStateForTest(VerifyWorkloadIsolation.SWEEP);
+            Row run = failedRun(VerifyWorkloadIsolation.ID.toString(), unresolved.getClass().getName() + ": "
+                + unresolved.getMessage() + "\n    at be.elevenways.Example.run(Example.java:1)");
             List<AttentionItem> tasks = new ArrayList<>();
             AttentionCollector.failedTasks(tasks);
             AttentionItem task = tasks.stream().filter(item -> item.target() != null && item.target().toUrl()
@@ -408,8 +421,12 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(say(task.title())).as("step 7: titled by the task's worded name").isEqualTo("Check app isolation failed");
             assertThat(task.title().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
                 .as("step 7: in Dutch too").isEqualTo("Isolatie van apps controleren is mislukt");
-            assertThat(say(task.detail())).as("step 7: with the failure's own words")
-                .isEqualTo("Workload isolation did not come back clean: local: no Docker client");
+            assertThat(say(task.detail())).as("step 7: with the finding in words, never the sweep's tokens")
+                .isEqualTo("Could not confirm that what runs on local is kept apart: per-app firewall rules are "
+                    + "switched off there, so its 1 app network can be neither checked nor repaired")
+                .doesNotContain("UNCONFIRMED").doesNotContain("security.nftables_enabled");
+            assertThat(unresolved.findings()).as("step 7: the token alerts and tests key on stays in the raw reading")
+                .singleElement().asString().contains("isolation UNCONFIRMED");
             assertThat(say(task.action())).as("step 7: and the way to the run").isEqualTo("Show the run");
 
             // 8. A host whose key nobody confirmed takes no new apps: the refusal is worded (no quotes, no

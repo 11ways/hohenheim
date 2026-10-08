@@ -153,6 +153,14 @@ public class CertificateStore {
         return snapshot.count;
     }
 
+    /**
+     * Every name a loaded certificate answers a handshake for: exact names and {@code *.} wildcards, lowercased, in
+     * the {@code CertificateCoverage.covers} shape.
+     */
+    public Set<String> servedNames() {
+        return snapshot.hostnameToAlias.keySet();
+    }
+
     // -----------------------------------------------------------------------
     // Snapshot construction (all private, no shared mutable state)
     // -----------------------------------------------------------------------
@@ -167,10 +175,11 @@ public class CertificateStore {
         for (Row cert : certs) {
             try {
                 String alias = addCertToKeyStore(cert, keyStore, hostnameToAlias);
+                // A row without its key loads nothing, so it is no certificate the store holds.
                 if (alias != null) {
                     loadedAliases.add(alias);
+                    loaded++;
                 }
-                loaded++;
             } catch (Exception e) {
                 String name = cert.get(CertificateModel.NICE_NAME);
                 Blast.log("CertificateStore: failed to load cert:", name, "-", e.getMessage());

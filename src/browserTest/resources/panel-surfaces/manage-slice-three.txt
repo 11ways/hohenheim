@@ -76,7 +76,7 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
 column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column app at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
@@ -373,7 +373,7 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
 column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column app at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
@@ -1347,7 +1347,7 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
 column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column app at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
@@ -1376,7 +1376,7 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
 column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column app at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
@@ -1405,7 +1405,7 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
 column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column app at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
@@ -1593,7 +1593,7 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
 column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column app at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
@@ -1649,7 +1649,7 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
 column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column app at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
@@ -1737,7 +1737,7 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
 column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column app at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
@@ -1758,7 +1758,7 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column hostname at=0 shown=true hidden=false sortable=false filterable=true copyable=true subtext=path relation=false
 column match_type at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column path at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
+column app at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column points_here at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column certificate at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column force_ssl at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false

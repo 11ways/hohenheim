@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.RelativeTime;
@@ -38,7 +39,12 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.Labels;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.render.CmsTemplateIds;
+import be.elevenways.zenit.cms.common.render.table.RecordLink;
+import be.elevenways.zenit.cms.common.render.table.RecordLinksCell;
+import be.elevenways.zenit.cms.common.resource.ListScope;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceAuthority;
@@ -69,6 +75,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.aggregate.Aggregate;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
@@ -77,6 +84,11 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationHandlers;
+import be.elevenways.zenit.widget.common.WidgetInstance;
+import be.elevenways.zenit.widget.common.WidgetTree;
+import be.elevenways.zenit.widget.common.builtin.CardWidget;
+import be.elevenways.zenit.widget.common.builtin.FactListWidget;
+import be.elevenways.zenit.widget.common.data.WidgetFact;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -89,7 +101,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Supplier;
 
 /**
  * The managed-database tier's parts: the operator's databases, their /manage twin and the shared engines (stage 4
@@ -144,8 +155,12 @@ public final class DatabaseParts {
     private static final IdentifierKey<Map<Integer, Long>> DATABASE_COUNTS =
         IdentifierKey.of("hohenheim", "database_engine_database_counts");
 
+    /** The create verb in the Databases board's words: the list's button and the form's heading. */
+    private static final Microcopy CREATE_TITLE = Microcopy.of("create_title").withFilter("scope", "database");
+
     /** The operator's create and resize form. */
     private static final FormSpec ADMIN_FORM = FormSpec.builder()
+        .createTitle(CREATE_TITLE)
         .add(DatabaseModel.NAME)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(DatabaseModel.ENGINE))
         // Where the record lives, and (for a shared one) which engine. Blank engine means the host's engine of
@@ -356,7 +371,8 @@ public final class DatabaseParts {
             .column(ColumnSpec.fromField(DatabaseModel.NAME).filterable().subtext(RUNS_ON_COLUMN).build())
             .column(ColumnSpec.virtual(RUNS_ON_COLUMN, listCopy("runs_on_column")).hidden().build())
             .column(ColumnSpec.fromField(DatabaseModel.ENGINE).filterable().build())
-            .column(ColumnSpec.virtual(USED_BY_COLUMN, listCopy("used_by_column")).build())
+            .column(ColumnSpec.virtual(USED_BY_COLUMN, listCopy("used_by_column"))
+                .renderer(CmsTemplateIds.CELL_RECORD_LINKS).build())
             .column(ColumnSpec.virtual(LAST_BACKUP_COLUMN, listCopy("last_backup_column"))
                 .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
             .column(ColumnSpec.fromField(DatabaseModel.STATUS).filterable().build())
@@ -397,6 +413,8 @@ public final class DatabaseParts {
                 .computed(Objects.requireNonNull(table.column(LAST_BACKUP_COLUMN)),
                     (database, request) -> lastBackupCell(database, request))
                 .rowLinkToTab(RecordOverview.SLUG)
+                // Board Databases: the shared engines the listed records live on, under the list.
+                .widgetsBelow(DatabaseParts::enginesCard)
                 .build())
             .form(ResourceForm.<Row>of(ADMIN_FORM)
                 .landingTab(RecordOverview.SLUG)
@@ -425,6 +443,7 @@ public final class DatabaseParts {
      */
     public static @NonNull PanelResource<Row> manage() {
         FormSpec form = FormSpec.builder()
+            .createTitle(CREATE_TITLE)
             .add(DatabaseModel.NAME)
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(DatabaseModel.ENGINE))
             .build();
@@ -807,20 +826,60 @@ public final class DatabaseParts {
         return DatabaseOverview.runsOn(database).resolve(conduit.getLocales(), conduit.getMessageResolver());
     }
 
-    /** The workloads using a database, by name, or "No app". */
-    private static @NonNull String usedByCell(@NonNull Row database, @NonNull PanelRequest request) {
-        Conduit conduit = request.conduit();
-        List<Row> instances = memo(conduit, USED_BY, InstanceDatabaseLinks::liveInstancesByDatabase)
+    /**
+     * The apps using a database, by name, each linked to its overview (the overview's Used by card's link) for a
+     * reader who may open it; "No app" when none does.
+     */
+    private static @NonNull RecordLinksCell usedByCell(@NonNull Row database, @NonNull PanelRequest request) {
+        List<Row> instances = CmsSupport.memo(request.conduit(), USED_BY,
+                InstanceDatabaseLinks::liveInstancesByDatabase)
             .getOrDefault(database.get(DatabaseModel.ID), List.of());
         if (instances.isEmpty()) {
-            return Microcopy.of("used_by_none").withFilter("scope", "database_overview")
-                .resolve(conduit.getLocales(), conduit.getMessageResolver());
+            return RecordLinksCell.none(DatabaseOverview.copy("used_by_none"));
         }
-        List<String> names = new ArrayList<>();
+        boolean listed = AppDirectory.offers(request.panel(), InstanceParts.SLUG, request.access());
+        List<RecordLink> links = new ArrayList<>();
         for (Row instance : instances) {
-            names.add(String.valueOf((Object) instance.get(InstanceModel.NAME)));
+            boolean opens = listed && HohenheimAccess.reachesRecord(request.access(), InstanceModel.MODEL_ID,
+                instance.get(InstanceModel.ID), HohenheimAccess.VIEW);
+            links.add(new RecordLink(String.valueOf((Object) instance.get(InstanceModel.NAME)),
+                opens ? InstanceParts.recordRoute(request.panelSlug(), instance, null).toUrl() : null));
         }
-        return String.join(", ", names);
+        return RecordLinksCell.of(links);
+    }
+
+    /**
+     * The Engines card under the list (board Databases): every shared engine as "MySQL on daystrom", how many databases
+     * it holds and its state, each opening its engine. Nothing while no engine exists.
+     */
+    private static @NonNull WidgetTree enginesCard(@NonNull ListScope scope) {
+        List<Row> engines = Models.get(DatabaseEngineModel.class).find()
+            .orderBy(DatabaseEngineModel.ID, SortOrder.ASC).all();
+        if (engines.isEmpty()) {
+            return WidgetTree.empty();
+        }
+        Conduit conduit = scope.accessContext().conduit();
+        String panelSlug = CmsSupport.panelSlug(conduit);
+        Map<Integer, Long> counts = countDatabasesPerEngine();
+        List<WidgetFact> facts = new ArrayList<>();
+        for (Row engine : engines) {
+            Integer id = engine.get(DatabaseEngineModel.ID);
+            String host = ServerModel.nameOf(ServerModel.canonicalServerId(engine.get(DatabaseEngineModel.SERVER_ID)));
+            Microcopy holds = listCopy("engine_holds")
+                .withArg("databases", HohenheimCounts.of("databases", counts.getOrDefault(id, 0L)))
+                .withArg("state", Labels.inSentence(CmsSupport.enumValueLabel(DatabaseEngineModel.STATUS,
+                    String.valueOf((Object) engine.get(DatabaseEngineModel.STATUS)))));
+            facts.add(WidgetFact.link(
+                listCopy("engine_on_host").withArg("engine", CmsSupport.enumValueLabel(DatabaseEngineModel.ENGINE,
+                        String.valueOf((Object) engine.get(DatabaseEngineModel.ENGINE)))).withArg("host", host)
+                    .resolve(conduit.getLocales(), conduit.getMessageResolver()),
+                holds.resolve(conduit.getLocales(), conduit.getMessageResolver()),
+                CmsRoutes.open(panelSlug, ENGINES_SLUG, id).toUrl()));
+        }
+        WidgetInstance card = new WidgetInstance(CardWidget.ID,
+            Map.of("title", listCopy("engines_title"), "lead", listCopy("engines_lead")),
+            new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));
+        return new WidgetTree(List.of(AdminDashboard.section(card)));
     }
 
     /**
@@ -851,21 +910,6 @@ public final class DatabaseParts {
                 null);
         }
         return new StateLineCell("done", BadgeVariant.SUCCESS, Microcopy.literal(ago), Microcopy.literal(size), null);
-    }
-
-    /** A per-request read: computed once per rendered list, again per row on an attribute-less conduit. */
-    private static <V> @NonNull V memo(@NonNull Conduit conduit, @NonNull IdentifierKey<V> key,
-                                       @NonNull Supplier<V> read) {
-        V value = conduit.getAttribute(key);
-        if (value == null) {
-            value = read.get();
-            try {
-                conduit.setAttribute(key, value);
-            } catch (UnsupportedOperationException attributeless) {
-                // An attribute-less conduit reads again per row.
-            }
-        }
-        return value;
     }
 
     private static @NonNull Microcopy listCopy(@NonNull String key) {
@@ -1100,7 +1144,7 @@ public final class DatabaseParts {
         if (engineId == null) {
             return 0;
         }
-        return memo(request.conduit(), DATABASE_COUNTS, DatabaseParts::countDatabasesPerEngine)
+        return CmsSupport.memo(request.conduit(), DATABASE_COUNTS, DatabaseParts::countDatabasesPerEngine)
             .getOrDefault(engineId, 0L);
     }
 

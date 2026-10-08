@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.zenit.common.task.TaskContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -41,6 +43,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * .failedTasks} projects that as an attention item until a clean run clears it. That half
  * is idempotent by construction and cannot spam anything.
  *
+ * AIDEV-NOTE: two readings of one finding. The failure's MESSAGE is what the dashboard shows, so it is worded
+ * through copy (scope {@code isolation_finding}) and stored resolved in the installation's content locale, like
+ * every stored reason. The raw lines ("<host>: isolation UNCONFIRMED: ...") are the machine reading that alerts and
+ * tests key on: they ride the exception ({@link IsolationUnresolved#findings()}), the alert body and the run's own
+ * reports ({@link #publish(TaskContext)}), never the shown sentence.
+ *
  * @author Jelle De Loecker
  * @since 0.7.0
  */
@@ -60,24 +68,60 @@ public final class IsolationFindings {
     private final @NonNull String sweep;
     private final List<String> escalations = new ArrayList<>();
     private final List<String> unconfirmed = new ArrayList<>();
+    /** The same findings in words, one sentence each, for the run's shown failure. */
+    private final List<Microcopy> said = new ArrayList<>();
 
     /** @param sweep the operator-facing name of the sweep, e.g. "Workload isolation" */
     public IsolationFindings(@NonNull String sweep) {
         this.sweep = sweep;
     }
 
-    /** A workload was CONTAINED, or its containment failed: a person must be told. */
+    /** Workloads whose isolation could not be checked or repaired, or not contained: a person must be told. */
     public void escalated(@NonNull String subject, @NonNull List<String> detail) {
         for (String line : detail) {
             this.escalations.add(subject + ": " + line);
         }
+        if (!detail.isEmpty()) {
+            this.said.add(words("not_repaired").withArg("subject", subject).withArg("count", detail.size()));
+        }
     }
 
-    /** The sweep could not confirm isolation here; nothing was stopped for it. */
+    /** The sweep could not confirm isolation here, for no reason it can word; nothing was stopped for it. */
     public void unconfirmed(@NonNull String subject, @NonNull List<String> detail) {
+        unconfirmed(subject, detail, null);
+    }
+
+    /**
+     * The sweep could not confirm isolation here; nothing was stopped for it.
+     *
+     * @param why why, in words ({@link #enforcementOff}, {@link #daemonUnreachable}, {@link #noFirewallLane}); null
+     *            when the sweep cannot word it
+     */
+    public void unconfirmed(@NonNull String subject, @NonNull List<String> detail, @Nullable Microcopy why) {
         this.unconfirmed.add(detail.isEmpty()
             ? subject + ": isolation UNCONFIRMED"
             : subject + ": isolation UNCONFIRMED: " + String.join("; ", detail));
+        this.said.add(why == null ? words("unconfirmed").withArg("subject", subject)
+            : words("unconfirmed_because").withArg("subject", subject).withArg("reason", why));
+    }
+
+    /** @return why a host cannot be checked: per-workload enforcement is switched off over this many networks */
+    public static @NonNull Microcopy enforcementOff(int networks) {
+        return words("enforcement_off").withArg("count", networks);
+    }
+
+    /** @return why a host cannot be checked: its container daemon cannot be reached */
+    public static @NonNull Microcopy daemonUnreachable() {
+        return words("daemon_unreachable");
+    }
+
+    /** @return why a host cannot be checked: nothing reads the firewall of the machine its daemon runs on */
+    public static @NonNull Microcopy noFirewallLane() {
+        return words("no_firewall_lane");
+    }
+
+    private static @NonNull Microcopy words(@NonNull String key) {
+        return Microcopy.of(key).withFilter("scope", "isolation_finding");
     }
 
     /**
@@ -86,31 +130,51 @@ public final class IsolationFindings {
      *
      * @param tag             the sweep's log prefix
      * @param unverifiableWhy why a host of this sweep cannot be verified, for the log
+     * @param why             the same in words, null when the sweep cannot word it
      * @param cutLabel        how the log names the workloads the sweep cut off (STOPPED, CONTAINED)
      */
-    public void host(@NonNull String tag, @NonNull String unverifiableWhy, @NonNull String server, boolean verifiable,
-                     @NonNull List<String> enforced, @NonNull List<String> repaired, @NonNull String cutLabel,
-                     @NonNull List<String> cut, @NonNull List<String> errors) {
+    public void host(@NonNull String tag, @NonNull String unverifiableWhy, @Nullable Microcopy why,
+                     @NonNull String server, boolean verifiable, @NonNull List<String> enforced,
+                     @NonNull List<String> repaired, @NonNull String cutLabel, @NonNull List<String> cut,
+                     @NonNull List<String> errors) {
         if (!verifiable) {
             Blast.log(tag, server, "cannot be kernel-verified" + unverifiableWhy
                 + "; its workloads' isolation is UNCONFIRMED:", errors);
-            this.unconfirmed(server, errors);
+            this.unconfirmed(server, errors, why);
             return;
         }
         if (!repaired.isEmpty() || !cut.isEmpty() || !errors.isEmpty()) {
             Blast.log(tag, server, "- enforced", enforced.size(), ", repaired", repaired, ", " + cutLabel, cut,
                 ", errors", errors);
         }
-        List<String> escalations = new ArrayList<>(cut);
-        escalations.addAll(errors);
-        if (!escalations.isEmpty()) {
-            this.escalated(server, escalations);
+        for (String line : cut) {
+            this.escalations.add(server + ": " + line);
         }
+        if (!cut.isEmpty()) {
+            this.said.add(words("cut_off").withArg("subject", server).withArg("count", cut.size()));
+        }
+        this.escalated(server, errors);
     }
 
     /** @return whether the sweep found nothing an operator needs to know about */
     public boolean isClean() {
         return this.escalations.isEmpty() && this.unconfirmed.isEmpty();
+    }
+
+    /**
+     * {@link #publish()} from a task executor: the raw findings first land in the run's own reports, the machine
+     * reading beside the worded failure.
+     *
+     * @throws IsolationUnresolved when anything was reported
+     */
+    public void publish(@NonNull TaskContext ctx) {
+        for (String line : this.escalations) {
+            ctx.report(line);
+        }
+        for (String line : this.unconfirmed) {
+            ctx.report(line);
+        }
+        publish();
     }
 
     /**
@@ -148,8 +212,11 @@ public final class IsolationFindings {
 
         List<String> everything = new ArrayList<>(this.escalations);
         everything.addAll(this.unconfirmed);
-        throw new IsolationUnresolved(this.sweep + " did not come back clean: "
-            + String.join(" | ", everything));
+        List<String> sentences = new ArrayList<>();
+        for (Microcopy sentence : this.said) {
+            sentences.add(HohenheimViolations.textOf(sentence));
+        }
+        throw new IsolationUnresolved(String.join(". ", sentences), everything);
     }
 
     /** An alerting failure must never swallow the isolation failure it was reporting. */
@@ -172,10 +239,22 @@ public final class IsolationFindings {
         }
     }
 
-    /** What a sweep throws when it did not come back clean; the task run records it. */
+    /**
+     * What a sweep throws when it did not come back clean; the task run records it. Its message is the findings in
+     * words, its {@link #findings()} the raw lines.
+     */
     public static final class IsolationUnresolved extends RuntimeException {
-        IsolationUnresolved(@NonNull String message) {
+
+        private final @NonNull List<String> findings;
+
+        IsolationUnresolved(@NonNull String message, @NonNull List<String> findings) {
             super(message);
+            this.findings = List.copyOf(findings);
+        }
+
+        /** @return the raw finding lines ("<host>: isolation UNCONFIRMED: ..."), escalations first */
+        public @NonNull List<String> findings() {
+            return this.findings;
         }
     }
 }

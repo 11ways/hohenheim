@@ -16,7 +16,6 @@ import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.site.SiteOperations;
-import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
 import be.elevenways.zenit.common.edit.FormSecrets;
 import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
@@ -252,7 +251,7 @@ public final class SiteOperationHandlers {
      * name that has one keeps it. The write states force_ssl itself, so the certificate latch stays disarmed.
      */
     private static @Nullable Void stopForcingHttps(@NonNull Row site) {
-        Set<String> working = CertificateCoverage.activeNames();
+        Set<String> working = AppHealth.workingNames();
         SiteDomainModel domains = Models.get(SiteDomainModel.class);
         for (Row domain : SiteParts.domainsOf(site)) {
             if (AppHealth.forcedUncovered(domain, working)) {

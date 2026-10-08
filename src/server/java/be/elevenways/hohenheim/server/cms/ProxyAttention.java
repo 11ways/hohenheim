@@ -158,7 +158,7 @@ public final class ProxyAttention {
         if (proxy != null && !proxy.isHttpsTerminationAvailable()) {
             return;
         }
-        Set<String> working = CertificateCoverage.activeNames();
+        Set<String> working = AppHealth.workingNames();
         for (Row domain : Models.get(SiteDomainModel.class).find()
                 .where(SiteDomainModel.FORCE_SSL.eq(true)).all()) {
             String hostname = domain.get(SiteDomainModel.HOSTNAME);

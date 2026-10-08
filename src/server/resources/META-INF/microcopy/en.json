@@ -904,6 +904,10 @@
     {
       "text": "Its last deploy failed",
       "scope": "app_health"
+    },
+    {
+      "text": "{$name}'s last deploy failed",
+      "scope": "attention_title"
     }
   ],
   "backup_failed": {
@@ -954,6 +958,11 @@
     {
       "text": "Active",
       "scope": "site_status"
+    },
+    {
+      "text": "active",
+      "scope": "database_status",
+      "case": "sentence"
     }
   ],
   "attach": [
@@ -1122,10 +1131,6 @@
     {
       "text": "Deploy",
       "scope": "hohenheim_nav"
-    },
-    {
-      "text": "Deploy of {$name}",
-      "scope": "attention_title"
     },
     {
       "text": "Deploy",
@@ -1334,6 +1339,11 @@
     {
       "text": "Failed",
       "scope": "release_status"
+    },
+    {
+      "text": "failed",
+      "scope": "database_status",
+      "case": "sentence"
     }
   ],
   "hostname": [
@@ -1632,6 +1642,11 @@
     {
       "text": "Provisioning",
       "scope": "database_status"
+    },
+    {
+      "text": "provisioning",
+      "scope": "database_status",
+      "case": "sentence"
     }
   ],
   "provisioning_failed": {
@@ -8250,6 +8265,11 @@
     {
       "text": "Destroy failed",
       "scope": "database_status"
+    },
+    {
+      "text": "destroy failed",
+      "scope": "database_status",
+      "case": "sentence"
     }
   ],
   "docker": {
@@ -9531,16 +9551,10 @@
       "scope": "app_overview"
     }
   ],
-  "instance_crashed": [
-    {
-      "text": "Instance {$name} needs attention",
-      "scope": "attention_title"
-    },
-    {
-      "text": "The workload exited unexpectedly and was not restarted.",
-      "scope": "attention_detail"
-    }
-  ],
+  "instance_crashed": {
+    "text": "The workload exited unexpectedly and was not restarted.",
+    "scope": "attention_detail"
+  },
   "instance_backup": {
     "text": "Backup of {$name} failed",
     "scope": "attention_title"
@@ -9891,10 +9905,16 @@
     "text": "Not pinned",
     "scope": "server_overview"
   },
-  "unconfirmed": {
-    "text": "Not confirmed",
-    "scope": "server_overview"
-  },
+  "unconfirmed": [
+    {
+      "text": "Not confirmed",
+      "scope": "server_overview"
+    },
+    {
+      "text": "Could not confirm that what runs on {$subject} is kept apart",
+      "scope": "isolation_finding"
+    }
+  ],
   "pinned_at": {
     "text": "Pinned",
     "scope": "server_overview"
@@ -10471,7 +10491,7 @@
       "scope": "server"
     },
     {
-      "text": "Managed database servers this installation provisions and backs up.",
+      "text": "Managed databases your apps use, with their backups.",
       "scope": "database"
     },
     {
@@ -11663,6 +11683,14 @@
     {
       "text": "Block an address",
       "scope": "ban"
+    },
+    {
+      "text": "Add address",
+      "scope": "site_domain"
+    },
+    {
+      "text": "Create database",
+      "scope": "database"
     }
   ],
   "edit_title": {
@@ -14170,10 +14198,16 @@
     "text": "Status unknown",
     "scope": "app_health"
   },
-  "stopped_after_error": {
-    "text": "Stopped after an error",
-    "scope": "app_health"
-  },
+  "stopped_after_error": [
+    {
+      "text": "Stopped after an error",
+      "scope": "app_health"
+    },
+    {
+      "text": "{$name} stopped after an error",
+      "scope": "attention_title"
+    }
+  ],
   "not_running_detail": {
     "text": "Deploy it to start it.",
     "scope": "app_health"
@@ -15910,5 +15944,49 @@
   "stat_tile": {
     "text": "Count tile",
     "scope": "dashboard"
+  },
+  "engines_title": {
+    "text": "Engines",
+    "scope": "database_list"
+  },
+  "engines_lead": {
+    "text": "Shared engines hold many databases, each with its own user. Hohenheim starts one per host and kind when the first database needs it.",
+    "scope": "database_list"
+  },
+  "engine_on_host": {
+    "text": "{$engine} on {$host}",
+    "scope": "database_list"
+  },
+  "engine_holds": {
+    "text": "{$databases}, {$state}",
+    "scope": "database_list"
+  },
+  "https_certificate_unserved": {
+    "text": "A certificate is stored for this name, but the proxy cannot serve it, so HTTPS fails here",
+    "scope": "site_domains"
+  },
+  "unconfirmed_because": {
+    "text": "Could not confirm that what runs on {$subject} is kept apart: {$reason}",
+    "scope": "isolation_finding"
+  },
+  "not_repaired": {
+    "text": ".match {$count :number}\none {{The isolation of 1 workload on {$subject} could not be checked or repaired}}\n* {{The isolation of {$count} workloads on {$subject} could not be checked or repaired}}",
+    "scope": "isolation_finding"
+  },
+  "cut_off": {
+    "text": ".match {$count :number}\none {{1 workload on {$subject} was stopped or cut off because its isolation could not be repaired}}\n* {{{$count} workloads on {$subject} were stopped or cut off because their isolation could not be repaired}}",
+    "scope": "isolation_finding"
+  },
+  "enforcement_off": {
+    "text": ".match {$count :number}\none {{per-app firewall rules are switched off there, so its 1 app network can be neither checked nor repaired}}\n* {{per-app firewall rules are switched off there, so its {$count} app networks can be neither checked nor repaired}}",
+    "scope": "isolation_finding"
+  },
+  "daemon_unreachable": {
+    "text": "Hohenheim cannot reach its container daemon",
+    "scope": "isolation_finding"
+  },
+  "no_firewall_lane": {
+    "text": "Hohenheim has no way to read the firewall of the machine its daemon runs on",
+    "scope": "isolation_finding"
   }
 }

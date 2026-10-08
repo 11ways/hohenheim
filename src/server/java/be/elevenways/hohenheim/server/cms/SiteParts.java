@@ -104,7 +104,7 @@ public final class SiteParts {
      */
     public static final ChildList<Row> DOMAINS = ChildList.<Row>sections(DOMAINS_TAB,
             AppOverview.copy("addresses"), DomainParts.SLUG)
-        .hide(DomainParts.SLUG, SiteDomainModel.SITE_ID.getName());
+        .hide(DomainParts.SLUG, DomainParts.APP_COLUMN);
 
     /**
      * The Protection tab, in the overview card's word: the framework's child list over the panel's protected-path entry
@@ -375,7 +375,7 @@ public final class SiteParts {
      * name forced without a working certificate is the one red state.
      */
     static @NonNull SiteTlsCell tlsCellOf(@NonNull Row site) {
-        return tlsCellOf(domainsOf(site), tlsPassthrough(site), CertificateCoverage.activeNames());
+        return tlsCellOf(domainsOf(site), tlsPassthrough(site), AppHealth.workingNames());
     }
 
     /**

@@ -1,22 +1,30 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.CertCoverage;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.tls.HostnameReach;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.ProxyTestSupport;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.test.support.OutboundFixture;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -94,6 +102,9 @@ class DomainsListJourneyTest extends HohenheimTestBase {
                 .contains("data-cert-status=\"" + CertCoverage.ACTIVE.key() + "\"");
             assertThat(html).as("step 3: Get a certificate is offered for the uncovered name")
                 .contains("request_domain_certificate");
+            assertThat(html).as("step 3: the App cell links the app to its overview, the framework's front door")
+                .contains("class=\"cms-record-link\" href=\"/admin/" + HohenheimSlugs.SITES + "/"
+                    + site.get(SiteModel.ID) + "/open\">addresses-" + suffix + "</a>");
 
             // 4. The HTTPS cell says why a name does not work: forced without a working certificate, and, for a name
             //    another server holds the certificate for (no "Get a certificate" there), that Let's Encrypt is told
@@ -116,6 +127,14 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             assertThat(html).as("step 5: the area's name above the tabs").contains("data-cms-cluster-title")
                 .containsPattern("data-cms-cluster-title>(<!--[^>]*-->)?<pb-microcopy[^>]*>Domains</pb-microcopy>");
             assertThat(html).as("step 5: released names are addresses").contains("Released addresses");
+            String strip = html.substring(html.indexOf("data-cms-cluster-tabs"));
+            List<Integer> tabs = List.of(DomainParts.SLUG, HohenheimSlugs.CERTIFICATES, HohenheimSlugs.DNS_ZONES,
+                ReleasedClaimParts.SLUG).stream().map(slug -> strip.indexOf("href=\"/admin/" + slug + "\"")).toList();
+            assertThat(tabs).as("step 5: every member is a tab").doesNotContain(-1);
+            assertThat(tabs).as("step 5: in the board's order: Addresses, Certificates, DNS zones, Released addresses")
+                .isSorted();
+            assertThat(html).as("step 5: the header button reads as the board's")
+                .containsPattern(Pattern.compile("data-cms-create[^>]*>.{0,1000}?Add address", Pattern.DOTALL));
 
             // 6. A certificate's names read as a list, a space after each comma, though stored comma-joined.
             String certificates = adminGet("/admin/certificates?q=" + suffix).body();
@@ -126,6 +145,33 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             HttpResponse<String> detail = adminGet("/admin/domains/" + hereRow.get(SiteDomainModel.ID));
             assertThat(detail.body()).as("step 7: the lead line names the app and says it points here")
                 .contains("addresses-" + suffix).contains("points here: Yes");
+
+            // 8. A certificate stored as working that the running proxy cannot serve (no material it could load) is
+            //    no working certificate: the covered name reads "Not working" and says why, on the list and in the
+            //    one per-name rule the Apps list and the dashboard read, never "Works".
+            ProxyServer previous = ServerMain.getProxyServer();
+            ProxyServer proxy = ProxyTestSupport.startProxy();
+            ServerMain.adoptProxyServer(proxy);
+            try {
+                assertThat(AppHealth.workingNames()).as("step 8: the proxy serves nothing for the stored row")
+                    .doesNotContain(covered);
+                assertThat(AppHealth.httpsOf(coveredRow, false, AppHealth.workingNames()))
+                    .as("step 8: the covered name does not work").isEqualTo(CertCoverage.ERROR);
+                Row stored = CertificateCoverage.coveringCertificate(covered);
+                assertThat(DomainParts.httpsDetail(coveredRow, CertCoverage.ERROR, stored).key())
+                    .as("step 8: because the proxy cannot serve its certificate")
+                    .isEqualTo("https_certificate_unserved");
+                assertThat(DomainParts.httpsDetail(coveredRow, CertCoverage.ERROR, stored)
+                        .resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                    .as("step 8: in Dutch too").contains("de proxy kan het niet aanbieden");
+                String served = adminGet("/admin/domains?q=" + suffix).body();
+                assertThat(served).as("step 8: the list says so beside the badge")
+                    .contains("A certificate is stored for this name, but the proxy cannot serve it")
+                    .doesNotContain("data-cert-status=\"" + CertCoverage.ACTIVE.key() + "\"");
+            } finally {
+                ServerMain.adoptProxyServer(previous);
+                proxy.stop();
+            }
         } finally {
             local = servers.findById(ServerModel.localServerId());
             local.set(ServerModel.PUBLIC_IPV4, declared);
