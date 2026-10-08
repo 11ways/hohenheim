@@ -286,18 +286,47 @@ public final class DomainParts {
         }
         Row cert = coverage.hasCertificate()
             ? CertificateCoverage.coveringCertificate(domain.get(SiteDomainModel.HOSTNAME)) : null;
+        Microcopy detail = httpsDetail(domain, coverage, cert);
         if (cert == null) {
-            return new DomainCertCell(coverage.key(), coverage.badgeVariant(), coverage.label(), null, null, null);
+            return new DomainCertCell(coverage.key(), coverage.badgeVariant(), coverage.label(), detail, null, null,
+                null);
         }
         Instant expiresOn = cert.get(CertificateModel.EXPIRES_ON);
         Integer certId = cert.get(CertificateModel.ID);
         boolean canOpen = HohenheimAccess.reachesRecord(request.access(), CertificateModel.MODEL_ID, certId,
             HohenheimAccess.VIEW);
         // The panel this list renders under carries a certificates entry on both faces.
-        return new DomainCertCell(coverage.key(), coverage.badgeVariant(), coverage.label(),
+        return new DomainCertCell(coverage.key(), coverage.badgeVariant(), coverage.label(), detail,
             canOpen ? String.valueOf((Object) cert.get(CertificateModel.NICE_NAME)) : null,
             canOpen ? CmsRoutes.detail(request.panelSlug(), HohenheimSlugs.CERTIFICATES, certId).toUrl() : null,
             expiresOn != null ? expiresOn.toString() : null);
+    }
+
+    /**
+     * Why HTTPS does not (fully) work for one exact name, null when it works: the reason beside the badge, so a "Not
+     * working" row says what is wrong and, through the row's actions, what fixes it.
+     *
+     * AIDEV-NOTE: a name excluded from Let's Encrypt is one another server holds the certificate for, so the row
+     * offers no "Get a certificate" (the request action's own applicability); the reason says so instead of leaving
+     * a red badge with nothing beside it.
+     */
+    static @Nullable Microcopy httpsDetail(@NonNull Row domain, @NonNull CertCoverage coverage, @Nullable Row cert) {
+        boolean forced = Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL));
+        boolean excluded = Boolean.TRUE.equals(domain.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT));
+        return switch (coverage) {
+            case ACTIVE -> null;
+            case NOT_USED -> domainText("https_passthrough");
+            case PENDING -> domainText("https_being_issued");
+            case NONE -> domainText(excluded ? "https_uncovered_excluded" : "https_uncovered");
+            case ERROR -> cert != null && CertificateModel.STATUS_ERROR.equals(cert.get(CertificateModel.STATUS))
+                ? domainText("https_certificate_failing")
+                : !forced ? domainText("https_uncovered")
+                : domainText(excluded ? "https_forced_excluded" : "https_forced_uncovered");
+        };
+    }
+
+    private static @NonNull Microcopy domainText(@NonNull String key) {
+        return Microcopy.of(key).withFilter("scope", "site_domains");
     }
 
     /**

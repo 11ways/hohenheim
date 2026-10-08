@@ -48,7 +48,10 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             Row awayRow = domain(site, elsewhere, true);
             Row coveredRow = domain(site, covered, true);
             Row pattern = domain(site, "*.pattern-" + suffix + ".test", false);
-            certificate("Covered " + suffix, covered);
+            Row excluded = domain(site, "elsewhere-cert-" + suffix + ".test", true);
+            excluded.set(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT, true);
+            Models.get(SiteDomainModel.class).save(excluded);
+            certificate("Covered " + suffix, covered + "," + "www." + covered);
 
             // 1. Points here: a name resolving to this host's declared address says yes; one resolving elsewhere says
             //    no and names where it points; a pattern has no single name and no answer.
@@ -92,9 +95,36 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             assertThat(html).as("step 3: Get a certificate is offered for the uncovered name")
                 .contains("request_domain_certificate");
 
-            // 4. The address's own page heads with the same answers.
+            // 4. The HTTPS cell says why a name does not work: forced without a working certificate, and, for a name
+            //    another server holds the certificate for (no "Get a certificate" there), that Let's Encrypt is told
+            //    never to ask. The badge is the word, never the certificate's name, which links on its own line.
+            assertThat(DomainParts.httpsDetail(awayRow, CertCoverage.ERROR, null).key())
+                .as("step 4: a forced name without a certificate").isEqualTo("https_forced_uncovered");
+            assertThat(DomainParts.httpsDetail(excluded, CertCoverage.ERROR, null).key())
+                .as("step 4: a forced name Let's Encrypt may not ask for").isEqualTo("https_forced_excluded");
+            assertThat(DomainParts.httpsDetail(hereRow, CertCoverage.NONE, null).key())
+                .as("step 4: an unforced name without one serves plain HTTP").isEqualTo("https_uncovered");
+            assertThat(DomainParts.httpsDetail(coveredRow, CertCoverage.ACTIVE, null))
+                .as("step 4: a working name needs no reason").isNull();
+            assertThat(html).as("step 4: the reason renders beside the broken badge")
+                .contains("HTTPS is forced, but no working certificate covers this name");
+            assertThat(html).as("step 4: the covered name's badge is the word").contains(">Works<");
+            assertThat(html).as("step 4: and its certificate links on its own line")
+                .contains("data-cert-link").contains("Covered " + suffix);
+
+            // 5. The Domains area heads its tabs with its own name, and its fourth tab reads in the board's words.
+            assertThat(html).as("step 5: the area's name above the tabs").contains("data-cms-cluster-title")
+                .containsPattern("data-cms-cluster-title>(<!--[^>]*-->)?<pb-microcopy[^>]*>Domains</pb-microcopy>");
+            assertThat(html).as("step 5: released names are addresses").contains("Released addresses");
+
+            // 6. A certificate's names read as a list, a space after each comma, though stored comma-joined.
+            String certificates = adminGet("/admin/certificates?q=" + suffix).body();
+            assertThat(certificates).as("step 6: the covered names, separated as words")
+                .contains(covered + ", www." + covered);
+
+            // 7. The address's own page heads with the same answers.
             HttpResponse<String> detail = adminGet("/admin/domains/" + hereRow.get(SiteDomainModel.ID));
-            assertThat(detail.body()).as("step 4: the lead line names the app and says it points here")
+            assertThat(detail.body()).as("step 7: the lead line names the app and says it points here")
                 .contains("addresses-" + suffix).contains("points here: Yes");
         } finally {
             local = servers.findById(ServerModel.localServerId());

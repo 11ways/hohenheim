@@ -278,7 +278,8 @@ public final class CertificateParts {
             .description(Microcopy.of("nav_hint").withFilter("scope", "certificate"))
             .icon(Icon.of("certificate")).navGroup(HohenheimPanel.NETWORK_GROUP).navOrder(20)
             .scope(ROWS)
-            .reads(ResourceReads.rows().mapValues(Set.of(COVERED_NAMES_DISPLAY.getName(), DNS_RECORDS_DISPLAY.getName(),
+            .reads(ResourceReads.rows().mapCells(CertificateParts::namesCell)
+                .mapValues(Set.of(COVERED_NAMES_DISPLAY.getName(), DNS_RECORDS_DISPLAY.getName(),
                 EXPIRY_DISPLAY.getName(),
                 CHALLENGE_DISPLAY.getName(), DNS_PUBLISHER_DISPLAY.getName(), RENEWAL_ERROR_DISPLAY.getName(),
                 NEXT_ATTEMPT_DISPLAY.getName()), CertificateParts::displayValues))
@@ -320,7 +321,7 @@ public final class CertificateParts {
             .recordLabel(Microcopy.of("singular").withFilter("scope", "certificate"))
             .description(Microcopy.of("nav_hint").withFilter("scope", "certificate"))
             .icon(Icon.of("certificate")).navGroup(HohenheimPanel.NETWORK_GROUP).navOrder(20)
-            .scope(TenantScopes.CERTIFICATES).reads(ResourceReads.rows())
+            .scope(TenantScopes.CERTIFICATES).reads(ResourceReads.rows().mapCells(CertificateParts::namesCell))
             .list(ResourceList.rows(table).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()
                 .search(CertificateModel.NICE_NAME, CertificateModel.DOMAIN_NAMES_TEXT)
                 .computed(Objects.requireNonNull(table.column(STATE_COLUMN)), (row, request) -> stateCell(row))
@@ -357,6 +358,15 @@ public final class CertificateParts {
             ResourceFieldBinding.of(RENEWAL_ERROR_DISPLAY.getName(), FieldAccess.alwaysReadonly()),
             ResourceFieldBinding.of(CertificateModel.ERROR_COUNT.getName(), FieldAccess.alwaysReadonly()),
             ResourceFieldBinding.of(NEXT_ATTEMPT_DISPLAY.getName(), FieldAccess.alwaysReadonly()));
+    }
+
+    /**
+     * The names a certificate covers as a list cell reads them ("starfleet.life, www.starfleet.life"): the stored text
+     * is comma-joined data, which the name column's subtext would otherwise print verbatim.
+     */
+    private static @Nullable Object namesCell(@NonNull Row cert, @NonNull ColumnSpec column) {
+        return CertificateModel.DOMAIN_NAMES_TEXT.getName().equals(column.name())
+            ? String.join(", ", CertificateCoverage.namesOf(cert)) : null;
     }
 
     /**

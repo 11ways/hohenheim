@@ -10,7 +10,6 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
@@ -138,12 +137,11 @@ public final class AccessListParts {
             .reads(ResourceReads.rows())
             .list(cells.apply(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
                 .search(AccessListModel.NAME)).build())
-            // AIDEV-NOTE: the quick-add bar is a NAME only: a list created empty is INERT, not a lockout
-            // (AccessListGate allows when a list carries no rules and no credential). The name is the one inline
-            // cell: SATISFY is the AND/OR of the request-time gate, so a cell edit would change on the next request
-            // whether the root group's rules must ALL pass.
+            // AIDEV-NOTE: no quick-add bar (board Access-List): a list is made through "New access list", which opens
+            // its form, and lists for one path are made by Protect a path. The name is the one inline cell: SATISFY
+            // is the AND/OR of the request-time gate, so a cell edit would change on the next request whether the
+            // root group's rules must ALL pass.
             .form(ResourceForm.<Row>of(form)
-                .quickCreate(QuickCreateSpec.of(AccessListModel.NAME.getName()))
                 .inlineEditable(AccessListModel.NAME)
                 .build())
             .deleteConfirmation(DeleteConfirmation.<Row>of(deleteBody(null))

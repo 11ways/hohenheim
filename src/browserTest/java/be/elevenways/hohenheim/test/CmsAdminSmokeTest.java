@@ -30,7 +30,7 @@ class CmsAdminSmokeTest extends HohenheimTestBase {
         assertThat(sidebar).as("what an app is made of is reached through Apps, not the sidebar")
             .doesNotContain("Sites")
             .doesNotContain("Instances")
-            .doesNotContain("Auth providers");
+            .doesNotContain("Sign-in providers");
 
         // The zenit-auth resources are wired into THIS panel, as tabs of the Access cluster. Their own behaviour
         // (create/edit/toggle/grants/roles journeys) is zenit-auth's to prove -- AuthCmsResourcesIntegrationTest.
