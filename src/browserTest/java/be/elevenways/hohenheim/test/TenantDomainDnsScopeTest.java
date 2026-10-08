@@ -1054,7 +1054,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         TableView.Applied<Row> applied = TableView
             .forPrincipal(Objects.requireNonNull(adminPrincipal.reference()).id(), parts.id()).build()
             .apply(PartsLists.<Row>tableSpec(parts))
-            .withSearch(parts.list().searchTerm(term));
+            .withSearch(term);
         return PartsReads.listRows(request, parts, null, applied, access);
     }
 

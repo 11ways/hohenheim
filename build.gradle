@@ -21,9 +21,10 @@ blastApp {
             microcopyScopes: ['dyndns_token': 'hohenheim', 'back_to_list': 'zenit-cms'],
     )
     // The shell user menu (za-user-menu, contributed by AuthCmsBridge) and the admin inbox page's
-    // <zc-inbox> hydrate, so zenit-auth and zenit-comms ride the client bundle too.
+    // <zc-inbox> hydrate, so zenit-auth and zenit-comms ride the client bundle too; a VM's screen is zenit-kvm's
+    // kvm-screen.
     implementation libs.zenit, libs.hawkeye, libs.plumage, libs.zenit.forms, libs.zenit.microcopy, libs.zenit.auth,
-            libs.zenit.cms, libs.zenit.comms, libs.zenit.media
+            libs.zenit.cms, libs.zenit.comms, libs.zenit.media, libs.zenit.kvm
 }
 
 blastGuards {
@@ -69,6 +70,9 @@ dependencies {
     // PEM parsing (BouncyCastle)
     serverImplementation libs.bouncycastle.pkix
 
+    // A VM's screen: the SPICE client its zenit-kvm screen source reads.
+    serverImplementation libs.pepperglass
+
     // The live-lane report is a TestExecutionListener, so the launcher API has to be on
     // the COMPILE path here, not merely on the runtime one Gradle supplies.
     browserTestImplementation libs.junit.launcher
@@ -79,6 +83,9 @@ dependencies {
     browserTestImplementation libs.zenit.test.support
     browserTestImplementation libs.zenit.browser.test.support
     browserTestImplementation libs.zenit.auth.test.support
+    // The screen journey: a scripted SPICE server behind a VM's screen, read through recording sockets.
+    browserTestImplementation(testFixtures(libs.pepperglass))
+    browserTestImplementation libs.zenit.kvm.test.support
     // PanelSurfaces: the stored before/after and twin captures of the /manage entries (stage 4 contract 4.9).
     browserTestImplementation libs.zenit.cms.test.support
     // The permission editor's capture projection, read by the surface captures through its service file.

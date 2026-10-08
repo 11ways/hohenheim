@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -24,6 +25,7 @@ import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -31,25 +33,17 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.kvm.common.ScreenMessage;
+import be.elevenways.zenit.kvm.test.support.RecordingScreenSocket;
 import java.time.Duration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.WebSocket;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Tag;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -160,7 +154,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
         String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, id);
         String agentlessHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, agentlessId);
         int userId = user("win-live");
-        WebSocket ws = null;
+        RecordingScreenSocket viewer = null;
 
         try {
             // 1. An absent PREPARED alias is refused against the REAL image store, by
@@ -227,23 +221,16 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             //    observe.
             RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, id,
                 HohenheimAccess.MANAGE, true);
-            RecordingClient client = new RecordingClient();
-            ws = HttpClient.newHttpClient().newWebSocketBuilder()
-                .header("Cookie", sessionCookieHeader(sessionFor(userId).token()))
-                .buildAsync(URI.create("ws://localhost:" + getServerPort()
-                    + "/ws/instance-framebuffer/" + id), client)
-                .join();
+            viewer = RecordingScreenSocket.as(new UserPrincipal(userId, "Windows tenant")).autoAck(true)
+                .with(HohenheimEndpoints.INSTANCE_ID, id).open(HohenheimEndpoints.VM_FRAMEBUFFER);
             assertThat(ipv4Of(incus, handle))
                 .as("step 5: the guest has NOT taken an address yet, so this frame cannot"
                     + " be coming from a booted guest")
                 .isNull();
-            assertThat(client.binaryArrived.await(60, TimeUnit.SECONDS))
-                .as("step 5: a VGA framebuffer frame reaches the granted tenant")
-                .isTrue();
-            byte[] frame = client.lastBinary.get();
-            assertThat(frame).as("step 5: the frame carries bytes").isNotNull().isNotEmpty();
-            assertThat(new String(frame, 1, 3, StandardCharsets.US_ASCII))
-                .as("step 5: and it is a PNG image").isEqualTo("PNG");
+            viewer.await(ScreenMessage.FrameEnd.class, end -> true);
+            assertThat(viewer.picture().width())
+                .as("step 5: a frame of the VM's SPICE screen reaches the granted tenant")
+                .isPositive();
 
             // 6. THE GUEST-AGENT CAPABILITY IS HONOURED LIVE: an exec-driven install
             //    REFUSES BY NAME rather than burning the 600s agent-ready window and
@@ -339,8 +326,8 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
                 .as("step 9: the daemon no longer knows the handle after destroy")
                 .contains("ERROR");
         } finally {
-            if (ws != null) {
-                ws.abort();
+            if (viewer != null) {
+                viewer.disconnect();
             }
             for (int record : List.of(id, agentlessId, absentId)) {
                 try {
@@ -507,41 +494,6 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             } catch (IOException absent) {
                 // a chain the daemon never made is not an error; 8b measures the outcome
             }
-        }
-    }
-
-    /** Records the framebuffer frames a real viewer socket receives. */
-    private static final class RecordingClient implements WebSocket.Listener {
-
-        private final CountDownLatch binaryArrived = new CountDownLatch(1);
-        private final AtomicReference<byte[]> lastBinary = new AtomicReference<>();
-        private final AtomicInteger closeCode = new AtomicInteger(-1);
-
-        @Override
-        public void onOpen(WebSocket webSocket) {
-            webSocket.request(1);
-        }
-
-        @Override
-        public CompletionStage<?> onBinary(WebSocket webSocket, ByteBuffer data, boolean last) {
-            byte[] bytes = new byte[data.remaining()];
-            data.get(bytes);
-            this.lastBinary.set(bytes);
-            this.binaryArrived.countDown();
-            webSocket.request(1);
-            return null;
-        }
-
-        @Override
-        public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
-            webSocket.request(1);
-            return null;
-        }
-
-        @Override
-        public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-            this.closeCode.set(statusCode);
-            return null;
         }
     }
 }

@@ -58,18 +58,8 @@ final class IncusGuestLane {
     // -- the console ----------------------------------------------------------------
 
     ConsoleStreamSupport.@NonNull Console openConsole(@NonNull String handle) throws IOException {
-        Map<String, Object> operation = this.incus.startConsole(handle);
-        Object id = operation.get("id");
-        Object metadata = operation.get("metadata");
-        String secret = metadata instanceof Map<?, ?> meta
-            && meta.get("fds") instanceof Map<?, ?> fds
-            && fds.get("0") instanceof String value ? value : null;
-        if (id == null || secret == null) {
-            throw new IOException("Incus console operation of '" + handle
-                + "' carried no websocket secret");
-        }
-        IncusWebSocket socket = this.incus.operationWebSocket(
-            "/1.0/operations/" + id, secret);
+        IncusWebSocket socket = this.incus.operationWebSocket(IncusClient.OperationSocket.of(
+            this.incus.startConsole(handle), "Incus console operation of '" + handle + "'"));
         // /dev/console is bidirectional by construction: what we write IS delivered to
         // the workload's console, unlike Docker's discarded attach-without-OpenStdin.
         // AIDEV-NOTE: NOT declared interactive, deliberately. /dev/console of a system

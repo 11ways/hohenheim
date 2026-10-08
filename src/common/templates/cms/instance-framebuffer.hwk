@@ -1,11 +1,10 @@
-{#- Framebuffer rescue console for a VM instance: server-captured VGA snapshots
-    stream down as binary frames, keyboard input rides back up. VM kinds only
-    (the tab hides on containers). -#}
+{#- The screen mode of a VM's console: its live screen over zenit-kvm, fed by the VM's SPICE
+    server, with input going back. VM kinds only (the mode hides on containers). -#}
 {% declare title: String %}
 {% declare instanceName: String %}
 {% declare instanceId: Integer %}
 {% declare running: Boolean = false %}
-{% declare framebufferWsUrl: String %}
+{% declare screenUrl: String %}
 {% declare head: RecordHeadState = null %}
 {% declare consoleModes: List<ConsoleModeView> %}
 {% extend "zenitcms:shell" var:title=title %}
@@ -23,10 +22,7 @@
                     <pl-card-description>{{ t("description", scope: "instance_framebuffer") }}</pl-card-description>
                 </pl-card-header>
                 <pl-card-content>
-                    <pl-framebuffer
-                        interactive={% true %}
-                        wsUrl={% framebufferWsUrl %}>
-                    </pl-framebuffer>
+                    <hh-vm-screen endpoint={% screenUrl %} label={% instanceName %}></hh-vm-screen>
                     <p class="instance-console-hint">{{ t("hint", scope: "instance_framebuffer") }}</p>
                 </pl-card-content>
             </pl-card>

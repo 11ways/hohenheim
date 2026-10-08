@@ -1,0 +1,34 @@
+{% tag HhVmScreen {
+    /* A VM's live screen with its control buttons: every viewer the gate admits may drive it, one at a time, so a
+       watcher asks for control and the one holding it can give it back. Which button shows follows the role the
+       viewer reflects on kvm-screen. */
+    public required endpoint: String
+    public label: String = ""
+
+    private screenEl: DominoElement
+
+    style {
+        display: block;
+
+        .hh-vm-screen-controls {
+            display: flex;
+            gap: var(--pl-space-sm);
+            margin-block-start: var(--pl-space-sm);
+        }
+
+        kvm-screen:not([data-screen-role="watcher"]) ~ .hh-vm-screen-controls .hh-vm-screen-take,
+        kvm-screen:not([data-screen-role="controller"]) ~ .hh-vm-screen-controls .hh-vm-screen-release {
+            display: none;
+        }
+    }
+
+    template {
+        <kvm-screen :ref={% screenEl %} endpoint={% endpoint %} label={% label %}></kvm-screen>
+        <div class="hh-vm-screen-controls">
+            <pl-button class="hh-vm-screen-take" variant="outline"
+                       event:click={% Kvm.control(screenEl, true) %}>{{ t("take_control", scope: "instance_framebuffer") }}</pl-button>
+            <pl-button class="hh-vm-screen-release" variant="outline"
+                       event:click={% Kvm.control(screenEl, false) %}>{{ t("release_control", scope: "instance_framebuffer") }}</pl-button>
+        </div>
+    }
+} %}

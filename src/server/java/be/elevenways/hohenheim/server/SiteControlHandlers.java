@@ -9,7 +9,7 @@ import be.elevenways.hohenheim.server.devtunnel.DevTunnelServerHandler;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceConsoleHandler;
 import be.elevenways.hohenheim.server.instance.InstanceShellHandler;
-import be.elevenways.hohenheim.server.instance.VmFramebufferHandler;
+import be.elevenways.hohenheim.server.instance.VmScreens;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.protoblast.common.Blast;
@@ -179,9 +179,7 @@ final class SiteControlHandlers {
             new InstanceShellHandler(session,
                 session.getParameter(HohenheimEndpoints.INSTANCE_ID)));
 
-        HohenheimEndpoints.VM_FRAMEBUFFER.setHandlerFactory(session ->
-            new VmFramebufferHandler(session,
-                session.getParameter(HohenheimEndpoints.INSTANCE_ID)));
+        VmScreens.install();
     }
 
     static void initDevTunnel() {
