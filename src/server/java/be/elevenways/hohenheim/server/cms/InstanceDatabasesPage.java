@@ -81,8 +81,9 @@ public final class InstanceDatabasesPage implements RecordTab.Rendered<Row> {
                 ? String.valueOf((Object) database.get(DatabaseModel.NAME)) : "");
             entry.put("engine", database != null
                 ? String.valueOf((Object) database.get(DatabaseModel.ENGINE)) : "");
-            entry.put("status", database != null
-                ? String.valueOf((Object) database.get(DatabaseModel.STATUS)) : "");
+            // What the database does (DatabaseVerdict), the words its own list and attention item use.
+            entry.put("status", database != null ? DatabaseVerdict.ofDatabase(database).state().label()
+                .resolve(conduit.getLocales(), conduit.getMessageResolver()) : "");
             entry.put("prefix", DatabaseEnvInjection.normalizedPrefix(
                 link.get(InstanceDatabaseModel.ENV_PREFIX)));
             entry.put("editTarget", CmsRoutes.detail(panel, "instance-databases",

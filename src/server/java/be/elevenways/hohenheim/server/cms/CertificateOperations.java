@@ -188,8 +188,9 @@ public final class CertificateOperations {
             .inSheet()
             .inputValues((domain, request) -> prefill(domain))
             // A name a working certificate already covers needs no new one: changing that certificate is its own
-            // reissue, on the certificate's row.
-            .hiddenWhen(domain -> CertificateCoverage.covers(CertificateCoverage.activeNames(),
+            // reissue, on the certificate's row. Working is what the proxy loaded: a stored row it cannot load
+            // covers nothing, so its name is offered a certificate.
+            .hiddenWhen(domain -> CertificateCoverage.covers(CertificateCoverage.workingNames(),
                 domain.get(SiteDomainModel.HOSTNAME)))
             .build();
     }

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.tls;
 
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -77,10 +78,30 @@ public final class CertificateCoverage {
     }
 
     /**
-     * Every name an ACTIVE certificate declares, read once, for callers that ask about many hostnames (the route
-     * table build).
+     * The names a working certificate covers: what the running proxy's certificate store loaded (the names it answers
+     * a handshake for), and the names an ACTIVE certificate row declares only where no proxy runs in this process (a
+     * node without the proxy role, a test), because the stored rows are then all there is to read.
+     *
+     * AIDEV-NOTE: THE rule routing (RouteTableBuilder's global force), the force-HTTPS latch, "Get a certificate" and
+     * every HTTPS display (AppHealth.workingNames, which also asks whether the listener terminates) read. An ACTIVE row
+     * is not a working certificate: D10b found a row without loadable material sent to HTTPS by the global setting,
+     * auto-forced and hiding "Get a certificate", while the proxy could serve it nothing.
      */
-    public static @NonNull Set<String> activeNames() {
+    public static @NonNull Set<String> workingNames() {
+        var proxy = ServerMain.getProxyServer();
+        return workingNames(proxy == null ? null : proxy.getCertificateStore());
+    }
+
+    /**
+     * @param store the proxy's certificate store, null where no proxy runs in this process
+     * @return {@link #workingNames()} for that store: what it loaded, or the ACTIVE rows without one
+     */
+    public static @NonNull Set<String> workingNames(@Nullable CertificateStore store) {
+        return store == null ? activeNames() : store.servedNames();
+    }
+
+    /** Every name an ACTIVE certificate row declares, read once. */
+    private static @NonNull Set<String> activeNames() {
         Set<String> names = new HashSet<>();
         for (Row cert : Models.get(CertificateModel.class).find()
                 .where(CertificateModel.STATUS.eq(CertificateModel.STATUS_ACTIVE)).all()) {
@@ -91,7 +112,7 @@ public final class CertificateCoverage {
         return names;
     }
 
-    /** @return whether one of {@code names} (a SAN list or {@link #activeNames()}) covers the hostname */
+    /** @return whether one of {@code names} (a SAN list or {@link #workingNames()}) covers the hostname */
     public static boolean covers(@NonNull Collection<String> names, @Nullable String hostname) {
         if (hostname == null || hostname.isEmpty()) {
             return false;

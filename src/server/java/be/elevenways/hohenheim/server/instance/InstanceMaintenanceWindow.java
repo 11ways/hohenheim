@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
@@ -130,8 +131,15 @@ final class InstanceMaintenanceWindow {
             case HOLD_ERROR -> InstanceModel.STATUS_ERROR;
         };
         try {
-            InstanceOperationGuard.stamp(instances.leases(), instanceId, resolved.serverId(), ended,
-                resolved.row().get(InstanceModel.NAME));
+            if (InstanceModel.STATUS_ERROR.equals(ended)) {
+                // Held in error past the point of no return: the restore's own failure is what the record says.
+                InstanceOperationGuard.stampError(instances.leases(), instanceId, resolved.serverId(),
+                    resolved.row().get(InstanceModel.NAME), HohenheimActivityAction.WORKLOAD_RESTORE_FAILED,
+                    failure.getMessage());
+            } else {
+                InstanceOperationGuard.stamp(instances.leases(), instanceId, resolved.serverId(), ended,
+                    resolved.row().get(InstanceModel.NAME));
+            }
         } catch (RuntimeException stampFailed) {
             // Fenced out: the record is a rival controller's now and so is its settle.
             failure.addSuppressed(stampFailed);

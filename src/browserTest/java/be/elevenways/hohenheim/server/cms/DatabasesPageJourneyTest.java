@@ -1,11 +1,17 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
+import be.elevenways.hohenheim.server.database.DatabaseEngines;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
+import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.hohenheim.test.database.EngineHandles;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -52,8 +58,9 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
     void aDatabaseSaysWhereItRunsWhoUsesItAndItsLastBackup() throws Exception {
         List<Runnable> cleanup = new ArrayList<>();
         try {
-            // 1. A persistent database an app uses, and a temporary one nobody uses.
+            // 1. A persistent database an app uses, its engine running, and a temporary one nobody uses.
             Row shop = database(cleanup, "shop", false);
+            plantEngine(cleanup, shop, InstanceModel.STATUS_RUNNING);
             Row scratch = database(cleanup, "scratch", true);
             Row app = row(cleanup, Models.get(InstanceModel.class), Map.of(InstanceModel.NAME.getName(), PREFIX + "app",
                 InstanceModel.KIND.getName(), "hohenheim:docker_container",
@@ -171,7 +178,8 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
             assertThat(below).as("step 8: titled and explained in the board's words")
                 .contains("Engines").contains("Shared engines hold many databases, each with its own user.")
                 .as("step 8: the engine by its kind and host").contains("MySQL on " + host)
-                .as("step 8: how many databases it holds and its state").contains("1 database, active")
+                .as("step 8: how many databases it holds and what its engine does, never the stored \"active\"")
+                .contains("1 database, not running")
                 .as("step 8: opening the engine")
                 .contains("/admin/" + DatabaseParts.ENGINES_SLUG + "/" + engine.get(DatabaseEngineModel.ID) + "/open");
         } finally {
@@ -179,6 +187,138 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
                 cleanup.get(i).run();
             }
         }
+    }
+
+    /**
+     * One stopped shared database two apps use is ONE problem, at its root, and every surface reads the same verdict
+     * (D12): the database's item names the apps it holds back, theirs fold under it, and its list cell, the Engines
+     * card, an app's Databases tab and Back up now all say what its engine does.
+     */
+    @Test
+    void aDatabaseThatDoesNotRunIsOneProblemEverySurfaceReads() throws Exception {
+        List<Runnable> cleanup = new ArrayList<>();
+        try {
+            // 1. A shared engine running one database that two apps use: nothing to say.
+            Row engine = row(cleanup, Models.get(DatabaseEngineModel.class), Map.of(
+                DatabaseEngineModel.NAME.getName(), PREFIX + "d12-engine", DatabaseEngineModel.ENGINE.getName(), "mysql",
+                DatabaseEngineModel.ROOT_USER.getName(), "root", DatabaseEngineModel.ROOT_PASSWORD.getName(), "rootpw",
+                DatabaseEngineModel.SERVER_ID.getName(), ServerModel.localServerId(),
+                DatabaseEngineModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
+            Row shared = row(cleanup, Models.get(DatabaseModel.class), Map.of(DatabaseModel.NAME.getName(),
+                PREFIX + "d12-shop", DatabaseModel.ENGINE.getName(), "mysql", DatabaseModel.PLACEMENT.getName(),
+                DatabaseModel.PLACEMENT_SHARED, DatabaseModel.ENGINE_ID.getName(), engine.get(DatabaseEngineModel.ID),
+                DatabaseModel.DB_NAME.getName(), "d12shop", DatabaseModel.DB_USER.getName(), "d12shop",
+                DatabaseModel.DB_PASSWORD.getName(), "d12-secret-password",
+                DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId(),
+                DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
+            String engineHandle = EngineHandles.plantEngine(engine.get(DatabaseEngineModel.ID), PREFIX + "d12-engine",
+                "mysql", InstanceModel.STATUS_RUNNING);
+            Row engineInstance = DatabaseInstances.owned(shared.get(DatabaseModel.ID));
+            assertThat(engineInstance).as("step 1: the planted engine serves the shared database (" + engineHandle
+                + ")").isNotNull();
+            cleanup.add(() -> OwnedInstances.inScopeUnchecked(DatabaseEngines.SOURCE, DatabaseEngineModel.MODEL_ID,
+                engine.get(DatabaseEngineModel.ID), () -> HardDeletes.row(Models.get(InstanceModel.class), engineInstance)));
+            Row shopApp = app(cleanup, PREFIX + "d12-shop-app", shared);
+            app(cleanup, PREFIX + "d12-blog-app", shared);
+            int sharedId = shared.get(DatabaseModel.ID);
+            assertThat(DatabaseVerdict.ofDatabase(shared).state()).as("step 1: its engine runs, so it runs")
+                .isEqualTo(DatabaseVerdict.State.RUNNING);
+            assertThat(rootOf(AttentionCollector.databases(), sharedId)).as("step 1: a running database raises nothing")
+                .isNull();
+
+            // 2. The engine stops. The database is the root: one item titled by the database, with its action, saying
+            //    how many apps it holds back, in English and in Dutch.
+            engineStatus(engineInstance, InstanceModel.STATUS_STOPPED);
+            List<AttentionItem> tier = AttentionCollector.databases();
+            AttentionItem root = rootOf(tier, sharedId);
+            assertThat(root).as("step 2: the stopped database raises its own item").isNotNull();
+            assertThat(say(root.title())).as("step 2: titled in words by the database")
+                .isEqualTo("Database " + PREFIX + "d12-shop is not running");
+            assertThat(root.title().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 2: in Dutch too").isEqualTo("Database " + PREFIX + "d12-shop draait niet");
+            assertThat(say(root.detail())).as("step 2: saying why").isEqualTo("Its engine is not running");
+            assertThat(say(root.heldBack())).as("step 2: naming the apps it holds back").isEqualTo("2 apps use it");
+            assertThat(say(root.action())).as("step 2: with its action").isEqualTo("Open the database");
+            assertThat(root.target().toUrl()).as("step 2: opening the database's front door")
+                .isEqualTo("/admin/" + DatabaseParts.SLUG + "/" + sharedId + "/open");
+
+            // 3. Each app's own item names the database as its cause and folds under it: the dashboard's band and the
+            //    Databases band draw the root alone, never "Instance Shop" twice over.
+            List<AttentionItem> perApp = tier.stream()
+                .filter(item -> AttentionSubject.database(sharedId).equals(item.causedBy())).toList();
+            assertThat(perApp).as("step 3: one item per app, each caused by the database").hasSize(2);
+            List<AttentionItem> dashboard = DashboardAttention.read(AttentionCollector.collect(), true).attention();
+            assertThat(dashboard).as("step 3: the dashboard draws the database's item")
+                .anySatisfy(item -> assertThat(item.about()).isEqualTo(AttentionSubject.database(sharedId)));
+            assertThat(dashboard).as("step 3: and folds the apps' items under it")
+                .noneSatisfy(item -> assertThat(item.causedBy()).isEqualTo(AttentionSubject.database(sharedId)));
+            assertThat(DashboardAttention.band(tier)).as("step 3: the Databases band folds them the same way")
+                .noneSatisfy(item -> assertThat(item.causedBy()).isEqualTo(AttentionSubject.database(sharedId)));
+            String list = adminGet("/admin/" + DatabaseParts.SLUG).body();
+            assertThat(list).as("step 3: the Databases page leads with the database's item")
+                .contains("Database " + PREFIX + "d12-shop is not running").contains("2 apps use it")
+                .doesNotContain(PREFIX + "d12-shop-app cannot use its database");
+
+            // 4. One verdict: the list's state cell, the Engines card, the app's Databases tab and Back up now all read
+            //    what the engine does, never the stored "active" the attention item contradicted.
+            assertThat(list).as("step 4: the list's state cell reads not running")
+                .contains("data-state=\"" + DatabaseVerdict.State.NOT_RUNNING.token() + "\"")
+                .as("step 4: the Engines card says the same").contains("1 database, not running");
+            assertThat(say(DatabaseParts.backUpUnavailable(shared))).as("step 4: Back up now is offered dead")
+                .isEqualTo("Only a running database can be backed up.");
+            String appTab = adminGet("/admin/" + InstanceParts.SLUG + "/" + shopApp.get(InstanceModel.ID)
+                + "/page/databases").body();
+            assertThat(appTab).as("step 4: the app's Databases tab reads the same words").contains("Not running</a>");
+
+            // 5. The engine runs again: the item, the apps' items and the not-running words all clear.
+            engineStatus(engineInstance, InstanceModel.STATUS_RUNNING);
+            assertThat(rootOf(AttentionCollector.databases(), sharedId)).as("step 5: nothing left to say").isNull();
+            assertThat(AttentionCollector.databases()).as("step 5: no app is held back")
+                .noneSatisfy(item -> assertThat(item.causedBy()).isEqualTo(AttentionSubject.database(sharedId)));
+            assertThat(adminGet("/admin/" + DatabaseParts.SLUG).body()).as("step 5: the list reads running")
+                .contains("data-state=\"" + DatabaseVerdict.State.RUNNING.token() + "\"");
+        } finally {
+            for (int i = cleanup.size() - 1; i >= 0; i--) {
+                cleanup.get(i).run();
+            }
+        }
+    }
+
+    private static AttentionItem rootOf(List<AttentionItem> items, int databaseId) {
+        return items.stream().filter(item -> AttentionSubject.database(databaseId).equals(item.about()))
+            .findFirst().orElse(null);
+    }
+
+    /** A stopped docker app using this database. */
+    private static Row app(List<Runnable> cleanup, String name, Row database) {
+        Row app = row(cleanup, Models.get(InstanceModel.class), Map.of(InstanceModel.NAME.getName(), name,
+            InstanceModel.KIND.getName(), "hohenheim:docker_container",
+            InstanceModel.SETTINGS.getName(), new LinkedHashMap<>(Map.of("image", "alpine")),
+            InstanceModel.STATUS.getName(), InstanceModel.STATUS_STOPPED,
+            InstanceModel.SERVER_ID.getName(), ServerModel.localServerId()));
+        row(cleanup, Models.get(InstanceDatabaseModel.class), Map.of(
+            InstanceDatabaseModel.INSTANCE_ID.getName(), app.get(InstanceModel.ID),
+            InstanceDatabaseModel.DATABASE_ID.getName(), database.get(DatabaseModel.ID),
+            InstanceDatabaseModel.ENV_PREFIX.getName(), "DB"));
+        return app;
+    }
+
+    /** The engine instance serving a dedicated database, planted with no daemon. */
+    private static void plantEngine(List<Runnable> cleanup, Row database, String status) {
+        EngineHandles.plant(database.get(DatabaseModel.ID), String.valueOf((Object) database.get(DatabaseModel.NAME)),
+            "mysql", status);
+        Row planted = DatabaseInstances.owned(database.get(DatabaseModel.ID));
+        // A generated row is only removed in its owner's scope (GeneratedRows), as its owner's own teardown does.
+        cleanup.add(() -> OwnedInstances.inScopeUnchecked(DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID,
+            database.get(DatabaseModel.ID), () -> HardDeletes.row(Models.get(InstanceModel.class), planted)));
+    }
+
+    /** What the status reconciler would have stamped, written the way it writes (hook-free). */
+    private static void engineStatus(Row engineInstance, String status) {
+        Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(engineInstance.get(InstanceModel.ID)))
+            .assign(InstanceModel.STATUS, status)
+            .bypassBehaviours()
+            .updateAll();
     }
 
     private static Row database(List<Runnable> cleanup, String name, boolean ephemeral) {

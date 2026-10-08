@@ -389,7 +389,7 @@ public final class InstanceService {
             // Fence first, ledger second: a fenced-out loser must not park the
             // winner's claims. Whatever the previous deploy held is unverifiable
             // for a still-fenced controller: park, never delete.
-            stampGuarded(resolved, InstanceModel.STATUS_ERROR);
+            stampGuardedError(resolved, HohenheimActivityAction.WORKLOAD_START_FAILED, e.getMessage());
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
             throw HohenheimViolations.instanceRefusal("instance_deploy_failed", resolved.row(), e);
         } catch (Violations refused) {
@@ -447,7 +447,7 @@ public final class InstanceService {
             PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
             recordPower(instanceId, HohenheimActivityAction.STOPPED, resolved);
         } catch (IOException e) {
-            stampGuarded(resolved, InstanceModel.STATUS_ERROR);
+            stampGuardedError(resolved, HohenheimActivityAction.WORKLOAD_STOP_FAILED, e.getMessage());
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
             throw HohenheimViolations.instanceRefusal("instance_stop_failed", resolved.row(), e);
         }
@@ -510,7 +510,7 @@ public final class InstanceService {
             // still attributes it to this record, and ONLY then.
             destroyAbandonedMigrationCopy(resolved);
         } catch (IOException e) {
-            stampGuarded(resolved, InstanceModel.STATUS_ERROR);
+            stampGuardedError(resolved, HohenheimActivityAction.WORKLOAD_REMOVE_FAILED, e.getMessage());
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
             throw HohenheimViolations.instanceRefusal("instance_destroy_failed", resolved.row(), e);
         }
@@ -677,6 +677,13 @@ public final class InstanceService {
         InstanceOperationGuard.stamp(this.leases, resolved.row().get(InstanceModel.ID),
             resolved.serverId(), status,
             String.valueOf((Object) resolved.row().get(InstanceModel.NAME)));
+    }
+
+    /** {@link #stampGuarded} of {@code error}, naming what caused it. */
+    private void stampGuardedError(@NonNull Resolved resolved, @NonNull HohenheimActivityAction cause,
+                                   @Nullable String detail) {
+        InstanceOperationGuard.stampError(this.leases, resolved.row().get(InstanceModel.ID),
+            resolved.serverId(), String.valueOf((Object) resolved.row().get(InstanceModel.NAME)), cause, detail);
     }
 
     /** The lease set this service mutates hosts under (shared with snapshot/backup ops). */
@@ -874,11 +881,17 @@ public final class InstanceService {
             settled = InstanceModel.STATUS_ERROR;
         }
         this.leases.requireFence(resolved.serverId());
-        InstanceOperationGuard.stamp(this.leases, instanceId, resolved.serverId(),
-            settled, row.get(InstanceModel.NAME));
-        ActivityLog.record(Models.get(InstanceModel.class), instanceId,
-            HohenheimActivityAction.SETTLED_INTERRUPTED, status + " -> " + settled
-                + " (interrupted by a controller restart)");
+        if (InstanceModel.STATUS_ERROR.equals(settled)) {
+            // A restore a controller restart cut off: its cause row says so, and is the settle's record.
+            InstanceOperationGuard.stampError(this.leases, instanceId, resolved.serverId(), row.get(InstanceModel.NAME),
+                HohenheimActivityAction.WORKLOAD_RESTORE_INTERRUPTED, null);
+        } else {
+            InstanceOperationGuard.stamp(this.leases, instanceId, resolved.serverId(),
+                settled, row.get(InstanceModel.NAME));
+            ActivityLog.record(Models.get(InstanceModel.class), instanceId,
+                HohenheimActivityAction.SETTLED_INTERRUPTED, status + " -> " + settled
+                    + " (interrupted by a controller restart)");
+        }
         Blast.log("INSTANCE: settled interrupted", status, "state of",
             row.get(InstanceModel.NAME), "->", settled);
         return true;

@@ -82,7 +82,7 @@ public final class InstanceAttention {
             AttentionSubject subject = AttentionSubject.instance(instance.get(InstanceModel.ID));
             items.add(item(AttentionSeverity.ERROR, "box",
                 AppHealth.Stoppage.AFTER_ERROR.title(instance.get(InstanceModel.NAME)),
-                copy("instance_crashed", "attention_detail"),
+                WorkloadErrors.detailOf(instance, true),
                 InstanceParts.recordRoute(ADMIN, instance, InstanceConsolePage.SLUG),
                 action("act_open_console"))
                 .about(subject, sitesHeldText(sitesHeld.get(subject))));

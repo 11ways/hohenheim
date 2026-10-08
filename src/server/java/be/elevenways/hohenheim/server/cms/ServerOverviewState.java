@@ -480,7 +480,8 @@ public final class ServerOverviewState {
             workloads.add(new WorkloadView(
                 String.valueOf((Object) database.get(DatabaseModel.NAME)),
                 WorkloadTier.DATABASE,
-                badgeOf(DatabaseModel.STATUS, database.get(DatabaseModel.STATUS)),
+                // What it does, never the stored "active" (DatabaseVerdict): the list and the attention band agree.
+                DatabaseVerdict.ofDatabase(database).badge(),
                 database.get(DatabaseModel.MEMORY_LIMIT_MB),
                 CmsRoutes.detail(panel, "databases", database.get(DatabaseModel.ID))));
         }
@@ -492,7 +493,7 @@ public final class ServerOverviewState {
             workloads.add(new WorkloadView(
                 String.valueOf((Object) engine.get(DatabaseEngineModel.NAME)),
                 WorkloadTier.DATABASE_ENGINE,
-                badgeOf(DatabaseEngineModel.STATUS, engine.get(DatabaseEngineModel.STATUS)),
+                DatabaseVerdict.ofEngine(engine).badge(),
                 engine.get(DatabaseEngineModel.MEMORY_LIMIT_MB),
                 CmsRoutes.detail(panel, DatabaseParts.ENGINES_SLUG,
                     engine.get(DatabaseEngineModel.ID))));

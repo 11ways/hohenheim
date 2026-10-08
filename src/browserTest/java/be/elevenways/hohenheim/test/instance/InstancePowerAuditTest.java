@@ -6,7 +6,11 @@ import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.server.panel.OperationWrites;
 import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
+import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.server.cms.InstanceAttention;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -29,6 +33,7 @@ import be.elevenways.zenit.common.security.PrincipalRef;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -160,6 +165,23 @@ class InstancePowerAuditTest {
                 .as("step 3: and the failed deploy recorded nothing -- only settled"
                     + " operations are answerable")
                 .hasSize(2);
+
+            // 3b. The ERROR names what caused it (D12): the failed start is recorded as the cause, with the failure's
+            //     own message, and the dashboard item words it, never "exited unexpectedly".
+            List<Row> causes = activityFor(id, HohenheimActivityAction.WORKLOAD_START_FAILED.id().toString());
+            assertThat(causes).as("step 3b: the error's cause is recorded once").hasSize(1);
+            assertThat((String) causes.get(0).get(ActivityModel.DETAIL))
+                .as("step 3b: with the failure's own message").isNotBlank();
+            List<AttentionItem> items = new ArrayList<>();
+            InstanceAttention.crashedInstances(items);
+            AttentionItem item = items.stream().filter(candidate -> candidate.target().toUrl()
+                .contains("/instances/" + id + "/")).findFirst().orElseThrow();
+            assertThat(item.detail().key()).as("step 3b: the item's detail is the cause and its reason")
+                .isEqualTo("error_cause_reason");
+            assertThat(item.detail().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 3b: in words that say what happened")
+                .startsWith("audit-restart could not be started: ")
+                .doesNotContain("exited unexpectedly");
 
             FakeNativeDaemons.daemonOf(hostId).remove(handle);
         });

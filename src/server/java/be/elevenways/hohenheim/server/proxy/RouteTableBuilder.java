@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughProvider;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
+import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.protoblast.common.Blast;
@@ -64,6 +65,7 @@ final class RouteTableBuilder {
 
     private final SessionStore sessionStore;
     private final TlsPassthroughRoutes tlsPassthroughRoutes;
+    private final CertificateStore certificates;
 
     private final Map<String, List<RouteEntry>> exact = new HashMap<>();
     private final List<WildcardRoute> wildcard = new ArrayList<>();
@@ -78,9 +80,12 @@ final class RouteTableBuilder {
 
     private boolean used;
 
-    RouteTableBuilder(@NonNull SessionStore sessionStore, @NonNull TlsPassthroughRoutes tlsPassthroughRoutes) {
+    /** @param certificates the proxy's certificate store, loaded before every route build */
+    RouteTableBuilder(@NonNull SessionStore sessionStore, @NonNull TlsPassthroughRoutes tlsPassthroughRoutes,
+                      @NonNull CertificateStore certificates) {
         this.sessionStore = sessionStore;
         this.tlsPassthroughRoutes = tlsPassthroughRoutes;
+        this.certificates = certificates;
     }
 
     /** The rows one generation is built from, each bucketed with ONE query per table. */
@@ -89,7 +94,8 @@ final class RouteTableBuilder {
                           Map<Integer, Row> authProviders, Map<Integer, List<Row>> protectedPathsBySite,
                           Set<String> certifiedNames) {
 
-        static Inputs load() {
+        /** @param certificates the proxy's store: the names it loaded are the working ones the global force waits for */
+        static Inputs load(@NonNull CertificateStore certificates) {
             List<Row> sites = Models.get(SiteModel.class).findEnabled();
             Map<Integer, List<Row>> domainsBySite = new HashMap<>();
             for (Row domain : Models.get(SiteDomainModel.class).find().all()) {
@@ -128,7 +134,7 @@ final class RouteTableBuilder {
                 }
             }
             return new Inputs(sites, domainsBySite, accessLists, rulesByList, authProviders,
-                protectedPathsBySite, CertificateCoverage.activeNames());
+                protectedPathsBySite, CertificateCoverage.workingNames(certificates));
         }
     }
 
@@ -151,7 +157,7 @@ final class RouteTableBuilder {
     }
 
     private RouteTable buildUnguarded() {
-        Inputs inputs = Inputs.load();
+        Inputs inputs = Inputs.load(this.certificates);
         for (Row site : inputs.sites()) {
             addSite(site, inputs);
         }

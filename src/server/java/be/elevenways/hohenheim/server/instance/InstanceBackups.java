@@ -291,9 +291,9 @@ public final class InstanceBackups {
                 } catch (RuntimeException restartFailed) {
                     FileTrees.deleteQuietly(staging);
                     if (application) {
-                        InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
-                            resolved.serverId(), InstanceModel.STATUS_ERROR,
-                            owner.get(InstanceModel.NAME));
+                        InstanceOperationGuard.stampError(this.instances.leases(), instanceId,
+                            resolved.serverId(), owner.get(InstanceModel.NAME),
+                            HohenheimActivityAction.WORKLOAD_START_FAILED, restartFailed.getMessage());
                     }
                     failedRow(instanceId, targetId, null,
                         "Backup failed: prior serving workload could not be restarted");

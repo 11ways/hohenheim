@@ -80,7 +80,40 @@ public enum HohenheimActivityAction implements ActivityAction {
     DISABLED("disabled"),
     CLONED("cloned"),
     QUARANTINE_LIFTED("quarantine_lifted"),
-    HTTPS_FORCED("https_forced");
+    HTTPS_FORCED("https_forced"),
+
+    // What stamped a workload ERROR, each recorded beside the status by InstanceOperationGuard.stampError; its
+    // sentence is the dashboard's crash detail, so the item says what happened instead of guessing a crash.
+    WORKLOAD_EXITED("workload_exited", ErrorCause.EXIT_CODE),
+    WORKLOAD_CRASH_LOOPED("workload_crash_looped", ErrorCause.PLAIN),
+    WORKLOAD_START_FAILED("workload_start_failed", ErrorCause.MESSAGE),
+    WORKLOAD_NEVER_READY("workload_never_ready", ErrorCause.PLAIN),
+    WORKLOAD_STOP_FAILED("workload_stop_failed", ErrorCause.MESSAGE),
+    WORKLOAD_REMOVE_FAILED("workload_remove_failed", ErrorCause.MESSAGE),
+    WORKLOAD_RESTORE_FAILED("workload_restore_failed", ErrorCause.MESSAGE),
+    WORKLOAD_RESTORE_INTERRUPTED("workload_restore_interrupted", ErrorCause.PLAIN),
+    WORKLOAD_COPY_LOST("workload_copy_lost", ErrorCause.PLAIN);
+
+    /** Whether a verb is the cause of a workload's ERROR status, and what its row's detail then holds. */
+    public enum ErrorCause {
+
+        /** Not a cause: the verb records something else. */
+        NONE,
+
+        /** A cause whose row carries no detail. */
+        PLAIN,
+
+        /** A cause whose row's detail is the exit code the workload ended with, when one was seen. */
+        EXIT_CODE,
+
+        /** A cause whose row's detail is the failure's own message, verbatim. */
+        MESSAGE;
+
+        /** @return whether a verb with this fact is the cause of an ERROR status */
+        public boolean isCause() {
+            return this != NONE;
+        }
+    }
 
     static {
         ActivityActions.register(HohenheimMicrocopy.SCOPE, values());
@@ -95,10 +128,21 @@ public enum HohenheimActivityAction implements ActivityAction {
 
     private final @NonNull String value;
     private final @NonNull Identifier id;
+    private final @NonNull ErrorCause errorCause;
 
     HohenheimActivityAction(@NonNull String value) {
+        this(value, ErrorCause.NONE);
+    }
+
+    HohenheimActivityAction(@NonNull String value, @NonNull ErrorCause errorCause) {
         this.value = value;
         this.id = HohenheimIds.id(value);
+        this.errorCause = errorCause;
+    }
+
+    /** @return whether this verb is the recorded cause of a workload's ERROR status, and what its detail holds */
+    public @NonNull ErrorCause errorCause() {
+        return this.errorCause;
     }
 
     @Override

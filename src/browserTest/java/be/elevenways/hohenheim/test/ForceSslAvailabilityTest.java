@@ -154,6 +154,25 @@ class ForceSslAvailabilityTest {
         assertThat(unmatched)
             .as("step 4: an unmatched hostname has nothing to protect and stays a 404")
             .contains("404");
+
+        // Step 4b: a certificate row stored ACTIVE whose material the proxy cannot load is no working certificate:
+        // the routes read what the store loaded (CertificateCoverage.workingNames), so the setting still leaves the
+        // name on plain HTTP instead of sending its visitors to a handshake nothing answers.
+        Row unloadable = Models.get(CertificateModel.class).createEmptyRow();
+        unloadable.set(CertificateModel.NICE_NAME, "Force SSL Unloadable");
+        unloadable.set(CertificateModel.PROVIDER, "custom");
+        unloadable.set(CertificateModel.STATUS, "active");
+        unloadable.set(CertificateModel.DOMAIN_NAMES_TEXT, "plain.fssl.test");
+        Models.get(CertificateModel.class).save(unloadable);
+        proxy.reload();
+        assertThat(ProxyTestSupport.rawRequest(port, "plain.fssl.test", "/"))
+            .as("step 4b: a name only an unloadable row covers is not forced by the setting")
+            .contains("200").contains("cleartext-content");
+        assertThat(proxy.getDispatcher().forcedSites().bySetting())
+            .as("step 4b: and the dispatcher names no site the setting sends to HTTPS for it")
+            .doesNotContain("Plain Site");
+        Models.get(CertificateModel.class).delete(unloadable);
+        proxy.reload();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, false);
 
         // Step 5: a certificate arrives; after reload the same request becomes the redirect.

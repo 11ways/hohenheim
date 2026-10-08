@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
+import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -34,10 +35,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The attached-database attention item judges STORED state, so rendering the dashboard asks
+ * The attached-database attention items judge STORED state, so rendering the dashboard asks
  * no daemon: the engine instance's stored status, the database record's status and the
  * engine host's recorded probe failure each name their own sentence, and a daemon transport
- * that counts every call made on the rendering thread stays at zero.
+ * that counts every call made on the rendering thread stays at zero. The database is the
+ * root: its own item says what it holds back, and each app's item names it as its cause.
  *
  * AIDEV-NOTE: the count is per THREAD on purpose. The booted runtime runs real cron tasks
  * that may reach the local daemon transport at any moment; only a call made by the render
@@ -106,21 +108,32 @@ class AttachedDatabaseAttentionTest {
                     .as("step 2: a stored running engine raises nothing").isNull();
 
                 // 3. Stored STOPPED engine: "not running", a warning linked to the
-                //    consumer's Databases tab.
+                //    consumer's Databases tab, caused by the database; the database's own
+                //    item is the root, titled by it and saying the one app it holds back.
                 engineStatus(engineId, InstanceModel.STATUS_STOPPED);
                 AttentionItem stopped = itemFor(PREFIX + "web");
                 assertThat(stopped).as("step 3: a stopped engine raises an item").isNotNull();
                 assertThat(stopped.severity()).as("step 3: as a warning").isEqualTo(AttentionSeverity.WARNING);
-                assertThat(stopped.detail().key()).as("step 3: naming it not running")
-                    .isEqualTo("database_not_running");
+                assertThat(stopped.detail().key()).as("step 3: naming its engine not running")
+                    .isEqualTo("database_engine_stopped");
                 assertThat(stopped.target().toUrl()).as("step 3: linked to the consumer's Databases tab")
                     .isEqualTo("/admin/instances/" + webId + "/page/databases");
+                assertThat(stopped.causedBy()).as("step 3: caused by the database")
+                    .isEqualTo(AttentionSubject.database(databaseId));
+                AttentionItem root = rootFor(databaseId);
+                assertThat(root).as("step 3: the database raises its own item").isNotNull();
+                assertThat(root.title().key()).as("step 3: titled by the database, not an app")
+                    .isEqualTo("database_not_running");
+                assertThat(root.heldBack().args().get("count")).as("step 3: holding back the one app using it")
+                    .isEqualTo(1);
 
                 // 4. Stored ERROR engine (crash detection stamped it): its own sentence.
                 engineStatus(engineId, InstanceModel.STATUS_ERROR);
                 assertThat(itemFor(PREFIX + "web").detail().key())
                     .as("step 4: a failed engine says so, not merely 'not running'")
-                    .isEqualTo("database_failed");
+                    .isEqualTo("database_engine_error");
+                assertThat(rootFor(databaseId).title().key()).as("step 4: and its database's title says it too")
+                    .isEqualTo("database_stopped_after_error");
 
                 // 5. Stored RUNNING engine on a host whose last probe FAILED: the status is
                 //    unverified, and the item says the host could not be reached.
@@ -128,7 +141,7 @@ class AttachedDatabaseAttentionTest {
                 hostErrorKind(hostId, "unreachable");
                 assertThat(itemFor(PREFIX + "web").detail().key())
                     .as("step 5: an unanswering host is its own problem, never 'stopped'")
-                    .isEqualTo("database_unreachable");
+                    .isEqualTo("database_host_unanswering");
                 hostErrorKind(hostId, null);
                 assertThat(itemFor(PREFIX + "web"))
                     .as("step 5: and a host answering again clears it").isNull();
@@ -141,14 +154,15 @@ class AttachedDatabaseAttentionTest {
                 assertThat(killed).as("step 5b: an OOM-killed engine raises an item").isNotNull();
                 assertThat(killed.detail().key())
                     .as("step 5b: naming the kill, never 'running' and never 'not running'")
-                    .isEqualTo("database_workload_dead");
+                    .isEqualTo("database_engine_killed");
                 assertThat(transport.calls.get())
                     .as("step 5b: the stored kill surfaced without asking a daemon").isZero();
                 engineKilledAt(engineId, null);
                 assertThat(itemFor(PREFIX + "web"))
                     .as("step 5b: and a sweep that no longer sees the kill clears it").isNull();
 
-                // 6. The RECORD is not active: the record's own status is the sentence.
+                // 6. The RECORD is not active: the record's own status speaks first. A database
+                //    still being set up raises no root of its own, so the app's item stands.
                 Model databases = Models.get(DatabaseModel.class);
                 databases.find().where(DatabaseModel.ID.eq(databaseId))
                     .assign(DatabaseModel.STATUS, DatabaseModel.STATUS_PROVISIONING)
@@ -156,9 +170,9 @@ class AttachedDatabaseAttentionTest {
                     .updateAll();
                 AttentionItem provisioning = itemFor(PREFIX + "web");
                 assertThat(provisioning.detail().key()).as("step 6: the record status speaks first")
-                    .isEqualTo("database_status");
-                assertThat(provisioning.detail().args().get("status"))
-                    .as("step 6: naming the state").isEqualTo(DatabaseModel.STATUS_PROVISIONING);
+                    .isEqualTo(DatabaseModel.STATUS_PROVISIONING);
+                assertThat(rootFor(databaseId)).as("step 6: and a database being set up raises no root")
+                    .isNull();
 
                 // 7. THE DEFECT: the whole dashboard collection, every role enabled, made no
                 //    daemon call on the rendering thread -- this lane included.
@@ -169,6 +183,16 @@ class AttachedDatabaseAttentionTest {
                 DockerClient.overrideLocalTransportForTest(null);
             }
         });
+    }
+
+    /** The database tier's own item about this database, or null. */
+    private static AttentionItem rootFor(int databaseId) {
+        for (AttentionItem item : AttentionCollector.databases()) {
+            if (AttentionSubject.database(databaseId).equals(item.about())) {
+                return item;
+            }
+        }
+        return null;
     }
 
     /** The item this collector raises for the named consumer instance, or null. */

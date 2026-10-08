@@ -229,8 +229,11 @@ public final class InstanceStatusReconciler {
         Instant storedKill = fresh.get(InstanceModel.WORKLOAD_KILLED_AT);
         Instant killedAt = workloadKilledAt(live, storedKill);
         this.instances.leases().requireFence(serverId);
+        // A crash nobody watched names itself: the daemon reports no exit code, so the cause carries none.
+        HohenheimActivityAction cause = !crashed ? null
+            : flapping ? HohenheimActivityAction.WORKLOAD_CRASH_LOOPED : HohenheimActivityAction.WORKLOAD_EXITED;
         InstanceOperationGuard.stampObserved(this.instances.leases(), instanceId, serverId,
-            settled, changed, killedAt, String.valueOf((Object) fresh.get(InstanceModel.NAME)));
+            settled, changed, killedAt, String.valueOf((Object) fresh.get(InstanceModel.NAME)), cause);
         if (storedKill == null && killedAt != null) {
             Blast.log("INSTANCE RECONCILE:", fresh.get(InstanceModel.NAME),
                 "runs, but the daemon reports its workload killed for out-of-memory");
