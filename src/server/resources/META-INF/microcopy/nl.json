@@ -1042,10 +1042,6 @@
     "text": "CPU",
     "scope": "instance_stats"
   },
-  "current_commit": {
-    "text": "Serveert momenteel commit {$commit}.",
-    "scope": "deployments"
-  },
   "database": [
     {
       "text": "Database",
@@ -11182,7 +11178,7 @@
     "scope": "violations"
   },
   "workspace_build_failed": {
-    "text": "Het build-commando van de workspace is mislukt: {$reason}",
+    "text": "Het build-commando stopte met exitcode {$code}; de uitvoer staat in het buildlog.",
     "scope": "violations"
   },
   "push_does_not_start_stopped_workload": {
@@ -14515,6 +14511,18 @@
   },
   "live_nothing_kept": {
     "text": "Er is nog geen vorige release bewaard.",
+    "scope": "deployments"
+  },
+  "live_workspace_no_rollback": {
+    "text": "Een workspace rolt uit in zijn eigen bestanden, dus er is geen eerdere release om naar terug te gaan.",
+    "scope": "deployments"
+  },
+  "history_description_workspace": {
+    "text": "Elke uitrol checkt de branch uit in de workspace, bouwt hem daar en herstart de app.",
+    "scope": "deployments"
+  },
+  "no_commit_from": {
+    "text": "{$branch}, geen commit uitgecheckt",
     "scope": "deployments"
   },
   "rollback_to": {

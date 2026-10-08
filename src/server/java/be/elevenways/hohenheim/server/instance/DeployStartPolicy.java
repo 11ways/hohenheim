@@ -3,11 +3,8 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
-import be.elevenways.protoblast.common.i18n.LocaleChain;
-import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.setting.ContentLocales;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -87,19 +84,5 @@ public final class DeployStartPolicy {
         }
         return HohenheimViolations.text("push_does_not_start_stopped_workload")
             .withArg("name", String.valueOf((Object) named.get(InstanceModel.NAME)));
-    }
-
-    /**
-     * The refusal as TEXT for the records a person reads later (a build operation row, a
-     * forge commit status).
-     *
-     * AIDEV-NOTE: resolved here rather than stored as a violation key, because
-     * {@code Violations.getMessage()} is a debug rendering by its own contract. There is
-     * no reader to localize for at this point, so it is the installation's default content
-     * locale -- the ErrorPages/InstanceShellHandler precedent.
-     */
-    public static @NonNull String textOf(@NonNull Microcopy declined) {
-        return declined.resolve(LocaleChain.of(ContentLocales.getDefault()),
-            MessageResolvers.getDefault());
     }
 }

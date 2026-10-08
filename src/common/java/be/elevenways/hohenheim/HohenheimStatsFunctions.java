@@ -259,6 +259,38 @@ public final class HohenheimStatsFunctions {
         return (int) Math.round(cpu.doubleValue() / cores);
     }
 
+    /** @return the CPU chart's top edge in plot units (100 per core of the limit), or null with no limit */
+    @HawkeyeFunction(
+        name = "cpuCeiling",
+        namespace = "InstanceStats",
+        description = "The CPU chart's top edge: the app's CPU limit in plot units",
+        returnType = Double.class,
+        returnsReference = false,
+        arguments = @Arg(name = "cpuLimit", required = false, type = Double.class, expectsReference = false,
+                         description = "The configured CPU limit in cores, or null for none")
+    )
+    public static @Nullable Double cpuCeiling(@Nullable Double cpuLimit) {
+        return cpuLimit != null && cpuLimit > 0 ? Metric.CPU.scaled(cpuLimit * 100d) : null;
+    }
+
+    /** @return the memory chart's top edge in plot units (the cap the runtime reports), or null without one */
+    @HawkeyeFunction(
+        name = "memoryCeiling",
+        namespace = "InstanceStats",
+        description = "The memory chart's top edge: the memory cap in plot units",
+        returnType = Double.class,
+        returnsReference = false,
+        arguments = @Arg(name = "sample", required = false, type = Map.class, expectsReference = false,
+                         description = "The latest sample map")
+    )
+    public static @Nullable Double memoryCeiling(@Nullable Object sample) {
+        if (!(sample instanceof Map<?, ?> map) || !(map.get(MEMORY_LIMIT_KEY) instanceof Number bytes)
+                || bytes.longValue() <= 0) {
+            return null;
+        }
+        return Metric.MEMORY.scaled(bytes.doubleValue());
+    }
+
     /** @return the memory in use as a size ("842.0 MB"), or "" when the sample has none */
     @HawkeyeFunction(
         name = "memoryUsed",

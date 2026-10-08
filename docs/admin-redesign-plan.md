@@ -752,3 +752,30 @@ Order: W6 as planned. G5 needs nothing from W1-W5 except the `put_online` operat
   live record's name would read better.
 - Pre-existing test defect fixed: hawkeye's server render now stamps an id on the record heading (`<h1 id="ser-..">`),
   so the journeys match the heading by pattern instead of the bare `<h1>name</h1>` literal.
+
+## 20. D7b decisions (fork D7b, 2026-10-08)
+
+- A stored failure reason is the refusal's own sentence. `HohenheimViolations.reasonOf` (43 callers) now reads a
+  `Violations` as its messages resolved in the installation's default content locale, never the debug
+  `Violations.getMessage()` ("1 violation(s): -> workspace_build_failed {reason=...}") that reached Starfleet's Deploys
+  tab. `HohenheimViolations.textOf` is the one content-locale resolver; `DeployStartPolicy.textOf`,
+  `InstanceShellHandler.messageOf` and `ReleaseEngine.reasonOf` are deleted in its favour, and the forge commit
+  statuses `ApplicationDeploys` reports read the same sentence. The better home is core `Violations` (every consumer
+  stores reasons); it moves there once zenit can be pushed again.
+- A workspace build failure names its exit code and points at the build log ("The build command stopped with exit
+  code 1; its output is in the build log."); the output never rides the reason. A failed checkout quotes at most git's
+  last three lines (300 characters). A build that fails after a good checkout records that commit on its row.
+- A history row whose source is not a commit (a refused deploy, a failed checkout) reads "<branch>, no commit checked
+  out" instead of the branch cut to eight letters; only a hex object name is shortened. Rows written before this keep
+  their stored text (Starfleet's month-old alchemy-skeleton rows still carry the old debug reason until pruned).
+- States read as the status vocabulary's words on both lanes (`build_status` labels; the release lane's Live/Kept/
+  Replaced marks unchanged); When and Took never wrap.
+- The live band leads a workspace too: "Live: commit X from <branch>", deployed since its last successful build, and in
+  words why there is no way back ("A workspace deploys into its own files, so there is no earlier release to go back
+  to."). The history card's lead names how a workspace deploys. Starfleet's alchemy-skeleton showed no band, rollback
+  or "Started by" because it is a WORKSPACE (no releases by design, W7a) -- not a defect; "Started by" stays
+  needs-building for both lanes (operations record no trigger).
+- Metrics: `pl-sparkline` takes `yMin`/`yMax` (plumage; kept exactly as pl-chart keeps its bounds, values beyond drawn
+  at the edge), and a constant series with derived bounds is drawn mid-height instead of on the floor. The Metrics tab
+  starts every chart at zero, tops CPU at its limit (`InstanceStats.cpuCeiling`) and memory at the cap the runtime
+  reports (`InstanceStats.memoryCeiling`); a steady 117.9 MB of 512 MB is a level line a quarter up, not the floor.

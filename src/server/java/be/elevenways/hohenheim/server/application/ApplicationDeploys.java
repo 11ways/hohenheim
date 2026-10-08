@@ -127,7 +127,7 @@ public final class ApplicationDeploys {
             ApplicationReleases.ownedServing(applicationId), application);
 
         if (declined != null) {
-            String message = DeployStartPolicy.textOf(declined);
+            String message = HohenheimViolations.textOf(declined);
             recordRefusal(applicationId, settings, ref, message);
             reportDeclined(settings, message);
             throw Violations.ofForm(declined);
@@ -142,12 +142,12 @@ public final class ApplicationDeploys {
                 commitSha = GitCheckout.materialize(InstanceModel.MODEL_ID, applicationId,
                     branch, settings, checkout);
             } catch (Violations refused) {
-                reportFailure(settings, null, refused.getMessage());
+                reportFailure(settings, null, HohenheimViolations.reasonOf(refused));
                 throw refused;
             } catch (Exception failed) {
-                reportFailure(settings, null, String.valueOf(failed.getMessage()));
+                reportFailure(settings, null, HohenheimViolations.reasonOf(failed));
                 throw Violations.ofForm(HohenheimViolations.text("source_checkout_failed")
-                    .withArg("reason", String.valueOf(failed.getMessage())));
+                    .withArg("reason", HohenheimViolations.reasonOf(failed)));
             }
             overrides.put("build_context", checkout.getAbsolutePath());
             overrides.put("commit_sha", commitSha);
@@ -167,7 +167,7 @@ public final class ApplicationDeploys {
             }
             return release;
         } catch (RuntimeException failed) {
-            reportFailure(settings, commitSha, String.valueOf(failed.getMessage()));
+            reportFailure(settings, commitSha, HohenheimViolations.reasonOf(failed));
             throw failed;
         }
     }

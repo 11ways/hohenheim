@@ -1042,10 +1042,6 @@
     "text": "CPU",
     "scope": "instance_stats"
   },
-  "current_commit": {
-    "text": "Currently serving commit {$commit}.",
-    "scope": "deployments"
-  },
   "database": [
     {
       "text": "Database",
@@ -11182,7 +11178,7 @@
     "scope": "violations"
   },
   "workspace_build_failed": {
-    "text": "The workspace build command failed: {$reason}",
+    "text": "The build command stopped with exit code {$code}; its output is in the build log.",
     "scope": "violations"
   },
   "push_does_not_start_stopped_workload": {
@@ -14515,6 +14511,18 @@
   },
   "live_nothing_kept": {
     "text": "No previous release is kept yet.",
+    "scope": "deployments"
+  },
+  "live_workspace_no_rollback": {
+    "text": "A workspace deploys into its own files, so there is no earlier release to go back to.",
+    "scope": "deployments"
+  },
+  "history_description_workspace": {
+    "text": "Every deploy checks the branch out into the workspace, builds it there and restarts the app.",
+    "scope": "deployments"
+  },
+  "no_commit_from": {
+    "text": "{$branch}, no commit checked out",
     "scope": "deployments"
   },
   "rollback_to": {

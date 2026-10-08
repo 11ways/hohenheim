@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
@@ -8,6 +9,7 @@ import be.elevenways.hohenheim.server.cms.InstanceDeploymentsPage;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +36,7 @@ class WorkspaceDeploysTabTest extends HohenheimTestBase {
 
     private static Integer bareWorkspaceId;
     private static Integer sourcedWorkspaceId;
+    private static Integer readingWorkspaceId;
 
     @BeforeAll
     static void seed() {
@@ -53,6 +56,69 @@ class WorkspaceDeploysTabTest extends HohenheimTestBase {
         operation(sourcedWorkspaceId, BuildOperationModel.STATUS_FAILED, "main",
             "The workspace build command failed: npm ERR! missing script: build",
             "[hohenheim] deploying main\nnpm ERR! missing script: build\n");
+
+        readingWorkspaceId = workspace("deploys-tab-reading", imageId, Map.of(
+            "repository_url", "https://git.example.test/team/site.git",
+            "branch", "hohenheim-rewrite"));
+        operation(readingWorkspaceId, BuildOperationModel.STATUS_SUCCEEDED,
+            "e590c03e1f2a3b4c5d6e7f8091a2b3c4d5e6f708", null, "[hohenheim] deploying hohenheim-rewrite\n");
+        operation(readingWorkspaceId, BuildOperationModel.STATUS_FAILED, "hohenheim-rewrite",
+            HohenheimViolations.reasonOf(Violations.ofForm(
+                HohenheimViolations.text("source_checkout_failed").withArg("reason", "Remote branch not found"))),
+            "[hohenheim] deploying hohenheim-rewrite\nfatal: Remote branch hohenheim-rewrite not found\n");
+    }
+
+    /**
+     * The Deploys tab of a workspace reads as the App-Deploys board does (Starfleet's alchemy-skeleton, DEP8): a row
+     * that never reached a commit names its branch instead of the branch's first eight letters, a failure reads as a
+     * sentence instead of a violation dump, states are words, and the live band says what serves now and why there
+     * is no way back.
+     */
+    @Test
+    void aWorkspaceDeployHistoryReadsInWords() throws Exception {
+        String body = adminGet(url(readingWorkspaceId)).body();
+
+        // 1. The failed row stored its branch: it reads as that branch, never cut to "hohenhei".
+        assertThat(body)
+            .as("step 1: the row that reached no commit names its branch in full")
+            .contains("hohenheim-rewrite, no commit checked out")
+            .as("step 1: and never as the branch's first eight letters in the commit slot")
+            .doesNotContain("<code>hohenhei</code>");
+
+        // 2. The failure is the refusal's own sentence, never Violations' debug rendering.
+        assertThat(body)
+            .as("step 2: the failure reads as a sentence")
+            .contains("The source could not be checked out: Remote branch not found")
+            .as("step 2: and never as a violation dump")
+            .doesNotContain("violation(s)");
+
+        // 3. States are the status vocabulary's words, capitalised.
+        assertThat(body)
+            .as("step 3: the failed state is a word").contains(">Failed<")
+            .as("step 3: the succeeded state is a word").contains(">Succeeded<")
+            .as("step 3: never the stored token").doesNotContain(">failed<");
+
+        // 4. When and Took are one line each.
+        assertThat(body)
+            .as("step 4: the When and Took cells never wrap word by word").contains("hh-deploys-when");
+
+        // 5. The live band leads a workspace too: what serves now, and in words why there is no way back.
+        assertThat(body)
+            .as("step 5: the band names the live commit and branch")
+            .contains("Live: commit e590c03e from hohenheim-rewrite")
+            .as("step 5: and says why a workspace has nothing to roll back to")
+            .contains("no earlier release to go back to")
+            .as("step 5: without offering a rollback").doesNotContain("Roll back");
+    }
+
+    /** A refusal stored as a reason is its sentence in the content locale, for every lane that stores one. */
+    @Test
+    void aStoredRefusalIsItsSentence() {
+        String reason = HohenheimViolations.reasonOf(Violations.ofForm(
+            HohenheimViolations.text("workspace_build_failed").withArg("code", 1)));
+        assertThat(reason)
+            .as("the build refusal names the exit code and points at the log, without the output")
+            .isEqualTo("The build command stopped with exit code 1; its output is in the build log.");
     }
 
     /**

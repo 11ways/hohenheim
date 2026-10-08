@@ -52,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 
 /**
  * Deploys tab on a record whose deploy has a HISTORY worth reading: an application's
@@ -106,6 +107,8 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         // a workspace build operation records no such word, and a column of blanks reads as
         // missing data rather than as "not applicable".
         vars.put("showTrigger", releaseManaged);
+        // The live band leads both lanes; only a release lane keeps a release to go back to.
+        vars.put("keepsReleases", releaseManaged);
         vars.put("columnCount", releaseManaged ? 5 : 4);
 
         WithheldFailure failures = WithheldFailure.of(conduit);
@@ -182,7 +185,6 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
                 // tenant's own checkout and build, and without it they cannot fix a build.
                 failures.operatorOnly(row.get(ReleaseOperationModel.STEP_LOG)));
             entry.put("kindLabel", enumLabel(ReleaseOperationModel.KIND, row.get(ReleaseOperationModel.KIND)));
-            entry.put("statusLabel", enumLabel(ReleaseOperationModel.STATUS, row.get(ReleaseOperationModel.STATUS)));
             boolean succeeded = ReleaseOperationModel.STATUS_SUCCEEDED.equals(row.get(ReleaseOperationModel.STATUS));
             ReleaseMark mark = !succeeded || candidate == null ? null
                 : candidate.equals(servingId) ? ReleaseMark.LIVE
@@ -349,6 +351,8 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         Row latest = model.latestSuccess(InstanceModel.MODEL_ID.toString(), instanceId);
         vars.put("currentCommit", latest == null ? ""
             : shortSha(latest.get(BuildOperationModel.SOURCE_REF)));
+        Instant liveSince = latest == null ? null : latest.get(BuildOperationModel.FINISHED_AT);
+        vars.put("liveSinceIso", liveSince == null ? "" : liveSince.toString());
 
         List<Map<String, Object>> deployments = new ArrayList<>();
         for (Row row : operations) {
@@ -377,8 +381,14 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         entry.put("statusVariant", colors.variant());
         entry.put("statusColorSet", colors.colorSet());
         entry.put("statusKnown", colors.known());
+        entry.put("statusLabel", enumLabel(statusField, status));
         entry.put("reason", reason);
-        entry.put("commit", shortSha(commit));
+        // A row that never reached a commit (a refused deploy, a failed checkout) stores the
+        // branch it was asked for: it reads as that branch, never as its first eight letters.
+        String source = orEmpty(commit);
+        boolean isCommit = COMMIT_SHA.matcher(source).matches();
+        entry.put("commit", isCommit ? shortSha(source) : "");
+        entry.put("ref", isCommit ? "" : source);
         entry.put("duration", durationLabel(durationMs));
         entry.put("error", failure);
         entry.put("startedAtIso", startedAt != null ? startedAt.toString() : "");
@@ -421,6 +431,9 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         }
         vars.put("webhookUrl", url);
     }
+
+    /** A git object name, full or abbreviated; anything else in a commit slot is a ref. */
+    private static final Pattern COMMIT_SHA = Pattern.compile("[0-9a-fA-F]{7,64}");
 
     private static String shortSha(Object sha) {
         String value = sha != null ? String.valueOf(sha) : "";

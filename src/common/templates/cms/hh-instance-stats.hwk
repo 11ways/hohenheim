@@ -28,6 +28,11 @@
     private computed cpuShare = InstanceStats.cpuShare(now{:}, cpuLimit)
     private computed memoryUsed = InstanceStats.memoryUsed(now{:})
     private computed memoryLimit = InstanceStats.memoryLimit(now{:})
+    /* Every chart starts at zero, and a reading with a known cap tops out at that cap: an
+       autoscaled line stretched a steady 117.9 MB of 512 MB across the box, or laid it on the
+       floor when every point was equal. */
+    private computed cpuCeiling = InstanceStats.cpuCeiling(cpuLimit)
+    private computed memoryCeiling = InstanceStats.memoryCeiling(now{:})
     private computed rxRate = InstanceStats.rate(before{:}, now{:}, "rx")
     private computed txRate = InstanceStats.rate(before{:}, now{:}, "tx")
 
@@ -64,7 +69,8 @@
                 <pl-card-content>
                     <pl-sparkline size="block" area={% true %}
                                   label={% t("cpu", scope: "instance_stats") %}
-                                  points={% cpu{:} ?? cpuSeed %}></pl-sparkline>
+                                  points={% cpu{:} ?? cpuSeed %}
+                                  yMin={% 0.0 %} yMax={% cpuCeiling{:} %}></pl-sparkline>
                     <p class="hh-stats-now">
                         <span>{{ t("now", scope: "instance_stats") }}</span>
                         <strong data-stats-now="cpu">
@@ -90,7 +96,8 @@
                 <pl-card-content>
                     <pl-sparkline size="block" area={% true %}
                                   label={% t("memory", scope: "instance_stats") %}
-                                  points={% memory{:} ?? memorySeed %}></pl-sparkline>
+                                  points={% memory{:} ?? memorySeed %}
+                                  yMin={% 0.0 %} yMax={% memoryCeiling{:} %}></pl-sparkline>
                     <p class="hh-stats-now">
                         <span>{{ t("now", scope: "instance_stats") }}</span>
                         <strong data-stats-now="memory">
@@ -118,7 +125,8 @@
                         <span class="hh-stats-series-label">{{ t("received", scope: "instance_stats") }}</span>
                         <pl-sparkline size="block" area={% true %}
                                       label={% t("received", scope: "instance_stats") %}
-                                      points={% rx{:} ?? rxSeed %}></pl-sparkline>
+                                      points={% rx{:} ?? rxSeed %}
+                                      yMin={% 0.0 %}></pl-sparkline>
                         <strong data-stats-now="rx">
                             {% if rxRate{:} == "" %}
                             {{ t("waiting", scope: "instance_stats") }}
@@ -131,7 +139,8 @@
                         <span class="hh-stats-series-label">{{ t("transmitted", scope: "instance_stats") }}</span>
                         <pl-sparkline size="block" area={% true %}
                                       label={% t("transmitted", scope: "instance_stats") %}
-                                      points={% tx{:} ?? txSeed %}></pl-sparkline>
+                                      points={% tx{:} ?? txSeed %}
+                                      yMin={% 0.0 %}></pl-sparkline>
                         <strong data-stats-now="tx">
                             {% if txRate{:} == "" %}
                             {{ t("waiting", scope: "instance_stats") }}
