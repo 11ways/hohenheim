@@ -715,3 +715,40 @@ Order: W6 as planned. G5 needs nothing from W1-W5 except the `put_online` operat
   the instance's Databases tab), Restore from a stored dump (restore takes an upload today), the Engines card under the
   Databases list (engines are a Settings tab), the engine and host filters as dropdowns beside search (they are facets
   in the filter bar), and worded names for preflight checks (the list names them by their code, as the overview does).
+
+## 19. D7a decisions (fork D7a, 2026-10-08)
+
+- The Apps list's record link is the app's NAME (board Apps-List), not the health glyph. Cause: zenit-cms linked the
+  first column whatever it held. Mechanism (zenit-cms): `ColumnSpec.glyph()`, a column fact; `ResourceHealth.column()`
+  declares it, and the title link lands on the first column that is not a glyph (`TableState.ColumnState.title`).
+- A workload answering with its site's verdict now offers that site's fixes (board App-Problem: "Get a certificate",
+  "Stop forcing HTTPS"). Cause: `AppHealth.runningVerdict` dropped them, because the framework only offered a record's
+  OWN row actions. Mechanism (zenit-cms): `RecordHealth.on(entrySlug, key)`, fixes that are another record's row
+  actions, offered through that record's action family to a viewer whose read of that entry reaches it; an entry the
+  panel does not register fails the band. Hohenheim offers them only where the node registers the site entries
+  (`SiteParts.ROLE`/`registered()`, the one fact the panels' `addIf` reads too).
+- "Stop forcing HTTPS" is a new site operation (`stop_forcing_https`): it switches force_ssl off on the names forced
+  without a working certificate, with a confirmation that it gives up encryption. It is the operator's explicit "off",
+  so the certificate latch stays disarmed: forcing again after a certificate works is the operator's choice, not the
+  latch's (the model's stated rule that the system never overrules an explicit off).
+- The overview's lone "Refresh" button is gone with its no-op operation (`refresh_instance_overview`, handler
+  `call -> null`): loading the overview reads the same stored evidence afresh. The board has no such button.
+- Every Hohenheim activity verb heads its rows with a sentence (`HohenheimActivityAction.happened()`, en and nl), so a
+  row written outside an operation (git-push deploys, old rows) no longer reads "Jelle: Deployed Instance #3".
+- zenit-auth's nine operations declare sentences ("Jelle changed who may use alchemy-skeleton" instead of "Jelle:
+  Access Instance #3"), with a drift test deriving the set from zenit-auth's sources and the operation registry.
+- Not done, needs zenit core (blocked while zenit's push waits on the arcana checkout):
+  1. Sign-ins dominating Activity and Recent: the board lists none. Hiding them by default needs a verb-level
+     visibility fact on `ActivityAction` (LOGIN/LOGOUT internal), read by the internal filter beside the per-model
+     `ActivityVisibility`.
+  2. `ActivityText.happened` returns an operation's sentence or null, never falling back to the row verb's own
+     sentence: an operation without one hides a verb that has one. Core should fall back.
+  3. A framework-wide operation-sentence coverage helper (zenit test support); zenit-cms (`task_run_now`,
+     `task_run_again`, `task_stop`, `legacy_dashboard_press`) and zenit-comms (`retry_delivery`, `rotate_token`,
+     `create_hub_project`) operations still read the generic headline.
+- Seen on the walk, left open: a static site the proxy refuses as misconfigured ("a tenant-owned site may not serve
+  files from the host", 503) reads "What it serves does not answer"; the verdict should carry the refusal's own reason.
+  An activity row stored without a record title names its subject "Instance #1" (core `ActivityText.subject`); the
+  live record's name would read better.
+- Pre-existing test defect fixed: hawkeye's server render now stamps an id on the record heading (`<h1 id="ser-..">`),
+  so the journeys match the heading by pattern instead of the bare `<h1>name</h1>` literal.

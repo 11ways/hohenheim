@@ -59,7 +59,8 @@ final class SiteActions {
     static @NonNull List<PanelAction<Row>> operator() {
         return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl, AppHealth.sites(false)), enableAction(),
             disableAction(), cloneAction(),
-            rollbackAction(), protectPathAction(), fixHttpsAction(), addAddressAction(), fixProtectionAction());
+            rollbackAction(), protectPathAction(), fixHttpsAction(), stopForcingHttpsAction(), addAddressAction(),
+            fixProtectionAction());
     }
 
     /**
@@ -68,7 +69,8 @@ final class SiteActions {
      */
     static @NonNull List<PanelAction<Row>> delegated() {
         return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl, AppHealth.sites(true)), enableAction(),
-            disableAction(), protectPathAction(), fixHttpsAction(), addAddressAction(), fixProtectionAction());
+            disableAction(), protectPathAction(), fixHttpsAction(), stopForcingHttpsAction(), addAddressAction(),
+            fixProtectionAction());
     }
 
     /**
@@ -99,6 +101,21 @@ final class SiteActions {
     /** To the site's addresses, where each name forced without a certificate gets one. */
     private static @NonNull PanelAction<Row> fixHttpsAction() {
         return fixLink(FIX_HTTPS, "fix_https", "lock", SiteParts.DOMAINS_TAB, AppHealth::needsCertificate);
+    }
+
+    /**
+     * The other way out of the error page: visitors reach the names over plain HTTP until a certificate works. A health
+     * fix and a row-menu chore, never a heading button; it confirms first, since it gives up encryption.
+     */
+    private static @NonNull PanelAction<Row> stopForcingHttpsAction() {
+        return PanelAction.<Row, Void>places(SiteOperations.STOP_FORCING_HTTPS, ActionPlacement.ROW,
+                (request, result) -> CmsActionResult.refreshWithToast(
+                    Microcopy.of("stop_forcing_https_toast").withFilter("scope", "site")))
+            .inlineOnRecord(false)
+            .inlineInRow(false)
+            .confirmation(ConfirmationSpec.generic(
+                Microcopy.of("stop_forcing_https_confirm").withFilter("scope", "site"), false))
+            .build();
     }
 
     /** To the site's addresses, for a site visitors cannot reach because it answers on no name. */

@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.instance.InstanceDiskView;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
-import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -21,7 +20,6 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
-import be.elevenways.zenit.widget.common.builtin.ActionButtonWidget;
 import be.elevenways.zenit.widget.common.builtin.AlertVariant;
 import be.elevenways.zenit.widget.common.builtin.AlertWidget;
 import be.elevenways.zenit.widget.common.builtin.CardWidget;
@@ -29,8 +27,6 @@ import be.elevenways.zenit.widget.common.data.NoticeData;
 import be.elevenways.zenit.widget.common.data.UsageData;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import be.elevenways.zenit.widget.common.data.WidgetFact;
-import be.elevenways.zenit.widget.common.surface.SurfaceActionOutcome;
-import be.elevenways.zenit.widget.common.surface.SurfaceOperation;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -56,23 +52,14 @@ public final class InstanceOverview {
 
     public static final String SLUG = RecordOverview.SLUG;
 
-    /** The one widget-native action on this tab: re-read the stored evidence. */
-    static final String REFRESH_ACTION = "refresh";
-
     private InstanceOverview() {
     }
 
-    /**
-     * The tab both instance entries declare. Its refresh re-renders the tree from the record the surface re-loaded
-     * through the entry's admitted read, so the answer is a new SSR-truth render.
-     */
+    /** The tab both instance entries declare; loading it reads the stored evidence afresh. */
     static @NonNull RecordOverview<Row> tab() {
         return RecordOverview.<Row>fields(SLUG, Microcopy.of("overview").withFilter("scope", "instance"))
             .withoutFields()
-            .widgets(InstanceOverview::widgets)
-            .surfaceActions(List.of(SurfaceOperation.of(REFRESH_ACTION, InstanceOperations.REFRESH_OVERVIEW,
-                (context, refreshed) -> SurfaceActionOutcome.tree(
-                    widgets(context.subjects().get(0), context.access())))));
+            .widgets(InstanceOverview::widgets);
     }
 
     private static @NonNull WidgetTree widgets(@NonNull Row instance, @NonNull AccessContext accessContext) {
@@ -86,12 +73,8 @@ public final class InstanceOverview {
 
         // Why the instance cannot start, whether it runs and what it is live at are the resource's health verdict
         // (AppHealth), drawn by the framework as the page's first band; this tree is what follows it.
-        // The record's actions are its heading's (zenitcms:record-head); only the page's own refresh stays here.
+        // The record's actions are its heading's (zenitcms:record-head).
         List<WidgetInstance> top = new ArrayList<>();
-        top.add(new WidgetInstance(ActionButtonWidget.ID, Map.of(
-            "label", HohenheimWidgetCopy.localized("refresh", "instance_overview"),
-            "action", REFRESH_ACTION,
-            "variant", "outline")));
 
         // AIDEV-NOTE: install_error is stamped with the daemon's or transport's OWN text
         // (InstanceInstalls stamps describe(IOException) and "exit N" plus the script's

@@ -127,7 +127,7 @@ public final class ManagePanel extends Panel {
         peers.add(new ManageDashboard());
         // The tenant's apps: its sites and instances read as one list, through the two entries below (AppDirectory).
         HohenheimPanel.addIf(peers, AppParts.manage(), Role.PROXY, Role.INSTANCES);
-        HohenheimPanel.addIf(peers, SiteParts.manage(), Role.PROXY);
+        HohenheimPanel.addIf(peers, SiteParts.manage(), SiteParts.ROLE);
         HohenheimPanel.addIf(peers, DomainParts.manage(), Role.PROXY);
         HohenheimPanel.addIf(peers, ManageDnsRecordParts.manage(), Role.DNS);
         HohenheimPanel.addIf(peers, CertificateParts.manage(), Role.PROXY);

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.CertCoverage;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceStatus;
@@ -102,7 +103,7 @@ final class AppHealth {
         if (forced != null) {
             return RecordHealth.broken(copy("error_page"))
                 .detail(copy("forced_without_certificate").withArg("host", forced))
-                .fixedBy(SiteActions.FIX_HTTPS);
+                .fixedBy(SiteActions.FIX_HTTPS, SiteOperations.STOP_FORCING_HTTPS.id());
         }
         Row instance = facts.instances.get(site.get(SiteModel.INSTANCE_ID));
         if (instance != null) {
@@ -203,8 +204,9 @@ final class AppHealth {
 
     /**
      * A running workload is only as healthy as what its visitors get: the first serving site (switched on, with an
-     * address) whose own verdict is not OK speaks for it, broken before attention. Its words carry over and its fixes do
-     * not: they are the site page's actions.
+     * address) whose own verdict is not OK speaks for it, broken before attention. Its words and its fixes carry over,
+     * the fixes still the site's own row actions ({@link RecordHealth#on}), offered on the workload's page wherever this
+     * node registers the sites entry at all.
      */
     private static @NonNull RecordHealth runningVerdict(@Nullable List<Row> sites, @NonNull SiteFacts facts,
                                                         boolean delegated) {
@@ -215,16 +217,22 @@ final class AppHealth {
                         || facts.domains.getOrDefault(site.get(SiteModel.ID), List.of()).isEmpty()) {
                     continue;
                 }
-                RecordHealth verdict = siteVerdict(site, facts, delegated);
+                RecordHealth verdict = spokenFor(siteVerdict(site, facts, delegated), site);
                 if (verdict.tone() == HealthTone.BROKEN) {
-                    return new RecordHealth(verdict.tone(), verdict.headline(), verdict.detail(), List.of());
+                    return verdict;
                 }
                 if (attention == null && verdict.tone() == HealthTone.ATTENTION) {
-                    attention = new RecordHealth(verdict.tone(), verdict.headline(), verdict.detail(), List.of());
+                    attention = verdict;
                 }
             }
         }
         return attention != null ? attention : RecordHealth.ok(liveHeadline(sites, facts.working));
+    }
+
+    /** A site's verdict as its workload says it: the same words, the fixes still the site's own actions. */
+    private static @NonNull RecordHealth spokenFor(@NonNull RecordHealth verdict, @NonNull Row site) {
+        return SiteParts.registered() ? verdict.on(HohenheimSlugs.SITES, site.get(SiteModel.ID))
+            : verdict.fixedBy();
     }
 
     private static @NonNull Microcopy liveHeadline(@Nullable List<Row> sites, @NonNull Set<String> working) {
@@ -249,13 +257,20 @@ final class AppHealth {
             return null;
         }
         for (Row domain : domains) {
-            String hostname = domain.get(SiteDomainModel.HOSTNAME);
-            if (exact(domain) && Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL))
-                    && !CertificateCoverage.covers(working, hostname)) {
-                return hostname;
+            if (forcedUncovered(domain, working)) {
+                return domain.get(SiteDomainModel.HOSTNAME);
             }
         }
         return null;
+    }
+
+    /**
+     * Whether this one name is forced to HTTPS while no working certificate covers it: the name the error-page verdict
+     * names and the Stop forcing HTTPS fix switches back.
+     */
+    static boolean forcedUncovered(@NonNull Row domain, @NonNull Set<String> working) {
+        return exact(domain) && Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL))
+            && !CertificateCoverage.covers(working, domain.get(SiteDomainModel.HOSTNAME));
     }
 
     /**

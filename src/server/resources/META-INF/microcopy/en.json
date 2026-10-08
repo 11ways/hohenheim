@@ -2574,6 +2574,11 @@
       "text": "Backup made",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} made a backup of {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "networking": {
@@ -2793,6 +2798,11 @@
       "text": "Enabled",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} switched {$subject} on",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "settings": [
@@ -5182,6 +5192,11 @@
       "text": "Disabled",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} switched {$subject} off",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "deploy_log": {
@@ -5309,6 +5324,11 @@
       "text": "Stopped",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} stopped {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "missing": [
@@ -5588,6 +5608,11 @@
       "text": "Deployed",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} deployed {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "stopped_toast": {
@@ -6131,6 +6156,11 @@
       "text": "Snapshot made",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} took a snapshot of {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "snapshot_confirm": {
@@ -7096,6 +7126,11 @@
       "text": "Console command sent",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} ran a console command on {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "expire_preview": [
@@ -7331,6 +7366,11 @@
       "text": "File written",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} wrote a file in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "stats": {
@@ -8079,6 +8119,11 @@
       "text": "App update failed",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "The app update of {$subject} failed",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "app_update": [
@@ -8508,6 +8553,11 @@
       "text": "Media fetched",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} downloaded install media {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "media_uploaded": [
@@ -8519,6 +8569,11 @@
       "text": "Media uploaded",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} uploaded install media {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "upload_title": {
@@ -8550,6 +8605,11 @@
       "text": "Media deleted",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} deleted install media {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "add_disk": {
@@ -9162,6 +9222,11 @@
       "text": "Command executed",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} ran a command in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "run": [
@@ -10083,10 +10148,6 @@
   "abandoned": {
     "text": "Abandoned",
     "scope": "schedule_run_status"
-  },
-  "refresh": {
-    "text": "Refresh",
-    "scope": "instance_overview"
   },
   "sections": {
     "text": "Sections",
@@ -12276,221 +12337,522 @@
     "text": "Its records are owned by {$peer}, the primary this zone transfers from, and arrive over AXFR, so a zone file cannot be imported here. Import it on {$peer} instead.",
     "scope": "dns_zone"
   },
-  "reaped_controller_objects": {
-    "text": "Controller objects cleaned up",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "removed_orphan": {
-    "text": "Orphan removed",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "backup_downloaded": {
-    "text": "Backup downloaded",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "dyndns_update": {
-    "text": "Dynamic DNS updated",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "released_hostname_disabled": {
-    "text": "Released hostname disabled",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "imported": {
-    "text": "Imported",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "rolled_back": {
-    "text": "Rolled back",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "volumes_purged": {
-    "text": "Volumes purged",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "variable_set": {
-    "text": "Variable set",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "variable_deleted": {
-    "text": "Variable deleted",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "domain_added": {
-    "text": "Domain added",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "domain_removed": {
-    "text": "Domain removed",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "cloned": {
-    "text": "Cloned",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "preview_triggered": {
-    "text": "Preview triggered",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "dyndns_token_minted": {
-    "text": "Dynamic DNS token created",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "dyndns_token_revoked": {
-    "text": "Dynamic DNS token revoked",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "tested": {
-    "text": "Tested",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "device_attached": {
-    "text": "Device attached",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "device_resized": {
-    "text": "Device resized",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "device_detached": {
-    "text": "Device detached",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "approved": {
-    "text": "Approved",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "unapproved": {
-    "text": "Approval withdrawn",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "volume_declared": {
-    "text": "Volume declared",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "volume_redeclared": {
-    "text": "Volume redeclared",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "quarantine_lifted": {
-    "text": "Quarantine lifted",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "requested": {
-    "text": "Requested",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "reissued": {
-    "text": "Reissued",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "files_save": {
-    "text": "File saved",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "files_upload": {
-    "text": "File uploaded",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "files_mkdir": {
-    "text": "Folder created",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "files_rename": {
-    "text": "File renamed",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "files_delete": {
-    "text": "File deleted",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "restored_backup": {
-    "text": "Backup restored",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "restored_snapshot": {
-    "text": "Snapshot restored",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "settled_interrupted": {
-    "text": "Interrupted run settled",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "deleted_data": {
-    "text": "Data deleted",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "template_captured": {
-    "text": "Template captured",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "reconciled": {
-    "text": "Reconciled",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "drained": {
-    "text": "Drained",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "migrated": {
-    "text": "Migrated",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "shell_open": {
-    "text": "Shell opened",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "shell_close": {
-    "text": "Shell closed",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "app_updated": {
-    "text": "App updated",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
+  "reaped_controller_objects": [
+    {
+      "text": "Controller objects cleaned up",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} cleaned up leftover objects on {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "removed_orphan": [
+    {
+      "text": "Orphan removed",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} removed leftover {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "backup_downloaded": [
+    {
+      "text": "Backup downloaded",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} downloaded a backup of {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "dyndns_update": [
+    {
+      "text": "Dynamic DNS updated",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} updated the dynamic DNS address of {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "released_hostname_disabled": [
+    {
+      "text": "Released hostname disabled",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} stopped serving released address {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "imported": [
+    {
+      "text": "Imported",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} imported {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "rolled_back": [
+    {
+      "text": "Rolled back",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} rolled {$subject} back",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "volumes_purged": [
+    {
+      "text": "Volumes purged",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} deleted the volumes of {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "variable_set": [
+    {
+      "text": "Variable set",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} set a variable on {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "variable_deleted": [
+    {
+      "text": "Variable deleted",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} removed a variable from {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "domain_added": [
+    {
+      "text": "Domain added",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} added an address to {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "domain_removed": [
+    {
+      "text": "Domain removed",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} removed an address from {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "cloned": [
+    {
+      "text": "Cloned",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} copied {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "preview_triggered": [
+    {
+      "text": "Preview triggered",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} started a preview of {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "dyndns_token_minted": [
+    {
+      "text": "Dynamic DNS token created",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} created a dynamic DNS token for {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "dyndns_token_revoked": [
+    {
+      "text": "Dynamic DNS token revoked",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} revoked the dynamic DNS token of {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "tested": [
+    {
+      "text": "Tested",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} sent a test notification through {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "device_attached": [
+    {
+      "text": "Device attached",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} attached a device to {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "device_resized": [
+    {
+      "text": "Device resized",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} resized a device of {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "device_detached": [
+    {
+      "text": "Device detached",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} detached a device from {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "approved": [
+    {
+      "text": "Approved",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} approved template {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "unapproved": [
+    {
+      "text": "Approval withdrawn",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} withdrew approval of template {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "volume_declared": [
+    {
+      "text": "Volume declared",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} declared a volume on {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "volume_redeclared": [
+    {
+      "text": "Volume redeclared",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} changed a volume of {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "quarantine_lifted": [
+    {
+      "text": "Quarantine lifted",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} lifted the hold on {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "requested": [
+    {
+      "text": "Requested",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} requested certificate {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "reissued": [
+    {
+      "text": "Reissued",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} reissued certificate {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "files_save": [
+    {
+      "text": "File saved",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} saved a file in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "files_upload": [
+    {
+      "text": "File uploaded",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} uploaded a file to {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "files_mkdir": [
+    {
+      "text": "Folder created",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} created a folder in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "files_rename": [
+    {
+      "text": "File renamed",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} renamed a file in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "files_delete": [
+    {
+      "text": "File deleted",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} deleted a file in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "restored_backup": [
+    {
+      "text": "Backup restored",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} restored {$subject} from a backup",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "restored_snapshot": [
+    {
+      "text": "Snapshot restored",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} restored {$subject} from a snapshot",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "settled_interrupted": [
+    {
+      "text": "Interrupted run settled",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "Hohenheim settled the interrupted work on {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "deleted_data": [
+    {
+      "text": "Data deleted",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} deleted the data of {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "template_captured": [
+    {
+      "text": "Template captured",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} saved {$subject} as a template",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "reconciled": [
+    {
+      "text": "Reconciled",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "Hohenheim brought the stored state of {$subject} in line with its host",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "drained": [
+    {
+      "text": "Drained",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} moved the workloads off {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "migrated": [
+    {
+      "text": "Migrated",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} moved {$subject} to another host",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "shell_open": [
+    {
+      "text": "Shell opened",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} opened a shell in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "shell_close": [
+    {
+      "text": "Shell closed",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} closed a shell in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "app_updated": [
+    {
+      "text": "App updated",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} updated the app in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
   "people_only": {
     "text": "People only",
     "scope": "hohenheim"
@@ -12614,6 +12976,11 @@
       "text": "Moved to a shared engine",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} moved database {$subject} to a shared engine",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "move_shared_hint": {
@@ -13110,6 +13477,11 @@
     {
       "text": "HTTPS forced",
       "scope": "app_overview"
+    },
+    {
+      "text": "HTTPS is now forced on {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "not_used": [
@@ -14104,7 +14476,6 @@
   "reinstall_instance": { "text": "{$actor} reinstalled {$subject}", "scope": "hohenheim", "target": "happened" },
   "destroy_instance_data": { "text": "{$actor} deleted {$subject} with its data", "scope": "hohenheim", "target": "happened" },
   "delete_instance": { "text": "{$actor} deleted {$subject}", "scope": "hohenheim", "target": "happened" },
-  "refresh_instance_overview": { "text": "{$actor} refreshed the status of {$subject}", "scope": "hohenheim", "target": "happened" },
   "migrate_instance": { "text": "{$actor} moved {$subject} to another host", "scope": "hohenheim", "target": "happened" },
   "open_shell": { "text": "{$actor} opened a shell in {$subject}", "scope": "hohenheim", "target": "happened" },
   "open_framebuffer": { "text": "{$actor} opened the screen of {$subject}", "scope": "hohenheim", "target": "happened" },
@@ -14539,5 +14910,18 @@
   "runs_count": {"text": "{$apps}, {$databases}", "scope": "host_list"},
   "apps_count": {"text": ".match {$count :number}\none {{1 app}}\n* {{{$count} apps}}", "scope": "host_list"},
   "databases_count": {"text": ".match {$count :number}\none {{1 database}}\n* {{{$count} databases}}", "scope": "host_list"},
-  "host_checks_failed": {"text": ".match {$count :number}\none {{1 required check failed: {$checks}. Check and admit runs it again.}}\n* {{{$count} required checks failed: {$checks}. Check and admit runs them again.}}", "scope": "attention_detail"}
+  "host_checks_failed": {"text": ".match {$count :number}\none {{1 required check failed: {$checks}. Check and admit runs it again.}}\n* {{{$count} required checks failed: {$checks}. Check and admit runs them again.}}", "scope": "attention_detail"},
+  "stop_forcing_https": [
+    {
+      "text": "Stop forcing HTTPS",
+      "scope": "site"
+    },
+    {
+      "text": "{$actor} stopped forcing HTTPS on {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "stop_forcing_https_toast": { "text": "HTTPS is no longer forced; visitors reach the site over plain HTTP", "scope": "site" },
+  "stop_forcing_https_confirm": { "text": "Visitors will reach the names that have no working certificate over plain, unencrypted HTTP. Force HTTPS again once a certificate works.", "scope": "site" }
 }

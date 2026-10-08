@@ -2574,6 +2574,11 @@
       "text": "Back-up gemaakt",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} maakte een back-up van {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "networking": {
@@ -2793,6 +2798,11 @@
       "text": "Ingeschakeld",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} zette {$subject} aan",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "settings": [
@@ -5182,6 +5192,11 @@
       "text": "Uitgeschakeld",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} zette {$subject} uit",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "deploy_log": {
@@ -5309,6 +5324,11 @@
       "text": "Gestopt",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} stopte {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "missing": [
@@ -5588,6 +5608,11 @@
       "text": "Uitgerold",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} rolde {$subject} uit",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "stopped_toast": {
@@ -6131,6 +6156,11 @@
       "text": "Momentopname gemaakt",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} nam een snapshot van {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "snapshot_confirm": {
@@ -7096,6 +7126,11 @@
       "text": "Consoleopdracht verstuurd",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} voerde een consolecommando uit op {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "expire_preview": [
@@ -7331,6 +7366,11 @@
       "text": "Bestand geschreven",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} schreef een bestand in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "stats": {
@@ -8079,6 +8119,11 @@
       "text": "App-update mislukt",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "De app-update van {$subject} mislukte",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "app_update": [
@@ -8508,6 +8553,11 @@
       "text": "Media opgehaald",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} downloadde installatiemedia {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "media_uploaded": [
@@ -8519,6 +8569,11 @@
       "text": "Media opgeladen",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} uploadde installatiemedia {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "upload_title": {
@@ -8550,6 +8605,11 @@
       "text": "Media verwijderd",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} verwijderde installatiemedia {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "add_disk": {
@@ -9162,6 +9222,11 @@
       "text": "Opdracht uitgevoerd",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} voerde een commando uit in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "run": [
@@ -10083,10 +10148,6 @@
   "abandoned": {
     "text": "Verlaten",
     "scope": "schedule_run_status"
-  },
-  "refresh": {
-    "text": "Vernieuwen",
-    "scope": "instance_overview"
   },
   "sections": {
     "text": "Onderdelen",
@@ -12276,221 +12337,522 @@
     "text": "De records zijn eigendom van {$peer}, de primary waarvan deze zone overdraagt, en komen binnen via AXFR, dus hier kan geen zonebestand geimporteerd worden. Importeer het op {$peer}.",
     "scope": "dns_zone"
   },
-  "reaped_controller_objects": {
-    "text": "Controllerobjecten opgeruimd",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "removed_orphan": {
-    "text": "Verweesd object verwijderd",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "backup_downloaded": {
-    "text": "Back-up gedownload",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "dyndns_update": {
-    "text": "Dynamische DNS bijgewerkt",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "released_hostname_disabled": {
-    "text": "Vrijgegeven hostnaam uitgeschakeld",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "imported": {
-    "text": "Geïmporteerd",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "rolled_back": {
-    "text": "Teruggerold",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "volumes_purged": {
-    "text": "Volumes gewist",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "variable_set": {
-    "text": "Variabele ingesteld",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "variable_deleted": {
-    "text": "Variabele verwijderd",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "domain_added": {
-    "text": "Domein toegevoegd",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "domain_removed": {
-    "text": "Domein verwijderd",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "cloned": {
-    "text": "Gekloond",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "preview_triggered": {
-    "text": "Preview gestart",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "dyndns_token_minted": {
-    "text": "Dynamische-DNS-token aangemaakt",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "dyndns_token_revoked": {
-    "text": "Dynamische-DNS-token ingetrokken",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "tested": {
-    "text": "Getest",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "device_attached": {
-    "text": "Apparaat gekoppeld",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "device_resized": {
-    "text": "Apparaatgrootte aangepast",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "device_detached": {
-    "text": "Apparaat losgekoppeld",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "approved": {
-    "text": "Goedgekeurd",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "unapproved": {
-    "text": "Goedkeuring ingetrokken",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "volume_declared": {
-    "text": "Volume vastgelegd",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "volume_redeclared": {
-    "text": "Volume opnieuw vastgelegd",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "quarantine_lifted": {
-    "text": "Quarantaine opgeheven",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "requested": {
-    "text": "Aangevraagd",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "reissued": {
-    "text": "Opnieuw uitgegeven",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "files_save": {
-    "text": "Bestand opgeslagen",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "files_upload": {
-    "text": "Bestand opgeladen",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "files_mkdir": {
-    "text": "Map aangemaakt",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "files_rename": {
-    "text": "Bestand hernoemd",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "files_delete": {
-    "text": "Bestand verwijderd",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "restored_backup": {
-    "text": "Back-up teruggezet",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "restored_snapshot": {
-    "text": "Momentopname teruggezet",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "settled_interrupted": {
-    "text": "Onderbroken run afgehandeld",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "deleted_data": {
-    "text": "Gegevens verwijderd",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "template_captured": {
-    "text": "Sjabloon vastgelegd",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "reconciled": {
-    "text": "Afgestemd",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "drained": {
-    "text": "Leeggehaald",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "migrated": {
-    "text": "Gemigreerd",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "shell_open": {
-    "text": "Shell geopend",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "shell_close": {
-    "text": "Shell gesloten",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
-  "app_updated": {
-    "text": "App bijgewerkt",
-    "scope": "hohenheim",
-    "target": "activity_action"
-  },
+  "reaped_controller_objects": [
+    {
+      "text": "Controllerobjecten opgeruimd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} ruimde achtergebleven objecten op {$subject} op",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "removed_orphan": [
+    {
+      "text": "Verweesd object verwijderd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} ruimde restant {$subject} op",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "backup_downloaded": [
+    {
+      "text": "Back-up gedownload",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} downloadde een back-up van {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "dyndns_update": [
+    {
+      "text": "Dynamische DNS bijgewerkt",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} werkte het dynamische DNS-adres van {$subject} bij",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "released_hostname_disabled": [
+    {
+      "text": "Vrijgegeven hostnaam uitgeschakeld",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} stopte met het vrijgegeven adres {$subject} te bedienen",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "imported": [
+    {
+      "text": "Geïmporteerd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} importeerde {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "rolled_back": [
+    {
+      "text": "Teruggerold",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} zette {$subject} terug",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "volumes_purged": [
+    {
+      "text": "Volumes gewist",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} verwijderde de volumes van {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "variable_set": [
+    {
+      "text": "Variabele ingesteld",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} stelde een variabele in op {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "variable_deleted": [
+    {
+      "text": "Variabele verwijderd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} verwijderde een variabele van {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "domain_added": [
+    {
+      "text": "Domein toegevoegd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} voegde een adres toe aan {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "domain_removed": [
+    {
+      "text": "Domein verwijderd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} verwijderde een adres van {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "cloned": [
+    {
+      "text": "Gekloond",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} kopieerde {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "preview_triggered": [
+    {
+      "text": "Preview gestart",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} startte een preview van {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "dyndns_token_minted": [
+    {
+      "text": "Dynamische-DNS-token aangemaakt",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} maakte een dynamisch-DNS-token voor {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "dyndns_token_revoked": [
+    {
+      "text": "Dynamische-DNS-token ingetrokken",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} trok het dynamisch-DNS-token van {$subject} in",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "tested": [
+    {
+      "text": "Getest",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} stuurde een testmelding via {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "device_attached": [
+    {
+      "text": "Apparaat gekoppeld",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} koppelde een apparaat aan {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "device_resized": [
+    {
+      "text": "Apparaatgrootte aangepast",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} wijzigde de grootte van een apparaat van {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "device_detached": [
+    {
+      "text": "Apparaat losgekoppeld",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} ontkoppelde een apparaat van {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "approved": [
+    {
+      "text": "Goedgekeurd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} keurde sjabloon {$subject} goed",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "unapproved": [
+    {
+      "text": "Goedkeuring ingetrokken",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} trok de goedkeuring van sjabloon {$subject} in",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "volume_declared": [
+    {
+      "text": "Volume vastgelegd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} declareerde een volume op {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "volume_redeclared": [
+    {
+      "text": "Volume opnieuw vastgelegd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} wijzigde een volume van {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "quarantine_lifted": [
+    {
+      "text": "Quarantaine opgeheven",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} hief de blokkering van {$subject} op",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "requested": [
+    {
+      "text": "Aangevraagd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} vroeg certificaat {$subject} aan",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "reissued": [
+    {
+      "text": "Opnieuw uitgegeven",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} vroeg certificaat {$subject} opnieuw aan",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "files_save": [
+    {
+      "text": "Bestand opgeslagen",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} bewaarde een bestand in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "files_upload": [
+    {
+      "text": "Bestand opgeladen",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} uploadde een bestand naar {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "files_mkdir": [
+    {
+      "text": "Map aangemaakt",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} maakte een map in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "files_rename": [
+    {
+      "text": "Bestand hernoemd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} hernoemde een bestand in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "files_delete": [
+    {
+      "text": "Bestand verwijderd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} verwijderde een bestand in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "restored_backup": [
+    {
+      "text": "Back-up teruggezet",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} zette {$subject} terug uit een back-up",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "restored_snapshot": [
+    {
+      "text": "Momentopname teruggezet",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} zette {$subject} terug uit een snapshot",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "settled_interrupted": [
+    {
+      "text": "Onderbroken run afgehandeld",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "Hohenheim rondde het onderbroken werk aan {$subject} af",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "deleted_data": [
+    {
+      "text": "Gegevens verwijderd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} verwijderde de gegevens van {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "template_captured": [
+    {
+      "text": "Sjabloon vastgelegd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} bewaarde {$subject} als sjabloon",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "reconciled": [
+    {
+      "text": "Afgestemd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "Hohenheim bracht de bewaarde staat van {$subject} in lijn met zijn host",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "drained": [
+    {
+      "text": "Leeggehaald",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} verhuisde de workloads weg van {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "migrated": [
+    {
+      "text": "Gemigreerd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} verhuisde {$subject} naar een andere host",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "shell_open": [
+    {
+      "text": "Shell geopend",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} opende een shell in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "shell_close": [
+    {
+      "text": "Shell gesloten",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} sloot een shell in {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "app_updated": [
+    {
+      "text": "App bijgewerkt",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$actor} werkte de app in {$subject} bij",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
   "people_only": {
     "text": "Alleen personen",
     "scope": "hohenheim"
@@ -12614,6 +12976,11 @@
       "text": "Naar een gedeelde engine verplaatst",
       "scope": "hohenheim",
       "target": "activity_action"
+    },
+    {
+      "text": "{$actor} verhuisde database {$subject} naar een gedeelde engine",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "move_shared_hint": {
@@ -13110,6 +13477,11 @@
     {
       "text": "HTTPS verplicht",
       "scope": "app_overview"
+    },
+    {
+      "text": "HTTPS is nu verplicht op {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
     }
   ],
   "not_used": [
@@ -14104,7 +14476,6 @@
   "reinstall_instance": { "text": "{$actor} installeerde {$subject} opnieuw", "scope": "hohenheim", "target": "happened" },
   "destroy_instance_data": { "text": "{$actor} verwijderde {$subject} met zijn gegevens", "scope": "hohenheim", "target": "happened" },
   "delete_instance": { "text": "{$actor} verwijderde {$subject}", "scope": "hohenheim", "target": "happened" },
-  "refresh_instance_overview": { "text": "{$actor} vernieuwde de status van {$subject}", "scope": "hohenheim", "target": "happened" },
   "migrate_instance": { "text": "{$actor} verhuisde {$subject} naar een andere host", "scope": "hohenheim", "target": "happened" },
   "open_shell": { "text": "{$actor} opende een shell in {$subject}", "scope": "hohenheim", "target": "happened" },
   "open_framebuffer": { "text": "{$actor} opende het scherm van {$subject}", "scope": "hohenheim", "target": "happened" },
@@ -14539,5 +14910,18 @@
   "runs_count": {"text": "{$apps}, {$databases}", "scope": "host_list"},
   "apps_count": {"text": ".match {$count :number}\none {{1 app}}\n* {{{$count} apps}}", "scope": "host_list"},
   "databases_count": {"text": ".match {$count :number}\none {{1 database}}\n* {{{$count} databases}}", "scope": "host_list"},
-  "host_checks_failed": {"text": ".match {$count :number}\none {{1 verplichte controle mislukt: {$checks}. Controleren en toelaten voert die opnieuw uit.}}\n* {{{$count} verplichte controles mislukt: {$checks}. Controleren en toelaten voert ze opnieuw uit.}}", "scope": "attention_detail"}
+  "host_checks_failed": {"text": ".match {$count :number}\none {{1 verplichte controle mislukt: {$checks}. Controleren en toelaten voert die opnieuw uit.}}\n* {{{$count} verplichte controles mislukt: {$checks}. Controleren en toelaten voert ze opnieuw uit.}}", "scope": "attention_detail"},
+  "stop_forcing_https": [
+    {
+      "text": "HTTPS niet meer verplichten",
+      "scope": "site"
+    },
+    {
+      "text": "{$actor} verplichtte HTTPS niet langer op {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "stop_forcing_https_toast": { "text": "HTTPS is niet langer verplicht; bezoekers bereiken de site via gewone HTTP", "scope": "site" },
+  "stop_forcing_https_confirm": { "text": "Bezoekers bereiken de namen zonder werkend certificaat dan via gewone, onversleutelde HTTP. Verplicht HTTPS opnieuw zodra een certificaat werkt.", "scope": "site" }
 }

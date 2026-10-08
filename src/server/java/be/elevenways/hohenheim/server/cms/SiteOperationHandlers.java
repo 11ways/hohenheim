@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.site.SiteOperations;
+import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
 import be.elevenways.zenit.common.edit.FormSecrets;
 import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
@@ -71,6 +72,11 @@ public final class SiteOperationHandlers {
             .availability((site, access) -> SiteParts.panelLockoutReason("toggle_self_lockout", site, access))
             .authorize(reachesSite())
             .handle(call -> switchTo(call, false));
+        // Only a name forced to HTTPS that no working certificate covers is an error page this switches back.
+        OperationHandlers.attach(SiteOperations.STOP_FORCING_HTTPS)
+            .applies(site -> live(site) && AppHealth.needsCertificate(site))
+            .authorize(reachesSite())
+            .handle(call -> stopForcingHttps(call.subject()));
         OperationHandlers.attach(SiteOperations.CLONE)
             .applies(SiteOperationHandlers::live)
             .authorize(administers())
@@ -238,6 +244,22 @@ public final class SiteOperationHandlers {
         site.set(SiteModel.ENABLED, enable);
         ActivityLog.withAction(enable ? HohenheimActivityAction.ENABLED : HohenheimActivityAction.DISABLED, null,
             () -> Models.get(SiteModel.class).save(site));
+        return null;
+    }
+
+    /**
+     * Switches HTTPS forcing off on each of the site's names that is forced while no working certificate covers it; a
+     * name that has one keeps it. The write states force_ssl itself, so the certificate latch stays disarmed.
+     */
+    private static @Nullable Void stopForcingHttps(@NonNull Row site) {
+        Set<String> working = CertificateCoverage.activeNames();
+        SiteDomainModel domains = Models.get(SiteDomainModel.class);
+        for (Row domain : SiteParts.domainsOf(site)) {
+            if (AppHealth.forcedUncovered(domain, working)) {
+                domain.set(SiteDomainModel.FORCE_SSL, false);
+                domains.save(domain);
+            }
+        }
         return null;
     }
 
