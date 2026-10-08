@@ -54,7 +54,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             //     a second row of the same actions under the verdict.
             assertThat(page).as("step 1b: the overview draws the record heading")
                 .contains("data-cms-record-head")
-                .contains("<h1>app-journey-healthy</h1>");
+                .containsPattern("<h1[^>]*>app-journey-healthy</h1>");
             assertThat(page.split("data-cms-record-actions", -1).length - 1)
                 .as("step 1b: exactly one action band on the page").isEqualTo(1);
             assertThat(page).as("step 1b: and no record-actions widget repeating it")
@@ -193,6 +193,34 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .doesNotContain("Live at");
             assertThat(adminGet("/admin/instances?q=app-journey-served").body())
                 .as("step 4: and its list row carries the broken glyph").contains("data-cms-health=\"broken\"");
+
+            // 5. The workload's band carries the site's two fixes (the App-Problem board): getting a certificate on the
+            //    site's addresses, and stopping forcing HTTPS, which runs on the site, not on the workload. The page's
+            //    old Refresh button is gone: loading the page reads the evidence afresh.
+            Object siteId = site.get(SiteModel.ID);
+            String fixes = forced.substring(forced.indexOf("data-cms-record-health"),
+                forced.indexOf("</pl-alert>", forced.indexOf("data-cms-record-health")));
+            assertThat(fixes).as("step 5: Get a certificate leads to the site's addresses")
+                .contains("Get a certificate")
+                .contains("/admin/sites/" + siteId + "/page/" + SiteParts.DOMAINS_TAB);
+            assertThat(fixes).as("step 5: Stop forcing HTTPS runs on the site serving the workload")
+                .contains("Stop forcing HTTPS")
+                .contains("/admin/sites/invoke/hohenheim.stop_forcing_https?ids=" + siteId);
+            assertThat(forced).as("step 5: no lone Refresh button under the band")
+                .doesNotContain(">Refresh<");
+
+            // 6. Stopping forcing HTTPS is that fix: the name is served over plain HTTP, the workload is live again,
+            //    and the latch never forces it back by itself, since the operator chose "off".
+            adminPostForm("/admin/sites/invoke/hohenheim.stop_forcing_https?ids=" + siteId, confirmed(""));
+            Row unforced = Models.get(SiteDomainModel.class).findById(name.get(SiteDomainModel.ID));
+            assertThat((Boolean) unforced.get(SiteDomainModel.FORCE_SSL)).as("step 6: HTTPS is no longer forced")
+                .isFalse();
+            assertThat((Boolean) unforced.get(SiteDomainModel.FORCE_SSL_AUTO))
+                .as("step 6: and the certificate latch stays disarmed").isFalse();
+            assertThat(adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview").body())
+                .as("step 6: the workload is live at its address over HTTP again")
+                .contains("data-cms-record-health=\"ok\"")
+                .contains("Live at http://served.app-journey.test");
         } finally {
             localBefore.restore();
             HardDeletes.row(Models.get(SiteModel.class), site);

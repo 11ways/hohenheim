@@ -162,8 +162,14 @@ class AppsListJourneyTest extends HohenheimTestBase {
             //    nothing that is not an app.
             String list = adminGet("/admin/apps?_search=apps-journey").body();
             for (App app : apps.values()) {
-                assertThat(list).as("step 6: the list links " + app.name() + " to its record page")
-                    .contains("href=\"" + app.target().toUrl());
+                int link = list.indexOf("href=\"" + app.target().toUrl());
+                assertThat(link).as("step 6: the list links " + app.name() + " to its record page").isNotNegative();
+                // The leading health glyph is no title: the record link is the app's NAME (the board's Apps list).
+                assertThat(list.substring(list.lastIndexOf("<a", link), list.indexOf("</a>", link)))
+                    .as("step 6: the link of " + app.name() + " is its name, not the health glyph")
+                    .contains("cms-row-link")
+                    .contains(app.name())
+                    .doesNotContain("data-cms-health");
             }
             assertThat(list).as("step 6: the broken static site carries the broken glyph")
                 .contains("data-cms-health=\"broken\"");

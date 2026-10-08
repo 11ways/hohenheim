@@ -4,6 +4,8 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -74,10 +76,18 @@ import java.util.Set;
  */
 public final class SiteParts {
 
+    /** The node role under which both panels register the site entries: one fact for the panels and the health fixes. */
+    static final Role ROLE = Role.PROXY;
+
     /** Virtual column names (renderer cells). */
     static final String HOSTNAMES_COLUMN = "hostnames";
     static final String UPSTREAM_COLUMN = "upstream";
     static final String TLS_COLUMN = "tls";
+
+    /** @return whether this node's panels register the site entries ({@link #ROLE}) */
+    static boolean registered() {
+        return HohenheimRoles.anyEnabled(ROLE);
+    }
 
     /** The Addresses tab's slug, which the domain entries name as their parent tab. */
     public static final String DOMAINS_TAB = DomainParts.SLUG;

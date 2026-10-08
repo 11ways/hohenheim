@@ -269,17 +269,6 @@ public final class InstanceOperations {
         .command(COMMAND_FACET)
         .register();
 
-    /** Re-reads one instance's stored evidence: the overview surface's refresh control. */
-    public static final Operation<Row, Void, Void> REFRESH_OVERVIEW =
-        Operation.declare(HohenheimIds.id("refresh_instance_overview"))
-            .happened(OperationSentences.of("refresh_instance_overview"))
-            .label(label("refresh", "instance_overview", "Refresh"))
-            .icon(Icon.REFRESH)
-            .one(INSTANCE)
-            .gate(OperationGate.open())
-            .facts(OperationFact.READ_ONLY)
-            .register();
-
     /** The host a migration moves the workload to. */
     public static final IntegerField TARGET_SERVER = IntegerField.builder("targetServerId")
         .label(Microcopy.of("host").withFilter("scope", "instance_migrate"))

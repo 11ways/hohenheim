@@ -95,5 +95,10 @@ class DeclaredMicrocopyKeysTest {
     void everyActivityVerbHasALabel() {
         // "move_shared" printed its raw key, and every other verb read its label from zenit-cms's scope.
         ActivityLabelCoverage.requireShipped(HohenheimMicrocopy.SCOPE, HohenheimActivityAction.class);
+        // A row written outside an operation read "Jelle: Deployed Instance #3": every verb tells it as a sentence, and
+        // the coverage above then requires that sentence in en and nl.
+        for (HohenheimActivityAction verb : HohenheimActivityAction.values()) {
+            assertNotNull(verb.happened(), verb.id() + " heads its rows with a sentence");
+        }
     }
 }

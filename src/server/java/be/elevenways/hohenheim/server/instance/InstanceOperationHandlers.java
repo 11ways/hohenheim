@@ -141,7 +141,6 @@ public final class InstanceOperationHandlers {
                 new InstanceService().destroy(instanceId(call));
                 return 1;
             });
-        OperationHandlers.attach(InstanceOperations.REFRESH_OVERVIEW).handle(call -> null);
         OperationHandlers.attach(InstanceOperations.MIGRATE).source(SUBJECTS)
             .authorize(InstanceOperationHandlers::operatorOnly)
             .handle(InstanceOperationHandlers::migrate);

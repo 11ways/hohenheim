@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.activity.ActivityAction;
 import be.elevenways.zenit.common.orm.activity.ActivityActions;
@@ -11,6 +12,10 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * The activity verbs Hohenheim declares; its created, updated and deleted rows are core's verbs.
+ *
+ * AIDEV-NOTE: every verb heads its rows with a sentence of its own ({@link #happened()}), so a row written outside an
+ * operation (a deploy from a git push, a crash restart, an old row from before operations told what happened) reads as
+ * a sentence too, never as "Jelle: Deployed Instance #3". DeclaredMicrocopyKeysTest requires each one in en and nl.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -114,5 +119,10 @@ public enum HohenheimActivityAction implements ActivityAction {
     @Override
     public boolean acceptedChange() {
         return false;
+    }
+
+    @Override
+    public @NonNull Microcopy happened() {
+        return ActivityActions.sentence(this);
     }
 }

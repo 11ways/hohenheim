@@ -59,6 +59,22 @@ public final class SiteOperations {
         .command(COMMAND)
         .register();
 
+    /**
+     * Stops forcing HTTPS on the site's names no working certificate covers, so visitors reach them over plain HTTP
+     * instead of an error page: the health band's second fix beside getting a certificate. An explicit "off", so the
+     * certificate latch never switches it back on by itself.
+     */
+    public static final Operation<Row, Void, Void> STOP_FORCING_HTTPS =
+        Operation.declare(HohenheimIds.id("stop_forcing_https"))
+            .happened(OperationSentences.of("stop_forcing_https"))
+            .label(label("stop_forcing_https", "Stop forcing HTTPS"))
+            .icon(Icon.of("unlock"))
+            .one(SITE)
+            .gate(OperationGate.open())
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .command(COMMAND)
+            .register();
+
     /** The copy's name, the one thing a clone asks. */
     public static final StringField CLONE_NAME = StringField.builder("name")
         .label(Microcopy.of("clone_name").withFilter("scope", "site"))

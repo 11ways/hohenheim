@@ -129,7 +129,7 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
                 String body = adminGet(record + "/page/" + tab).body();
                 assertThat(body).as("step 1: the %s tab heads with the record", tab)
                     .contains("data-cms-record-head")
-                    .contains("<h1>tab-set-heading</h1>");
+                    .containsPattern("<h1[^>]*>tab-set-heading</h1>");
                 assertThat(body.split("data-cms-record-head", -1).length - 1)
                     .as("step 1: the %s tab draws ONE heading", tab).isEqualTo(1);
                 assertThat(body).as("step 1: the %s tab keeps no heading of its own", tab)
@@ -157,7 +157,7 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
             assertThat(adminGet(siteRecord + "/page/" + SiteParts.DOMAINS_TAB).body())
                 .as("step 3: the Addresses tab heads with the site")
                 .contains("data-cms-record-head")
-                .contains("<h1>tab-set-site</h1>");
+                .containsPattern("<h1[^>]*>tab-set-site</h1>");
         } finally {
             HardDeletes.row(Models.get(SiteModel.class), site);
             HardDeletes.row(Models.get(InstanceModel.class), instance);
