@@ -107,16 +107,9 @@ abstract class ApiProviderClient implements GitProviderClient {
         } catch (IllegalArgumentException unsendable) {
             throw new IOException("Provider request refused: " + unsendable.getMessage());
         }
-        return switch (this.fetcher.fetch(request)) {
-            case FetchOutcome.Fetched fetched ->
-                new Response(fetched.status(), new String(fetched.body(), StandardCharsets.UTF_8));
-            case FetchOutcome.Redirected redirected ->
-                throw new IOException("Provider redirected " + pathOf(url) + ": HTTP "
-                    + redirected.status() + " (redirects are never followed)");
-            case FetchOutcome.Refused refused -> throw new IOException(refused.reason());
-            case FetchOutcome.Failed failed -> throw new IOException("Provider request to "
-                + pathOf(url) + " failed: " + failed.reason());
-        };
+        FetchOutcome.Fetched fetched = this.fetcher.fetch(request)
+            .requireResponse("Provider request to " + pathOf(url));
+        return new Response(fetched.status(), new String(fetched.body(), StandardCharsets.UTF_8));
     }
 
     private static void requireSuccess(@NonNull String url, @NonNull Response response)

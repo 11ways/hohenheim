@@ -8,7 +8,6 @@ import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -179,7 +178,7 @@ class GeneratedDnsRecordsTest extends HohenheimTestBase {
         //    resolves a record by ZONE MEMBERSHIP alone, so an API key holding the admin
         //    permission reached every generated row in every hosted zone.
         String apiKey = ApiKeyService.create(
-            AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
+            Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
                 .get(UserModel.ID),
             "generated-dns-test", List.of("hohenheim.*"), null).plaintext();
 

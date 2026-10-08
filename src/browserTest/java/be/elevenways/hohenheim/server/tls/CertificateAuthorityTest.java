@@ -12,7 +12,6 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -301,7 +300,8 @@ class CertificateAuthorityTest extends HohenheimTestBase {
     }
 
     private static void setEnabled(int userId, boolean enabled) {
-        AuthModels.users().find().where(UserModel.ID.eq(userId)).assign(UserModel.ENABLED, enabled).updateAll();
+        Models.get(UserModel.class).find().where(UserModel.ID.eq(userId))
+            .assign(UserModel.ENABLED, enabled).updateAll();
     }
 
     /**

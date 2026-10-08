@@ -12,7 +12,6 @@ import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -50,7 +49,7 @@ class DnsZoneApiTest extends HohenheimTestBase {
     static void seed() {
         previousDeclared = DnsNameservers.declared();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Dns.NAMESERVERS, DECLARED);
-        int adminId = AuthModels.users().find()
+        int adminId = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
         keyAdmin = ApiKeyService.create(adminId, "zone-api-admin", List.of("hohenheim.*"), null)
             .plaintext();

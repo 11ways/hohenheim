@@ -15,7 +15,6 @@ import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -172,7 +171,7 @@ class DatabaseLimitPartialWriteTest extends HohenheimTestBase {
     }
 
     private static UserPrincipal adminPrincipal() {
-        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         return new UserPrincipal(admin.get(UserModel.ID), "Test Admin");
     }
 

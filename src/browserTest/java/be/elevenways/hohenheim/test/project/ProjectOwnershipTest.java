@@ -23,7 +23,6 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -487,11 +486,11 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         Row throwaway = Models.get(ProjectModel.class).findById(throwawayId);
         Integer groupId = throwaway.get(ProjectModel.GROUP_ID);
         assertThat(groupId).as("step 2: the write hook created the backing group").isNotNull();
-        assertThat(AuthModels.permissionGroups().findById(groupId))
+        assertThat(Models.get(PermissionGroupModel.class).findById(groupId))
             .as("step 2: and the group row exists").isNotNull();
         // 3. Before it goes: the group SAYS where it came from, so /admin/roles no longer
         //    lists a bare "project-..." row with an empty description column.
-        Row group = AuthModels.permissionGroups().findById(groupId);
+        Row group = Models.get(PermissionGroupModel.class).findById(groupId);
         assertThat((String) group.get(PermissionGroupModel.DESCRIPTION))
             .as("step 3: the auto-created role names its owning project")
             .contains(PREFIX + "throwaway");
@@ -499,24 +498,24 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         // 4. Deleting that role on its own is REFUSED while the project points at it --
         //    it used to succeed and leave the project pointing at nothing.
         Throwable orphaning = catchThrowable(() ->
-            AuthModels.permissionGroups().delete(groupId));
+            Models.get(PermissionGroupModel.class).delete(groupId));
         assertThat(violationKeys(orphaning))
             .as("step 4: a project-owned role cannot be deleted from the roles surface")
             .contains("role_owned_by_project");
-        assertThat(AuthModels.permissionGroups().findById(groupId))
+        assertThat(Models.get(PermissionGroupModel.class).findById(groupId))
             .as("step 4: and the row is still there").isNotNull();
 
         // 5. Renaming the project moves the provenance sentence with it.
         Row renamed = Models.get(ProjectModel.class).findById(throwawayId);
         renamed.set(ProjectModel.NAME, PREFIX + "renamed");
         Models.get(ProjectModel.class).save(renamed);
-        assertThat((String) AuthModels.permissionGroups().findById(groupId)
+        assertThat((String) Models.get(PermissionGroupModel.class).findById(groupId)
                 .get(PermissionGroupModel.DESCRIPTION))
             .as("step 5: the description follows the project name")
             .contains(PREFIX + "renamed");
 
         Models.get(ProjectModel.class).delete(throwawayId);
-        assertThat(AuthModels.permissionGroups().findById(groupId))
+        assertThat(Models.get(PermissionGroupModel.class).findById(groupId))
             .as("step 6: deleting the project deleted its group explicitly")
             .isNull();
     }
@@ -534,10 +533,10 @@ class ProjectOwnershipTest extends HohenheimTestBase {
 
         // A hand-made role is the counterfactual: everything asserted below must be
         // TRUE of it, or the assertions are only measuring an empty page.
-        Row plain = AuthModels.permissionGroups().createEmptyRow();
+        Row plain = Models.get(PermissionGroupModel.class).createEmptyRow();
         plain.set(PermissionGroupModel.SLUG, PREFIX + "plain");
         plain.set(PermissionGroupModel.TITLE, PREFIX + "plain");
-        AuthModels.permissionGroups().save(plain);
+        Models.get(PermissionGroupModel.class).save(plain);
         Integer plainGroupId = plain.get(PermissionGroupModel.ID);
 
         // 1. The list declares the managed-by column and names the owning project.
@@ -578,10 +577,10 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         assertThat(deleted.statusCode())
             .as("step 4: the delete submit is refused, not merely hidden")
             .isIn(403, 404);
-        assertThat(AuthModels.permissionGroups().findById(ownedGroupId))
+        assertThat(Models.get(PermissionGroupModel.class).findById(ownedGroupId))
             .as("step 4: and the role is still there").isNotNull();
 
-        AuthModels.permissionGroups().delete(plainGroupId);
+        Models.get(PermissionGroupModel.class).delete(plainGroupId);
         Models.get(ProjectModel.class).delete(ownedProjectId);
     }
 

@@ -15,7 +15,6 @@ import be.elevenways.hohenheim.server.cms.InstanceScheduleParts;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepParts;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
@@ -66,7 +65,7 @@ class PartialWriteContractTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() throws Exception {
-        Row admin = AuthModels.users().find()
+        Row admin = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         adminId = ((Integer) admin.get(UserModel.ID)).longValue();
 

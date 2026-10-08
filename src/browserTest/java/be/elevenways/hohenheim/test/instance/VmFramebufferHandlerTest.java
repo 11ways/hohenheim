@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -176,7 +176,7 @@ class VmFramebufferHandlerTest extends HohenheimTestBase {
         RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE);
         HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
-        AuthModels.users().delete(userId);
+        Models.get(UserModel.class).delete(userId);
     }
 
     /** A minimal in-process session that records what the handler did to it. */

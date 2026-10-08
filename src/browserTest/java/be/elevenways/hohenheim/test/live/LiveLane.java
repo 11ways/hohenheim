@@ -60,9 +60,6 @@ public final class LiveLane {
         /** OpenSSH binaries on this machine. */
         SSH_TOOLS("ssh"),
 
-        /** Enforceable process confinement (cgroup delegation). */
-        CONFINEMENT("confinement"),
-
         /** A {@code node} binary. */
         NODE("node"),
 

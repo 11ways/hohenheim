@@ -4,6 +4,8 @@ import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.hohenheim.net.LegacyIpSpellings;
 import be.elevenways.protoblast.common.platform.PlatformSeam;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.model.FrozenSettingsLeaves;
+import be.elevenways.zenit.auth.model.GrantMigrations;
 import be.elevenways.zenit.common.orm.datasource.ColumnType;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -149,6 +151,8 @@ public class M011_ReviewHardening extends HohenheimMigration {
         dependsOn("be.elevenways.zenit.common.task.record.M004_AddRecordScheduleStepInput");
         // The step-run respelling reads the rows zenit's M005 converts from each legacy run's step_results.
         dependsOn("be.elevenways.zenit.common.task.record.M005_ConvertLegacyStepResults");
+        // The settings grants write zenit-auth's grant rows with the owner column its M014 adds.
+        dependsOn("be.elevenways.zenit.auth.server.migration.M014_AddGrantOwner");
         irreversible("plaintext Basic auth passwords are replaced by their argon2 hashes and access-rule"
             + " networks by their canonical spelling; neither original can be restored");
     }
@@ -243,7 +247,16 @@ public class M011_ReviewHardening extends HohenheimMigration {
             column -> column.nullable(true).maxLength(50).defaultValue(CRASH_RESTART)));
         schema.data("restart every stored workload after a crash, the new default", "1",
             M011_ReviewHardening::restartStoredWorkloadsOnCrash);
+        // The settings page asked the system tier itself; each setting now asks its own leaf, so whoever held the tier
+        // keeps every setting the page offers.
+        GrantMigrations.grantToHolders(schema, "grant the system tier's holders every settings leaf", "2",
+            List.of("hohenheim.admin.system"), SYSTEM_SETTINGS_GRANTS);
     }
+
+    /** The settings leaves the system tier's holders are granted: every one the settings page offers. */
+    public static final List<String> SYSTEM_SETTINGS_GRANTS = FrozenSettingsLeaves.union(FrozenSettingsLeaves.ZENIT,
+        FrozenSettingsLeaves.AUTH, FrozenSettingsLeaves.CMS, FrozenSettingsLeaves.COMMS, FrozenSettingsLeaves.MEDIA,
+        FrozenSettingsLeaves.MICROCOPY);
 
     /** The crash policy every stored workload gets, as InstanceModel.CRASH_DEFAULT spells it today. */
     static final String CRASH_RESTART = "restart";

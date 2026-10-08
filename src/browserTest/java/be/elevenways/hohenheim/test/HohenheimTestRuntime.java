@@ -57,11 +57,6 @@ public final class HohenheimTestRuntime {
         // the module's drain reads the setting.
         Zenit.SETTINGS_VALUES.setValue(AuthSettings.CMS_AUTO_PANEL, false);
         ServerSettings.VALUES.setValue(ServerSettings.Network.AUTO_START_HTTP, false);
-        // The suite opts OUT explicitly: its sites have no system user of their own
-        // and would otherwise all fault. Nothing flips it back on any more -- the
-        // host-user process lane that needed it was deleted in phase 0.
-        Zenit.SETTINGS_VALUES.setValue(
-            HohenheimSettings.Process.REQUIRE_DEDICATED_USER, false);
         ServerZenitRuntime.init().join();
     }
 

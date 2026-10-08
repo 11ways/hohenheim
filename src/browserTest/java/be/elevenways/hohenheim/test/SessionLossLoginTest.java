@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
-import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.auth.server.PasswordService;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.Zenit;
@@ -35,7 +35,7 @@ class SessionLossLoginTest extends HohenheimTestBase {
     @Test
     void sessionLossRecoversThroughTheInPlaceLoginForm() {
         // Give the seeded admin a real password to log back in with.
-        Row user = AuthModels.users().find()
+        Row user = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         PasswordService.setPassword((Integer) user.get(UserModel.ID), "hunter2-session-test");
 

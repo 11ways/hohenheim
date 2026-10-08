@@ -9,7 +9,6 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.test.support.PanelSurfaces;
 import be.elevenways.zenit.cms.common.render.table.SynthesizedRowActions;
@@ -119,7 +118,7 @@ class InstanceSurfacesBrowserTest extends HohenheimTestBase {
     }
 
     private static UserPrincipal operatorPrincipal() {
-        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         return new UserPrincipal(admin.get(UserModel.ID), "Test Admin");
     }
 

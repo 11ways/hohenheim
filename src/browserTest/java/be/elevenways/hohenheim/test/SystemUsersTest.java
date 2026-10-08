@@ -164,23 +164,6 @@ class SystemUsersTest {
             .contains("/usr/bin/prlimit");
     }
 
-    /** A confinement prefix wraps the spawn OUTSIDE the privilege drop, never inside it. */
-    @Test
-    void theConfinementScopeWrapsTheSpawnOutsideTheDrop() {
-        List<String> command = SystemUsers.execution(
-            new SystemUsers.RunAsUser("site", 4242, 4243, "/srv/site"), Map.of(),
-            List.of("node", "server.js"), true,
-            List.of("/usr/bin/systemd-run", "--scope", "--")).command();
-
-        assertThat(command.indexOf("/usr/bin/systemd-run"))
-            .as("the cgroup scope is created by the daemon's identity, before sudo")
-            .isGreaterThan(command.indexOf("/usr/bin/setsid"))
-            .isLessThan(command.indexOf("/usr/bin/sudo"));
-        assertThat(command.indexOf("/usr/bin/setpriv"))
-            .as("no_new_privs must land AFTER sudo, or the setuid sudo binary itself fails")
-            .isGreaterThan(command.indexOf("/usr/bin/sudo"));
-    }
-
     @Test
     void explicitChildEnvironmentDoesNotInheritDaemonSecrets() throws Exception {
         Map<String, String> environment = SystemUsers.safeEnvironment("/srv/site");

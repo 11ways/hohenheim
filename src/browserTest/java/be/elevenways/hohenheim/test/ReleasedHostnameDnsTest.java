@@ -10,7 +10,6 @@ import be.elevenways.hohenheim.server.dns.DynamicDnsService.Status;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -287,7 +286,7 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
     }
 
     private static long grantCount(int recordId) {
-        return AuthModels.recordGrants().find()
+        return Models.get(RecordGrantModel.class).find()
             .where(RecordGrantModel.MODEL.eq(DnsRecordModel.MODEL_ID.toString()))
             .where(RecordGrantModel.RECORD_ID.eq(String.valueOf(recordId)))
             .count();

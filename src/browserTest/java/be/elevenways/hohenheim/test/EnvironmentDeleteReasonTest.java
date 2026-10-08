@@ -10,7 +10,6 @@ import be.elevenways.hohenheim.server.project.ProjectGuards;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -80,7 +79,7 @@ class EnvironmentDeleteReasonTest extends HohenheimTestBase {
 
     @Test
     void theDeadDeleteAndTheRefusalBothNameTheHolders() throws Exception {
-        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         AccessContext operator = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(admin.get(UserModel.ID), "Test Admin")));
         Row environment = Models.get(EnvironmentModel.class).findById(environmentId);

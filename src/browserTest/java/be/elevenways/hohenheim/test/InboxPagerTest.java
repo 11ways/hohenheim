@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.comms.server.CommsInbox;
 import be.elevenways.zenit.comms.server.CommsInboxModel;
 import be.elevenways.zenit.comms.server.CommsInboxOwners;
@@ -63,7 +62,7 @@ class InboxPagerTest extends HohenheimTestBase {
     }
 
     private static long harnessAdminId() {
-        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         assertThat(admin).as("the harness admin exists").isNotNull();
         return ((Integer) admin.get(UserModel.ID)).longValue();
     }

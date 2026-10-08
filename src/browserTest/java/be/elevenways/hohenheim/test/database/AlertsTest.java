@@ -14,7 +14,6 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.comms.CommsChannel;
 import be.elevenways.zenit.comms.CommsRecipient;
 import be.elevenways.zenit.comms.CommsSettings;
@@ -79,8 +78,8 @@ class AlertsTest {
         Models.get(CommsInboxModel.class).find().delete();
         // The inbox fanout is driven by who holds the admin permission, so every
         // method decides that for itself instead of inheriting the previous one's.
-        AuthModels.grants().find().delete();
-        AuthModels.users().find().delete();
+        Models.get(GrantModel.class).find().delete();
+        Models.get(UserModel.class).find().delete();
         // Inline webhook-only dispatcher: assertions run right after send().
         Comms.install(new CommsDispatcher(Map.of(
             CommsChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
@@ -279,23 +278,23 @@ class AlertsTest {
      * @return the new user's id
      */
     private static int seedUser(@NonNull String email, boolean enabled, boolean administrator) {
-        Row user = AuthModels.users().createEmptyRow();
+        Row user = Models.get(UserModel.class).createEmptyRow();
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, email);
         user.set(UserModel.ENABLED, enabled);
         user.set(UserModel.CREATED_AT, Now.instant());
         user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
+        Models.get(UserModel.class).save(user);
 
         Integer id = user.get(UserModel.ID);
 
         if (administrator) {
-            Row grant = AuthModels.grants().createEmptyRow();
+            Row grant = Models.get(GrantModel.class).createEmptyRow();
             grant.set(GrantModel.SUBJECT_TYPE, GrantSubjectType.USER.key());
             grant.set(GrantModel.SUBJECT_ID, id);
             grant.set(GrantModel.PERMISSION, HohenheimSources.ADMIN_ACCESS.value());
             grant.set(GrantModel.VALUE, true);
-            AuthModels.grants().save(grant);
+            Models.get(GrantModel.class).save(grant);
         }
         return id;
     }

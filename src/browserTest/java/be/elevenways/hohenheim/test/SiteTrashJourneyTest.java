@@ -10,7 +10,6 @@ import be.elevenways.hohenheim.server.cms.ProtectedPathParts;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.quota.SiteQuota;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -290,7 +289,7 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
     }
 
     private static String adminId() {
-        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         return String.valueOf((Object) admin.get(UserModel.ID));
     }
 }

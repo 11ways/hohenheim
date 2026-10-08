@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.plumage.component.Pager;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.cms.common.render.table.TableState;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -134,7 +133,7 @@ class DnsZoneRecordsTabTest extends HohenheimTestBase {
     }
 
     private static AccessContext operator() {
-        Row admin = AuthModels.users().find()
+        Row admin = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         return AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(admin.get(UserModel.ID), "Test Admin")));

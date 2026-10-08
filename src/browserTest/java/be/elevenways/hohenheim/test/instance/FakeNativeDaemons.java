@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -27,6 +28,7 @@ import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.BadgeColor;
@@ -86,12 +88,25 @@ final class FakeNativeDaemons {
      */
     static final Map<String, Set<String>> LINK_NETWORKS = new ConcurrentHashMap<>();
 
+    /** The database the scripted streams belong to: a fresh one restarts instance ids, so its handles recur. */
+    private static @Nullable SqlDatasource streamsDatabase;
+
     private FakeNativeDaemons() {
     }
 
     /** Register both fake kinds (idempotent) and make sure this host has a daemon map. */
     static void register() {
+        followDatabase();
         FakeNativeKind.register();
+    }
+
+    /** Drops the scripted streams of the previous database once a fresh one is in place. */
+    private static synchronized void followDatabase() {
+        SqlDatasource current = HohenheimDatabase.datasource();
+        if (current != streamsDatabase) {
+            streamsDatabase = current;
+            resetStreams();
+        }
     }
 
     /** The fake daemon of a host record, created on first use. */
@@ -102,6 +117,7 @@ final class FakeNativeDaemons {
 
     /** The handle the fake kinds spell for an instance id. */
     static String handleOf(int instanceId) {
+        followDatabase();
         return "fake-instance-" + instanceId;
     }
 
@@ -321,6 +337,7 @@ final class FakeNativeDaemons {
         private final Map<String, FakeWorkload> daemon;
 
         FakeNativeRuntime(String serverName) {
+            followDatabase();
             this.daemon = DAEMONS.computeIfAbsent(serverName,
                 name -> new ConcurrentHashMap<>());
         }

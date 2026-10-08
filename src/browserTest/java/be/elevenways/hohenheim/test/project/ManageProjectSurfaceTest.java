@@ -13,7 +13,6 @@ import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -89,7 +88,7 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
         for (Row row : projects.find().where(ProjectModel.NAME.startsWith(PREFIX)).all()) {
             projects.delete(row.get(ProjectModel.ID));
         }
-        Model users = AuthModels.users();
+        Model users = Models.get(UserModel.class);
         for (Row row : users.find().where(UserModel.DISPLAY_NAME.startsWith(PREFIX)).all()) {
             users.delete(row.get(UserModel.ID));
         }

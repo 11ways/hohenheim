@@ -58,8 +58,7 @@ import java.util.stream.Collectors;
  * ({@code ProcessNetworkPolicy}); as of 2026-08-07 they are no longer a hardening hole
  * either -- {@code SystemUsers.execution} gives every spawn the same floor this
  * class stamps on a container (no-new-privileges plus a process cap, as
- * {@code setpriv --no-new-privs} and RLIMIT_NPROC/TasksMax), and a declared memory limit is
- * a real cgroup scope ({@code ProcessConfinement}) or a refusal.
+ * {@code setpriv --no-new-privs} and RLIMIT_NPROC).
  */
 public final class ContainerHardening {
 

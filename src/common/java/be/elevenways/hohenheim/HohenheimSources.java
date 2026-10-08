@@ -37,9 +37,9 @@ public final class HohenheimSources implements ZenitModule {
         Microcopy.of("hohenheim_admin_access").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
 
     /**
-     * Editing the installation's settings: every value an operator declares for the whole install, among them the
-     * endpoints Hohenheim itself fetches with operator trust ({@code hohenheim.auth_proteus}, which rides
-     * {@code OutboundUrlGuard.ANY_ADDRESS}) and the private-network opt-ins.
+     * Editing the installation's operator-trusted settings: the Proteus login ({@code hohenheim.auth_proteus}, whose
+     * endpoint is host-only because it rides {@code OutboundUrlGuard.ANY_ADDRESS}), the proxy trust lists, the build
+     * images and the spam service's settings.
      *
      * AIDEV-NOTE: NOT delegable, unlike {@link #ADMIN_ACCESS}: whoever holds a delegated admin grant must never be
      * able to point a trusted, any-address fetch at this host or the LAN. The bootstrap operator holds the "*" grant

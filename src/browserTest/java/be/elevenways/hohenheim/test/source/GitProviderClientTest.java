@@ -315,7 +315,7 @@ class GitProviderClientTest {
         Throwable refused = catchThrowable(() -> client.listBranches("redir/repo"));
         assertThat(refused)
             .as("a 302 from the provider is a refusal, not a hop")
-            .isInstanceOf(java.io.IOException.class).hasMessageContaining("redirects are never followed");
+            .isInstanceOf(java.io.IOException.class).hasMessageContaining("is not followed");
         assertThat(REDIRECT_TARGET_HITS.get())
             .as("the Authorization header never walked to the redirect target")
             .isZero();

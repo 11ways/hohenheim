@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.cms.DnsZoneParts;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -40,7 +39,7 @@ class DnsZoneSoaPartialWriteTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        Row user = AuthModels.users().find()
+        Row user = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         admin = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(user.get(UserModel.ID), "Test Admin")));

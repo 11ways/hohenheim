@@ -268,23 +268,12 @@ public final class InstallMedia {
             sink = new SuccessSink(out, progress);
             outcome = FETCHER.fetch(FetchRequest.get(url), sink);
         }
-        switch (outcome) {
-            case FetchOutcome.Fetched fetched -> {
-                if (fetched.status() < 200 || fetched.status() >= 300) {
-                    throw new IOException("download answered HTTP " + fetched.status());
-                }
-                if (sink.total == 0) {
-                    throw new IOException("download carried no body");
-                }
-            }
-            case FetchOutcome.Redirected redirected ->
-                throw new IOException("download redirected to a target that may not be followed ("
-                    + OutboundUrlGuard.originOf(redirected.location()) + ")");
-            case FetchOutcome.Refused refused -> throw new IOException(refused.reason());
-            case FetchOutcome.Failed failed -> throw new IOException(
-                failed.kind() == FetchFailure.TOO_LARGE
-                    ? "download exceeds the " + (MAX_ISO_BYTES >> 30) + " GiB install-media cap"
-                    : failed.reason());
+        if (outcome instanceof FetchOutcome.Failed failed && failed.kind() == FetchFailure.TOO_LARGE) {
+            throw new IOException("download exceeds the " + (MAX_ISO_BYTES >> 30) + " GiB install-media cap");
+        }
+        outcome.requireSuccess("download");
+        if (sink.total == 0) {
+            throw new IOException("download carried no body");
         }
     }
 

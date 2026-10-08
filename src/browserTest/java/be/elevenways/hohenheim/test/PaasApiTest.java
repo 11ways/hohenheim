@@ -20,7 +20,6 @@ import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -140,7 +139,7 @@ class PaasApiTest extends HohenheimTestBase {
         // at all -- the environment lane must answer to the panel, not to instance
         // vocabulary the environment tier has no record capability for.
         keyAdmin = ApiKeyService.create(
-            AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local"))
+            Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local"))
                 .first().get(UserModel.ID),
             PREFIX + "admin", List.of("hohenheim.*"), null).plaintext();
 

@@ -5,19 +5,25 @@ import be.elevenways.hohenheim.server.HohenheimRetiredNames;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.setting.SettingsForms;
 import be.elevenways.zenit.forms.common.render.FormEntryFacets;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.server.setting.DryFileSource;
+import be.elevenways.zenit.server.setting.EnvSettingsSource;
+import be.elevenways.zenit.server.setting.RetiredConfiguration;
 import be.elevenways.zenit.server.setting.RetiredName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
  * The settings loader must define EVERY declared group before values load, because the
@@ -167,5 +173,37 @@ class SettingsGroupCoverageTest {
         assertThat(Files.readString(gitignore).lines().map(String::trim).toList())
             .as("step 4: settings/local.dry and the retired file's backups are gitignored")
             .contains("settings/hohenheim.dry*", "settings/local.dry");
+    }
+
+    /**
+     * The deleted host-user process lane's dedicated-user switch is gone, and an install that still stores it boots:
+     * nothing replaces it, so the key is skipped like any unknown key, never refused.
+     */
+    @Test
+    void anOldDedicatedUserValueIsIgnoredAndBootProceeds(@TempDir Path root) {
+        // 1. Nothing declares the switch any more.
+        assertThat(HohenheimSettings.Process.GROUP.getDefinition("require_dedicated_user"))
+            .as("step 1: the setting is gone").isNull();
+
+        // 2. The boot's retired-name gate lets a source still carrying it through.
+        EnvSettingsSource stored = new EnvSettingsSource("ZENIT",
+            Map.of("ZENIT__HOHENHEIM__PROCESS__REQUIRE_DEDICATED_USER", "false"));
+        assertThatCode(() -> RetiredConfiguration.refuse(root, Map.of(), stored))
+            .as("step 2: no retired name refuses the boot").doesNotThrowAnyException();
+
+        // 3. Loading the stored value into the live settings skips it and changes nothing; the shared context is
+        //    snapshotted first and put back afterwards, so no later class sees this load.
+        Map<String, Object> before = Zenit.SETTINGS_VALUES.toMap();
+        try {
+            assertThatCode(() -> Zenit.SETTINGS_VALUES.loadFromMap(Map.of("hohenheim",
+                Map.of("process", Map.of("require_dedicated_user", false)))))
+                .as("step 3: the load skips the unknown key").doesNotThrowAnyException();
+            assertThat(Zenit.SETTINGS_VALUES.toMap())
+                .as("step 3: and leaves every stored value as it was").isEqualTo(before);
+        } finally {
+            if (!Zenit.SETTINGS_VALUES.toMap().equals(before)) {
+                Zenit.SETTINGS_VALUES.loadFromMap(before);
+            }
+        }
     }
 }

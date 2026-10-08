@@ -74,11 +74,15 @@ class InstanceConsoleCrashRestartTest {
             assertThat(workload.running).as("step 1: the workload runs").isTrue();
             assertThat(FakeNativeDaemons.CONSOLE_STREAMS.get(handle))
                 .as("step 1: nothing attached a console yet").isNull();
+            assertThat(InstanceConsoles.peek(instanceId))
+                .as("step 1: the console hub has no live session either").isNull();
 
             // 2. The operator turns on the restart policy; the running workload keeps its (absent) watch.
             Row row = Models.get(InstanceModel.class).findById(instanceId);
             row.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_RESTART);
             Models.get(InstanceModel.class).save(row);
+            assertThat(InstanceConsoles.peek(instanceId))
+                .as("step 2: changing the policy alone does not open a session").isNull();
 
             // 3. A tenant holding CONSOLE and not POWER opens the console: THIS session is the watch.
             int viewerId = ApiSupport.user("crash-viewer@hohenheim.local", "Crash Viewer");

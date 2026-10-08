@@ -98,7 +98,7 @@ public final class PutOnlinePage extends PanelPage {
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", resolve(PutOnline.copy("put_online"), request));
+        vars.put("title", resolve(label(), request));
         vars.put("lead", PutOnline.copy("lead"));
         vars.put("cancelTarget", CmsRoutes.list(request.panelSlug(), AppParts.SLUG));
         String kind = request.conduit().getQueryParam(HohenheimParams.PUT_ONLINE_KIND.getName());

@@ -15,7 +15,6 @@ import be.elevenways.hohenheim.server.tls.CertificateAuthority;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.common.Zenit;
@@ -87,7 +86,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
             bobSiteId, HohenheimAccess.MANAGE, true);
 
         // The harness administrator, revived as a principal for the detailed-sentence half.
-        Row adminRow = AuthModels.users().find()
+        Row adminRow = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         admin = new UserPrincipal(adminRow.get(UserModel.ID), "Test Admin");
 

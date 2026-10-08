@@ -292,7 +292,7 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
 
     @Test
     void rollbackRetainsIntentAndCommitClearsItJourney() {
-        Model users = AuthModels.users();
+        Model users = Models.get(UserModel.class);
         int id = ApiSupport.user("rollback-intent@hohenheim.local", "Before rollback");
         Row row = users.findById(id);
         row.set(UserModel.DISPLAY_NAME, "Pending rollback");
@@ -314,7 +314,7 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
 
     @Test
     void upsertAndAfterSaveStagingCompleteOnlyPersistedIntentJourney() {
-        Model users = AuthModels.users();
+        Model users = Models.get(UserModel.class);
         int id = ApiSupport.user("after-save-intent@hohenheim.local", "Original");
         Row row = users.findById(id);
         // 1. Successful upsert and upsertAll complete the same lifetime as save.
@@ -414,7 +414,7 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
 
     /** The seeded operator account (it holds "*"), as a request caller rather than the test body's system work. */
     private static UserPrincipal operator() {
-        int id = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
+        int id = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
             .get(UserModel.ID);
         return new UserPrincipal(id, "Test Admin");
     }

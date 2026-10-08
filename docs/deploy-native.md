@@ -255,10 +255,11 @@ The managed Spamservice additionally needs its own account and a run-as grant
     printf 'hohenheim ALL=(spamservice : spamservice) NOPASSWD:SETENV: /usr/bin/prlimit\n' \
         > /etc/sudoers.d/hohenheim-spamservice     # validate as above
 
-`SystemUsers.executionBuilder` launches it as `sudo -n --preserve-env -u #uid
--g #gid -- /usr/bin/prlimit ... setpriv ... java`, and `--preserve-env` is what
-needs `SETENV`; the environment is the explicit map the controller built, and the
-controller key travels on stdin. Pick the `spamservice` account in the Spamservice
+`SystemUsers.execution` launches it as `setsid -- sudo -n --preserve-env -u #uid
+-g #gid -- /usr/bin/prlimit --nproc=<process.pids_limit> -- setpriv --no-new-privs
+-- java`, so util-linux must provide `setsid`, `setpriv` and `prlimit` (it does by
+default), and `--preserve-env` is what needs `SETENV`; the environment is the
+explicit map the controller built, and the controller key travels on stdin. Pick the `spamservice` account in the Spamservice
 settings once the system-user sync has seen it.
 
 These lines are the entire root surface the controller needs; a missing
@@ -266,31 +267,6 @@ grant surfaces as `volume_own_failed` (or a sibling) carrying sudo's own
 "a password is required" text, never as a silent success. The Incus admin group is
 `incus-admin` (full API); the restricted `incus` group is NOT enough for the
 instance tier.
-
-### Host-process sites (`roles.processes`) only
-
-A node that runs managed child processes needs two more things, and NEITHER is
-a wider root grant:
-
-    loginctl enable-linger hohenheim        # a persistent systemd USER manager
-    # util-linux must provide setsid, setpriv and prlimit (it does by default)
-
-`ProcessConfinement` puts every child that declares `memory_limit_mb` in a
-cgroup v2 scope through `systemd-run --user --scope`, which needs the daemon
-user's own systemd manager to be running (lingering) -- a root daemon uses a
-system scope instead and needs nothing. This is deliberately NOT
-`NOPASSWD: /usr/bin/systemd-run`: that would be arbitrary code as root, an
-enormously wider grant than the nft line, for a knob the user manager already
-delegates. Without it, a site that declares a memory limit REFUSES to start
-and says so by name (the limit would otherwise be booked against the host
-budget without being enforced); a site that declares no limit is unaffected,
-runs unbounded and is booked for nothing.
-
-`SystemUsers.executionBuilder` additionally wraps every spawn in
-`prlimit --nproc` (only where the site has its own dedicated uid -- the limit
-is per-UID) and `setpriv --no-new-privs`. The per-site run-as user still needs
-the controller's existing NOPASSWD sudo for `-u #uid`, which this tier has
-always required.
 
 ## Layout (what the installer creates)
 

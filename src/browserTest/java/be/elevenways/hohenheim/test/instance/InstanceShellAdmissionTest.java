@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.server.instance.InstanceShellHandler;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -81,7 +81,7 @@ class InstanceShellAdmissionTest extends HohenheimTestBase {
             // A generated record is its product's to delete: the cleanup runs in that product's scope.
             OwnedInstances.inScopeUnchecked("site", SiteModel.MODEL_ID, 424242,
                 () -> HardDeletes.byId(Models.get(InstanceModel.class), generated));
-            AuthModels.users().delete(userId);
+            Models.get(UserModel.class).delete(userId);
         }
     }
 

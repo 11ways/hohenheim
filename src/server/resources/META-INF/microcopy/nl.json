@@ -4098,7 +4098,7 @@
     "scope": "permission"
   },
   "hohenheim_admin_system": {
-    "text": "De installatie-instellingen bewerken",
+    "text": "De vertrouwde installatie-instellingen van de beheerder bewerken",
     "scope": "permission"
   },
   "hohenheim_manage_access": {
@@ -13263,6 +13263,10 @@
     "text": "Bewaar images minstens 1 uur",
     "scope": "violations"
   },
+  "setting_nixpacks_release_version": {
+    "text": "Gebruik een numerieke Nixpacks-releaseversie in major.minor.patch-vorm, zoals 1.41.0",
+    "scope": "violations"
+  },
   "setting_public_port_window": {
     "text": "Het publieke poortvenster moet boven 1024 beginnen en op of onder {$max} eindigen",
     "scope": "violations"
@@ -13373,10 +13377,8 @@
   "settings.hohenheim.previews.lifetime_minutes.help": "Aantal minuten dat een preview leeft voordat de vervalronde hem opruimt, verlengd door dezelfde ref opnieuw uit te rollen; waarden onder 1 gebruiken de standaardwaarde.",
   "settings.hohenheim.previews.max_per_owner.label": "Max. previews per eigenaar",
   "settings.hohenheim.previews.max_per_owner.help": "Aantal gelijktijdige actieve previews per eigenaar, afgedwongen via het quotumregister; 0 of minder betekent geen limiet.",
-  "settings.hohenheim.process.pids_limit.label": "Proceslimiet per site",
-  "settings.hohenheim.process.pids_limit.help": "Maximaal aantal processen dat het kindproces van een beheerde site mag hebben, zodat een forkbom zijn eigen budget uitput in plaats van de procestabel van de host; 0 of minder gebruikt de standaardwaarde.",
-  "settings.hohenheim.process.require_dedicated_user.label": "Eigen gebruiker vereisen",
-  "settings.hohenheim.process.require_dedicated_user.help": "Weigert een beheerd siteproces te starten zonder een eigen, exclusief geclaimde systeemgebruiker; sites die een andere tenant beheert vereisen er altijd een.",
+  "settings.hohenheim.process.pids_limit.label": "Proceslimiet per uitvoerende gebruiker",
+  "settings.hohenheim.process.pids_limit.help": "Maximaal aantal processen dat een hostproces dat Hohenheim als een andere systeemgebruiker uitvoert (de beheerde spamdienst, een git-commando) onder die gebruiker mag hebben, zodat een forkbom het budget van die gebruiker uitput in plaats van de procestabel van de host; 0 of minder gebruikt de standaardwaarde.",
   "settings.hohenheim.proxy.connection_prologue_timeout_seconds.label": "Time-out voor de verbindingsaanloop",
   "settings.hohenheim.proxy.connection_prologue_timeout_seconds.help": "Maximale tijd die een publieke verbinding krijgt om te sturen wat Hohenheim leest voor het routeren: een optionele PROXY v2-header en, op de HTTPS-poort, de TLS ClientHello.",
   "settings.hohenheim.proxy.fallback_address.label": "Terugvaladres",
@@ -13527,7 +13529,7 @@
   "settings.hohenheim.security.label": "Beveiliging",
   "settings.hohenheim.security.help": "Containerisolatie, detectie van hostnaamverkenning, native IP-blokkades, spamservice-reputatie en de quarantaine van vrijgegeven hostnamen",
   "settings.hohenheim.process.label": "Processen",
-  "settings.hohenheim.process.help": "Werklastidentiteit voor beheerde kindprocessen",
+  "settings.hohenheim.process.help": "Limieten voor hostprocessen die Hohenheim als een andere systeemgebruiker uitvoert",
   "settings.hohenheim.auth_proteus.label": "Proteus SSO",
   "settings.hohenheim.auth_proteus.help": "Bied eenmalig aanmelden via Proteus naast aanmelden met een wachtwoord aan",
   "settings.hohenheim.proxy_auth.label": "Proxy-authenticatie",

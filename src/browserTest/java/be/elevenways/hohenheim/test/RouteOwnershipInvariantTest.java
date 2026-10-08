@@ -14,7 +14,6 @@ import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
@@ -722,7 +721,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
             .and(ActivityModel.DETAIL.eq(hostname))
             .orderBy(ActivityModel.ID, SortOrder.DESC).first();
         assertThat(entry).as("step 5b: the lift is recorded as its own action").isNotNull();
-        Row admin = AuthModels.users().find()
+        Row admin = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         assertThat((String) entry.get(ActivityModel.ACTOR))
             .as("step 5b: attributed to the administrator that invoked it")

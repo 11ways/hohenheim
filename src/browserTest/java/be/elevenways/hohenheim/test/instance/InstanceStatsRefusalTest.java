@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.channel.ChannelException;
 import be.elevenways.zenit.common.channel.FakeChannelLink;
@@ -97,7 +96,7 @@ class InstanceStatsRefusalTest extends HohenheimTestBase {
                 .isEqualTo("No live stats");
 
             // 2. The harness administrator gets the reason, which is what they act on.
-            Row adminRow = AuthModels.users().find()
+            Row adminRow = Models.get(UserModel.class).find()
                 .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
             FakeChannelLink<Object, Object> adminLink = new FakeChannelLink<>(
                 HohenheimChannels.INSTANCE_STATS, "stats-admin")
@@ -113,7 +112,7 @@ class InstanceStatsRefusalTest extends HohenheimTestBase {
                 .contains("has no live-stats lane");
         } finally {
             HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
-            AuthModels.users().delete(tenantId);
+            Models.get(UserModel.class).delete(tenantId);
         }
     }
 }

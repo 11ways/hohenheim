@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.channel.ChannelHub;
 import be.elevenways.zenit.common.live.LiveChannel;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -33,7 +32,7 @@ class AdminInboxBadgeTest extends HohenheimTestBase {
 
     @Test
     void theInboxBadgeFollowsAnAlertWhileThePanelStaysOpen() throws Exception {
-        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         String owner = CommsInboxOwners.userKey(((Integer) admin.get(UserModel.ID)).longValue());
         CommsInboxModel inbox = Models.get(CommsInboxModel.class);
         long baseline = inbox.unreadCountFor(owner);

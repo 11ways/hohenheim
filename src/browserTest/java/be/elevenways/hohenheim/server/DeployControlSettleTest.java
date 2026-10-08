@@ -10,7 +10,6 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.flash.FlashLevel;
 import be.elevenways.zenit.common.flash.FlashNotice;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -81,7 +80,7 @@ class DeployControlSettleTest extends HohenheimTestBase {
         }
 
         // 3b. The background verb writes its activity as whoever asked: the attribution rides the hop.
-        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         int adminId = admin.get(UserModel.ID);
         TenantConduits.as(new UserPrincipal(adminId, "Test Admin"), () -> SiteControlHandlers.settleWithin(
             Duration.ofSeconds(5), "test verb",

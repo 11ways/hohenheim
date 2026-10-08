@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -577,7 +576,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
 
     /** The seeded admin as a production-shaped context (see {@link TestAccessContexts}). */
     private static AccessContext adminAccessContext() {
-        Row user = AuthModels.users().find()
+        Row user = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         assertThat(user).as("the harness seeded its admin").isNotNull();
         return TestAccessContexts.contextFor(new UserPrincipal(
