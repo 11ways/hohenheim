@@ -108,8 +108,8 @@ class AccessRuleSurfacesBrowserTest extends HohenheimTestBase {
         // legacy resource's own access_rule_delete, which duplicated it, is retired in its favour.
         SurfaceBaselines stored = SurfaceBaselines.load(AccessRuleSurfacesBrowserTest.class,
                 "/panel-surfaces/access-rules.txt")
-            .placedOperations(PlacedOperationMoves.of(AccessRuleParts.MOVE_UP.id(), AccessRuleParts.MOVE_DOWN.id(),
-                    AccessRuleParts.TOGGLE.id())
+            .placedOperations(PlacedOperationMoves.of(AccessRuleParts.ORDER.moveUp().id(),
+                    AccessRuleParts.ORDER.moveDown().id(), AccessRuleParts.TOGGLE.id())
                 .synthesized(RULES, SynthesizedRowActions.DELETE, AccessRuleParts.DELETE.id())
                 .retired(RULES, HohenheimIds.id("access_rule_delete"), AccessRuleParts.DELETE.id()));
 

@@ -23,6 +23,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.resource.RowSave;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.cms.server.panel.PanelTreeOrderActions;
 import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
 import be.elevenways.zenit.common.edit.FieldLabels;
@@ -41,13 +42,14 @@ import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.operation.OperationHandlers;
+import be.elevenways.zenit.server.operation.TreeOrderOperations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 /**
  * The access rules' shared parts, and the admin rule resource and its /manage twin built from them: one node of an
@@ -55,9 +57,9 @@ import java.util.Objects;
  *
  * AIDEV-NOTE: where a node SITS is the tree's, never the form's: the model carries core's TreeBehaviour
  * ({@link AccessRuleModel#TREE}: dense sibling positions per list, a cycle guard, and a delete that takes the
- * subtree), so the move verbs are {@link #MOVE_UP}/{@link #MOVE_DOWN} over its move, and the delete is
- * {@link #DELETE}, the canonical delete (the legacy resource's own {@code access_rule_delete} duplicated it and is
- * gone). The form edits only what a node MEANS: its type, that type's own fields and whether it counts.
+ * subtree), so the move verbs are core's {@link #ORDER} over it, and the delete is {@link #DELETE}, the canonical
+ * delete (the legacy resource's own {@code access_rule_delete} duplicated it and is gone). The form edits only what
+ * a node MEANS: its type, that type's own fields and whether it counts.
  *
  * AIDEV-NOTE: a rule answers to its LIST: writing one (the form, a move, the toggle, the delete) demands
  * {@code manage} on the list it belongs to, asked by each operation's authorizer and the parts' authority alike.
@@ -76,11 +78,9 @@ public final class AccessRuleParts {
 
     private static final SubjectType<Row> SUBJECT = SubjectType.record(AccessRuleModel.MODEL_ID);
 
-    /** Moves a rule one place up among its own siblings; offered dead on the first. */
-    public static final Operation<Row, Void, Void> MOVE_UP = move("access_rule_move_up", "move_up", "arrow-up");
-
-    /** Moves a rule one place down among its own siblings; offered dead on the last. */
-    public static final Operation<Row, Void, Void> MOVE_DOWN = move("access_rule_move_down", "move_down", "arrow-down");
+    /** Moves a rule one place up or down among its own siblings; offered dead at either end of its group. */
+    public static final TreeOrderOperations ORDER = TreeOrderOperations.declare(HohenheimIds.id("access_rule"),
+        AccessRuleModel.class, OperationGate.open(), (rule, input, access) -> writeRefusal(rule, access));
 
     /** Switches a rule on or off; switching one on runs the model's completeness hook. */
     public static final Operation<Row, Void, Void> TOGGLE = Operation.declare(HohenheimIds.id("access_rule_toggle"))
@@ -107,8 +107,6 @@ public final class AccessRuleParts {
             .register();
 
     static {
-        attachMove(MOVE_UP, -1);
-        attachMove(MOVE_DOWN, 1);
         OperationHandlers.attach(TOGGLE)
             .authorize((rule, input, access) -> writeRefusal(rule, access))
             .handle(call -> {
@@ -183,10 +181,7 @@ public final class AccessRuleParts {
             // No create: a rule is born inside a tree, through the Rules tab's add form; a generic create would
             // produce a node belonging to no list and enforcing nothing.
             .writes(ResourceMutations.rows().update().beforeSave(AccessRuleParts::hashPassword).delete(DELETE).build())
-            .actions(List.of(
-                moveAction(MOVE_UP, "move_up"),
-                moveAction(MOVE_DOWN, "move_down"),
-                toggleAction()))
+            .actions(Stream.concat(PanelTreeOrderActions.of(ORDER).stream(), Stream.of(toggleAction())).toList())
             .authority(ResourceAuthority.<Row>builder()
                 .write(null, (rule, access) -> writeRefusal(rule, access) == null)
                 .build());
@@ -214,65 +209,6 @@ public final class AccessRuleParts {
             rule.get(AccessRuleModel.ACCESS_LIST_ID), HohenheimAccess.MANAGE) ? null
             : new DomainRefusal(ZenitRefusalReason.NOT_FOUND, "rule " + rule.get(AccessRuleModel.ID)
                 + " is not reachable");
-    }
-
-    private static @NonNull Operation<Row, Void, Void> move(@NonNull String id, @NonNull String copyKey,
-                                                            @NonNull String icon) {
-        return Operation.declare(HohenheimIds.id(id))
-            .happened(OperationSentences.of(id))
-            .label(Microcopy.of(copyKey).withFilter("scope", "access_rule"))
-            .icon(Icon.of(icon))
-            .one(SUBJECT)
-            .gate(OperationGate.open())
-            .command(COMMAND)
-            .register();
-    }
-
-    /**
-     * @param direction -1 for up, 1 for down; a rule at that edge of its own sibling run is offered the move DEAD,
-     *                  saying why, and a group's edge never lets a rule escape into its parent's order
-     */
-    private static void attachMove(@NonNull Operation<Row, Void, Void> move, int direction) {
-        OperationHandlers.attach(move)
-            .authorize((rule, input, access) -> writeRefusal(rule, access))
-            .availability((rule, access) -> indexAfter(rule, direction) < 0
-                ? Microcopy.of(direction < 0 ? "already_first" : "already_last").withFilter("scope", "access_rule")
-                : null)
-            .handle(call -> {
-                Row rule = call.subject();
-                int target = indexAfter(rule, direction);
-                if (target >= 0) {
-                    AccessRuleModel.TREE.move(rule.get(AccessRuleModel.ID), rule.get(AccessRuleModel.PARENT_ID),
-                        target);
-                }
-                return null;
-            });
-    }
-
-    /** @return the sibling index the rule takes after one step in {@code direction}, -1 at that edge */
-    private static int indexAfter(@NonNull Row rule, int direction) {
-        Integer listId = rule.get(AccessRuleModel.ACCESS_LIST_ID);
-        if (listId == null) {
-            return -1;
-        }
-        List<Row> siblings = Models.get(AccessRuleModel.class)
-            .findChildren(listId, rule.get(AccessRuleModel.PARENT_ID));
-        Object id = rule.get(AccessRuleModel.ID);
-        for (int index = 0; index < siblings.size(); index++) {
-            if (Objects.equals(siblings.get(index).get(AccessRuleModel.ID), id)) {
-                int target = index + direction;
-                return target < 0 || target >= siblings.size() ? -1 : target;
-            }
-        }
-        return -1;
-    }
-
-    private static @NonNull PanelAction<Row> moveAction(@NonNull Operation<Row, Void, Void> move,
-                                                        @NonNull String copyKey) {
-        return PanelAction.<Row, Void>places(move, ActionPlacement.ROW, (request, result) ->
-                CmsActionResult.refreshWithToast(Microcopy.of("moved").withFilter("scope", "access_rule")))
-            .description(Microcopy.of(copyKey + "_hint").withFilter("scope", "access_rule"))
-            .build();
     }
 
     private static boolean switchedOn(@NonNull Row rule) {

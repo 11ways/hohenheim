@@ -10734,40 +10734,12 @@
     "text": "A new rule starts switched off, so traffic keeps flowing until you have filled it in and switched it on. A new group starts on, because an empty group gates nothing.",
     "scope": "access_rule"
   },
-  "already_first": {
-    "text": "This rule is already first inside its group.",
-    "scope": "access_rule"
-  },
-  "already_last": {
-    "text": "This rule is already last inside its group.",
-    "scope": "access_rule"
-  },
   "added_group": {
     "text": "Group added",
     "scope": "access_rule"
   },
   "unknown_type": {
     "text": "That is not a rule type",
-    "scope": "access_rule"
-  },
-  "move_up": {
-    "text": "Move up",
-    "scope": "access_rule"
-  },
-  "move_up_hint": {
-    "text": "Move this rule one place up inside its own group.",
-    "scope": "access_rule"
-  },
-  "move_down": {
-    "text": "Move down",
-    "scope": "access_rule"
-  },
-  "move_down_hint": {
-    "text": "Move this rule one place down inside its own group.",
-    "scope": "access_rule"
-  },
-  "moved": {
-    "text": "Order changed",
     "scope": "access_rule"
   },
   "toggle_hint": {
@@ -14732,8 +14704,6 @@
   "test_backup_target": { "text": "{$actor} tested the connection to {$subject}", "scope": "hohenheim", "target": "happened" },
   "access_rule_toggle": { "text": "{$actor} switched rule {$subject} on or off", "scope": "hohenheim", "target": "happened" },
   "delete_access_rule": { "text": "{$actor} deleted rule {$subject}", "scope": "hohenheim", "target": "happened" },
-  "access_rule_move_up": { "text": "{$actor} moved rule {$subject} up", "scope": "hohenheim", "target": "happened" },
-  "access_rule_move_down": { "text": "{$actor} moved rule {$subject} down", "scope": "hohenheim", "target": "happened" },
   "delete_project": { "text": "{$actor} deleted project {$subject}", "scope": "hohenheim", "target": "happened" },
   "spamservice_mark_spam": { "text": "{$actor} marked {$subject} as spam", "scope": "hohenheim", "target": "happened" },
   "spamservice_mark_ham": { "text": "{$actor} marked {$subject} as not spam", "scope": "hohenheim", "target": "happened" },

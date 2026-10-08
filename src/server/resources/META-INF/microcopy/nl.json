@@ -10734,40 +10734,12 @@
     "text": "Een nieuwe regel staat eerst uit, zodat het verkeer blijft doorgaan tot je ze hebt ingevuld en aangezet. Een nieuwe groep staat wel aan, want een lege groep houdt niets tegen.",
     "scope": "access_rule"
   },
-  "already_first": {
-    "text": "Deze regel staat al vooraan in haar groep.",
-    "scope": "access_rule"
-  },
-  "already_last": {
-    "text": "Deze regel staat al achteraan in haar groep.",
-    "scope": "access_rule"
-  },
   "added_group": {
     "text": "Groep toegevoegd",
     "scope": "access_rule"
   },
   "unknown_type": {
     "text": "Dat is geen soort regel",
-    "scope": "access_rule"
-  },
-  "move_up": {
-    "text": "Omhoog",
-    "scope": "access_rule"
-  },
-  "move_up_hint": {
-    "text": "Verplaats deze regel één plaats omhoog binnen haar eigen groep.",
-    "scope": "access_rule"
-  },
-  "move_down": {
-    "text": "Omlaag",
-    "scope": "access_rule"
-  },
-  "move_down_hint": {
-    "text": "Verplaats deze regel één plaats omlaag binnen haar eigen groep.",
-    "scope": "access_rule"
-  },
-  "moved": {
-    "text": "Volgorde gewijzigd",
     "scope": "access_rule"
   },
   "toggle_hint": {
@@ -14732,8 +14704,6 @@
   "test_backup_target": { "text": "{$actor} testte de verbinding met {$subject}", "scope": "hohenheim", "target": "happened" },
   "access_rule_toggle": { "text": "{$actor} zette regel {$subject} aan of uit", "scope": "hohenheim", "target": "happened" },
   "delete_access_rule": { "text": "{$actor} verwijderde regel {$subject}", "scope": "hohenheim", "target": "happened" },
-  "access_rule_move_up": { "text": "{$actor} schoof regel {$subject} omhoog", "scope": "hohenheim", "target": "happened" },
-  "access_rule_move_down": { "text": "{$actor} schoof regel {$subject} omlaag", "scope": "hohenheim", "target": "happened" },
   "delete_project": { "text": "{$actor} verwijderde project {$subject}", "scope": "hohenheim", "target": "happened" },
   "spamservice_mark_spam": { "text": "{$actor} markeerde {$subject} als spam", "scope": "hohenheim", "target": "happened" },
   "spamservice_mark_ham": { "text": "{$actor} markeerde {$subject} als geen spam", "scope": "hohenheim", "target": "happened" },
