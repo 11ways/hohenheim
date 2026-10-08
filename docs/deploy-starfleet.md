@@ -1991,3 +1991,89 @@ ROLLBACK: the preflight database already carries the re-recorded 011 checksum, w
 produce. Stop the service and either restore `/root/hohenheim-dep9-20261008/hohenheim.db.pre-rerecord` (remove
 `hohenheim.db-wal`/`-shm` first) or set 011's checksum back to `51a4a79b...b100b6a852` (the inverse of `rerecord.sql`),
 then `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20261008-054705`.
+
+## Deploy 2026-10-08 (starfleet, DEP10): 12758b21, D8-D12, CORE1, KVM1, account SSH keys, key rotation in core
+
+Swapped starfleet from 41706aab to the pushed hohenheim 12758b21 (jar sha256 `7a025497...5fdf12c`, 282434926 bytes,
+17 stamp rows clean; zenit 8f9556e3, zenit-cms 4e2b2b79, zenit-forms 5904bd1e, zenit-auth 7d2b1c14, plumage
+fb3da24e, hawkeye e06d63ba, protoblast f21210b4, zenit-kvm 0185b540, zenit-comms 97d96a78, zenit-widget b2d584da,
+spamservice 453257b3, pepperglass a4d2b0be; zenit-media, zenit-microcopy, janeway and emberglyph unchanged). Ships the
+dashboard waves D8-D12 (one item per cause, the board's four tiles, the placement gate's one verdict), CORE1 (core
+task labels, worded toast arguments, sign-ins out of feeds), KVM1 (four viewers per VM screen), zenit-auth account SSH
+keys (SFTP W1/W2; zenit-sftp itself is still NOT wired into Hohenheim), the zenit-auth handler split and lockout
+minimums, and key rotation through core's offline commands (12758b21 deleted Hohenheim's own). No changelog entry
+asks this install to act: `local.dry` sets no `auth.lockout` values, and `auth.sign_in_links` stays off.
+
+Before: `zenit-dev deployed starfleet` read 41706aab, `local-ahead` for every repo that moved. Own copies
+`/root/hohenheim-dep10-20261008/hohenheim.db` (`sqlite3 .backup`, integrity ok) and `settings/` (`local.dry` and the
+keyring sha256 equal to the originals). `--foreign-key-orphans` on a byte copy (old jar as `hohenheim`, scratch
+`/opt/hohenheim-dep10-orphans/`, `-Dzenit.settings.root` at a copied tree whose `local.dry` names the copy and an empty
+backup target; removed afterwards): "No row violates a declared foreign key". Pending, read from the pushed sources
+and confirmed by the rehearsal: zenit-auth `2026_10_08_090000 create_ssh_keys` and zenit
+`2026_10_08_120000 add_comment_assignee`. zenit-auth M001/M002/M013/M020 changed only in formatting and one inlined
+constant; the rehearsal accepted their checksums. M011 is unchanged since DEP9, so no re-record was owed.
+
+Lane `zenit-dev deploy starfleet --pushed` (build 316s in the pushed workspace, no source change needed): rehearsal
+green (2 applied on the copy), zenit_migrations 105 before, 107 after (the two above), healthy after both restarts
+(19:27:46 and 19:28:19 UTC), step 10 `current` for all 17 repos, no RESTART PENDING. Preflight
+`/root/hohenheim-preflight-20261008-192618/`. The rehearsal and boot print, informational: `orm.migration_integrity`
+migrations `2026_06_12_000002` and `2026_07_07_000002` keep their recorded checksums "under a superseded framework
+rule". The lane cleaned its own rehearsal copy; `/opt/hohenheim-rehearse-20260928-235235`, `-20261006-233512` and
+`-20261007-232059` are still on the host.
+
+Journal since the restart: 0 `-p err` entries; "Stored ids reconciled 0 rewritten"; no `settings.unknown_key`. Still
+logged, harmless: `settings.source_missing` for `settings/default.dry`, `comms.transports_unconfigured` for
+`zenit:chat`, "hohenheim database.path is deprecated", and `cms.chooser.inline_create_skipped` for
+`hohenheim:game_domain` (`site_domain_id`) and `hohenheim:preview_deployment` (`application_id`), which the previous
+jar logged as well. Undertow's start/stop INFO lines reach the journal tagged `[ERR]` (stderr), not as errors.
+
+Logged-in pass (screenshots in the git-ignored `docs/hohenheim-ux-mockups-2026-09-30/shots/dep10/` of the workspace).
+Fixed since DEP9: the dashboard tiles are Apps / Hosts / Certificates / Backups and Recent activity leaves sign-ins
+out; the Apps list's HTTPS column says the address's HTTPS state and Host reads "-"; the app overview's Recent names
+the app, not "Instance #3", and it has a Resources card; Databases reads "Managed databases your apps use",
+"Create database", Used by is a link, and an Engines card exists; local reads "Cannot take new apps" and is raised as
+attention on the dashboard and Hosts; the host's daemon line says "seen", the posture risk "Accepted by <name>";
+Domains orders Certificates second, says "Add address" and links the app; tasks carry worded names. Defects seen:
+- Dashboard (01): the red "13" badge sits on Activity and counts unread Inbox alerts; Apps carries no count of its 3
+  broken apps (board: the badge is on Apps). The Starfleet catch-all row has no state badge. The live alert
+  "Secondary 'kuifje' of zone starfleet.life is stale" (Inbox, a day ago) is not on the dashboard. Backups reads "0,
+  No app has a backup target" while skeleton-mongo was backed up 16 hours ago.
+- Apps list (02): no fix action ("Get a certificate") on a broken row; comms reads "upload one, or stop forcing
+  HTTPS" as text only; certificate expiry reads "a month and 5 days from now" (dashboard: "in 35 days").
+- One app, two names: "alchemy-skeleton" (Apps list, overview) and "Alchemy skeleton" (dashboard "Fix on Alchemy
+  skeleton", Domains App column).
+- App overview (03): Resources shows only "Root disk Not measured", no memory or CPU; Details lack running time,
+  database and backups; no "Open site"; the page title says "Instances".
+- Hosts (05): a row's State repeats the attention item's sentence word for word; "Check again measures it" names a
+  button in prose; "New host" (board "Add host"). `/admin/hosts` is a 404 (the list lives at `/admin/servers`).
+- Host page (06, 06b): Capacity ends in "Last measured" with no value, then "Nothing to show"; Workloads lists
+  `dbengine-mongo-local` (Instance, 512 MB) beside `mongo-local` (Database engine, 512 MB), one engine booked twice;
+  Recent activity is ten identical "Jelle De Loecker changed local / Server" rows (raw "Server", no change named);
+  "Probe now" and "Check again" sit side by side unexplained.
+- Domains (07, 07b): Points here is Unknown everywhere (no public address declared); the catch-all row has empty
+  Points here and HTTPS cells; "Domains" is a small label above the tabs and each tab has its own H1; Certificates
+  offers "New certificate" (board: "Get a certificate" and "Upload a certificate") and lists only working ones.
+- Access (08, 08b, 08c): tabs are still Users and Roles (board: People) plus Abuse protection; Blocked addresses
+  still reads "Went over the limit for: Unmatched domain request" and has no Recent misses or Never block; Users says
+  "Last login at" (board "Last sign-in") and has no Role column.
+- Activity (09, 09b): still a table without day groups, app filter or detail lines; "Jelle De Loecker created
+  hohenheim" names a build operation raw. Inbox: the same orphan alert four times and "phoenix stopped answering"
+  eight times (13 unread in all), unread and ungrouped, in raw words ("auth_passwords -> auth_users: 5 orphaned row(s)",
+  "--foreign-key-orphans", "kex_exchange_identification ..."); the orphan rows are gone today.
+- Settings (10): a top tab row (Instance templates, Runtime images, Git providers, Database engines, Notification
+  channels, More) beside the left section list (board: one left list; "App templates", "Git connections"); no
+  Backup targets card; some sections have no icon.
+- Scheduled tasks (11): Frequency is raw cron ("30 2 * * *"); headers "Type", "Last fired at", "Next fire at"; no
+  last-run state or description; every row a primary "Run now"; the table scrolls inside its own box.
+- Tenant /manage (12, 13, 14): the attention title is still "Visitors get an error page" without the app's name;
+  usage shows Previews only; no Put something online, Recent, Databases or Team; the app page's band offers no fix
+  and does not say who can clear it; "What you can do here" is a raw permission list ("Console, Power, Configure,
+  Run commands, ..."); Public endpoint says "This host has no public address set"; no sidebar row is current on the
+  app page; the page title says "Instances"; the Apps lead speaks as the operator ("sites, instances and stacks").
+Nothing was put online, protected, ordered or marked read; no host check was run.
+
+daystrom: still NOT deployed from this workstation; runs 27064da4.
+
+ROLLBACK: two framework migrations were applied, so stop the service, restore
+`/root/hohenheim-preflight-20261008-192618/hohenheim.db.at-swap` (remove `hohenheim.db-wal`/`-shm` first), then
+`tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20261008-192618`.
