@@ -290,8 +290,8 @@ final class AppHealth {
             case RUNNING -> runningVerdict(facts.sitesByInstance.get(instance.get(InstanceModel.ID)), facts.sites,
                 delegated, viewer);
             case ERROR -> delegated
-                ? RecordHealth.broken(copy("stopped_after_error"))
-                : RecordHealth.broken(copy("stopped_after_error")).fixedBy(InstanceOperations.RESTART.id());
+                ? RecordHealth.broken(Stoppage.AFTER_ERROR.headline())
+                : RecordHealth.broken(Stoppage.AFTER_ERROR.headline()).fixedBy(InstanceOperations.RESTART.id());
             case STOPPED, CREATED -> RecordHealth.attention(copy("not_running")).detail(copy("not_running_detail"))
                 .fixedBy(InstanceOperations.START.id());
             case STARTING, CAPTURING, RESTORING, MIGRATING -> RecordHealth.unknown(status.label());
@@ -309,7 +309,7 @@ final class AppHealth {
         }
         if (StackModel.STATUS_FAILED.equals(status)) {
             String reason = StackFailures.reasonOf(stack);
-            return RecordHealth.broken(copy("deploy_failed"))
+            return RecordHealth.broken(Stoppage.DEPLOY_FAILED.headline())
                 .detail(reason == null ? null : Microcopy.literal(reason));
         }
         if (StackModel.STATUS_DEGRADED.equals(status)) {
@@ -405,10 +405,11 @@ final class AppHealth {
      * and the app overview's Addresses card all read.
      *
      * AIDEV-NOTE: a name forced to HTTPS that no working certificate covers is ERROR whatever its certificate's own
-     * status says, the same rule {@link #forcedWithoutCertificate} turns into the app's broken verdict.
+     * status says, the same rule {@link #forcedWithoutCertificate} turns into the app's broken verdict. A covering
+     * certificate stored ACTIVE that the working names leave out is ERROR too: the proxy cannot serve it.
      *
      * @param passthrough whether the name belongs to a TLS passthrough site, which terminates nothing here
-     * @param working     the names a working certificate covers ({@code CertificateCoverage.activeNames()})
+     * @param working     the names a working certificate covers ({@link #workingNames()})
      * @return the coverage, null for a pattern (no single name to judge)
      */
     static @Nullable CertCoverage httpsOf(@NonNull Row domain, boolean passthrough, @NonNull Set<String> working) {
@@ -424,8 +425,26 @@ final class AppHealth {
         }
         Row cert = CertificateCoverage.coveringCertificate(hostname);
         CertCoverage coverage = CertCoverage.ofCertificateStatus(cert == null ? null : cert.get(CertificateModel.STATUS));
-        return Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)) && coverage != CertCoverage.ACTIVE
+        // A certificate stored as active that the working names leave out is one the proxy cannot serve.
+        return coverage == CertCoverage.ACTIVE || Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL))
             ? CertCoverage.ERROR : coverage;
+    }
+
+    /**
+     * The names HTTPS works for: what the running proxy's certificate store answers a handshake for while it
+     * terminates HTTPS, nothing while it cannot, and the names an ACTIVE certificate row declares where no proxy runs
+     * in this process (a node without the proxy role, a test), because the stored rows are then all there is to read.
+     *
+     * AIDEV-NOTE: an ACTIVE row is not a working certificate. D11's Shop had an active row without loadable material,
+     * and every HTTPS cell said "Works" while the proxy could serve nothing; reading the store is what makes the cells,
+     * the verdicts and the attention items agree with the handshake a visitor gets.
+     */
+    static @NonNull Set<String> workingNames() {
+        var proxy = ServerMain.getProxyServer();
+        if (proxy == null) {
+            return CertificateCoverage.activeNames();
+        }
+        return proxy.isHttpsTerminationAvailable() ? proxy.getCertificateStore().servedNames() : Set.of();
     }
 
     /** @return the first of these paths whose protection admits everyone, null when none does */
@@ -440,7 +459,7 @@ final class AppHealth {
 
     /** Whether the Get a certificate fix applies to this one site (its row action's visibility). */
     static boolean needsCertificate(@NonNull Row site) {
-        return forcedWithoutCertificate(SiteParts.domainsOf(site), CertificateCoverage.activeNames(),
+        return forcedWithoutCertificate(SiteParts.domainsOf(site), workingNames(),
             SiteParts.tlsPassthrough(site)) != null;
     }
 
@@ -495,7 +514,7 @@ final class AppHealth {
             return null;
         }
         List<Row> domains = SiteParts.domainsOf(site);
-        Set<String> working = CertificateCoverage.activeNames();
+        Set<String> working = workingNames();
         boolean passthrough = SiteParts.tlsPassthrough(site);
         if (forcedWithoutCertificate(domains, working, passthrough) != null) {
             return null;
@@ -559,6 +578,38 @@ final class AppHealth {
 
     private static @NonNull Microcopy copy(@NonNull String key) {
         return Microcopy.of(key).withFilter("scope", "app_health");
+    }
+
+    /**
+     * What stopped a workload, in words: its record's verdict headline ("Stopped after an error") and the dashboard
+     * item naming it ("Shop stopped after an error") are one declaration, so the two never tell different stories.
+     *
+     * AIDEV-NOTE: AFTER_ERROR is the stored ERROR status, which a crash, a failed start, a failed migration and a
+     * failed maintenance hold all stamp; "after an error" is what every one of them is, "after a crash" is not.
+     */
+    enum Stoppage {
+
+        /** The runtime stamped the workload ERROR and nothing restarted it. */
+        AFTER_ERROR("stopped_after_error"),
+
+        /** Its newest deploy failed. */
+        DEPLOY_FAILED("deploy_failed");
+
+        private final String key;
+
+        Stoppage(@NonNull String key) {
+            this.key = key;
+        }
+
+        /** @return the verdict's headline on the workload's own page */
+        @NonNull Microcopy headline() {
+            return copy(this.key);
+        }
+
+        /** @return the same words naming the workload, for a surface that lists many (the attention band) */
+        @NonNull Microcopy title(@Nullable Object name) {
+            return Microcopy.of(this.key).withFilter("scope", "attention_title").withArg("name", name);
+        }
     }
 
     /**
@@ -650,7 +701,7 @@ final class AppHealth {
                     instances.put(instance.get(InstanceModel.ID), instance);
                 }
             }
-            return new SiteFacts(domains, paths, instances, live, problems, CertificateCoverage.activeNames());
+            return new SiteFacts(domains, paths, instances, live, problems, workingNames());
         }
     }
 }

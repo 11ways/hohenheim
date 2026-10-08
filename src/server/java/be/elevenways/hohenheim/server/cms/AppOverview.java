@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -115,7 +114,7 @@ final class AppOverview {
     static @NonNull WidgetInstance addresses(@NonNull List<Row> sites, @NonNull AccessContext access) {
         Conduit conduit = access.conduit();
         String panelSlug = CmsSupport.panelSlug(conduit);
-        Set<String> working = CertificateCoverage.activeNames();
+        Set<String> working = AppHealth.workingNames();
         List<AppAddress> rows = new ArrayList<>();
         for (Row site : sites) {
             boolean passthrough = SiteParts.tlsPassthrough(site);

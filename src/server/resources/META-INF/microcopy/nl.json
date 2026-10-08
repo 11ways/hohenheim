@@ -904,6 +904,10 @@
     {
       "text": "De laatste deploy is mislukt",
       "scope": "app_health"
+    },
+    {
+      "text": "De laatste deploy van {$name} is mislukt",
+      "scope": "attention_title"
     }
   ],
   "backup_failed": {
@@ -954,6 +958,11 @@
     {
       "text": "Actief",
       "scope": "site_status"
+    },
+    {
+      "text": "actief",
+      "scope": "database_status",
+      "case": "sentence"
     }
   ],
   "attach": [
@@ -1122,10 +1131,6 @@
     {
       "text": "Deploy",
       "scope": "hohenheim_nav"
-    },
-    {
-      "text": "Deployment van {$name}",
-      "scope": "attention_title"
     },
     {
       "text": "Deployen",
@@ -1334,6 +1339,11 @@
     {
       "text": "Mislukt",
       "scope": "release_status"
+    },
+    {
+      "text": "mislukt",
+      "scope": "database_status",
+      "case": "sentence"
     }
   ],
   "hostname": [
@@ -1632,6 +1642,11 @@
     {
       "text": "Voorbereiden",
       "scope": "database_status"
+    },
+    {
+      "text": "voorbereiden",
+      "scope": "database_status",
+      "case": "sentence"
     }
   ],
   "provisioning_failed": {
@@ -8250,6 +8265,11 @@
     {
       "text": "Verwijderen mislukt",
       "scope": "database_status"
+    },
+    {
+      "text": "verwijderen mislukt",
+      "scope": "database_status",
+      "case": "sentence"
     }
   ],
   "docker": {
@@ -9531,16 +9551,10 @@
       "scope": "app_overview"
     }
   ],
-  "instance_crashed": [
-    {
-      "text": "Instantie {$name} vraagt aandacht",
-      "scope": "attention_title"
-    },
-    {
-      "text": "De workload is onverwacht gestopt en is niet herstart.",
-      "scope": "attention_detail"
-    }
-  ],
+  "instance_crashed": {
+    "text": "De workload is onverwacht gestopt en is niet herstart.",
+    "scope": "attention_detail"
+  },
   "instance_backup": {
     "text": "Back-up van {$name} is mislukt",
     "scope": "attention_title"
@@ -9891,10 +9905,16 @@
     "text": "Niet vastgepind",
     "scope": "server_overview"
   },
-  "unconfirmed": {
-    "text": "Niet bevestigd",
-    "scope": "server_overview"
-  },
+  "unconfirmed": [
+    {
+      "text": "Niet bevestigd",
+      "scope": "server_overview"
+    },
+    {
+      "text": "Kon niet bevestigen dat wat op {$subject} draait gescheiden blijft",
+      "scope": "isolation_finding"
+    }
+  ],
   "pinned_at": {
     "text": "Vastgepind",
     "scope": "server_overview"
@@ -10471,7 +10491,7 @@
       "scope": "server"
     },
     {
-      "text": "Beheerde databankservers die deze installatie inricht en back-upt.",
+      "text": "Beheerde databanken die je apps gebruiken, met hun back-ups.",
       "scope": "database"
     },
     {
@@ -11663,6 +11683,14 @@
     {
       "text": "Een adres blokkeren",
       "scope": "ban"
+    },
+    {
+      "text": "Adres toevoegen",
+      "scope": "site_domain"
+    },
+    {
+      "text": "Databank aanmaken",
+      "scope": "database"
     }
   ],
   "edit_title": {
@@ -14170,10 +14198,16 @@
     "text": "Status onbekend",
     "scope": "app_health"
   },
-  "stopped_after_error": {
-    "text": "Gestopt na een fout",
-    "scope": "app_health"
-  },
+  "stopped_after_error": [
+    {
+      "text": "Gestopt na een fout",
+      "scope": "app_health"
+    },
+    {
+      "text": "{$name} is gestopt na een fout",
+      "scope": "attention_title"
+    }
+  ],
   "not_running_detail": {
     "text": "Deploy om het te starten.",
     "scope": "app_health"
@@ -15910,5 +15944,49 @@
   "stat_tile": {
     "text": "Teltegel",
     "scope": "dashboard"
+  },
+  "engines_title": {
+    "text": "Engines",
+    "scope": "database_list"
+  },
+  "engines_lead": {
+    "text": "Gedeelde engines bevatten veel databanken, elk met een eigen gebruiker. Hohenheim start er een per host en soort zodra de eerste databank er een nodig heeft.",
+    "scope": "database_list"
+  },
+  "engine_on_host": {
+    "text": "{$engine} op {$host}",
+    "scope": "database_list"
+  },
+  "engine_holds": {
+    "text": "{$databases}, {$state}",
+    "scope": "database_list"
+  },
+  "https_certificate_unserved": {
+    "text": "Er is een certificaat voor deze naam opgeslagen, maar de proxy kan het niet aanbieden, dus HTTPS werkt hier niet",
+    "scope": "site_domains"
+  },
+  "unconfirmed_because": {
+    "text": "Kon niet bevestigen dat wat op {$subject} draait gescheiden blijft: {$reason}",
+    "scope": "isolation_finding"
+  },
+  "not_repaired": {
+    "text": ".match {$count :number}\none {{De isolatie van 1 workload op {$subject} kon niet worden gecontroleerd of hersteld}}\n* {{De isolatie van {$count} workloads op {$subject} kon niet worden gecontroleerd of hersteld}}",
+    "scope": "isolation_finding"
+  },
+  "cut_off": {
+    "text": ".match {$count :number}\none {{1 workload op {$subject} is gestopt of afgesneden omdat de isolatie niet kon worden hersteld}}\n* {{{$count} workloads op {$subject} zijn gestopt of afgesneden omdat hun isolatie niet kon worden hersteld}}",
+    "scope": "isolation_finding"
+  },
+  "enforcement_off": {
+    "text": ".match {$count :number}\none {{de firewallregels per app staan daar uit, dus het ene app-netwerk kan niet worden gecontroleerd of hersteld}}\n* {{de firewallregels per app staan daar uit, dus de {$count} app-netwerken kunnen niet worden gecontroleerd of hersteld}}",
+    "scope": "isolation_finding"
+  },
+  "daemon_unreachable": {
+    "text": "Hohenheim bereikt de container-daemon daar niet",
+    "scope": "isolation_finding"
+  },
+  "no_firewall_lane": {
+    "text": "Hohenheim kan de firewall van de machine waarop de daemon draait niet lezen",
+    "scope": "isolation_finding"
   }
 }

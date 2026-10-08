@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -28,6 +29,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -131,6 +133,47 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
                 .filter(action -> action.id().equals(DatabaseParts.MOVE_TO_SHARED.id())).findFirst().orElseThrow();
             assertThat(move.style()).as("step 6: the move is not the primary action").isEqualTo(ActionStyle.DEFAULT);
             assertThat(move.inlineOnRecord()).as("step 6: and waits in the heading's More menu").isFalse();
+
+            // 7. The board's words around the rows: the lead, the create button, and Used by linking each app to
+            //    its overview, the overview card's own link.
+            list = adminGet("/admin/" + DatabaseParts.SLUG);
+            assertThat(list.body()).as("step 7: the list's lead in the board's words")
+                .contains("Managed databases your apps use, with their backups.")
+                .as("step 7: the header button reads as the board's")
+                .containsPattern(Pattern.compile("data-cms-create[^>]*>.{0,1000}?Create database", Pattern.DOTALL));
+            String appOverview = InstanceParts.recordRoute("admin", app, null).toUrl();
+            assertThat(appOverview).as("step 7: the app's front door is its overview")
+                .isEqualTo("/admin/" + InstanceParts.SLUG + "/" + app.get(InstanceModel.ID) + "/page/"
+                    + InstanceOverview.SLUG);
+            assertThat(list.body()).as("step 7: Used by links the app to that overview")
+                .contains("class=\"cms-record-link\" href=\"" + appOverview + "\">" + PREFIX + "app</a>");
+
+            // 8. The Engines card under the list (board Databases): each shared engine by its kind and host, how
+            //    many databases it holds and its state, opening the engine; after the rows, never above them.
+            Row engine = row(cleanup, Models.get(DatabaseEngineModel.class), Map.of(
+                DatabaseEngineModel.NAME.getName(), PREFIX + "engine", DatabaseEngineModel.ENGINE.getName(), "mysql",
+                DatabaseEngineModel.ROOT_USER.getName(), "root", DatabaseEngineModel.ROOT_PASSWORD.getName(), "rootpw",
+                DatabaseEngineModel.SERVER_ID.getName(), ServerModel.localServerId(),
+                DatabaseEngineModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
+            row(cleanup, Models.get(DatabaseModel.class), Map.of(DatabaseModel.NAME.getName(), PREFIX + "shared",
+                DatabaseModel.ENGINE.getName(), "mysql", DatabaseModel.PLACEMENT.getName(),
+                DatabaseModel.PLACEMENT_SHARED, DatabaseModel.ENGINE_ID.getName(), engine.get(DatabaseEngineModel.ID),
+                DatabaseModel.DB_NAME.getName(), "shareddb", DatabaseModel.DB_USER.getName(), "shareduser",
+                DatabaseModel.DB_PASSWORD.getName(), "shared-secret-password",
+                DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId(),
+                DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
+            String withEngine = adminGet("/admin/" + DatabaseParts.SLUG).body();
+            int card = withEngine.indexOf("data-cms-list-card");
+            int engines = withEngine.indexOf("data-cms-list-widgets-below");
+            assertThat(engines).as("step 8: the Engines card renders").isPositive();
+            assertThat(engines).as("step 8: under the list, as the board draws it").isGreaterThan(card);
+            String below = withEngine.substring(engines);
+            assertThat(below).as("step 8: titled and explained in the board's words")
+                .contains("Engines").contains("Shared engines hold many databases, each with its own user.")
+                .as("step 8: the engine by its kind and host").contains("MySQL on " + host)
+                .as("step 8: how many databases it holds and its state").contains("1 database, active")
+                .as("step 8: opening the engine")
+                .contains("/admin/" + DatabaseParts.ENGINES_SLUG + "/" + engine.get(DatabaseEngineModel.ID) + "/open");
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();

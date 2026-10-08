@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.security.WorkloadNetwork;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackServiceKind;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -28,6 +29,7 @@ import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -80,10 +82,23 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
     public static final String STATIC_DESCRIPTION =
         "Verify workload isolation in the host kernel";
 
-    /** One host's outcome; every list names workloads, never a bare count. */
+    /**
+     * One host's outcome; every list names workloads, never a bare count.
+     *
+     * @param why why an unverifiable host could not be read, in words; null on a verifiable host or one the sweep
+     *            cannot word
+     */
     public record HostOutcome(@NonNull String server, boolean verifiable,
                               @NonNull List<String> enforced, @NonNull List<String> repaired,
-                              @NonNull List<String> contained, @NonNull List<String> errors) {
+                              @NonNull List<String> contained, @NonNull List<String> errors,
+                              @Nullable Microcopy why) {
+
+        /** An outcome with no worded reason. */
+        public HostOutcome(@NonNull String server, boolean verifiable, @NonNull List<String> enforced,
+                           @NonNull List<String> repaired, @NonNull List<String> contained,
+                           @NonNull List<String> errors) {
+            this(server, verifiable, enforced, repaired, contained, errors, null);
+        }
     }
 
     /** The escalation for one workload whose policy is diverged AND unrepairable. */
@@ -126,7 +141,7 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
 
     @Override
     public void executor(TaskContext ctx) {
-        report(sweep()).publish();
+        report(sweep()).publish(ctx);
     }
 
     /**
@@ -146,8 +161,8 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
     public static @NonNull IsolationFindings report(@NonNull List<HostOutcome> outcomes) {
         IsolationFindings findings = new IsolationFindings(SWEEP);
         for (HostOutcome outcome : outcomes) {
-            findings.host("WORKLOAD ISOLATION:", "", outcome.server(), outcome.verifiable(), outcome.enforced(),
-                outcome.repaired(), "CONTAINED", outcome.contained(), outcome.errors());
+            findings.host("WORKLOAD ISOLATION:", "", outcome.why(), outcome.server(), outcome.verifiable(),
+                outcome.enforced(), outcome.repaired(), "CONTAINED", outcome.contained(), outcome.errors());
         }
         return findings;
     }
@@ -186,7 +201,7 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
                 + (expected.size() == 1 ? "1 workload network" : expected.size() + " workload networks")
                 + " can be neither verified nor repaired");
             return new HostOutcome(name, false, List.of(), List.of(), List.of(),
-                List.copyOf(errors));
+                List.copyOf(errors), IsolationFindings.enforcementOff(expected.size()));
         }
         DockerClient docker;
         try {
@@ -195,7 +210,7 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
             List<String> errors = new ArrayList<>(inventoryErrors);
             errors.add("no Docker client for this host: " + unreachable.getMessage());
             return new HostOutcome(name, false, List.of(), List.of(), List.of(),
-                List.copyOf(errors));
+                List.copyOf(errors), IsolationFindings.daemonUnreachable());
         }
 
         List<String> enforced = new ArrayList<>();

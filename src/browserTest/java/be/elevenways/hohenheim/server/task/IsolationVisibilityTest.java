@@ -22,6 +22,7 @@ import be.elevenways.zenit.comms.server.transport.TransportTypes;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.task.DefaultTaskContext;
 import be.elevenways.zenit.common.task.TaskStatus;
 import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
 import com.sun.net.httpserver.HttpServer;
@@ -41,6 +42,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * Isolation is a SECURITY BOUNDARY, so a sweep that cannot confirm it -- or that had to cut
@@ -132,16 +134,27 @@ class IsolationVisibilityTest {
         // 2. "This host's workloads' isolation is UNCONFIRMED" -- enforcement is off while
         //    workloads run. It FAILS the run (which is what puts it on the dashboard) and
         //    it reaches a person the first time.
-        assertThatThrownBy(() -> VerifyWorkloadIsolation.report(List.of(
+        VerifyWorkloadIsolation task = new VerifyWorkloadIsolation();
+        IsolationFindings.IsolationUnresolved unconfirmed = catchThrowableOfType(
+            IsolationFindings.IsolationUnresolved.class,
+            () -> VerifyWorkloadIsolation.report(List.of(
                 new VerifyWorkloadIsolation.HostOutcome(HOST, false, List.of(), List.of(),
-                    List.of(), List.of("per-workload enforcement is off")))).publish())
-            .as("step 2: an unconfirmed host must fail the task run")
-            .isInstanceOf(IsolationFindings.IsolationUnresolved.class)
-            .hasMessageContaining("UNCONFIRMED")
-            .hasMessageContaining(HOST);
+                    List.of(), List.of("per-workload enforcement is off"), IsolationFindings.enforcementOff(2))))
+                .publish(new DefaultTaskContext(task)));
+        assertThat(unconfirmed).as("step 2: an unconfirmed host must fail the task run").isNotNull();
         assertThat(DELIVERIES.get())
             .as("step 2: and must notify an operator, not only the log")
             .isEqualTo(1);
+        // The failure the dashboard shows is worded; the machine reading keeps its token beside it, on the exception
+        // and in the run's own reports.
+        assertThat(unconfirmed.getMessage()).as("step 2: the shown failure is a sentence")
+            .isEqualTo("Could not confirm that what runs on " + HOST + " is kept apart: per-app firewall rules are "
+                + "switched off there, so its 2 app networks can be neither checked nor repaired")
+            .doesNotContain("UNCONFIRMED");
+        assertThat(unconfirmed.findings()).as("step 2: the raw finding keeps its token")
+            .containsExactly(HOST + ": isolation UNCONFIRMED: per-workload enforcement is off");
+        assertThat(task.getReports()).as("step 2: and lands in the run's reports, a field of its own")
+            .containsExactly(HOST + ": isolation UNCONFIRMED: per-workload enforcement is off");
 
         // 3. The same unresolved state on the next five-minute tick still fails the run --
         //    the dashboard item must not disappear -- but does NOT re-notify. 288 identical
@@ -157,13 +170,18 @@ class IsolationVisibilityTest {
 
         // 4. CONTAINMENT is the sharp end: a tenant just lost availability so its
         //    neighbours would keep their boundary. That alerts every single run.
-        assertThatThrownBy(() -> VerifyWorkloadIsolation.report(List.of(
+        IsolationFindings.IsolationUnresolved contained = catchThrowableOfType(
+            IsolationFindings.IsolationUnresolved.class,
+            () -> VerifyWorkloadIsolation.report(List.of(
                 new VerifyWorkloadIsolation.HostOutcome(HOST, true, List.of(), List.of(),
                     List.of("stopped instance " + HANDLE),
-                    List.of("containment failed: daemon refused")))).publish())
-            .as("step 4: a contained workload must fail the run")
-            .isInstanceOf(IsolationFindings.IsolationUnresolved.class)
-            .hasMessageContaining(HANDLE);
+                    List.of("containment failed: daemon refused")))).publish());
+        assertThat(contained).as("step 4: a contained workload must fail the run").isNotNull();
+        assertThat(contained.findings()).as("step 4: naming the workload in the raw reading")
+            .containsExactly(HOST + ": stopped instance " + HANDLE, HOST + ": containment failed: daemon refused");
+        assertThat(contained.getMessage()).as("step 4: and saying what happened in words")
+            .isEqualTo("1 workload on " + HOST + " was stopped or cut off because its isolation could not be "
+                + "repaired. The isolation of 1 workload on " + HOST + " could not be checked or repaired");
         assertThat(DELIVERIES.get())
             .as("step 4: and must always notify")
             .isEqualTo(2);

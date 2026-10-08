@@ -1342,3 +1342,73 @@ before it was fixed.
   without force and say "someone else holds this console" with a take-over button); whether playback should stop
   announcing Opus (a viewer without an Opus AudioDecoder reads AUDIO_UNSUPPORTED; Pepperglass has no playback setting
   yet); whether RESIZE should be an opt-in per VM.
+
+## 31. D10b decisions (fork D10b, 2026-10-08)
+
+Addresses and Databases brought closer to boards Domains and Databases, and three dashboard leftovers of D11.
+
+- Home: `zemble home` answered EXTEND_EXISTING zenit-cms for a list cell naming linked records. zenit-cms gains
+  `RecordLinksCell` (`zenitcms:cell/record-links`, `CmsTemplateIds.CELL_RECORD_LINKS`): titles each linked to their
+  record's page where the producer says the reader may open it, the titles as export text, and its own empty words
+  (`RecordLinksCell.none`), because a renderer column ignores `ColumnSpec.absent`. And `ResourceList.widgetsBelow`, the
+  widget slot under the list card (the slot above is `widgets`).
+- Addresses: the App cell is a virtual `app` column (a computed cell cannot reflect a field) linking the site to its
+  front door, `CmsRoutes.open` (`/admin/sites/<id>/open`, its overview; J1: a site's overview and its workload's are
+  one composition), for a reader the Sites entry admits and `reachesRecord` VIEW lets open; the site's own Addresses
+  tab hides it. The Domains cluster's tabs follow the board: Addresses, Certificates, DNS zones, Released addresses.
+  The create verb reads "Add address" (`FormSpec.createTitle`, both twins).
+- Databases: the lead reads "Managed databases your apps use, with their backups." and the create verb "Create
+  database" (both twins). Used by names each app linked to its overview (`InstanceParts.recordRoute`, the overview
+  card's own link), "No app" when none. The Engines card sits under the list (`widgetsBelow`): every
+  `DatabaseEngineModel` row as "MySQL on daystrom", "1 database, active" (the counted noun and the status label's
+  sentence variant), opening its engine. The board's per-engine badge and the card-per-engine look are a fact list in
+  one card (the generic `FactListWidget`); the engine kind is already in the row's words.
+- Dashboard titles by what happened, from the verdict: `AppHealth.Stoppage` is the one declaration of a workload's
+  stoppage words, read by the instance verdict's headline and the attention item's title: "Shop stopped after an
+  error" (ERROR; deliberately not "after a crash": a failed start, migration or maintenance hold stamps ERROR too) and
+  "Shop's last deploy failed" (the stack verdict's "Its last deploy failed"). `instance_crashed` and `deploy` under
+  `attention_title` are deleted (replacement: `stopped_after_error`, `deploy_failed` there).
+- HTTPS works only where the proxy can serve it: `AppHealth.workingNames()` is the running proxy's certificate store
+  (`CertificateStore.servedNames`, the names a loaded certificate answers a handshake for) while it terminates HTTPS,
+  nothing while it cannot, and the ACTIVE rows only where no proxy runs in the process. `AppHealth.httpsOf` reads a
+  covering certificate stored ACTIVE that the working names leave out as ERROR, and `DomainParts.httpsDetail` says
+  why ("A certificate is stored for this name, but the proxy cannot serve it"). Every display reader of the working
+  names switched (Addresses cell and lead, Apps list and band, app overview, Sites TLS cell, the verdict, Stop forcing
+  HTTPS, the forced-address item). The store also stopped counting a row whose key is missing as loaded.
+- Isolation findings in words: `IsolationFindings` keeps two readings. The failure message (the run's stored error,
+  the dashboard detail) is copy under `isolation_finding`, resolved in the content locale ("Could not confirm that
+  what runs on local is kept apart: per-app firewall rules are switched off there, so its 1 app network can be neither
+  checked nor repaired"); the raw lines with their UNCONFIRMED token stay the machine reading, on
+  `IsolationUnresolved.findings()`, in the alert body and in the run's reports (`publish(TaskContext)`). The workload
+  sweep words why a host is unverifiable (`HostOutcome.why`: enforcement off, daemon unreachable); the Incus sweep's
+  one reason is no firewall lane.
+- Needs building: the engine kind badge and per-engine cards of the board's Engines card; "Attach to an app" and the
+  other database-side items W9a listed stay open.
+- Found, not fixed here: `RouteTableBuilder` and `ForceSslLatch` still read ACTIVE rows (`activeNames`), so a name an
+  unloadable active certificate covers is still sent to HTTPS by the setting; the request action hides "Get a
+  certificate" for such a name (it is the certificate's reissue). The crashed item's detail "The workload exited
+  unexpectedly" claims a crash for every ERROR. The database tier's attention items still title themselves "Instance
+  Shop" ("Attached database shop is not running"), the same developer shape the crash item had.
+- Walk (scratch server from the built jar, fresh database, `/setup`; then by SQL, because hosts cannot be admitted on
+  this machine and seeded secrets are encrypted with the scratch key: a Docker workload Shop in status error behind
+  a site with shop/www.shop.d10b.test, a stopped Blog, a static Docs site, an ACTIVE certificate row for the Shop
+  names without material, a MySQL engine on local with a shared database shop used by Shop and Blog, an unused
+  dedicated old-blog; the isolation sweep failed on its own, enforcement being off): shots
+  `docs/hohenheim-ux-mockups-2026-09-30/shots/d10b/` (workspace repo). 01 Addresses: the board's tab order, "Add
+  address", App links (Shop opens the site's overview), the Shop names "Not working" with why; 02 Databases: the
+  board's lead and "Create database", Used by "Shop, Blog" linked and "No app", the Engines card under the list; 03
+  the dashboard: "Shop stopped after an error", "Check app isolation failed" with its finding in words, the Apps band
+  reading "Not working" for Shop where it read "Works". The run stored the worded error and the raw UNCONFIRMED line
+  in its reports. A failed deploy title is proven by the journey only (no application was seeded).
+- Proof: zenit-cms test run 862 (ResourceListCopyTest, 1 passed; stale only for another session's zenit-cms files);
+  Hohenheim build 861, test run 863 (28 ran, 26 passed: the journeys' markup assumptions, href before class and
+  `data-cms-create>`, and "No app" because a renderer column ignores `absent`; the class filter's other classes did
+  not run under fail-fast) and run 864 (20 classes, 57 tests, all passed). Journeys: DomainsListJourneyTest (steps
+  3, 5 and the new 8), DatabasesPageJourneyTest (new steps 7-8), DashboardAttentionJourneyTest (steps 1, 3, 7),
+  IsolationVisibilityTest (steps 2, 4), AdminNavigationJourneyTest (the cluster order), ManagePanelSurfacesBrowserTest
+  (baseline hand-edited: the domains list's App column is `app`, no relation), MicrocopyCatalogScopeTest
+  (`isolation_finding`) and the other microcopy gates, AppsListJourneyTest, AppOverviewJourneyTest,
+  SiteRefusalVerdictJourneyTest, LandingDashboardSurfacesTest, InstanceAttentionTest, InstanceStatusReconcileTest,
+  DatabaseAdminTest, AdminPagesTest, SharedDatabaseEngineTest, DashboardVocabularyDriftTest. The walk's jar is the
+  build after run 865's thrash refusal (`--thrash-override`, invocation 20261008-112652: the chain had moved under
+  another session's zenit and zenit-cms work).

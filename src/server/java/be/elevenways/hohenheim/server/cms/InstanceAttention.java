@@ -81,8 +81,7 @@ public final class InstanceAttention {
                 .all()) {
             AttentionSubject subject = AttentionSubject.instance(instance.get(InstanceModel.ID));
             items.add(item(AttentionSeverity.ERROR, "box",
-                copy("instance_crashed", "attention_title",
-                    "name", instance.get(InstanceModel.NAME)),
+                AppHealth.Stoppage.AFTER_ERROR.title(instance.get(InstanceModel.NAME)),
                 copy("instance_crashed", "attention_detail"),
                 InstanceParts.recordRoute(ADMIN, instance, InstanceConsolePage.SLUG),
                 action("act_open_console"))
@@ -248,8 +247,7 @@ public final class InstanceAttention {
                     operation.get(ReleaseOperationModel.STATUS))) {
                 AttentionSubject subject = AttentionSubject.instance(applicationId);
                 items.add(item(AttentionSeverity.ERROR, "rocket",
-                    copy("deploy", "attention_title",
-                        "name", application.get(InstanceModel.NAME)),
+                    AppHealth.Stoppage.DEPLOY_FAILED.title(application.get(InstanceModel.NAME)),
                     literal(operation.get(ReleaseOperationModel.FAILURE_REASON)),
                     CmsRoutes.subpage(ADMIN, InstanceParts.SLUG, applicationId,
                         InstanceDeploymentsPage.SLUG),

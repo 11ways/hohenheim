@@ -22,6 +22,9 @@ import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.render.CmsTemplateIds;
+import be.elevenways.zenit.cms.common.render.table.RecordLink;
+import be.elevenways.zenit.cms.common.render.table.RecordLinksCell;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
@@ -89,6 +92,12 @@ public final class DomainParts {
     /** The HTTPS column: what HTTPS gives the name, and the certificate behind it. */
     static final String CERTIFICATE_COLUMN = "certificate";
 
+    /** The App column: the app the address serves, linked to its front door. */
+    static final String APP_COLUMN = "app";
+
+    /** Request memo of every site by id: the App cells of one rendered page read the sites once. */
+    private static final IdentifierKey<Map<Integer, Row>> SITES_BY_ID = IdentifierKey.of("hohenheim", "domain_sites");
+
     /**
      * The Domains tab's quick-add entries; the site rides along as a host-supplied preset.
      *
@@ -101,6 +110,9 @@ public final class DomainParts {
         .presets(SiteDomainModel.SITE_ID.getName());
 
     private static final SubjectType<Row> SUBJECT = SubjectType.record(SiteDomainModel.MODEL_ID);
+
+    /** The create verb in the Domains board's words: the list's button and the form's heading ("Add address"). */
+    private static final Microcopy CREATE_TITLE = Microcopy.of("create_title").withFilter("scope", "site_domain");
 
     private DomainParts() {
     }
@@ -179,10 +191,9 @@ public final class DomainParts {
             // the name visitors type, and a pattern says so in its empty "Points here" cell.
             .column(ColumnSpec.fromField(SiteDomainModel.MATCH_TYPE).filterable().hidden().build())
             .column(ColumnSpec.fromField(SiteDomainModel.PATH).hidden().build())
-            // The cell resolves the site's NAME: the app this address serves.
-            .column(ColumnSpec.fromField(SiteDomainModel.SITE_ID)
-                .label(Microcopy.of("app_column").withFilter("scope", "site_domains"))
-                .relation(RelationPick.of(SiteDomainModel.SITE_ID, SiteModel.MODEL_ID).build()).build())
+            // The app this address serves, by name, linked to the app's front door (appCell).
+            .column(ColumnSpec.virtual(APP_COLUMN, Microcopy.of("app_column").withFilter("scope", "site_domains"))
+                .renderer(CmsTemplateIds.CELL_RECORD_LINKS).build())
             .column(ColumnSpec.virtual(REACH_COLUMN,
                     Microcopy.of("points_here_column").withFilter("scope", "site_domains"))
                 .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
@@ -202,9 +213,39 @@ public final class DomainParts {
             .search(SiteDomainModel.HOSTNAME, SiteDomainModel.PATH)
             // What an empty list (a new site's Domains tab above all: it routes nothing yet) tells the reader to do.
             .emptyDescription(Microcopy.of("empty_description").withFilter("scope", "site_domains"))
+            .computed(Objects.requireNonNull(table.column(APP_COLUMN)), DomainParts::appCell)
             .computed(Objects.requireNonNull(table.column(REACH_COLUMN)), DomainParts::reachCell)
             .computed(Objects.requireNonNull(table.column(CERTIFICATE_COLUMN)), DomainParts::certificateCell)
             .build();
+    }
+
+    /**
+     * The app an address serves, by name, linked to that app's front door (its overview, through the framework's
+     * {@code /open}) for a reader who may open it.
+     *
+     * AIDEV-NOTE: the site IS the app's page here (decision J1: a site's overview and its workload's are one
+     * composition), so the link opens the site the row names, never a workload the reader may not reach.
+     */
+    static @Nullable RecordLinksCell appCell(@NonNull Row domain, @NonNull PanelRequest request) {
+        Integer siteId = domain.get(SiteDomainModel.SITE_ID);
+        Row site = siteId == null ? null
+            : CmsSupport.memo(request.conduit(), SITES_BY_ID, DomainParts::sitesById).get(siteId);
+        if (site == null) {
+            return null;
+        }
+        boolean opens = AppDirectory.offers(request.panel(), HohenheimSlugs.SITES, request.access())
+            && HohenheimAccess.reachesRecord(request.access(), SiteModel.MODEL_ID, siteId, HohenheimAccess.VIEW);
+        return RecordLinksCell.of(new RecordLink(String.valueOf((Object) site.get(SiteModel.NAME)),
+            opens ? CmsRoutes.open(request.panelSlug(), HohenheimSlugs.SITES, siteId).toUrl() : null));
+    }
+
+    /** @return every site by id, read once for a rendered page */
+    private static @NonNull Map<Integer, Row> sitesById() {
+        Map<Integer, Row> sites = new LinkedHashMap<>();
+        for (Row site : Models.get(SiteModel.class).find().all()) {
+            sites.put(site.get(SiteModel.ID), site);
+        }
+        return sites;
     }
 
     /**
@@ -279,7 +320,7 @@ public final class DomainParts {
     static @Nullable DomainCertCell certificateCell(@NonNull Row domain, @NonNull PanelRequest request) {
         boolean passthrough = SiteParts.tlsPassthrough(
             Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID)));
-        return certificateCell(domain, passthrough, CertificateCoverage.activeNames(), request.access(),
+        return certificateCell(domain, passthrough, AppHealth.workingNames(), request.access(),
             request.panelSlug());
     }
 
@@ -288,7 +329,7 @@ public final class DomainParts {
      * address through it, so the two lists say one name's HTTPS in the same words.
      *
      * @param passthrough whether the name belongs to a TLS passthrough site
-     * @param working     the names an active certificate covers ({@code CertificateCoverage.activeNames()})
+     * @param working     the names a working certificate covers ({@link AppHealth#workingNames()})
      * @param access      who reads it, which decides whether the certificate is named and linked
      * @param panelSlug   the panel the link points into
      */
@@ -335,6 +376,9 @@ public final class DomainParts {
             case NONE -> domainText(excluded ? "https_uncovered_excluded" : "https_uncovered");
             case ERROR -> cert != null && CertificateModel.STATUS_ERROR.equals(cert.get(CertificateModel.STATUS))
                 ? domainText("https_certificate_failing")
+                // Stored as working, but the proxy cannot serve it (AppHealth.httpsOf).
+                : cert != null && CertificateModel.STATUS_ACTIVE.equals(cert.get(CertificateModel.STATUS))
+                ? domainText("https_certificate_unserved")
                 : !forced ? domainText("https_uncovered")
                 : domainText(excluded ? "https_forced_excluded" : "https_forced_uncovered");
         };
@@ -377,8 +421,7 @@ public final class DomainParts {
         Row site = Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID));
         String app = site == null ? "" : String.valueOf((Object) site.get(SiteModel.NAME));
         StateLineCell reach = reachCell(domain, HostnameReach.LOOKUP_WAIT_MS);
-        CertCoverage https = AppHealth.httpsOf(domain, SiteParts.tlsPassthrough(site),
-            CertificateCoverage.activeNames());
+        CertCoverage https = AppHealth.httpsOf(domain, SiteParts.tlsPassthrough(site), AppHealth.workingNames());
         if (reach == null || https == null) {
             return new RecordLead(Microcopy.of("address_lead_pattern").withFilter("scope", "site_domains")
                 .withArg("app", app)
@@ -442,6 +485,7 @@ public final class DomainParts {
      */
     private static @NonNull FormSpec adminFormSpec() {
         return FormSpec.builder()
+            .createTitle(CREATE_TITLE)
             .add(RelationPick.of(SiteDomainModel.SITE_ID, SiteModel.MODEL_ID).build())
             .add(SiteDomainModel.HOSTNAME)
             // The select (options, labels, icons) derives from the MATCH_TYPE EnumField, the vocabulary's one home.
@@ -483,6 +527,7 @@ public final class DomainParts {
      */
     private static @NonNull FormSpec manageFormSpec() {
         return FormSpec.builder()
+            .createTitle(CREATE_TITLE)
             .add(RelationPick.of(SiteDomainModel.SITE_ID, SiteModel.MODEL_ID).build())
             .add(SiteDomainModel.HOSTNAME)
             .add(SiteDomainModel.FORCE_SSL)

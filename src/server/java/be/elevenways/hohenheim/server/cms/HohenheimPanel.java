@@ -217,8 +217,9 @@ public final class HohenheimPanel extends Panel {
         peers.add(AppParts.admin(present(peers, HohenheimSlugs.SITES, InstanceParts.SLUG, StackParts.SLUG,
                 ProjectParts.SLUG),
             present(peers, PutOnlinePage.SLUG).isEmpty() ? null : PutOnlinePage.SLUG));
+        // In the Domains board's tab order: addresses, certificates, DNS zones, released addresses.
         addCluster(peers, cluster("domain_names", DOMAINS_CLUSTER, "globe", 50), DomainParts.SLUG,
-            HohenheimSlugs.DNS_ZONES, HohenheimSlugs.CERTIFICATES, ReleasedClaimParts.SLUG);
+            HohenheimSlugs.CERTIFICATES, HohenheimSlugs.DNS_ZONES, ReleasedClaimParts.SLUG);
         // In the Access board's tab order: lists, blocked addresses, people (users and roles), sign-in providers.
         addCluster(peers, cluster("access", ACCESS_CLUSTER, "shield-halved", 60), HohenheimSlugs.ACCESS_LISTS,
             BanParts.SLUG, AuthAdminParts.USERS_SLUG, AuthAdminParts.ROLES_SLUG, AuthProviderParts.SLUG,

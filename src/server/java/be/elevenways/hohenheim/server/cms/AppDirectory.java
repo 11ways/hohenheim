@@ -8,7 +8,6 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
-import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.site.SiteHostnamesCell;
 import be.elevenways.hohenheim.site.DomainCertCell;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -110,7 +109,7 @@ final class AppDirectory {
         }
         List<Row> stacks = listed(panel, StackParts.SLUG, access);
 
-        Set<String> working = CertificateCoverage.activeNames();
+        Set<String> working = AppHealth.workingNames();
         Map<Integer, Row> workloads = new LinkedHashMap<>();
         for (Row instance : instances) {
             workloads.put(instance.get(InstanceModel.ID), instance);
