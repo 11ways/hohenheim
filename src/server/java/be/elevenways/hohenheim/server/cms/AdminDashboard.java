@@ -230,7 +230,8 @@ public final class AdminDashboard extends PanelDashboard {
         return RecordSourceRegistry.INSTANCE.requireById(modelId).idToken();
     }
 
-    private static @NonNull WidgetInstance section(@NonNull WidgetInstance child) {
+    /** A band claiming the widget grid's full width: the dashboards' bands and a list's attention band. */
+    static @NonNull WidgetInstance section(@NonNull WidgetInstance child) {
         return section(new WidgetTree(List.of(child)));
     }
 

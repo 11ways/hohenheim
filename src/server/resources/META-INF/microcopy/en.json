@@ -5672,7 +5672,7 @@
       "scope": "violations"
     },
     {
-      "text": "Host {$name} is not admitted for placement",
+      "text": "{$name} cannot run apps yet",
       "scope": "attention_title"
     },
     {
@@ -5741,15 +5741,15 @@
     "scope": "server"
   },
   "blocked": {
-    "text": "Blocked",
+    "text": "Waiting for its checks",
     "scope": "host_admission"
   },
   "admitted": {
-    "text": "Admitted",
+    "text": "Takes new apps",
     "scope": "host_admission"
   },
   "cordoned": {
-    "text": "Cordoned",
+    "text": "Takes no new apps",
     "scope": "host_admission"
   },
   "trusted_only": {
@@ -5776,7 +5776,7 @@
   },
   "posture": [
     {
-      "text": "Posture",
+      "text": "Who may run here",
       "scope": "hohenheim_field"
     },
     {
@@ -6257,6 +6257,10 @@
     {
       "text": "Backups",
       "scope": "instance"
+    },
+    {
+      "text": "Backups",
+      "scope": "database_overview"
     }
   ],
   "backup_target": {
@@ -14380,10 +14384,16 @@
     "text": "Address of {$app} · a pattern, so no single name to check",
     "scope": "site_domains"
   },
-  "state_column": {
-    "text": "State",
-    "scope": "certificate"
-  },
+  "state_column": [
+    {
+      "text": "State",
+      "scope": "certificate"
+    },
+    {
+      "text": "State",
+      "scope": "host_list"
+    }
+  ],
   "state_failing": {
     "text": "Renewal failing",
     "scope": "certificate"
@@ -14476,10 +14486,16 @@
     "text": "Blocked now",
     "scope": "ban"
   },
-  "used_by_column": {
-    "text": "Used by",
-    "scope": "auth_provider"
-  },
+  "used_by_column": [
+    {
+      "text": "Used by",
+      "scope": "auth_provider"
+    },
+    {
+      "text": "Used by",
+      "scope": "database_list"
+    }
+  ],
   "used_by_nothing": {
     "text": "Not used yet",
     "scope": "auth_provider"
@@ -14487,5 +14503,41 @@
   "used_by_count": {
     "text": ".match {$count :number}\none {{1 place}}\n* {{{$count} places}}",
     "scope": "auth_provider"
-  }
+  },
+  "back_up_now": {"text": "Back up now", "scope": "database"},
+  "back_up_now_hint": {"text": "Dumps this database next to its nightly backups, in the background.", "scope": "database"},
+  "back_up_started": {"text": "Backing up {$name}; the dump shows under Backups when it is done.", "scope": "database"},
+  "back_up_temporary": {"text": "A temporary database is not backed up.", "scope": "database"},
+  "back_up_not_active": {"text": "Only a running database can be backed up.", "scope": "database"},
+  "back_up_database": {"text": "{$actor} backed up database {$subject}", "scope": "hohenheim", "target": "happened"},
+  "runs_on_column": {"text": "Runs on", "scope": "database_list"},
+  "last_backup_column": {"text": "Last backup", "scope": "database_list"},
+  "runs_on": {"text": "Runs on", "scope": "database_overview"},
+  "how_apps_connect": {"text": "How apps connect", "scope": "database_overview"},
+  "how_apps_connect_value": {"text": "Attached apps get these as environment variables; nobody pastes them.", "scope": "database_overview"},
+  "used_by_none": {"text": "No app", "scope": "database_overview"},
+  "used_by_none_detail": {"text": "Attach it on an app's Databases tab.", "scope": "database_overview"},
+  "backup_temporary": {"text": "Not backed up", "scope": "database_overview"},
+  "backup_temporary_detail": {"text": "Temporary data, gone when it stops", "scope": "database_overview"},
+  "backup_never": {"text": "Never", "scope": "database_overview"},
+  "backup_never_detail": {"text": "Back up now, or wait for the nightly backup", "scope": "database_overview"},
+  "backup_overdue_detail": {"text": "{$size}; the nightly backup has not written a newer one", "scope": "database_overview"},
+  "kept": {"text": "Kept", "scope": "database_overview"},
+  "kept_value": {"text": ".match {$count :number}\none {{The newest dump, on this machine}}\n* {{The newest {$count} dumps, on this machine}}", "scope": "database_overview"},
+  "runs_on_dedicated": {"text": "Own container on {$host}", "scope": "database_overview"},
+  "runs_on_shared": {"text": "Shared engine {$engine} on {$host}", "scope": "database_overview"},
+  "memory_column": {"text": "Memory", "scope": "host_list"},
+  "runs_column": {"text": "Runs", "scope": "host_list"},
+  "cordoned_detail": {"text": "Apps already here keep running", "scope": "host_list"},
+  "checks_failed": {"text": ".match {$count :number}\none {{1 required check failed: {$checks}}}\n* {{{$count} required checks failed: {$checks}}}", "scope": "host_list"},
+  "never_checked": {"text": "Not checked yet", "scope": "host_list"},
+  "checks_pass": {"text": "Its required checks pass; Check and admit lets apps run here", "scope": "host_list"},
+  "memory_booked": {"text": "{$booked} of {$budget} booked", "scope": "host_list"},
+  "memory_unmeasured": {"text": "Not measured yet", "scope": "host_list"},
+  "memory_stale": {"text": "Last measurement too old", "scope": "host_list"},
+  "runs_nothing": {"text": "Nothing yet", "scope": "host_list"},
+  "runs_count": {"text": "{$apps}, {$databases}", "scope": "host_list"},
+  "apps_count": {"text": ".match {$count :number}\none {{1 app}}\n* {{{$count} apps}}", "scope": "host_list"},
+  "databases_count": {"text": ".match {$count :number}\none {{1 database}}\n* {{{$count} databases}}", "scope": "host_list"},
+  "host_checks_failed": {"text": ".match {$count :number}\none {{1 required check failed: {$checks}. Check and admit runs it again.}}\n* {{{$count} required checks failed: {$checks}. Check and admit runs them again.}}", "scope": "attention_detail"}
 }

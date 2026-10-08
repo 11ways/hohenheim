@@ -58,6 +58,12 @@ import java.util.Map;
  * {@code tab access} fact per database record case, re-recorded beside the legacy capture, because zenit-auth's record
  * access page rides every parts entry over a grantable model (RecordTab#ridesEveryEntry). Every other fact is the
  * legacy capture as stored.
+ *
+ * AIDEV-NOTE: intended difference, board Databases (W9a, 2026-10-08): the operator's database record case carries the
+ * list's redrawn columns (where it runs under the name, engine, used by, last backup; the name inside the engine, the
+ * host, the placement, its engine and the tmpfs flag behind the picker), the placed "Back up now" row action and the
+ * Overview landing tab before Restore, each hand-inserted beside the legacy capture. With Edit and "Back up now"
+ * filling the two inline row slots, the dump download link moves to the overflow band.
  */
 class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
 

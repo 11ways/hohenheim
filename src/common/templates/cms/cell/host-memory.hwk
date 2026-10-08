@@ -1,0 +1,9 @@
+{#- A host's booked memory against its budget: the bar, the amounts underneath. A host without a fresh reading has
+    no bar, only the sentence saying so, because an empty bar would read as an empty host. -#}
+{% declare value: HostMemoryCell %}
+{% if value != null %}
+<span class="hh-state-line hh-host-memory" attr:data-measured={% value.measured %}>
+    {% if value.measured %}<pl-usage-bar value={% value.percent %} max={% 100 %} size="sm"></pl-usage-bar>{% /if %}
+    <span class="hh-state-line-detail">{{ value.text }}</span>
+</span>
+{% /if %}

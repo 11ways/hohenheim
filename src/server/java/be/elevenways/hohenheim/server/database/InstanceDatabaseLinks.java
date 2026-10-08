@@ -17,8 +17,11 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -184,6 +187,36 @@ public final class InstanceDatabaseLinks {
             names.add(String.valueOf((Object) instance.get(InstanceModel.NAME)));
         }
         return names;
+    }
+
+    /**
+     * {@link #liveInstances} for every database at once, in two queries: what a list of databases reads per page
+     * instead of two queries per row.
+     *
+     * @return database id to its live instance rows, in link order; a database without one is absent
+     */
+    public static @NonNull Map<Integer, List<Row>> liveInstancesByDatabase() {
+        List<Row> links = Models.get(InstanceDatabaseModel.class).find().all();
+        List<Integer> instanceIds = new ArrayList<>();
+        for (Row link : links) {
+            instanceIds.add(link.get(InstanceDatabaseModel.INSTANCE_ID));
+        }
+        Map<Integer, Row> live = new HashMap<>();
+        if (!instanceIds.isEmpty()) {
+            for (Row instance : Models.get(InstanceModel.class).find()
+                    .where(InstanceModel.ID.in(instanceIds)).all()) {
+                live.put(instance.get(InstanceModel.ID), instance);
+            }
+        }
+        Map<Integer, List<Row>> byDatabase = new LinkedHashMap<>();
+        for (Row link : links) {
+            Row instance = live.get(link.get(InstanceDatabaseModel.INSTANCE_ID));
+            if (instance != null) {
+                byDatabase.computeIfAbsent(link.get(InstanceDatabaseModel.DATABASE_ID), id -> new ArrayList<>())
+                    .add(instance);
+            }
+        }
+        return byDatabase;
     }
 
     /** The live (non-deleted) instance ROWS a database is attached to, in link order. */

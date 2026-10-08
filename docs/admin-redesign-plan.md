@@ -662,3 +662,56 @@ Order: W6 as planned. G5 needs nothing from W1-W5 except the `put_online` operat
 - Needs building: recent misses on the Blocked page (security events live in spamservice; a domain-miss list needs a
   local store or the spamservice feed filtered), the never-block list shown in place, a Role column and a selected
   person's app access on People, and "Signed in to protected sites" (Node clause 28, OPEN).
+
+## 18. W9a decisions (fork W9a, 2026-10-08)
+
+- Hosts stay a list, not the board's card grid. The only card face zenit-cms has is `CardGridSpec` over plumage's
+  `pl-media-grid`, which its own rules reserve for records recognised by a picture ("when the columns are how, it is a
+  table"); a status-card list face would be a new zenit-cms face plus a plumage grid, out of proportion for a list of a
+  handful of hosts. The board's card content is the list's columns instead: the name with the daemon and when it was
+  last seen under it, State (the admission in words with what it means), Memory (a usage bar over the capacity ledger
+  placement reads), Who may run here (the posture), Runs ("7 apps, 3 databases", the Apps list's notion of an app).
+  Runtime, ssh target, the public address and the raw admission token stay searchable or filterable behind the picker.
+- The admission's three words are the board's, at their one home (the `host_admission` catalog entries the enum's
+  labels read): Waiting for its checks, Takes new apps, Takes no new apps. Posture is labelled "Who may run here".
+- A waiting host says why: the REQUIRED preflight checks that failed, by name (`HostAttention.failedRequiredChecks`,
+  read from the stored report the overview already draws). The same sentence is the attention item's detail, and its
+  title reads "<name> cannot run apps yet".
+- A list leads with its own tier's attention items: `AttentionCollector.hosts()` and `.databases()` are the dashboard's
+  collectors split by tier (`collect()` is composed of them), drawn through the dashboard's attention widget by
+  `AttentionCollector.band`. The list's widget slot now sits between the page heading and the card (zenit-cms), where the
+  board draws its alert; it used to sit above the heading.
+- Databases: the name with where it runs under it ("Shared engine X on host" / "Own container on host"), the engine,
+  Used by (the live workloads holding its credentials), Last backup. The name inside the engine, host, placement, engine
+  row and tmpfs flag move behind the picker. A database row opens its new Overview tab (landing; the form is
+  "Configuration"): Connection (engine, where, database name, user, how apps connect), Used by (each workload linked to
+  its front door), Backups (retention and every stored dump with its size and time), Recent.
+- The stored dumps ARE the backup record: `DatabaseBackups` (server/database) is the one home of where dumps go, what
+  is on disk and pruning; there is no backup table, so the page can never claim a dump that is not on disk. The nightly
+  task and "Back up now" both go through `DatabaseBackups.backUpOrAlert`, so a failure raises the same BACKUP_FAILED
+  alert either way.
+- "Back up now" is a placed operation (`back_up_database`) on the row and the record heading, running on the
+  provisioning pool as system work; offered dead on a temporary database and on one that is not running.
+- The password stays off the overview: the Restore tab (operator) and the Credentials tab (tenant) already show it with
+  their own gates, and a fact list has no reveal control.
+- The daemon and when it was last seen sit under the host name (the board's card line), so the public address is no
+  column any more; it stays searchable. What a host runs ("1 app, 3 databases") sits under "Who may run here", as the
+  board's card ends: as a sixth column it slid under the pinned row actions at 1440px.
+- The list widget slot (zenit-cms) keeps the dashboard grid, so stat cards still sit side by side; on a railed list the
+  heading and the widgets span the rail and the card. A list's attention band claims the grid's full width through
+  the same band section the dashboards use (`AdminDashboard.section`, now the one home ManageDashboard calls too).
+- Counted copy agrees with its count (MF2 `.match`): "1 required check failed", "1 app, 0 databases", "The newest
+  dump". The runs line is two counted parts, because the catalog's `.match` takes one selector.
+- A newest dump older than 36 hours (the nightly 03:00 run plus half a day) reads as a warning with "the nightly
+  backup has not written a newer one", never as done.
+- Open framework defect (zenit-cms row-action register): the pinned inline action lane switches to the compact menu
+  only below a 48rem CARD; a wider card whose TABLE still overflows (Hosts at 1440px once a host's status line is
+  long, e.g. "probe failed (docker_absent) 6 minutes ago") keeps the opaque lane over the last data column. The
+  register has to follow the table's own overflow, with hysteresis (the compact menu frees the room that ended the
+  overflow), not the card width alone.
+- Needs building (on the boards, left out): the host card's disk bar (no host disk measurement is stored), the
+  database "Connect with host:port" line (the address an app gets is resolved per link at start, never stored), Show
+  and Copy on the password, "Change password" (rotation), "Attach to an app" from the database side (attaching lives on
+  the instance's Databases tab), Restore from a stored dump (restore takes an upload today), the Engines card under the
+  Databases list (engines are a Settings tab), the engine and host filters as dropdowns beside search (they are facets
+  in the filter bar), and worded names for preflight checks (the list names them by their code, as the overview does).

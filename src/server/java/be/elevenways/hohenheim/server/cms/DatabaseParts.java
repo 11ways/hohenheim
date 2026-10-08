@@ -1,6 +1,15 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.activity.OperationSentences;
+import be.elevenways.hohenheim.StateLineCell;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.server.database.DatabaseBackups;
+import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.RelativeTime;
+import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
+import be.elevenways.zenit.common.text.ByteText;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -72,6 +81,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -79,6 +89,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * The managed-database tier's parts: the operator's databases, their /manage twin and the shared engines (stage 4
@@ -114,6 +125,17 @@ public final class DatabaseParts {
     private static final ProvisionedRecords.Columns ENGINE_CEILINGS = new ProvisionedRecords.Columns(
         DatabaseEngineModel.ID, DatabaseEngineModel.MEMORY_LIMIT_MB, DatabaseEngineModel.CPU_LIMIT,
         DatabaseEngineModel.STATUS, DatabaseEngineModel.FAILURE_REASON);
+
+    /** The list's virtual columns: where a database runs, what uses it, and its newest stored dump. */
+    private static final String RUNS_ON_COLUMN = "runs_on";
+    private static final String USED_BY_COLUMN = "used_by";
+    private static final String LAST_BACKUP_COLUMN = "last_backup";
+    /** A newest dump older than the nightly 03:00 run plus half a day of slack means the backups stopped. */
+    static final Duration BACKUP_OVERDUE_AFTER = Duration.ofHours(36);
+
+    /** Request memo of every database's live workloads: two queries per rendered list. */
+    private static final IdentifierKey<Map<Integer, List<Row>>> USED_BY =
+        IdentifierKey.of("hohenheim", "database_used_by");
 
     /** The virtual column counting the managed databases living on an engine. */
     private static final String DATABASES_COLUMN = "databases";
@@ -197,6 +219,21 @@ public final class DatabaseParts {
             .command(CmsCommands.EXTERNAL)
             .register();
 
+    /**
+     * Dumps the database next to its nightly dumps, now, in the background; offered dead on a temporary database and
+     * on one that is not running.
+     */
+    public static final Operation<Row, Void, Void> BACK_UP_NOW =
+        Operation.declare(HohenheimIds.id("back_up_database"))
+            .happened(OperationSentences.of("back_up_database"))
+            .label(Microcopy.of("back_up_now").withFilter("scope", "database"))
+            .description(Microcopy.of("back_up_now_hint").withFilter("scope", "database"))
+            .icon(Icon.of("box-archive"))
+            .one(DATABASE)
+            .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
+            .command(CmsCommands.EXTERNAL)
+            .register();
+
     /** The recorded escape hatch once a normal destroy failed: the record goes, the host may keep orphans. */
     public static final Operation<Row, Void, Void> FORCE_DELETE =
         Operation.declare(HohenheimIds.id("force_delete_database"))
@@ -244,6 +281,12 @@ public final class DatabaseParts {
             .handle(call -> {
                 destroy(call.subject());
                 return 1;
+            });
+        OperationHandlers.attach(BACK_UP_NOW)
+            .availability((database, access) -> backUpUnavailable(database))
+            .handle(call -> {
+                DatabaseBackups.backUpInBackground(call.subject().get(DatabaseModel.NAME));
+                return null;
             });
         OperationHandlers.attach(MOVE_TO_SHARED)
             .applies(database -> DatabaseService.moveRefusal(database) == null)
@@ -307,20 +350,24 @@ public final class DatabaseParts {
      */
     public static @NonNull PanelResource<Row> admin() {
         TableSpec<Row> table = TableSpec.<Row>builder()
-            // The engine qualifies the managed name; the name INSIDE the engine is what goes into a connection
-            // string, so it keeps a column of its own plus the copy chip.
-            .column(ColumnSpec.fromField(DatabaseModel.NAME).filterable().subtext("engine").build())
-            .column(ColumnSpec.fromField(DatabaseModel.ENGINE).filterable().hidden().build())
-            .column(ColumnSpec.fromField(DatabaseModel.DB_NAME).filterable().copyable().build())
-            .column(ColumnSpec.fromField(DatabaseModel.SERVER_ID)
-                .relation(RelationPick.of(DatabaseModel.SERVER_ID, ServerModel.MODEL_ID).build()).build())
-            // Placement and its engine are what an operator scans this list for since the shared tier exists; the
-            // tmpfs flag is a rarity and moves behind the picker so the row still fits a laptop screen.
-            .column(ColumnSpec.fromField(DatabaseModel.PLACEMENT).filterable().build())
-            .column(ColumnSpec.fromField(DatabaseModel.ENGINE_ID)
-                .relation(RelationPick.of(DatabaseModel.ENGINE_ID, DatabaseEngineModel.MODEL_ID).build()).build())
-            .column(ColumnSpec.fromField(DatabaseModel.EPHEMERAL).filterable().hidden().build())
+            // Board Databases: the name with where it runs under it, the engine, what uses it and its last backup.
+            // The name inside the engine, the host, the placement and its engine move behind the picker and the
+            // filters; the overview and the Restore tab carry them.
+            .column(ColumnSpec.fromField(DatabaseModel.NAME).filterable().subtext(RUNS_ON_COLUMN).build())
+            .column(ColumnSpec.virtual(RUNS_ON_COLUMN, listCopy("runs_on_column")).hidden().build())
+            .column(ColumnSpec.fromField(DatabaseModel.ENGINE).filterable().build())
+            .column(ColumnSpec.virtual(USED_BY_COLUMN, listCopy("used_by_column")).build())
+            .column(ColumnSpec.virtual(LAST_BACKUP_COLUMN, listCopy("last_backup_column"))
+                .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
             .column(ColumnSpec.fromField(DatabaseModel.STATUS).filterable().build())
+            .column(ColumnSpec.fromField(DatabaseModel.DB_NAME).filterable().copyable().hidden().build())
+            .column(ColumnSpec.fromField(DatabaseModel.SERVER_ID)
+                .relation(RelationPick.of(DatabaseModel.SERVER_ID, ServerModel.MODEL_ID).build()).hidden().build())
+            .column(ColumnSpec.fromField(DatabaseModel.PLACEMENT).filterable().hidden().build())
+            .column(ColumnSpec.fromField(DatabaseModel.ENGINE_ID)
+                .relation(RelationPick.of(DatabaseModel.ENGINE_ID, DatabaseEngineModel.MODEL_ID).build())
+                .hidden().build())
+            .column(ColumnSpec.fromField(DatabaseModel.EPHEMERAL).filterable().hidden().build())
             .filter(FilterSpec.leaf(DatabaseModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(DatabaseModel.NAME)).build())
             .filter(FilterSpec.leaf(DatabaseModel.ENGINE, CoreTypes.EQUALS)
@@ -342,8 +389,18 @@ public final class DatabaseParts {
                 // The managed name and the name inside the engine are different strings; a connection string only
                 // ever carries the second.
                 .search(DatabaseModel.NAME, DatabaseModel.DB_NAME)
+                .widgets(scope -> AttentionCollector.band(AttentionCollector.databases()))
+                .computed(Objects.requireNonNull(table.column(RUNS_ON_COLUMN)),
+                    (database, request) -> runsOnCell(database, request))
+                .computed(Objects.requireNonNull(table.column(USED_BY_COLUMN)),
+                    (database, request) -> usedByCell(database, request))
+                .computed(Objects.requireNonNull(table.column(LAST_BACKUP_COLUMN)),
+                    (database, request) -> lastBackupCell(database, request))
+                .rowLinkToTab(RecordOverview.SLUG)
                 .build())
             .form(ResourceForm.<Row>of(ADMIN_FORM)
+                .landingTab(RecordOverview.SLUG)
+                .tabLabel(AppOverview.copy("configuration"))
                 .bindings(adminBindings())
                 .createDefaults(DatabaseParts::createDefaults)
                 .notice((database, access) -> resizeNotice(database))
@@ -354,10 +411,11 @@ public final class DatabaseParts {
                 .delete(DELETE)
                 .build())
             .deleteConfirmation(deleteConfirmation())
-            .actions(List.of(backupLink(HohenheimIds.id("backup_database"), false), moveToShared(), forceDelete()))
-            // The restore tab and no history, as the legacy subpages() override had it; contributed tabs (zenit-auth's
-            // Access tab) join like on every converted entry.
-            .tabs(ResourceTabs.<Row>of(List.of(new DatabaseRestorePage())).withContributions())
+            .actions(List.of(backUpNow(), backupLink(HohenheimIds.id("backup_database"), false), moveToShared(),
+                forceDelete()))
+            // The overview first (the record's front door), then the restore tab; no history, as the legacy subpages()
+            // override had it; contributed tabs (zenit-auth's Access tab) join like on every converted entry.
+            .tabs(ResourceTabs.<Row>of(List.of(DatabaseOverview.tab(), new DatabaseRestorePage())).withContributions())
             .build();
     }
 
@@ -715,6 +773,99 @@ public final class DatabaseParts {
             .build();
     }
 
+    /**
+     * "Back up now" in the row and the record heading; the dump runs in the background and lands in the Backups card.
+     */
+    private static @NonNull PanelAction<Row> backUpNow() {
+        return PanelAction.<Row, Void>places(BACK_UP_NOW, ActionPlacement.ROW,
+                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("back_up_started")
+                    .withFilter("scope", "database")
+                    .withArg("name", request.subject().get(DatabaseModel.NAME))))
+            .build();
+    }
+
+    /** @return why this database cannot be backed up now, or null when it can */
+    static @Nullable Microcopy backUpUnavailable(@NonNull Row database) {
+        if (Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL))) {
+            return Microcopy.of("back_up_temporary").withFilter("scope", "database");
+        }
+        if (!DatabaseModel.STATUS_ACTIVE.equals(database.get(DatabaseModel.STATUS))) {
+            return Microcopy.of("back_up_not_active").withFilter("scope", "database");
+        }
+        return null;
+    }
+
+    /** The muted line under a database's name: its shared engine and host, or its own container's host. */
+    private static @NonNull String runsOnCell(@NonNull Row database, @NonNull PanelRequest request) {
+        Conduit conduit = request.conduit();
+        return DatabaseOverview.runsOn(database).resolve(conduit.getLocales(), conduit.getMessageResolver());
+    }
+
+    /** The workloads using a database, by name, or "No app". */
+    private static @NonNull String usedByCell(@NonNull Row database, @NonNull PanelRequest request) {
+        Conduit conduit = request.conduit();
+        List<Row> instances = memo(conduit, USED_BY, InstanceDatabaseLinks::liveInstancesByDatabase)
+            .getOrDefault(database.get(DatabaseModel.ID), List.of());
+        if (instances.isEmpty()) {
+            return Microcopy.of("used_by_none").withFilter("scope", "database_overview")
+                .resolve(conduit.getLocales(), conduit.getMessageResolver());
+        }
+        List<String> names = new ArrayList<>();
+        for (Row instance : instances) {
+            names.add(String.valueOf((Object) instance.get(InstanceModel.NAME)));
+        }
+        return String.join(", ", names);
+    }
+
+    /**
+     * The newest stored dump as a word and a line: how long ago and how big, a warning when it is older than the
+     * nightly backup allows, "Never" as a warning while a persistent database has none, and "Not backed up" for a
+     * temporary one.
+     */
+    private static @NonNull StateLineCell lastBackupCell(@NonNull Row database, @NonNull PanelRequest request) {
+        if (Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL))) {
+            return new StateLineCell("temporary", BadgeVariant.OUTLINE,
+                Microcopy.of("backup_temporary").withFilter("scope", "database_overview"),
+                Microcopy.of("backup_temporary_detail").withFilter("scope", "database_overview"), null);
+        }
+        String name = database.get(DatabaseModel.NAME);
+        DatabaseBackups.Stored newest = name == null ? null : DatabaseBackups.newest(name);
+        if (newest == null) {
+            return new StateLineCell("never", BadgeVariant.WARNING,
+                Microcopy.of("backup_never").withFilter("scope", "database_overview"),
+                Microcopy.of("backup_never_detail").withFilter("scope", "database_overview"), null);
+        }
+        Conduit conduit = request.conduit();
+        String ago = RelativeTime.ago(newest.at(),
+            RelativeTimeWording.resolve(conduit.getLocales(), conduit.getMessageResolver()));
+        String size = ByteText.human(newest.bytes());
+        if (newest.at().isBefore(Now.instant().minus(BACKUP_OVERDUE_AFTER))) {
+            return new StateLineCell("overdue", BadgeVariant.WARNING, Microcopy.literal(ago),
+                Microcopy.of("backup_overdue_detail").withFilter("scope", "database_overview").withArg("size", size),
+                null);
+        }
+        return new StateLineCell("done", BadgeVariant.SUCCESS, Microcopy.literal(ago), Microcopy.literal(size), null);
+    }
+
+    /** A per-request read: computed once per rendered list, again per row on an attribute-less conduit. */
+    private static <V> @NonNull V memo(@NonNull Conduit conduit, @NonNull IdentifierKey<V> key,
+                                       @NonNull Supplier<V> read) {
+        V value = conduit.getAttribute(key);
+        if (value == null) {
+            value = read.get();
+            try {
+                conduit.setAttribute(key, value);
+            } catch (UnsupportedOperationException attributeless) {
+                // An attribute-less conduit reads again per row.
+            }
+        }
+        return value;
+    }
+
+    private static @NonNull Microcopy listCopy(@NonNull String key) {
+        return Microcopy.of(key).withFilter("scope", "database_list");
+    }
+
     // -- the shared engines ---------------------------------------------------------------------------------------
 
     /**
@@ -943,17 +1094,8 @@ public final class DatabaseParts {
         if (engineId == null) {
             return 0;
         }
-        Conduit conduit = request.conduit();
-        Map<Integer, Long> counts = conduit.getAttribute(DATABASE_COUNTS);
-        if (counts == null) {
-            counts = countDatabasesPerEngine();
-            try {
-                conduit.setAttribute(DATABASE_COUNTS, counts);
-            } catch (UnsupportedOperationException attributeless) {
-                // An attribute-less conduit counts again per row.
-            }
-        }
-        return counts.getOrDefault(engineId, 0L);
+        return memo(request.conduit(), DATABASE_COUNTS, DatabaseParts::countDatabasesPerEngine)
+            .getOrDefault(engineId, 0L);
     }
 
     /** @return engine id -> managed database count, for every engine holding one */
