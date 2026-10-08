@@ -795,26 +795,43 @@ public class IncusClient {
     }
 
     /**
-     * The first stream an operation opened: the operation's path and its {@code fds["0"]} secret.
+     * Cancel a running operation; the daemon refuses one that already ended.
+     *
+     * @param operationPath {@code /1.0/operations/<id>}
+     * @throws ApiException carrying the daemon's refusal, 404 once it forgot the operation
+     */
+    public void cancelOperation(@NonNull String operationPath) throws IOException {
+        syncPayload("DELETE", operationPath, null, DEFAULT_TIMEOUT_MS);
+    }
+
+    /**
+     * One stream an operation opened: the operation's path and the secret of one of its {@code fds}.
      *
      * @param operationPath {@code /1.0/operations/<id>}
      * @param secret        the secret its websocket links with
      */
     public record OperationSocket(@NonNull String operationPath, @NonNull String secret) {
 
+        /** The {@code fds} key of an operation's first data stream. */
+        public static final String DATA = "0";
+
+        /** The {@code fds} key of an operation's control stream. */
+        public static final String CONTROL = "control";
+
         /**
          * @param operation an operation as the daemon returned it
+         * @param stream    the {@code fds} key of the stream, {@link #DATA} or {@link #CONTROL}
          * @param what      what the operation is, for the refusal
-         * @throws IOException when it carries no id or no stream secret
+         * @throws IOException when it carries no id or no secret for that stream
          */
-        public static @NonNull OperationSocket of(@NonNull Map<String, Object> operation, @NonNull String what)
-                throws IOException {
+        public static @NonNull OperationSocket of(@NonNull Map<String, Object> operation, @NonNull String stream,
+                                                  @NonNull String what) throws IOException {
             Object id = operation.get("id");
             String secret = operation.get("metadata") instanceof Map<?, ?> meta
                 && meta.get("fds") instanceof Map<?, ?> fds
-                && fds.get("0") instanceof String value ? value : null;
+                && fds.get(stream) instanceof String value ? value : null;
             if (id == null || secret == null) {
-                throw new IOException(what + " carried no websocket secret");
+                throw new IOException(what + " carried no '" + stream + "' websocket secret");
             }
             return new OperationSocket("/1.0/operations/" + id, secret);
         }

@@ -1,7 +1,8 @@
 {% tag HhVmScreen {
     /* A VM's live screen with its control buttons: every viewer the gate admits may drive it, one at a time, so a
        watcher asks for control and the one holding it can give it back. Which button shows follows the role the
-       viewer reflects on kvm-screen. */
+       viewer reflects on kvm-screen. The controller's element size goes to the guest, whose SPICE agent lays its
+       display out at it; a guest without the agent keeps its own size. */
     public required endpoint: String
     public label: String = ""
 
@@ -23,7 +24,7 @@
     }
 
     template {
-        <kvm-screen :ref={% screenEl %} endpoint={% endpoint %} label={% label %}></kvm-screen>
+        <kvm-screen :ref={% screenEl %} endpoint={% endpoint %} label={% label %} remoteResize={% true %}></kvm-screen>
         <div class="hh-vm-screen-controls">
             <pl-button class="hh-vm-screen-take" variant="outline"
                        event:click={% Kvm.control(screenEl, true) %}>{{ t("take_control", scope: "instance_framebuffer") }}</pl-button>

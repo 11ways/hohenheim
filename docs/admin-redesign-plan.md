@@ -1286,3 +1286,59 @@ The dashboard defects D10a's walk left (shot `d10a/02`), each fixed at its cause
   DashboardAttentionJourneyTest (new `oneCauseIsOneItemCarryingItsRootsAction`, steps 1-8, and
   `everyTaskAndEveryCountReadsInWords`, steps 1-3), InstanceAttentionTest, IsolationVisibilityTest step 6,
   WorkspaceDeploysTabTest step 2b, HostRemovalAgreementTest, BackupTargetRemovalTest and the four microcopy gates.
+
+## 30. KVM1 decisions (fork KVM1, 2026-10-08)
+
+The risks a read-only review found in the live VM screen (491030b7), each verified against code and Incus source
+before it was fixed.
+
+- Home: `zemble home` answered EXTEND_EXISTING `ScreenSession` in zenit-kvm for the viewer cap, so the cap, the FULL
+  status and the rejoin are framework (zenit-kvm); Hohenheim only declares its bound. Pepperglass needed no change:
+  `ChannelSettings.videoCodecs` already decides what a session announces.
+- Incus operation leak, verified in Incus `cmd/incusd/instance_console.go`: a `type=vga` console operation ends only
+  when its CONTROL websocket closes (`doVGA` reads it until it errors, then closes every channel socket). Incus 6.0
+  through 6.16 wait for that socket forever, so every screen session left a running operation behind; current main
+  fails the operation 10 seconds after start without it and closes the SPICE channels, so there the screen died
+  after 10 s. `DELETE /1.0/operations/<id>` cancels such an operation (it has an `onCancel`) and is refused once it
+  ended. Fix: `IncusSpice.open` links the control socket right after the POST (cancelling the operation when it cannot
+  link); `IncusSpice.Console.close` closes it and then cancels, idempotently. The seam hands over a `VmSpice.Link`
+  (options plus release) and `SpiceScreenSource.close` releases it after closing Pepperglass, also when `start`
+  failed or raced a close. The text console (`type=console`) needs no change: it ends when its data socket closes.
+- One console per VM: `VmScreens.session` gets-or-opens under one lock, so two viewers opening at once share one
+  session (journey step 1 opens two concurrently: one operation). The race that remained was a viewer looking a
+  session up just before the last viewer's leave ended it: it read ENDED. zenit-kvm now asks the lookup once more
+  when a join finds its session ended, so it gets the fresh one.
+- Viewer cap: `ScreenOptions.maxViewers` (default 16, refused below 1); a viewer past it reads `ScreenStatus.FULL`,
+  worded in en and nl, closes with 1013 and is never counted; its input is dropped. `ScreenStatus.endsScreen()` is the
+  one home for "this status ends the screen" (ENDED, UNAVAILABLE, FULL), read by the browser viewer instead of its own
+  list. Hohenheim: `VmScreens.MAX_VIEWERS = 4` (at most 128 MiB of queued frames per VM).
+- Force stays: Hohenheim cannot tell a console an operator opened with `incus console --type=vga` from one an older
+  Hohenheim leaked (those never end on 6.0-6.16), so a new session still forces. It never forces over its own live
+  session (one per VM). Open question for the owner below.
+- Capabilities: the source declares RESIZE; a controller's size goes to the guest agent as one monitor
+  (`Session.setMonitors`), and `hh-vm-screen` sets `remoteResize`, so the guest follows the controller's element
+  (as remote-viewer does); a guest without the agent keeps its size. Video: only MJPEG is announced to the SPICE
+  server. Pepperglass fixes the announced codecs when the session links, which happens when the first viewer opens,
+  before any viewer said what it decodes, and one stream feeds every viewer; VP8/VP9/H.264 would leave a viewer
+  without WebCodecs looking at a hole. MJPEG frames go on as JPEG rects every viewer draws, so the source declares no
+  VIDEO_* capability and the WebCodecs passthrough code is gone. `viewersChanged` stays the default no-op: nothing the
+  link announced can follow the viewer set at runtime.
+- Watch-only tier: not added. No Hohenheim capability fits: VIEW is "read a record's own state" and the journey pins
+  VIEW-only as refused; letting it watch a live screen would change what every stored VIEW grant means. CONSOLE holders
+  all get CONTROL, one driver at a time through the session's handoff.
+- Live lane: `VmScreenLiveTest` did not run. Missing: `~/.config/hohenheim-livehost/incus.properties` (no enrolled
+  Incus host on this machine), no `incus` binary locally, and Starfleet has neither Incus nor `/dev/kvm` (its servers
+  are docker-only: `local`, `phoenix`).
+- Look: the Console tab's chrome is unchanged (no screenshot); `remoteResize` changes the guest's size, and FULL is a
+  new worded status inside `kvm-screen`, proven in `KvmScreenBrowserTest`.
+- Proof: zenit-kvm build 850 and test run 851 (ScreenSessionJourneyTest with the new
+  `aFullSessionTurnsTheNextViewerAwayUntilSomeoneLeaves` and `aJoinerOfASessionThatEndedBeforeItsJoinIsGivenTheFreshOne`,
+  ScreenEndpointHttpTest, KvmCopyTest, ScreenCodecTest, KvmScreenBrowserTest with
+  `aFullScreenKeepsSayingSoAfterItsConnectionCloses`: 31 passed). Hohenheim build 852 and test run 854 (IncusSpiceTest
+  on the new `FakeVgaConsoleDaemon`, which models the control socket and cancel, SpiceScreenSourceTest,
+  VmScreenJourneyTest with `oneConsoleServesAVmsViewersUpToItsCapAndEndsWithTheLastOneOrAFailedSource`, steps 1-5:
+  6 passed).
+- Open for the owner: whether a new screen session may take over a VGA console an operator holds (alternatives: try
+  without force and say "someone else holds this console" with a take-over button); whether playback should stop
+  announcing Opus (a viewer without an Opus AudioDecoder reads AUDIO_UNSUPPORTED; Pepperglass has no playback setting
+  yet); whether RESIZE should be an opt-in per VM.

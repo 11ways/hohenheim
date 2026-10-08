@@ -9,33 +9,92 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
- * Reaches a virtual machine's SPICE server through its host's Incus daemon: one VGA console operation, and per SPICE
- * channel one websocket on it, each a fresh connection to the server.
+ * Reaches a virtual machine's SPICE server through its host's Incus daemon: one VGA console operation, held open by
+ * its control websocket, and per SPICE channel one websocket on it, each a fresh connection to the server.
  *
  * AIDEV-NOTE: the console is started with force, so it takes over a VGA console someone else left open; the ticket is
- * empty because the daemon's proxy is the authority, not SPICE.
+ * empty because the daemon's proxy is the authority, not SPICE. The daemon ends a VGA console operation only when its
+ * control websocket closes: Incus 6.0 through 6.16 keep one whose control never connected running forever, and later
+ * releases fail it after 10 seconds, closing every SPICE channel with it. So the control socket is linked at once and
+ * {@link Console#close} closes it and cancels the operation.
  *
  * @author Jelle De Loecker
  * @since 0.2.0
  */
 public final class IncusSpice {
 
+    private static final Logger LOG = Logger.getLogger(IncusSpice.class.getName());
+
     private IncusSpice() {
     }
 
     /**
-     * Starts the instance's VGA console and returns how a SPICE session reaches it.
+     * Starts the instance's VGA console and links its control socket.
      *
-     * @throws IOException when the daemon refuses the console
+     * @throws IOException when the daemon refuses the console or its control socket; the operation is cancelled then
      */
-    public static SessionOptions.@NonNull Builder options(@NonNull IncusClient incus, @NonNull String handle)
-            throws IOException {
-        IncusClient.OperationSocket console = IncusClient.OperationSocket.of(incus.startVgaConsole(handle, true),
-            "VGA console operation of '" + handle + "'");
-        return SessionOptions.dialing(handle, (type, id, timeout) ->
-            new WebSocketChannel(incus.operationWebSocket(console)));
+    public static @NonNull Console open(@NonNull IncusClient incus, @NonNull String handle) throws IOException {
+        String what = "VGA console operation of '" + handle + "'";
+        Map<String, Object> operation = incus.startVgaConsole(handle, true);
+        IncusClient.OperationSocket channels = IncusClient.OperationSocket.of(operation,
+            IncusClient.OperationSocket.DATA, what);
+        IncusWebSocket control;
+        try {
+            control = incus.operationWebSocket(IncusClient.OperationSocket.of(operation,
+                IncusClient.OperationSocket.CONTROL, what));
+        } catch (IOException refused) {
+            cancel(incus, channels.operationPath());
+            throw refused;
+        }
+        return new Console(incus, handle, channels, control);
+    }
+
+    /** Cancels an operation that may have ended already; a failure is only logged, the operation ends either way. */
+    private static void cancel(@NonNull IncusClient incus, @NonNull String operationPath) {
+        try {
+            incus.cancelOperation(operationPath);
+        } catch (IOException ended) {
+            LOG.log(Level.FINE, "Incus did not cancel " + operationPath, ended);
+        }
+    }
+
+    /** One VGA console of a running VM: how a SPICE session reaches it, until it is closed. */
+    public static final class Console implements AutoCloseable {
+
+        private final @NonNull IncusClient incus;
+        private final @NonNull String handle;
+        private final IncusClient.@NonNull OperationSocket channels;
+        private final @NonNull IncusWebSocket control;
+        private final AtomicBoolean closed = new AtomicBoolean();
+
+        private Console(@NonNull IncusClient incus, @NonNull String handle,
+                        IncusClient.@NonNull OperationSocket channels, @NonNull IncusWebSocket control) {
+            this.incus = incus;
+            this.handle = handle;
+            this.channels = channels;
+            this.control = control;
+        }
+
+        /** @return how a SPICE session links each channel: a fresh websocket on this console's operation */
+        public SessionOptions.@NonNull Builder options() {
+            return SessionOptions.dialing(this.handle, (type, id, timeout) ->
+                new WebSocketChannel(this.incus.operationWebSocket(this.channels)));
+        }
+
+        /** Ends the console: its control socket closes and its operation is cancelled; only the first call acts. */
+        @Override
+        public void close() {
+            if (this.closed.compareAndSet(false, true)) {
+                this.control.close();
+                cancel(this.incus, this.channels.operationPath());
+            }
+        }
     }
 
     /** One SPICE channel over one Incus websocket: its messages read as one byte stream, each write sent as one. */

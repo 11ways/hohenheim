@@ -4,7 +4,9 @@ import be.elevenways.pepperglass.Pepperglass;
 import be.elevenways.pepperglass.agent.ClipboardReply;
 import be.elevenways.pepperglass.agent.ClipboardType;
 import be.elevenways.pepperglass.agent.FileTransfer;
+import be.elevenways.pepperglass.agent.MonitorConfig;
 import be.elevenways.pepperglass.agent.Selection;
+import be.elevenways.pepperglass.channel.ChannelSettings;
 import be.elevenways.pepperglass.session.AudioEncoding;
 import be.elevenways.pepperglass.session.AudioFormat;
 import be.elevenways.pepperglass.session.AudioPacket;
@@ -13,8 +15,8 @@ import be.elevenways.pepperglass.session.DisplaySurface;
 import be.elevenways.pepperglass.session.MouseButton;
 import be.elevenways.pepperglass.session.Session;
 import be.elevenways.pepperglass.session.SessionListener;
-import be.elevenways.pepperglass.session.SessionOptions;
 import be.elevenways.pepperglass.session.StreamFrame;
+import be.elevenways.pepperglass.session.VideoCodec;
 import be.elevenways.pepperglass.session.VideoStream;
 import be.elevenways.pepperglass.wire.Rect;
 import be.elevenways.pepperglass.wire.SpiceException;
@@ -24,9 +26,7 @@ import be.elevenways.zenit.kvm.common.RectEncoding;
 import be.elevenways.zenit.kvm.common.ScreenCapability;
 import be.elevenways.zenit.kvm.common.ScreenCursor;
 import be.elevenways.zenit.kvm.common.ScreenProtocol;
-import be.elevenways.zenit.kvm.common.ScreenRect;
 import be.elevenways.zenit.kvm.common.UsbStatus;
-import be.elevenways.zenit.kvm.common.VideoCodec;
 import be.elevenways.zenit.kvm.server.ScreenFileTarget;
 import be.elevenways.zenit.kvm.server.ScreenRefusalReason;
 import be.elevenways.zenit.kvm.server.ScreenSink;
@@ -40,8 +40,6 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -54,13 +52,16 @@ import java.util.logging.Logger;
 
 /**
  * A SPICE server's screen as a zenit-kvm screen source, through a Pepperglass session: the primary surface's changes
- * go into the sink as damage, each applied batch ending a frame; MJPEG stream frames pass through as JPEG images and
- * VP8, VP9 and H.264 frames as video chunks, playback as audio, with the cursor, the guest's clipboard and its
- * microphone requests; the controller's keys, pointer, wheel, pastes, files and USB devices go back.
+ * go into the sink as damage, each applied batch ending a frame; MJPEG stream frames pass through as JPEG images,
+ * playback as audio, with the cursor, the guest's clipboard and its microphone requests; the controller's keys,
+ * pointer, wheel, size, pastes, files and USB devices go back.
  *
  * AIDEV-NOTE: display, stream and cursor callbacks arrive on Pepperglass reader threads, one per channel, so the
  * display state below is the primary display channel's own; input arrives on the session's input lane. An MJPEG frame
  * that is scaled, mirrored or partly covered cannot pass through as it is, so it is decoded and drawn as damage.
+ * Only MJPEG is announced to the SPICE server: the codecs are fixed when the session links, before any viewer said
+ * what it decodes, and one stream feeds every viewer, so a WebCodecs stream would leave a viewer without that decoder
+ * looking at a hole, while every viewer draws a JPEG.
  *
  * @author Jelle De Loecker
  * @since 0.2.0
@@ -76,16 +77,22 @@ final class SpiceScreenSource implements ScreenSource, SessionListener {
     private static final int UPLOAD_CHUNKS = 8;
     private static final long UPLOAD_WAIT_SECONDS = 30;
 
-    private final @NonNull Callable<SessionOptions.Builder> connection;
+    /** The SPICE server is asked for MJPEG streams only. */
+    private static final ChannelSettings SETTINGS = new ChannelSettings(ChannelSettings.DEFAULTS.imageCacheBytes(),
+        ChannelSettings.DEFAULTS.glzDictionaryBytes(), ChannelSettings.DEFAULTS.glzWindowPixels(),
+        ChannelSettings.DEFAULTS.preferredCompression(), List.of(VideoCodec.MJPEG),
+        ChannelSettings.DEFAULTS.recordEncoding(), ChannelSettings.DEFAULTS.crossChannelWaitMs());
+
+    private final @NonNull Callable<VmSpice.Link> connection;
     private volatile @Nullable ScreenSink sink;
     private volatile @Nullable Session session;
+    private VmSpice.@Nullable Link link;
     private boolean closed;
 
     // The primary display channel's own.
     private volatile @Nullable DisplaySurface primary;
     private int[] scratch = new int[0];
     private boolean drawn;
-    private final Map<Long, VideoStream> passthrough = new HashMap<>();
 
     // The playback channel's own.
     private boolean playing;
@@ -110,20 +117,33 @@ final class SpiceScreenSource implements ScreenSource, SessionListener {
     /**
      * @param connection how the session reaches the server; called once, on the session's start thread
      */
-    SpiceScreenSource(@NonNull Callable<SessionOptions.Builder> connection) {
+    SpiceScreenSource(@NonNull Callable<VmSpice.Link> connection) {
         this.connection = connection;
     }
 
     @Override
     public int capabilities() {
         return ScreenCapability.maskOf(ScreenCapability.AUDIO_OPUS, ScreenCapability.AUDIO_PCM,
-            ScreenCapability.CLIPBOARD, ScreenCapability.FILE, ScreenCapability.MICROPHONE, ScreenCapability.USB);
+            ScreenCapability.CLIPBOARD, ScreenCapability.FILE, ScreenCapability.MICROPHONE, ScreenCapability.RESIZE,
+            ScreenCapability.USB);
     }
 
     @Override
     public void start(@NonNull ScreenSink sink) throws Exception {
         this.sink = sink;
-        Session opened = Pepperglass.connect(this.connection.call().build(), this);
+        VmSpice.Link reached = this.connection.call();
+        boolean late;
+        synchronized (this) {
+            late = this.closed;
+            if (!late) {
+                this.link = reached;
+            }
+        }
+        if (late) {
+            reached.release().run();
+            return;
+        }
+        Session opened = Pepperglass.connect(reached.options().settings(SETTINGS).build(), this);
         synchronized (this) {
             if (!this.closed) {
                 this.session = opened;
@@ -178,10 +198,6 @@ final class SpiceScreenSource implements ScreenSource, SessionListener {
         DisplaySurface shown = this.primary;
         if (shown != null && shown.channel() == channel) {
             this.primary = null;
-            for (VideoStream stream : this.passthrough.values()) {
-                this.sink().videoEnd(streamId(stream));
-            }
-            this.passthrough.clear();
         }
     }
 
@@ -200,56 +216,10 @@ final class SpiceScreenSource implements ScreenSource, SessionListener {
         }
         switch (stream.codec()) {
             case MJPEG -> this.jpeg(shown, stream, frame.data());
-            case VP8 -> this.video(stream, VideoCodec.VP8, frame);
-            case VP9 -> this.video(stream, VideoCodec.VP9, frame);
-            case H264 -> this.video(stream, VideoCodec.H264, frame);
             // Never announced, so never sent.
-            case H265 -> {
+            case VP8, VP9, H264, H265 -> {
             }
         }
-    }
-
-    @Override
-    public void streamChanged(@NonNull VideoStream stream) {
-        VideoStream started = this.passthrough.get(stream.id());
-        if (started == null) {
-            return;
-        }
-        if (!started.destination().equals(stream.destination())) {
-            // A moved stream starts again at its next key frame.
-            this.passthrough.remove(stream.id());
-            this.sink().videoEnd(streamId(stream));
-            return;
-        }
-        this.passthrough.put(stream.id(), stream);
-        this.sink().videoClip(streamId(stream), visible(stream));
-    }
-
-    @Override
-    public void streamDestroyed(@NonNull VideoStream stream) {
-        if (this.passthrough.remove(stream.id()) != null) {
-            this.sink().videoEnd(streamId(stream));
-        }
-    }
-
-    /** Passes a video frame through, starting the stream at its first key frame. */
-    private void video(@NonNull VideoStream stream, @NonNull VideoCodec codec, @NonNull StreamFrame frame) {
-        byte[] data = frame.data();
-        boolean keyframe = keyframe(codec, data);
-        if (!this.passthrough.containsKey(stream.id())) {
-            String codecString = keyframe ? codecString(codec, data) : null;
-            if (codecString == null) {
-                return;
-            }
-            this.sink().videoStart(streamId(stream), codec, codecString, screenRect(stream.destination()),
-                stream.frameWidth(),
-                stream.frameHeight(), new byte[0]);
-            this.passthrough.put(stream.id(), stream);
-            if (!stream.clip().all()) {
-                this.sink().videoClip(streamId(stream), visible(stream));
-            }
-        }
-        this.sink().videoChunk(streamId(stream), keyframe, frame.mmTime() * 1000, data);
     }
 
     /** Draws an MJPEG frame: passed through when it fills its whole destination as it is, else decoded. */
@@ -485,6 +455,15 @@ final class SpiceScreenSource implements ScreenSource, SessionListener {
         }
     }
 
+    /** The guest agent lays its one monitor out at the size; without an agent the size waits for one. */
+    @Override
+    public void resize(int width, int height) {
+        Session current = this.session;
+        if (current != null) {
+            current.setMonitors(List.of(MonitorConfig.of(width, height)), false);
+        }
+    }
+
     /** A dropped file goes to the guest agent, which must be running to take it. */
     @Override
     public @NonNull ScreenFileTarget file(@NonNull String name, @NonNull String mime, long size) {
@@ -576,15 +555,27 @@ final class SpiceScreenSource implements ScreenSource, SessionListener {
         }
     }
 
+    /** Closes the SPICE session, then releases the console the host opened for it. */
     @Override
     public void close() {
         Session current;
+        VmSpice.Link reached;
         synchronized (this) {
+            if (this.closed) {
+                return;
+            }
             this.closed = true;
             current = this.session;
+            reached = this.link;
         }
-        if (current != null) {
-            current.close();
+        try {
+            if (current != null) {
+                current.close();
+            }
+        } finally {
+            if (reached != null) {
+                reached.release().run();
+            }
         }
     }
 
@@ -612,30 +603,6 @@ final class SpiceScreenSource implements ScreenSource, SessionListener {
         }
     }
 
-    private static int streamId(@NonNull VideoStream stream) {
-        return (int) (stream.id() & 0xFFFF);
-    }
-
-    private static @NonNull ScreenRect screenRect(@NonNull Rect rect) {
-        return new ScreenRect(rect.left(), rect.top(), rect.width(), rect.height());
-    }
-
-    /** @return the stream's visible rectangles, its whole destination when unclipped */
-    private static @NonNull List<ScreenRect> visible(@NonNull VideoStream stream) {
-        List<ScreenRect> visible = new ArrayList<>();
-        if (stream.clip().all()) {
-            visible.add(screenRect(stream.destination()));
-            return visible;
-        }
-        for (Rect rect : stream.clip().rects()) {
-            Rect inside = rect.intersect(stream.destination());
-            if (inside != null && !inside.isEmpty() && visible.size() < ScreenProtocol.MAX_CLIP_RECTS) {
-                visible.add(screenRect(inside));
-            }
-        }
-        return visible;
-    }
-
     private static @NonNull AudioCodec codec(@NonNull AudioEncoding encoding) {
         return switch (encoding) {
             case RAW -> AudioCodec.PCM_S16LE;
@@ -656,54 +623,6 @@ final class SpiceScreenSource implements ScreenSource, SessionListener {
     private static @NonNull String baseMime(@NonNull String mime) {
         int parameters = mime.indexOf(';');
         return (parameters < 0 ? mime : mime.substring(0, parameters)).trim().toLowerCase(Locale.ROOT);
-    }
-
-    /** @return whether a frame of the codec is a key frame */
-    private static boolean keyframe(@NonNull VideoCodec codec, byte @NonNull [] data) {
-        return switch (codec) {
-            // VP8: the frame tag's lowest bit is 0 on a key frame.
-            case VP8 -> data.length > 0 && (data[0] & 0x01) == 0;
-            // VP9: frame marker, profile bits, then show_existing_frame and frame_type, 0 on a key frame.
-            case VP9 -> data.length > 0 && vp9KeyFrame(data[0] & 0xFF);
-            // H.264 Annex B: an IDR slice.
-            case H264 -> h264Unit(data, 5) >= 0;
-        };
-    }
-
-    /** @return the WebCodecs codec string of a stream, read from its key frame; null when it names none */
-    private static @Nullable String codecString(@NonNull VideoCodec codec, byte @NonNull [] keyframe) {
-        return switch (codec) {
-            case VP8 -> "vp8";
-            // Profile 0, 8-bit, level 1 as the floor; decoders do not hold a stream to the level it names.
-            case VP9 -> (keyframe[0] & 0x30) == 0 ? "vp09.00.10.08" : null;
-            case H264 -> {
-                int sps = h264Unit(keyframe, 7);
-                yield sps < 0 || sps + 3 >= keyframe.length ? null : String.format(Locale.ROOT,
-                    "avc1.%02x%02x%02x", keyframe[sps + 1] & 0xFF, keyframe[sps + 2] & 0xFF, keyframe[sps + 3] & 0xFF);
-            }
-        };
-    }
-
-    private static boolean vp9KeyFrame(int header) {
-        // frame_marker (2 bits) = 2, profile_low_bit, profile_high_bit, [reserved for profile 3], then
-        // show_existing_frame and frame_type.
-        if ((header >> 6) != 2) {
-            return false;
-        }
-        int profile = ((header >> 5) & 1) | (((header >> 4) & 1) << 1);
-        int at = profile == 3 ? 2 : 3;
-        boolean showExisting = ((header >> at) & 1) != 0;
-        return !showExisting && ((header >> (at - 1)) & 1) == 0;
-    }
-
-    /** @return the offset of the first Annex B NAL unit header of the type, -1 when there is none */
-    private static int h264Unit(byte @NonNull [] data, int type) {
-        for (int at = 0; at + 3 < data.length; at++) {
-            if (data[at] == 0 && data[at + 1] == 0 && data[at + 2] == 1 && (data[at + 3] & 0x1F) == type) {
-                return at + 3;
-            }
-        }
-        return -1;
     }
 
     /** The DOM pointer buttons mask bits and the SPICE buttons they press. */
