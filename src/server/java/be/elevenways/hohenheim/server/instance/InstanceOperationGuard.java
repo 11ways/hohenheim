@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -7,6 +8,7 @@ import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
@@ -156,9 +158,36 @@ final class InstanceOperationGuard {
      * record matches none of these statements without any of them spelling the filter.
      *
      * @throws Violations {@code instance_fenced_out}
+     * @throws IllegalArgumentException for {@code error}, which names its cause through {@link #stampError}
      */
     static void stamp(@NonNull HostLeases leases, int instanceId, int serverId,
                       @NonNull String status, @NonNull Object instanceName) {
+        requireCause(status, null);
+        write(leases, instanceId, serverId, status, instanceName);
+    }
+
+    /**
+     * {@link #stamp} of {@code error}, recording what caused it on the record's activity, where the dashboard's
+     * crash item reads its words ({@code InstanceErrorCauses}).
+     *
+     * AIDEV-NOTE: the ONE way a workload reaches ERROR with a cause, and {@link #stamp} refuses ERROR without one:
+     * the status alone told a failed start, a failed restore and a crash apart for nobody, so the dashboard claimed a
+     * crash for every one of them (D10b).
+     *
+     * @param cause  what happened, a verb whose {@link HohenheimActivityAction#errorCause()} is a cause
+     * @param detail the row's detail as the cause's fact declares it (an exit code, a failure's message), or null
+     * @throws Violations {@code instance_fenced_out}
+     */
+    static void stampError(@NonNull HostLeases leases, int instanceId, int serverId, @NonNull Object instanceName,
+                           @NonNull HohenheimActivityAction cause, @Nullable String detail) {
+        requireCause(InstanceModel.STATUS_ERROR, cause);
+        write(leases, instanceId, serverId, InstanceModel.STATUS_ERROR, instanceName);
+        recordCause(instanceId, cause, detail);
+    }
+
+    /** The fenced status write behind {@link #stamp} and {@link #stampError}. */
+    private static void write(@NonNull HostLeases leases, int instanceId, int serverId,
+                              @NonNull String status, @NonNull Object instanceName) {
         // AIDEV-NOTE: UPDATED_AT is assigned HERE because this is a set-based updateAll
         // that fires no write hooks -- without it a CAPTURING/RESTORING stamp leaves the
         // row's timestamp at whatever save() last wrote, and the boot settle
@@ -191,11 +220,15 @@ final class InstanceOperationGuard {
      *                         records the confirmation, and only that)
      * @param workloadKilledAt the {@code workload_killed_at} value this observation settles
      *                         to (the caller passes the stored value when it learned nothing)
+     * @param cause            what made a changed status {@code error} (a crash nobody watched), recorded as
+     *                         {@link #stampError} records it; null for any other status
      * @throws Violations {@code instance_fenced_out}
      */
     static void stampObserved(@NonNull HostLeases leases, int instanceId, int serverId,
                               @NonNull String status, boolean changed,
-                              @Nullable Instant workloadKilledAt, @NonNull Object instanceName) {
+                              @Nullable Instant workloadKilledAt, @NonNull Object instanceName,
+                              @Nullable HohenheimActivityAction cause) {
+        requireCause(changed ? status : "", cause);
         var statement = fenced(leases, instanceId, serverId)
             .assign(InstanceModel.STATUS, status)
             .assign(InstanceModel.STATUS_OBSERVED_AT, Now.instant())
@@ -204,6 +237,9 @@ final class InstanceOperationGuard {
             statement = statement.assign(InstanceModel.UPDATED_AT, Now.instant());
         }
         requireMatched(statement.updateAll(), serverId, instanceName);
+        if (cause != null) {
+            recordCause(instanceId, cause, null);
+        }
     }
 
     /**
@@ -238,12 +274,16 @@ final class InstanceOperationGuard {
      * rather than the failure.
      *
      * @param reservedTargetServerId the host the window booked, or null when none was
+     * @param cause                  what made the status {@code error}, recorded as {@link #stampError} records
+     *                               it; null for any other status
      * @throws Violations {@code instance_fenced_out}
      */
     static void clearMigration(@NonNull HostLeases leases, int instanceId, int serverId,
                                @Nullable Integer reservedTargetServerId,
                                @NonNull String status,
-                               @NonNull Object instanceName) {
+                               @NonNull Object instanceName,
+                               @Nullable HohenheimActivityAction cause) {
+        requireCause(status, cause);
         // The STORED window amount, never a recompute: releasing anything else against
         // the destination is the over-release that clamps its bucket to zero.
         long booked = reservedTargetServerId == null ? 0 : InstanceCapacity.windowReservedOf(
@@ -256,6 +296,9 @@ final class InstanceOperationGuard {
         requireMatched(matched, serverId, instanceName);
         if (reservedTargetServerId != null) {
             InstanceCapacity.release(reservedTargetServerId, booked);
+        }
+        if (cause != null) {
+            recordCause(instanceId, cause, null);
         }
     }
 
@@ -288,6 +331,7 @@ final class InstanceOperationGuard {
     static void handoff(@NonNull HostLeases leases, int instanceId, int sourceServerId,
                         int targetServerId,
                         @NonNull String status, @NonNull Object instanceName) {
+        requireCause(status, null);
         Row stored = Models.get(InstanceModel.class).findById(instanceId);
         long booked = InstanceCapacity.sourceBookedOf(stored);
         long reserved = InstanceCapacity.windowReservedOf(stored);
@@ -300,6 +344,29 @@ final class InstanceOperationGuard {
             .updateAll();
         requireMatched(matched, sourceServerId, instanceName);
         InstanceCapacity.release(sourceServerId, booked);
+    }
+
+    /**
+     * Refuses an {@code error} status without a cause, and a cause beside any other status: every ERROR a workload
+     * holds says what caused it.
+     *
+     * @throws IllegalArgumentException for either mismatch
+     */
+    private static void requireCause(@NonNull String status, @Nullable HohenheimActivityAction cause) {
+        boolean error = InstanceModel.STATUS_ERROR.equals(status);
+        if (error && (cause == null || !cause.errorCause().isCause())) {
+            throw new IllegalArgumentException("An error status names its cause (InstanceOperationGuard.stampError)");
+        }
+        if (!error && cause != null) {
+            throw new IllegalArgumentException("Only an error status records a cause, not " + status);
+        }
+    }
+
+    /** Records the cause on the record's activity, its detail the first line of what the cause declares. */
+    private static void recordCause(int instanceId, @NonNull HohenheimActivityAction cause, @Nullable String detail) {
+        String line = detail == null ? null : detail.strip().lines().findFirst().orElse(null);
+        ActivityLog.record(Models.get(InstanceModel.class), instanceId, cause,
+            line == null || line.isBlank() ? null : line);
     }
 
     /**

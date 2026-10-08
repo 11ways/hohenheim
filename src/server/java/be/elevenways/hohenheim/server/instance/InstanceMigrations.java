@@ -634,7 +634,7 @@ public final class InstanceMigrations {
             }
             InstanceOperationGuard.clearMigration(this.instances.leases(), instanceId,
                 resolved.serverId(), targetId,
-                InstanceModel.STATUS_STOPPED, nameOf(row));
+                InstanceModel.STATUS_STOPPED, nameOf(row), null);
             Blast.log("MIGRATE: rolled back interrupted migration of", handle,
                 "- source host keeps it");
             return true;
@@ -654,7 +654,7 @@ public final class InstanceMigrations {
         // where it is, so the window's destination booking goes back like a rollback's.
         InstanceOperationGuard.clearMigration(this.instances.leases(), instanceId,
             resolved.serverId(), targetId,
-            InstanceModel.STATUS_ERROR, nameOf(row));
+            InstanceModel.STATUS_ERROR, nameOf(row), HohenheimActivityAction.WORKLOAD_COPY_LOST);
         Blast.log("MIGRATE: interrupted migration of", handle, "found NO copy on either"
             + " host; the record is stamped error for the operator");
         return true;

@@ -289,9 +289,12 @@ final class AppHealth {
         RecordHealth health = switch (status) {
             case RUNNING -> runningVerdict(facts.sitesByInstance.get(instance.get(InstanceModel.ID)), facts.sites,
                 delegated, viewer);
+            // What stopped it, as its recorded cause says (the dashboard item's detail too); a tenant reads the sentence
+            // without the daemon's own message.
             case ERROR -> delegated
-                ? RecordHealth.broken(Stoppage.AFTER_ERROR.headline())
-                : RecordHealth.broken(Stoppage.AFTER_ERROR.headline()).fixedBy(InstanceOperations.RESTART.id());
+                ? RecordHealth.broken(Stoppage.AFTER_ERROR.headline()).detail(WorkloadErrors.detailOf(instance, false))
+                : RecordHealth.broken(Stoppage.AFTER_ERROR.headline()).detail(WorkloadErrors.detailOf(instance, true))
+                    .fixedBy(InstanceOperations.RESTART.id());
             case STOPPED, CREATED -> RecordHealth.attention(copy("not_running")).detail(copy("not_running_detail"))
                 .fixedBy(InstanceOperations.START.id());
             case STARTING, CAPTURING, RESTORING, MIGRATING -> RecordHealth.unknown(status.label());
@@ -437,14 +440,13 @@ final class AppHealth {
      *
      * AIDEV-NOTE: an ACTIVE row is not a working certificate. D11's Shop had an active row without loadable material,
      * and every HTTPS cell said "Works" while the proxy could serve nothing; reading the store is what makes the cells,
-     * the verdicts and the attention items agree with the handshake a visitor gets.
+     * the verdicts and the attention items agree with the handshake a visitor gets. The names are
+     * {@link CertificateCoverage#workingNames()}, the rule routing and the force-HTTPS latch read too; only the
+     * listener half is the display's own, because a visitor's handshake also needs a listener that terminates.
      */
     static @NonNull Set<String> workingNames() {
         var proxy = ServerMain.getProxyServer();
-        if (proxy == null) {
-            return CertificateCoverage.activeNames();
-        }
-        return proxy.isHttpsTerminationAvailable() ? proxy.getCertificateStore().servedNames() : Set.of();
+        return proxy != null && !proxy.isHttpsTerminationAvailable() ? Set.of() : CertificateCoverage.workingNames();
     }
 
     /** @return the first of these paths whose protection admits everyone, null when none does */
@@ -585,7 +587,8 @@ final class AppHealth {
      * item naming it ("Shop stopped after an error") are one declaration, so the two never tell different stories.
      *
      * AIDEV-NOTE: AFTER_ERROR is the stored ERROR status, which a crash, a failed start, a failed migration and a
-     * failed maintenance hold all stamp; "after an error" is what every one of them is, "after a crash" is not.
+     * failed maintenance hold all stamp; "after an error" is what every one of them is, "after a crash" is not. Which
+     * one it was is the recorded cause ({@link WorkloadErrors}), the verdict's and the item's detail.
      */
     enum Stoppage {
 

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -166,7 +167,7 @@ public final class InstanceConsoles {
                 // The deploy's own thread, under its claim: no later generation can exist yet.
                 stampIfStatus(watch.leases(), watch.serverId(), watch.instanceName(),
                     instanceId, () -> true, watch.initialStatus(), InstanceModel.STATUS_ERROR,
-                    "deferred console attach failed");
+                    "deferred console attach failed", HohenheimActivityAction.WORKLOAD_START_FAILED, null);
                 throw refused;
             }
             // Close the start-to-attach gap: what the daemon buffered before the
@@ -187,7 +188,7 @@ public final class InstanceConsoles {
         armed.armReadiness(readiness, () -> withScope(watch.datasource(), () ->
             stampIfStatus(watch.leases(), watch.serverId(), watch.instanceName(), instanceId,
                 () -> isCurrent(armed), InstanceModel.STATUS_STARTING, InstanceModel.STATUS_RUNNING,
-                "readiness line observed on the console")));
+                "readiness line observed on the console", null, null)));
         long deadline = readinessTimeoutMs;
         JobRunner.startVirtualThread(() -> {
             try {
@@ -202,7 +203,8 @@ public final class InstanceConsoles {
             withScope(watch.datasource(), () ->
                 stampIfStatus(watch.leases(), watch.serverId(), watch.instanceName(), instanceId,
                     () -> isCurrent(armed), InstanceModel.STATUS_STARTING, InstanceModel.STATUS_ERROR,
-                    "readiness line not observed within " + deadline + "ms"));
+                    "readiness line not observed within " + deadline + "ms",
+                    HohenheimActivityAction.WORKLOAD_NEVER_READY, null));
         });
     }
 
@@ -210,13 +212,16 @@ public final class InstanceConsoles {
      * One fenced conditional stamp: only writes when the session's generation is still current and the row still
      * holds {@code expected}, both asked under the record's claim.
      *
+     * @param cause  what made {@code status} an error, recorded beside it; null for any other status
+     * @param detail the cause's detail as its fact declares it (the exit code), or null
      * @return whether the status was written
      */
     private static boolean stampIfStatus(@NonNull HostLeases leases, int serverId,
                                          @NonNull Object name, int instanceId,
                                          @NonNull BooleanSupplier current,
                                          @NonNull String expected, @NonNull String status,
-                                         @NonNull String why) {
+                                         @NonNull String why, @Nullable HohenheimActivityAction cause,
+                                         @Nullable String detail) {
         try {
             // Under the record's claim, queued behind whatever operation holds it; the generation and the status are
             // re-read inside it, so an operation that moved the record meanwhile wins and this observation is dropped.
@@ -232,7 +237,11 @@ public final class InstanceConsoles {
                         return false;
                     }
                     leases.requireFence(serverId);
-                    InstanceOperationGuard.stamp(leases, instanceId, serverId, status, name);
+                    if (cause != null) {
+                        InstanceOperationGuard.stampError(leases, instanceId, serverId, name, cause, detail);
+                    } else {
+                        InstanceOperationGuard.stamp(leases, instanceId, serverId, status, name);
+                    }
                     Blast.log("CONSOLE: instance", instanceId, "->", status, "(" + why + ")");
                     return true;
                 });
@@ -603,7 +612,7 @@ public final class InstanceConsoles {
         }
         if (stopObserved) {
             if (!stampIfAnyRunning(leases, serverId, name, instanceId,
-                InstanceModel.STATUS_STOPPED, "observed stop, exit " + exitCode)) return;
+                InstanceModel.STATUS_STOPPED, "observed stop, exit " + exitCode, null, null)) return;
             PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
             return;
         }
@@ -612,7 +621,8 @@ public final class InstanceConsoles {
         if (!restart) {
             if (!stampIfAnyRunning(leases, serverId, name, instanceId,
                 exitCode == 0 ? InstanceModel.STATUS_STOPPED : InstanceModel.STATUS_ERROR,
-                "unexpected exit " + exitCode + ", crash policy none")) return;
+                "unexpected exit " + exitCode + ", crash policy none",
+                exitCode == 0 ? null : HohenheimActivityAction.WORKLOAD_EXITED, String.valueOf(exitCode))) return;
             PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
             return;
         }
@@ -621,7 +631,8 @@ public final class InstanceConsoles {
         if (flapExceeded(instanceId)) {
             if (!stampIfAnyRunning(leases, serverId, name, instanceId,
                 InstanceModel.STATUS_ERROR,
-                "crash loop: " + FLAP_THRESHOLD + " crashes inside " + flapWindowMs + "ms")) return;
+                "crash loop: " + FLAP_THRESHOLD + " crashes inside " + flapWindowMs + "ms",
+                HohenheimActivityAction.WORKLOAD_CRASH_LOOPED, null)) return;
             PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
             alertCrashLoop(instanceId, name);
             return;
@@ -639,11 +650,13 @@ public final class InstanceConsoles {
     /** Stamp from starting OR running (whichever the exit interrupted). */
     private static boolean stampIfAnyRunning(@NonNull HostLeases leases, int serverId,
                                           @NonNull Object name, int instanceId,
-                                          @NonNull String status, @NonNull String why) {
+                                          @NonNull String status, @NonNull String why,
+                                          @Nullable HohenheimActivityAction cause, @Nullable String detail) {
         // Called under the claim, after the generation check: the re-entrant stamps need no second one.
         return stampIfStatus(leases, serverId, name, instanceId, () -> true,
-            InstanceModel.STATUS_RUNNING, status, why) || stampIfStatus(leases, serverId, name, instanceId, () -> true,
-            InstanceModel.STATUS_STARTING, status, why);
+            InstanceModel.STATUS_RUNNING, status, why, cause, detail)
+            || stampIfStatus(leases, serverId, name, instanceId, () -> true,
+            InstanceModel.STATUS_STARTING, status, why, cause, detail);
     }
 
     /** Shared crash-flap clock: the console watch AND the status reconciler both count

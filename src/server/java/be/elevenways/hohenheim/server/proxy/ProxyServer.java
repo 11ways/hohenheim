@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
+import be.elevenways.hohenheim.server.tls.ForceSslLatch;
 import be.elevenways.hohenheim.server.tls.SniKeyManager;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Backoff;
@@ -101,7 +102,7 @@ public class ProxyServer {
         this.connectionIdentities = new ConnectionIdentities();
         long sessionTtl = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.ProxyAuth.SESSION_TTL_SECONDS);
         this.proxySessionStore = new InMemorySessionStore(sessionTtl);
-        this.dispatcher = new SiteDispatcher(acmeService, proxySessionStore);
+        this.dispatcher = new SiteDispatcher(acmeService, proxySessionStore, certificateStore);
 
         // Wrap dispatcher with gzip/deflate compression. gRPC exchanges bypass the
         // encoding layer entirely: gRPC does its own message compression and a
@@ -156,8 +157,7 @@ public class ProxyServer {
      */
     public synchronized void start() {
         try {
-            certificateStore.loadFromDatabase();
-            dispatcher.reloadRoutes();
+            loadCertificatesAndRoutes();
             dispatcher.setHttpsAvailable(false);
         } catch (Exception e) {
             Blast.log("PROXY: failed to load routes/certificates:", e.getMessage());
@@ -171,6 +171,18 @@ public class ProxyServer {
             Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED));
         if (acmeEnabled) {
             acmeService.start();
+        }
+    }
+
+    /**
+     * Loads the certificate store, then the routes that read it; a certificate the store loaded for the first time
+     * forces the armed addresses it covers ({@link ForceSslLatch}), whose new force needs the routes built again.
+     */
+    private void loadCertificatesAndRoutes() {
+        certificateStore.loadFromDatabase();
+        dispatcher.reloadRoutes();
+        if (ForceSslLatch.fire(certificateStore) > 0) {
+            dispatcher.reloadRoutes();
         }
     }
 
@@ -567,8 +579,7 @@ public class ProxyServer {
     private void reloadListeners(boolean respectBackoff) {
         long now = clock.getAsLong();
         try {
-            certificateStore.loadFromDatabase();
-            dispatcher.reloadRoutes();
+            loadCertificatesAndRoutes();
         } catch (Exception e) {
             Blast.log("PROXY: reload failed:", e.getMessage());
         }

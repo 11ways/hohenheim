@@ -1066,16 +1066,8 @@
     }
   ],
   "database_not_running": {
-    "text": "Gekoppelde database {$name} draait niet",
-    "scope": "attention_detail"
-  },
-  "database_failed": {
-    "text": "Gekoppelde database {$name} is mislukt: de engine is onverwacht gestopt of de laatste bewerking is niet voltooid",
-    "scope": "attention_detail"
-  },
-  "database_workload_dead": {
-    "text": "Gekoppelde database {$name} draait, maar de engine is gestopt wegens geheugentekort",
-    "scope": "attention_detail"
+    "text": "Database {$name} draait niet",
+    "scope": "attention_title"
   },
   "site_unrouted": {
     "text": "Site {$name} ontbreekt in de routering",
@@ -1108,10 +1100,6 @@
   "access_rule_unusable": {
     "text": "Een toegangsregel kan niet worden geevalueerd en weigert elk verzoek waarover hij beslist: {$detail}",
     "scope": "routing_problem"
-  },
-  "database_status": {
-    "text": "Gekoppelde database {$name} is {$status}",
-    "scope": "attention_detail"
   },
   "spamservice_not_ready": {
     "text": "De beheerde spamservice is ingeschakeld maar meldt status \"{$state}\"",
@@ -5555,6 +5543,15 @@
     {
       "text": "Draait",
       "scope": "app_health"
+    },
+    {
+      "text": "Draait",
+      "scope": "database_status"
+    },
+    {
+      "text": "draait",
+      "scope": "database_status",
+      "case": "sentence"
     }
   ],
   "unhealthy": {
@@ -5694,8 +5691,8 @@
     }
   ],
   "database_unreachable": {
-    "text": "Gekoppelde database {$name} staat op een onbereikbare host",
-    "scope": "attention_detail"
+    "text": "Database {$name} is niet bereikbaar",
+    "scope": "attention_title"
   },
   "database_destroy_failed": {
     "text": "Verwijderen van '{$name}' kon de afbraak niet verifieren: {$reason}. Het record en de inloggegevens blijven bewaard; probeer opnieuw, of gebruik Geforceerd verwijderen voor een onbereikbare host.",
@@ -6563,10 +6560,6 @@
     {
       "text": "Een instantie serveren die deze installatie beheert",
       "scope": "upstream_kind_description"
-    },
-    {
-      "text": "Instance {$name}",
-      "scope": "attention_title"
     }
   ],
   "note": {
@@ -7273,6 +7266,15 @@
     {
       "text": "Draait niet",
       "scope": "app_health"
+    },
+    {
+      "text": "Draait niet",
+      "scope": "database_status"
+    },
+    {
+      "text": "draait niet",
+      "scope": "database_status",
+      "case": "sentence"
     }
   ],
   "not_running_description": [
@@ -9540,10 +9542,6 @@
       "scope": "app_overview"
     }
   ],
-  "instance_crashed": {
-    "text": "De workload is onverwacht gestopt en is niet herstart.",
-    "scope": "attention_detail"
-  },
   "instance_backup": {
     "text": "Back-up van {$name} is mislukt",
     "scope": "attention_title"
@@ -14195,6 +14193,15 @@
     {
       "text": "{$name} is gestopt na een fout",
       "scope": "attention_title"
+    },
+    {
+      "text": "Gestopt na een fout",
+      "scope": "database_status"
+    },
+    {
+      "text": "gestopt na een fout",
+      "scope": "database_status",
+      "case": "sentence"
     }
   ],
   "not_running_detail": {
@@ -15098,6 +15105,10 @@
     {
       "text": "Toestand",
       "scope": "host_list"
+    },
+    {
+      "text": "Status",
+      "scope": "database_list"
     }
   ],
   "state_failing": {
@@ -15977,5 +15988,191 @@
   "no_firewall_lane": {
     "text": "Hohenheim kan de firewall van de machine waarop de daemon draait niet lezen",
     "scope": "isolation_finding"
-  }
+  },
+  "workload_exited": [
+    {
+      "text": "Onverwacht gestopt",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$subject} stopte onverwacht en is niet herstart",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "workload_crash_looped": [
+    {
+      "text": "Bleef stoppen",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$subject} bleef stoppen, dus automatische herstarts wachten op de volgende deploy",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "workload_start_failed": [
+    {
+      "text": "Kon niet starten",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$subject} kon niet gestart worden",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "workload_never_ready": [
+    {
+      "text": "Nooit klaar",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$subject} startte maar meldde nooit dat het klaar was",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "workload_stop_failed": [
+    {
+      "text": "Kon niet stoppen",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$subject} stoppen is mislukt",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "workload_remove_failed": [
+    {
+      "text": "Kon niet verwijderen",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$subject} verwijderen is mislukt",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "workload_restore_failed": [
+    {
+      "text": "Herstellen mislukt",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$subject} herstellen is halverwege mislukt, dus het bleef gestopt",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "workload_restore_interrupted": [
+    {
+      "text": "Herstellen onderbroken",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "Een herstart van Hohenheim onderbrak het herstellen van {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "workload_copy_lost": [
+    {
+      "text": "Verplaatsing verloren",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "Het verplaatsen van {$subject} naar een andere host werd onderbroken, en geen van beide hosts heeft nog een kopie",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "error_cause_exit_code": {
+    "text": "{$cause} (afsluitcode {$code})",
+    "scope": "attention_detail"
+  },
+  "error_cause_reason": {
+    "text": "{$cause}: {$reason}",
+    "scope": "attention_detail"
+  },
+  "error_cause_unknown": {
+    "text": "Voor deze fout is geen oorzaak vastgelegd; de console-uitvoer kan zeggen wat er gebeurde",
+    "scope": "attention_detail"
+  },
+  "apps_use_it": {
+    "text": ".match {$count :number}\none {{1 app gebruikt het}}\n* {{{$count} apps gebruiken het}}",
+    "scope": "attention_detail"
+  },
+  "app_database_down": {
+    "text": "{$name} kan zijn database {$database} niet gebruiken",
+    "scope": "attention_title"
+  },
+  "database_setup_failed": {
+    "text": "Database {$name} kon niet aangemaakt worden",
+    "scope": "attention_title"
+  },
+  "database_remove_failed": {
+    "text": "Database {$name} kon niet verwijderd worden",
+    "scope": "attention_title"
+  },
+  "database_stopped_after_error": {
+    "text": "Database {$name} is gestopt na een fout",
+    "scope": "attention_title"
+  },
+  "database_out_of_memory": {
+    "text": "Database {$name} had geen geheugen meer",
+    "scope": "attention_title"
+  },
+  "database_no_engine": {
+    "text": "Er is geen engine waarop het draait",
+    "scope": "attention_detail"
+  },
+  "database_host_unanswering": {
+    "text": "De host antwoordde niet bij de laatste controle, dus niemand weet of de engine draait",
+    "scope": "attention_detail"
+  },
+  "database_engine_stopped": {
+    "text": "De engine draait niet",
+    "scope": "attention_detail"
+  },
+  "database_engine_error": {
+    "text": "De engine is gestopt na een fout",
+    "scope": "attention_detail"
+  },
+  "database_engine_killed": {
+    "text": "De engine draait, maar werd gestopt omdat het geheugen op was",
+    "scope": "attention_detail"
+  },
+  "out_of_memory": [
+    {
+      "text": "Geheugen op",
+      "scope": "database_status"
+    },
+    {
+      "text": "geheugen op",
+      "scope": "database_status",
+      "case": "sentence"
+    }
+  ],
+  "unreachable": [
+    {
+      "text": "Niet bereikbaar",
+      "scope": "database_status"
+    },
+    {
+      "text": "niet bereikbaar",
+      "scope": "database_status",
+      "case": "sentence"
+    }
+  ]
 }

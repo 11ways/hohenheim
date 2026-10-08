@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.tls.AcmeService;
+import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.SniKeyManager;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
@@ -130,6 +131,7 @@ public class SiteDispatcher implements HttpHandler {
 
     // ACME service for Let's Encrypt challenge responses (nullable)
     private final AcmeService acmeService;
+    private final CertificateStore certificates;
 
     // Proxy-auth session store (owned by ProxyServer), threaded into per-site auth gates.
     private final SessionStore proxySessionStore;
@@ -152,8 +154,10 @@ public class SiteDispatcher implements HttpHandler {
     // The proxy route for unmatched hostnames, keyed by the fallback address it was built from.
     private volatile @Nullable FallbackRoute fallbackRoute;
 
-    public SiteDispatcher(AcmeService acmeService, SessionStore proxySessionStore) {
+    /** @param certificates the proxy's certificate store, whose loaded names the global force waits for */
+    public SiteDispatcher(AcmeService acmeService, SessionStore proxySessionStore, CertificateStore certificates) {
         this.acmeService = acmeService;
+        this.certificates = certificates;
         this.proxySessionStore = proxySessionStore;
         this.delayScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "site-dispatch-delay");
@@ -235,7 +239,7 @@ public class SiteDispatcher implements HttpHandler {
      * created).
      */
     public synchronized void reloadRoutes() {
-        RouteTable next = new RouteTableBuilder(proxySessionStore, tlsPassthroughRoutes).build();
+        RouteTable next = new RouteTableBuilder(proxySessionStore, tlsPassthroughRoutes, certificates).build();
         RouteTable previous;
         synchronized (generationLock) {
             previous = this.routes;
@@ -425,8 +429,10 @@ public class SiteDispatcher implements HttpHandler {
         // setting rides the same gate for MATCHED routes only: an unmatched hostname has no
         // content to protect and keeps its 404/fallback.
         // AIDEV-NOTE: the global setting waits for a working certificate on an exact name (RouteEntry.globalForce):
-        // forcing a name no certificate covers sent every visitor of a new domain to an error page. "Working" is an
-        // ACTIVE certificate ROW, not the loaded TLS store, so a store that empties still fails closed here.
+        // forcing a name no certificate covers sent every visitor of a new domain to an error page. "Working" is what
+        // this proxy's certificate store loaded (CertificateCoverage.workingNames), the rule every HTTPS display
+        // reads: an ACTIVE row whose material cannot load serves no handshake, so the setting leaves its name on plain
+        // HTTP. An address's own force_ssl is untouched by this and keeps failing closed.
         if (forcesHttps(entry) && !ProxyScheme.isEffectivelyHttps(exchange)) {
             if (httpsAvailable) {
                 redirectToHttps(exchange, hostname);

@@ -58,6 +58,17 @@ final class DashboardAttention {
     }
 
     /**
+     * A list's own band, folded like the dashboard's band without a checklist: an app's item caused by a database
+     * leaves the Databases band while that database's own item is shown there.
+     *
+     * @param items the tier's items, unfolded
+     * @return those a shown root does not hold back
+     */
+    static @NonNull List<AttentionItem> band(@NonNull List<AttentionItem> items) {
+        return fold(List.of(), items).attention();
+    }
+
+    /**
      * @param steps the checklist as {@link OnboardingCollector#collect(List)} built it from these items
      * @param items every attention item, unfolded
      */

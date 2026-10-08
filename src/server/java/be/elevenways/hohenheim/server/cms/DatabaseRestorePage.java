@@ -40,7 +40,7 @@ public final class DatabaseRestorePage implements RecordTab.Rendered<Row> {
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row record) {
         Conduit conduit = request.conduit();
         String name = record.get(DatabaseModel.NAME);
-        Map<String, Object> vars = new HashMap<>(DatabaseConnectionCard.facts(record));
+        Map<String, Object> vars = new HashMap<>(DatabaseConnectionCard.facts(record, conduit));
         vars.put("title", CmsSupport.pageTitle(conduit, "database_restore", name));
         vars.put("restoreUrl", HohenheimEndpoints.DATABASES_RESTORE
             .with(HohenheimEndpoints.DATABASE_NAME, name).toUrl());

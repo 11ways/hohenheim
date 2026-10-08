@@ -109,6 +109,11 @@ class InstanceAttentionTest {
                 .as("step 1: exactly the crashed instance surfaces, as an error linked to"
                     + " its console -- not the running one, not the stopped one")
                 .containsExactly("error /admin/instances/" + crashed + "/page/console");
+            List<AttentionItem> crashedItems = new ArrayList<>();
+            InstanceAttention.crashedInstances(crashedItems);
+            assertThat(crashedItems.get(0).detail().key())
+                .as("step 1: an error no cause was recorded for says so, never claiming a crash")
+                .isEqualTo("error_cause_unknown");
 
             // 2. Soft-deleting the crashed instance silences it: an item about a record in
             //    the trash is noise nobody can act on.

@@ -141,6 +141,11 @@ public final class DatabaseParts {
     private static final String RUNS_ON_COLUMN = "runs_on";
     private static final String USED_BY_COLUMN = "used_by";
     private static final String LAST_BACKUP_COLUMN = "last_backup";
+    /**
+     * What a database or engine is doing ({@link DatabaseVerdict}), where the stored lifecycle status used to read:
+     * "Active" only says provisioning finished. The stored status stays a hidden, filterable column.
+     */
+    private static final String STATE_COLUMN = "state";
     /** A newest dump older than the nightly 03:00 run plus half a day of slack means the backups stopped. */
     static final Duration BACKUP_OVERDUE_AFTER = Duration.ofHours(36);
 
@@ -375,7 +380,7 @@ public final class DatabaseParts {
                 .renderer(CmsTemplateIds.CELL_RECORD_LINKS).build())
             .column(ColumnSpec.virtual(LAST_BACKUP_COLUMN, listCopy("last_backup_column"))
                 .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
-            .column(ColumnSpec.fromField(DatabaseModel.STATUS).filterable().build())
+            .column(stateColumn())
             .column(ColumnSpec.fromField(DatabaseModel.DB_NAME).filterable().copyable().hidden().build())
             .column(ColumnSpec.fromField(DatabaseModel.SERVER_ID)
                 .relation(RelationPick.of(DatabaseModel.SERVER_ID, ServerModel.MODEL_ID).build()).hidden().build())
@@ -384,6 +389,7 @@ public final class DatabaseParts {
                 .relation(RelationPick.of(DatabaseModel.ENGINE_ID, DatabaseEngineModel.MODEL_ID).build())
                 .hidden().build())
             .column(ColumnSpec.fromField(DatabaseModel.EPHEMERAL).filterable().hidden().build())
+            .column(ColumnSpec.fromField(DatabaseModel.STATUS).filterable().hidden().build())
             .filter(FilterSpec.leaf(DatabaseModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(DatabaseModel.NAME)).build())
             .filter(FilterSpec.leaf(DatabaseModel.ENGINE, CoreTypes.EQUALS)
@@ -405,13 +411,15 @@ public final class DatabaseParts {
                 // The managed name and the name inside the engine are different strings; a connection string only
                 // ever carries the second.
                 .search(DatabaseModel.NAME, DatabaseModel.DB_NAME)
-                .widgets(scope -> AttentionCollector.band(AttentionCollector.databases()))
+                .widgets(scope -> AttentionCollector.band(DashboardAttention.band(AttentionCollector.databases())))
                 .computed(Objects.requireNonNull(table.column(RUNS_ON_COLUMN)),
                     (database, request) -> runsOnCell(database, request))
                 .computed(Objects.requireNonNull(table.column(USED_BY_COLUMN)),
                     (database, request) -> usedByCell(database, request))
                 .computed(Objects.requireNonNull(table.column(LAST_BACKUP_COLUMN)),
                     (database, request) -> lastBackupCell(database, request))
+                .computed(Objects.requireNonNull(table.column(STATE_COLUMN)),
+                    (database, request) -> DatabaseVerdict.ofDatabase(database).cell())
                 .rowLinkToTab(RecordOverview.SLUG)
                 // Board Databases: the shared engines the listed records live on, under the list.
                 .widgetsBelow(DatabaseParts::enginesCard)
@@ -455,7 +463,8 @@ public final class DatabaseParts {
             // explains why no ceilings are theirs to set), never which engine it is -- an engine name is another
             // tenant's neighbour list.
             .column(ColumnSpec.fromField(DatabaseModel.PLACEMENT).build())
-            .column(ColumnSpec.fromField(DatabaseModel.STATUS).filterable().build())
+            .column(stateColumn())
+            .column(ColumnSpec.fromField(DatabaseModel.STATUS).filterable().hidden().build())
             .build();
         return entry("manage_database")
             // A row of the tenant's sidebar, in the board's place (ManagePanel's sidebar note).
@@ -470,6 +479,8 @@ public final class DatabaseParts {
                 HohenheimAccess.VIEW))
             .list(ResourceList.rows(table).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()
                 .search(DatabaseModel.NAME, DatabaseModel.DB_NAME)
+                .computed(Objects.requireNonNull(table.column(STATE_COLUMN)),
+                    (database, request) -> DatabaseVerdict.ofDatabase(database).cell())
                 .build())
             .form(ResourceForm.<Row>of(form).build())
             // THE tenant allocation funnel, in one call: the namespaced name, the credentials, the placement, the
@@ -814,7 +825,8 @@ public final class DatabaseParts {
         if (Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL))) {
             return Microcopy.of("back_up_temporary").withFilter("scope", "database");
         }
-        if (!DatabaseModel.STATUS_ACTIVE.equals(database.get(DatabaseModel.STATUS))) {
+        // A dump runs inside the engine serving it: the verdict every surface reads, never the stored "active".
+        if (!DatabaseVerdict.ofDatabase(database).serves()) {
             return Microcopy.of("back_up_not_active").withFilter("scope", "database");
         }
         return null;
@@ -867,8 +879,7 @@ public final class DatabaseParts {
             String host = ServerModel.nameOf(ServerModel.canonicalServerId(engine.get(DatabaseEngineModel.SERVER_ID)));
             Microcopy holds = listCopy("engine_holds")
                 .withArg("databases", HohenheimCounts.of("databases", counts.getOrDefault(id, 0L)))
-                .withArg("state", Labels.inSentence(CmsSupport.enumValueLabel(DatabaseEngineModel.STATUS,
-                    String.valueOf((Object) engine.get(DatabaseEngineModel.STATUS)))));
+                .withArg("state", Labels.inSentence(DatabaseVerdict.ofEngine(engine).state().label()));
             facts.add(WidgetFact.link(
                 listCopy("engine_on_host").withArg("engine", CmsSupport.enumValueLabel(DatabaseEngineModel.ENGINE,
                         String.valueOf((Object) engine.get(DatabaseEngineModel.ENGINE)))).withArg("host", host)
@@ -912,6 +923,12 @@ public final class DatabaseParts {
         return new StateLineCell("done", BadgeVariant.SUCCESS, Microcopy.literal(ago), Microcopy.literal(size), null);
     }
 
+    /** The state column every database and engine list draws in place of the stored status. */
+    private static @NonNull ColumnSpec stateColumn() {
+        return ColumnSpec.virtual(STATE_COLUMN, listCopy("state_column"))
+            .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build();
+    }
+
     private static @NonNull Microcopy listCopy(@NonNull String key) {
         return Microcopy.of(key).withFilter("scope", "database_list");
     }
@@ -933,10 +950,11 @@ public final class DatabaseParts {
             .column(ColumnSpec.fromField(DatabaseEngineModel.SERVER_ID)
                 .relation(RelationPick.of(DatabaseEngineModel.SERVER_ID, ServerModel.MODEL_ID).build())
                 .build())
-            .column(ColumnSpec.fromField(DatabaseEngineModel.STATUS).filterable().build())
+            .column(stateColumn())
             .column(ColumnSpec.virtual(DATABASES_COLUMN,
                 Microcopy.of("databases").withFilter("scope", "database_engine")).build())
             .column(ColumnSpec.fromField(DatabaseEngineModel.MEMORY_LIMIT_MB).build())
+            .column(ColumnSpec.fromField(DatabaseEngineModel.STATUS).filterable().hidden().build())
             .filter(FilterSpec.leaf(DatabaseEngineModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(DatabaseEngineModel.NAME)).build())
             .filter(FilterSpec.leaf(DatabaseEngineModel.ENGINE, CoreTypes.EQUALS)
@@ -957,6 +975,8 @@ public final class DatabaseParts {
                 .search(DatabaseEngineModel.NAME)
                 .computed(Objects.requireNonNull(table.column(DATABASES_COLUMN)),
                     (engine, request) -> databaseCount(engine, request))
+                .computed(Objects.requireNonNull(table.column(STATE_COLUMN)),
+                    (engine, request) -> DatabaseVerdict.ofEngine(engine).cell())
                 .build())
             .form(ResourceForm.<Row>of(ENGINE_FORM)
                 .bindings(engineBindings())

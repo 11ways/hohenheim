@@ -1066,16 +1066,8 @@
     }
   ],
   "database_not_running": {
-    "text": "Attached database {$name} is not running",
-    "scope": "attention_detail"
-  },
-  "database_failed": {
-    "text": "Attached database {$name} failed: its engine stopped unexpectedly or its last operation did not complete",
-    "scope": "attention_detail"
-  },
-  "database_workload_dead": {
-    "text": "Attached database {$name} runs, but its engine was killed for running out of memory",
-    "scope": "attention_detail"
+    "text": "Database {$name} is not running",
+    "scope": "attention_title"
   },
   "site_unrouted": {
     "text": "Site {$name} is missing from routing",
@@ -1108,10 +1100,6 @@
   "access_rule_unusable": {
     "text": "An access rule cannot be evaluated and refuses every request it decides: {$detail}",
     "scope": "routing_problem"
-  },
-  "database_status": {
-    "text": "Attached database {$name} is {$status}",
-    "scope": "attention_detail"
   },
   "spamservice_not_ready": {
     "text": "The managed spam service is enabled but reports state \"{$state}\"",
@@ -5555,6 +5543,15 @@
     {
       "text": "Running",
       "scope": "app_health"
+    },
+    {
+      "text": "Running",
+      "scope": "database_status"
+    },
+    {
+      "text": "running",
+      "scope": "database_status",
+      "case": "sentence"
     }
   ],
   "unhealthy": {
@@ -5694,8 +5691,8 @@
     }
   ],
   "database_unreachable": {
-    "text": "Attached database {$name} is on a host that cannot be reached",
-    "scope": "attention_detail"
+    "text": "Database {$name} cannot be reached",
+    "scope": "attention_title"
   },
   "database_destroy_failed": {
     "text": "Destroy of '{$name}' could not verify its teardown: {$reason}. The record and its credentials are kept; retry, or use Force delete for an unreachable host.",
@@ -6563,10 +6560,6 @@
     {
       "text": "Serve an instance this deployment manages",
       "scope": "upstream_kind_description"
-    },
-    {
-      "text": "Instance {$name}",
-      "scope": "attention_title"
     }
   ],
   "note": {
@@ -7273,6 +7266,15 @@
     {
       "text": "Not running",
       "scope": "app_health"
+    },
+    {
+      "text": "Not running",
+      "scope": "database_status"
+    },
+    {
+      "text": "not running",
+      "scope": "database_status",
+      "case": "sentence"
     }
   ],
   "not_running_description": [
@@ -9540,10 +9542,6 @@
       "scope": "app_overview"
     }
   ],
-  "instance_crashed": {
-    "text": "The workload exited unexpectedly and was not restarted.",
-    "scope": "attention_detail"
-  },
   "instance_backup": {
     "text": "Backup of {$name} failed",
     "scope": "attention_title"
@@ -14195,6 +14193,15 @@
     {
       "text": "{$name} stopped after an error",
       "scope": "attention_title"
+    },
+    {
+      "text": "Stopped after an error",
+      "scope": "database_status"
+    },
+    {
+      "text": "stopped after an error",
+      "scope": "database_status",
+      "case": "sentence"
     }
   ],
   "not_running_detail": {
@@ -15098,6 +15105,10 @@
     {
       "text": "State",
       "scope": "host_list"
+    },
+    {
+      "text": "Status",
+      "scope": "database_list"
     }
   ],
   "state_failing": {
@@ -15977,5 +15988,191 @@
   "no_firewall_lane": {
     "text": "Hohenheim has no way to read the firewall of the machine its daemon runs on",
     "scope": "isolation_finding"
-  }
+  },
+  "workload_exited": [
+    {
+      "text": "Exited unexpectedly",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$subject} exited unexpectedly and was not restarted",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "workload_crash_looped": [
+    {
+      "text": "Kept exiting",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$subject} kept exiting, so automatic restarts wait for its next deploy",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "workload_start_failed": [
+    {
+      "text": "Could not start",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$subject} could not be started",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "workload_never_ready": [
+    {
+      "text": "Never ready",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$subject} started but never said it was ready",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "workload_stop_failed": [
+    {
+      "text": "Could not stop",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "Stopping {$subject} failed",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "workload_remove_failed": [
+    {
+      "text": "Could not remove",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "Removing {$subject} failed",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "workload_restore_failed": [
+    {
+      "text": "Restore failed",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "Restoring {$subject} failed partway, so it was left stopped",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "workload_restore_interrupted": [
+    {
+      "text": "Restore interrupted",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "A restart of Hohenheim interrupted the restore of {$subject}",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "workload_copy_lost": [
+    {
+      "text": "Move lost",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "Moving {$subject} to another host was interrupted, and neither host holds its copy",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "error_cause_exit_code": {
+    "text": "{$cause} (exit code {$code})",
+    "scope": "attention_detail"
+  },
+  "error_cause_reason": {
+    "text": "{$cause}: {$reason}",
+    "scope": "attention_detail"
+  },
+  "error_cause_unknown": {
+    "text": "No cause was recorded for this error; its console output may say what happened",
+    "scope": "attention_detail"
+  },
+  "apps_use_it": {
+    "text": ".match {$count :number}\none {{1 app uses it}}\n* {{{$count} apps use it}}",
+    "scope": "attention_detail"
+  },
+  "app_database_down": {
+    "text": "{$name} cannot use its database {$database}",
+    "scope": "attention_title"
+  },
+  "database_setup_failed": {
+    "text": "Database {$name} could not be set up",
+    "scope": "attention_title"
+  },
+  "database_remove_failed": {
+    "text": "Database {$name} could not be removed",
+    "scope": "attention_title"
+  },
+  "database_stopped_after_error": {
+    "text": "Database {$name} stopped after an error",
+    "scope": "attention_title"
+  },
+  "database_out_of_memory": {
+    "text": "Database {$name} ran out of memory",
+    "scope": "attention_title"
+  },
+  "database_no_engine": {
+    "text": "It has no engine to run on",
+    "scope": "attention_detail"
+  },
+  "database_host_unanswering": {
+    "text": "Its host did not answer its last check, so nobody knows whether its engine runs",
+    "scope": "attention_detail"
+  },
+  "database_engine_stopped": {
+    "text": "Its engine is not running",
+    "scope": "attention_detail"
+  },
+  "database_engine_error": {
+    "text": "Its engine stopped after an error",
+    "scope": "attention_detail"
+  },
+  "database_engine_killed": {
+    "text": "Its engine runs, but was killed for running out of memory",
+    "scope": "attention_detail"
+  },
+  "out_of_memory": [
+    {
+      "text": "Out of memory",
+      "scope": "database_status"
+    },
+    {
+      "text": "out of memory",
+      "scope": "database_status",
+      "case": "sentence"
+    }
+  ],
+  "unreachable": [
+    {
+      "text": "Cannot be reached",
+      "scope": "database_status"
+    },
+    {
+      "text": "cannot be reached",
+      "scope": "database_status",
+      "case": "sentence"
+    }
+  ]
 }

@@ -76,7 +76,7 @@ class DomainsListJourneyTest extends HohenheimTestBase {
 
             // 2. HTTPS: a name forced to HTTPS without a working certificate is the error page visitors get, a covered
             //    name works, an unforced name without one has none, and a pattern has no verdict.
-            var working = CertificateCoverage.activeNames();
+            var working = AppHealth.workingNames();
             assertThat(AppHealth.httpsOf(awayRow, false, working)).as("step 2: forced without a certificate")
                 .isEqualTo(CertCoverage.ERROR);
             assertThat(AppHealth.httpsOf(coveredRow, false, working)).as("step 2: covered by a working one")
@@ -168,6 +168,25 @@ class DomainsListJourneyTest extends HohenheimTestBase {
                 assertThat(served).as("step 8: the list says so beside the badge")
                     .contains("A certificate is stored for this name, but the proxy cannot serve it")
                     .doesNotContain("data-cert-status=\"" + CertCoverage.ACTIVE.key() + "\"");
+                // 9. Routing, the force-HTTPS latch and "Get a certificate" read that same rule
+                //    (CertificateCoverage.workingNames): the stored row covers nothing the proxy loaded, so the name is
+                //    offered a certificate of its own, and an armed address written under it is not forced.
+                assertThat(CertificateCoverage.workingNames())
+                    .as("step 9: the one rule leaves the unloadable row's name out").doesNotContain(covered);
+                assertThat(served).as("step 9: Get a certificate is offered for the name the row cannot serve")
+                    .contains(CertificateOperations.REQUEST_FOR_DOMAIN.id().toString().replace(':', '.') + "?ids="
+                        + coveredRow.get(SiteDomainModel.ID) + "&amp;");
+                Row armed = Models.get(SiteDomainModel.class).createEmptyRow();
+                armed.set(SiteDomainModel.SITE_ID, site.get(SiteModel.ID));
+                armed.set(SiteDomainModel.HOSTNAME, "www." + covered);
+                armed.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+                Models.get(SiteDomainModel.class).save(armed);
+                Row written = Models.get(SiteDomainModel.class).findById(armed.get(SiteDomainModel.ID));
+                assertThat((Boolean) written.get(SiteDomainModel.FORCE_SSL))
+                    .as("step 9: an address the unloadable row names is not forced to HTTPS").isFalse();
+                assertThat((Boolean) written.get(SiteDomainModel.FORCE_SSL_AUTO))
+                    .as("step 9: it stays armed for a certificate that works").isTrue();
+                Models.get(SiteDomainModel.class).delete(written);
             } finally {
                 ServerMain.adoptProxyServer(previous);
                 proxy.stop();

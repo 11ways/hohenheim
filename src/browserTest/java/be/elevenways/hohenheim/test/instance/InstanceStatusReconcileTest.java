@@ -138,6 +138,15 @@ class InstanceStatusReconcileTest {
                 .anySatisfy(item -> assertThat(item.target().toUrl())
                     .contains("/instances/" + id + "/"));
 
+            // 4c. And it says what happened (D12): the crash is recorded as the error's cause, and the item's detail is
+            //     that cause's sentence, never a guess from the status.
+            assertThat(activity(id, HohenheimActivityAction.WORKLOAD_EXITED.id().toString()))
+                .as("step 4c: the unwatched death is recorded as the error's cause").hasSize(1);
+            assertThat(attention)
+                .as("step 4c: the dashboard item's detail is that cause")
+                .anySatisfy(item -> assertThat(item.detail().key())
+                    .isEqualTo(HohenheimActivityAction.WORKLOAD_EXITED.happened().key()));
+
             // 5. THE HONESTY RULE, falsified against the very same disagreement: put the
             //    record back to running and make the daemon UNANSWERABLE rather than
             //    negative. The identical sweep must now move nothing at all.

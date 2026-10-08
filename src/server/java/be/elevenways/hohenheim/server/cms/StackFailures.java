@@ -18,8 +18,8 @@ import java.util.Map;
  * Why a stack reads "Failed": the newest deployment row's error, memoized per request.
  *
  * AIDEV-NOTE: the stacks LIST asks once per rendered row, so the newest deployment per
- * stack is snapshotted ONCE per request through the conduit's attribute scope (the
- * DeleteImpact shape) rather than queried per row. A conduit-less caller reads the table.
+ * stack is kept ONCE per request in the panel's one request memo ({@link CmsSupport#memo})
+ * rather than queried per row. A conduit-less caller reads the table.
  */
 final class StackFailures {
 
@@ -67,21 +67,9 @@ final class StackFailures {
         return latest;
     }
 
-    /** The request's memo, created on first use; null without a request or attributes. */
+    /** The request's memo, created on first use; null without a request (an attribute-less one keeps none). */
     private static @Nullable Map<Integer, Row> memo() {
         Conduit conduit = RouteScope.currentConduit();
-        if (conduit == null) {
-            return null;
-        }
-        try {
-            Map<Integer, Row> cached = conduit.getAttribute(LATEST);
-            if (cached == null) {
-                cached = new HashMap<>();
-                conduit.setAttribute(LATEST, cached);
-            }
-            return cached;
-        } catch (UnsupportedOperationException attributeless) {
-            return null;
-        }
+        return conduit == null ? null : CmsSupport.memo(conduit, LATEST, HashMap::new);
     }
 }

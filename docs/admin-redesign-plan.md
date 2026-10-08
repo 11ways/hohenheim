@@ -1433,3 +1433,80 @@ The framework defects sections 19, 25 and 29 left open, fixed at their causes in
   `TaskRunErrors.message` then `HohenheimViolations.storedText` in `AttentionCollector.failureOf`). zenit-cms's task
   screens title and list runs by the label and show the failure without its stack trace (folded under "Technical
   details").
+
+## 33. D12 decisions (fork D12, 2026-10-08)
+
+Places where the admin said two different things about one subject (D10b shots 02 and 03), each fixed at its cause.
+Section 32 was taken by CORE1 while this fork ran, so D12 is section 33.
+
+- Home: Hohenheim. `zemble home` answered NEW_MECHANISM in apps for the database verdict, the error cause and the
+  certificate rule, beside the existing homes it listed (`AppHealth`, `DatabaseAttention`, `CertificateCoverage`,
+  `CertificateStore`, `ForceSslLatch`); the cause rides zenit's existing `ActivityLog`, no column and no migration.
+- One database verdict: `DatabaseVerdict` (server/cms) reads the record's lifecycle while it is not active, then the
+  STORED state of the engine instance serving it (`InstanceStatusReconciler`'s column, the host's recorded probe
+  failure, `workload_killed_at`). The record's "active" only says provisioning finished, so it is no longer shown as a
+  status: the Databases list (both twins) and the Engines list draw a `state` cell from the verdict where `status`
+  was (the stored status stays a hidden, filterable column), and the Engines card, an app's Databases tab, the
+  connection card (Restore, tenant Credentials), the host page's workload badges and Back up now's availability read
+  it too. Its states are one vocabulary (`DatabaseVerdict.State`: label, badge, whether it serves, its attention title
+  and severity); the lifecycle members reuse the `database_status` labels.
+- One database item: the database is the root. `DatabaseAttention.failedDatabases` raises one item per database whose
+  state carries an attention title ("Database shop is not running", en/nl), with the verdict's reason, "Open the
+  database" to its front door and `heldBack` "2 apps use it"; it is `about` `AttentionSubject.database`. The per-app
+  items stay, reworded ("Shop cannot use its database shop", detail the verdict's reason), and are `causedBy` the
+  database, so the dashboard folds them; the Databases band folds too (`DashboardAttention.band`, the dashboard fold
+  without a checklist; the Hosts band stays unfolded). A database still being set up raises no root, so an app waiting
+  on it keeps its own item. The setup-failed record's item joined the same loop (title "Database shop could not be set
+  up"). Deleted copy: `database_failed`, `database_workload_dead`, `database_status` (attention_detail) and the
+  "Instance {$name}" attention title (replacement: the verdict's reasons and `app_database_down`);
+  `database_not_running` and `database_unreachable` became the root's titles.
+- One certificate rule: `CertificateCoverage.workingNames()` is what the running proxy's store loaded, the ACTIVE rows
+  only where no proxy runs in this process. `RouteTableBuilder` reads it for its own store (passed down from
+  `ProxyServer` through `SiteDispatcher`), so the global Force HTTPS no longer sends a name whose certificate cannot load
+  to HTTPS; "Get a certificate" is hidden only for a name a loaded certificate covers; `AppHealth.workingNames` is that
+  rule plus the listener half. `activeNames` is private now. The force-HTTPS latch fires when the proxy's store loads a
+  certificate (`ProxyServer.loadCertificatesAndRoutes`, which rebuilds the routes when it forced anything), and on an
+  ACTIVE row save only where no proxy runs in the process; an address written under a working certificate is forced
+  in the same write as before. A store that fails to load leaves names only the global setting forced on plain HTTP;
+  an address's own force_ssl still fails closed.
+- Error causes: every ERROR stamp names its cause. `InstanceOperationGuard.stamp` refuses ERROR; `stampError` (and the
+  ERROR branches of `stampObserved` and `clearMigration`) records the cause on the workload's activity as one of nine
+  new verbs (`HohenheimActivityAction` members with the `ErrorCause` fact: exited with its exit code, crash loop, could
+  not be started with the failure's message, never ready, could not stop, could not remove, restore failed, restore
+  interrupted by a restart, move lost). `WorkloadErrors.detailOf` reads the newest cause: the crash item's detail and
+  the workload verdict's detail are that verb's own sentence ("Shop could not be started: <message>", "Shop exited
+  unexpectedly and was not restarted (exit code 137)"), a tenant reading the sentence without the daemon's message,
+  and "No cause was recorded for this error; its console output may say what happened" where none is (log off or
+  pruned, a status written by hand). `instance_crashed` is deleted (replacement: those sentences). The reconciler keeps
+  its `reconciled` accountability row beside the cause row.
+- Memo: `StackFailures` keeps its request memo through `CmsSupport.memo` (its private attribute code is gone).
+- Walk (scratch server from the jar of build 885, fresh database, `/setup`; then by SQL, because hosts cannot be
+  admitted on this machine and a dedicated database needs no encrypted secret: Docker apps Shop (error, with a
+  `workload_start_failed` cause row) and Blog (stopped) using a dedicated MySQL database shop whose engine instance is
+  stopped, a site Shop on shop.d12.test (not forced) and an ACTIVE certificate row for it without material): shots
+  `docs/hohenheim-ux-mockups-2026-09-30/shots/d12/` (workspace repo). 01 the dashboard: one "Database shop is not
+  running" item ("Its engine is not running", "2 apps use it", Open the database) and "Shop stopped after an error"
+  reading "Shop could not be started: Docker refused ..."; 02 Databases: the band's one item, the row reading "Not
+  running" with why and Back up now offered dead; 03 Shop's Databases tab: "Not running"; 04 Addresses: shop.d12.test
+  "Not working" and "Get a certificate" offered (dead only because Let's Encrypt is off on the scratch install); 05
+  Shop's overview: the Recent card names the cause. A plain HTTP request for shop.d12.test answered the instance
+  upstream's own 503 ("No release is serving this application"), not the HTTPS refusal the global setting used to send.
+- Found, not fixed here: the Last backup cell still says "Back up now, or wait for the nightly backup" for a database
+  that cannot be backed up while it does not run; an app's Databases tab heads its first column "database" in lower
+  case and shows the engine token ("mysql"); the attention fold and the Recent card both show a failed start, but
+  the host's placement refusal leads the app overview ("Shop cannot start yet"), so the cause sentence shows on the
+  workload verdict only once the host takes apps. Other private per-request caches beside `CmsSupport.memo` remain
+  (`DeleteImpact`, `ServerParts` run counts, `DnsZoneParts`, `InstanceScheduleStepParts`, `SpamserviceRemoteStore`).
+- Proof: build run 885; test run 886 (28 classes, 88 tests: 85 passed; DatabasesPageJourneyTest's two journeys passed
+  every step and failed in their cleanup, a generated engine row being deletable only in its owner's scope, now
+  `OwnedInstances.inScopeUnchecked`; DatabaseDnsGitSurfacesBrowserTest's baseline still drew Move to a shared engine
+  as PRIMARY, a stale fact the journey already pins as DEFAULT, hand-edited) and run 887 (those two classes, 3
+  passed). Journeys: DatabasesPageJourneyTest (new `aDatabaseThatDoesNotRunIsOneProblemEverySurfaceReads`, steps
+  1-5; steps 1 and 8 of the old one), AttachedDatabaseAttentionTest (steps 3-6), DomainsListJourneyTest (new step 9),
+  ForceSslAvailabilityTest (new step 4b), InstancePowerAuditTest (new step 3b), InstanceStatusReconcileTest (new step
+  4c), InstanceAttentionTest (step 1), DatabaseDnsGitSurfacesBrowserTest (baseline hand-edited: the state columns, the
+  hidden status columns, Back up now dead with `back_up_not_active`), and AdminPagesTest, CertificateRequestJourneyTest,
+  NewDomainHttpsJourneyTest, DashboardAttentionJourneyTest, LandingDashboardSurfacesTest, AppOverviewJourneyTest,
+  AppsListJourneyTest, SiteRefusalVerdictJourneyTest, ServerOverviewTest, DatabaseAdminTest, SharedDatabaseEngineTest,
+  InstanceDatabaseSurfaceTest, TlsCertificateTest, ProxyListenerSupervisionTest, InstanceConsoleCrashRestartTest,
+  DashboardVocabularyDriftTest and the four microcopy gates.
