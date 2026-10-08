@@ -945,3 +945,49 @@ Found, not fixed here (each its own issue):
   812 (nine classes, one red: InstanceRecordRouteTest pinned the delegated verbs without Restart, updated) and the
   green run 814 (InstanceRecordRouteTest, ManagePanelJourneyTest, LandingDashboardSurfacesTest,
   InstanceSurfacesBrowserTest).
+
+## 24. D7f decisions (fork D7f, 2026-10-08)
+
+The /manage defects W9b2 left (section 23, "Found, not fixed here"), each fixed at its cause.
+
+- Host privacy: the tenant twin never speaks a host. `HostFields` (Hohenheim, one declaring home) names the fields of
+  each model that name or select a host: an instance's `server_id` and `migrate_target_id`, a database's `server_id`
+  and `engine_id` (one engine per host and engine kind, so its id selects a host). Every /manage twin over such a model
+  withholds them through zenit-cms `PanelResource.Builder.withholds` (new): a hidden field access for every viewer, so
+  the rule vocabulary, sort, search, facets, cells and the panel record source drop them in one rule.
+  `ManagePanel.declareEntries` refuses to boot a twin that does not withhold its model's host fields, and
+  ManagePanelJourneyTest fails while a /manage model relates to a host (`ServerModel`, `DatabaseEngineModel`) through
+  a field `HostFields` does not name. A tenant's `?q=server_id = N` is refused or ignored, never honoured, and a host
+  sort is ignored; the operator's own list still filters by host. The Apps store already left the host out.
+- "Open site" hides while the app is not serving: the verdict (`AppHealth`) now carries a serving half beside its
+  words, decided at each branch (an ATTENTION verdict can mean "cannot start" or "a path is open"), and Open site reads
+  it for sites and instances on both panels. This widens the 2026-10-06 rule (hidden while BROKEN) to an app that
+  cannot start, is stopped, failed its install or whose site answers an error page.
+- Who clears a placement refusal decides its words (`OwnedInstances.placementReason(refusal, delegated, viewer)`,
+  `mayClearPlacement`): on /manage an operator reads "Open the host in the admin panel and use Check and admit", a
+  tenant "Your operator has to clear this"; the admin panel keeps the gate's own sentence. The dead power buttons say
+  the same through zenit-cms's reader-aware `disabledWhen((row, access) -> ...)` (new; `PanelAction.disabledFor` now
+  takes the reader), because a state-only presentation could not name the reader. Check host's own offer asks the same
+  predicate.
+- Destroy has its door: the /manage instance twin places the verified destroy as its delete, the same operation and
+  dialog as the operator's. It is offered live to a holder of `destroy` and dead, in the gate's own
+  "instance_not_permitted", to everyone else, as the operation is everywhere: a hiding delete authority was tried and
+  dropped, because the API's delete runs through the admin entry and answered a bare 403 instead of the gate's 422
+  (InstanceApiTest). The "What you can do here" card leaves to the operator only what the reader cannot do: removal
+  without `destroy`, access without the Access tab's gate, and nothing when both are held.
+- The first-run checklist's "Put your first app online" is done only while an authored app runs or a website serves
+  its visitors (`AppHealth.anyOnline`, the verdict's serving half). This replaces the 2026-10-05 rule that any website,
+  even switched off, counted: a site whose workload cannot start ticked the step while nothing ran.
+- The /manage landing is headed "Your services" (the panel's title, `ManagePanel.TITLE`), its sidebar row still
+  Overview, through zenit-cms `PanelDashboard.heading()` (new). en and nl copy already existed; the new sentences
+  (`deploy_blocked_operator`, `operator_decides_access`) are in both.
+- Proof: zenit-cms runs 4 (red: two panels registered in one renderer test) and 6 (green: PartsFormListFactsTest,
+  DashboardPageRendererTest, RecordHeadJourneyTest, ChildListJourneyTest); Hohenheim runs 5 (red: the hiding delete
+  authority, InstanceApiTest; a guessed delete marker) and 7 (green, 21 tests: ManagePanelJourneyTest,
+  ManageScopeParityTest, InstancePowerAvailabilityJourneyTest, InstanceDatabaseSurfaceTest,
+  InstanceSurfacesBrowserTest, LandingDashboardSurfacesTest, OnboardingChecklistTest, DashboardRoleGatingTest,
+  InstanceRecordRouteTest, SiteRefusalVerdictJourneyTest, ManagePanelSurfacesBrowserTest, InstanceApiTest). The runs
+  ran in a sibling workspace at the pushed heads (`zenit-workspace-d7f`): the local zenit checkout holds another
+  session's unpushed commits and lacks the upstream ones zenit-forms and zenit-cms now compile against. Hand-edited
+  baselines: `instances.txt` (the tenant's delete row) and `landing-dashboards.txt` (the /manage title, the checklist
+  step TODO).

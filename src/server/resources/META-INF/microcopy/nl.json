@@ -10015,6 +10015,10 @@
     "text": "De host neemt op dit moment geen nieuwe workloads aan. Je beheerder moet dit oplossen.",
     "scope": "instance_overview"
   },
+  "deploy_blocked_operator": {
+    "text": "De host neemt op dit moment geen nieuwe workloads aan. Open de host in het beheerpaneel en gebruik Controleren en toelaten.",
+    "scope": "instance_overview"
+  },
   "used": {
     "text": "Gebruikt",
     "scope": "instance_overview"
@@ -15318,6 +15322,10 @@
   },
   "operator_decides_removal": {
     "text": "Deze app verwijderen.",
+    "scope": "instance_overview"
+  },
+  "operator_decides_access": {
+    "text": "Wijzigen wie er toegang toe heeft.",
     "scope": "instance_overview"
   },
   "you_can_look_share": {

@@ -52,6 +52,10 @@ import java.util.Map;
  * command, a VM's screen) follow the Console tab as routed pages out of the strip, snapshots and schedules became
  * sections of the Backups tab (their own tabs are gone), and the housekeeping tabs follow Backups. Only the
  * {@code tab} facts were re-recorded, each case's from its capture; no verb, column or filter fact moved.
+ *
+ * AIDEV-NOTE: intended difference, the tenant's delete door (D7f, 2026-10-08): the /manage twin offers the verified
+ * destroy to a holder of {@code destroy}, which the fixture's MANAGE grant implies, so the tenant's record case gains
+ * {@code verb DELETE} and the delete row, hand-written as the operator's own delete row. Nothing else moved.
  */
 class InstanceSurfacesBrowserTest extends HohenheimTestBase {
 

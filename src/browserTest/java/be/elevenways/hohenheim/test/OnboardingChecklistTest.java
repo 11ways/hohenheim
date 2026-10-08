@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.cms.OnboardingCollector;
@@ -11,6 +12,7 @@ import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -81,7 +83,7 @@ class OnboardingChecklistTest {
             assertThat(putOnlineStep().state())
                 .as("step 1: an empty install has nothing online").isEqualTo(OnboardingState.TODO);
 
-            // 2. A redirect or proxy put online is a website with no workload; it counts as something online.
+            // 2. A website with no address yet serves nobody: nothing is online.
             SiteModel sites = Models.get(SiteModel.class);
             Row site = sites.createEmptyRow();
             site.set(SiteModel.NAME, "Checklist redirect");
@@ -91,16 +93,31 @@ class OnboardingChecklistTest {
             site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
             site.set(SiteModel.ENABLED, true);
             sites.save(site);
+            Model domains = Models.get(SiteDomainModel.class);
+            Row domain = null;
             try {
                 assertThat(putOnlineStep().state())
-                    .as("step 2: an enabled website completes the put-online step").isEqualTo(OnboardingState.DONE);
+                    .as("step 2: a website without an address is not online").isEqualTo(OnboardingState.TODO);
 
-                // 3. Switching that website off later does not reopen the first-run step.
+                // 3. With an address it serves its visitors, though no workload runs: a redirect or a proxy put
+                //    online counts as something online.
+                domain = domains.createEmptyRow();
+                domain.set(SiteDomainModel.SITE_ID, site.get(SiteModel.ID));
+                domain.set(SiteDomainModel.HOSTNAME, "checklist-redirect.example.test");
+                domains.save(domain);
+                assertThat(putOnlineStep().state())
+                    .as("step 3: a serving website completes the put-online step").isEqualTo(OnboardingState.DONE);
+
+                // 4. Switched off, it serves nobody again, and the checklist says so (D7f: the step reflects an app
+                //    that serves or runs, never one that once existed).
                 site.set(SiteModel.ENABLED, false);
                 sites.save(site);
                 assertThat(putOnlineStep().state())
-                    .as("step 3: a switched-off website still counts as put online").isEqualTo(OnboardingState.DONE);
+                    .as("step 4: a switched-off website is not online").isEqualTo(OnboardingState.TODO);
             } finally {
+                if (domain != null) {
+                    domains.delete(domain);
+                }
                 sites.delete(site);
             }
         });

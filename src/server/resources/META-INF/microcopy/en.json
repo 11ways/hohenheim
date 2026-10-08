@@ -10015,6 +10015,10 @@
     "text": "Its host is not accepting new workloads right now. Your operator has to clear this.",
     "scope": "instance_overview"
   },
+  "deploy_blocked_operator": {
+    "text": "Its host is not accepting new workloads right now. Open the host in the admin panel and use Check and admit.",
+    "scope": "instance_overview"
+  },
   "used": {
     "text": "Used",
     "scope": "instance_overview"
@@ -15318,6 +15322,10 @@
   },
   "operator_decides_removal": {
     "text": "Removing this app.",
+    "scope": "instance_overview"
+  },
+  "operator_decides_access": {
+    "text": "Changing who has access to it.",
     "scope": "instance_overview"
   },
   "you_can_look_share": {

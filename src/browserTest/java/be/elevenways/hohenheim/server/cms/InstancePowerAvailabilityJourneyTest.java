@@ -4,12 +4,16 @@ import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -43,17 +47,26 @@ class InstancePowerAvailabilityJourneyTest extends HohenheimTestBase {
         assertThat(refusal.key()).as("step 1: it is the placement gate's own words").isEqualTo("host_not_admitted");
 
         // 2. The operator's Deploy and Restart are offered dead with exactly those words.
+        AccessContext operator = TenantConduits.operator();
         for (String verb : List.of(InstanceOperations.START.id().toString(), InstanceOperations.RESTART.id().toString())) {
             PanelAction<Row> action = action(InstanceActions.placedOperator(), verb);
-            assertThat(action.disabledFor(instance)).as("step 2: " + verb + " is dead with the host's reason")
-                .isNotNull();
-            assertThat(action.disabledFor(instance).key()).isEqualTo("host_not_admitted");
+            assertThat(action.disabledFor(instance, operator))
+                .as("step 2: " + verb + " is dead with the host's reason").isNotNull();
+            assertThat(action.disabledFor(instance, operator).key()).isEqualTo("host_not_admitted");
         }
 
-        // 3. On /manage the same Deploy is dead too, but its words never name the host.
+        // 3. On /manage the same Deploy is dead too, but its words never name the host: a tenant reads that the
+        //    operator has to clear it.
         PanelAction<Row> delegated = action(InstanceActions.placedDelegated(), InstanceOperations.START.id().toString());
-        assertThat(delegated.disabledFor(instance).key()).as("step 3: the tenant reads the host-free sentence")
-            .isEqualTo("deploy_blocked_delegated");
+        AccessContext tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(
+            ApiSupport.user("power-availability-tenant@hohenheim.local", "Power Tenant"), "Power Tenant")));
+        assertThat(delegated.disabledFor(instance, tenant).key())
+            .as("step 3: the tenant reads the host-free sentence").isEqualTo("deploy_blocked_delegated");
+
+        // 3b. The operator reading /manage is the one who clears it: their words name the fix, still host-free.
+        assertThat(delegated.disabledFor(instance, operator).key())
+            .as("step 3b: the operator on /manage reads how to clear it, never that their operator must")
+            .isEqualTo("deploy_blocked_operator");
 
         // 4. Once the instance sits on a host that takes it, every verb is live again.
         var local = HostFixtures.captureLocal();
@@ -68,7 +81,7 @@ class InstancePowerAvailabilityJourneyTest extends HohenheimTestBase {
             Row placed = Models.get(InstanceModel.class).findById(instance.get(InstanceModel.ID));
             assertThat(OwnedInstances.placementRefusal(placed)).as("step 4: an admitted host refuses nothing").isNull();
             assertThat(action(InstanceActions.placedOperator(), InstanceOperations.START.id().toString())
-                .disabledFor(placed)).as("step 4: Deploy is live").isNull();
+                .disabledFor(placed, operator)).as("step 4: Deploy is live").isNull();
         } finally {
             local.restore();
         }

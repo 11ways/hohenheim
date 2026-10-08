@@ -10,6 +10,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -248,11 +249,25 @@ public final class OwnedInstances {
     }
 
     /**
-     * @param delegated whether the reader is on a surface where hosts are operator inventory (the tenant panel, a
-     *                  non-operator caller): the host-naming refusal becomes the host-free sentence
+     * The words of a placement refusal for its reader: the gate's own on the operator surface, and on a surface where
+     * hosts are operator inventory a host-free sentence that names the fix to whoever may clear it (the operator, who
+     * may run Check and admit) and the operator to everyone else.
+     *
+     * @param delegated whether the reader is on a surface where hosts are operator inventory (the tenant panel)
+     * @param viewer    who reads it, null when nobody can be named (which reads as a tenant)
      * @return the refusal as the reader may see it
      */
-    public static @NonNull Microcopy placementReason(@NonNull Microcopy refusal, boolean delegated) {
-        return delegated ? Microcopy.of("deploy_blocked_delegated").withFilter("scope", "instance_overview") : refusal;
+    public static @NonNull Microcopy placementReason(@NonNull Microcopy refusal, boolean delegated,
+                                                     @Nullable AccessContext viewer) {
+        if (!delegated) {
+            return refusal;
+        }
+        return Microcopy.of(viewer != null && mayClearPlacement(viewer) ? "deploy_blocked_operator"
+            : "deploy_blocked_delegated").withFilter("scope", "instance_overview");
+    }
+
+    /** Whether this viewer may clear a placement refusal: run Check and admit on the host, an operator act. */
+    public static boolean mayClearPlacement(@NonNull AccessContext viewer) {
+        return HohenheimAccess.isAdmin(viewer);
     }
 }

@@ -60,9 +60,11 @@ public final class ManagePanel extends Panel {
 
     private static volatile boolean sourceRegistered = false;
 
+    /** The panel's title, "Your services": the shell names it and the landing is headed by it (board Manage-Home). */
+    static final Microcopy TITLE = Microcopy.of("title").withFilter("scope", "manage");
+
     public ManagePanel() {
-        super(HohenheimIds.id(SLUG), SLUG,
-            Microcopy.of("title").withFilter("scope", "manage"), ACCESS);
+        super(HohenheimIds.id(SLUG), SLUG, TITLE, ACCESS);
     }
 
     /** The one eligibility computation, held so a JVM that boots twice installs the same instance. */
@@ -181,6 +183,8 @@ public final class ManagePanel extends Panel {
             "globe", 50), DomainParts.SLUG, DnsRecordParts.SLUG, HohenheimSlugs.CERTIFICATES, HohenheimSlugs.ACCESS_LISTS);
         HohenheimPanel.addCluster(peers, HohenheimPanel.cluster("team", TEAM_CLUSTER, "users", 60), ProjectParts.SLUG,
             ProjectMembershipParts.SLUG);
+        // The host is operator inventory: no twin here may filter, sort, search or read by it.
+        HostFields.requireWithheld(peers);
         return peers;
     }
 

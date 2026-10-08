@@ -5,9 +5,7 @@ import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
-import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.host.HostAdmission;
@@ -138,19 +136,16 @@ public final class OnboardingCollector {
     }
 
     /**
-     * Done once something was put online: a running app, or any website (a redirect or a proxy put online needs no
-     * workload). "Put something online" creates and starts it in one flow, so the former "create an instance" and
-     * "deploy it" steps are this one step.
+     * Done once something is online: an app that runs, or a website whose verdict serves its visitors (a redirect or a
+     * proxy put online needs no workload). "Put something online" creates and starts it in one flow, so the former
+     * "create an instance" and "deploy it" steps are this one step.
      *
-     * AIDEV-NOTE: a website switched off still counts. This is a first-run checklist ("you know how to put something
-     * online"), not a health check: a switched-off app reads as off on its own row, and reopening this step told an
-     * operator who had done it to do it again. A trashed site does not count (the soft-delete scope).
+     * AIDEV-NOTE: D7f replaced "any website at all": a site whose workload cannot start ticked this step while nothing
+     * ran. The answer is the app verdict's own serving half ({@link AppHealth#anyOnline}), so the checklist and every
+     * app's health band agree on what online means.
      */
     private static OnboardingStep firstAppOnline() {
-        boolean online = Models.get(InstanceModel.class).find()
-            .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_RUNNING))
-            .count() > 0
-            || Models.get(SiteModel.class).find().count() > 0;
+        boolean online = AppHealth.anyOnline();
 
         return new OnboardingStep(
             online ? OnboardingState.DONE : OnboardingState.TODO,

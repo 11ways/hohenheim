@@ -95,8 +95,9 @@ import java.util.Objects;
  * column, the verified destroy as the delete, the placed instance verbs ({@link InstanceActions}) and the record tabs.
  *
  * AIDEV-NOTE: the /manage twin is a NARROWING, never a gate of its own: its rows are the instances the caller holds a
- * grant on ({@link TenantScopes#INSTANCES}), its form edits the name and the crash policy, it creates and deletes
- * nothing; the operations' gates and the model's write hooks judge every writer alike.
+ * grant on ({@link TenantScopes#INSTANCES}), its form edits the name and the crash policy, it creates nothing and its
+ * delete is the operator's verified destroy, live for a holder of {@code destroy} and dead for everyone else; the
+ * operations' gates and the model's write hooks judge every writer alike. It withholds the host ({@link HostFields}).
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -151,17 +152,8 @@ public final class InstanceParts {
                     (row, request) -> managedByCellOf(row))
                 .build())
             .form(form(createForm()).createDefaults(InstanceParts::createDefaults).build())
-            .writes(ResourceMutations.rows()
-                .create()
-                .update()
-                .delete(InstanceOperations.DELETE)
-                // The verified destroy reaches the host daemon and takes the host lease, which refuses to wait inside
-                // a write transaction; a rollback could not undo a removed container anyway.
-                .ownsWriteEnvelope(ResourceVerb.DELETE)
-                .beforeSave(InstanceParts::beforeSave)
-                .build())
-            .deleteConfirmation(DeleteConfirmation.<Row>of(deleteBody(null))
-                .forRow((instance, request) -> deleteBody(instance)))
+            .writes(writes(true))
+            .deleteConfirmation(deleteConfirmation())
             .authority(authority())
             .actions(InstanceActions.placedOperator())
             // AIDEV-NOTE: no contributions, on purpose (decided 2026-10-03): the tab set is DECLARED, so zenit-auth's
@@ -184,7 +176,7 @@ public final class InstanceParts {
 
     /**
      * @return the /manage twin: the instances the caller holds a grant on, through two visible columns; their name and
-     *         crash policy; no create and no delete
+     *         crash policy; no create, and the verified destroy, live for a holder of {@code destroy}
      */
     public static @NonNull PanelResource<Row> manage() {
         return entry("manage_instance")
@@ -195,6 +187,8 @@ public final class InstanceParts {
             // makes an unowned id read as MISSING rather than forbidden. Generated (product-tier-owned) instances stay
             // off the delegated surface too: their one UI is the owning record's own page.
             .scope(TenantScopes.INSTANCES)
+            // The host is operator inventory: never a rule, sort, search or value of this list.
+            .withholds(HostFields.of(InstanceModel.MODEL_ID))
             // NAV-ONLY (zero granted instances hide the empty list); the route stays scoped.
             //
             // AIDEV-NOTE: reachesAny, not "ids.isEmpty()" -- the walk's whole-model rows (the admin bypass here) cover
@@ -221,10 +215,8 @@ public final class InstanceParts {
                     ResourceFieldBinding.of(InstanceModel.NAME.getName(), FieldAccess.ALWAYS_EDITABLE),
                     ResourceFieldBinding.of(InstanceModel.CRASH_POLICY.getName(), FieldAccess.ALWAYS_EDITABLE)))
                 .build())
-            .writes(ResourceMutations.rows()
-                .update()
-                .beforeSave(InstanceParts::beforeSave)
-                .build())
+            .writes(writes(false))
+            .deleteConfirmation(deleteConfirmation())
             .authority(authority())
             // Power and the two artifact actions, placed operations gated by the record capability.
             .actions(InstanceActions.placedDelegated())
@@ -285,6 +277,33 @@ public final class InstanceParts {
                 && HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID, instance.get(InstanceModel.ID),
                     HohenheimAccess.CONFIG))
             .build();
+    }
+
+    /**
+     * Both twins' row writes: the update with its resize, the verified destroy as the delete, the operator's create.
+     *
+     * AIDEV-NOTE: no delete authority on purpose (D7f). The destroy operation offers its Delete DEAD, with the gate's
+     * own "instance_not_permitted", to a reader without {@code destroy}, so the button, a panel POST and the API's
+     * delete (which runs through the admin entry) answer with one decision and one text; a hiding authority answered
+     * the API with a bare 403 instead (InstanceApiTest).
+     */
+    private static @NonNull ResourceMutations<Row> writes(boolean creates) {
+        ResourceMutations.RowBuilder rows = ResourceMutations.rows();
+        if (creates) {
+            rows.create();
+        }
+        return rows.update()
+            .delete(InstanceOperations.DELETE)
+            // The verified destroy reaches the host daemon and takes the host lease, which refuses to wait inside a
+            // write transaction; a rollback could not undo a removed container anyway.
+            .ownsWriteEnvelope(ResourceVerb.DELETE)
+            .beforeSave(InstanceParts::beforeSave)
+            .build();
+    }
+
+    /** The delete dialog both twins show, naming the sites one record's destroy disables. */
+    private static @NonNull DeleteConfirmation<Row> deleteConfirmation() {
+        return DeleteConfirmation.<Row>of(deleteBody(null)).forRow((instance, request) -> deleteBody(instance));
     }
 
     /**

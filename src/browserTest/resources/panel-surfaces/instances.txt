@@ -486,6 +486,7 @@ case manage.instances.tenant.failed-install manage instances tenant v2
 admission - verdict=admitted
 record - found=true
 verb UPDATE
+verb DELETE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=true
 column name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=kind relation=false
 column kind at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
@@ -494,6 +495,7 @@ column install_state at=3 shown=false hidden=true sortable=false filterable=fals
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:start_instance at=1 verb=invoke band=inline style=DEFAULT disabled=deploy_blocked_delegated confirm= target=/{panel}/{entry}/invoke/hohenheim.start_instance?ids%3D{record}
 row hohenheim:restart_instance at=2 verb=invoke band=overflow style=DEFAULT disabled=deploy_blocked_delegated confirm=style:DEFAULT,title:restart%252Cscope%3Dinstance,body:restart_confirm%252Cscope%3Dinstance,confirm:restart%252Cscope%3Dinstance,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.restart_instance?ids%3D{record}
+row zenit:delete at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dinstance,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline name
 tab overview at=0 landing=true view=false
 tab console at=1 landing=false view=false
