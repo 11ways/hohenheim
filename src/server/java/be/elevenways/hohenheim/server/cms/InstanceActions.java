@@ -32,6 +32,7 @@ import be.elevenways.zenit.cms.server.page.CmsActionResultTranslator;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -69,7 +70,7 @@ final class InstanceActions {
      * declaration order inside the inline band, so the first declared verb leads.
      */
     static @NonNull List<PanelAction<Row>> placedOperator() {
-        return List.of(SiteActions.openSiteAction(OPEN_SITE, AppHealth::openUrlOfInstance, AppHealth.instances(false)),
+        return List.of(SiteActions.openSiteAction(OPEN_SITE, AppHealth::openUrlOfInstance, AppHealth::instanceServes),
             deployAction(false),
             stopAction(), restartAction(false), snapshotAction(), backupAction(),
             appUpdateAction(false), consoleCommandAction(), exposeAction(), rollbackAction(),
@@ -82,7 +83,7 @@ final class InstanceActions {
      * the app update and the console line.
      */
     static @NonNull List<PanelAction<Row>> placedDelegated() {
-        return List.of(SiteActions.openSiteAction(OPEN_SITE, AppHealth::openUrlOfInstance, AppHealth.instances(true)),
+        return List.of(SiteActions.openSiteAction(OPEN_SITE, AppHealth::openUrlOfInstance, AppHealth::instanceServes),
             deployAction(true), restartAction(true),
             stopAction(), snapshotAction(), backupAction(), appUpdateAction(true), consoleCommandAction());
     }
@@ -103,10 +104,10 @@ final class InstanceActions {
             .label(Microcopy.of("deploy").withFilter("scope", "instance"))
             .icon(Icon.of("play"))
             .hiddenWhen(row -> !InstanceKinds.isUserDeployable(row.get(InstanceModel.KIND)))
-            .disabledWhen(row -> {
+            .disabledWhen((row, access) -> {
                 Integer id = row.get(InstanceModel.ID);
                 Microcopy database = id == null ? null : InstanceDatabaseLinks.notReadyReason(id);
-                return database != null ? database : hostRefusal(row, delegated);
+                return database != null ? database : hostRefusal(row, delegated, access);
             })
             .build();
     }
@@ -145,7 +146,7 @@ final class InstanceActions {
             .label(Microcopy.of("restart").withFilter("scope", "instance"))
             .icon(Icon.of("rotate-right"))
             .inlineInRow(false)
-            .disabledWhen(row -> hostRefusal(row, delegated))
+            .disabledWhen((row, access) -> hostRefusal(row, delegated, access))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("restart").withFilter("scope", "instance"))
                 .body(Microcopy.of("restart_confirm").withFilter("scope", "instance"))
@@ -202,7 +203,7 @@ final class InstanceActions {
             .icon(Icon.of("stethoscope"))
             .inlineOnRecord(false)
             .inlineInRow(false)
-            .shownWhen((row, ctx) -> HohenheimAccess.isAdmin(ctx) && OwnedInstances.placementRefusal(row) != null)
+            .shownWhen((row, ctx) -> OwnedInstances.mayClearPlacement(ctx) && OwnedInstances.placementRefusal(row) != null)
             .route((row, request) -> CmsRoutes.subpage(request.panelSlug(), "servers",
                 ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID)), ServerOverviewState.SLUG))
             .build();
@@ -242,7 +243,7 @@ final class InstanceActions {
                     Microcopy.of("rollback_done").withFilter("scope", "instance")
                         .withArg("name", request.subject().get(InstanceModel.NAME))))
             .inlineInRow(false)
-            .disabledWhen(row -> hostRefusal(row, false))
+            .disabledWhen((row, access) -> hostRefusal(row, false, access))
             .description(Microcopy.of("rollback_hint").withFilter("scope", "instance"))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("rollback").withFilter("scope", "instance"))
@@ -259,10 +260,12 @@ final class InstanceActions {
      * disabledWhen here: a direct POST, the API and a schedule still meet the handler's own refusal, unchanged.
      *
      * @param delegated whether the button is drawn on /manage, where the host is operator inventory
+     * @param viewer    who reads the button, which decides whether its words name the fix or the operator
      */
-    private static @Nullable Microcopy hostRefusal(@NonNull Row row, boolean delegated) {
+    private static @Nullable Microcopy hostRefusal(@NonNull Row row, boolean delegated,
+                                                   @NonNull AccessContext viewer) {
         Microcopy refusal = OwnedInstances.placementRefusal(row);
-        return refusal == null ? null : OwnedInstances.placementReason(refusal, delegated);
+        return refusal == null ? null : OwnedInstances.placementReason(refusal, delegated, viewer);
     }
 
     /** Whether a site's instance upstream could serve this row's kind. */
@@ -278,7 +281,7 @@ final class InstanceActions {
                     Microcopy.of("installed_toast").withFilter("scope", "instance")
                         .withArg("name", request.subject().get(InstanceModel.NAME))))
             .inlineInRow(false)
-            .disabledWhen(row -> hostRefusal(row, false))
+            .disabledWhen((row, access) -> hostRefusal(row, false, access))
             .build();
     }
 
@@ -295,7 +298,7 @@ final class InstanceActions {
                         .withArg("name", request.subject().get(InstanceModel.NAME))))
             .inlineOnRecord(false)
             .inlineInRow(false)
-            .disabledWhen(row -> hostRefusal(row, false))
+            .disabledWhen((row, access) -> hostRefusal(row, false, access))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("reinstall").withFilter("scope", "instance"))
                 .body(Microcopy.of("reinstall_confirm").withFilter("scope", "instance"))
@@ -331,7 +334,7 @@ final class InstanceActions {
             .inlineOnRecord(false)
             .inlineInRow(false)
             .hiddenWhen(row -> !InstanceAppUpdates.hasUpdateScript(row))
-            .disabledWhen(row -> hostRefusal(row, delegated))
+            .disabledWhen((row, access) -> hostRefusal(row, delegated, access))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("app_update").withFilter("scope", "instance"))
                 .body(Microcopy.of("app_update_confirm").withFilter("scope", "instance"))

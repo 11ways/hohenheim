@@ -54,6 +54,12 @@ public final class ManageDashboard extends PanelDashboard {
         return CmsSupport.navHint("manage_dashboard");
     }
 
+    /** The sidebar row reads "Overview"; the page is headed by the panel's own title, as board Manage-Home heads it. */
+    @Override
+    public @NonNull Microcopy heading() {
+        return ManagePanel.TITLE;
+    }
+
     /** Put something online, for a tenant who may start something from the catalog. */
     @Override
     public @NonNull List<LinkActionState> headerLinks(@NonNull PanelRequest request) {

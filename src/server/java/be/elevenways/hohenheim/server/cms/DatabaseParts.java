@@ -443,6 +443,8 @@ public final class DatabaseParts {
             .navGroup(NavGroup.DEFAULT)
             .navOrder(30)
             .scope(TenantScopes.DATABASES)
+            // The host and the engine on it are operator inventory: never a rule, sort, search or value of this list.
+            .withholds(HostFields.of(DatabaseModel.MODEL_ID))
             // NAV-ONLY (zero granted databases hide the empty list); the route stays scoped. reachesAny, because an
             // id set cannot express every-record authority.
             .hasInScopeRecords(access -> HohenheimAccess.reachesAny(access, DatabaseModel.MODEL_ID,

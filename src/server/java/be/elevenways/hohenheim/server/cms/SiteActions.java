@@ -15,8 +15,6 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.resource.HealthTone;
-import be.elevenways.zenit.cms.common.resource.ResourceHealth;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.UrlTarget;
@@ -57,7 +55,7 @@ final class SiteActions {
 
     /** The operator panel's placed operations, in the order the legacy row actions had, then the health fixes. */
     static @NonNull List<PanelAction<Row>> operator() {
-        return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl, AppHealth.sites(false)), enableAction(),
+        return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl, AppHealth::siteServes), enableAction(),
             disableAction(), cloneAction(),
             rollbackAction(), protectPathAction(), fixHttpsAction(), stopForcingHttpsAction(), addAddressAction(),
             fixProtectionAction());
@@ -68,7 +66,7 @@ final class SiteActions {
      * stay operator acts.
      */
     static @NonNull List<PanelAction<Row>> delegated() {
-        return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl, AppHealth.sites(true)), enableAction(),
+        return List.of(openSiteAction(OPEN_SITE, AppHealth::openUrl, AppHealth::siteServes), enableAction(),
             disableAction(), protectPathAction(), fixHttpsAction(), stopForcingHttpsAction(), addAddressAction(),
             fixProtectionAction());
     }
@@ -77,22 +75,22 @@ final class SiteActions {
      * The app's own address in a new tab, the record heading's first action (the board's Open site), offered only
      * while visitors reach it: the instance's twin passes {@link AppHealth#openUrlOfInstance}.
      *
-     * AIDEV-NOTE: hidden whenever the record's own health verdict is BROKEN (decided by Jelle, 2026-10-06): a link to
-     * the error page visitors get offers nothing, and the health band beside it carries the fix. It reads the
-     * resource's verdict producer, never a second check of what "broken" means.
+     * AIDEV-NOTE: hidden while the app is not serving (decided by Jelle, 2026-10-06 for BROKEN, widened by D7f to an
+     * app that cannot start or is stopped): a link to the error page visitors get offers nothing, and the health band
+     * beside it carries the fix. It reads the verdict's own serving half (AppHealth), never a second check of what
+     * "serving" means, for the operator and the tenant alike.
      *
-     * @param health the verdict producer of the resource this action is placed on
+     * @param serves the serving half of the verdict of the resource this action is placed on
      */
     static @NonNull PanelAction<Row> openSiteAction(@NonNull Identifier id,
                                                     @NonNull Function<Row, @Nullable String> url,
-                                                    @NonNull ResourceHealth<Row> health) {
+                                                    @NonNull Predicate<Row> serves) {
         return PanelAction.<Row>link(id, ActionPlacement.ROW)
             .label(Microcopy.of("open_site").withFilter("scope", "app_overview"))
             .icon(Icon.of("up-right-from-square"))
             .inlineInRow(false)
             .openInNewTab()
-            .shownWhen((row, access) -> url.apply(row) != null
-                && health.read(row, access).tone() != HealthTone.BROKEN)
+            .shownWhen((row, access) -> url.apply(row) != null && serves.test(row))
             .route((row, request) -> new UrlTarget(Objects.requireNonNull(url.apply(row),
                 "Open site is shown only while the app has an address")))
             .build();

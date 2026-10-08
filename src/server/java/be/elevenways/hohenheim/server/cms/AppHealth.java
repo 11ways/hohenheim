@@ -59,21 +59,45 @@ final class AppHealth {
     static @NonNull ResourceHealth<Row> sites(boolean delegated) {
         return ResourceHealth.batch((sites, access) -> {
             SiteFacts facts = SiteFacts.of(sites);
-            return site -> siteVerdict(site, facts, delegated);
+            return site -> siteVerdict(site, facts, delegated, access).health();
         });
     }
 
     /** @param delegated whether the twin is /manage, whose row actions are a subset and whose words name no host */
     static @NonNull ResourceHealth<Row> instances(boolean delegated) {
         return ResourceHealth.batch((instances, access) -> {
-            Map<Integer, List<Row>> sitesByInstance = sitesServing(instances);
-            List<Row> serving = new ArrayList<>();
-            for (List<Row> sites : sitesByInstance.values()) {
-                serving.addAll(sites);
-            }
-            SiteFacts facts = SiteFacts.of(serving);
-            return instance -> instanceVerdict(instance, sitesByInstance, facts, delegated);
+            InstanceFacts facts = InstanceFacts.of(instances);
+            return instance -> instanceVerdict(instance, facts, delegated, access).health();
         });
+    }
+
+    /** Whether visitors reach this site: its verdict's serving half (Open site's condition). */
+    static boolean siteServes(@NonNull Row site) {
+        return siteVerdict(site, SiteFacts.of(List.of(site)), false, null).serving();
+    }
+
+    /** Whether this instance runs and serves what visitors reach of it: its verdict's serving half. */
+    static boolean instanceServes(@NonNull Row instance) {
+        return instanceVerdict(instance, InstanceFacts.of(List.of(instance)), false, null).serving();
+    }
+
+    /**
+     * Whether anything on this installation is online: an authored app that runs, or a website whose verdict serves
+     * its visitors (a redirect or a proxy needs no workload). The first-run checklist's "Put your first app online".
+     */
+    static boolean anyOnline() {
+        if (Models.get(InstanceModel.class).find().where(InstanceModel.liveAuthored())
+                .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_RUNNING)).count() > 0) {
+            return true;
+        }
+        List<Row> sites = Models.get(SiteModel.class).find().all();
+        SiteFacts facts = SiteFacts.of(sites);
+        for (Row site : sites) {
+            if (siteVerdict(site, facts, false, null).serving()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -86,102 +110,121 @@ final class AppHealth {
 
     // -- sites -----------------------------------------------------------------------
 
-    private static @NonNull RecordHealth siteVerdict(@NonNull Row site, @NonNull SiteFacts facts, boolean delegated) {
+    /**
+     * @param viewer who reads the words, null where only the serving half is asked
+     */
+    private static @NonNull Verdict siteVerdict(@NonNull Row site, @NonNull SiteFacts facts, boolean delegated,
+                                                @Nullable AccessContext viewer) {
         Integer siteId = site.get(SiteModel.ID);
         if (site.get(SiteModel.DELETED_AT) != null) {
-            return RecordHealth.unknown(copy("in_trash"));
+            return Verdict.notServing(RecordHealth.unknown(copy("in_trash")));
         }
         if (!Boolean.TRUE.equals(site.get(SiteModel.ENABLED))) {
-            return RecordHealth.attention(copy("switched_off")).detail(copy("switched_off_detail"))
-                .fixedBy(SiteOperations.ENABLE.id());
+            return Verdict.notServing(RecordHealth.attention(copy("switched_off")).detail(copy("switched_off_detail"))
+                .fixedBy(SiteOperations.ENABLE.id()));
         }
         List<Row> domains = facts.domains.getOrDefault(siteId, List.of());
         if (domains.isEmpty()) {
-            return RecordHealth.attention(copy("no_address")).detail(copy("no_address_detail"))
-                .fixedBy(SiteActions.ADD_ADDRESS);
+            return Verdict.notServing(RecordHealth.attention(copy("no_address")).detail(copy("no_address_detail"))
+                .fixedBy(SiteActions.ADD_ADDRESS));
         }
         List<RoutingProblem> problems = facts.problems.getOrDefault(siteId, List.of());
         for (RoutingProblem problem : problems) {
             // Its own refusal, never "does not answer": the proxy turns every visitor away and says why.
             if (problem.reason().refusesEveryVisitor()) {
-                return RecordHealth.broken(copy("error_page")).detail(ProxyAttention.reasonOf(problem));
+                return Verdict.notServing(RecordHealth.broken(copy("error_page"))
+                    .detail(ProxyAttention.reasonOf(problem)));
             }
         }
         boolean passthrough = SiteParts.tlsPassthrough(site);
         String forced = forcedWithoutCertificate(domains, facts.working, passthrough);
         if (forced != null) {
-            return RecordHealth.broken(copy("error_page"))
+            return Verdict.notServing(RecordHealth.broken(copy("error_page"))
                 .detail(copy("forced_without_certificate").withArg("host", forced))
-                .fixedBy(SiteActions.FIX_HTTPS, SiteOperations.STOP_FORCING_HTTPS.id());
+                .fixedBy(SiteActions.FIX_HTTPS, SiteOperations.STOP_FORCING_HTTPS.id()));
         }
         Row instance = facts.instances.get(site.get(SiteModel.INSTANCE_ID));
         if (instance != null) {
-            RecordHealth workload = workloadVerdict(instance, delegated);
+            RecordHealth workload = workloadVerdict(instance, delegated, viewer);
             if (workload != null) {
-                return workload;
+                return Verdict.notServing(workload);
             }
         }
         SiteHealth live = facts.live.get(siteId);
         if (live == SiteHealth.DOWN) {
-            return RecordHealth.broken(copy("error_page")).detail(copy("upstream_down"));
+            return Verdict.notServing(RecordHealth.broken(copy("error_page")).detail(copy("upstream_down")));
         }
         Row open = firstOpenPath(facts.paths.getOrDefault(siteId, List.of()));
         if (open != null) {
-            return RecordHealth.attention(copy("path_open").withArg("path", open.get(ProtectedPathModel.PATH)))
+            return Verdict.serving(RecordHealth.attention(copy("path_open")
+                    .withArg("path", open.get(ProtectedPathModel.PATH)))
                 .detail(copy("path_open_detail"))
-                .fixedBy(SiteActions.FIX_PROTECTION);
+                .fixedBy(SiteActions.FIX_PROTECTION));
         }
         if (!problems.isEmpty()) {
-            return RecordHealth.attention(copy("routed_in_part")).detail(ProxyAttention.reasonOf(problems.get(0)));
+            return Verdict.serving(RecordHealth.attention(copy("routed_in_part"))
+                .detail(ProxyAttention.reasonOf(problems.get(0))));
         }
         if (live == SiteHealth.DEGRADED) {
-            return RecordHealth.attention(copy("degraded")).detail(copy("degraded_detail"));
+            return Verdict.serving(RecordHealth.attention(copy("degraded")).detail(copy("degraded_detail")));
         }
-        return RecordHealth.ok(copy("live_at").withArg("address", liveAddress(domains, facts.working, passthrough)));
+        return Verdict.serving(RecordHealth.ok(copy("live_at")
+            .withArg("address", liveAddress(domains, facts.working, passthrough))));
     }
 
     /**
      * Why a site's workload keeps visitors out, or null when it serves: the site page says it in the site's words and
      * leaves the fix to the instance page, where the host check lives.
      */
-    private static @Nullable RecordHealth workloadVerdict(@NonNull Row instance, boolean delegated) {
+    private static @Nullable RecordHealth workloadVerdict(@NonNull Row instance, boolean delegated,
+                                                          @Nullable AccessContext viewer) {
         Microcopy refusal = OwnedInstances.placementRefusal(instance);
         if (refusal != null) {
             return RecordHealth.broken(copy("error_page"))
-                .detail(OwnedInstances.placementReason(refusal, delegated));
+                .detail(OwnedInstances.placementReason(refusal, delegated, viewer));
         }
         InstanceStatus status = InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
-        // servable() keeps a route through an ERROR (the handler answers its own failure page), which is exactly what a
-        // visitor experiences as an error page.
-        if (status == null || status.servable() && status != InstanceStatus.ERROR) {
+        if (status != null && workloadServes(status)) {
             return null;
         }
         return RecordHealth.broken(copy("error_page"))
             .detail(copy("workload_not_running").withArg("name", instance.get(InstanceModel.NAME)));
     }
 
+    /**
+     * Whether a workload in this status leaves visitors something to reach. servable() keeps a route through an ERROR
+     * (the handler answers its own failure page), which is exactly what a visitor experiences as an error page.
+     */
+    private static boolean workloadServes(@NonNull InstanceStatus status) {
+        return status.servable() && status != InstanceStatus.ERROR;
+    }
+
     // -- instances -------------------------------------------------------------------
 
-    private static @NonNull RecordHealth instanceVerdict(@NonNull Row instance,
-                                                         @NonNull Map<Integer, List<Row>> sitesByInstance,
-                                                         @NonNull SiteFacts facts, boolean delegated) {
+    /**
+     * @param viewer who reads the words, null where only the serving half is asked
+     */
+    private static @NonNull Verdict instanceVerdict(@NonNull Row instance, @NonNull InstanceFacts facts,
+                                                    boolean delegated, @Nullable AccessContext viewer) {
         String installError = instance.get(InstanceModel.INSTALL_ERROR);
         if (installError != null && !installError.isBlank()) {
-            return RecordHealth.broken(copy("install_failed")).detail(copy("install_failed_detail"));
+            return Verdict.notServing(RecordHealth.broken(copy("install_failed"))
+                .detail(copy("install_failed_detail")));
         }
         Microcopy refusal = OwnedInstances.placementRefusal(instance);
         if (refusal != null) {
             RecordHealth blocked = RecordHealth.attention(
                     copy("cannot_start").withArg("name", instance.get(InstanceModel.NAME)))
-                .detail(OwnedInstances.placementReason(refusal, delegated));
-            return delegated ? blocked : blocked.fixedBy(InstanceActions.CHECK_HOST);
+                .detail(OwnedInstances.placementReason(refusal, delegated, viewer));
+            return Verdict.notServing(delegated ? blocked : blocked.fixedBy(InstanceActions.CHECK_HOST));
         }
         InstanceStatus status = InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
         if (status == null) {
-            return RecordHealth.unknown(copy("status_unknown"));
+            return Verdict.notServing(RecordHealth.unknown(copy("status_unknown")));
         }
-        return switch (status) {
-            case RUNNING -> runningVerdict(sitesByInstance.get(instance.get(InstanceModel.ID)), facts, delegated);
+        RecordHealth health = switch (status) {
+            case RUNNING -> runningVerdict(facts.sitesByInstance.get(instance.get(InstanceModel.ID)), facts.sites,
+                delegated, viewer);
             case ERROR -> delegated
                 ? RecordHealth.broken(copy("stopped_after_error"))
                 : RecordHealth.broken(copy("stopped_after_error")).fixedBy(InstanceOperations.RESTART.id());
@@ -189,6 +232,8 @@ final class AppHealth {
                 .fixedBy(InstanceOperations.START.id());
             case STARTING, CAPTURING, RESTORING, MIGRATING -> RecordHealth.unknown(status.label());
         };
+        // A running workload whose site turns visitors away serves nothing, though it runs.
+        return new Verdict(health, workloadServes(status) && health.tone() != HealthTone.BROKEN);
     }
 
     // -- stacks ----------------------------------------------------------------------
@@ -221,7 +266,7 @@ final class AppHealth {
      * node registers the sites entry at all.
      */
     private static @NonNull RecordHealth runningVerdict(@Nullable List<Row> sites, @NonNull SiteFacts facts,
-                                                        boolean delegated) {
+                                                        boolean delegated, @Nullable AccessContext viewer) {
         RecordHealth attention = null;
         if (sites != null) {
             for (Row site : sites) {
@@ -229,7 +274,7 @@ final class AppHealth {
                         || facts.domains.getOrDefault(site.get(SiteModel.ID), List.of()).isEmpty()) {
                     continue;
                 }
-                RecordHealth verdict = spokenFor(siteVerdict(site, facts, delegated), site);
+                RecordHealth verdict = spokenFor(siteVerdict(site, facts, delegated, viewer).health(), site);
                 if (verdict.tone() == HealthTone.BROKEN) {
                     return verdict;
                 }
@@ -422,6 +467,37 @@ final class AppHealth {
 
     private static @NonNull Microcopy copy(@NonNull String key) {
         return Microcopy.of(key).withFilter("scope", "app_health");
+    }
+
+    /**
+     * One app's verdict and whether visitors reach it. The serving half is what Open site and the first-run checklist
+     * ask: a link to an app that cannot start, is stopped or answers an error page offers nothing.
+     *
+     * AIDEV-NOTE: serving is decided where the verdict is, at each branch, never re-derived from the tone: an ATTENTION
+     * verdict can mean "cannot start" (nothing served) or "a path is open" (served), and only the branch knows which.
+     */
+    private record Verdict(@NonNull RecordHealth health, boolean serving) {
+
+        static @NonNull Verdict serving(@NonNull RecordHealth health) {
+            return new Verdict(health, true);
+        }
+
+        static @NonNull Verdict notServing(@NonNull RecordHealth health) {
+            return new Verdict(health, false);
+        }
+    }
+
+    /** Everything a page of instance verdicts reads: the sites serving each, and those sites' own facts. */
+    private record InstanceFacts(@NonNull Map<Integer, List<Row>> sitesByInstance, @NonNull SiteFacts sites) {
+
+        static @NonNull InstanceFacts of(@NonNull List<Row> instances) {
+            Map<Integer, List<Row>> sitesByInstance = sitesServing(instances);
+            List<Row> serving = new ArrayList<>();
+            for (List<Row> sites : sitesByInstance.values()) {
+                serving.addAll(sites);
+            }
+            return new InstanceFacts(sitesByInstance, SiteFacts.of(serving));
+        }
     }
 
     /** Everything a page of site verdicts reads, read once for the page. */

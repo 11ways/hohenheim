@@ -225,10 +225,12 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         link.set(InstanceDatabaseModel.ENV_PREFIX, "WORDPRESS_DB");
         links.save(link);
         PanelAction<Row> deploy = deployAction();
+        AccessContext viewer = TenantConduits.operator();
         Model databases = Models.get(DatabaseModel.class);
 
         // 1. Still provisioning: the button is DEAD, naming the database and its state.
-        Microcopy provisioning = deploy.disabledFor(Models.get(InstanceModel.class).findById(waitingInstanceId));
+        Microcopy provisioning = deploy.disabledFor(Models.get(InstanceModel.class).findById(waitingInstanceId),
+            viewer);
         assertThat(provisioning)
             .as("step 1: deploy is offered dead while the database provisions")
             .isNotNull();
@@ -251,7 +253,7 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         database.set(DatabaseModel.STATUS, DatabaseModel.STATUS_FAILED);
         database.set(DatabaseModel.FAILURE_REASON, "image pull refused: no such tag");
         databases.save(database);
-        Microcopy failed = deploy.disabledFor(Models.get(InstanceModel.class).findById(waitingInstanceId));
+        Microcopy failed = deploy.disabledFor(Models.get(InstanceModel.class).findById(waitingInstanceId), viewer);
         assertThat(failed).as("step 3: a failed database is still a dead deploy").isNotNull();
         assertThat(failed.key()).isEqualTo("database_not_ready");
         assertThat(String.valueOf(failed.args().get("reason")))
@@ -271,7 +273,7 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         database.set(DatabaseModel.STATUS, DatabaseModel.STATUS_ACTIVE);
         database.set(DatabaseModel.FAILURE_REASON, null);
         databases.save(database);
-        assertThat(deploy.disabledFor(Models.get(InstanceModel.class).findById(waitingInstanceId)))
+        assertThat(deploy.disabledFor(Models.get(InstanceModel.class).findById(waitingInstanceId), viewer))
             .as("step 4: an active database refuses nothing")
             .isNull();
         Map<String, String> env = DatabaseEnvInjection.envForInstance(waitingInstanceId,

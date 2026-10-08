@@ -64,6 +64,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * slug address, a PanelDashboard only to its id token: P07, no slug alias) and the /manage landing's surface, which
  * W9b redrew on purpose ({@link #redrawn}).
  *
+ * AIDEV-NOTE: intended differences, hand-edited (D7f, 2026-10-08): the /manage landing's title is the panel's
+ * "Your services" (its nav row still reads Overview), and the operator's "Put your first app online" step is TODO
+ * with its Open link, because the fixture's only site has no address and so serves nobody. No other fact moved.
+ *
  * AIDEV-NOTE: the attention widget reads JVM-global inputs other classes of a lane change (decided 2026-10-03: pin
  * every input the test does not own, never compare host state). {@link #pinAttentionInputs} sets the settings and
  * servers and restores them after (the DNS zones follow this class's datasource by themselves); Docker health and

@@ -317,8 +317,9 @@ public final class InstanceOverview {
      *
      * AIDEV-NOTE: sharing is the Access tab's own gate ({@link GrantAdministration#mayAdministerRecordAccess}), never
      * MANAGE: every instance capability is delegable, so a VIEW holder may already hand VIEW on, and a card saying
-     * "who has access is up to the operator" sat beside the tab that lets them do it. Removing the app stays the
-     * operator's whatever the grant: the /manage instance entry offers no delete.
+     * "who has access is up to the operator" sat beside the tab that lets them do it. Removing the app is the
+     * destroy gate's answer, the one that makes the /manage entry's Delete live (the destroy operation's
+     * availability), so a listed Destroy always has its door.
      */
     private static @NonNull WidgetInstance yourPart(int instanceId, @NonNull AccessContext access,
                                                     @NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
@@ -339,11 +340,15 @@ public final class InstanceOverview {
             }
             can = String.join(", ", held);
         }
+        boolean removes = HohenheimAccess.destroyUnavailableReason(access, instanceId) == null;
         List<WidgetFact> facts = new ArrayList<>();
         facts.add(WidgetFact.of(text("you_can", "instance_overview", locales, resolver), can));
-        facts.add(WidgetFact.of(text("operator_decides", "instance_overview", locales, resolver),
-            text(shares ? "operator_decides_removal" : "operator_decides_detail", "instance_overview", locales,
-                resolver)));
+        String operators = removes && shares ? null
+            : removes ? "operator_decides_access" : shares ? "operator_decides_removal" : "operator_decides_detail";
+        if (operators != null) {
+            facts.add(WidgetFact.of(text("operator_decides", "instance_overview", locales, resolver),
+                text(operators, "instance_overview", locales, resolver)));
+        }
         return CardWidget.of(Microcopy.of("your_part").withFilter("scope", "instance_overview"),
             new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));
     }
