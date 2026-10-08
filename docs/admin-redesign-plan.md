@@ -1053,3 +1053,58 @@ Host page, admin attention band and the faulted site's band, each fixed at its c
   MicrocopyCatalogScopeTest). The slow live classes HostPreflightTest and LiveRemoteHostTest now assert the finding's
   evidence (`found().args()`, the finding member) instead of the retired English prose; they need a live host and
   did not run here.
+
+## 26. D8 decisions (fork D8, 2026-10-08)
+
+The admin dashboard showed one cause several times (D7e shot 04): an unadmitted host in two checklist steps and two
+attention items, and the backup destination in a step and an item. Each problem is now shown once, at its root, with
+its one action.
+
+- Home: Hohenheim. `zemble home` pointed at generic CMS routing (noise); the attention item, its collectors, the
+  checklist and the dashboard are Hohenheim's (`AttentionItem`, `AttentionCollector`, `OnboardingCollector`,
+  `AdminDashboard`), and zenit-cms has no attention item (its `RecordHealthReads.Notice` reads one entry's verdicts and
+  has no checklist or host relation). The cause joins the verdict as its third half beside D7f's serving half, in
+  `AppHealth.Verdict`, not on zenit-cms `RecordHealth`.
+- Checklist vs band: the checklist wins while it shows (board Empty-Dashboard draws open steps and no band; board Main,
+  without the checklist, draws the backup and the waiting host as attention). One declared relation:
+  `OnboardingStage` (common, one member per step) and `AttentionItem.stage`, the stage whose open step states the
+  item's condition. An open step presents the first item of its stage (`OnboardingStep.presenting`: the item's
+  detail, what it holds back, its target and worded action under the step's own title), and
+  `DashboardAttention.fold` leaves that item out of the band, asking the same `OnboardingCollector.presentedBy`. The
+  band's all-clear is not drawn under an open checklist (it would contradict the step).
+- Root cause: `AttentionItem.about` / `causedBy` (`AttentionSubject`, a model id and a record id). The site-down item
+  takes its cause from the app verdict (`AppHealth.Verdict.heldBy`, set at the two placement-refusal branches through
+  `OwnedInstances.placementHost`, which Check host's route now reads too); the host item names what it holds back
+  (`held_back`: "2 apps wait for it", from `AppHealth.heldBackByHost`, the instance verdicts' cause half). An item
+  caused by a shown root (in the band or presented by a step) folds; one whose root nobody shows stays. The app pages,
+  the Apps list and the Hosts list's band keep every verdict and item unfolded.
+- A host that is admitted (or cordoned) but still refuses the apps placed on it (a posture refusing tenant
+  workloads, an unaccepted posture, a required check that no longer passes) is their root too
+  (`HostAttention.hostsHoldingAppsBack`, "local cannot run apps yet", the gate's words, "Open local"): the walk found
+  its apps' items repeating the host's refusal with no root to fold under. A host holding nothing back raises nothing.
+- One step per stage: enrolment is done once a host is stored and names it ("local, Docker", board Empty-Dashboard),
+  admission is the one open host step (title "Let it run apps", done words "Its checks passed, so apps can run
+  here."); `checklist_host_pending` is deleted (replacement: the admission step presenting the host item). A done
+  backups step reads "Copies go to <target>." instead of the to-do sentence. The control-plane backup item reads the
+  board's words ("Backups stay on this machine").
+- Not changed: the checklist still retires only when every step is done. Board Main has no checklist while backups
+  are unconfigured ("Before your first app"), which would retire it at the first app online; that is a product
+  decision left open.
+- Walk (scratch server from the built jar, fresh database, `/setup`; two Docker apps with sites seeded by SQL on the
+  waiting local host): shots `docs/hohenheim-ux-mockups-2026-09-30/shots/d8/` (workspace repo). 01 fresh install: no
+  band, enrolment ticked, admission and backups each presenting their item. 02 two apps: "2 apps wait for it" on the
+  admission step, no site item in the band. 03 (found in the walk, before the admitted-host root): admitted with a
+  trusted-only posture, both sites repeated the host's refusal. 04 the same state after the fix: the step presents the
+  host's root ("Open local", 2 apps wait). 05 posture accepted through the UI: the required nftables check (sudo on
+  this machine) still refuses, in the gate's words, once. Real Check and admit cannot admit this machine (D7e's
+  nftables finding), so the admitted state was set by SQL; the fully placeable state is the journey's step 5.
+- Found, not fixed here: the host item's and step's target `CmsRoutes.detail(servers, id)` opens the host's
+  Configuration tab, not its Overview where Check and admit's result reads; the gate's preflight-posture refusal
+  ("Host 'local' last passed preflight under a different posture: the nftables check FAILED ...") is raw English with
+  a check token, not worded copy.
+- Proof: Hohenheim test runs 823 (green, 37 tests) and 827 (green, 37 tests, after the walk's admitted-host root and
+  journey step 4): DashboardAttentionJourneyTest (new), OnboardingChecklistTest, LandingDashboardSurfacesTest
+  (baseline hand-edited: the operator checklist's enrolment ticked, admission and backups presenting their items, no
+  band), AdminPagesTest (the waiting host is linked once, by the step or the band), DashboardRoleGatingTest,
+  SiteRefusalVerdictJourneyTest, HostsPageJourneyTest, InstancePowerAvailabilityJourneyTest, NavigationTest,
+  ManagePanelJourneyTest, DashboardVocabularyDriftTest and the four microcopy gates.

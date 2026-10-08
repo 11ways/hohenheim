@@ -25,8 +25,8 @@ import java.util.Objects;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The dashboard checklist's first step is done when a host is ADMITTED, not merely stored:
- * an enrolled-but-blocked host used to render the step green above a blocked second step.
+ * The dashboard checklist reads one step per stage: enrolment is done once a host is stored, admission once one
+ * accepts work, and neither repeats the other's sentence.
  */
 class OnboardingChecklistTest {
 
@@ -39,36 +39,33 @@ class OnboardingChecklistTest {
     }
 
     @Test
-    void theHostStepIsDoneOnlyOnceAHostIsAdmitted() {
+    void enrolmentAndAdmissionAreOneStepEach() {
         Db.run(datasource, () -> {
             ServerModel servers = Models.get(ServerModel.class);
             Row local = servers.findById(ServerModel.localServerId());
             String admission = local.get(ServerModel.ADMISSION);
             try {
-                // 1. The only host is enrolled but BLOCKED: the step is still to do, and its
-                //    detail says so in those words rather than reading as a fresh install.
+                // 1. The only host is enrolled but BLOCKED: enrolment is done and names the host; the
+                //    admission step alone stays open, so the waiting host is said once.
                 local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
                 servers.save(local);
                 List<OnboardingStep> blocked = OnboardingCollector.collect();
                 assertThat(blocked.get(0).state())
-                    .as("step 1: an enrolled but unadmitted host does not complete the step")
-                    .isEqualTo(OnboardingState.TODO);
+                    .as("step 1: an enrolled host completes the enrolment step")
+                    .isEqualTo(OnboardingState.DONE);
                 assertThat(blocked.get(0).detail().key())
-                    .as("step 1: and the detail names the pending admission")
-                    .isEqualTo("checklist_host_pending");
+                    .as("step 1: and the detail names the host, not the pending admission")
+                    .isIn("checklist_host_enrolled", "checklist_host_enrolled_more");
                 assertThat(blocked.get(1).isDone())
-                    .as("step 1: the admit step agrees").isFalse();
+                    .as("step 1: the admit step is the open one").isFalse();
 
-                // 2. Admitting the host completes the step, with the ordinary detail.
+                // 2. Admitting the host leaves enrolment done (admission's own done words are
+                //    DashboardAttentionJourneyTest's, on a host that is placeable, not merely admitted).
                 local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
                 servers.save(local);
-                List<OnboardingStep> admitted = OnboardingCollector.collect();
-                assertThat(admitted.get(0).state())
-                    .as("step 2: an admitted host completes the step")
+                assertThat(OnboardingCollector.collect().get(0).state())
+                    .as("step 2: enrolment stays done")
                     .isEqualTo(OnboardingState.DONE);
-                assertThat(admitted.get(0).detail().key())
-                    .as("step 2: with the plain detail")
-                    .isEqualTo("checklist_host_detail");
             } finally {
                 local.set(ServerModel.ADMISSION, admission);
                 servers.save(local);

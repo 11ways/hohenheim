@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
@@ -205,7 +204,7 @@ final class InstanceActions {
             .inlineInRow(false)
             .shownWhen((row, ctx) -> OwnedInstances.mayClearPlacement(ctx) && OwnedInstances.placementRefusal(row) != null)
             .route((row, request) -> CmsRoutes.subpage(request.panelSlug(), "servers",
-                ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID)), ServerOverviewState.SLUG))
+                OwnedInstances.placementHost(row), ServerOverviewState.SLUG))
             .build();
     }
 

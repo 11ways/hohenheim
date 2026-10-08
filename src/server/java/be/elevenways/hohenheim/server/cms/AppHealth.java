@@ -31,6 +31,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -73,8 +74,39 @@ final class AppHealth {
 
     /** This site's verdict in the operator's words, for a surface that names the site itself (the attention band). */
     static @NonNull RecordHealth siteHealth(@NonNull Row site) {
-        return siteVerdict(site, SiteFacts.of(List.of(site)), false, null).health();
+        return siteReading(site).health();
     }
+
+    /** This site's whole verdict in the operator's words: its health, serving half and cause (the attention band). */
+    static @NonNull Verdict siteReading(@NonNull Row site) {
+        return siteVerdict(site, SiteFacts.of(List.of(site)), false, null);
+    }
+
+    /**
+     * What each host holds back: the authored workloads whose verdict is that host's placement refusal (the verdict's
+     * cause half), keyed by host id.
+     */
+    static @NonNull Map<Integer, HeldBack> heldBackByHost() {
+        List<Row> instances = Models.get(InstanceModel.class).find().where(InstanceModel.liveAuthored()).all();
+        InstanceFacts facts = InstanceFacts.of(instances);
+        Map<Integer, HeldBack> held = new LinkedHashMap<>();
+        for (Row instance : instances) {
+            Verdict verdict = instanceVerdict(instance, facts, false, null);
+            if (verdict.heldBy() != null) {
+                held.merge(verdict.heldBy(), new HeldBack(1, verdict.health().detail()),
+                    (first, next) -> new HeldBack(first.apps() + 1, first.reason()));
+            }
+        }
+        return held;
+    }
+
+    /**
+     * The apps one host holds back.
+     *
+     * @param apps   how many
+     * @param reason why, in the first held app's verdict words (the placement gate's refusal)
+     */
+    record HeldBack(int apps, @Nullable Microcopy reason) {}
 
     /** Whether visitors reach this site: its verdict's serving half (Open site's condition). */
     static boolean siteServes(@NonNull Row site) {
@@ -152,9 +184,9 @@ final class AppHealth {
         }
         Row instance = facts.instances.get(site.get(SiteModel.INSTANCE_ID));
         if (instance != null) {
-            RecordHealth workload = workloadVerdict(instance, delegated, viewer);
+            Verdict workload = workloadVerdict(instance, delegated, viewer);
             if (workload != null) {
-                return Verdict.notServing(workload);
+                return workload;
             }
         }
         SiteHealth live = facts.live.get(siteId);
@@ -183,19 +215,19 @@ final class AppHealth {
      * Why a site's workload keeps visitors out, or null when it serves: the site page says it in the site's words and
      * leaves the fix to the instance page, where the host check lives.
      */
-    private static @Nullable RecordHealth workloadVerdict(@NonNull Row instance, boolean delegated,
-                                                          @Nullable AccessContext viewer) {
+    private static @Nullable Verdict workloadVerdict(@NonNull Row instance, boolean delegated,
+                                                     @Nullable AccessContext viewer) {
         Microcopy refusal = OwnedInstances.placementRefusal(instance);
         if (refusal != null) {
-            return RecordHealth.broken(copy("error_page"))
-                .detail(OwnedInstances.placementReason(refusal, delegated, viewer));
+            return Verdict.heldBy(OwnedInstances.placementHost(instance), RecordHealth.broken(copy("error_page"))
+                .detail(OwnedInstances.placementReason(refusal, delegated, viewer)));
         }
         InstanceStatus status = InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
         if (status != null && workloadServes(status)) {
             return null;
         }
-        return RecordHealth.broken(copy("error_page"))
-            .detail(copy("workload_not_running").withArg("name", instance.get(InstanceModel.NAME)));
+        return Verdict.notServing(RecordHealth.broken(copy("error_page"))
+            .detail(copy("workload_not_running").withArg("name", instance.get(InstanceModel.NAME))));
     }
 
     /**
@@ -223,7 +255,8 @@ final class AppHealth {
             RecordHealth blocked = RecordHealth.attention(
                     copy("cannot_start").withArg("name", instance.get(InstanceModel.NAME)))
                 .detail(OwnedInstances.placementReason(refusal, delegated, viewer));
-            return Verdict.notServing(delegated ? blocked : blocked.fixedBy(InstanceActions.CHECK_HOST));
+            return Verdict.heldBy(OwnedInstances.placementHost(instance),
+                delegated ? blocked : blocked.fixedBy(InstanceActions.CHECK_HOST));
         }
         InstanceStatus status = InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
         if (status == null) {
@@ -240,7 +273,7 @@ final class AppHealth {
             case STARTING, CAPTURING, RESTORING, MIGRATING -> RecordHealth.unknown(status.label());
         };
         // A running workload whose site turns visitors away serves nothing, though it runs.
-        return new Verdict(health, workloadServes(status) && health.tone() != HealthTone.BROKEN);
+        return new Verdict(health, workloadServes(status) && health.tone() != HealthTone.BROKEN, null);
     }
 
     // -- stacks ----------------------------------------------------------------------
@@ -492,20 +525,28 @@ final class AppHealth {
     }
 
     /**
-     * One app's verdict and whether visitors reach it. The serving half is what Open site and the first-run checklist
-     * ask: a link to an app that cannot start, is stopped or answers an error page offers nothing.
+     * One app's verdict, whether visitors reach it and what causes it. The serving half is what Open site and the
+     * first-run checklist ask: a link to an app that cannot start, is stopped or answers an error page offers nothing.
+     * The cause half is what the dashboard folds by: an app held back by its host is that host's problem first.
      *
-     * AIDEV-NOTE: serving is decided where the verdict is, at each branch, never re-derived from the tone: an ATTENTION
-     * verdict can mean "cannot start" (nothing served) or "a path is open" (served), and only the branch knows which.
+     * AIDEV-NOTE: serving and cause are decided where the verdict is, at each branch, never re-derived from the tone or
+     * the words: an ATTENTION verdict can mean "cannot start" (nothing served) or "a path is open" (served), and only
+     * the branch that asked the placement gate knows the host refused.
+     *
+     * @param heldBy the host whose placement refusal this verdict is, null when no host holds the app back
      */
-    private record Verdict(@NonNull RecordHealth health, boolean serving) {
+    record Verdict(@NonNull RecordHealth health, boolean serving, @Nullable Integer heldBy) {
 
         static @NonNull Verdict serving(@NonNull RecordHealth health) {
-            return new Verdict(health, true);
+            return new Verdict(health, true, null);
         }
 
         static @NonNull Verdict notServing(@NonNull RecordHealth health) {
-            return new Verdict(health, false);
+            return new Verdict(health, false, null);
+        }
+
+        static @NonNull Verdict heldBy(int host, @NonNull RecordHealth health) {
+            return new Verdict(health, false, host);
         }
     }
 

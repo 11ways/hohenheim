@@ -68,6 +68,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * "Your services" (its nav row still reads Overview), and the operator's "Put your first app online" step is TODO
  * with its Open link, because the fixture's only site has no address and so serves nobody. No other fact moved.
  *
+ * AIDEV-NOTE: intended differences, hand-edited (D8, 2026-10-08): the operator's checklist ticks enrolment (naming
+ * "local, Docker") and its open admission and backups steps present the attention items stating their stage (their
+ * words and worded action), so the band, holding nothing else, is not drawn under the open checklist.
+ *
  * AIDEV-NOTE: the attention widget reads JVM-global inputs other classes of a lane change (decided 2026-10-03: pin
  * every input the test does not own, never compare host state). {@link #pinAttentionInputs} sets the settings and
  * servers and restores them after (the DNS zones follow this class's datasource by themselves); Docker health and

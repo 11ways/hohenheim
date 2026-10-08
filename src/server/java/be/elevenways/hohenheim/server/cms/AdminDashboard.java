@@ -122,8 +122,11 @@ public final class AdminDashboard extends PanelDashboard {
 
         // The readiness checklist RETIRES ITSELF: no dismissed flag, it is simply absent once every step is done.
         // Before it, nothing said a host must be checked and admitted before anything can run, so the first session's
-        // natural arc (create -> deploy -> silence) had no visible way forward.
-        List<OnboardingStep> onboarding = OnboardingCollector.collect();
+        // natural arc (create -> deploy -> silence) had no visible way forward. It and the attention band are read
+        // together, so a problem an open step presents, or a root already holds back, is drawn once.
+        DashboardAttention.Reading reading = DashboardAttention.read();
+        List<OnboardingStep> onboarding = reading.checklist();
+        List<AttentionItem> attention = reading.attention();
         WidgetInstance checklist = OnboardingCollector.hasWork(onboarding)
             ? new WidgetInstance(HohenheimWidgets.ONBOARDING_CHECKLIST.id(), Map.of()).withData(onboarding)
             : null;
@@ -142,7 +145,6 @@ public final class AdminDashboard extends PanelDashboard {
                 lead.add(checklist);
             }
             widgets.add(section(columns(lead)));
-            List<AttentionItem> attention = AttentionCollector.collect();
             if (!attention.isEmpty()) {
                 widgets.add(section(new WidgetInstance(HohenheimWidgets.ATTENTION.id(), Map.of())
                     .withData(attention)));
@@ -153,8 +155,12 @@ public final class AdminDashboard extends PanelDashboard {
         if (checklist != null) {
             widgets.add(section(checklist));
         }
-        widgets.add(section(new WidgetInstance(HohenheimWidgets.ATTENTION.id(), Map.of())
-            .withData(AttentionCollector.collect())));
+        // AIDEV-NOTE: "All clear" under a checklist with an open step would contradict it: the step IS the problem
+        // (the band folded it there). The band's all-clear is drawn only when no checklist shows.
+        if (checklist == null || !attention.isEmpty()) {
+            widgets.add(section(new WidgetInstance(HohenheimWidgets.ATTENTION.id(), Map.of())
+                .withData(attention)));
+        }
         if (!tiles.isEmpty()) {
             widgets.add(section(columns(tiles)));
             // AIDEV-NOTE: the 30-day bans chart used to live beside these and is deliberately

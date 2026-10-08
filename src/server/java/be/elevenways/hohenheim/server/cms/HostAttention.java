@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
+import be.elevenways.hohenheim.AttentionSubject;
+import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.model.PortAllocationModel;
@@ -19,6 +21,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.byHost;
@@ -71,11 +74,22 @@ public final class HostAttention {
      * on the same roles that put the Servers list in the panel, so the link always exists.
      * CORDONED is deliberately absent: an operator drained that host on purpose, and a
      * permanent warning over a deliberate state is how a warning stops being read.
+     *
+     * Each item is the ROOT of what its host holds back: it names how many apps wait for it (the apps whose verdict is
+     * this host's placement refusal), and the dashboard folds their own items under it. It states the checklist's
+     * admission stage, so while that step is open the step presents it.
      */
     public static void hostsNotAdmitted(List<AttentionItem> items) {
+        hostsNotAdmitted(items, AppHealth.heldBackByHost());
+    }
+
+    /** @param heldBack what each host holds back ({@link AppHealth#heldBackByHost}), read once for the tier */
+    static void hostsNotAdmitted(List<AttentionItem> items, Map<Integer, AppHealth.HeldBack> heldBack) {
         for (Row server : Models.get(ServerModel.class).find()
                 .where(ServerModel.ADMISSION.eq(ServerModel.ADMISSION_BLOCKED))
                 .all()) {
+            int id = server.get(ServerModel.ID);
+            AppHealth.HeldBack held = heldBack.get(id);
             List<Microcopy> failed = failedRequiredChecks(server);
             items.add(item(AttentionSeverity.WARNING, "server",
                 copy("host_not_admitted", "attention_title",
@@ -84,9 +98,43 @@ public final class HostAttention {
                     ? copy("host_not_admitted", "attention_detail")
                     : copy("host_checks_failed", "attention_detail",
                         "count", failed.size(), "checks", failed),
-                CmsRoutes.detail(ADMIN, "servers", server.get(ServerModel.ID)),
-                action("act_check_admit")));
+                CmsRoutes.detail(ADMIN, "servers", id),
+                action("act_check_admit"))
+                .about(AttentionSubject.host(id), heldBackText(held))
+                .forStage(OnboardingStage.ADMISSION));
         }
+    }
+
+    /**
+     * Admitted or cordoned hosts that still refuse the apps placed on them (a posture that refuses tenant workloads, a
+     * stale contact, a failed re-check): the ROOT those apps' own items fold under, in the gate's words.
+     *
+     * AIDEV-NOTE: without it the apps' items had no root to fold under and each repeated the host's refusal (D8 walk:
+     * a trusted-only host under two tenant-kind apps). A blocked host is {@link #hostsNotAdmitted}'s, and a host that
+     * holds nothing back raises nothing: a cordon or a posture is a deliberate state until an app waits on it.
+     *
+     * @param heldBack what each host holds back ({@link AppHealth#heldBackByHost}), read once for the tier
+     */
+    static void hostsHoldingAppsBack(List<AttentionItem> items, Map<Integer, AppHealth.HeldBack> heldBack) {
+        for (Map.Entry<Integer, AppHealth.HeldBack> entry : heldBack.entrySet()) {
+            Row server = Models.get(ServerModel.class).findById(entry.getKey());
+            if (server == null || ServerModel.ADMISSION_BLOCKED.equals(server.get(ServerModel.ADMISSION))) {
+                continue;
+            }
+            int id = entry.getKey();
+            items.add(item(AttentionSeverity.WARNING, "server",
+                copy("host_not_admitted", "attention_title", "name", server.get(ServerModel.NAME)),
+                entry.getValue().reason(),
+                CmsRoutes.detail(ADMIN, "servers", id),
+                action("act_open_app", "name", server.get(ServerModel.NAME)))
+                .about(AttentionSubject.host(id), heldBackText(entry.getValue()))
+                .forStage(OnboardingStage.ADMISSION));
+        }
+    }
+
+    /** @return "2 apps wait for it", null when the host holds nothing back */
+    private static @Nullable Microcopy heldBackText(AppHealth.@Nullable HeldBack held) {
+        return held == null ? null : copy("held_back", "attention_detail", "count", held.apps());
     }
 
     /** @return the host's required preflight checks that did not pass, in words, in the stored report's order */
