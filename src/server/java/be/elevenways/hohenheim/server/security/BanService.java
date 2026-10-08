@@ -442,7 +442,7 @@ public final class BanService {
                 .where(BanModel.IP.eq(normalized))
                 .where(BanModel.ACTIVE.eq(true))
                 .all()) {
-            if (!isExpired(row) && BanScope.fromToken(row.get(BanModel.SCOPE)) == scope) {
+            if (BanModel.blockedNow(row, Now.instant()) && BanScope.fromToken(row.get(BanModel.SCOPE)) == scope) {
                 return row;
             }
         }
@@ -483,7 +483,7 @@ public final class BanService {
         BanModel bans = Models.get(BanModel.class);
         List<Row> result = new ArrayList<>();
         for (Row row : bans.find().where(BanModel.ACTIVE.eq(true)).all()) {
-            if (!isExpired(row)) {
+            if (BanModel.blockedNow(row, Now.instant())) {
                 result.add(row);
             }
         }
@@ -749,11 +749,6 @@ public final class BanService {
             refusalLogTimes.clear();
         }
         Blast.log("BANS: over-threshold IP", ip, "is protected and stays UNENFORCED -", reason);
-    }
-
-    private static boolean isExpired(@NonNull Row ban) {
-        Instant expires = ban.get(BanModel.EXPIRES_AT);
-        return expires != null && expires.isBefore(Now.instant());
     }
 
     private static @Nullable String truncate(@Nullable String value, int max) {

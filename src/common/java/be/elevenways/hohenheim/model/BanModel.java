@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.security.BanScope;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -13,7 +15,12 @@ import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.orm.query.rules.VariableDefinition;
 import be.elevenways.zenit.common.ui.ColorHue;
+import org.checkerframework.checker.nullness.qual.NonNull;
+
+import java.time.Instant;
 
 /**
  * An IP ban: auto-created by the threat scorer or the spamservice reputation
@@ -88,6 +95,43 @@ public class BanModel extends Model {
     static {
         // A ban is an address; the reason is the subtext everywhere it renders.
         SCHEMA.setDisplayFields(IP);
+    }
+
+    /** The rule variable of {@link #blockedNow(Instant)}: the list's "Blocked now" filter and the dashboard tile. */
+    public static final String BLOCKED_NOW = "blocked_now";
+
+    /**
+     * Whether this ban blocks its address NOW: enforced, never lifted, and not past its expiry.
+     *
+     * AIDEV-NOTE: THE definition the list's filter ({@link #blockedNow(Instant)}), the state cell and Lift's
+     * availability read. The stored {@code active} flag alone is not it: the expiry sweep clears it only on its next
+     * run, so an expired ban still reads active until then (DEP9: "Blocked now" listed a ban whose state read
+     * Expired, with Lift offered).
+     *
+     * @param now the instant asked about, read through {@code Now} by every caller
+     */
+    public static boolean blockedNow(@NonNull Row ban, @NonNull Instant now) {
+        Instant expires = ban.get(EXPIRES_AT);
+        return Boolean.TRUE.equals(ban.get(ACTIVE)) && ban.get(LIFTED_AT) == null
+            && (expires == null || expires.isAfter(now));
+    }
+
+    /**
+     * {@link #blockedNow(Row, Instant)} as a query: two-valued, so its negation keeps the rows with a null column.
+     *
+     * @param now the instant asked about, read through {@code Now} by every caller
+     */
+    public static @NonNull Criteria blockedNow(@NonNull Instant now) {
+        return Criteria.and(ACTIVE.isNotNull(), ACTIVE.eq(true), LIFTED_AT.isNull(),
+            Criteria.or(EXPIRES_AT.isNull(), Criteria.and(EXPIRES_AT.isNotNull(), EXPIRES_AT.gt(now))));
+    }
+
+    /** @return the {@link #BLOCKED_NOW} rule variable, compiled against the clock at query time */
+    public static @NonNull VariableDefinition blockedNowVariable() {
+        return VariableDefinition.bool(BLOCKED_NOW, (call, context) -> call.truth()
+                ? blockedNow(Now.instant()) : Criteria.not(blockedNow(Now.instant())))
+            .label(Microcopy.of("blocked_now").withFilter("scope", "ban"))
+            .build();
     }
 
     @Override

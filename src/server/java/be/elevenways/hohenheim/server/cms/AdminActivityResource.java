@@ -16,8 +16,10 @@ import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.cms.server.resource.ActivityAdmin;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ActivityRules;
 import be.elevenways.zenit.common.orm.activity.ActivityText;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.query.rules.RuleText;
 import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.zenit.common.security.AccountabilityOrigin;
@@ -126,6 +128,20 @@ public final class AdminActivityResource {
             text.append(" and ").append(ActivityModel.MODEL.getName()).append(" not in ").append(quotedList(internal));
         }
         return RuleText.parse(text.toString()).require();
+    }
+
+    /**
+     * What a person did to one record: the host page's recent activity.
+     *
+     * AIDEV-NOTE: a host's bookkeeping writes (the hourly heartbeat HostProbe stamps) run under
+     * ActivityLog.suppressed since W5b, but the rows they wrote before stay in the log, and a host nobody touches kept
+     * them as its ten newest rows forever (DEP9: Starfleet's local host, hourly "System changed local Server" rows
+     * up to the W5b deploy). Reading what a person did leaves those rows in the log and off the card.
+     *
+     * @return the rule tree selecting what a person did to this record
+     */
+    public static @NonNull Condition peopleOnlyFor(@NonNull Model model, @NonNull Object recordId) {
+        return Condition.all(ActivityRules.forRecord(model, recordId), peopleOnly());
     }
 
     /** @return the tokens as a RuleText list literal ({@code ["a", "b"]}) */

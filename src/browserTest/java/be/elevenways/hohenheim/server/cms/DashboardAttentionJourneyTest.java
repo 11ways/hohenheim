@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
+import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -18,6 +19,7 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -25,6 +27,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -157,7 +160,27 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(mine(admitted.attention())).as("step 5: each site is its own problem again").hasSize(2)
                 .allMatch(item -> item.causedBy() == null);
 
-            // 6. A root the band draws (a second host waiting while one is admitted, board Main) folds what it holds
+            // 6. Its memory reading goes stale (measured 40 days ago, DEP9's Starfleet host): the chooser refuses it,
+            //    so admission is open again and its step presents the host's item, with the fresh check that clears it
+            //    and the way to the host's Overview; the band does not repeat it.
+            HostPreflight.store(ServerModel.MODE_LOCAL, new HostPreflight.Report(List.of(),
+                Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024), true,
+                Now.instant().minus(Duration.ofDays(40)), null));
+            DashboardAttention.Reading stale = DashboardAttention.read();
+            OnboardingStep reopened = step(stale, OnboardingStage.ADMISSION);
+            assertThat(reopened.state()).as("step 6: a host the gate refuses does not complete admission")
+                .isEqualTo(OnboardingState.BLOCKED);
+            AttentionItem staleRoot = rootOf(AttentionCollector.collect(), localHost);
+            assertThat(staleRoot).as("step 6: the host is raised").isNotNull();
+            assertThat(staleRoot.detail().key()).as("step 6: for its stale reading, in the gate's words")
+                .isEqualTo("host_capacity_unproven");
+            assertThat(say(reopened.detail())).as("step 6: the step presents it").isEqualTo(say(staleRoot.detail()));
+            assertThat(say(reopened.action())).as("step 6: with a fresh check").isEqualTo("Check again");
+            assertThat(reopened.target().toUrl()).as("step 6: leading to the host's Overview")
+                .isEqualTo("/admin/servers/" + local + "/open");
+            assertThat(rootOf(stale.attention(), localHost)).as("step 6: the band does not repeat it").isNull();
+
+            // 7. A root the band draws (a second host waiting while one is admitted, board Main) folds what it holds
             //    back too; a consequence whose root nobody shows stays, so a fold never hides a problem.
             AttentionSubject other = AttentionSubject.host(local + 1000);
             AttentionItem root = new AttentionItem(AttentionSeverity.WARNING, "server", Microcopy.literal("root"),
@@ -167,7 +190,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             AttentionItem orphan = new AttentionItem(AttentionSeverity.ERROR, "globe", Microcopy.literal("orphan"),
                 null, null, null).causedBy(AttentionSubject.host(local + 2000));
             assertThat(DashboardAttention.fold(admitted.checklist(), List.of(root, held, orphan)).attention())
-                .as("step 6: the root stays, its consequence folds, a rootless consequence stays")
+                .as("step 7: the root stays, its consequence folds, a rootless consequence stays")
                 .containsExactly(root, orphan);
         } finally {
             ServerMain.adoptProxyServer(previous);

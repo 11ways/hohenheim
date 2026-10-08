@@ -1,10 +1,11 @@
 package be.elevenways.hohenheim.security;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
+import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
 
@@ -26,18 +27,16 @@ public record BanStateCell(@NonNull String token) {
     public static final String EXPIRED = "expired";
 
     /**
-     * Derive the state from the stored facts; a lift stamp beats everything, so a ban
-     * lifted after its expiry still reads as the operator's act.
+     * Derive the state from the stored facts; a lift stamp beats everything, so a ban lifted after its expiry still
+     * reads as the operator's act, and ACTIVE is exactly {@link BanModel#blockedNow(Row, Instant)}.
+     *
+     * @param now the instant asked about, read through {@code Now}
      */
-    public static @NonNull BanStateCell of(boolean active, @Nullable Instant liftedAt,
-                                           @Nullable Instant expiresAt, @NonNull Instant now) {
-        if (liftedAt != null) {
+    public static @NonNull BanStateCell of(@NonNull Row ban, @NonNull Instant now) {
+        if (ban.get(BanModel.LIFTED_AT) != null) {
             return new BanStateCell(LIFTED);
         }
-        if (!active || (expiresAt != null && !expiresAt.isAfter(now))) {
-            return new BanStateCell(EXPIRED);
-        }
-        return new BanStateCell(ACTIVE);
+        return new BanStateCell(BanModel.blockedNow(ban, now) ? ACTIVE : EXPIRED);
     }
 
     /** The pl-badge variant for this state (derived, so it never crosses the wire). */

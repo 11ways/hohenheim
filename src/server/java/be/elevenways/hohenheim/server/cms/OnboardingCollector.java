@@ -6,11 +6,9 @@ import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
-import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
-import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.edit.FieldLabels;
@@ -28,8 +26,8 @@ import java.util.List;
  * Builds the dashboard readiness checklist, one step per {@link OnboardingStage}: enrol a host, let it run apps,
  * choose where backups go, put the first app online.
  *
- * AIDEV-NOTE: every step is DERIVED, never a restatement. The host step asks
- * {@link HostAdmission#instancePlacementRefusal} -- the very call the deploy lane makes --
+ * AIDEV-NOTE: every step is DERIVED, never a restatement. The host step asks each host's
+ * {@link HostVerdict} -- the placement gate's own reading, the one the Hosts list words --
  * so a refusal added to that gate shows up here with no edit, and this checklist can never
  * tell an operator they are ready while the gate disagrees. It is also why the step's detail
  * is the gate's own sentence rather than prose written beside it.
@@ -77,9 +75,9 @@ public final class OnboardingCollector {
             List<Row> servers = Models.get(ServerModel.class).find().all();
             steps.add(hostEnrolled(servers));
 
-            Microcopy placementRefusal = firstPlacementRefusal(servers);
-            boolean placeable = !servers.isEmpty() && placementRefusal == null;
-            steps.add(hostAcceptsWorkloads(placeable, placementRefusal));
+            List<HostVerdict> verdicts = servers.stream().map(HostVerdict::of).toList();
+            boolean placeable = verdicts.stream().anyMatch(HostVerdict::takesNewApps);
+            steps.add(hostAcceptsWorkloads(placeable, placeable ? null : firstReason(verdicts)));
             steps.add(backupDestination());
         }
 
@@ -202,43 +200,9 @@ public final class OnboardingCollector {
             listTarget(PutOnlinePage.SLUG));
     }
 
-    /**
-     * The first host that refuses a shared-kernel workload, in the gate's words; null when
-     * some host accepts one.
-     */
-    private static @Nullable Microcopy firstPlacementRefusal(List<Row> servers) {
-
-        Microcopy first = null;
-
-        for (Row server : servers) {
-
-            Integer id = server.get(ServerModel.ID);
-
-            if (id == null) {
-                continue;
-            }
-
-            Microcopy refusal;
-
-            try {
-                // Null owner bucket: this asks "could ANY ordinary workload land here", which
-                // is the question the checklist is about. A dedicated host answers no, honestly.
-                refusal = HostAdmission.instancePlacementRefusal(id, WorkloadIsolation.SHARED_KERNEL, null);
-            } catch (RuntimeException unreadable) {
-                // One bad host record must never take out the dashboard.
-                continue;
-            }
-
-            if (refusal == null) {
-                return null;
-            }
-
-            if (first == null) {
-                first = refusal;
-            }
-        }
-
-        return first;
+    /** @return why the first host takes no new apps, in its verdict's words; null when it says no reason */
+    private static @Nullable Microcopy firstReason(List<HostVerdict> verdicts) {
+        return verdicts.isEmpty() ? null : verdicts.get(0).reason();
     }
 
     private static Microcopy copy(String key) {

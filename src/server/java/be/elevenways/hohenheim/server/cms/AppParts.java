@@ -173,7 +173,9 @@ public final class AppParts {
         if (withHost) {
             table.column(ColumnSpec.fromField(HOST).sortable().build());
         }
-        table.column(ColumnSpec.virtual("https", copy("https")).renderer(HohenheimTemplateIds.CELL_SITE_TLS).build())
+        // The main address's HTTPS in the Addresses list's words and cell, never the app's overall verdict.
+        table.column(ColumnSpec.virtual("https", copy("https")).renderer(HohenheimTemplateIds.CELL_DOMAIN_CERTIFICATE)
+                .build())
             .column(ColumnSpec.fromField(TYPE).hidden().build())
             .column(ColumnSpec.fromField(STATE).hidden().build())
             .filter(FilterSpec.leaf(TYPE, CoreTypes.EQUALS).label(copy("kind")).build());

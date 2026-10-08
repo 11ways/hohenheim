@@ -55,24 +55,20 @@ public record HostStatusCell(
         return this.state.loud();
     }
 
-    /** {@link HostState#namesDaemon}, in property spelling for the cell template. */
-    public boolean namesDaemon() {
-        return this.state.namesDaemon();
-    }
-
     /**
-     * The state's wording, with the failure class already bound for {@link HostState#ERROR}.
+     * The state's wording, with the failure class or the daemon already bound.
      *
-     * @return null for {@link HostState#OK}, which shows the daemon label instead
+     * @return the words beside the dot, before the last-contact time
      */
-    public @Nullable Microcopy stateText() {
+    public @NonNull Microcopy stateText() {
         Microcopy wording = this.state.wording();
-        if (wording != null && this.state == HostState.ERROR) {
+        if (this.state == HostState.ERROR) {
             // The relative time after the words is the last contact: say so, or there is none to name.
             Microcopy failed = this.lastSeenIso != null
                 ? Microcopy.of("state_error_seen").withFilter("scope", "server") : wording;
             return failed.withArg("kind", this.error != null ? this.error : Microcopy.literal(""));
         }
-        return wording;
+        return this.state.namesDaemon() ? wording.withArg("daemon", this.daemon != null ? this.daemon : "")
+            : wording;
     }
 }

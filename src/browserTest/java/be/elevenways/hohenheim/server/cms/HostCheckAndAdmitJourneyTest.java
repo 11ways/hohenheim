@@ -116,7 +116,7 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
                 assertThat(catalog).as("step 1: " + language + " says how to fix " + name)
                     .contains("\"fix_" + name + "\"");
                 assertThat(catalog).as("step 1: " + language + " names " + name)
-                    .contains("\"" + ServerOverviewState.checkLabel(name).key() + "\"");
+                    .contains("\"" + HostPreflight.checkLabel(name).key() + "\"");
             }
             // 2. Every verdict a check can carry, and every way a probe can fail, reads as words.
             for (PreflightStatus status : PreflightStatus.values()) {

@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.site.SiteHostnamesCell;
-import be.elevenways.hohenheim.site.SiteTlsCell;
+import be.elevenways.hohenheim.site.DomainCertCell;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
@@ -38,6 +38,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -83,12 +84,14 @@ final class AppDirectory {
      * @param kind        what it is, in the words its own record page uses
      * @param addressText the address cell as plain text, for the list's search; null when it has none
      * @param host        the host it runs on, null for a website and on the delegated panel
+     * @param https       what HTTPS gives its main address (the one the address cell shows), in the Addresses list's
+     *                    words; null without an exact address
      * @param health      the verdict its own record page leads with
      * @param target      its record page's front door
      */
     record App(@NonNull String key, @NonNull Source source, int id, @NonNull String name, @NonNull String kind,
                @NonNull SiteHostnamesCell address, @Nullable String addressText, @Nullable String host,
-               @NonNull SiteTlsCell https, @NonNull RecordHealth health, @NonNull RouteTarget target) {}
+               @Nullable DomainCertCell https, @NonNull RecordHealth health, @NonNull RouteTarget target) {}
 
     private AppDirectory() {
     }
@@ -133,10 +136,8 @@ final class AppDirectory {
             int id = instance.get(InstanceModel.ID);
             List<Row> served = servingSites.getOrDefault(id, List.of());
             List<Row> names = new ArrayList<>();
-            boolean passthrough = !served.isEmpty();
             for (Row site : served) {
                 names.addAll(domains.getOrDefault(site.get(SiteModel.ID), List.of()));
-                passthrough &= SiteParts.tlsPassthrough(site);
             }
             SiteHostnamesCell address = names.isEmpty() ? endpointAddress(id) : SiteParts.hostnamesCellOf(names);
             apps.add(new App(Source.WORKLOAD.token() + "-" + id, Source.WORKLOAD, id,
@@ -145,7 +146,7 @@ final class AppDirectory {
                     .label(),
                 address, address.primary(),
                 delegated ? null : hostOf(instance.get(InstanceModel.SERVER_ID)),
-                SiteParts.tlsCellOf(names, passthrough, working), workloadHealth.apply(instance),
+                mainHttps(names, served, working, access, panel.slug()), workloadHealth.apply(instance),
                 InstanceParts.recordRoute(panel.slug(), instance, null)));
         }
 
@@ -157,7 +158,7 @@ final class AppDirectory {
             apps.add(new App(Source.WEBSITE.token() + "-" + id, Source.WEBSITE, id,
                 String.valueOf((Object) site.get(SiteModel.NAME)), words.say(SiteParts.upstreamLabel(site)),
                 address, address.primary(), null,
-                SiteParts.tlsCellOf(names, SiteParts.tlsPassthrough(site), working), websiteHealth.apply(site),
+                mainHttps(names, List.of(site), working, access, panel.slug()), websiteHealth.apply(site),
                 SiteParts.recordRoute(panel.slug(), id)));
         }
 
@@ -171,7 +172,7 @@ final class AppDirectory {
                     .withArg("count", members.getOrDefault(id, 0))),
                 new SiteHostnamesCell(null, 0), null,
                 delegated ? null : hostOf(stack.get(StackModel.SERVER_ID)),
-                new SiteTlsCell(SiteTlsCell.NONE), stackHealth.apply(stack),
+                null, stackHealth.apply(stack),
                 CmsRoutes.subpage(panel.slug(), StackParts.SLUG, id, StackServicesPage.SLUG)));
         }
         apps.sort(Comparator.comparing((App app) -> app.name().toLowerCase(Locale.ROOT)).thenComparing(App::key));
@@ -193,6 +194,30 @@ final class AppDirectory {
             return List.of();
         }
         return source.buildQuery(null, null, null, SortOrder.ASC, null, access).all();
+    }
+
+    /**
+     * What HTTPS gives an app's main address, the first name its address cell shows, through the Addresses list's own
+     * cell ({@link DomainParts#certificateCell}): one name's HTTPS reads the same words on both lists, never the app's
+     * overall verdict.
+     *
+     * @param sites the sites the names belong to, which decide whether the name is a TLS passthrough
+     * @return the cell, null without a name or for a pattern (which no one certificate answers for)
+     */
+    private static @Nullable DomainCertCell mainHttps(@NonNull List<Row> names, @NonNull List<Row> sites,
+                                                      @NonNull Set<String> working, @NonNull AccessContext access,
+                                                      @NonNull String panelSlug) {
+        if (names.isEmpty()) {
+            return null;
+        }
+        Row main = names.get(0);
+        boolean passthrough = false;
+        for (Row site : sites) {
+            if (Objects.equals(site.get(SiteModel.ID), main.get(SiteDomainModel.SITE_ID))) {
+                passthrough = SiteParts.tlsPassthrough(site);
+            }
+        }
+        return DomainParts.certificateCell(main, passthrough, working, access, panelSlug);
     }
 
     /** The name of the host a workload or stack runs on, the way its record page's lead line names it. */

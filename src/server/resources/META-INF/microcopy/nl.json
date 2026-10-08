@@ -5773,10 +5773,6 @@
     {
       "text": "{$name} kan nog geen apps draaien",
       "scope": "attention_title"
-    },
-    {
-      "text": "Gebruik Controleren en toelaten op de host, anders kan er niets op uitgerold worden.",
-      "scope": "attention_detail"
     }
   ],
   "instance_placement_blocked": {
@@ -5866,7 +5862,7 @@
     }
   ],
   "shared_container": {
-    "text": "Gedeelde containers (operator-risico)",
+    "text": "Gedeelde containers",
     "scope": "host_posture"
   },
   "vm_isolated": {
@@ -6058,7 +6054,7 @@
     "scope": "violations"
   },
   "host_preflight_check_now_required": {
-    "text": "Host '{$name}' slaagde voor het laatst voor preflight onder een andere houding: de check {$check} FAALDE en telde toen enkel als advies, terwijl de houding die hij nu opgeeft hem vereist; los die check op en draai preflight opnieuw",
+    "text": "{$name} slaagt niet voor de controle {$check}, die moet slagen om er apps te draaien: {$finding}. Los het op en kies dan Opnieuw controleren",
     "scope": "violations"
   },
   "host_capacity_reached": {
@@ -6066,7 +6062,7 @@
     "scope": "violations"
   },
   "host_capacity_unproven": {
-    "text": "Host '{$name}' heeft geen recente geheugenmeting, dus er kan niets op geplaatst worden: draai preflight op deze host, die het totale geheugen vastlegt waartegen elke plaatsing beoordeeld wordt",
+    "text": "{$name} heeft geen recente geheugenmeting, dus er komt geen nieuwe app op; Opnieuw controleren meet het",
     "scope": "violations"
   },
   "host_prepared_image_missing": {
@@ -9682,7 +9678,7 @@
     "scope": "server"
   },
   "state_silent": {
-    "text": "stil",
+    "text": "{$daemon} stil, laatst gezien",
     "scope": "server"
   },
   "state_never_probed": {
@@ -9850,7 +9846,7 @@
     "scope": "server_overview"
   },
   "evidence_stale": {
-    "text": "Bewijs te oud: de geheugenmeting is ouder dan de versheidsgrens van {$hours} uur, dus plaatsing weigert deze host tot preflight opnieuw meet. Laatst gemeten",
+    "text": "De geheugenmeting is ouder dan {$hours} uur, dus er komt geen nieuwe app op deze host tot Opnieuw controleren ze meet. Laatst gemeten",
     "scope": "server_overview"
   },
   "workloads": {
@@ -10178,11 +10174,11 @@
     "scope": "server_overview"
   },
   "ack_current": {
-    "text": "Aanvaard door {$actor} (waarschuwing v{$version})",
+    "text": "Aanvaard door {$actor}",
     "scope": "server_overview"
   },
   "ack_stale": {
-    "text": "Aanvaarding verouderd (waarschuwing v{$version})",
+    "text": "Aanvaard voor een eerdere waarschuwing; aanvaard ze opnieuw",
     "scope": "server_overview"
   },
   "ack_missing": {
@@ -14070,10 +14066,16 @@
     "text": "Stack",
     "scope": "app_list"
   },
-  "state_ok": {
-    "text": "Werkt",
-    "scope": "app_list"
-  },
+  "state_ok": [
+    {
+      "text": "Werkt",
+      "scope": "app_list"
+    },
+    {
+      "text": "{$daemon}, gezien",
+      "scope": "server"
+    }
+  ],
   "state_attention": {
     "text": "Vraagt aandacht",
     "scope": "app_list"
@@ -15037,7 +15039,7 @@
   "runs_column": {"text": "Draait", "scope": "host_list"},
   "cordoned_detail": {"text": "Apps die hier al draaien, blijven draaien", "scope": "host_list"},
   "checks_failed": {"text": ".match {$count :number}\none {{1 verplichte controle mislukt: {$checks}}}\n* {{{$count} verplichte controles mislukt: {$checks}}}", "scope": "host_list"},
-  "never_checked": {"text": "Nog niet gecontroleerd", "scope": "host_list"},
+  "never_checked": {"text": "Nog nooit gecontroleerd", "scope": "host_list"},
   "checks_pass": {"text": "Zijn verplichte controles slagen; Controleren en toelaten laat hier apps draaien", "scope": "host_list"},
   "memory_booked": {"text": "{$booked} van {$budget} geboekt", "scope": "host_list"},
   "memory_unmeasured": {"text": "Nog niet gemeten", "scope": "host_list"},
@@ -15046,7 +15048,6 @@
   "runs_count": {"text": "{$apps}, {$databases}", "scope": "host_list"},
   "apps_count": {"text": ".match {$count :number}\none {{1 app}}\n* {{{$count} apps}}", "scope": "host_list"},
   "databases_count": {"text": ".match {$count :number}\none {{1 database}}\n* {{{$count} databases}}", "scope": "host_list"},
-  "host_checks_failed": {"text": ".match {$count :number}\none {{1 verplichte controle mislukt: {$checks}. Controleren en toelaten voert die opnieuw uit.}}\n* {{{$count} verplichte controles mislukt: {$checks}. Controleren en toelaten voert ze opnieuw uit.}}", "scope": "attention_detail"},
   "stop_forcing_https": [
     {
       "text": "HTTPS niet meer verplichten",
@@ -15647,5 +15648,13 @@
       "text": "Sommige verzoeken naar wat het serveert, mislukken.",
       "scope": "attention_detail"
     }
-  ]
+  ],
+  "refusing": {
+    "text": "Kan geen nieuwe apps aannemen",
+    "scope": "host_admission"
+  },
+  "act_check_again": {
+    "text": "Opnieuw controleren",
+    "scope": "attention_action"
+  }
 }

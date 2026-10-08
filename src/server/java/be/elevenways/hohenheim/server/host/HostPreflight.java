@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.docker.PinnedImages;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.server.build.BuildStamp;
 import be.elevenways.protoblast.server.build.BuildStamps;
@@ -534,6 +535,37 @@ public final class HostPreflight {
                                                      @NonNull String checkName) {
         Object status = storedCheckField(server, checkName, "status");
         return status != null ? String.valueOf(status) : null;
+    }
+
+    /**
+     * What one stored check found, in words ({@link PreflightFinding#wordsOf}).
+     *
+     * @return the finding, its stored text for an entry without a declared finding, null when the check never ran
+     */
+    public static @Nullable Microcopy storedFinding(@NonNull Row server, @NonNull String checkName) {
+        if (storedCheckField(server, checkName, "status") == null) {
+            return null;
+        }
+        Object detail = storedCheckField(server, checkName, "detail");
+        return PreflightFinding.wordsOf(storedCheckField(server, checkName, PreflightFinding.TOKEN_KEY),
+            storedCheckField(server, checkName, PreflightFinding.ARGS_KEY), detail != null ? String.valueOf(detail) : "");
+    }
+
+    /** @return whether a stored check name is one the batteries declare, which is what gives it words and a fix */
+    public static boolean declaredCheck(@NonNull String checkName) {
+        return DOCKER_BATTERY.contains(checkName) || IncusPreflight.BATTERY.contains(checkName);
+    }
+
+    /**
+     * A check's name in words, wherever a check is named: the host page, the host list, the attention item, the
+     * placement gate's refusal and the refusal of Check and admit.
+     *
+     * @return the declared check's label; a name no battery declares (an older stored report) keeps its spelling
+     */
+    public static @NonNull Microcopy checkLabel(@NonNull String checkName) {
+        return declaredCheck(checkName)
+            ? Microcopy.of("check_" + checkName).withFilter("scope", "host_check")
+            : Microcopy.literal(checkName);
     }
 
     /**

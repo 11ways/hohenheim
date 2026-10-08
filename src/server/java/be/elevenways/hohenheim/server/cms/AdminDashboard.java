@@ -105,12 +105,12 @@ public final class AdminDashboard extends PanelDashboard {
             tiles.add(stat("access_list", AccessListModel.MODEL_ID, "access-lists", "shield-halved"));
         }
         if (firewall) {
-            // The active-ban count (event analytics live in spamservice now, so bans are
-            // the only security records here).
+            // The count of addresses blocked now, the Blocked addresses list's own default (event analytics live in
+            // spamservice now, so bans are the only security records here).
             tiles.add(new WidgetInstance(StatWidget.ID, Map.of(
                 "label", HohenheimWidgetCopy.localized("active_bans", "dashboard"),
                 "source", sourceToken(BanModel.MODEL_ID),
-                "rules", Condition.all(Condition.test(BanModel.ACTIVE.getName(), CoreTypes.IS_TRUE)),
+                "rules", Condition.all(Condition.test(BanModel.BLOCKED_NOW, CoreTypes.IS_TRUE)),
                 "icon", "ban",
                 // StatWidget's stored "link" is a String, so the typed target renders here.
                 "link", CmsRoutes.list(ADMIN, "bans").toUrl())));

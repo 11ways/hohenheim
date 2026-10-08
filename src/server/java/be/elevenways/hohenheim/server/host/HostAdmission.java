@@ -79,17 +79,17 @@ public final class HostAdmission {
                                         @Nullable String ownerBucket) {
         Row server = Models.get(ServerModel.class).findById(serverId);
         if (server == null) {
-            throw Violations.ofForm(HohenheimViolations.text("host_not_admitted")
+            throw Violations.ofForm(PlacementRefusal.NOT_ADMITTED.text()
                 .withArg("name", String.valueOf(serverId)));
         }
         String admission = server.get(ServerModel.ADMISSION);
         if (!ServerModel.ADMISSION_ADMITTED.equals(admission)) {
-            throw Violations.ofForm(HohenheimViolations.text("host_not_admitted")
+            throw Violations.ofForm(PlacementRefusal.NOT_ADMITTED.text()
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         requireVerifiedIdentity(server);
         if (!ServerModel.acceptsTenantWorkloads(server)) {
-            throw Violations.ofForm(HohenheimViolations.text("host_posture_refuses")
+            throw Violations.ofForm(PlacementRefusal.POSTURE_REFUSES.text()
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         requirePostureSatisfies(server, isolation);
@@ -115,14 +115,20 @@ public final class HostAdmission {
      * {@link HostPreflight#failedRequirementNow} re-derives the verdict from the flags
      * already stored -- no probe, no ssh, no daemon call.
      *
-     * @throws Violations {@code host_preflight_check_now_required}, naming the check
+     * The refusal names the check and what it found in words (the host page's own check and finding copy), never a
+     * check token: the stored required flag is not always a posture's (a Docker check is required by its battery), so
+     * the sentence claims no history the record cannot prove.
+     *
+     * @throws Violations {@code host_preflight_check_now_required}, naming the check and its finding
      */
     public static void requirePreflightVerdictForPosture(@NonNull Row server) {
         String failed = HostPreflight.failedRequirementNow(server);
         if (failed != null) {
-            throw Violations.ofForm(HohenheimViolations.text("host_preflight_check_now_required")
+            Microcopy finding = HostPreflight.storedFinding(server, failed);
+            throw Violations.ofForm(PlacementRefusal.CHECK_NOW_REQUIRED.text()
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME)))
-                .withArg("check", failed));
+                .withArg("check", HostPreflight.checkLabel(failed))
+                .withArg("finding", finding != null ? finding : Microcopy.literal("")));
         }
     }
 
@@ -151,12 +157,12 @@ public final class HostAdmission {
                                                @NonNull WorkloadIsolation isolation) {
         String name = String.valueOf((Object) server.get(ServerModel.NAME));
         if (ServerModel.postureRequiresVirtualMachine(server, isolation)) {
-            throw Violations.ofForm(HohenheimViolations.text("host_posture_requires_vm").withArg("name", name));
+            throw Violations.ofForm(PlacementRefusal.POSTURE_REQUIRES_VM.text().withArg("name", name));
         }
         if (isolation == WorkloadIsolation.SHARED_KERNEL
                 && !ServerModel.postureAcknowledged(server)) {
             throw Violations.ofForm(
-                HohenheimViolations.text("host_posture_unacknowledged").withArg("name", name));
+                PlacementRefusal.POSTURE_UNACKNOWLEDGED.text().withArg("name", name));
         }
     }
 
@@ -190,7 +196,7 @@ public final class HostAdmission {
                 .all()) {
             String charged = instance.get(InstanceModel.QUOTA_BUCKET);
             if (charged == null || !charged.equals(ownerBucket)) {
-                throw Violations.ofForm(HohenheimViolations.text("host_dedicated_to_other")
+                throw Violations.ofForm(PlacementRefusal.DEDICATED_TO_OTHER.text()
                     .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
             }
         }
@@ -234,7 +240,7 @@ public final class HostAdmission {
                 || lastSeen.isAfter(Now.instant().minus(Duration.ofMinutes(minutes)))) {
             return;
         }
-        throw Violations.ofForm(HohenheimViolations.text("host_contact_lapsed")
+        throw Violations.ofForm(PlacementRefusal.CONTACT_LAPSED.text()
             .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME)))
             .withArg("minutes", Duration.between(lastSeen, Now.instant()).toMinutes()));
     }
@@ -275,11 +281,11 @@ public final class HostAdmission {
         }
         String name = String.valueOf((Object) server.get(ServerModel.NAME));
         if (!IncusKernelIsolation.laneAvailable(server)) {
-            throw Violations.ofForm(HohenheimViolations.text("host_kernel_lane_missing").withArg("name", name));
+            throw Violations.ofForm(PlacementRefusal.KERNEL_LANE_MISSING.text().withArg("name", name));
         }
         if (!HostPreflight.STATUS_PASS.equals(
                 HostPreflight.storedCheckStatus(server, IncusPreflight.KERNEL_LANE_CHECK))) {
-            throw Violations.ofForm(HohenheimViolations.text("host_kernel_lane_unproven").withArg("name", name));
+            throw Violations.ofForm(PlacementRefusal.KERNEL_LANE_UNPROVEN.text().withArg("name", name));
         }
     }
 
@@ -310,14 +316,14 @@ public final class HostAdmission {
      */
     public static void requireTrustedSlot(@NonNull Row server, @NonNull HostTrustSlot slot) {
         if (!slot.isConfirmed(server)) {
-            throw Violations.ofForm(HohenheimViolations.text("host_key_unverified")
+            throw Violations.ofForm(PlacementRefusal.KEY_UNVERIFIED.text()
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         // A confirmed pin the machine has since CONTRADICTED is not a verified identity.
         // The ssh client would refuse the connection anyway; refusing here means the
         // refusal is ours, named, and arrives before any work is spent on it.
         if (HostPins.isQuarantined(server, slot)) {
-            throw Violations.ofForm(HohenheimViolations.text("host_quarantined")
+            throw Violations.ofForm(PlacementRefusal.QUARANTINED.text()
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
     }
@@ -406,7 +412,7 @@ public final class HostAdmission {
         } catch (Violations refused) {
             List<Violation> all = refused.all();
             return all.isEmpty()
-                ? HohenheimViolations.text("host_not_admitted").withArg("name", String.valueOf(serverId))
+                ? PlacementRefusal.NOT_ADMITTED.text().withArg("name", String.valueOf(serverId))
                 : all.get(0).message();
         }
     }

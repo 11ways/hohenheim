@@ -8,12 +8,8 @@
     <pl-status-dot status={% value.dot %}></pl-status-dot>
     {% if value.loud %}
     <strong class="hh-host-state-quarantined">{{ value.stateText }}</strong>
-    {% elseif value.namesDaemon %}
-    <span>{{ value.daemon }} {{ value.stateText }}</span>
-    {% elseif value.stateText != null %}
-    <span>{{ value.stateText }}</span>
     {% else %}
-    <span>{{ value.daemon }}</span>
+    <span>{{ value.stateText }}</span>
     {% /if %}
     {% if value.lastSeenIso != null %}
     <pl-relative-time datetime={% value.lastSeenIso %} wording={% value.wording %} title={% value.lastSeenIso %}></pl-relative-time>

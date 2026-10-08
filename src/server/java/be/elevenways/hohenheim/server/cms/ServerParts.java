@@ -12,7 +12,6 @@ import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.text.ByteText;
-import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.host.HostState;
@@ -194,28 +193,9 @@ public final class ServerParts {
             .build();
     }
 
-    /**
-     * What the host takes, in the admission's own words, and what that means: the required checks that keep a
-     * waiting host out, or that a host taking no new apps keeps the ones it has.
-     */
+    /** What the host takes and why, in the words of its one verdict ({@link HostVerdict}). */
     static @NonNull StateLineCell stateCellOf(@NonNull Row server) {
-        // An unknown or missing token reads as waiting, the state that places nothing: fail closed.
-        String stored = server.get(ServerModel.ADMISSION);
-        String admission = ServerModel.ADMISSION_ADMITTED.equals(stored) || ServerModel.ADMISSION_CORDONED.equals(stored)
-            ? stored : ServerModel.ADMISSION_BLOCKED;
-        Microcopy label = Microcopy.of(admission).withFilter("scope", "host_admission");
-        return switch (admission) {
-            case ServerModel.ADMISSION_ADMITTED -> new StateLineCell(admission, BadgeVariant.SUCCESS, label, null, null);
-            case ServerModel.ADMISSION_CORDONED -> new StateLineCell(admission, BadgeVariant.SECONDARY, label,
-                listCopy("cordoned_detail"), null);
-            default -> {
-                List<Microcopy> failed = HostAttention.failedRequiredChecks(server);
-                Microcopy detail = !failed.isEmpty()
-                    ? listCopy("checks_failed").withArg("count", failed.size()).withArg("checks", failed)
-                    : server.get(ServerModel.PROBED_AT) == null ? listCopy("never_checked") : listCopy("checks_pass");
-                yield new StateLineCell(admission, BadgeVariant.WARNING, label, detail, null);
-            }
-        };
+        return HostVerdict.of(server).cell();
     }
 
     /** Booked memory against the bookable budget, from the same ledger the host's overview and placement read. */

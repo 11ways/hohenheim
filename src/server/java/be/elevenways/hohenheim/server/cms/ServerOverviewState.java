@@ -35,7 +35,6 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
-import be.elevenways.zenit.common.orm.activity.ActivityRules;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -107,12 +106,18 @@ public final class ServerOverviewState {
                     NoticeData.of(text("quarantined_title", locales, resolver), body))))));
         }
 
+        HostVerdict verdict = HostVerdict.of(server);
         List<WidgetInstance> state = new ArrayList<>();
         state.add(new WidgetInstance(StatusWidget.ID,
             Map.of("label", HohenheimWidgetCopy.localized("state", "server_overview")))
-            .withData(stateBadges(server, locales, resolver)));
+            .withData(stateBadges(server, verdict, locales, resolver)));
         state.add(new WidgetInstance(HohenheimWidgets.HOST_STATE.id(), Map.of())
             .withData(ServerParts.statusCellOf(server)));
+        // Why a host takes no new apps, in the words the Hosts list and the attention band use (one verdict).
+        if (verdict.standing().raisesAttention() && verdict.reason() != null) {
+            state.add(alert(AlertVariant.WARNING, NoticeData.of(verdict.standing().label().resolve(locales, resolver),
+                verdict.reason().resolve(locales, resolver))));
+        }
 
         String lastError = blankable(server.get(ServerModel.LAST_ERROR));
         if (!lastError.isBlank()) {
@@ -191,7 +196,7 @@ public final class ServerOverviewState {
             new WidgetInstance(RecordsWidget.ID, Map.of(
                 "title", HohenheimWidgetCopy.localized("recent_activity", "server_overview"),
                 "source", CmsSupport.ACTIVITY_SOURCE,
-                "rules", ActivityRules.forRecord(Models.get(ServerModel.class), serverId),
+                "rules", AdminActivityResource.peopleOnlyFor(Models.get(ServerModel.class), serverId),
                 "sort", ActivityModel.CREATED_AT.getName(),
                 "descending", true,
                 "limit", 10))))));
@@ -202,13 +207,15 @@ public final class ServerOverviewState {
 
     // -- state ---------------------------------------------------------------------
 
-    private static @NonNull List<WidgetBadge> stateBadges(@NonNull Row server,
+    /** The runtime, what the host takes (its verdict, never the stored admission token alone) and who may run here. */
+    private static @NonNull List<WidgetBadge> stateBadges(@NonNull Row server, @NonNull HostVerdict verdict,
                                                           @NonNull LocaleChain locales,
                                                           @Nullable MessageResolver resolver) {
         List<WidgetBadge> badges = new ArrayList<>();
         badges.add(WidgetBadge.of(ServerModel.RUNTIME, ServerModel.runtimeOf(server),
             locales, resolver));
-        addBadge(badges, ServerModel.ADMISSION, server.get(ServerModel.ADMISSION), locales, resolver);
+        badges.add(WidgetBadge.of(verdict.standing().label().resolve(locales, resolver), verdict.standing().variant(),
+            verdict.standing().icon()));
         addBadge(badges, ServerModel.POSTURE, server.get(ServerModel.POSTURE), locales, resolver);
         return badges;
     }
@@ -226,15 +233,13 @@ public final class ServerOverviewState {
             @NonNull PostureAcknowledgementView acknowledgement,
             @NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
         if (acknowledgement.current()) {
+            // Who accepted it; the warning's version is the record's bookkeeping, never words.
             return WidgetBadge.of(Microcopy.of("ack_current").withFilter("scope", "server_overview")
                 .withArg("actor", acknowledgement.actorLabel())
-                .withArg("version", String.valueOf(acknowledgement.version()))
                 .resolve(locales, resolver), BadgeVariant.SUCCESS, null);
         }
         if (acknowledgement.stale()) {
-            return WidgetBadge.of(Microcopy.of("ack_stale").withFilter("scope", "server_overview")
-                .withArg("version", String.valueOf(acknowledgement.requiredVersion()))
-                .resolve(locales, resolver), BadgeVariant.DESTRUCTIVE, null);
+            return WidgetBadge.of(text("ack_stale", locales, resolver), BadgeVariant.DESTRUCTIVE, null);
         }
         return WidgetBadge.of(text("ack_missing", locales, resolver), BadgeVariant.DESTRUCTIVE, null);
     }
@@ -317,7 +322,7 @@ public final class ServerOverviewState {
         List<PreflightCheckView> mustPass = new ArrayList<>();
         List<PreflightCheckView> advice = new ArrayList<>();
         for (PreflightCheckView check : preflightChecks(server)) {
-            (check.required() ? mustPass : advice).add(check.withLabel(checkLabel(check.name())).withFix(fixFor(check)));
+            (check.required() ? mustPass : advice).add(check.withLabel(HostPreflight.checkLabel(check.name())).withFix(fixFor(check)));
         }
         // What blocks comes first; within each half the stored order stays.
         Comparator<PreflightCheckView> failingFirst = Comparator.comparing(check -> !check.notPassing());
@@ -337,31 +342,14 @@ public final class ServerOverviewState {
      *
      * AIDEV-NOTE: the check names are the batteries' own declarations (HostPreflight.DOCKER_BATTERY,
      * IncusPreflight.BATTERY); HostCheckAndAdmitJourneyTest asserts every one of them has this copy and its
-     * {@link #checkLabel} in both shipped catalogs, so a new check fails the build until it is named and says how to
+     * {@link HostPreflight#checkLabel} in both shipped catalogs, so a new check fails the build until it is named and says how to
      * fix it.
      */
     static @Nullable Microcopy fixFor(@NonNull PreflightCheckView check) {
-        if (!check.notPassing() || !declaredCheck(check.name())) {
+        if (!check.notPassing() || !HostPreflight.declaredCheck(check.name())) {
             return null;
         }
         return fixCopy(check.name());
-    }
-
-    /** @return whether a stored check name is one the batteries declare, which is what gives it words and a fix */
-    static boolean declaredCheck(@NonNull String checkName) {
-        return HostPreflight.DOCKER_BATTERY.contains(checkName) || IncusPreflight.BATTERY.contains(checkName);
-    }
-
-    /**
-     * A check's name in words, wherever a check is named: the host page, the host list, the attention item and the
-     * refusal of Check and admit.
-     *
-     * @return the declared check's label; a name no battery declares (an older stored report) keeps its spelling
-     */
-    static @NonNull Microcopy checkLabel(@NonNull String checkName) {
-        return declaredCheck(checkName)
-            ? Microcopy.of("check_" + checkName).withFilter("scope", "host_check")
-            : Microcopy.literal(checkName);
     }
 
     /** @return the how-to-fix sentence of one declared check */
