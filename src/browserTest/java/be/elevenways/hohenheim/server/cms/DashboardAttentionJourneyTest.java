@@ -24,6 +24,7 @@ import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -35,13 +36,15 @@ import java.util.Map;
 
 import static be.elevenways.hohenheim.test.ProxyTestSupport.addDomain;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.setupInstanceSite;
+import static be.elevenways.hohenheim.test.ProxyTestSupport.setupSite;
 import static be.elevenways.hohenheim.test.ProxyTestSupport.startProxy;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The admin dashboard shows each problem once, at its root, with its one action: an open checklist step presents the
  * attention item stating its stage instead of the band repeating it, and an app its host holds back folds under that
- * host, which says how many apps wait for it, while the app's own verdict stays its own.
+ * host, which says how many apps wait for it, while the app's own verdict stays its own. Once the first app is online
+ * the checklist retires and what its open steps stood for is the band's (board Main), beside the count tiles.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -50,6 +53,12 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
 
     private static final String PREFIX = "d8-fold-";
     private static final LocaleChain EN = LocaleChain.ofTags("en");
+
+    /** Its own database: whether anything is online retires the checklist, and other classes leave live sites. */
+    @BeforeAll
+    static void seed() throws Exception {
+        freshSeededDatabase();
+    }
 
     @Test
     @Timeout(90)
@@ -79,6 +88,8 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(hostItem).as("step 1: the unfolded collector still names the host").isNotNull();
             assertThat(hostItem.stage()).as("step 1: as the admission stage's condition")
                 .isEqualTo(OnboardingStage.ADMISSION);
+            assertThat(say(hostItem.title())).as("step 1: a host never admitted cannot run apps yet")
+                .isEqualTo(ServerModel.nameOf(local) + " cannot run apps yet");
             assertThat(admit.state()).as("step 1: admission is open").isEqualTo(OnboardingState.BLOCKED);
             assertThat(say(admit.detail())).as("step 1: in the host item's words").isEqualTo(say(hostItem.detail()));
             assertThat(say(admit.action())).as("step 1: with its one action").isEqualTo("Check and admit");
@@ -174,13 +185,52 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(staleRoot).as("step 6: the host is raised").isNotNull();
             assertThat(staleRoot.detail().key()).as("step 6: for its stale reading, in the gate's words")
                 .isEqualTo("host_capacity_unproven");
+            assertThat(say(staleRoot.title())).as("step 6: an admitted host the gate refuses takes no new apps")
+                .isEqualTo(ServerModel.nameOf(local) + " takes no new apps");
             assertThat(say(reopened.detail())).as("step 6: the step presents it").isEqualTo(say(staleRoot.detail()));
             assertThat(say(reopened.action())).as("step 6: with a fresh check").isEqualTo("Check again");
             assertThat(reopened.target().toUrl()).as("step 6: leading to the host's Overview")
                 .isEqualTo("/admin/servers/" + local + "/open");
             assertThat(rootOf(stale.attention(), localHost)).as("step 6: the band does not repeat it").isNull();
 
-            // 7. A root the band draws (a second host waiting while one is admitted, board Main) folds what it holds
+            // 7. The first app goes online (a website serving its visitors, board Main): the checklist retires, and
+            //    what its open steps stood for is the band's from then on, each once: the host that takes no new apps
+            //    and, while no off-host destination is chosen, the backups that stay on this machine.
+            Row online = setupSite("hohenheim:static", PREFIX + "live", PREFIX + "live", Map.of("root_path", "/tmp"));
+            sites.add(online);
+            addDomain(online, "live.d8.test", "exact", null, false);
+            assertThat(AppHealth.anyOnline()).as("step 7: a serving website is something online").isTrue();
+            DashboardAttention.Reading retired = DashboardAttention.read();
+            assertThat(retired.checklist()).as("step 7: the checklist retires once the first app is online").isEmpty();
+            List<AttentionItem> hostItems = retired.attention().stream()
+                .filter(item -> localHost.equals(item.about())).toList();
+            assertThat(hostItems).as("step 7: the host the step presented is the band's item, once").hasSize(1);
+            assertThat(say(hostItems.get(0).title())).as("step 7: still saying it takes no new apps")
+                .isEqualTo(ServerModel.nameOf(local) + " takes no new apps");
+            if (ControlPlaneBackups.configuredDestinationName() == null) {
+                assertThat(retired.attention().stream().map(item -> say(item.title())).toList())
+                    .as("step 7: the backups the step asked for are the band's item")
+                    .containsOnlyOnce("Backups stay on this machine");
+            }
+            String dashboard = adminGet("/admin/dashboard").body();
+            assertThat(dashboard).as("step 7: the rendered dashboard draws no checklist")
+                .doesNotContain("data-onboarding-steps")
+                .as("step 7: and the host in the band").contains(ServerModel.nameOf(local) + " takes no new apps");
+
+            // 8. The count tiles (board Main): Apps, Hosts, Certificates and Backups, each with the line saying what
+            //    its count holds, only where a fact backs it.
+            assertThat(tile(dashboard, "apps")).as("step 8: the apps, live and with a problem, by their verdicts")
+                .contains("href=\"/admin/apps\"").contains(">3<").contains("1 live, 2 with a problem");
+            assertThat(tile(dashboard, "hosts")).as("step 8: the hosts, tallied by their standing")
+                .contains("href=\"/admin/servers\"").contains(">1<").contains("1 refuses new apps");
+            assertThat(tile(dashboard, "certificates")).as("step 8: no certificate, so no line about one")
+                .contains("href=\"/admin/certificates\"").contains(">0<").doesNotContain("class=\"description\"");
+            assertThat(tile(dashboard, "backups")).as("step 8: no app with a backup target says so")
+                .contains("href=\"/admin/instance-backups\"").contains("No app has a backup target");
+            assertThat(dashboard).as("step 8: the tiles the board replaced are gone")
+                .doesNotContain("href=\"/admin/access-lists\"").doesNotContain("Active bans");
+
+            // 9. A root the band draws (a second host waiting while one is admitted, board Main) folds what it holds
             //    back too; a consequence whose root nobody shows stays, so a fold never hides a problem.
             AttentionSubject other = AttentionSubject.host(local + 1000);
             AttentionItem root = new AttentionItem(AttentionSeverity.WARNING, "server", Microcopy.literal("root"),
@@ -190,7 +240,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             AttentionItem orphan = new AttentionItem(AttentionSeverity.ERROR, "globe", Microcopy.literal("orphan"),
                 null, null, null).causedBy(AttentionSubject.host(local + 2000));
             assertThat(DashboardAttention.fold(admitted.checklist(), List.of(root, held, orphan)).attention())
-                .as("step 7: the root stays, its consequence folds, a rootless consequence stays")
+                .as("step 9: the root stays, its consequence folds, a rootless consequence stays")
                 .containsExactly(root, orphan);
         } finally {
             ServerMain.adoptProxyServer(previous);
@@ -205,6 +255,14 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             }
             captured.restore();
         }
+    }
+
+    /** @return the rendered count tile counting this, up to its end */
+    private static String tile(String dashboard, String key) {
+        int start = dashboard.indexOf("data-hh-stat=\"" + key + "\"");
+        assertThat(start).as("the dashboard draws the " + key + " tile").isNotNegative();
+        return dashboard.substring(dashboard.lastIndexOf("<pl-stat-card", start),
+            dashboard.indexOf("</pl-stat-card>", start));
     }
 
     private static int heldBack(int host) {

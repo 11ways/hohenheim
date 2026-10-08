@@ -323,7 +323,7 @@ class AdminPagesTest extends HohenheimTestBase {
         navigateToApp("/admin/dashboard");
         waitForHydration();
         assertThat(page.locator(".hh-dashboard-band").count()).isGreaterThanOrEqualTo(3);
-        assertThat(page.locator(".widget-stat-link a.stat-link[href='/admin/sites']").count()).isEqualTo(1);
+        assertThat(page.locator(".widget-stat-link a.stat-link[href='/admin/apps']").count()).isEqualTo(1);
         assertThat(page.locator("a.widget-record-entry[href^='/admin/activity/']").count())
             .isGreaterThanOrEqualTo(1);
         assertThat(page.locator(".widget-records dl.widget-record").count()).isZero();
@@ -868,11 +868,10 @@ class AdminPagesTest extends HohenheimTestBase {
                 .as("step 3: exactly one stat grid on the dashboard")
                 .isEqualTo(1);
             var grid = page.locator(".hh-dashboard-band .widget-columns:has(pl-stat-card)").first();
-            assertThat(grid.locator(".widget-stat-link a.stat-link[href='/admin/sites']").count())
-                .as("step 3: the sites tile is in it").isEqualTo(1);
-            assertThat(grid.locator(".widget-stat-link a.stat-link[href='/admin/bans']").count())
-                .as("step 3: and so is the firewall tile that used to sit in its own grid")
-                .isEqualTo(1);
+            assertThat(grid.locator(".widget-stat-link a.stat-link[href='/admin/apps']").count())
+                .as("step 3: the apps tile is in it").isEqualTo(1);
+            assertThat(grid.locator(".widget-stat-link a.stat-link[href='/admin/instance-backups']").count())
+                .as("step 3: and so is the backups tile, the board's fourth").isEqualTo(1);
 
             // 4. Admitting a host the gate can place on retracts the item; the collector answers negatively too.
             HostFixtures.makeLocalPlaceable(16L * 1024);

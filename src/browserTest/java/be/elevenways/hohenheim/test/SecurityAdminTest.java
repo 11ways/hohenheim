@@ -85,9 +85,9 @@ class SecurityAdminTest extends HohenheimTestBase {
         assertThat(lifted.get(BanModel.LIFTED_BY)).isNotNull();
     }
 
-    /** The dashboard's security band: the active-bans stat, and NO 30-day chart. */
+    /** The dashboard counts the board's four (bans are the Blocked addresses list's), and draws NO 30-day chart. */
     @Test
-    void dashboardShowsTheBanStatAndNotTheBansChart() {
+    void dashboardShowsTheBoardsTilesAndNotTheBansChart() {
         // The stat tiles belong to a fleet with apps (an empty install shows the onboarding hero instead), so the
         // test seeds its own app rather than relying on what earlier test classes left behind.
         Row site = ProxyTestSupport.setupSite("hohenheim:address", "Security dashboard app", "security-dashboard-app",
@@ -95,14 +95,19 @@ class SecurityAdminTest extends HohenheimTestBase {
         try {
             navigateToApp("/admin/dashboard");
             waitForHydration();
-            assertThat(page.locator(".widget-stat-link a.stat-link[href='/admin/bans']").count()).isEqualTo(1);
+            // 1. Board Main's tiles are Apps, Hosts, Certificates and Backups: the active-bans tile is gone with Sites
+            //    and Access lists (D10a), and the blocked addresses are counted on their own list.
+            assertThat(page.locator(".widget-stat-link a.stat-link[href='/admin/apps']").count())
+                .as("step 1: the apps are counted").isEqualTo(1);
+            assertThat(page.locator(".widget-stat-link a.stat-link[href='/admin/bans']").count())
+                .as("step 1: the bans are not").isZero();
             // The deleted security-events surface is gone from the dashboard.
             assertThat(page.locator(".widget-stat-link a.stat-link[href='/admin/security-events']").count())
                 .isZero();
             // The 30-day bans chart was REMOVED from the landing dashboard on purpose: on any
             // fleet that is not under attack it is an all-zero series drawn as ~450px of flat
-            // line, above the content the operator opened the page for. The count stays as the
-            // tile asserted above. See the AIDEV-NOTE in AdminDashboard.widgets().
+            // line, above the content the operator opened the page for. The count is the
+            // Blocked addresses list's. See the AIDEV-NOTE in AdminDashboard.widgets().
             assertThat(page.locator(".widget-chart pl-chart").count()).isZero();
         } finally {
             HardDeletes.row(Models.get(SiteModel.class), site);

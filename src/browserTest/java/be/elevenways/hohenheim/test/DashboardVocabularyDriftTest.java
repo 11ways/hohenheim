@@ -120,7 +120,8 @@ class DashboardVocabularyDriftTest {
         // 1. The stored ids never move: widget trees persisted by earlier versions reference them.
         List<DisplayWidget> widgets = List.of(HohenheimWidgets.ATTENTION, HohenheimWidgets.ONBOARDING,
             HohenheimWidgets.ONBOARDING_CHECKLIST, HohenheimWidgets.HOST_STATE, HohenheimWidgets.HOST_TRUST,
-            HohenheimWidgets.HOST_PREFLIGHT, HohenheimWidgets.HOST_WORKLOADS, HohenheimWidgets.INSTANCE_ENDPOINTS);
+            HohenheimWidgets.HOST_PREFLIGHT, HohenheimWidgets.HOST_WORKLOADS, HohenheimWidgets.INSTANCE_ENDPOINTS,
+            HohenheimWidgets.STAT);
         assertThat(widgets.stream().map(widget -> widget.id().toString()))
             .as("step 1: the stored widget type ids")
             .containsExactly(Identifier.of("hohenheim", "attention").toString(),
@@ -130,7 +131,8 @@ class DashboardVocabularyDriftTest {
                 Identifier.of("hohenheim", "host_trust").toString(),
                 Identifier.of("hohenheim", "host_preflight").toString(),
                 Identifier.of("hohenheim", "host_workloads").toString(),
-                Identifier.of("hohenheim", "instance_endpoints").toString());
+                Identifier.of("hohenheim", "instance_endpoints").toString(),
+                Identifier.of("hohenheim", "stat").toString());
 
         // 2. Each one is registered as itself.
         for (DisplayWidget widget : widgets) {

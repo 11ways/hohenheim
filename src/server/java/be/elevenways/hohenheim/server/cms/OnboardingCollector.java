@@ -32,8 +32,10 @@ import java.util.List;
  * tell an operator they are ready while the gate disagrees. It is also why the step's detail
  * is the gate's own sentence rather than prose written beside it.
  *
- * The whole thing is state-derived, with no dismissed flag: it disappears because the fleet
- * is running, which is the only honest reason for onboarding to stop being shown.
+ * The whole thing is state-derived, with no dismissed flag: it retires once the first app is online
+ * ({@link AppHealth#anyOnline}, board Main draws no checklist beside a running app), which is the only honest reason
+ * for onboarding to stop being shown. From then on a condition a step stood for that still holds (backups that stay
+ * on this machine, a host that takes no new apps) is the attention band's item, which the step only presented.
  *
  * @author Jelle De Loecker
  * @since  0.5.0
@@ -59,15 +61,16 @@ public final class OnboardingCollector {
      * @return the ordered steps; a list whose every entry is done means there is nothing to show
      */
     public static @NonNull List<OnboardingStep> collect() {
-        return collect(AttentionCollector.collect());
+        return collect(AttentionCollector.collect(), AppHealth.anyOnline());
     }
 
     /**
      * The steps, each open one presenting the attention item that states its condition ({@link #presentedBy}).
      *
      * @param attention the dashboard's attention items, unfolded
+     * @param online    whether anything is online ({@link AppHealth#anyOnline}): the put-online step's state
      */
-    static @NonNull List<OnboardingStep> collect(@NonNull List<AttentionItem> attention) {
+    static @NonNull List<OnboardingStep> collect(@NonNull List<AttentionItem> attention, boolean online) {
 
         List<OnboardingStep> steps = new ArrayList<>(4);
 
@@ -82,7 +85,7 @@ public final class OnboardingCollector {
         }
 
         if (HohenheimRoles.enabled(Role.INSTANCES)) {
-            steps.add(firstAppOnline());
+            steps.add(firstAppOnline(online));
         }
 
         List<OnboardingStep> presented = new ArrayList<>(steps.size());
@@ -109,6 +112,14 @@ public final class OnboardingCollector {
             }
         }
         return null;
+    }
+
+    /**
+     * Whether the checklist has retired: the first app is online ({@link AppHealth#anyOnline}, the put-online step's
+     * own fact). Board Main draws no checklist beside a running app; what a step still stood for is the band's then.
+     */
+    public static boolean retired() {
+        return AppHealth.anyOnline();
     }
 
     /** True while any step still has something to do -- the dashboard's render condition. */
@@ -188,9 +199,7 @@ public final class OnboardingCollector {
      * ran. The answer is the app verdict's own serving half ({@link AppHealth#anyOnline}), so the checklist and every
      * app's health band agree on what online means.
      */
-    private static OnboardingStep firstAppOnline() {
-        boolean online = AppHealth.anyOnline();
-
+    private static OnboardingStep firstAppOnline(boolean online) {
         return new OnboardingStep(
             OnboardingStage.FIRST_APP,
             online ? OnboardingState.DONE : OnboardingState.TODO,

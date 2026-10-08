@@ -204,6 +204,10 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             assertThat(say(cell.detail())).as("step 2: saying why in the gate's words").isEqualTo(say(refusal));
             AttentionItem item = hostItem(PREFIX + "stale");
             assertThat(item).as("step 2: the host tier raises it").isNotNull();
+            assertThat(say(item.title())).as("step 2: titled as an admitted host that takes nothing new, never as one"
+                + " that cannot run apps yet").isEqualTo(PREFIX + "stale takes no new apps");
+            assertThat(item.title().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 2: and in Dutch").isEqualTo(PREFIX + "stale neemt geen nieuwe apps aan");
             assertThat(say(item.detail())).as("step 2: in the same words").isEqualTo(say(refusal));
             assertThat(say(item.action())).as("step 2: offering a fresh check").isEqualTo("Check again");
             assertThat(item.target().toUrl()).as("step 2: on the host's Overview, never its Configuration form")
@@ -252,6 +256,8 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             assertThat(say(waiting.label())).as("step 5: a new host waits").isEqualTo("Waiting for its checks");
             assertThat(say(waiting.detail())).as("step 5: because it was never checked").isEqualTo("Never checked yet");
             AttentionItem neverItem = hostItem(PREFIX + "fresh");
+            assertThat(say(neverItem.title())).as("step 5: a host never admitted cannot run apps yet")
+                .isEqualTo(PREFIX + "fresh cannot run apps yet");
             assertThat(say(neverItem.detail())).as("step 5: its item says the same").isEqualTo("Never checked yet");
             assertThat(say(neverItem.action())).as("step 5: with Check and admit").isEqualTo("Check and admit");
 
@@ -274,10 +280,11 @@ class HostsPageJourneyTest extends HohenheimTestBase {
         }
     }
 
-    /** @return the host tier's item titled for this host, null when none is */
+    /** @return the host tier's item titled for this host (waiting or refusing), null when none is */
     private static AttentionItem hostItem(String name) {
         for (AttentionItem candidate : AttentionCollector.hosts()) {
-            if (say(candidate.title()).equals(name + " cannot run apps yet")) {
+            String title = say(candidate.title());
+            if (title.equals(name + " cannot run apps yet") || title.equals(name + " takes no new apps")) {
                 return candidate;
             }
         }

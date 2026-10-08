@@ -151,7 +151,12 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
         Row bare = instance("app-journey-unserved");
         HostFixtures.LocalHostState localBefore = HostFixtures.captureLocal();
         try {
-            // 1. The workload's heading leads with Open site, to the address of the site serving it.
+            // 1. A running workload on a host that takes new apps leads its heading with Open site, to the address of
+            //    the site serving it. Open site shows only while the app serves (D7f: never for a stopped one), and
+            //    since D9 an admitted host without a fresh memory reading takes nothing, so its workload cannot start.
+            HostFixtures.makeLocalPlaceable(16L * 1024);
+            instance.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
+            Models.get(InstanceModel.class).save(instance);
             String served = adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview").body();
             assertThat(served).as("step 1: Open site leads to the serving site's address")
                 .contains("href=\"http://served.app-journey.test")
@@ -163,9 +168,8 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .doesNotContain("Open site");
 
             // 3. A workload that stopped after an error is broken: its address answers with an error page, so neither
-            //    its page nor the site's offers Open site, and the health band carries the fix instead. The host is
-            //    admitted first: on a host that cannot place it, "cannot start" is the verdict that leads.
-            HostFixtures.admitLocal();
+            //    its page nor the site's offers Open site, and the health band carries the fix instead. The host
+            //    takes new apps (step 1): on a host that cannot place it, "cannot start" is the verdict that leads.
             instance.set(InstanceModel.STATUS, InstanceModel.STATUS_ERROR);
             Models.get(InstanceModel.class).save(instance);
             String failed = adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview").body();

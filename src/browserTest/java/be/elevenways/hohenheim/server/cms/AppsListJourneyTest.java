@@ -41,7 +41,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * The Apps list reads every kind of app Hohenheim serves as one row of its own, with the kind, address, host and
  * HTTPS state the app's record page says, and opens that record page; what belongs to another record (a stack's
- * members, a database's container, a database engine) is no app.
+ * members, a database's container, a database engine) is no app. A website runs where its instance runs, and a
+ * catch-all says what it catches.
  *
  * @author Jelle De Loecker
  * @since  0.2.0
@@ -104,20 +105,14 @@ class AppsListJourneyTest extends HohenheimTestBase {
                 StackServiceModel.STACK_ID.getName(), stack.get(StackModel.ID),
                 StackServiceModel.NAME.getName(), "cache", StackServiceModel.IMAGE.getName(), "redis",
                 StackServiceModel.ENABLED.getName(), false));
-            generated(cleanup, "stack", StackServiceModel.MODEL_ID, web.get(StackServiceModel.ID), "stack-web",
-                "hohenheim:stack_service", Map.of("image", "nginx"), local);
+            Row stackWeb = generated(cleanup, "stack", StackServiceModel.MODEL_ID, web.get(StackServiceModel.ID),
+                "stack-web", "hohenheim:stack_service", Map.of("image", "nginx"), local);
             generated(cleanup, "database", DatabaseModel.MODEL_ID, 919191, "database",
                 "hohenheim:database_container", Map.of("engine", "mariadb"), local);
             generated(cleanup, "database", DatabaseEngineModel.MODEL_ID, 929292, "engine",
                 "hohenheim:database_container", Map.of("engine", "postgres"), local);
 
-            Map<String, App> apps = new LinkedHashMap<>();
-            for (App app : AppDirectory.read(Objects.requireNonNull(PanelRegistry.getBySlug("admin")),
-                    TenantConduits.operator())) {
-                if (app.name().startsWith(PREFIX)) {
-                    apps.put(app.name(), app);
-                }
-            }
+            Map<String, App> apps = journeyApps();
 
             // 2. Exactly the apps a person put online: one row each, and no row for what another record owns.
             assertThat(apps.keySet()).as("step 2: one row per app, a site serving a workload folded into it")
@@ -220,11 +215,63 @@ class AppsListJourneyTest extends HohenheimTestBase {
                     .doesNotContain("Resources");
                 assertThat(page).as("step 8: the form tab says Configuration").contains("Configuration");
             }
+
+            // 9. A website runs where the instance serving it runs (board Apps-List): one served by an instance that
+            //    is no app of its own (the stack's service) names that instance's host; one no instance serves names
+            //    none, and its cell reads the board's dash, never the framework's "None".
+            Row stackSite = site(cleanup, "stack-site", "hohenheim:instance", Map.of(), stackWeb.get(InstanceModel.ID));
+            domain(stackSite, "stack-site.apps-journey.test", false);
+            App stackSiteApp = journeyApps().get(PREFIX + "stack-site");
+            assertThat(stackSiteApp).as("step 9: the site serving a stack's service is a website of its own")
+                .isNotNull();
+            assertThat(stackSiteApp.source()).as("step 9: read from the site").isEqualTo(Source.WEBSITE);
+            assertThat(stackSiteApp.host()).as("step 9: on the host its instance runs on").isEqualTo(host);
+            assertThat(journeyApps().get(PREFIX + "redirect").host()).as("step 9: a redirect runs on no host")
+                .isNull();
+            String redirectRow = adminGet("/admin/apps?_search=" + PREFIX + "redirect").body();
+            assertThat(redirectRow).as("step 9: the list draws its host cell as the board's dash")
+                .contains("class=\"cms-cell-absent\" aria-label=\"-\"").contains(">-</pb-microcopy></span>")
+                .as("step 9: never as None").doesNotContain(">None<");
+            assertThat(adminGet("/admin/apps?_search=" + PREFIX + "stack-site").body())
+                .as("step 9: the served website's row names the host")
+                .containsPattern("data-column=\"host\"[^>]*><div class=\"cms-cell-clamp\">\\s*" + host + "\\s*<");
+
+            // 10. A catch-all website (only a pattern) serves its visitors, and its verdict says what it catches: a
+            //     pattern is never presented as an address to visit ("Live at *.catch...").
+            Row catchAll = site(cleanup, "catch-all", "hohenheim:static", Map.of("root_path", "/tmp"), null);
+            SiteDomainModel names = Models.get(SiteDomainModel.class);
+            Row pattern = names.createEmptyRow();
+            pattern.set(SiteDomainModel.SITE_ID, catchAll.get(SiteModel.ID));
+            pattern.set(SiteDomainModel.HOSTNAME, "*.catch.apps-journey.test");
+            pattern.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_WILDCARD);
+            names.save(pattern);
+            App catchApp = journeyApps().get(PREFIX + "catch-all");
+            assertThat(catchApp.health().tone()).as("step 10: the catch-all serves its visitors")
+                .isEqualTo(HealthTone.OK);
+            assertThat(say(catchApp.health().headline())).as("step 10: saying what it catches")
+                .isEqualTo("Answers every address matching *.catch.apps-journey.test");
+            assertThat(catchApp.health().headline().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 10: in Dutch too").isEqualTo("Beantwoordt elk adres dat past op *.catch.apps-journey.test");
+            assertThat(adminGet("/admin/sites/" + catchAll.get(SiteModel.ID) + "/page/overview").body())
+                .as("step 10: its page never says it is live at the pattern").doesNotContain("Live at *.")
+                .contains("Answers every address matching *.catch.apps-journey.test");
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();
             }
         }
+    }
+
+    /** @return this journey's apps, by name, as the operator's Apps list reads them now */
+    private static Map<String, App> journeyApps() {
+        Map<String, App> apps = new LinkedHashMap<>();
+        for (App app : AppDirectory.read(Objects.requireNonNull(PanelRegistry.getBySlug("admin")),
+                TenantConduits.operator())) {
+            if (app.name().startsWith(PREFIX)) {
+                apps.put(app.name(), app);
+            }
+        }
+        return apps;
     }
 
     private static void assertRow(App app, Source source, String kind, String address, String host,
@@ -271,8 +318,8 @@ class AppsListJourneyTest extends HohenheimTestBase {
      * An instance another record generates (a stack service, a database container), created and removed again inside
      * its owner's scope: outside it the row is read-only.
      */
-    private static void generated(List<Runnable> cleanup, String source, Identifier owner, int ownerId, String name,
-                                  String kind, Map<String, Object> settings, int serverId) {
+    private static Row generated(List<Runnable> cleanup, String source, Identifier owner, int ownerId, String name,
+                                 String kind, Map<String, Object> settings, int serverId) {
         InstanceModel instances = Models.get(InstanceModel.class);
         Row[] row = new Row[1];
         OwnedInstances.inScopeUnchecked(source, owner, ownerId, () -> {
@@ -285,6 +332,7 @@ class AppsListJourneyTest extends HohenheimTestBase {
         });
         cleanup.add(() -> OwnedInstances.inScopeUnchecked(source, owner, ownerId,
             () -> HardDeletes.row(instances, row[0])));
+        return row[0];
     }
 
     private static void domain(Row site, String hostname, boolean forceSsl) {

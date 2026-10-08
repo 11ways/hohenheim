@@ -83,7 +83,8 @@ final class AppDirectory {
      * @param key         unique over the list: the source's token and the record's id
      * @param kind        what it is, in the words its own record page uses
      * @param addressText the address cell as plain text, for the list's search; null when it has none
-     * @param host        the host it runs on, null for a website and on the delegated panel
+     * @param host        the host it runs on (a website's: the host of the instance serving it), null without one and
+     *                    on the delegated panel
      * @param https       what HTTPS gives its main address (the one the address cell shows), in the Addresses list's
      *                    words; null without an exact address
      * @param health      the verdict its own record page leads with
@@ -151,13 +152,14 @@ final class AppDirectory {
         }
 
         Function<Row, RecordHealth> websiteHealth = AppHealth.sites(delegated).read(websites, access);
+        Map<Integer, Row> servedBy = delegated ? Map.of() : servingInstancesOf(websites);
         for (Row site : websites) {
             int id = site.get(SiteModel.ID);
             List<Row> names = domains.getOrDefault(id, List.of());
             SiteHostnamesCell address = SiteParts.hostnamesCellOf(names);
             apps.add(new App(Source.WEBSITE.token() + "-" + id, Source.WEBSITE, id,
                 String.valueOf((Object) site.get(SiteModel.NAME)), words.say(SiteParts.upstreamLabel(site)),
-                address, address.primary(), null,
+                address, address.primary(), websiteHost(site, servedBy),
                 mainHttps(names, List.of(site), working, access, panel.slug()), websiteHealth.apply(site),
                 SiteParts.recordRoute(panel.slug(), id)));
         }
@@ -183,17 +185,22 @@ final class AppDirectory {
      * The rows one entry of this panel lists for this viewer, through that entry's own source: nothing for an entry
      * the panel does not register (a node without that role) or does not admit this viewer to.
      */
-    private static @NonNull List<Row> listed(@NonNull Panel panel, @NonNull String slug,
-                                             @NonNull AccessContext access) {
-        PanelEntry entry = panel.entryBySlug(slug);
-        if (entry == null || !panel.admits(entry, access)) {
+    static @NonNull List<Row> listed(@NonNull Panel panel, @NonNull String slug, @NonNull AccessContext access) {
+        if (!offers(panel, slug, access)) {
             return List.of();
         }
+        PanelEntry entry = panel.entryBySlug(slug);
         RecordSource<?> source = CmsRecordSources.panelSource(panel, entry);
         if (source == null || !source.authorizes(access)) {
             return List.of();
         }
         return source.buildQuery(null, null, null, SortOrder.ASC, null, access).all();
+    }
+
+    /** @return whether this panel registers the entry and admits this viewer to it */
+    static boolean offers(@NonNull Panel panel, @NonNull String slug, @NonNull AccessContext access) {
+        PanelEntry entry = panel.entryBySlug(slug);
+        return entry != null && panel.admits(entry, access);
     }
 
     /**
@@ -223,6 +230,34 @@ final class AppDirectory {
     /** The name of the host a workload or stack runs on, the way its record page's lead line names it. */
     private static @NonNull String hostOf(@Nullable Integer serverId) {
         return ServerModel.nameOf(ServerModel.canonicalServerId(serverId));
+    }
+
+    /**
+     * The instances these websites serve that are no app of their own here (a generated instance, one this viewer's
+     * Instances list does not show), read once, by id: the website runs where its instance runs.
+     */
+    private static @NonNull Map<Integer, Row> servingInstancesOf(@NonNull List<Row> websites) {
+        List<Integer> ids = new ArrayList<>();
+        for (Row site : websites) {
+            Integer instanceId = site.get(SiteModel.INSTANCE_ID);
+            if (instanceId != null) {
+                ids.add(instanceId);
+            }
+        }
+        Map<Integer, Row> instances = new HashMap<>();
+        AppHealth.rowsByKey(Models.get(InstanceModel.class), InstanceModel.ID, ids)
+            .forEach((id, rows) -> instances.put(id, rows.get(0)));
+        return instances;
+    }
+
+    /**
+     * @param servedBy the instances websites serve, by id ({@link #servingInstancesOf}); empty on the delegated panel
+     * @return the host of the instance serving this website, null for a website no instance serves
+     */
+    private static @Nullable String websiteHost(@NonNull Row site, @NonNull Map<Integer, Row> servedBy) {
+        Integer instanceId = site.get(SiteModel.INSTANCE_ID);
+        Row instance = instanceId == null ? null : servedBy.get(instanceId);
+        return instance == null ? null : hostOf(instance.get(InstanceModel.SERVER_ID));
     }
 
     /** The live (untrashed) sites serving each of these workloads, read once, in stored order. */
@@ -274,7 +309,7 @@ final class AppDirectory {
     }
 
     /** The viewer's language, for the words a row carries as text (so the list sorts and searches what it shows). */
-    private record Wording(@NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
+    record Wording(@NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
 
         static @NonNull Wording of(@NonNull AccessContext access) {
             Conduit conduit = access.conduit();
@@ -286,6 +321,18 @@ final class AppDirectory {
 
         @NonNull String say(@NonNull Microcopy copy) {
             return copy.resolve(this.locales, this.resolver);
+        }
+
+        /** @return the parts said one after the other ("3 live, 1 with a problem"), null when there are none */
+        @Nullable String join(@NonNull List<Microcopy> parts) {
+            if (parts.isEmpty()) {
+                return null;
+            }
+            List<String> said = new ArrayList<>(parts.size());
+            for (Microcopy part : parts) {
+                said.add(this.say(part));
+            }
+            return String.join(", ", said);
         }
     }
 }

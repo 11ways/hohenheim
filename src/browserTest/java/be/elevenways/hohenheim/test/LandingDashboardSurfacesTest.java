@@ -72,6 +72,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  * "local, Docker") and its open admission and backups steps present the attention items stating their stage (their
  * words and worded action), so the band, holding nothing else, is not drawn under the open checklist.
  *
+ * AIDEV-NOTE: intended differences, hand-edited (D10a, 2026-10-08): the checklist reads board Empty-Dashboard's
+ * "Before your first app" / "Each step ticks itself off.", and the count tiles are board Main's Apps, Hosts,
+ * Certificates and Backups (Hohenheim's own stat widget, each with the line its facts back: "1 with a problem" for
+ * the address-less site, "1 waiting" for the never-checked host, none for no certificate, "No app has a backup
+ * target"), replacing Sites, Certificates, Access lists and Active bans.
+ *
  * AIDEV-NOTE: the attention widget reads JVM-global inputs other classes of a lane change (decided 2026-10-03: pin
  * every input the test does not own, never compare host state). {@link #pinAttentionInputs} sets the settings and
  * servers and restores them after (the DNS zones follow this class's datasource by themselves); Docker health and

@@ -34,7 +34,7 @@ public final class HohenheimWidgets {
     /**
      * Dashboard readiness checklist: the ordered steps between a fresh install and a deployed
      * workload, each one derived from the REAL gate rather than restating it. The dashboard omits
-     * the whole band once every step is done, so it retires itself.
+     * the whole band once the first app is online (or every step is done), so it retires itself.
      */
     public static final DisplayWidget ONBOARDING_CHECKLIST = register("onboarding_checklist",
         HohenheimTemplateIds.WIDGET_ONBOARDING_CHECKLIST,
@@ -82,6 +82,13 @@ public final class HohenheimWidgets {
     /** The dashboard's Apps band (board Main): each app with what it is, where, and whether HTTPS works. */
     public static final DisplayWidget APPS = register("apps", HohenheimTemplateIds.WIDGET_APPS,
         Microcopy.of("apps").withFilter("scope", "dashboard"), "cubes");
+
+    /**
+     * The admin dashboard's count tile (board Main): a count with the line saying what it holds, which the framework's
+     * record-count tile cannot say (an app is a reading, not a record; "2 of 3" is no count of one source).
+     */
+    public static final DisplayWidget STAT = register("stat", HohenheimTemplateIds.WIDGET_STAT,
+        Microcopy.of("stat_tile").withFilter("scope", "dashboard"), "gauge");
 
     /** The /manage landing's usage card (board Manage-Home): each capped budget of the tenant against its cap. */
     public static final DisplayWidget TENANT_USAGE = register("tenant_usage", HohenheimTemplateIds.WIDGET_TENANT_USAGE,

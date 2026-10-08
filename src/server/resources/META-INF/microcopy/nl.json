@@ -2589,7 +2589,7 @@
       "scope": "attention_title"
     },
     {
-      "text": "{$count} container(s), volume(s) of netwerk(en) op deze host zijn niet door Hohenheim aangemaakt. Ze blijven ongemoeid; open {$page} om precies deze te bekijken.",
+      "text": ".match {$count :number}\none {{1 Docker-resource op deze host is niet door Hohenheim aangemaakt. Die blijft ongemoeid; open {$page} om hem te bekijken.}}\n* {{{$count} Docker-resources op deze host zijn niet door Hohenheim aangemaakt. Ze blijven ongemoeid; open {$page} om precies deze te bekijken.}}",
       "scope": "attention_detail"
     }
   ],
@@ -5489,7 +5489,7 @@
       "scope": "attention_title"
     },
     {
-      "text": "{$count} Docker-resource(s) zonder levend eigenaarsrecord: {$names}",
+      "text": ".match {$count :number}\none {{1 Docker-resource zonder levend eigenaarsrecord: {$names}}}\n* {{{$count} Docker-resources zonder levend eigenaarsrecord: {$names}}}",
       "scope": "attention_detail"
     }
   ],
@@ -5499,7 +5499,7 @@
       "scope": "attention_title"
     },
     {
-      "text": "{$count} onbeheerde resource(s) dragen namen in hohenheim-stijl: {$names}",
+      "text": ".match {$count :number}\none {{1 onbeheerde resource draagt een naam in hohenheim-stijl: {$names}}}\n* {{{$count} onbeheerde resources dragen namen in hohenheim-stijl: {$names}}}",
       "scope": "attention_detail"
     }
   ],
@@ -5509,7 +5509,7 @@
       "scope": "attention_title"
     },
     {
-      "text": "{$count} poortclaim(s) staan al meer dan {$hours} uur op vrijgeven: {$ports}. Mogelijk houdt iets buiten ons beheer ze nog vast.",
+      "text": ".match {$count :number}\none {{1 poortclaim staat al meer dan {$hours} uur op vrijgeven: {$ports}. Mogelijk houdt iets buiten ons beheer hem nog vast.}}\n* {{{$count} poortclaims staan al meer dan {$hours} uur op vrijgeven: {$ports}. Mogelijk houdt iets buiten ons beheer ze nog vast.}}",
       "scope": "attention_detail"
     }
   ],
@@ -9956,11 +9956,11 @@
     "scope": "instance_overview"
   },
   "checklist_title": {
-    "text": "Krijg je eerste workload draaiend",
+    "text": "Voor je eerste app",
     "scope": "onboarding_checklist"
   },
   "checklist_description": {
-    "text": "Elke stap controleert zichzelf. Dit verdwijnt zodra alles draait.",
+    "text": "Elke stap vinkt zichzelf af.",
     "scope": "onboarding_checklist"
   },
   "checklist_open": {
@@ -15656,5 +15656,73 @@
   "act_check_again": {
     "text": "Opnieuw controleren",
     "scope": "attention_action"
+  },
+  "host_takes_no_new_apps": {
+    "text": "{$name} neemt geen nieuwe apps aan",
+    "scope": "attention_title"
+  },
+  "host_holds_apps_back": {
+    "text": "{$name} kan sommige van zijn apps niet draaien",
+    "scope": "attention_title"
+  },
+  "catches": {
+    "text": "Beantwoordt elk adres dat past op {$pattern}",
+    "scope": "app_health"
+  },
+  "host_none": {
+    "text": "-",
+    "scope": "app_list"
+  },
+  "stat_backups": {
+    "text": "Back-ups",
+    "scope": "dashboard"
+  },
+  "stat_apps_live": {
+    "text": ".match {$count :number}\none {{1 live}}\n* {{{$count} live}}",
+    "scope": "dashboard"
+  },
+  "stat_apps_problem": {
+    "text": ".match {$count :number}\none {{1 met een probleem}}\n* {{{$count} met een probleem}}",
+    "scope": "dashboard"
+  },
+  "stat_certs_attention": {
+    "text": ".match {$count :number}\none {{1 vraagt aandacht}}\n* {{{$count} vragen aandacht}}",
+    "scope": "dashboard"
+  },
+  "stat_certs_next": {
+    "text": ".match {$days :number}\none {{Eerstvolgende vervalt over 1 dag}}\n* {{Eerstvolgende vervalt over {$days} dagen}}",
+    "scope": "dashboard"
+  },
+  "stat_backups_value": {
+    "text": "{$ok} van {$total}",
+    "scope": "dashboard"
+  },
+  "stat_backups_newest": {
+    "text": "Nieuwste {$ago}, {$size}",
+    "scope": "dashboard"
+  },
+  "stat_backups_none": {
+    "text": "Geen enkele app heeft een back-updoel",
+    "scope": "dashboard"
+  },
+  "tally_waiting": {
+    "text": ".match {$count :number}\none {{1 wacht}}\n* {{{$count} wachten}}",
+    "scope": "host_admission"
+  },
+  "tally_taking": {
+    "text": ".match {$count :number}\none {{1 neemt nieuwe apps aan}}\n* {{{$count} nemen nieuwe apps aan}}",
+    "scope": "host_admission"
+  },
+  "tally_refusing": {
+    "text": ".match {$count :number}\none {{1 weigert nieuwe apps}}\n* {{{$count} weigeren nieuwe apps}}",
+    "scope": "host_admission"
+  },
+  "tally_paused": {
+    "text": ".match {$count :number}\none {{1 gepauzeerd}}\n* {{{$count} gepauzeerd}}",
+    "scope": "host_admission"
+  },
+  "stat_tile": {
+    "text": "Teltegel",
+    "scope": "dashboard"
   }
 }

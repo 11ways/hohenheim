@@ -4,10 +4,13 @@ import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.ui.ColorHue;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * One portable, encrypted instance export written to a {@link BackupTargetModel}:
@@ -92,4 +95,14 @@ public class InstanceBackupModel extends Model {
     @Override public String getModelName() { return "InstanceBackup"; }
     @Override public String getTableName() { return "instance_backups"; }
     @Override public Schema getSchema() { return SCHEMA; }
+
+    /**
+     * This instance's newest backup, whatever its status: by id, never created_at, which two backups inside one second
+     * share.
+     *
+     * @return the row, null when the instance has no backup
+     */
+    public @Nullable Row newestOf(int instanceId) {
+        return this.find().where(INSTANCE_ID.eq(instanceId)).orderBy(ID, SortOrder.DESC).first();
+    }
 }

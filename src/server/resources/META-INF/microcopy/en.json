@@ -2589,7 +2589,7 @@
       "scope": "attention_title"
     },
     {
-      "text": "{$count} container(s), volume(s) or network(s) on this host were not created by Hohenheim. They are left alone; open {$page} to review exactly these.",
+      "text": ".match {$count :number}\none {{1 Docker resource on this host was not created by Hohenheim. It is left alone; open {$page} to review it.}}\n* {{{$count} Docker resources on this host were not created by Hohenheim. They are left alone; open {$page} to review exactly these.}}",
       "scope": "attention_detail"
     }
   ],
@@ -5489,7 +5489,7 @@
       "scope": "attention_title"
     },
     {
-      "text": "{$count} Docker resource(s) have no live owning record: {$names}",
+      "text": ".match {$count :number}\none {{1 Docker resource has no live owning record: {$names}}}\n* {{{$count} Docker resources have no live owning record: {$names}}}",
       "scope": "attention_detail"
     }
   ],
@@ -5499,7 +5499,7 @@
       "scope": "attention_title"
     },
     {
-      "text": "{$count} unmanaged resource(s) hold hohenheim-style names: {$names}",
+      "text": ".match {$count :number}\none {{1 unmanaged resource holds a hohenheim-style name: {$names}}}\n* {{{$count} unmanaged resources hold hohenheim-style names: {$names}}}",
       "scope": "attention_detail"
     }
   ],
@@ -5509,7 +5509,7 @@
       "scope": "attention_title"
     },
     {
-      "text": "{$count} port claim(s) have been releasing for over {$hours} hours: {$ports}. Something outside our management may still hold them.",
+      "text": ".match {$count :number}\none {{1 port claim has been releasing for over {$hours} hours: {$ports}. Something outside our management may still hold it.}}\n* {{{$count} port claims have been releasing for over {$hours} hours: {$ports}. Something outside our management may still hold them.}}",
       "scope": "attention_detail"
     }
   ],
@@ -9956,11 +9956,11 @@
     "scope": "instance_overview"
   },
   "checklist_title": {
-    "text": "Get your first workload running",
+    "text": "Before your first app",
     "scope": "onboarding_checklist"
   },
   "checklist_description": {
-    "text": "Each step checks itself. This disappears once the fleet is running.",
+    "text": "Each step ticks itself off.",
     "scope": "onboarding_checklist"
   },
   "checklist_open": {
@@ -15656,5 +15656,73 @@
   "act_check_again": {
     "text": "Check again",
     "scope": "attention_action"
+  },
+  "host_takes_no_new_apps": {
+    "text": "{$name} takes no new apps",
+    "scope": "attention_title"
+  },
+  "host_holds_apps_back": {
+    "text": "{$name} cannot run some of its apps",
+    "scope": "attention_title"
+  },
+  "catches": {
+    "text": "Answers every address matching {$pattern}",
+    "scope": "app_health"
+  },
+  "host_none": {
+    "text": "-",
+    "scope": "app_list"
+  },
+  "stat_backups": {
+    "text": "Backups",
+    "scope": "dashboard"
+  },
+  "stat_apps_live": {
+    "text": ".match {$count :number}\none {{1 live}}\n* {{{$count} live}}",
+    "scope": "dashboard"
+  },
+  "stat_apps_problem": {
+    "text": ".match {$count :number}\none {{1 with a problem}}\n* {{{$count} with a problem}}",
+    "scope": "dashboard"
+  },
+  "stat_certs_attention": {
+    "text": ".match {$count :number}\none {{1 needs attention}}\n* {{{$count} need attention}}",
+    "scope": "dashboard"
+  },
+  "stat_certs_next": {
+    "text": ".match {$days :number}\none {{Next expiry in 1 day}}\n* {{Next expiry in {$days} days}}",
+    "scope": "dashboard"
+  },
+  "stat_backups_value": {
+    "text": "{$ok} of {$total}",
+    "scope": "dashboard"
+  },
+  "stat_backups_newest": {
+    "text": "Newest {$ago}, {$size}",
+    "scope": "dashboard"
+  },
+  "stat_backups_none": {
+    "text": "No app has a backup target",
+    "scope": "dashboard"
+  },
+  "tally_waiting": {
+    "text": ".match {$count :number}\none {{1 waiting}}\n* {{{$count} waiting}}",
+    "scope": "host_admission"
+  },
+  "tally_taking": {
+    "text": ".match {$count :number}\none {{1 takes new apps}}\n* {{{$count} take new apps}}",
+    "scope": "host_admission"
+  },
+  "tally_refusing": {
+    "text": ".match {$count :number}\none {{1 refuses new apps}}\n* {{{$count} refuse new apps}}",
+    "scope": "host_admission"
+  },
+  "tally_paused": {
+    "text": ".match {$count :number}\none {{1 paused}}\n* {{{$count} paused}}",
+    "scope": "host_admission"
+  },
+  "stat_tile": {
+    "text": "Count tile",
+    "scope": "dashboard"
   }
 }
