@@ -60,8 +60,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code build/panel-surfaces/} and fails, so recording is a deliberate copy. Per case it holds the status, the
  * redirect, the title, the dashboard nav links and the widget surface, with markup ids, digits, UUIDs and CSRF values
  * masked and every tag's attributes in name order (HTML attribute order means nothing): the data under the widgets
- * is not this conversion's subject. The one declared difference is the surface
- * address: a legacy peer answered to its slug address, a PanelDashboard only to its id token (P07, no slug alias).
+ * is not this conversion's subject. The declared differences are the surface address (a legacy peer answered to its
+ * slug address, a PanelDashboard only to its id token: P07, no slug alias) and the /manage landing's surface, which
+ * W9b redrew on purpose ({@link #redrawn}).
  *
  * AIDEV-NOTE: the attention widget reads JVM-global inputs other classes of a lane change (decided 2026-10-03: pin
  * every input the test does not own, never compare host state). {@link #pinAttentionInputs} sets the settings and
@@ -88,6 +89,8 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
     private static final Pattern SPACE = Pattern.compile("\\s+");
     private static final Pattern START_TAG = Pattern.compile("<([a-z][a-z0-9-]*)((?:\\s+[^\\s=>\"]+(?:=\"[^\"]*\")?)+)\\s*>");
     private static final Pattern ATTRIBUTE = Pattern.compile("[^\\s=>\"]+(?:=\"[^\"]*\")?");
+    private static final Pattern MANAGE_LANDING = Pattern.compile("case [a-z]+ /manage/dashboard\\b");
+    private static final Pattern SURFACE_LINE = Pattern.compile("(?m)^  surface .*$");
 
     private static TestSession tenant;
     private static TestSession outsider;
@@ -217,8 +220,22 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
             stored = stored.replace("surface=\"cms:" + panelSlug + "/dashboard\"",
                 "surface=\"" + normalize(dashboardToken(panelSlug)) + "\"");
         }
-        assertThat(cases(current)).as("step 3: every audience's landing dashboards are the stored ones")
-            .containsExactlyElementsOf(cases(sortAttributes(stored)));
+        assertThat(redrawn(cases(current))).as("step 3: every audience's landing dashboards are the stored ones")
+            .containsExactlyElementsOf(redrawn(cases(sortAttributes(stored))));
+    }
+
+    /**
+     * The declared difference: the /manage landing's widget surface was redrawn on purpose (plan section 23, W9b:
+     * the tenant's apps band, their verdicts in the attention band, the usage card), so its surface line is not
+     * compared; its status, title and nav still are. ManagePanelJourneyTest proves what the new surface shows.
+     */
+    private static @NonNull List<String> redrawn(@NonNull List<String> cases) {
+        List<String> declared = new ArrayList<>(cases.size());
+        for (String text : cases) {
+            boolean manageLanding = MANAGE_LANDING.matcher(text).lookingAt();
+            declared.add(manageLanding ? SURFACE_LINE.matcher(text).replaceAll("  surface redrawn by W9b") : text);
+        }
+        return declared;
     }
 
     /** @return the surface token the panel's dashboard entry answers to */

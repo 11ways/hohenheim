@@ -119,8 +119,6 @@ public final class DomainParts {
     /** @return the /manage twin: the domains of the sites the caller manages, through the delegated form */
     public static @NonNull PanelResource<Row> manage() {
         return entry("manage_site_domain")
-            // Reached through a site's Addresses tab on this panel, which has no Domains cluster.
-            .showInNav(false)
             .scope(TenantScopes.DOMAINS)
             .form(form(manageFormSpec()))
             // NAV-ONLY (zero granted sites hide the empty list); the route itself stays scoped.

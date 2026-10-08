@@ -59,10 +59,13 @@ public final class ProjectMembershipParts {
         }
     };
 
+    /** The entry's slug, a member of the /manage Team cluster. */
+    public static final String SLUG = "project-members";
+
     private ProjectMembershipParts() {}
 
     public static @NonNull PanelResource<Membership> manage() {
-        return PanelResource.builder(HohenheimIds.id("manage_project_member"), "project-members",
+        return PanelResource.builder(HohenheimIds.id("manage_project_member"), SLUG,
                 SubjectType.of(HohenheimIds.id("project_membership"), Membership.class, Membership::key))
             .label(Microcopy.of("members").withFilter("scope", "project"))
             .recordLabel(Microcopy.of("singular").withFilter("scope", "project_member"))

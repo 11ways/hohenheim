@@ -39,6 +39,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * The Apps list of both panels: one row per app of the {@link AppDirectory}, each opening its record page.
@@ -74,32 +75,44 @@ public final class AppParts {
      * @return the operator's Apps list
      */
     static @NonNull PanelResource<App> admin(@NonNull List<String> related, @Nullable String putOnline) {
-        PanelResource.Builder<App> builder = entry("app", HohenheimPanel.SLUG, true)
-            .navGroup(NavGroup.DEFAULT)
-            .navOrder(20);
+        return onward(entry("app", HohenheimPanel.SLUG, true), related, putOnline, null).build();
+    }
+
+    /**
+     * @param related   the slugs of the /manage entries an app is made of that this node registers, linked from the
+     *                  list's toolbar
+     * @param putOnline the entry that puts something online, null on a node that has none
+     * @return the /manage twin: the apps made of the sites and instances the caller may list there; no host column,
+     *         since the delegated panel names no host
+     */
+    static @NonNull PanelResource<App> manage(@NonNull List<String> related, @Nullable String putOnline) {
+        return onward(entry("manage_app", ManagePanel.SLUG, false), related, putOnline,
+                InstanceTemplateParts::offersTenantCatalog)
+            // NAV-ONLY: a tenant granted nothing an app is made of sees no empty entry; the list stays scoped.
+            .hasInScopeRecords(access -> HohenheimAccess.managesAnySite(access)
+                || HohenheimAccess.reachesAny(access, InstanceModel.MODEL_ID, HohenheimAccess.VIEW))
+            .build();
+    }
+
+    /**
+     * Both twins' sidebar place, toolbar pages and primary verb.
+     *
+     * @param offered who is offered the primary verb, null for everyone the panel admits
+     */
+    private static PanelResource.@NonNull Builder<App> onward(PanelResource.@NonNull Builder<App> builder,
+                                                              @NonNull List<String> related,
+                                                              @Nullable String putOnline,
+                                                              @Nullable Predicate<AccessContext> offered) {
+        builder.navGroup(NavGroup.DEFAULT).navOrder(20);
         List<RelatedPage> pages = new ArrayList<>();
         for (String slug : related) {
             pages.add(RelatedPage.toPeer(slug));
         }
         builder.relatedPages(pages.toArray(RelatedPage[]::new));
         if (putOnline != null) {
-            builder.actions(List.of(putOnlineAction(putOnline)));
+            builder.actions(List.of(putOnlineAction(putOnline, offered)));
         }
-        return builder.build();
-    }
-
-    /**
-     * @return the /manage twin: the apps made of the sites and instances the caller may list there; no host column,
-     *         since the delegated panel names no host
-     */
-    static @NonNull PanelResource<App> manage() {
-        return entry("manage_app", ManagePanel.SLUG, false)
-            .navGroup(HohenheimPanel.DEPLOY_GROUP)
-            .navOrder(5)
-            // NAV-ONLY: a tenant granted nothing an app is made of sees no empty entry; the list stays scoped.
-            .hasInScopeRecords(access -> HohenheimAccess.managesAnySite(access)
-                || HohenheimAccess.reachesAny(access, InstanceModel.MODEL_ID, HohenheimAccess.VIEW))
-            .build();
+        return builder;
     }
 
     private static PanelResource.@NonNull Builder<App> entry(@NonNull String id, @NonNull String panelSlug,
@@ -191,17 +204,23 @@ public final class AppParts {
     }
 
     /**
-     * The list's primary verb, until the put-online flow (W5) exists: the page that puts a workload online from a
-     * template.
+     * The list's primary verb: the Put something online flow.
+     *
+     * @param offered who is offered it, null for everyone the panel admits
      */
-    private static @NonNull PanelAction<App> putOnlineAction(@NonNull String entrySlug) {
-        return PanelAction.<App>link(HohenheimIds.id("app_put_online"), ActionPlacement.HEADER)
+    private static @NonNull PanelAction<App> putOnlineAction(@NonNull String entrySlug,
+                                                             @Nullable Predicate<AccessContext> offered) {
+        PanelAction.LinkBuilder<App> link = PanelAction.<App>link(HohenheimIds.id("app_put_online"),
+                ActionPlacement.HEADER)
             .label(copy("put_online"))
             .icon(Icon.of("plus"))
             .style(ActionStyle.PRIMARY)
             .inlineInHeader(true)
-            .toEntry(entrySlug)
-            .build();
+            .toEntry(entrySlug);
+        if (offered != null) {
+            link.shownWhen((app, access) -> offered.test(access));
+        }
+        return link.build();
     }
 
     /** The kind filter's values: the directory's own closed set. */

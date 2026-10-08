@@ -93,6 +93,8 @@ public final class InstanceTemplateParts {
     public static @NonNull PanelResource<Row> manage() {
         return base(HohenheimIds.id("manage_instance_template"))
             .navOrder(60)
+            // Reached through Put something online and the Apps list's toolbar (ManagePanel's sidebar note).
+            .showInNav(false)
             .description(Microcopy.of("nav_hint").withFilter("scope", "instance_template"))
             .scope(TenantScopes.INSTANCE_TEMPLATES)
             // NAV-ONLY: the catalog exists to start a create, so it stays out of the nav for a tenant who may not
@@ -226,7 +228,11 @@ public final class InstanceTemplateParts {
     }
 
     /** An operator always; a tenant who may create, once anything is approved. */
-    private static boolean offersTenantCatalog(@NonNull AccessContext access) {
+    /**
+     * Whether this viewer may start something from the catalog: an admin always, anyone else only with the right to
+     * create instances and at least one approved template. /manage offers Put something online by it too.
+     */
+    static boolean offersTenantCatalog(@NonNull AccessContext access) {
         if (HohenheimAccess.isAdmin(access)) {
             return true;
         }

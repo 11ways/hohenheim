@@ -57,7 +57,7 @@ class MicrocopyCatalogScopeTest {
                 "spamservice_key", "spamservice_reputation", "spamservice_sample", "spamservice_word", "stack",
                 "stack_deploy_reason", "stack_deploy_status", "stack_deployments", "stack_file", "stack_mount_type",
                 "stack_service", "stack_services", "stack_state", "stack_status", "stop_kind", "template_contents",
-                "template_database", "template_file", "template_import", "template_variable", "template_volume",
+                "template_database", "template_file", "template_import", "template_variable", "template_volume", "tenant_usage",
                 "uid_mode", "upstream_kind", "upstream_kind_description", "upstream_protocol", "upstream_scheme",
                 "user", "variable_kind", "variable_type", "volume_backend", "webhook_outcome")
             .requireClaimed();

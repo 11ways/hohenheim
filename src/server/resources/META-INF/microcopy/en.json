@@ -1384,6 +1384,10 @@
     {
       "text": "Booked memory",
       "scope": "instance_migrate"
+    },
+    {
+      "text": "Memory",
+      "scope": "tenant_usage"
     }
   ],
   "no_logs": {
@@ -1739,6 +1743,10 @@
     {
       "text": "Interactive shell",
       "scope": "instance_shell"
+    },
+    {
+      "text": "Your usage",
+      "scope": "tenant_usage"
     }
   ],
   "description": [
@@ -2527,18 +2535,6 @@
       "scope": "manage"
     }
   ],
-  "blocked_instance": {
-    "text": "{$instance} cannot deploy yet",
-    "scope": "manage_dashboard"
-  },
-  "blocked_instance_detail": {
-    "text": "A precondition outside your control is not met. Open the instance for what you can do, or contact your operator.",
-    "scope": "manage_dashboard"
-  },
-  "your_instances": {
-    "text": "Your instances",
-    "scope": "manage_dashboard"
-  },
   "download": [
     {
       "text": "Download",
@@ -2703,6 +2699,10 @@
     {
       "text": "Databases",
       "scope": "database_engine"
+    },
+    {
+      "text": "Databases",
+      "scope": "tenant_usage"
     }
   ],
   "clone_confirm": {
@@ -8364,6 +8364,10 @@
     {
       "text": "Root disk",
       "scope": "instance_stats"
+    },
+    {
+      "text": "Disk",
+      "scope": "tenant_usage"
     }
   ],
   "nic": {
@@ -14106,10 +14110,16 @@
     "text": "Some of its services are not healthy.",
     "scope": "app_health"
   },
-  "lead": {
-    "text": "Creates the app, its address and its certificate in one go.",
-    "scope": "put_online"
-  },
+  "lead": [
+    {
+      "text": "Creates the app, its address and its certificate in one go.",
+      "scope": "put_online"
+    },
+    {
+      "text": "Limits set by the operator of this installation.",
+      "scope": "tenant_usage"
+    }
+  ],
   "what_question": {
     "text": "What do you want to put online?",
     "scope": "put_online"
@@ -14643,10 +14653,16 @@
     "text": "Replaced",
     "scope": "deployments"
   },
-  "previews": {
-    "text": "Previews",
-    "scope": "deployments"
-  },
+  "previews": [
+    {
+      "text": "Previews",
+      "scope": "deployments"
+    },
+    {
+      "text": "Previews",
+      "scope": "tenant_usage"
+    }
+  ],
   "previews_description": {
     "text": "A temporary copy per branch or pull request.",
     "scope": "deployments"
@@ -15229,5 +15245,65 @@
   "lift_title": {
     "text": "Lift this block",
     "scope": "ban"
+  },
+  "tenant_domains": [
+    {
+      "text": "Domains",
+      "scope": "nav_cluster"
+    },
+    {
+      "text": "Your addresses, DNS records, certificates and access lists.",
+      "scope": "nav_cluster_hint"
+    }
+  ],
+  "team": [
+    {
+      "text": "Team",
+      "scope": "nav_cluster"
+    },
+    {
+      "text": "The projects you are in and the people in them.",
+      "scope": "nav_cluster_hint"
+    }
+  ],
+  "need_more": {
+    "text": "Need more? Ask the operator of this installation.",
+    "scope": "tenant_usage"
+  },
+  "of_count": {
+    "text": "{$used} of {$limit}",
+    "scope": "tenant_usage"
+  },
+  "of_size": {
+    "text": "{$used} of {$limit}",
+    "scope": "tenant_usage"
+  },
+  "instances": {
+    "text": "Apps",
+    "scope": "tenant_usage"
+  },
+  "sites": {
+    "text": "Websites",
+    "scope": "tenant_usage"
+  },
+  "you_can": {
+    "text": "You can",
+    "scope": "instance_overview"
+  },
+  "you_can_look": {
+    "text": "Look at it; ask the operator for more",
+    "scope": "instance_overview"
+  },
+  "operator_decides": {
+    "text": "Up to the operator",
+    "scope": "instance_overview"
+  },
+  "operator_decides_detail": {
+    "text": "Removing this app and changing who has access to it.",
+    "scope": "instance_overview"
+  },
+  "your_part": {
+    "text": "What you can do here",
+    "scope": "instance_overview"
   }
 }

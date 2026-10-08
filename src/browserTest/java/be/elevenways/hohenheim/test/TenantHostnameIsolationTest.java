@@ -301,9 +301,11 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
             assertThat(slugsOf(ManagePanel.declareEntries()))
                 .as("step 1: a full node projects the instance tier")
                 .contains("instances", "databases", "instance-databases");
+            // The overview names no record source of its own any more: its apps band reads the App directory, which
+            // reads only the entries the panel registered (AppDirectory.listed), so a tier without a route adds no app.
             assertThat(instanceSources(new ManageDashboard().widgets(ctx)))
-                .as("step 1: and the overview carries the instance list")
-                .isNotEmpty();
+                .as("step 1: the overview lists apps through the directory, never an instance source")
+                .isEmpty();
 
             // 2. The starfleet shape: proxy/DNS/firewall on, every workload tier off. The
             //    instance, database and instance-database projections have no route, the
@@ -319,7 +321,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
                 .contains("sites", "domains", "dns-records", "certificates",
                     "git-providers", "access-lists", "projects");
             assertThat(instanceSources(new ManageDashboard().widgets(ctx)))
-                .as("step 2: the overview offers no instance list for a tier with no route")
+                .as("step 2: the overview still offers no instance list for a tier with no route")
                 .isEmpty();
 
             // 3. DNS off drops the record authoring peer and nothing else of the proxy tier.

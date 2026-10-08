@@ -121,6 +121,24 @@
         }
     }
 
+    // A tenant's usage card: the budget and its amount on one line, the bar under them, a gap between budgets.
+    .hh-tenant-usage-line {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: var(--pl-space-xs);
+        margin-block-end: var(--pl-space-md);
+
+        pl-usage-bar {
+            grid-column: 1 / -1;
+        }
+    }
+
+    .hh-tenant-usage-amount,
+    .hh-tenant-usage-more {
+        color: var(--pl-color-text-muted);
+        font-size: var(--pl-font-size-sm);
+    }
+
     .hh-state-line-detail,
     .hh-cert-expiry {
         color: var(--pl-color-text-muted);

@@ -166,6 +166,8 @@ public final class SiteParts {
      */
     public static @NonNull PanelResource<Row> manage() {
         return entry("manage_site")
+            // Reached from the Apps list's toolbar (ManagePanel's sidebar note).
+            .showInNav(false)
             .health(AppHealth.sites(true))
             .scope(TenantScopes.SITES)
             // NAV-ONLY (zero granted sites hide the empty list); the route itself stays scoped.
