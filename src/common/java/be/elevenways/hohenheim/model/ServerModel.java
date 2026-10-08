@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimViolations;
@@ -608,14 +609,17 @@ public class ServerModel extends Model {
             return this.total() > 0;
         }
 
-        /** @return {@code message} carrying every count as an argument, the total as {@code workloads} */
+        /**
+         * @return {@code message} carrying every count as a counted phrase ("2 stacks"), the total as the number
+         *         {@code workloads}
+         */
         public @NonNull Microcopy describe(@NonNull Microcopy message) {
             return message
-                .withArg("stacks", this.stacks)
-                .withArg("databases", this.databases)
-                .withArg("engines", this.engines)
-                .withArg("instances", this.instances)
-                .withArg("ports", this.ports)
+                .withArg("stacks", HohenheimCounts.of("stacks", this.stacks))
+                .withArg("databases", HohenheimCounts.of("databases", this.databases))
+                .withArg("engines", HohenheimCounts.of("engines", this.engines))
+                .withArg("instances", HohenheimCounts.of("instances", this.instances))
+                .withArg("ports", HohenheimCounts.of("port_claims", this.ports))
                 .withArg("workloads", this.total());
         }
     }

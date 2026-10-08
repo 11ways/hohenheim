@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
@@ -80,8 +81,8 @@ public final class SiteAuthProviderGuards {
         throw Violations.ofForm(CmsSupport.violationText("auth_provider_in_use")
             .withArg("name", provider != null
                 ? String.valueOf((Object) provider.get(SiteAuthProviderModel.NAME)) : "")
-            .withArg("sites", siteCount)
-            .withArg("rules", ruleCount));
+            .withArg("sites", HohenheimCounts.of("sites", siteCount))
+            .withArg("rules", HohenheimCounts.of("access_rules", ruleCount)));
     }
 
     /** The provider ids every provider-typed access rule names, dangling ones included. */

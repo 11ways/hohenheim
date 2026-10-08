@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.host;
 
+import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -80,7 +81,8 @@ class HostRemovalAgreementTest {
             assertThat(byEngine).as("step 2: a host carrying a shared engine is not deletable")
                 .isNotNull();
             assertThat(byEngine.key()).as("step 2: with the in-use reason").isEqualTo("delete_in_use");
-            assertThat(byEngine.args().get("engines")).as("step 2: naming the engine").isEqualTo(1L);
+            assertThat(byEngine.args().get("engines")).as("step 2: naming the engine, as a counted phrase")
+                .isEqualTo(HohenheimCounts.of("engines", 1L));
             assertThat(byEngine.args().get("workloads"))
                 .as("step 2: and counting it in the total").isEqualTo(1L);
             assertThat(violationKeyOf(catchThrowable(() ->
@@ -92,7 +94,8 @@ class HostRemovalAgreementTest {
             PortLedger.claim(hostId, "", 47811, "tcp", null, null, "agreement probe");
             Microcopy byPort = deleteReason(host, operator);
             assertThat(byPort).as("step 3: a host holding a port claim is not deletable").isNotNull();
-            assertThat(byPort.args().get("ports")).as("step 3: naming the claim").isEqualTo(1L);
+            assertThat(byPort.args().get("ports")).as("step 3: naming the claim, as a counted phrase")
+                .isEqualTo(HohenheimCounts.of("port_claims", 1L));
             assertThat(violationKeyOf(catchThrowable(() ->
                     Models.get(ServerModel.class).delete((Object) hostId))))
                 .as("step 3: and the removal refuses it too").isEqualTo("server_in_use");

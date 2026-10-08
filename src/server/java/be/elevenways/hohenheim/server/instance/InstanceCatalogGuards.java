@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
@@ -110,8 +111,8 @@ public final class InstanceCatalogGuards {
         throw Violations.ofForm(CmsSupport.violationText("runtime_image_in_use")
             .withArg("name", image != null
                 ? String.valueOf((Object) image.get(RuntimeImageModel.NAME)) : "")
-            .withArg("instances", instanceCount)
-            .withArg("templates", templateCount));
+            .withArg("instances", HohenheimCounts.of("instances", instanceCount))
+            .withArg("templates", HohenheimCounts.of("templates", templateCount)));
     }
 
     private static @NonNull QueryBuilder<Row> liveInstances() {

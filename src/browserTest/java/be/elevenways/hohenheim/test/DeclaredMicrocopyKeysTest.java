@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimCounts;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
@@ -47,7 +48,7 @@ class DeclaredMicrocopyKeysTest {
     private JavaMicrocopyKeys scan() {
         return JavaMicrocopyKeys.in(Path.of("src/common"), Path.of("src/server"))
             // The helpers' own files only FORWARD their parameters; they declare no key.
-            .excluding("HohenheimFormCopy.java", "HohenheimViolations.java")
+            .excluding("HohenheimFormCopy.java", "HohenheimViolations.java", "HohenheimCounts.java")
             .factory("HohenheimFormCopy.label", List.of("scope=" + HohenheimFormCopy.FIELD_SCOPE), List.of())
             .factory("HohenheimFormCopy.help", List.of("scope=help"), List.of())
             .factory("HohenheimFormCopy.section", List.of("scope=form_section"), List.of())
@@ -58,6 +59,8 @@ class DeclaredMicrocopyKeysTest {
             // ServerResource's own host-scoped helper; a key it builds is never spelled
             // through Microcopy.of, so without this the whole host vocabulary is invisible.
             .factory("serverCopy", List.of("scope=server"), List.of())
+            // A counted noun ("2 stacks") a sentence counting several things carries as an argument.
+            .factory("HohenheimCounts.of", List.of("scope=" + HohenheimCounts.SCOPE), List.of())
             .factory(JavaMicrocopyKeys.MICROCOPY_OF);
     }
 

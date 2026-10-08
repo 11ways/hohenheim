@@ -685,16 +685,53 @@ public class SiteDispatcher implements HttpHandler {
      * that REFUSE plain HTTP while HTTPS termination is unavailable.
      */
     public List<String> forceSslSiteNames() {
-        Set<String> names = new TreeSet<>();
-        for (RouteEntry entry : this.routes.entries()) {
-            if (forcesHttps(entry)) names.add(entry.siteName);
-        }
+        ForcedSites forced = forcedSites();
+        Set<String> names = new TreeSet<>(forced.own());
+        names.addAll(forced.bySetting());
         return List.copyOf(names);
+    }
+
+    /**
+     * The sites {@link #forcesHttps} sends to HTTPS, split by what sends them: an address's own Force HTTPS, or the
+     * global Force HTTPS setting (a pattern, or a name a working certificate covers). A site with both is its own.
+     *
+     * AIDEV-NOTE: D10a's dashboard said "sites that force SSL" of a catch-all and a certified name that forced nothing
+     * themselves: the setting (on by default) sent them. The reader names each by its cause.
+     */
+    public ForcedSites forcedSites() {
+        Set<String> own = new TreeSet<>();
+        Set<String> bySetting = new TreeSet<>();
+        for (RouteEntry entry : this.routes.entries()) {
+            if (entry.forceSsl) {
+                own.add(entry.siteName);
+            } else if (forcedBySetting(entry)) {
+                bySetting.add(entry.siteName);
+            }
+        }
+        bySetting.removeAll(own);
+        return new ForcedSites(List.copyOf(own), List.copyOf(bySetting));
+    }
+
+    /**
+     * @param own       sites with an address forcing HTTPS itself, in name order
+     * @param bySetting sites only the global Force HTTPS setting sends to HTTPS, in name order
+     */
+    public record ForcedSites(List<String> own, List<String> bySetting) {
+
+        /** @return whether no site is sent to HTTPS */
+        public boolean isEmpty() {
+            return own.isEmpty() && bySetting.isEmpty();
+        }
     }
 
     /** @return whether this route refuses plain HTTP: its own force_ssl, or the global force_https where it applies */
     private static boolean forcesHttps(RouteEntry entry) {
-        return entry.forceSsl || entry.globalForce && Boolean.TRUE.equals(
+        return entry.forceSsl || forcedBySetting(entry);
+    }
+
+    /** @return whether the global force_https setting sends this route to HTTPS (it waits for a working certificate) */
+    private static boolean forcedBySetting(RouteEntry entry) {
+        return entry.globalForce && Boolean.TRUE.equals(
             Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
     }
 

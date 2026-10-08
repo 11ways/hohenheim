@@ -1,11 +1,13 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceStatus;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
@@ -92,9 +94,28 @@ final class AppHealth {
         Map<Integer, HeldBack> held = new LinkedHashMap<>();
         for (Row instance : instances) {
             Verdict verdict = instanceVerdict(instance, facts, false, null);
-            if (verdict.heldBy() != null) {
-                held.merge(verdict.heldBy(), new HeldBack(1, verdict.health().detail()),
+            AttentionSubject cause = verdict.cause();
+            if (cause != null && ServerModel.MODEL_ID.equals(cause.model())) {
+                held.merge(cause.id(), new HeldBack(1, verdict.health().detail()),
                     (first, next) -> new HeldBack(first.apps() + 1, first.reason()));
+            }
+        }
+        return held;
+    }
+
+    /**
+     * How many switched-on websites each record keeps from their visitors: the sites whose verdict names that record
+     * as its cause (a workload that does not run, an address forced to HTTPS without a certificate). A root item about
+     * that record says it ("Visitors of its site get an error page") while the sites' own items fold under it.
+     */
+    static @NonNull Map<AttentionSubject, Integer> sitesHeldBack() {
+        List<Row> sites = Models.get(SiteModel.class).find().where(SiteModel.ENABLED.eq(true)).all();
+        SiteFacts facts = SiteFacts.of(sites);
+        Map<AttentionSubject, Integer> held = new LinkedHashMap<>();
+        for (Row site : sites) {
+            AttentionSubject cause = siteVerdict(site, facts, false, null).cause();
+            if (cause != null) {
+                held.merge(cause, 1, Integer::sum);
             }
         }
         return held;
@@ -176,11 +197,13 @@ final class AppHealth {
             }
         }
         boolean passthrough = SiteParts.tlsPassthrough(site);
-        String forced = forcedWithoutCertificate(domains, facts.working, passthrough);
+        Row forced = forcedUncoveredDomain(domains, facts.working, passthrough);
         if (forced != null) {
-            return Verdict.notServing(RecordHealth.broken(copy("error_page"))
-                .detail(copy("forced_without_certificate").withArg("host", forced))
-                .fixedBy(SiteActions.FIX_HTTPS, SiteOperations.STOP_FORCING_HTTPS.id()));
+            // The address is the cause: its own item ("Visitors of shop.example get an error page") is the root.
+            return Verdict.causedBy(AttentionSubject.address(forced.get(SiteDomainModel.ID)),
+                RecordHealth.broken(copy("error_page"))
+                    .detail(copy("forced_without_certificate").withArg("host", forced.get(SiteDomainModel.HOSTNAME)))
+                    .fixedBy(SiteActions.FIX_HTTPS, SiteOperations.STOP_FORCING_HTTPS.id()));
         }
         Row instance = facts.instances.get(site.get(SiteModel.INSTANCE_ID));
         if (instance != null) {
@@ -225,8 +248,10 @@ final class AppHealth {
         if (status != null && workloadServes(status)) {
             return null;
         }
-        return Verdict.notServing(RecordHealth.broken(copy("error_page"))
-            .detail(copy("workload_not_running").withArg("name", instance.get(InstanceModel.NAME))));
+        // The workload is the cause: a crashed or failed-to-deploy workload's own item is the root, never the site's.
+        return Verdict.causedBy(AttentionSubject.instance(instance.get(InstanceModel.ID)),
+            RecordHealth.broken(copy("error_page"))
+                .detail(copy("workload_not_running").withArg("name", instance.get(InstanceModel.NAME))));
     }
 
     /**
@@ -348,12 +373,19 @@ final class AppHealth {
     /** @return the first exact name forced to HTTPS that no working certificate covers, null when none is */
     static @Nullable String forcedWithoutCertificate(@NonNull List<Row> domains, @NonNull Set<String> working,
                                                      boolean passthrough) {
+        Row domain = forcedUncoveredDomain(domains, working, passthrough);
+        return domain == null ? null : domain.get(SiteDomainModel.HOSTNAME);
+    }
+
+    /** @return the address row of {@link #forcedWithoutCertificate}, null when none is */
+    private static @Nullable Row forcedUncoveredDomain(@NonNull List<Row> domains, @NonNull Set<String> working,
+                                                       boolean passthrough) {
         if (passthrough) {
             return null;
         }
         for (Row domain : domains) {
             if (forcedUncovered(domain, working)) {
-                return domain.get(SiteDomainModel.HOSTNAME);
+                return domain;
             }
         }
         return null;
@@ -532,15 +564,17 @@ final class AppHealth {
     /**
      * One app's verdict, whether visitors reach it and what causes it. The serving half is what Open site and the
      * first-run checklist ask: a link to an app that cannot start, is stopped or answers an error page offers nothing.
-     * The cause half is what the dashboard folds by: an app held back by its host is that host's problem first.
+     * The cause half is what the dashboard folds by: an app held back by its host is that host's problem first, a
+     * site whose workload does not run is that workload's, and a site whose address is forced to HTTPS without a
+     * certificate is that address's.
      *
      * AIDEV-NOTE: serving and cause are decided where the verdict is, at each branch, never re-derived from the tone or
      * the words: an ATTENTION verdict can mean "cannot start" (nothing served) or "a path is open" (served), and only
      * the branch that asked the placement gate knows the host refused.
      *
-     * @param heldBy the host whose placement refusal this verdict is, null when no host holds the app back
+     * @param cause the record whose own problem this verdict is (a host, a workload, an address), null for none
      */
-    record Verdict(@NonNull RecordHealth health, boolean serving, @Nullable Integer heldBy) {
+    record Verdict(@NonNull RecordHealth health, boolean serving, @Nullable AttentionSubject cause) {
 
         static @NonNull Verdict serving(@NonNull RecordHealth health) {
             return new Verdict(health, true, null);
@@ -551,7 +585,11 @@ final class AppHealth {
         }
 
         static @NonNull Verdict heldBy(int host, @NonNull RecordHealth health) {
-            return new Verdict(health, false, host);
+            return new Verdict(health, false, AttentionSubject.host(host));
+        }
+
+        static @NonNull Verdict causedBy(@NonNull AttentionSubject cause, @NonNull RecordHealth health) {
+            return new Verdict(health, false, cause);
         }
     }
 

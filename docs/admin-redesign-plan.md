@@ -1223,3 +1223,66 @@ The admin dashboard and the Apps list brought closer to boards Main, Empty-Dashb
   DashboardVocabularyDriftTest, LandingDashboardSurfacesTest (baseline hand-edited: the checklist's board words and the
   four tiles with their lines), ManagePanelJourneyTest, AppOverviewJourneyTest, InstanceAttentionTest and the four
   microcopy gates.
+
+## 29. D11 decisions (fork D11, 2026-10-08)
+
+The dashboard defects D10a's walk left (shot `d10a/02`), each fixed at its cause.
+
+- Home: Hohenheim. `zemble home` pointed a task label at zenit core (`TaskCatalog`/`ScheduledTask`), which this fork
+  may not push; the label is Hohenheim copy instead (below). The fold is D8's mechanism, the refusal words D9's.
+- One cause, one item: the app verdict's cause half is a record, `AppHealth.Verdict.cause` (`AttentionSubject`:
+  a host, a workload, an address), no longer only a host id. A site whose workload does not run names the workload
+  (`AttentionSubject.instance`); a site whose address is forced to HTTPS without a certificate names that address
+  (`AttentionSubject.address`). The crashed-workload item and the failed-deploy item are `about` their workload and
+  say what they keep from visitors (`sites_held_back`, "Visitors of its site get an error page", from
+  `AppHealth.sitesHeldBack`); the forced-address item is `about` its address. The site's error-page item folds under
+  whichever is shown. A stopped workload raises no item of its own, so its site's item stays (a fold needs a shown
+  root). A failed or degraded HTTPS listener is the root of the forced sites' refusal: it carries them as what it
+  holds back (`AttentionItem.holding`) and the "HTTPS is unavailable" item stays silent while it speaks.
+- HTTPS is unavailable: the list was right about behaviour and wrong in words. `SiteDispatcher.forcesHttps` counts the
+  global Force HTTPS setting (on by default) for every pattern and for every exact name an ACTIVE certificate row
+  covers, so D10a's catch-all and Shop (a seeded active certificate with no loadable material) did refuse plain HTTP,
+  but they force nothing themselves. `SiteDispatcher.forcedSites` splits the sites by what sends them (`own` vs
+  `bySetting`), the item names each by its cause (`https_refused_forced` / `_setting` / `_both`), and its detail says
+  why nothing can be served: no certificate stored, or N active certificates that could not be loaded.
+- Failing task: titled "<task label> failed" (`task_failed`), the label being `TaskWords.label`, catalog copy keyed by
+  the task id's path under `task_label`, shipped in en and nl for every task the catalog holds (framework tasks
+  included); `DashboardAttentionJourneyTest.everyTaskAndEveryCountReadsInWords` fails on a task without one. The
+  detail is the run's failure in its own words (`TaskWords.failure`: the stored error without the exception class or
+  stack trace; a stored refusal read back through `HohenheimViolations.storedText`), the action "Show the run" leads
+  to the run's page (`TaskAdmin.RUNS_SLUG`), which offers Run now. `task` (attention_title) is deleted (replacement:
+  `task_failed`).
+- Placement refusals in words: every `PlacementRefusal` message is reworded in en and nl without quotes, check tokens
+  or capitals for emphasis (key unverified, quarantined, the postures by their own names, dedicated, kernel lane
+  missing/unproven with the check's label, contact lapsed as a plural). Two remedies join `PlacementRefusal.Remedy`:
+  `CONFIRM_KEY` ("Confirm its host key", KEY_UNVERIFIED) and `REVIEW_KEY` ("Compare its new host key", QUARANTINED);
+  `HostVerdict.remedyAction` words them (exhaustive switch). The item links the host's Overview, where Scan host key
+  and Confirm fingerprint head the page beside the SSH host key card.
+- Plurals: the fifteen "(s)" sentences (and the DNS health toast's "secundaire(n)") are `.match` plurals; a sentence
+  counting several things carries each count as a counted noun (`HohenheimCounts.of`, scope `count`: stacks,
+  databases, engines, instances, port_claims, backups, templates, sites, access_rules). The journey scans both shipped
+  catalogs for pseudo-plurals.
+- Walk (scratch server from the built jar of run 840, fresh database, `/setup`; then by SQL, because hosts cannot be
+  admitted on this machine: local admitted with a fresh memory reading and shared containers accepted, phoenix an
+  admitted SSH host whose key nobody confirmed, daystrom never checked, a Docker app Shop on local in status error
+  with a site on shop.d11.test, a catch-all redirect on `**.d11.test`, a static Docs site forcing HTTPS on
+  docs.d11.test, one active certificate row for shop.d11.test without PEM; the isolation task failed on its own):
+  shots `docs/hohenheim-ux-mockups-2026-09-30/shots/d11/` (workspace repo). 01 the dashboard: one Shop item (the
+  workload's, "Visitors of its site get an error page", Open the console), HTTPS unavailable naming Docs by its own
+  forcing and Catch-all, Shop by the setting with why, "phoenix takes no new apps" in words with "Confirm its host
+  key", "Check app isolation failed" with its reason and "Show the run"; 02 that run's page with Run now; 03 phoenix's
+  Overview. The Docs "refuses requests" item in shot 01 is the seed's (a static site without an owner is a tenant's).
+- Found, not fixed here: the task runs and schedules screens (zenit-cms `TaskAdmin`) title rows with the raw task id
+  and show the stack trace; the label belongs on zenit core's `TaskDescriptor`, which this fork may not push, and the
+  stored error has no message column apart from the trace. The isolation sweeps' own failure text ("isolation
+  UNCONFIRMED") is English developer prose that alerts and tests key on. The Apps list's HTTPS badge reads "Works" for
+  a name an active certificate row covers even while no certificate could be loaded (the D9 rule reads the row).
+- Also: the workload isolation sweep's own "N workload network(s)" reads as a real plural.
+- Proof: build run 840; test run 841 and 843 could not run (zenit-cms red upstream of another session, then a stale
+  `heldBy()` call in the journey), run 846 (31 classes, 91 tests: 88 passed; DashboardAttentionJourneyTest step 5
+  still expected no cause where the site now names its stopped workload, MicrocopyCatalogScopeTest did not claim the
+  `count` and `task_label` scopes, ForeignKeyIntegrityTest read the engine count as a number) and run 848
+  (DashboardAttentionJourneyTest, MicrocopyCatalogScopeTest, ForeignKeyIntegrityTest: 5 passed). Journeys:
+  DashboardAttentionJourneyTest (new `oneCauseIsOneItemCarryingItsRootsAction`, steps 1-8, and
+  `everyTaskAndEveryCountReadsInWords`, steps 1-3), InstanceAttentionTest, IsolationVisibilityTest step 6,
+  WorkspaceDeploysTabTest step 2b, HostRemovalAgreementTest, BackupTargetRemovalTest and the four microcopy gates.

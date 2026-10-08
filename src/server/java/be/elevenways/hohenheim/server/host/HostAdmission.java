@@ -285,7 +285,8 @@ public final class HostAdmission {
         }
         if (!HostPreflight.STATUS_PASS.equals(
                 HostPreflight.storedCheckStatus(server, IncusPreflight.KERNEL_LANE_CHECK))) {
-            throw Violations.ofForm(PlacementRefusal.KERNEL_LANE_UNPROVEN.text().withArg("name", name));
+            throw Violations.ofForm(PlacementRefusal.KERNEL_LANE_UNPROVEN.text().withArg("name", name)
+                .withArg("check", HostPreflight.checkLabel(IncusPreflight.KERNEL_LANE_CHECK)));
         }
     }
 

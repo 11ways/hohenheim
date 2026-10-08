@@ -1354,6 +1354,182 @@
     "text": "Last run failed",
     "scope": "attention_detail"
   },
+  "access_rules": {
+    "text": ".match {$count :number}\none {{1 access rule}}\n* {{{$count} access rules}}",
+    "scope": "count"
+  },
+  "templates": {
+    "text": ".match {$count :number}\none {{1 template}}\n* {{{$count} templates}}",
+    "scope": "count"
+  },
+  "port_claims": {
+    "text": ".match {$count :number}\none {{1 port claim}}\n* {{{$count} port claims}}",
+    "scope": "count"
+  },
+  "engines": {
+    "text": ".match {$count :number}\none {{1 shared database engine}}\n* {{{$count} shared database engines}}",
+    "scope": "count"
+  },
+  "stacks": {
+    "text": ".match {$count :number}\none {{1 stack}}\n* {{{$count} stacks}}",
+    "scope": "count"
+  },
+  "act_review_host_key": {
+    "text": "Compare its new host key",
+    "scope": "attention_action"
+  },
+  "act_confirm_host_key": {
+    "text": "Confirm its host key",
+    "scope": "attention_action"
+  },
+  "https_refused_both": {
+    "text": "Visitors of {$forced} get an error page: their addresses force HTTPS. So do visitors of {$sent}: the Force HTTPS setting sends them there.",
+    "scope": "attention_detail"
+  },
+  "https_refused_setting": {
+    "text": "Visitors of {$sites} get an error page: the Force HTTPS setting sends them there.",
+    "scope": "attention_detail"
+  },
+  "https_refused_forced": {
+    "text": "Visitors of {$sites} get an error page: their addresses force HTTPS.",
+    "scope": "attention_detail"
+  },
+  "https_certificates_unloaded": {
+    "text": ".match {$count :number}\none {{The active certificate could not be loaded, so nothing can be answered over HTTPS.}}\n* {{None of the {$count} active certificates could be loaded, so nothing can be answered over HTTPS.}}",
+    "scope": "attention_detail"
+  },
+  "https_no_certificate": {
+    "text": "No certificate is stored yet, so nothing can be answered over HTTPS.",
+    "scope": "attention_detail"
+  },
+  "watch_summary": {
+    "text": "Send watch summaries",
+    "scope": "task_label"
+  },
+  "run_record_schedules": {
+    "text": "Run record schedules",
+    "scope": "task_label"
+  },
+  "publish_scheduled_content": {
+    "text": "Publish scheduled content",
+    "scope": "task_label"
+  },
+  "orphan_record_grant_prune": {
+    "text": "Remove shares of deleted records",
+    "scope": "task_label"
+  },
+  "orm_housekeeping": {
+    "text": "Database housekeeping",
+    "scope": "task_label"
+  },
+  "expired_record_grant_prune": {
+    "text": "Remove expired shares",
+    "scope": "task_label"
+  },
+  "content_sweep": {
+    "text": "Clean unused files",
+    "scope": "task_label"
+  },
+  "activity_prune": {
+    "text": "Clean old activity",
+    "scope": "task_label"
+  },
+  "verify_workload_isolation": {
+    "text": "Check app isolation",
+    "scope": "task_label"
+  },
+  "verify_incus_isolation": {
+    "text": "Check Incus app isolation",
+    "scope": "task_label"
+  },
+  "update_system_users": {
+    "text": "Find this machine's users",
+    "scope": "task_label"
+  },
+  "update_system_ip_addresses": {
+    "text": "Find this machine's IP addresses",
+    "scope": "task_label"
+  },
+  "supervise_proxy_listeners": {
+    "text": "Watch the proxy listeners",
+    "scope": "task_label"
+  },
+  "security_sweep": {
+    "text": "Security sweep",
+    "scope": "task_label"
+  },
+  "resign_dnssec_zones": {
+    "text": "Re-sign DNSSEC zones",
+    "scope": "task_label"
+  },
+  "reconcile_instance_status": {
+    "text": "Check which apps run",
+    "scope": "task_label"
+  },
+  "reconcile_engine_isolation": {
+    "text": "Check database engine isolation",
+    "scope": "task_label"
+  },
+  "reconcile_docker_resources": {
+    "text": "Tidy Docker",
+    "scope": "task_label"
+  },
+  "reclaim_docker_images": {
+    "text": "Remove old Docker images",
+    "scope": "task_label"
+  },
+  "reap_incus_controllers": {
+    "text": "Tidy Incus controllers",
+    "scope": "task_label"
+  },
+  "probe_dns_secondaries": {
+    "text": "Check DNS secondaries",
+    "scope": "task_label"
+  },
+  "observe_instance_disk": {
+    "text": "Measure app disk use",
+    "scope": "task_label"
+  },
+  "monitor_stacks": {
+    "text": "Watch stack health",
+    "scope": "task_label"
+  },
+  "clean_orphan_certificates": {
+    "text": "Clean unused certificates",
+    "scope": "task_label"
+  },
+  "clean_old_instance_logs": {
+    "text": "Clean old console output",
+    "scope": "task_label"
+  },
+  "check_foreign_keys": {
+    "text": "Check the database for orphaned rows",
+    "scope": "task_label"
+  },
+  "check_dns_delegations": {
+    "text": "Check DNS delegations",
+    "scope": "task_label"
+  },
+  "backup_databases": {
+    "text": "Back up databases",
+    "scope": "task_label"
+  },
+  "backup_control_plane": {
+    "text": "Back up the control panel",
+    "scope": "task_label"
+  },
+  "act_show_run": {
+    "text": "Show the run",
+    "scope": "attention_action"
+  },
+  "task_failed": {
+    "text": "{$task} failed",
+    "scope": "attention_title"
+  },
+  "sites_held_back": {
+    "text": ".match {$count :number}\none {{Visitors of its site get an error page}}\n* {{Visitors of its {$count} sites get an error page}}",
+    "scope": "attention_detail"
+  },
   "lines": {
     "text": "Lines",
     "scope": "instance_console"
@@ -1650,10 +1826,6 @@
   "stored_logs": {
     "text": "Stored console logs",
     "scope": "instance_console"
-  },
-  "task": {
-    "text": "Task {$name}",
-    "scope": "attention_title"
   },
   "trigger": [
     {
@@ -2691,6 +2863,10 @@
     {
       "text": "Databases",
       "scope": "tenant_usage"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 database}}\n* {{{$count} databases}}",
+      "scope": "count"
     }
   ],
   "clone_confirm": {
@@ -5602,15 +5778,15 @@
     "scope": "released_claim"
   },
   "route_quarantined": {
-    "text": "{$hostname} was recently released by another owner and stays reserved for {$days} more day(s); an administrator can lift the quarantine",
+    "text": ".match {$days :number}\none {{{$hostname} was recently released by another owner and stays reserved for 1 more day; an administrator can lift the quarantine}}\n* {{{$hostname} was recently released by another owner and stays reserved for {$days} more days; an administrator can lift the quarantine}}",
     "scope": "violations"
   },
   "enable_route_quarantined": {
-    "text": "Cannot enable this site: {$hostname} was recently released by another owner and stays reserved for {$days} more day(s); an administrator can lift the quarantine",
+    "text": ".match {$days :number}\none {{Cannot enable this site: {$hostname} was recently released by another owner and stays reserved for 1 more day; an administrator can lift the quarantine}}\n* {{Cannot enable this site: {$hostname} was recently released by another owner and stays reserved for {$days} more days; an administrator can lift the quarantine}}",
     "scope": "violations"
   },
   "restore_route_quarantined": {
-    "text": "Cannot restore this site: {$hostname} was recently released by another owner and stays reserved for {$days} more day(s); an administrator can lift the quarantine",
+    "text": ".match {$days :number}\none {{Cannot restore this site: {$hostname} was recently released by another owner and stays reserved for 1 more day; an administrator can lift the quarantine}}\n* {{Cannot restore this site: {$hostname} was recently released by another owner and stays reserved for {$days} more days; an administrator can lift the quarantine}}",
     "scope": "violations"
   },
   "kind": [
@@ -5767,7 +5943,7 @@
   },
   "host_not_admitted": [
     {
-      "text": "Host {$name} is not admitted for placement; use Check and admit on the host first",
+      "text": "{$name} is not admitted to run apps yet; Check and admit it first",
       "scope": "violations"
     },
     {
@@ -5780,7 +5956,7 @@
     "scope": "violations"
   },
   "host_posture_refuses": {
-    "text": "Host {$name} declares a trusted-only posture and refuses tenant instances",
+    "text": "{$name} is set to Trusted only, so it takes no tenant apps",
     "scope": "violations"
   },
   "admit_needs_preflight": {
@@ -5788,7 +5964,7 @@
     "scope": "violations"
   },
   "server_in_use": {
-    "text": "Host {$name} is still referenced by {$stacks} stack(s), {$databases} database(s), {$engines} shared database engine(s), {$instances} instance(s) and {$ports} port claim(s); remove or move them (release the claims) first",
+    "text": "Host {$name} is still used by {$stacks}, {$databases}, {$engines}, {$instances} and {$ports}; remove or move them (release the claims) first",
     "scope": "violations"
   },
   "preflight": {
@@ -6038,19 +6214,19 @@
     "scope": "violations"
   },
   "host_key_unverified": {
-    "text": "Host '{$name}' has no confirmed SSH host key fingerprint; scan the host key and confirm it first",
+    "text": "Nobody has confirmed the host key of {$name} yet, so Hohenheim cannot be sure it is talking to that machine; compare the key and confirm it first",
     "scope": "violations"
   },
   "host_quarantined": {
-    "text": "Host '{$name}' offered an SSH host key that disagrees with its pin and is quarantined; re-pin it deliberately before using it again",
+    "text": "{$name} offered a different host key than the one confirmed, so nothing is sent to it until someone compares the new key and accepts it",
     "scope": "violations"
   },
   "host_kernel_lane_missing": {
-    "text": "Host '{$name}' accepts tenant workloads but declares no lane to read its own kernel, so workload isolation cannot be verified there; give it an SSH admin lane and confirm the host key, or set its posture to trusted-only",
+    "text": "{$name} takes tenant apps but has no way to read its own firewall, so their isolation cannot be checked there; give it an SSH admin connection and confirm its key, or set it to Trusted only",
     "scope": "violations"
   },
   "host_kernel_lane_unproven": {
-    "text": "Host '{$name}' has no PROVEN kernel-truth lane: its last preflight did not transact on the daemon host's nftables; run preflight again and fix the kernel_isolation_lane check",
+    "text": "{$name} has not proven it can check its apps' isolation: its last check could not change the firewall on that machine. Fix the {$check} check, then Check again",
     "scope": "violations"
   },
   "host_preflight_check_now_required": {
@@ -6098,7 +6274,7 @@
     "scope": "violations"
   },
   "migrate_devices_present": {
-    "text": "Instance {$name} carries {$count} attached device(s); their volumes do not travel in a whole-instance export, so migrating would silently lose them. Detach the devices first.",
+    "text": ".match {$count :number}\none {{Instance {$name} carries 1 attached device; its volume does not travel in a whole-instance export, so migrating would silently lose it. Detach the device first.}}\n* {{Instance {$name} carries {$count} attached devices; their volumes do not travel in a whole-instance export, so migrating would silently lose them. Detach the devices first.}}",
     "scope": "violations"
   },
   "migrate_publication_present": {
@@ -6142,7 +6318,7 @@
     "scope": "violations"
   },
   "backup_target_in_use": {
-    "text": "Backup target {$name} still holds {$backups} backup(s) and backs {$instances} instance(s); delete those backups and repoint the instances first",
+    "text": "Backup target {$name} still holds {$backups} and backs {$instances}; delete those backups and repoint the instances first",
     "scope": "violations"
   },
   "backup_target_control_plane": {
@@ -6361,6 +6537,10 @@
     {
       "text": "Backups",
       "scope": "database_overview"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 backup}}\n* {{{$count} backups}}",
+      "scope": "count"
     }
   ],
   "backup_target": {
@@ -6454,11 +6634,11 @@
     "scope": "violations"
   },
   "template_in_use": {
-    "text": "Template {$name} is still used by {$count} instance(s)",
+    "text": ".match {$count :number}\none {{Template {$name} is still used by 1 instance}}\n* {{Template {$name} is still used by {$count} instances}}",
     "scope": "violations"
   },
   "runtime_image_in_use": {
-    "text": "Image {$name} is still used by {$instances} instance(s) and {$templates} template(s); repoint those first",
+    "text": "Image {$name} is still used by {$instances} and {$templates}; repoint those first",
     "scope": "violations"
   },
   "stack_service_running": {
@@ -7829,11 +8009,11 @@
     }
   ],
   "dns_peer_in_use": {
-    "text": "Peer {$name} is still the primary of {$count} secondary zone(s) such as {$zone}; repoint or delete them first",
+    "text": ".match {$count :number}\none {{Peer {$name} is still the primary of 1 secondary zone, {$zone}; repoint or delete it first}}\n* {{Peer {$name} is still the primary of {$count} secondary zones such as {$zone}; repoint or delete them first}}",
     "scope": "violations"
   },
   "auth_provider_in_use": {
-    "text": "Auth provider {$name} still gates {$sites} site(s) and is named by {$rules} access rule(s); assign them another provider first",
+    "text": "Auth provider {$name} still gates {$sites} and is named by {$rules}; assign them another provider first",
     "scope": "violations"
   },
   "system_user_in_use": {
@@ -8787,7 +8967,7 @@
     "scope": "server"
   },
   "controller_objects_reaped": {
-    "text": "{$name}: removed {$removed} shared object(s) of departed controllers, refused {$refused}",
+    "text": ".match {$removed :number}\none {{{$name}: removed 1 shared object of departed controllers, refused {$refused}}}\n* {{{$name}: removed {$removed} shared objects of departed controllers, refused {$refused}}}",
     "scope": "server"
   },
   "singular": [
@@ -9549,16 +9729,10 @@
     "text": "HTTPS termination is degraded",
     "scope": "attention_title"
   },
-  "https_unavailable": [
-    {
-      "text": "HTTPS is unavailable",
-      "scope": "attention_title"
-    },
-    {
-      "text": "No certificate can be served, so sites that force SSL refuse plain HTTP: {$sites}",
-      "scope": "attention_detail"
-    }
-  ],
+  "https_unavailable": {
+    "text": "HTTPS is unavailable",
+    "scope": "attention_title"
+  },
   "access_satisfy_invalid": {
     "text": "Satisfy must be 'any' or 'all'",
     "scope": "violations"
@@ -9622,7 +9796,7 @@
     "scope": "violations"
   },
   "host_contact_lapsed": {
-    "text": "Host '{$name}' last answered {$minutes} minutes ago, past the host contact bound; no new workload is placed there until it answers again",
+    "text": ".match {$minutes :number}\none {{{$name} last answered 1 minute ago, so no new app is placed there until it answers again}}\n* {{{$name} last answered {$minutes} minutes ago, so no new app is placed there until it answers again}}",
     "scope": "violations"
   },
   "preview_branches": [
@@ -10126,15 +10300,15 @@
     "scope": "instance_stats"
   },
   "host_posture_unacknowledged": {
-    "text": "Host {$name} declares shared containers, and no operator has accepted that risk; acknowledge the posture on the host before tenant containers land there",
+    "text": "{$name} is set to Shared containers and nobody has accepted that risk yet; accept it on the host first",
     "scope": "violations"
   },
   "host_posture_requires_vm": {
-    "text": "Host {$name} declares VM isolation and refuses a container workload, which would share its kernel with every guest on the machine",
+    "text": "{$name} is set to VM isolated, so it takes no container app: a container would share its kernel with every other app there",
     "scope": "violations"
   },
   "host_dedicated_to_other": {
-    "text": "Host {$name} is dedicated to another owner's workloads",
+    "text": "{$name} is dedicated to another owner's apps",
     "scope": "violations"
   },
   "posture_not_acknowledgeable": {
@@ -11723,7 +11897,7 @@
   },
   "delete_in_use": [
     {
-      "text": "{$workloads} records still name this host: {$instances} instance(s), {$stacks} stack(s), {$databases} database(s), {$engines} shared database engine(s) and {$ports} port claim(s). Remove or move them (release the claims) first, or their records would name a host that no longer exists.",
+      "text": ".match {$workloads :number}\none {{1 record still names this host: {$instances}, {$stacks}, {$databases}, {$engines} and {$ports}. Remove or move it (release the claim) first, or its record would name a host that no longer exists.}}\n* {{{$workloads} records still name this host: {$instances}, {$stacks}, {$databases}, {$engines} and {$ports}. Remove or move them (release the claims) first, or their records would name a host that no longer exists.}}",
       "scope": "server"
     },
     {
@@ -12230,7 +12404,7 @@
     "scope": "dns_zone"
   },
   "check_health_done": {
-    "text": "Delegation: {$verdict}. {$secondaries} secondaries probed, {$behind} behind.",
+    "text": ".match {$secondaries :number}\none {{Delegation: {$verdict}. 1 secondary probed, {$behind} behind.}}\n* {{Delegation: {$verdict}. {$secondaries} secondaries probed, {$behind} behind.}}",
     "scope": "dns_zone"
   },
   "check_health_unserved": {
@@ -13250,15 +13424,15 @@
     "scope": "alert"
   },
   "isolation_contained_subject": {
-    "text": "{$sweep}: {$count} workload(s) contained",
+    "text": ".match {$count :number}\none {{{$sweep}: 1 workload contained}}\n* {{{$sweep}: {$count} workloads contained}}",
     "scope": "alert"
   },
   "isolation_unconfirmed_subject": {
-    "text": "{$sweep}: isolation unconfirmed on {$count} subject(s)",
+    "text": ".match {$count :number}\none {{{$sweep}: isolation unconfirmed on 1 subject}}\n* {{{$sweep}: isolation unconfirmed on {$count} subjects}}",
     "scope": "alert"
   },
   "data_integrity_subject": {
-    "text": "Orphaned rows in the control-plane database ({$count} table link(s))",
+    "text": ".match {$count :number}\none {{Orphaned rows in the control-plane database (1 table link)}}\n* {{Orphaned rows in the control-plane database ({$count} table links)}}",
     "scope": "alert"
   },
   "data_integrity_body": {
@@ -15293,14 +15467,26 @@
     "text": "{$used} of {$limit}",
     "scope": "tenant_usage"
   },
-  "instances": {
-    "text": "Apps",
-    "scope": "tenant_usage"
-  },
-  "sites": {
-    "text": "Websites",
-    "scope": "tenant_usage"
-  },
+  "instances": [
+    {
+      "text": "Apps",
+      "scope": "tenant_usage"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 instance}}\n* {{{$count} instances}}",
+      "scope": "count"
+    }
+  ],
+  "sites": [
+    {
+      "text": "Websites",
+      "scope": "tenant_usage"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 site}}\n* {{{$count} sites}}",
+      "scope": "count"
+    }
+  ],
   "you_can": {
     "text": "You can",
     "scope": "instance_overview"
