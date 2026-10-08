@@ -31,6 +31,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -63,6 +64,10 @@ public final class WorkspaceBuilds {
 
     /** Hard wall-clock cap on one in-container checkout or build. */
     static final long BUILD_TIMEOUT_MS = 20 * 60 * 1000;
+
+    /** Lines and characters of a command's output a refusal may quote. */
+    private static final int EXCERPT_LINES = 3;
+    private static final int EXCERPT_CHARS = 300;
 
     private final @NonNull InstanceService instances;
 
@@ -164,7 +169,7 @@ public final class WorkspaceBuilds {
             DeployStartPolicy.declineToStart(trigger, state, resolved.row());
 
         if (declined != null) {
-            String message = DeployStartPolicy.textOf(declined);
+            String message = HohenheimViolations.textOf(declined);
             log.line("[hohenheim] deploying " + branch);
             log.line("[hohenheim] not deployed: " + message);
             // REFUSED, not FAILED: nothing broke. The row is the honest record that the
@@ -175,12 +180,15 @@ public final class WorkspaceBuilds {
             throw Violations.ofForm(declined);
         }
 
+        // The commit the checkout landed on, kept outside the try: a build that fails after a
+        // good checkout still names that commit on its row, never the branch it started from.
+        String commitSha = null;
         try {
             DeployStatuses.report(settings, null, GitProviderClient.StatusState.PENDING,
                 DeployStatuses.CONTEXT_DEPLOY, "Deploying", null);
             log.line("[hohenheim] deploying " + branch);
             ensureRunning(instanceId, state);
-            String commitSha = checkout(resolved, branch, settings, log);
+            commitSha = checkout(resolved, branch, settings, log);
             boolean built = build(resolved, settings, log);
             // The workload restarts LAST: the files it will serve are on disk and owned by
             // the uid it comes back as, so there is no window where a live process reads a
@@ -195,13 +203,13 @@ public final class WorkspaceBuilds {
                 startedAt);
             return new Outcome(commitSha, built, log.text(), status, operationId);
         } catch (RuntimeException failed) {
-            String message = String.valueOf(failed.getMessage());
+            String message = HohenheimViolations.reasonOf(failed);
             // Appended THROUGH the log, so the secrets the checkout registered are redacted
             // out of a refusal that quotes git's own output back.
             log.line("[hohenheim] deploy failed: " + message);
-            finish(operationId, BuildOperationModel.STATUS_FAILED, null, message, log,
+            finish(operationId, BuildOperationModel.STATUS_FAILED, commitSha, message, log,
                 startedAt);
-            reportFailure(settings, null, message);
+            reportFailure(settings, commitSha, message);
             throw failed;
         }
     }
@@ -314,7 +322,7 @@ public final class WorkspaceBuilds {
 
         if (!run.succeeded()) {
             throw Violations.ofForm(HohenheimViolations.text("source_checkout_failed")
-                .withArg("reason", tail(run.outputTail())));
+                .withArg("reason", excerpt(run.outputTail())));
         }
 
         String commit = markedCommit(run.outputTail());
@@ -356,8 +364,10 @@ public final class WorkspaceBuilds {
         log.append(run.outputTail());
 
         if (!run.succeeded()) {
+            // The exit code, never the output: the whole output is the build log beside the
+            // reason, and a pasted npm dump made the reason unreadable on the Deploys tab.
             throw Violations.ofForm(HohenheimViolations.text("workspace_build_failed")
-                .withArg("reason", tail(run.outputTail())));
+                .withArg("code", run.exitCode()));
         }
 
         return true;
@@ -483,10 +493,22 @@ public final class WorkspaceBuilds {
         return "";
     }
 
-    private static @NonNull String tail(@NonNull String text) {
-        String trimmed = text.strip();
-        return trimmed.length() <= 2000 ? trimmed
-            : trimmed.substring(trimmed.length() - 2000);
+    /**
+     * The last lines of a command's output, short enough to read inside a sentence.
+     *
+     * AIDEV-NOTE: a refusal quotes git's own last words ("Remote branch x not found"), and
+     * the full output stays in the build log; 2000 characters of it used to land in the
+     * reason itself.
+     */
+    private static @NonNull String excerpt(@NonNull String output) {
+        List<String> lines = new ArrayList<>();
+        for (String line : output.strip().split("\\R")) {
+            if (!line.isBlank()) {
+                lines.add(line.strip());
+            }
+        }
+        String text = String.join(" ", lines.subList(Math.max(0, lines.size() - EXCERPT_LINES), lines.size()));
+        return text.length() <= EXCERPT_CHARS ? text : "..." + text.substring(text.length() - EXCERPT_CHARS);
     }
 
 

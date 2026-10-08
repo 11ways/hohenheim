@@ -9,6 +9,9 @@
 {% declare canRollback: Boolean = false %}
 {#- The trigger column is the release lane's vocabulary; a workspace build records none. -#}
 {% declare showTrigger: Boolean = true %}
+{#- Whether this lane keeps a previous release: an application does, a workspace deploys
+    into its own files and has nothing earlier to go back to. -#}
+{% declare keepsReleases: Boolean = true %}
 {#- How many columns the history table has, so the detail row spans all of them. -#}
 {% declare columnCount: Integer = 5 %}
 {% declare currentCommit: String = "" %}
@@ -40,14 +43,15 @@
 <section class="cms-resource-list-page hh-deploys">
     {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
 
-    {% if showTrigger and currentCommit != "" %}
+    {% if currentCommit != "" %}
     {#- The live release first, as the record overview leads with its verdict: what serves
-        now, and the one-step way back when a previous release is kept. -#}
+        now, and the one-step way back when a previous release is kept. A workspace says in
+        words why it has no way back, rather than leaving the band out. -#}
     <pl-alert class="cms-record-health" variant={% "success" %} data-hh-live-release>
         <pl-alert-title>{% if sourceBranch != "" %}{{ t("live_from_branch", scope: "deployments", commit: currentCommit, branch: sourceBranch) }}{% else %}{{ t("live_commit", scope: "deployments", commit: currentCommit) }}{% /if %}</pl-alert-title>
         <pl-alert-description>
             {% if liveSinceIso != "" %}<span>{{ t("live_since", scope: "deployments") }} <pl-relative-time datetime={% liveSinceIso %} wording={% timeWording %} title={% liveSinceIso %}></pl-relative-time>.</span>{% /if %}
-            {% if keptCommit != "" %}{{ t("live_kept", scope: "deployments", commit: keptCommit) }}{% else %}{{ t("live_nothing_kept", scope: "deployments") }}{% /if %}
+            {% if !keepsReleases %}{{ t("live_workspace_no_rollback", scope: "deployments") }}{% elseif keptCommit != "" %}{{ t("live_kept", scope: "deployments", commit: keptCommit) }}{% else %}{{ t("live_nothing_kept", scope: "deployments") }}{% /if %}
         </pl-alert-description>
         {% if canRollback %}
         <div class="cms-record-health-fixes">
@@ -63,10 +67,10 @@
     <pl-card>
         <pl-card-header>
             <pl-card-title>{{ t("title", scope: "deployments") }}</pl-card-title>
-            {% if showTrigger %}
+            {% if keepsReleases %}
             <pl-card-description>{{ t("history_description", scope: "deployments") }}</pl-card-description>
-            {% elseif currentCommit != "" %}
-            <pl-card-description>{{ t("current_commit", scope: "deployments", commit: currentCommit) }}</pl-card-description>
+            {% else %}
+            <pl-card-description>{{ t("history_description_workspace", scope: "deployments") }}</pl-card-description>
             {% /if %}
             <pl-card-header-actions>
                 {#- _return: the framework return target (zenit ReturnTarget) --
@@ -93,19 +97,19 @@
                 <pl-table-body>
                     {% each deployments as index, deploy %}
                     <pl-table-row data-hh-release-mark={% deploy.get("mark") %}>
-                        <pl-table-cell><code>{{ deploy.get("commit") }}</code></pl-table-cell>
+                        <pl-table-cell>{% if deploy.get("commit") != "" %}<code>{{ deploy.get("commit") }}</code>{% elseif deploy.get("ref") != "" %}<span class="hh-deploys-ref" data-hh-deploy-ref>{{ t("no_commit_from", scope: "deployments", branch: deploy.get("ref")) }}</span>{% /if %}</pl-table-cell>
                         {% if showTrigger %}
                         <pl-table-cell>{{ deploy.get("kindLabel") }}</pl-table-cell>
                         {% /if %}
                         <pl-table-cell>
                             {% if deploy.get("mark") == "live" %}<pl-badge variant={% "success" %}>{{ deploy.get("statusLabel") }}</pl-badge>{% elseif deploy.get("mark") == "kept" %}<pl-badge variant={% "info" %}>{{ deploy.get("statusLabel") }}</pl-badge>{% elseif deploy.get("mark") == "replaced" %}<pl-badge variant={% "secondary" %}>{{ deploy.get("statusLabel") }}</pl-badge>{% elseif deploy.get("statusKnown") == true %}<pl-badge variant={% deploy.get("statusVariant") %} colorSet={% deploy.get("statusColorSet") %}>{% if deploy.get("statusLabel") != null %}{{ deploy.get("statusLabel") }}{% else %}{{ deploy.get("status") }}{% /if %}</pl-badge>{% else %}{{ deploy.get("status") }}{% /if %}
                         </pl-table-cell>
-                        <pl-table-cell>
+                        <pl-table-cell class="hh-deploys-when">
                             {% if deploy.get("startedAtIso") != "" %}
                             <pl-relative-time datetime={% deploy.get("startedAtIso") %} wording={% timeWording %} title={% deploy.get("startedAtIso") %}></pl-relative-time>
                             {% /if %}
                         </pl-table-cell>
-                        <pl-table-cell>{{ deploy.get("duration") }}</pl-table-cell>
+                        <pl-table-cell class="hh-deploys-when">{{ deploy.get("duration") }}</pl-table-cell>
                     </pl-table-row>
                     {% if deploy.get("error") != "" or deploy.get("hasLog") == true %}
                     {% render "hohenheim:cms/deploy-detail" var:deploy=deploy var:colspan=columnCount var:logLabel=t("build_log", scope: "deployments") %}

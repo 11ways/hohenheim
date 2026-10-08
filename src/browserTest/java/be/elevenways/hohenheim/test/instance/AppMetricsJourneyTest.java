@@ -84,6 +84,13 @@ class AppMetricsJourneyTest extends HohenheimTestBase {
                 .as("step 2: received plots as a rate from the ring's consecutive samples")
                 .isNotEmpty();
 
+            // 2b. Memory plots against its cap from zero: a steady 512 MiB of a 1 GiB cap is a level line at half
+            //     the drawing's height (y 16 of the 1..31 band), never on the floor where it reads as nothing.
+            String memoryLine = page.locator("[data-stats-metric='memory'] path.series-line").getAttribute("d");
+            assertThat(memoryLine)
+                .as("step 2b: the memory line sits at half height, against its cap")
+                .matches("M0,16(L[0-9.]+,16)+");
+
             // 3. Every reading is in words: a full core is half of the 2-core limit, memory
             //    reads against its cap, and the counters read as a rate.
             assertThat(nowText("cpu")).as("step 3: cpu against the CPU limit").isEqualTo("50% of 2 cores");

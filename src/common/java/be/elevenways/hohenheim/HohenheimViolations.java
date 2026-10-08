@@ -1,8 +1,12 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.setting.ContentLocales;
+import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -56,8 +60,32 @@ public final class HohenheimViolations {
         return Violations.ofForm(instanceRefusalText(key, instance, cause));
     }
 
-    /** @return a failure's message, or its type and nothing else when it carries none */
+    /**
+     * A failure as text for a record a person reads later: an operation's stored reason, a log line.
+     *
+     * AIDEV-NOTE: a refusal reads as its own messages, never as {@code Violations.getMessage()}, which is a debug
+     * rendering by its own contract ("1 violation(s): -> workspace_build_failed {reason=...}") and reached the
+     * Deploys tab verbatim. Where a reason is stored there is no reader to localize for, so it is the installation's
+     * default content locale, the choice {@code Violations.describedIn} makes for the same reason.
+     *
+     * @return the refusal's messages, else the failure's message, else its type
+     */
     public static @NonNull String reasonOf(@NonNull Throwable cause) {
+        if (cause instanceof Violations refused && !refused.isEmpty()) {
+            StringBuilder text = new StringBuilder();
+            for (Violation violation : refused) {
+                if (text.length() > 0) {
+                    text.append(' ');
+                }
+                text.append(textOf(violation.message()));
+            }
+            return text.toString();
+        }
         return cause.getMessage() != null ? cause.getMessage() : cause.toString();
+    }
+
+    /** @return the message resolved in the installation's default content locale */
+    public static @NonNull String textOf(@NonNull Microcopy message) {
+        return message.resolve(LocaleChain.of(ContentLocales.getDefault()), MessageResolvers.getDefault());
     }
 }

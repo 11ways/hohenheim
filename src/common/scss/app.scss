@@ -360,6 +360,16 @@
         }
     }
 
+    // When and Took are short phrases ("a month ago", "1 min 7 s"): one line each, never a word per line
+    .hh-deploys-when {
+        white-space: nowrap;
+    }
+
+    // A row that never reached a commit names the branch it was asked for, quieter than a commit
+    .hh-deploys-ref {
+        color: var(--pl-color-text-muted, inherit);
+    }
+
     .hh-deploys-event {
         font-family: var(--pl-font-mono, monospace);
         font-size: var(--pl-font-size-xs);

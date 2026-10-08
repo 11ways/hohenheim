@@ -1,12 +1,8 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
-import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.LocaleChain;
-import be.elevenways.protoblast.common.i18n.MessageResolvers;
-import be.elevenways.zenit.common.setting.ContentLocales;
 import be.elevenways.zenit.common.security.Principal;
-import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.websocket.WebSocketHandler;
 import be.elevenways.zenit.common.websocket.WebSocketSession;
@@ -58,7 +54,7 @@ public final class InstanceShellHandler implements WebSocketHandler {
         } catch (Violations refused) {
             // Named, in the terminal itself: an operator must be able to read WHY a shell
             // did not open, and a bare 1008 says nothing.
-            this.session.sendText("\r\n[" + messageOf(refused) + "]\r\n");
+            this.session.sendText("\r\n[" + HohenheimViolations.reasonOf(refused) + "]\r\n");
             this.session.close(1008, "refused");
         }
     }
@@ -115,28 +111,6 @@ public final class InstanceShellHandler implements WebSocketHandler {
     private void endSocket() {
         if (this.session.isOpen()) {
             this.session.close();
-        }
-    }
-
-    /**
-     * The first violation's resolved text, so a refusal keeps the reason it names.
-     *
-     * AIDEV-NOTE: the installation's default CONTENT locale, never a hardcoded tag and
-     * never the debug {@code Violations.getMessage()} -- there is no conduit on a socket,
-     * so no viewer locale chain exists to read. Same choice {@code Violations.describedIn}
-     * makes for the same reason.
-     */
-    private static @NonNull String messageOf(@NonNull Violations violations) {
-        if (violations.all().isEmpty()) {
-            return String.valueOf(violations.getMessage());
-        }
-        Violation first = violations.all().get(0);
-        try {
-            return String.valueOf(first.message().resolve(
-                LocaleChain.of(ContentLocales.getDefault()), MessageResolvers.getDefault()));
-        } catch (RuntimeException unresolved) {
-            Blast.log("SHELL: could not resolve refusal text:", unresolved.getMessage());
-            return first.message().key();
         }
     }
 }

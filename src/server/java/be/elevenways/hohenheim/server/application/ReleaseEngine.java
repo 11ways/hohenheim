@@ -236,7 +236,7 @@ public final class ReleaseEngine {
             if (instanceId != null) {
                 destroyCandidateQuietly(instanceId);
             }
-            finish(op, ReleaseOperationModel.STATUS_FAILED, reasonOf(e), "deploy failed");
+            finish(op, ReleaseOperationModel.STATUS_FAILED, HohenheimViolations.reasonOf(e), "deploy failed");
             throw e;
         }
     }
@@ -274,11 +274,11 @@ public final class ReleaseEngine {
                 ApplicationReleases.requireApplication(applicationId), sourceSettings);
             desired.put("source_fingerprint", ownerFingerprint);
         } catch (RuntimeException e) {
-            finish(op, ReleaseOperationModel.STATUS_FAILED, reasonOf(e),
+            finish(op, ReleaseOperationModel.STATUS_FAILED, HohenheimViolations.reasonOf(e),
                 "spec resolution failed");
             if (protecting) {
                 Blast.log("RELEASE: application", applicationId, "release failed before a candidate"
-                    + " existed; the prior release keeps serving -", reasonOf(e));
+                    + " existed; the prior release keeps serving -", HohenheimViolations.reasonOf(e));
                 return new ApplicationReleases.Release(servingId, oldLive);
             }
             throw e;
@@ -290,7 +290,7 @@ public final class ReleaseEngine {
             try {
                 requireHealthy(oldLive, desired, serverId);
             } catch (RuntimeException unhealthy) {
-                finish(op, ReleaseOperationModel.STATUS_FAILED, reasonOf(unhealthy),
+                finish(op, ReleaseOperationModel.STATUS_FAILED, HohenheimViolations.reasonOf(unhealthy),
                     "existing release failed its health gate");
                 throw unhealthy;
             }
@@ -319,7 +319,7 @@ public final class ReleaseEngine {
             if (!prior.running() || prior.workloadDead()) {
                 throw e;
             }
-            Blast.log("RELEASE: application", applicationId, "candidate refused -", reasonOf(e),
+            Blast.log("RELEASE: application", applicationId, "candidate refused -", HohenheimViolations.reasonOf(e),
                 "- the prior release keeps serving");
             return new ApplicationReleases.Release(servingId, prior);
         }
@@ -479,8 +479,8 @@ public final class ReleaseEngine {
                 instances.deploy(servingId);
                 ApplicationUpstreams.invalidate(applicationId);
             }
-            finish(op, ReleaseOperationModel.STATUS_FAILED, reasonOf(gateHeld),
-                "candidate refused: " + reasonOf(gateHeld));
+            finish(op, ReleaseOperationModel.STATUS_FAILED, HohenheimViolations.reasonOf(gateHeld),
+                "candidate refused: " + HohenheimViolations.reasonOf(gateHeld));
             throw gateHeld;
         }
     }
@@ -548,7 +548,7 @@ public final class ReleaseEngine {
             } catch (RuntimeException undrained) {
                 // Boot recovery finishes a DRAINING operation; the operation row says so.
                 Blast.log("RELEASE: drain of application", applicationId, "could not run -",
-                    reasonOf(undrained));
+                    HohenheimViolations.reasonOf(undrained));
             }
         }));
     }
@@ -589,9 +589,9 @@ public final class ReleaseEngine {
             // The release itself succeeded (traffic switched); the failed stop is
             // recorded verbatim and the instance tier's parked claims/reconciler
             // surface the leftover -- never a silent shrug, never a false "failed".
-            step(op, "WARNING: superseded release stop failed: " + reasonOf(stopFailed));
+            step(op, "WARNING: superseded release stop failed: " + HohenheimViolations.reasonOf(stopFailed));
             Blast.log("RELEASE: application", applicationId, "superseded release stop failed -",
-                reasonOf(stopFailed));
+                HohenheimViolations.reasonOf(stopFailed));
         }
         reclaimOlderRetired(applicationId, retiredId, op);
         pruneArtifactsQuietly(applicationId, servingImage, op);
@@ -601,7 +601,7 @@ public final class ReleaseEngine {
         try {
             InstanceDatabaseNetworks.sweepFor(applicationId, false);
         } catch (RuntimeException e) {
-            step(op, "WARNING: database link-network sweep failed: " + reasonOf(e));
+            step(op, "WARNING: database link-network sweep failed: " + HohenheimViolations.reasonOf(e));
         }
         finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null, "release complete");
     }
@@ -617,9 +617,9 @@ public final class ReleaseEngine {
                 new InstanceService().destroy(staleId);
                 step(op, "reclaimed superseded release instance " + staleId);
             } catch (RuntimeException e) {
-                step(op, "WARNING: could not reclaim instance " + staleId + ": " + reasonOf(e));
+                step(op, "WARNING: could not reclaim instance " + staleId + ": " + HohenheimViolations.reasonOf(e));
                 Blast.log("RELEASE: application", applicationId, "could not reclaim instance", staleId,
-                    "-", reasonOf(e));
+                    "-", HohenheimViolations.reasonOf(e));
             }
         }
     }
@@ -634,7 +634,7 @@ public final class ReleaseEngine {
                     InstanceModel.MODEL_ID.toString(), applicationId, servingImage);
             }
         } catch (RuntimeException e) {
-            step(op, "WARNING: artifact prune failed: " + reasonOf(e));
+            step(op, "WARNING: artifact prune failed: " + HohenheimViolations.reasonOf(e));
         }
     }
 
@@ -688,7 +688,7 @@ public final class ReleaseEngine {
                 }
             } catch (RuntimeException e) {
                 Blast.log("RELEASE: recovery of operation",
-                    op.get(ReleaseOperationModel.ID), "failed -", reasonOf(e));
+                    op.get(ReleaseOperationModel.ID), "failed -", HohenheimViolations.reasonOf(e));
             }
         }
         sweepOrphanCandidates(answered);
@@ -745,7 +745,7 @@ public final class ReleaseEngine {
                         instances.destroy(strandedId);
                     } catch (RuntimeException e) {
                         Blast.log("RELEASE: could not reclaim stranded serving instance",
-                            strandedId, "-", reasonOf(e));
+                            strandedId, "-", HohenheimViolations.reasonOf(e));
                     }
                 });
             }
@@ -994,7 +994,7 @@ public final class ReleaseEngine {
         } catch (RuntimeException e) {
             // The record stays (status error, claims parked); the reconciler surfaces it.
             Blast.log("RELEASE: could not destroy refused candidate", candidateId,
-                "-", reasonOf(e));
+                "-", HohenheimViolations.reasonOf(e));
         }
     }
 
@@ -1143,10 +1143,6 @@ public final class ReleaseEngine {
         } else {
             body.run();
         }
-    }
-
-    private static @NonNull String reasonOf(@NonNull Throwable e) {
-        return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
     }
 
     private static @NonNull String str(@Nullable Object value) {
