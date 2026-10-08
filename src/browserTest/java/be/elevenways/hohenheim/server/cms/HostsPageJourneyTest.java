@@ -5,9 +5,12 @@ import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.host.HostMemoryCell;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.host.HostFactView;
+import be.elevenways.hohenheim.host.HostPreflightReportView;
 import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.HostProbe;
+import be.elevenways.hohenheim.server.host.PreflightFinding;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -56,8 +59,9 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             cleanup.add(() -> deleteServer(waiting));
             HostPreflight.store(PREFIX + "waiting", new HostPreflight.Report(List.of(
                 new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
-                new HostPreflight.Check("nftables", HostPreflight.STATUS_FAIL, true, "nft missing"),
-                new HostPreflight.Check("lsm", HostPreflight.STATUS_FAIL, false, "advice only")),
+                HostPreflight.Check.of("nftables", HostPreflight.STATUS_FAIL, true,
+                    PreflightFinding.NFT_REFUSED.with("error", "nft: command not found")),
+                HostPreflight.Check.of("lsm", HostPreflight.STATUS_FAIL, false, PreflightFinding.PROBE_UNANSWERED.with())),
                 Map.of(), false, Now.instant(), null));
             setAdmission(waiting, ServerModel.ADMISSION_BLOCKED);
             forgetMemoryReading(waiting);
@@ -134,6 +138,38 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             PreflightCheckView failing = ServerOverviewState.preflightReport(server(waiting)).mustPass().get(0);
             assertThat(say(failing.label())).as("step 6: the host page names the check").isEqualTo("Firewall control");
             assertThat(say(failing.statusLabel())).as("step 6: and its verdict").isEqualTo("Failed");
+
+            // 7. What each check found reads as the finding's words with its evidence, never the probe's token, in
+            //    every shipped language; an advisory check that did not pass reads as advice, never as a failure.
+            assertThat(say(failing.detail())).as("step 7: the finding in words, with the probe's own message")
+                .isEqualTo("nftables refused a firewall change: nft: command not found");
+            assertThat(failing.detail().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 7: and in Dutch").isEqualTo("nftables weigerde een firewallwijziging: nft: command not found");
+            PreflightCheckView advice = ServerOverviewState.preflightReport(server(waiting)).advice().get(0);
+            assertThat(advice.status()).as("step 7: the advisory check stored a failure").isEqualTo("fail");
+            assertThat(say(advice.statusLabel())).as("step 7: yet it reads as advice").isEqualTo("Advice");
+            assertThat(advice.statusVariant()).as("step 7: in the warning tone").isEqualTo(BadgeVariant.WARNING);
+            assertThat(say(advice.detail())).as("step 7: saying what it found")
+                .isEqualTo("The probe instance never answered, so this is unknown");
+            HostPreflightReportView report = ServerOverviewState.preflightReport(server(waiting));
+            assertThat(say(report.summaryLabel())).as("step 7: the report's verdict is a capitalised word from copy")
+                .isEqualTo("Failed");
+            assertThat(report.summaryVariant()).isEqualTo(BadgeVariant.DESTRUCTIVE);
+
+            // 8. A measured fact reads by its name in words and its value with its unit, through the byte formatter
+            //    the memory bars use; the rendered page says the same.
+            HostFactView memory = ServerOverviewState.preflightReport(server(admitted)).facts().stream()
+                .filter(fact -> fact.name().equals(HostPreflight.MEM_TOTAL_FACT)).findFirst().orElseThrow();
+            assertThat(say(memory.label())).as("step 8: the memory fact is named in words").isEqualTo("Memory");
+            assertThat(memory.value()).as("step 8: as a size, never a byte count").isEqualTo("16.0 GB");
+            String waitingPage = adminGet("/admin/" + ServerParts.SLUG + "/" + waiting + "/page/overview").body();
+            assertThat(waitingPage).as("step 8: the host page draws the finding")
+                .contains("nftables refused a firewall change")
+                .as("step 8: and the advice's").contains("The probe instance never answered")
+                .as("step 8: and the report's verdict apart from its time").contains("data-preflight-verdict");
+            String admittedPage = adminGet("/admin/" + ServerParts.SLUG + "/" + admitted + "/page/overview").body();
+            assertThat(admittedPage).as("step 8: the measured memory as a size").contains("16.0 GB")
+                .as("step 8: never its raw bytes").doesNotContain(String.valueOf(16L * 1024 * 1024 * 1024));
         } finally {
             for (Runnable step : cleanup) {
                 step.run();

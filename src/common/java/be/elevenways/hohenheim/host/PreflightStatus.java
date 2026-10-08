@@ -50,6 +50,19 @@ public enum PreflightStatus {
     }
 
     /**
+     * The verdict a reader is shown for a check that is or is not required.
+     *
+     * AIDEV-NOTE: advice never blocks admission, so an advisory check that did not pass reads as advice in the
+     * warning tone whatever it stored; the Incus battery stores FAIL on its advisory lsm check when the probe never
+     * answered, which used to draw a red "Failed" under "Advice never blocks admission".
+     *
+     * @return this verdict for a required check or a pass, else {@link #WARN}
+     */
+    public @NonNull PreflightStatus shownFor(boolean required) {
+        return required || this.passed() ? this : WARN;
+    }
+
+    /**
      * The member behind a stored token.
      *
      * AIDEV-NOTE: fails CLOSED. A token this build does not know (an older/newer controller

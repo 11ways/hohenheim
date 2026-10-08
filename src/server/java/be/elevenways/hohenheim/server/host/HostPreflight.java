@@ -52,7 +52,7 @@ public final class HostPreflight {
      * The stored fact carrying a host's total memory in BYTES, written by both batteries
      * and read as the denominator of every placement decision on that host.
      */
-    public static final String MEM_TOTAL_FACT = "mem_total";
+    public static final String MEM_TOTAL_FACT = HostFact.MEM_TOTAL.token();
 
     /** Oldest daemon API we accept: 1.41 = Docker 20.10, the floor our request shapes assume. */
     static final String MIN_API_VERSION = "1.41";
@@ -76,9 +76,25 @@ public final class HostPreflight {
         CONTAINER_KERNEL_CHECK, "cgroup_pids_controller", "pids_limit_enforced", "seccomp",
         "no_new_privs", "userns_remap", "lsm", "network_headroom", "nftables");
 
-    /** One named probe. Only {@code required} checks decide the verdict. */
+    /**
+     * One named probe. Only {@code required} checks decide the verdict.
+     *
+     * @param detail what it found as stored text: the finding in the installation's content locale
+     * @param found  what it found as a finding, null on a hand-written check whose detail reads verbatim
+     */
     public record Check(@NonNull String name, @NonNull String status, boolean required,
-                        @NonNull String detail) {
+                        @NonNull String detail, PreflightFinding.@Nullable Found found) {
+
+        /** A hand-written check (a fixture, a stored refusal): its detail is its own text and reads verbatim. */
+        public Check(@NonNull String name, @NonNull String status, boolean required, @NonNull String detail) {
+            this(name, status, required, detail, null);
+        }
+
+        /** @return a battery's check, its detail the finding's words */
+        public static @NonNull Check of(@NonNull String name, @NonNull String status, boolean required,
+                                        PreflightFinding.@NonNull Found found) {
+            return new Check(name, status, required, found.text(), found);
+        }
 
         public boolean failed() {
             return STATUS_FAIL.equals(this.status);
@@ -138,8 +154,7 @@ public final class HostPreflight {
             // verdict, and it must be STORED like any other, not thrown at the operator
             // as an untyped stack trace.
             HostProbe.Outcome outcome = HostProbe.classify(refusal);
-            report = new Report(List.of(new Check("daemon", STATUS_FAIL, true,
-                outcome.kind().token + ": " + outcome.detail())),
+            report = new Report(List.of(Check.of("daemon", STATUS_FAIL, true, unreachable(outcome))),
                 Map.of(), false, Now.instant(), outcome);
         }
         store(serverName, report, DOCKER_BATTERY);
@@ -182,33 +197,39 @@ public final class HostPreflight {
         try {
             Map<String, Object> version = docker.version();
             Map<String, Object> info = docker.info();
-            facts.put("docker_version", stringOf(version.get("Version")));
-            facts.put("api_version", stringOf(version.get("ApiVersion")));
-            facts.put("kernel_version", stringOf(version.get("KernelVersion")));
-            facts.put("os", stringOf(info.get("OperatingSystem")));
-            facts.put("os_type", stringOf(info.get("OSType")));
-            facts.put("architecture", stringOf(info.get("Architecture")));
-            facts.put("ncpu", numberOf(info.get("NCPU")));
-            facts.put(MEM_TOTAL_FACT, numberOf(info.get("MemTotal")));
-            facts.put("cgroup_version", stringOf(info.get("CgroupVersion")));
-            facts.put("cgroup_driver", stringOf(info.get("CgroupDriver")));
-            facts.put("containers", numberOf(info.get("Containers")));
-            facts.put("containers_running", numberOf(info.get("ContainersRunning")));
-            facts.put("images", numberOf(info.get("Images")));
-            checks.add(new Check("daemon", STATUS_PASS, true,
-                "Docker " + facts.get("docker_version") + " reachable"));
+            facts.put(HostFact.DOCKER_VERSION.token(), stringOf(version.get("Version")));
+            facts.put(HostFact.API_VERSION.token(), stringOf(version.get("ApiVersion")));
+            facts.put(HostFact.KERNEL_VERSION.token(), stringOf(version.get("KernelVersion")));
+            facts.put(HostFact.OS.token(), stringOf(info.get("OperatingSystem")));
+            facts.put(HostFact.OS_TYPE.token(), stringOf(info.get("OSType")));
+            facts.put(HostFact.ARCHITECTURE.token(), stringOf(info.get("Architecture")));
+            facts.put(HostFact.NCPU.token(), numberOf(info.get("NCPU")));
+            facts.put(HostFact.MEM_TOTAL.token(), numberOf(info.get("MemTotal")));
+            facts.put(HostFact.CGROUP_VERSION.token(), stringOf(info.get("CgroupVersion")));
+            facts.put(HostFact.CGROUP_DRIVER.token(), stringOf(info.get("CgroupDriver")));
+            facts.put(HostFact.CONTAINERS.token(), numberOf(info.get("Containers")));
+            facts.put(HostFact.CONTAINERS_RUNNING.token(), numberOf(info.get("ContainersRunning")));
+            facts.put(HostFact.IMAGES.token(), numberOf(info.get("Images")));
+            checks.add(Check.of("daemon", STATUS_PASS, true, PreflightFinding.DOCKER_REACHABLE.with(
+                "version", facts.get(HostFact.DOCKER_VERSION.token()))));
             return info;
         } catch (Exception error) {
             HostProbe.Outcome outcome = HostProbe.classify(error);
             failure[0] = outcome;
-            checks.add(new Check("daemon", STATUS_FAIL, true,
-                outcome.kind().token + ": " + outcome.detail()));
+            checks.add(Check.of("daemon", STATUS_FAIL, true, unreachable(outcome)));
             return null;
         }
     }
 
+    /** An unreachable daemon as a finding: the probe failure's words and its own message. */
+    static PreflightFinding.@NonNull Found unreachable(HostProbe.@NonNull Outcome outcome) {
+        HostProbe.FailureKind kind = outcome.kind();
+        return PreflightFinding.DAEMON_UNREACHABLE.with(PreflightFinding.FAILURE_ARG,
+            kind != null ? kind.token : "", "error", String.valueOf(outcome.detail()));
+    }
+
     private static void checkApiVersion(Map<String, Object> facts, List<Check> checks) {
-        checks.add(apiVersionCheck(String.valueOf(facts.get("api_version"))));
+        checks.add(apiVersionCheck(String.valueOf(facts.get(HostFact.API_VERSION.token()))));
     }
 
     /**
@@ -221,11 +242,11 @@ public final class HostPreflight {
     static @NonNull Check apiVersionCheck(@NonNull String api) {
         Integer order = compareVersions(api, MIN_API_VERSION);
         if (order == null) {
-            return new Check("api_version", STATUS_FAIL, true,
-                "unparseable daemon API version '" + api + "'");
+            return Check.of("api_version", STATUS_FAIL, true,
+                PreflightFinding.API_VERSION_UNREADABLE.with("version", api));
         }
-        return new Check("api_version", order >= 0 ? STATUS_PASS : STATUS_FAIL,
-            true, "daemon API " + api + " (minimum " + MIN_API_VERSION + ")");
+        return Check.of("api_version", order >= 0 ? STATUS_PASS : STATUS_FAIL, true,
+            PreflightFinding.API_VERSION.with("version", api, "minimum", MIN_API_VERSION));
     }
 
     /**
@@ -296,11 +317,9 @@ public final class HostPreflight {
                 // AIDEV-NOTE: named, because a host without registry access that only has
                 // some OTHER alpine (alpine:latest) preloaded fails exactly here, and the
                 // operator must learn the one reference to preload (docs/deploy-native.md).
-                checks.add(new Check(CONTAINER_KERNEL_CHECK, STATUS_FAIL, true,
-                    "the probe image " + PinnedImages.ALPINE + " is not on this host and could"
-                        + " not be pulled (" + unobtainable.getMessage() + "); a host without"
-                        + " registry access must have exactly this digest preloaded, see"
-                        + " docs/deploy-native.md"));
+                checks.add(Check.of(CONTAINER_KERNEL_CHECK, STATUS_FAIL, true,
+                    PreflightFinding.PROBE_IMAGE_UNOBTAINABLE.with("image", PinnedImages.ALPINE,
+                        "error", unobtainable.getMessage())));
                 return;
             }
             docker.createContainer(name, Map.of(
@@ -321,12 +340,12 @@ public final class HostPreflight {
             // record after the host was fixed, and failedRequirementNow refused every
             // placement on that host forever.
             if (result.exitCode() != 0) {
-                checks.add(new Check(CONTAINER_KERNEL_CHECK, STATUS_FAIL, true,
-                    "kernel probe exec failed: " + result.output()));
+                checks.add(Check.of(CONTAINER_KERNEL_CHECK, STATUS_FAIL, true,
+                    PreflightFinding.KERNEL_PROBE_EXEC_FAILED.with("output", result.output())));
                 return;
             }
-            checks.add(new Check(CONTAINER_KERNEL_CHECK, STATUS_PASS, true,
-                "a hardened probe container ran and answered the kernel reads"));
+            checks.add(Check.of(CONTAINER_KERNEL_CHECK, STATUS_PASS, true,
+                PreflightFinding.KERNEL_PROBE_ANSWERED.with()));
             String[] sections = result.output().split("---");
             String controllers = sections.length > 0 ? sections[0].trim() : "";
             String pidsMax = sections.length > 1 ? sections[1].trim() : "";
@@ -337,31 +356,28 @@ public final class HostPreflight {
             checks.add(lsmCheck(lsmLabel));
 
             boolean pidsDelegated = controllers.contains("pids");
-            checks.add(new Check("cgroup_pids_controller",
-                pidsDelegated ? STATUS_PASS : STATUS_FAIL, true,
-                pidsDelegated ? "cgroup v2 controllers: " + controllers
-                    : "pids controller not delegated (controllers: '" + controllers
-                        + "'); a PidsLimit on this host enforces NOTHING"));
+            checks.add(Check.of("cgroup_pids_controller", pidsDelegated ? STATUS_PASS : STATUS_FAIL, true,
+                (pidsDelegated ? PreflightFinding.PIDS_DELEGATED : PreflightFinding.PIDS_NOT_DELEGATED)
+                    .with("controllers", controllers)));
 
             boolean pidsEnforced = String.valueOf(expectedPids).equals(pidsMax);
-            checks.add(new Check("pids_limit_enforced",
-                pidsEnforced ? STATUS_PASS : STATUS_FAIL, true,
-                "pids.max inside the container reads '" + pidsMax + "' (configured "
-                    + expectedPids + ")"));
+            checks.add(Check.of("pids_limit_enforced", pidsEnforced ? STATUS_PASS : STATUS_FAIL, true,
+                PreflightFinding.PIDS_LIMIT.with("read", pidsMax, "configured", expectedPids)));
 
             boolean seccomp = status.lines().anyMatch(l ->
                 l.startsWith("Seccomp:") && l.trim().endsWith("2"));
-            checks.add(new Check("seccomp", seccomp ? STATUS_PASS : STATUS_FAIL, true,
-                seccomp ? "seccomp filter mode active on pid 1"
-                    : "seccomp NOT filtering (unconfined daemon profile?): " + status));
+            checks.add(Check.of("seccomp", seccomp ? STATUS_PASS : STATUS_FAIL, true,
+                seccomp ? PreflightFinding.SECCOMP_FILTERING.with()
+                    : PreflightFinding.SECCOMP_OFF.with("status", status)));
 
             boolean nnp = status.lines().anyMatch(l ->
                 l.startsWith("NoNewPrivs:") && l.trim().endsWith("1"));
-            checks.add(new Check("no_new_privs", nnp ? STATUS_PASS : STATUS_FAIL, true,
-                nnp ? "no_new_privs set on pid 1" : "no_new_privs NOT set: " + status));
+            checks.add(Check.of("no_new_privs", nnp ? STATUS_PASS : STATUS_FAIL, true,
+                nnp ? PreflightFinding.NO_NEW_PRIVS_SET.with()
+                    : PreflightFinding.NO_NEW_PRIVS_UNSET.with("status", status)));
         } catch (Exception error) {
-            checks.add(new Check(CONTAINER_KERNEL_CHECK, STATUS_FAIL, true,
-                "probe container failed: " + error.getMessage()));
+            checks.add(Check.of(CONTAINER_KERNEL_CHECK, STATUS_FAIL, true,
+                PreflightFinding.PROBE_CONTAINER_FAILED.with("error", error.getMessage())));
         } finally {
             try {
                 docker.removeContainer(name, true);
@@ -393,15 +409,11 @@ public final class HostPreflight {
         String first = uidMap.isEmpty() ? "" : uidMap.lines().findFirst().orElse("").trim()
             .replaceAll("\\s+", " ");
         if (first.isEmpty()) {
-            return new Check("userns_remap", STATUS_WARN, false,
-                "the probe container's /proc/self/uid_map could not be read, so whether"
-                    + " container root is host root is UNKNOWN on this host");
+            return Check.of("userns_remap", STATUS_WARN, false, PreflightFinding.USERNS_UNREADABLE.with());
         }
         boolean remapped = !IDENTITY_UID_MAP.equals(first);
-        return new Check("userns_remap", remapped ? STATUS_PASS : STATUS_WARN, false,
-            remapped ? "user namespace remapped: uid_map reads '" + first + "'"
-                : "no user-namespace remapping: uid_map reads '" + first
-                    + "', so container root IS host root (daemon.json userns-remap)");
+        return Check.of("userns_remap", remapped ? STATUS_PASS : STATUS_WARN, false,
+            (remapped ? PreflightFinding.USERNS_REMAPPED : PreflightFinding.USERNS_IDENTITY).with("uid_map", first));
     }
 
     /**
@@ -422,11 +434,10 @@ public final class HostPreflight {
     static @NonNull Check lsmCheck(@NonNull String label) {
         String confinement = label.trim();
         boolean confined = !confinement.isEmpty() && !confinement.startsWith("unconfined");
-        return new Check("lsm", confined ? STATUS_PASS : STATUS_WARN, false,
-            confined ? "pid 1 runs under LSM confinement '" + confinement + "'"
-                : "no LSM confines the probe container (pid 1 label: '"
-                    + (confinement.isEmpty() ? "<none>" : confinement)
-                    + "'); AppArmor/SELinux add no layer on this host");
+        return Check.of("lsm", confined ? STATUS_PASS : STATUS_WARN, false,
+            confined ? PreflightFinding.LSM_CONFINED.with("label", confinement)
+                : confinement.isEmpty() ? PreflightFinding.LSM_NONE.with()
+                : PreflightFinding.LSM_UNCONFINED.with("label", confinement));
     }
 
     /**
@@ -441,18 +452,16 @@ public final class HostPreflight {
         int networks = 0;
         try {
             networks = docker.listNetworks().size();
-            facts.put("networks", networks);
+            facts.put(HostFact.NETWORKS.token(), networks);
             docker.createNetwork(name, null, null, null, false);
             docker.removeNetwork(name);
-            checks.add(new Check("network_headroom",
-                networks > NETWORK_HEADROOM_WARN ? STATUS_WARN : STATUS_PASS, true,
-                "one more user-defined network is allocatable (" + networks + " exist"
-                    + (networks > NETWORK_HEADROOM_WARN
-                        ? "; nearing default-address-pools exhaustion" : "") + ")"));
+            boolean low = networks > NETWORK_HEADROOM_WARN;
+            checks.add(Check.of("network_headroom", low ? STATUS_WARN : STATUS_PASS, true,
+                (low ? PreflightFinding.NETWORK_HEADROOM_LOW : PreflightFinding.NETWORK_HEADROOM)
+                    .with("count", networks)));
         } catch (Exception error) {
-            checks.add(new Check("network_headroom", STATUS_FAIL, true,
-                "could not create a probe network (" + networks + " exist): "
-                    + error.getMessage()));
+            checks.add(Check.of("network_headroom", STATUS_FAIL, true,
+                PreflightFinding.NETWORK_EXHAUSTED.with("count", networks, "error", error.getMessage())));
             try {
                 docker.removeNetwork(name);
             } catch (IOException ignored) {
@@ -489,19 +498,18 @@ public final class HostPreflight {
             NftRunner.Result added = nft.run(List.of("-f", "-"),
                 "add table inet " + table + "\n");
             if (!added.ok()) {
-                return new Check(name, STATUS_FAIL, required,
-                    "nft add table refused: " + added.failureText());
+                return Check.of(name, STATUS_FAIL, required,
+                    PreflightFinding.NFT_REFUSED.with("error", added.failureText()));
             }
             NftRunner.Result listed = nft.run(List.of("list", "table", "inet", table), null);
             boolean visible = listed.ok() && listed.stdout().contains(table);
             nft.run(List.of("delete", "table", "inet", table), null);
-            return new Check(name, visible ? STATUS_PASS : STATUS_FAIL, required,
-                visible ? "nft transaction applied and read back from the kernel"
-                    : "nft add reported success but the table did not read back: "
-                        + listed.failureText());
+            return Check.of(name, visible ? STATUS_PASS : STATUS_FAIL, required,
+                visible ? PreflightFinding.NFT_APPLIED.with()
+                    : PreflightFinding.NFT_NOT_READ_BACK.with("error", listed.failureText()));
         } catch (Exception error) {
-            return new Check(name, STATUS_FAIL, required,
-                "nft probe failed: " + error.getMessage());
+            return Check.of(name, STATUS_FAIL, required,
+                PreflightFinding.NFT_PROBE_FAILED.with("error", error.getMessage()));
         }
     }
 
@@ -701,6 +709,10 @@ public final class HostPreflight {
             entry.put("status", check.status());
             entry.put("required", check.required());
             entry.put("detail", check.detail());
+            if (check.found() != null) {
+                entry.put(PreflightFinding.TOKEN_KEY, check.found().finding().token());
+                entry.put(PreflightFinding.ARGS_KEY, new LinkedHashMap<>(check.found().args()));
+            }
             entry.put("at", at);
             checkMap.put(check.name(), entry);
         }

@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.PreflightFinding;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -282,9 +283,9 @@ class LiveRemoteHostTest {
                     .as("step 2: the pids controller is delegated on the remote host: %s",
                         report.check("cgroup_pids_controller").detail())
                     .isEqualTo(HostPreflight.STATUS_PASS);
-                assertThat(report.check("pids_limit_enforced").detail())
+                assertThat(report.check("pids_limit_enforced").found().args())
                     .as("step 2: and the remote cgroup really enforces the cap we set")
-                    .contains("'149'");
+                    .containsEntry("read", "149");
                 assertThat(report.check("pids_limit_enforced").status())
                     .as("step 2: so the check passes on evidence, not on config")
                     .isEqualTo(HostPreflight.STATUS_PASS);
@@ -303,9 +304,9 @@ class LiveRemoteHostTest {
                     .as("step 3: nft applied and read back on the remote host: %s",
                         report.check("nftables").detail())
                     .isEqualTo(HostPreflight.STATUS_PASS);
-                assertThat(report.check("nftables").detail())
+                assertThat(report.check("nftables").found().finding())
                     .as("step 3: and it was read back from the kernel, not assumed")
-                    .contains("read back from the kernel");
+                    .isEqualTo(PreflightFinding.NFT_APPLIED);
 
                 // 4. A network really was allocated and removed over there.
                 assertThat(report.check("network_headroom").failed())

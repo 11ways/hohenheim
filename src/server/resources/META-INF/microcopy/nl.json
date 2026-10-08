@@ -1110,10 +1110,6 @@
   },
   "degraded": [
     {
-      "text": "Verminderd beschikbaar",
-      "scope": "attention_detail"
-    },
-    {
       "text": "Verminderd",
       "scope": "stack_status"
     },
@@ -1143,10 +1139,6 @@
   "deploy_now": {
     "text": "Nu uitrollen",
     "scope": "deployments"
-  },
-  "down": {
-    "text": "Onbereikbaar",
-    "scope": "attention_detail"
   },
   "dump_file": {
     "text": "Dumpbestand",
@@ -1579,10 +1571,6 @@
       "scope": "variable_type"
     }
   ],
-  "site": {
-    "text": "Site {$name}",
-    "scope": "attention_title"
-  },
   "start": [
     {
       "text": "Starten",
@@ -9799,14 +9787,6 @@
     "text": "Laatste preflight",
     "scope": "server_overview"
   },
-  "verdict_passed": {
-    "text": "Geslaagd",
-    "scope": "server_overview"
-  },
-  "verdict_failed": {
-    "text": "Mislukt",
-    "scope": "server_overview"
-  },
   "never_preflighted": {
     "text": "Nooit gepreflight",
     "scope": "server_overview"
@@ -15339,5 +15319,317 @@
   "your_part": {
     "text": "Wat je hier kunt doen",
     "scope": "instance_overview"
-  }
+  },
+  "finding_daemon_unreachable": {
+    "text": "{$failure}: {$error}",
+    "scope": "host_check"
+  },
+  "finding_docker_reachable": {
+    "text": "Docker {$version} antwoordt",
+    "scope": "host_check"
+  },
+  "finding_incus_reachable": {
+    "text": "Incus {$version} antwoordt (API {$api})",
+    "scope": "host_check"
+  },
+  "finding_api_version": {
+    "text": "De daemon spreekt API {$version}; {$minimum} of nieuwer is nodig",
+    "scope": "host_check"
+  },
+  "finding_api_version_unreadable": {
+    "text": "De daemon meldt een API-versie die niet te lezen is: {$version}",
+    "scope": "host_check"
+  },
+  "finding_probe_image_unobtainable": {
+    "text": "Het testimage {$image} staat niet op deze host en kon niet worden opgehaald ({$error}). Een host zonder toegang tot een registry moet precies dit image vooraf geladen hebben; zie docs/deploy-native.md.",
+    "scope": "host_check"
+  },
+  "finding_kernel_probe_exec_failed": {
+    "text": "De testcontainer kon de kernel niet uitlezen: {$output}",
+    "scope": "host_check"
+  },
+  "finding_kernel_probe_answered": {
+    "text": "Een geharde testcontainer draaide en beantwoordde elke kernelvraag",
+    "scope": "host_check"
+  },
+  "finding_probe_container_failed": {
+    "text": "De testcontainer mislukte: {$error}",
+    "scope": "host_check"
+  },
+  "finding_probe_instance_failed": {
+    "text": "De testinstance (image {$image} van {$server}) kon niet draaien ({$error}), dus wat deze host met een app doet, is onbekend",
+    "scope": "host_check"
+  },
+  "finding_probe_unanswered": {
+    "text": "De testinstance antwoordde nooit, dus dit is onbekend",
+    "scope": "host_check"
+  },
+  "finding_userns_unreadable": {
+    "text": "De test kon zijn uid-map niet lezen, dus of root in een container root op de host is, is onbekend",
+    "scope": "host_check"
+  },
+  "finding_userns_remapped": {
+    "text": "Root in een container is geen root op de host: uid_map leest '{$uid_map}'",
+    "scope": "host_check"
+  },
+  "finding_userns_identity": {
+    "text": "Root in een container is root op de host: uid_map leest '{$uid_map}' (zet userns-remap in daemon.json)",
+    "scope": "host_check"
+  },
+  "finding_userns_identity_incus": {
+    "text": "Root in een container is root op de host: uid_map leest '{$uid_map}'. Incus-systeemcontainers zijn standaard niet-geprivilegieerd, dus deze host is zo ingesteld dat apps zijn eigen uid-bereik krijgen.",
+    "scope": "host_check"
+  },
+  "finding_lsm_confined": {
+    "text": "Containers draaien afgeschermd door {$label}",
+    "scope": "host_check"
+  },
+  "finding_lsm_none": {
+    "text": "Geen AppArmor- of SELinux-profiel schermt containers af op deze host",
+    "scope": "host_check"
+  },
+  "finding_lsm_unconfined": {
+    "text": "Containers draaien niet afgeschermd (label {$label}); AppArmor of SELinux voegt op deze host niets toe",
+    "scope": "host_check"
+  },
+  "finding_pids_delegated": {
+    "text": "De pids-controller is gedelegeerd (cgroup v2-controllers: {$controllers})",
+    "scope": "host_check"
+  },
+  "finding_pids_not_delegated": {
+    "text": "De pids-controller is niet gedelegeerd (controllers: {$controllers}), dus een proceslimiet dwingt op deze host niets af",
+    "scope": "host_check"
+  },
+  "finding_pids_limit": {
+    "text": "pids.max in een container leest {$read}; {$configured} is ingesteld",
+    "scope": "host_check"
+  },
+  "finding_seccomp_filtering": {
+    "text": "Seccomp filtert systeemaanroepen in containers",
+    "scope": "host_check"
+  },
+  "finding_seccomp_off": {
+    "text": "Seccomp filtert geen systeemaanroepen in containers (een onbeperkt daemonprofiel?): {$status}",
+    "scope": "host_check"
+  },
+  "finding_no_new_privs_set": {
+    "text": "Containers kunnen geen nieuwe rechten krijgen (no_new_privs staat aan)",
+    "scope": "host_check"
+  },
+  "finding_no_new_privs_unset": {
+    "text": "Containers kunnen nieuwe rechten krijgen (no_new_privs staat niet aan): {$status}",
+    "scope": "host_check"
+  },
+  "finding_network_headroom": {
+    "text": "Ruimte voor nog een containernetwerk ({$count} in gebruik)",
+    "scope": "host_check"
+  },
+  "finding_network_headroom_low": {
+    "text": "Ruimte voor nog een containernetwerk, maar er zijn er {$count} in gebruik en de standaard adrespools zijn bijna op",
+    "scope": "host_check"
+  },
+  "finding_network_exhausted": {
+    "text": "Er kon geen containernetwerk worden gemaakt ({$count} in gebruik): {$error}",
+    "scope": "host_check"
+  },
+  "finding_nft_applied": {
+    "text": "Een firewallwijziging werd toegepast en uit de kernel teruggelezen",
+    "scope": "host_check"
+  },
+  "finding_nft_refused": {
+    "text": "nftables weigerde een firewallwijziging: {$error}",
+    "scope": "host_check"
+  },
+  "finding_nft_not_read_back": {
+    "text": "nftables aanvaardde een firewallwijziging, maar die las niet terug: {$error}",
+    "scope": "host_check"
+  },
+  "finding_nft_probe_failed": {
+    "text": "De firewall kon niet worden getest: {$error}",
+    "scope": "host_check"
+  },
+  "finding_kernel_lane_no_ssh": {
+    "text": "Geen vertrouwd SSH-beheerkanaal bereikt deze host, dus isolatie kan alleen uit de eigen configuratie van de daemon worden gelezen en blijft onbevestigd in de kernel. Voeg een SSH-doel toe en bevestig de hostsleutel, of laat hier alleen vertrouwde apps draaien.",
+    "scope": "host_check"
+  },
+  "finding_kernel_lane_unbuildable": {
+    "text": "De kernelcontrole kon niet worden opgezet: {$error}",
+    "scope": "host_check"
+  },
+  "finding_resources_measured": {
+    "text": "{$cpus} CPU's en {$memory} geheugen",
+    "scope": "host_check"
+  },
+  "finding_resources_no_memory": {
+    "text": "De daemon meldde geen totaal geheugen, dus deze host heeft geen geheugenbudget om apps op te plaatsen",
+    "scope": "host_check"
+  },
+  "finding_resources_unreadable": {
+    "text": "De middelen van de daemon konden niet worden gelezen, dus deze host heeft geen geheugenbudget om apps op te plaatsen: {$error}",
+    "scope": "host_check"
+  },
+  "finding_trusted": {
+    "text": "De daemon vertrouwt het certificaat van deze controller",
+    "scope": "host_check"
+  },
+  "finding_not_trusted": {
+    "text": "De daemon antwoordt maar noemt deze controller {$auth}: schrijf het clientcertificaat in (een trust-token of incus config trust)",
+    "scope": "host_check"
+  },
+  "finding_drivers": {
+    "text": "Stuurprogramma's van de daemon: {$drivers}",
+    "scope": "host_check"
+  },
+  "finding_drivers_no_lxc": {
+    "text": "Stuurprogramma's van de daemon: {$drivers}; zonder het lxc-stuurprogramma kunnen systeemcontainers niet draaien",
+    "scope": "host_check"
+  },
+  "finding_storage_pools": {
+    "text": "Opslagpools: {$pools}",
+    "scope": "host_check"
+  },
+  "finding_storage_none_created": {
+    "text": "Geen opslagpool is klaar, dus apps kunnen nergens staan ({$pools})",
+    "scope": "host_check"
+  },
+  "finding_storage_unlisted": {
+    "text": "De opslagpools konden niet worden opgesomd: {$error}",
+    "scope": "host_check"
+  },
+  "finding_bridge_present": {
+    "text": "Beheerde bridge {$bridge} is aanwezig",
+    "scope": "host_check"
+  },
+  "finding_bridge_missing": {
+    "text": "Geen beheerd bridgenetwerk, dus containers zouden geen verbinding hebben",
+    "scope": "host_check"
+  },
+  "finding_networks_unlisted": {
+    "text": "De netwerken konden niet worden opgesomd: {$error}",
+    "scope": "host_check"
+  },
+  "finding_acl_enforceable": {
+    "text": "Een netwerktoegangslijst werd gemaakt en teruggelezen, dus tenants kunnen gescheiden blijven",
+    "scope": "host_check"
+  },
+  "finding_acl_not_read_back": {
+    "text": "De daemon aanvaardde een netwerktoegangslijst, maar die las niet terug met zijn regel, dus tenants kunnen op deze host niet gescheiden blijven",
+    "scope": "host_check"
+  },
+  "finding_acl_refused": {
+    "text": "Er kon geen netwerktoegangslijst worden gemaakt, dus tenants kunnen niet gescheiden blijven: {$error}",
+    "scope": "host_check"
+  },
+  "fact_docker_version": {
+    "text": "Docker-versie",
+    "scope": "host_check"
+  },
+  "fact_incus_version": {
+    "text": "Incus-versie",
+    "scope": "host_check"
+  },
+  "fact_api_version": {
+    "text": "API-versie",
+    "scope": "host_check"
+  },
+  "fact_kernel_version": {
+    "text": "Kernelversie",
+    "scope": "host_check"
+  },
+  "fact_os": {
+    "text": "Besturingssysteem",
+    "scope": "host_check"
+  },
+  "fact_os_type": {
+    "text": "Systeemtype",
+    "scope": "host_check"
+  },
+  "fact_architecture": {
+    "text": "Architectuur",
+    "scope": "host_check"
+  },
+  "fact_ncpu": {
+    "text": "CPU's",
+    "scope": "host_check"
+  },
+  "fact_mem_total": {
+    "text": "Geheugen",
+    "scope": "host_check"
+  },
+  "fact_cgroup_version": {
+    "text": "Cgroup-versie",
+    "scope": "host_check"
+  },
+  "fact_cgroup_driver": {
+    "text": "Cgroup-stuurprogramma",
+    "scope": "host_check"
+  },
+  "fact_containers": {
+    "text": "Containers",
+    "scope": "host_check"
+  },
+  "fact_containers_running": {
+    "text": "Draaiende containers",
+    "scope": "host_check"
+  },
+  "fact_images": {
+    "text": "Images",
+    "scope": "host_check"
+  },
+  "fact_networks": {
+    "text": "Containernetwerken",
+    "scope": "host_check"
+  },
+  "fact_server_name": {
+    "text": "Servernaam",
+    "scope": "host_check"
+  },
+  "fact_project": {
+    "text": "Incus-project",
+    "scope": "host_check"
+  },
+  "fact_driver": {
+    "text": "Stuurprogramma's",
+    "scope": "host_check"
+  },
+  "fact_auth": {
+    "text": "Vertrouwen",
+    "scope": "host_check"
+  },
+  "fact_storage_pools": {
+    "text": "Opslagpools",
+    "scope": "host_check"
+  },
+  "fact_managed_bridge": {
+    "text": "Beheerde bridge",
+    "scope": "host_check"
+  },
+  "fact_probe_image_fingerprint": {
+    "text": "Build van het testimage",
+    "scope": "host_check"
+  },
+  "change_configuration": {
+    "text": "Configuratie aanpassen",
+    "scope": "app_health"
+  },
+  "site_down": [
+    {
+      "text": "Bezoekers van {$name} krijgen een foutpagina",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Wat het serveert, antwoordt niet.",
+      "scope": "attention_detail"
+    }
+  ],
+  "site_degraded": [
+    {
+      "text": "{$name} antwoordt, maar niet betrouwbaar",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Sommige verzoeken naar wat het serveert, mislukken.",
+      "scope": "attention_detail"
+    }
+  ]
 }

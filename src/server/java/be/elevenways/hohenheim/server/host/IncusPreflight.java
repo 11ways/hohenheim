@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -115,9 +116,8 @@ public final class IncusPreflight {
             // Same stance as the ssh lane: an unpinned host cannot be probed at all,
             // and that refusal IS the stored verdict.
             HostProbe.Outcome outcome = HostProbe.classify(refusal);
-            report = new HostPreflight.Report(List.of(new HostPreflight.Check("daemon",
-                HostPreflight.STATUS_FAIL, true,
-                outcome.kind().token + ": " + outcome.detail())),
+            report = new HostPreflight.Report(List.of(HostPreflight.Check.of("daemon",
+                HostPreflight.STATUS_FAIL, true, HostPreflight.unreachable(outcome))),
                 Map.of(), false, Now.instant(), outcome);
         }
         report = withKernelLaneCheck(server, report);
@@ -154,15 +154,12 @@ public final class IncusPreflight {
         try {
             NftRunner nft = IncusKernelIsolation.kernelRunner(server);
             check = nft == null
-                ? new HostPreflight.Check(KERNEL_LANE_CHECK, HostPreflight.STATUS_FAIL, required,
-                    "no trusted ssh admin lane on this record, so this host's workload"
-                        + " isolation can only be read from the daemon's own configuration"
-                        + " and stays UNCONFIRMED in the kernel; declare an ssh target and"
-                        + " confirm its host key, or set the posture to trusted-only")
+                ? HostPreflight.Check.of(KERNEL_LANE_CHECK, HostPreflight.STATUS_FAIL, required,
+                    PreflightFinding.KERNEL_LANE_NO_SSH.with())
                 : HostPreflight.nftablesProbe(nft, KERNEL_LANE_CHECK, required);
         } catch (RuntimeException unreachable) {
-            check = new HostPreflight.Check(KERNEL_LANE_CHECK, HostPreflight.STATUS_FAIL, required,
-                "could not build the kernel-truth verifier: " + unreachable.getMessage());
+            check = HostPreflight.Check.of(KERNEL_LANE_CHECK, HostPreflight.STATUS_FAIL, required,
+                PreflightFinding.KERNEL_LANE_UNBUILDABLE.with("error", unreachable.getMessage()));
         }
         List<HostPreflight.Check> checks = new ArrayList<>(report.checks());
         checks.add(check);
@@ -209,7 +206,7 @@ public final class IncusPreflight {
         }
         Map<String, Object> facts = new LinkedHashMap<>(report.facts());
         if (probe.imageFingerprint() != null) {
-            facts.put(PROBE_IMAGE_FACT, probe.imageFingerprint());
+            facts.put(HostFact.PROBE_IMAGE_FINGERPRINT.token(), probe.imageFingerprint());
         }
         return new HostPreflight.Report(List.copyOf(checks), facts, passed,
             report.at(), report.daemonFailure());
@@ -236,7 +233,7 @@ public final class IncusPreflight {
     public static final String PROBE_IMAGE = "alpine/3.22/default";
 
     /** The stored fact naming the image fingerprint the kernel probe actually ran. */
-    public static final String PROBE_IMAGE_FACT = "probe_image_fingerprint";
+    public static final String PROBE_IMAGE_FACT = HostFact.PROBE_IMAGE_FINGERPRINT.token();
 
     /**
      * What the kernel probe found.
@@ -275,11 +272,9 @@ public final class IncusPreflight {
             client.changeState(name, "start", 30, false);
             IncusClient.ExecResult result = awaitProbeExec(client, name);
             if (result == null) {
-                return new KernelProbe(List.of(unanswered(USERNS_CHECK, required,
-                        "the probe instance never accepted an exec"),
-                    unanswered(SECCOMP_CHECK, required,
-                        "the probe instance never accepted an exec"),
-                    unanswered("lsm", false, "the probe instance never accepted an exec")),
+                PreflightFinding.Found never = PreflightFinding.PROBE_UNANSWERED.with();
+                return new KernelProbe(List.of(unanswered(USERNS_CHECK, required, never),
+                    unanswered(SECCOMP_CHECK, required, never), unanswered("lsm", false, never)),
                     fingerprint);
             }
             String[] sections = result.output().split("---");
@@ -291,9 +286,8 @@ public final class IncusPreflight {
         } catch (Exception error) {
             // The image is named so an operator of a host that cannot reach the image
             // server knows exactly what the daemon failed to obtain.
-            String detail = "the kernel probe instance (image " + PROBE_IMAGE + " from "
-                + IncusInstanceRuntime.IMAGE_SERVER + ") could not be run ("
-                + error.getMessage() + "), so what this host does to a workload is UNKNOWN";
+            PreflightFinding.Found detail = PreflightFinding.PROBE_INSTANCE_FAILED.with("image", PROBE_IMAGE,
+                "server", IncusInstanceRuntime.IMAGE_SERVER, "error", error.getMessage());
             return new KernelProbe(List.of(unanswered(USERNS_CHECK, required, detail),
                 unanswered(SECCOMP_CHECK, required, detail),
                 unanswered("lsm", false, detail)), fingerprint);
@@ -362,11 +356,9 @@ public final class IncusPreflight {
     }
 
     /** A check whose question was asked and NOT answered: a fail, never a silent pass. */
-    private static HostPreflight.@NonNull Check unanswered(@NonNull String name,
-                                                           boolean required,
-                                                           @NonNull String detail) {
-        return new HostPreflight.Check(name, HostPreflight.STATUS_FAIL, required,
-            "UNKNOWN: " + detail);
+    private static HostPreflight.@NonNull Check unanswered(@NonNull String name, boolean required,
+                                                           PreflightFinding.@NonNull Found detail) {
+        return HostPreflight.Check.of(name, HostPreflight.STATUS_FAIL, required, detail);
     }
 
     /** The Incus verdict on the same uid_map the Docker battery reads, but REQUIRED. */
@@ -374,12 +366,13 @@ public final class IncusPreflight {
                                                             boolean required) {
         HostPreflight.Check advisory = HostPreflight.usernsCheck(uidMap);
         boolean remapped = HostPreflight.STATUS_PASS.equals(advisory.status());
-        return new HostPreflight.Check(USERNS_CHECK,
+        PreflightFinding.Found found = advisory.found() != null
+            && advisory.found().finding() == PreflightFinding.USERNS_IDENTITY
+            ? PreflightFinding.USERNS_IDENTITY_INCUS.with("uid_map", advisory.found().args().get("uid_map"))
+            : advisory.found();
+        return HostPreflight.Check.of(USERNS_CHECK,
             remapped ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL, required,
-            remapped ? advisory.detail()
-                : advisory.detail() + "; an Incus system container is unprivileged by"
-                    + " DEFAULT, so this host is configured to hand workloads the host's"
-                    + " own uid range");
+            Objects.requireNonNull(found, "the advisory userns check is a battery's own"));
     }
 
     /** Seccomp filter mode on the probe instance's pid 1, read from {@code /proc}. */
@@ -387,10 +380,9 @@ public final class IncusPreflight {
                                                              boolean required) {
         boolean filtering = status.lines().anyMatch(line ->
             line.startsWith("Seccomp:") && line.trim().endsWith("2"));
-        return new HostPreflight.Check(SECCOMP_CHECK,
+        return HostPreflight.Check.of(SECCOMP_CHECK,
             filtering ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL, required,
-            filtering ? "seccomp filter mode active on the probe instance's pid 1"
-                : "seccomp is NOT filtering inside a workload on this host: " + status);
+            filtering ? PreflightFinding.SECCOMP_FILTERING.with() : PreflightFinding.SECCOMP_OFF.with("status", status));
     }
 
     /** The battery itself, injectable for tests. */
@@ -427,26 +419,26 @@ public final class IncusPreflight {
             Map<String, Object> environment =
                 server.get("environment") instanceof Map<?, ?> map
                     ? castMap(map) : Map.of();
-            facts.put("incus_version", stringOf(environment.get("server_version")));
-            facts.put("api_version", stringOf(server.get("api_version")));
-            facts.put("kernel_version", stringOf(environment.get("kernel_version")));
-            facts.put("os", stringOf(environment.get("os_name")));
-            facts.put("os_type", BlastString.lower(stringOf(environment.get("kernel"))));
-            facts.put("architecture", stringOf(environment.get("kernel_architecture")));
-            facts.put("server_name", stringOf(environment.get("server_name")));
-            facts.put("project", stringOf(environment.get("project")));
-            facts.put("driver", stringOf(environment.get("driver")));
-            facts.put("auth", stringOf(server.get("auth")));
+            facts.put(HostFact.INCUS_VERSION.token(), stringOf(environment.get("server_version")));
+            facts.put(HostFact.API_VERSION.token(), stringOf(server.get("api_version")));
+            facts.put(HostFact.KERNEL_VERSION.token(), stringOf(environment.get("kernel_version")));
+            facts.put(HostFact.OS.token(), stringOf(environment.get("os_name")));
+            facts.put(HostFact.OS_TYPE.token(), BlastString.lower(stringOf(environment.get("kernel"))));
+            facts.put(HostFact.ARCHITECTURE.token(), stringOf(environment.get("kernel_architecture")));
+            facts.put(HostFact.SERVER_NAME.token(), stringOf(environment.get("server_name")));
+            facts.put(HostFact.PROJECT.token(), stringOf(environment.get("project")));
+            facts.put(HostFact.DRIVER.token(), stringOf(environment.get("driver")));
+            facts.put(HostFact.AUTH.token(), stringOf(server.get("auth")));
             recordResources(client, facts, checks);
-            checks.add(new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true,
-                "Incus " + facts.get("incus_version") + " reachable (API "
-                    + facts.get("api_version") + ")"));
+            checks.add(HostPreflight.Check.of("daemon", HostPreflight.STATUS_PASS, true,
+                PreflightFinding.INCUS_REACHABLE.with("version", facts.get(HostFact.INCUS_VERSION.token()),
+                    "api", facts.get(HostFact.API_VERSION.token()))));
             return server;
         } catch (Exception error) {
             HostProbe.Outcome outcome = HostProbe.classify(error);
             failure[0] = outcome;
-            checks.add(new HostPreflight.Check("daemon", HostPreflight.STATUS_FAIL, true,
-                outcome.kind().token + ": " + outcome.detail()));
+            checks.add(HostPreflight.Check.of("daemon", HostPreflight.STATUS_FAIL, true,
+                HostPreflight.unreachable(outcome)));
             return null;
         }
     }
@@ -469,26 +461,24 @@ public final class IncusPreflight {
             Map<String, Object> resources = client.resources();
             if (resources.get("cpu") instanceof Map<?, ?> cpu
                     && cpu.get("total") instanceof Number total) {
-                facts.put("ncpu", total.intValue());
+                facts.put(HostFact.NCPU.token(), total.intValue());
             }
             if (resources.get("memory") instanceof Map<?, ?> memory
                     && memory.get("total") instanceof Number total) {
-                facts.put(HostPreflight.MEM_TOTAL_FACT, total.longValue());
+                facts.put(HostFact.MEM_TOTAL.token(), total.longValue());
             }
         } catch (IOException | RuntimeException unreadable) {
-            checks.add(new HostPreflight.Check("resources", HostPreflight.STATUS_FAIL, true,
-                "the daemon's resource inventory could not be read, so this host has no"
-                    + " memory budget to place against: " + unreadable.getMessage()));
+            checks.add(HostPreflight.Check.of("resources", HostPreflight.STATUS_FAIL, true,
+                PreflightFinding.RESOURCES_UNREADABLE.with("error", unreadable.getMessage())));
             return;
         }
         boolean measured = facts.get(HostPreflight.MEM_TOTAL_FACT) instanceof Number bytes
             && bytes.longValue() > 0;
-        checks.add(new HostPreflight.Check("resources",
+        checks.add(HostPreflight.Check.of("resources",
             measured ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL, true,
-            measured ? "host reports " + facts.get("ncpu") + " CPUs and "
-                    + facts.get(HostPreflight.MEM_TOTAL_FACT) + " bytes of memory"
-                : "the daemon reported no total memory, so this host has no memory budget"
-                    + " to place against"));
+            measured ? PreflightFinding.RESOURCES_MEASURED.with("cpus", facts.get(HostFact.NCPU.token()),
+                    "memory", HostFact.MEM_TOTAL.valueText(facts.get(HostFact.MEM_TOTAL.token())))
+                : PreflightFinding.RESOURCES_NO_MEMORY.with()));
     }
 
     /**
@@ -498,12 +488,10 @@ public final class IncusPreflight {
     private static void checkTrusted(Map<String, Object> server,
                                      List<HostPreflight.Check> checks) {
         String auth = stringOf(server.get("auth"));
-        checks.add(new HostPreflight.Check("trusted",
+        checks.add(HostPreflight.Check.of("trusted",
             "trusted".equals(auth) ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL,
-            true, "trusted".equals(auth)
-                ? "the daemon trusts this client's certificate"
-                : "the daemon answers but reports this client '" + auth
-                    + "': enroll the client certificate (trust token or incus config trust)"));
+            true, "trusted".equals(auth) ? PreflightFinding.TRUSTED.with()
+                : PreflightFinding.NOT_TRUSTED.with("auth", auth)));
     }
 
     /** System containers need the lxc driver; a qemu-only daemon cannot run this tier. */
@@ -511,10 +499,9 @@ public final class IncusPreflight {
                                     List<HostPreflight.Check> checks) {
         String driver = stringOf(facts.get("driver"));
         boolean lxc = ("|" + driver.replace(" ", "") + "|").contains("|lxc|");
-        checks.add(new HostPreflight.Check("driver_lxc",
+        checks.add(HostPreflight.Check.of("driver_lxc",
             lxc ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL, true,
-            "daemon drivers: '" + driver + "'"
-                + (lxc ? "" : " -- no lxc driver, system containers cannot run")));
+            (lxc ? PreflightFinding.DRIVERS : PreflightFinding.DRIVERS_NO_LXC).with("drivers", driver)));
     }
 
     private static void checkStorage(IncusClient client, List<HostPreflight.Check> checks,
@@ -528,15 +515,14 @@ public final class IncusPreflight {
                     + pool.get("status") + ")");
                 created |= "Created".equalsIgnoreCase(stringOf(pool.get("status")));
             }
-            facts.put("storage_pools", String.join(" ", described));
-            checks.add(new HostPreflight.Check("storage_pool",
+            facts.put(HostFact.STORAGE_POOLS.token(), String.join(" ", described));
+            checks.add(HostPreflight.Check.of("storage_pool",
                 created ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL, true,
-                created ? "storage pools: " + String.join(", ", described)
-                    : "no CREATED storage pool -- instances have nowhere to live ("
-                        + described + ")"));
+                (created ? PreflightFinding.STORAGE_POOLS : PreflightFinding.STORAGE_NONE_CREATED)
+                    .with("pools", String.join(", ", described))));
         } catch (IOException error) {
-            checks.add(new HostPreflight.Check("storage_pool", HostPreflight.STATUS_FAIL,
-                true, "could not list storage pools: " + error.getMessage()));
+            checks.add(HostPreflight.Check.of("storage_pool", HostPreflight.STATUS_FAIL,
+                true, PreflightFinding.STORAGE_UNLISTED.with("error", error.getMessage())));
         }
     }
 
@@ -552,15 +538,14 @@ public final class IncusPreflight {
                     break;
                 }
             }
-            facts.put("managed_bridge", managed != null ? managed : "");
-            checks.add(new HostPreflight.Check("managed_network",
+            facts.put(HostFact.MANAGED_BRIDGE.token(), managed != null ? managed : "");
+            checks.add(HostPreflight.Check.of("managed_network",
                 managed != null ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL,
-                true, managed != null
-                    ? "managed bridge '" + managed + "' present"
-                    : "no managed bridge network -- containers would have no connectivity"));
+                true, managed != null ? PreflightFinding.BRIDGE_PRESENT.with("bridge", managed)
+                    : PreflightFinding.BRIDGE_MISSING.with()));
         } catch (IOException error) {
-            checks.add(new HostPreflight.Check("managed_network", HostPreflight.STATUS_FAIL,
-                true, "could not list networks: " + error.getMessage()));
+            checks.add(HostPreflight.Check.of("managed_network", HostPreflight.STATUS_FAIL,
+                true, PreflightFinding.NETWORKS_UNLISTED.with("error", error.getMessage())));
         }
     }
 
@@ -588,15 +573,12 @@ public final class IncusPreflight {
             } catch (IOException cleanup) {
                 // a stuck probe ACL is the reconciler's, not this verdict's, problem
             }
-            checks.add(new HostPreflight.Check("network_acl",
+            checks.add(HostPreflight.Check.of("network_acl",
                 visible ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL, true,
-                visible ? "network ACL created and read back -- tenant isolation is enforceable"
-                    : "the daemon accepted an ACL but it did not read back with its rule;"
-                        + " tenant isolation cannot be enforced on this host"));
+                visible ? PreflightFinding.ACL_ENFORCEABLE.with() : PreflightFinding.ACL_NOT_READ_BACK.with()));
         } catch (Exception error) {
-            checks.add(new HostPreflight.Check("network_acl", HostPreflight.STATUS_FAIL, true,
-                "could not create a probe network ACL, so tenant isolation is not"
-                    + " enforceable: " + error.getMessage()));
+            checks.add(HostPreflight.Check.of("network_acl", HostPreflight.STATUS_FAIL, true,
+                PreflightFinding.ACL_REFUSED.with("error", error.getMessage())));
         }
     }
 

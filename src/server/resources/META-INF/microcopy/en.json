@@ -1111,10 +1111,6 @@
   "degraded": [
     {
       "text": "Degraded",
-      "scope": "attention_detail"
-    },
-    {
-      "text": "Degraded",
       "scope": "stack_status"
     },
     {
@@ -1143,10 +1139,6 @@
   "deploy_now": {
     "text": "Deploy now",
     "scope": "deployments"
-  },
-  "down": {
-    "text": "Down",
-    "scope": "attention_detail"
   },
   "dump_file": {
     "text": "Dump file",
@@ -1579,10 +1571,6 @@
       "scope": "variable_type"
     }
   ],
-  "site": {
-    "text": "Site {$name}",
-    "scope": "attention_title"
-  },
   "start": [
     {
       "text": "Start",
@@ -9799,14 +9787,6 @@
     "text": "Last preflight",
     "scope": "server_overview"
   },
-  "verdict_passed": {
-    "text": "Passed",
-    "scope": "server_overview"
-  },
-  "verdict_failed": {
-    "text": "Failed",
-    "scope": "server_overview"
-  },
   "never_preflighted": {
     "text": "Never preflighted",
     "scope": "server_overview"
@@ -15339,5 +15319,317 @@
   "your_part": {
     "text": "What you can do here",
     "scope": "instance_overview"
-  }
+  },
+  "finding_daemon_unreachable": {
+    "text": "{$failure}: {$error}",
+    "scope": "host_check"
+  },
+  "finding_docker_reachable": {
+    "text": "Docker {$version} answers",
+    "scope": "host_check"
+  },
+  "finding_incus_reachable": {
+    "text": "Incus {$version} answers (API {$api})",
+    "scope": "host_check"
+  },
+  "finding_api_version": {
+    "text": "The daemon speaks API {$version}; {$minimum} or newer is needed",
+    "scope": "host_check"
+  },
+  "finding_api_version_unreadable": {
+    "text": "The daemon reports an API version that cannot be read: {$version}",
+    "scope": "host_check"
+  },
+  "finding_probe_image_unobtainable": {
+    "text": "The probe image {$image} is not on this host and could not be pulled ({$error}). A host without registry access needs exactly this image preloaded; see docs/deploy-native.md.",
+    "scope": "host_check"
+  },
+  "finding_kernel_probe_exec_failed": {
+    "text": "The probe container could not read the kernel: {$output}",
+    "scope": "host_check"
+  },
+  "finding_kernel_probe_answered": {
+    "text": "A hardened probe container ran and answered every kernel read",
+    "scope": "host_check"
+  },
+  "finding_probe_container_failed": {
+    "text": "The probe container failed: {$error}",
+    "scope": "host_check"
+  },
+  "finding_probe_instance_failed": {
+    "text": "The probe instance (image {$image} from {$server}) could not run ({$error}), so what this host does to an app is unknown",
+    "scope": "host_check"
+  },
+  "finding_probe_unanswered": {
+    "text": "The probe instance never answered, so this is unknown",
+    "scope": "host_check"
+  },
+  "finding_userns_unreadable": {
+    "text": "The probe could not read its uid map, so whether root in a container is root on the host is unknown",
+    "scope": "host_check"
+  },
+  "finding_userns_remapped": {
+    "text": "Root in a container is not root on the host: uid_map reads '{$uid_map}'",
+    "scope": "host_check"
+  },
+  "finding_userns_identity": {
+    "text": "Root in a container is root on the host: uid_map reads '{$uid_map}' (set userns-remap in daemon.json)",
+    "scope": "host_check"
+  },
+  "finding_userns_identity_incus": {
+    "text": "Root in a container is root on the host: uid_map reads '{$uid_map}'. Incus system containers are unprivileged by default, so this host is set up to hand apps its own uid range.",
+    "scope": "host_check"
+  },
+  "finding_lsm_confined": {
+    "text": "Containers run confined by {$label}",
+    "scope": "host_check"
+  },
+  "finding_lsm_none": {
+    "text": "No AppArmor or SELinux profile confines containers on this host",
+    "scope": "host_check"
+  },
+  "finding_lsm_unconfined": {
+    "text": "Containers run unconfined (label {$label}); AppArmor or SELinux adds no layer on this host",
+    "scope": "host_check"
+  },
+  "finding_pids_delegated": {
+    "text": "The pids controller is delegated (cgroup v2 controllers: {$controllers})",
+    "scope": "host_check"
+  },
+  "finding_pids_not_delegated": {
+    "text": "The pids controller is not delegated (controllers: {$controllers}), so a process limit enforces nothing on this host",
+    "scope": "host_check"
+  },
+  "finding_pids_limit": {
+    "text": "pids.max inside a container reads {$read}; {$configured} is configured",
+    "scope": "host_check"
+  },
+  "finding_seccomp_filtering": {
+    "text": "Seccomp filters system calls in containers",
+    "scope": "host_check"
+  },
+  "finding_seccomp_off": {
+    "text": "Seccomp does not filter system calls in containers (an unconfined daemon profile?): {$status}",
+    "scope": "host_check"
+  },
+  "finding_no_new_privs_set": {
+    "text": "Containers cannot gain new privileges (no_new_privs is set)",
+    "scope": "host_check"
+  },
+  "finding_no_new_privs_unset": {
+    "text": "Containers can gain new privileges (no_new_privs is not set): {$status}",
+    "scope": "host_check"
+  },
+  "finding_network_headroom": {
+    "text": "Room for another container network ({$count} in use)",
+    "scope": "host_check"
+  },
+  "finding_network_headroom_low": {
+    "text": "Room for another container network, but {$count} are in use and the default address pools are nearly used up",
+    "scope": "host_check"
+  },
+  "finding_network_exhausted": {
+    "text": "No container network could be made ({$count} in use): {$error}",
+    "scope": "host_check"
+  },
+  "finding_nft_applied": {
+    "text": "A firewall change was applied and read back from the kernel",
+    "scope": "host_check"
+  },
+  "finding_nft_refused": {
+    "text": "nftables refused a firewall change: {$error}",
+    "scope": "host_check"
+  },
+  "finding_nft_not_read_back": {
+    "text": "nftables accepted a firewall change but it did not read back: {$error}",
+    "scope": "host_check"
+  },
+  "finding_nft_probe_failed": {
+    "text": "The firewall could not be tried: {$error}",
+    "scope": "host_check"
+  },
+  "finding_kernel_lane_no_ssh": {
+    "text": "No trusted SSH admin lane reaches this host, so isolation can only be read from the daemon's own configuration and stays unconfirmed in the kernel. Add an SSH target and confirm its host key, or let only trusted apps run here.",
+    "scope": "host_check"
+  },
+  "finding_kernel_lane_unbuildable": {
+    "text": "The kernel check could not be set up: {$error}",
+    "scope": "host_check"
+  },
+  "finding_resources_measured": {
+    "text": "{$cpus} CPUs and {$memory} of memory",
+    "scope": "host_check"
+  },
+  "finding_resources_no_memory": {
+    "text": "The daemon reported no total memory, so this host has no memory budget to place apps against",
+    "scope": "host_check"
+  },
+  "finding_resources_unreadable": {
+    "text": "The daemon's resources could not be read, so this host has no memory budget to place apps against: {$error}",
+    "scope": "host_check"
+  },
+  "finding_trusted": {
+    "text": "The daemon trusts this controller's certificate",
+    "scope": "host_check"
+  },
+  "finding_not_trusted": {
+    "text": "The daemon answers but calls this controller {$auth}: enrol its client certificate (a trust token or incus config trust)",
+    "scope": "host_check"
+  },
+  "finding_drivers": {
+    "text": "Daemon drivers: {$drivers}",
+    "scope": "host_check"
+  },
+  "finding_drivers_no_lxc": {
+    "text": "Daemon drivers: {$drivers}; without the lxc driver, system containers cannot run",
+    "scope": "host_check"
+  },
+  "finding_storage_pools": {
+    "text": "Storage pools: {$pools}",
+    "scope": "host_check"
+  },
+  "finding_storage_none_created": {
+    "text": "No storage pool is ready, so apps have nowhere to live ({$pools})",
+    "scope": "host_check"
+  },
+  "finding_storage_unlisted": {
+    "text": "The storage pools could not be listed: {$error}",
+    "scope": "host_check"
+  },
+  "finding_bridge_present": {
+    "text": "Managed bridge {$bridge} is present",
+    "scope": "host_check"
+  },
+  "finding_bridge_missing": {
+    "text": "No managed bridge network, so containers would have no connection",
+    "scope": "host_check"
+  },
+  "finding_networks_unlisted": {
+    "text": "The networks could not be listed: {$error}",
+    "scope": "host_check"
+  },
+  "finding_acl_enforceable": {
+    "text": "A network access list was made and read back, so tenants can be kept apart",
+    "scope": "host_check"
+  },
+  "finding_acl_not_read_back": {
+    "text": "The daemon accepted a network access list but it did not read back with its rule, so tenants cannot be kept apart on this host",
+    "scope": "host_check"
+  },
+  "finding_acl_refused": {
+    "text": "No network access list could be made, so tenants cannot be kept apart: {$error}",
+    "scope": "host_check"
+  },
+  "fact_docker_version": {
+    "text": "Docker version",
+    "scope": "host_check"
+  },
+  "fact_incus_version": {
+    "text": "Incus version",
+    "scope": "host_check"
+  },
+  "fact_api_version": {
+    "text": "API version",
+    "scope": "host_check"
+  },
+  "fact_kernel_version": {
+    "text": "Kernel version",
+    "scope": "host_check"
+  },
+  "fact_os": {
+    "text": "Operating system",
+    "scope": "host_check"
+  },
+  "fact_os_type": {
+    "text": "System type",
+    "scope": "host_check"
+  },
+  "fact_architecture": {
+    "text": "Architecture",
+    "scope": "host_check"
+  },
+  "fact_ncpu": {
+    "text": "CPUs",
+    "scope": "host_check"
+  },
+  "fact_mem_total": {
+    "text": "Memory",
+    "scope": "host_check"
+  },
+  "fact_cgroup_version": {
+    "text": "Cgroup version",
+    "scope": "host_check"
+  },
+  "fact_cgroup_driver": {
+    "text": "Cgroup driver",
+    "scope": "host_check"
+  },
+  "fact_containers": {
+    "text": "Containers",
+    "scope": "host_check"
+  },
+  "fact_containers_running": {
+    "text": "Containers running",
+    "scope": "host_check"
+  },
+  "fact_images": {
+    "text": "Images",
+    "scope": "host_check"
+  },
+  "fact_networks": {
+    "text": "Container networks",
+    "scope": "host_check"
+  },
+  "fact_server_name": {
+    "text": "Server name",
+    "scope": "host_check"
+  },
+  "fact_project": {
+    "text": "Incus project",
+    "scope": "host_check"
+  },
+  "fact_driver": {
+    "text": "Drivers",
+    "scope": "host_check"
+  },
+  "fact_auth": {
+    "text": "Trust",
+    "scope": "host_check"
+  },
+  "fact_storage_pools": {
+    "text": "Storage pools",
+    "scope": "host_check"
+  },
+  "fact_managed_bridge": {
+    "text": "Managed bridge",
+    "scope": "host_check"
+  },
+  "fact_probe_image_fingerprint": {
+    "text": "Probe image build",
+    "scope": "host_check"
+  },
+  "change_configuration": {
+    "text": "Change its configuration",
+    "scope": "app_health"
+  },
+  "site_down": [
+    {
+      "text": "Visitors of {$name} get an error page",
+      "scope": "attention_title"
+    },
+    {
+      "text": "What it serves does not answer.",
+      "scope": "attention_detail"
+    }
+  ],
+  "site_degraded": [
+    {
+      "text": "{$name} answers, but not reliably",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Some requests to what it serves fail.",
+      "scope": "attention_detail"
+    }
+  ]
 }

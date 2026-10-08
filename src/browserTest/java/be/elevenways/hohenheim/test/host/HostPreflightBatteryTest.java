@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.docker.PinnedImages;
 import be.elevenways.hohenheim.server.host.HostAdmission;
+import be.elevenways.hohenheim.server.host.HostFact;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -97,6 +98,14 @@ class HostPreflightBatteryTest {
                     .as("step 2: check '%s' is declared in DOCKER_BATTERY, or a partial run"
                         + " would drop it", check.name())
                     .contains(check.name());
+                assertThat(check.found())
+                    .as("step 2: check '%s' stores a worded finding, never a bare probe token", check.name())
+                    .isNotNull();
+            }
+            for (String fact : passing.facts().keySet()) {
+                assertThat(HostFact.ofToken(fact))
+                    .as("step 2: fact '%s' is declared, so the host page names it in words", fact)
+                    .isNotNull();
             }
 
             // 3. Stored, the stale FAIL is gone and the posture gate admits the host.

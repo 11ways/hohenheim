@@ -71,6 +71,11 @@ final class AppHealth {
         });
     }
 
+    /** This site's verdict in the operator's words, for a surface that names the site itself (the attention band). */
+    static @NonNull RecordHealth siteHealth(@NonNull Row site) {
+        return siteVerdict(site, SiteFacts.of(List.of(site)), false, null).health();
+    }
+
     /** Whether visitors reach this site: its verdict's serving half (Open site's condition). */
     static boolean siteServes(@NonNull Row site) {
         return siteVerdict(site, SiteFacts.of(List.of(site)), false, null).serving();
@@ -130,10 +135,12 @@ final class AppHealth {
         }
         List<RoutingProblem> problems = facts.problems.getOrDefault(siteId, List.of());
         for (RoutingProblem problem : problems) {
-            // Its own refusal, never "does not answer": the proxy turns every visitor away and says why.
+            // Its own refusal, never "does not answer": the proxy turns every visitor away and says why. Every such
+            // refusal is the site's own settings (what it serves, its upstream, its sign-in provider), so the fix is
+            // its configuration; /manage's form cannot change those, so the delegated verdict offers none.
             if (problem.reason().refusesEveryVisitor()) {
-                return Verdict.notServing(RecordHealth.broken(copy("error_page"))
-                    .detail(ProxyAttention.reasonOf(problem)));
+                RecordHealth refused = RecordHealth.broken(copy("error_page")).detail(ProxyAttention.reasonOf(problem));
+                return Verdict.notServing(delegated ? refused : refused.fixedBy(SiteActions.CHANGE_CONFIGURATION));
             }
         }
         boolean passthrough = SiteParts.tlsPassthrough(site);
@@ -377,6 +384,21 @@ final class AppHealth {
     /** Whether the Add an address fix applies to this one site. */
     static boolean needsAddress(@NonNull Row site) {
         return SiteParts.domainsOf(site).isEmpty();
+    }
+
+    /** Whether the Change its configuration fix applies: the running proxy turns every visitor of this site away. */
+    static boolean refusedBySettings(@NonNull Row site) {
+        var proxy = ServerMain.getProxyServer();
+        Integer siteId = site.get(SiteModel.ID);
+        if (proxy == null || siteId == null) {
+            return false;
+        }
+        for (RoutingProblem problem : proxy.getDispatcher().routingProblems()) {
+            if (problem.siteId() == siteId && problem.reason().refusesEveryVisitor()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Whether the Fix protection fix applies to this one site. */

@@ -991,3 +991,65 @@ The /manage defects W9b2 left (section 23, "Found, not fixed here"), each fixed 
   session's unpushed commits and lacks the upstream ones zenit-forms and zenit-cms now compile against. Hand-edited
   baselines: `instances.txt` (the tenant's delete row) and `landing-dashboards.txt` (the /manage title, the checklist
   step TODO).
+
+## 25. D7e decisions (fork D7e, 2026-10-08)
+
+Host page, admin attention band and the faulted site's band, each fixed at its cause.
+
+- What a preflight check found reads as words, through one vocabulary beside the check names: `PreflightFinding`
+  (server/host), worded by `finding_<token>` (scope `host_check`) in en and nl. Both batteries build every check with
+  `Check.of(name, status, required, finding.with(evidence...))`; `HostPreflight.store` keeps the finding's token and
+  its evidence (`finding`, `finding_args`) beside the `detail` text, which is now the finding in the installation's
+  content locale (the stored-reason rule of D7b), so the API's text is a sentence too. The host page reads the
+  finding in the reader's locale (`PreflightFinding.wordsOf`); a token this build does not declare, a check written
+  before findings, or a hand-written fixture check reads its stored text verbatim, never another finding. Evidence
+  (versions, a uid map, a probe's error message) travels verbatim; the `failure` argument of an unreachable daemon is
+  the probe-failure token and reads as `HostProbe.FailureKind.label`. The raw tokens of the D7d screenshot ("nft
+  missing", "no LSM") were a journey's fixture text; the real batteries wrote long English prose ("no LSM confines the
+  probe container (pid 1 label: '<none>'); AppArmor/SELinux add no layer"), which is what the operator now reads in
+  words. HostCheckAndAdmitJourneyTest binds every finding to copy in en and nl, and HostPreflightBatteryTest fails a
+  Docker battery check stored without a finding.
+- A measured fact reads by its name in words and its value with its unit: `HostFact` (server/host) is the one home of
+  the fact keys both batteries write (`fact_<token>`, `HostFact.Unit`); a byte count reads through `ByteText` ("63.0
+  GB"), the formatter the Hosts list's memory bars use. `HostPreflight.MEM_TOTAL_FACT` and
+  `IncusPreflight.PROBE_IMAGE_FACT` are aliases of their members. A stored key this build does not declare keeps its
+  spelling and raw value. The overview's capacity facts ("Booked", "Budget", "Bookable") now read through the same
+  `ServerParts.sizeOfMegabytes` the list uses instead of a hand-written "N MB".
+- An advisory check that did not pass reads as advice in the warning tone, never "Failed": the verdict a reader is
+  shown is `PreflightStatus.shownFor(required)` (a fact on the member), so the Incus battery's unanswered advisory lsm
+  (stored FAIL) reads "Advice" like the board. The report's overall verdict is the same vocabulary's word ("Passed",
+  "Failed", `HostPreflightReportView.summaryLabel`) in the card header's action slot, apart from "Last preflight ...";
+  the duplicated `verdict_passed`/`verdict_failed` entries of scope `server_overview` are deleted in its favour.
+- The admin attention band's down site reads like every other item: "Visitors of <site> get an error page", the
+  site verdict's own reason as the detail (`AppHealth.siteHealth`, e.g. why its app cannot start), "Open <site>" as
+  the action. A degraded site reads "<site> answers, but not reliably". A site the proxy turns away over its settings
+  is DOWN too but already has its routing-problem item, so it is not drawn twice. The old `site`/`down`/`degraded`
+  entries of scopes `attention_title`/`attention_detail` are deleted in favour of `site_down`/`site_degraded`.
+- A site the proxy turns every visitor away from offers its fix: "Change its configuration" (`SiteActions`
+  `site_change_configuration`, a row link to the site's Configuration), shown while the running proxy records a
+  refusing problem for it (`AppHealth.refusedBySettings`). Every refusing reason is the site's own settings (what it
+  serves, its upstream, its sign-in provider). The app page of a workload that speaks for the site carries it through
+  `RecordHealth.on`. /manage's form cannot change what a site serves, so the delegated verdict offers no fix.
+- Walk (scratch server from the built jar, fresh database, `/setup`, the local host checked through Check and admit;
+  a down site serving an app that cannot start and a faulted site naming no app seeded by SQL): shots
+  `docs/hohenheim-ux-mockups-2026-09-30/shots/d7e/` (workspace repo). The real Docker battery on this machine reads
+  "nftables refused a firewall change: sudo: a password is required", "Docker 29.8.1 answers", "Room for another
+  container network (5 in use)"; the advisory userns/lsm checks read "Advice"; Memory reads "31.0 GB"; the dashboard
+  band reads "Visitors of Survival web get an error page / Host local is not admitted for placement; ... / Open
+  Survival web"; Shop front's band offers "Change its configuration", which opens its Configuration form.
+- Found, not fixed here (each its own issue):
+  1. zenit core: a toast drops worded arguments. Check and admit's refusal reads "These checks must pass first:
+     [check_nftables]" because `Flash.stash` encodes every message argument as `String.valueOf` (FlashEncoding), so a
+     `List<Microcopy>` (or a Microcopy) argument reaches the toast as its key. The fix is zenit's (resolve or encode
+     worded arguments structurally); zenit cannot be pushed while it holds another checkout's commits.
+  2. A check's "How to fix" is per check, not per finding: Firewall control failing on "sudo: a password is
+     required" still says "Install nftables on the host"; the fix should follow the finding (grant the helper's sudo
+     line) once findings carry their own fix.
+  3. D7d's check name "Root in a container is not root on the host" reads as a claim beside "Advice"; a neutral name
+     ("Container root is remapped") would read right in both states.
+- Proof: build run 817; Hohenheim test run 818 green on the first run (29 tests: HostCheckAndAdmitJourneyTest,
+  HostsPageJourneyTest, SiteRefusalVerdictJourneyTest, HostPreflightBatteryTest, HostEvidenceTest,
+  ServerOverviewTest, DeclaredMicrocopyKeysTest, MicrocopyManifestDriftTest, MicrocopyCatalogParsesTest,
+  MicrocopyCatalogScopeTest). The slow live classes HostPreflightTest and LiveRemoteHostTest now assert the finding's
+  evidence (`found().args()`, the finding member) instead of the retired English prose; they need a live host and
+  did not run here.
