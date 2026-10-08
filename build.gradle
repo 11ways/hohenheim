@@ -73,6 +73,9 @@ dependencies {
     // A VM's screen: the SPICE client its zenit-kvm screen source reads.
     serverImplementation libs.pepperglass
 
+    // SFTP to app files: zenit-sftp's server over this host's InstanceSftpRealm (docs/sftp-design.md).
+    serverImplementation libs.zenit.sftp.server
+
     // The live-lane report is a TestExecutionListener, so the launcher API has to be on
     // the COMPILE path here, not merely on the runtime one Gradle supplies.
     browserTestImplementation libs.junit.launcher
@@ -86,6 +89,9 @@ dependencies {
     // The screen journey: a scripted SPICE server behind a VM's screen, read through recording sockets.
     browserTestImplementation(testFixtures(libs.pepperglass))
     browserTestImplementation libs.zenit.kvm.test.support
+    // SftpJourneyTest signs in with MINA's own SFTP client, the client zenit-sftp's journeys use.
+    browserTestImplementation libs.sshd.core
+    browserTestImplementation libs.sshd.sftp
     // PanelSurfaces: the stored before/after and twin captures of the /manage entries (stage 4 contract 4.9).
     browserTestImplementation libs.zenit.cms.test.support
     // The permission editor's capture projection, read by the surface captures through its service file.

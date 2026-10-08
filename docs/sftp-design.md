@@ -1,6 +1,7 @@
 # SFTP for app files: design
 
-Status: W1 and W2 landed 2026-10-08 (zenit-auth keys; the `zenit-sftp` module); W3 (Hohenheim wiring) is next.
+Status: W1 and W2 landed 2026-10-08 (zenit-auth keys; the `zenit-sftp` module); W3 (Hohenheim wiring) and the W4
+card landed 2026-10-08, as built in section 10 (the `SESSION_ID` grouping and the open-sessions list are open there).
 Jelle approved SFTP on 2026-10-08: Hohenheim runs its OWN
 SFTP server on its own port, never the host sshd or host Linux accounts, gated by the browser file manager's
 capabilities and logged in the same activity log.
@@ -305,3 +306,84 @@ add/list/remove plus revalidation. zenit: transport-neutral `FailureBudget`.
 
 - **Q1. A new repo `11ways/zenit-sftp`?** Recommended: yes (section 1). Alternative: keep the server inside
   Hohenheim behind the same interface and extract it when a second consumer appears.
+
+## 10. W3/W4 as built (2026-10-08)
+
+zemble `home` ("Hohenheim SFTP realm: an SftpRealm/SftpMount over InstanceFiles, a boot stage from hohenheim.sftp
+settings, a shared file-verb home"): EXTEND_EXISTING `SftpRealm` in zenit-sftp, high confidence. So W3 implements the
+SPI and changes nothing in the module.
+
+- **Dependency and settings.** `serverImplementation libs.zenit.sftp.server` (the module's own migration stream brings
+  `sftp_host_keys`; no Hohenheim migration). `hohenheim.sftp.*`: `enabled` (false), `port` (2022), `bind_address`
+  (blank = all), `public_host` (blank = the host the page was opened on), `max_file_mb` (4096), `max_sessions` (32),
+  `max_sessions_per_account` (4), `idle_timeout_minutes` (15); all host-only, en and nl labels, in the settings page's
+  Apps section after Files. `spool_budget_mb` (4.1) is NOT built: the module has no spool budget to feed.
+- **Boot stage.** `HohenheimSftp.startIfEnabled()` runs last in `ServerMain.start`, `HohenheimSftp.stop` is a shutdown
+  step. No role gate, which answers 4.1's open question: every node that renders the panel serves the Files tab, and
+  SFTP serves exactly that. Spool `<storage.data_path>/sftp/spool`. A server that cannot start is no refused boot: the
+  reason is kept and the dashboard's attention band shows "SFTP is on but not running" with a link to the setting
+  (`AttentionCollector.sftpServer`).
+- **Realm and mount.** `InstanceSftpRealm`: the mount name must be canonical decimal digits; the instance is
+  `InstanceFiles.reachableInstance(ctx, id)`, which is now the ONE home of the automation API's uniform 404 (live,
+  authored, files.read) and is read by both lanes. `InstanceSftpMount` lives for one request. An SFTP path IS the
+  container path, so activity rows and refusals name the paths the browser names; the directories above the volume
+  roots ("/" and, for /var/lib/mysql, "/var" and "/var/lib") are virtual and every change there is
+  `files_path_refused`. `stat` answers null for nothing there, an absent ancestor included (`InstanceFiles.stat` over
+  the new `Opened.lookup`; a symlinked or non-directory ancestor stays the one refusal). The service's
+  `instance_not_permitted` reaches the client as PERMISSION_DENIED in its own words (matched on
+  `HohenheimRefusalReason.INSTANCE_NOT_PERMITTED.code()`); every other refusal is a worded failure.
+- **One verb home.** `FileVerbs` performs through `InstanceFiles` AND records the `FILES_*` verb; the HTML lane, the
+  API lane and SFTP all call it (the endpoints' private `perform` now only maps form action names onto it). A mode or
+  time change records nothing, as the browser never had one.
+- **Streaming seam.** `InstanceFileSupport` gained `readFileTo` (Docker `getArchiveFileTo`), `writeFileFrom` (the new
+  `DockerClient.putArchiveFile` tars the spool file under the target's name: no staging copy), `setMode` (permission
+  bits 0000-0777 only, refused otherwise: no transport can mint a setuid binary) and `setModified` (`touch -h -c`).
+  `InstanceFiles.writeFrom` and `write` share one preamble (`fileTarget`).
+- **Bans.** No new sink: the module reports `SSH_*` events with `lane=sftp` through `SecurityEvents`, and
+  `HohenheimSecurity`'s in-process sink already scores every non-positive event with a literal address; those types
+  are `BanScope.SSH`. `NftService.configuredSshPorts()` adds `hohenheim.sftp.port` while SFTP is on (derived, never a
+  second list). `ThreatScorer.scoreOf(ip)` was added as the read the journey asserts with.
+- **Card (W4).** The Files tab (`InstanceFilesPage`, the same page on /admin and /manage) draws "Connect with SFTP" for
+  a runtime with a file lane: address, port, the viewer's login name (`<email>.<id>`, copy button), which credentials
+  work (the viewer's SSH key labels, else "an SFTP password"), the host key fingerprint, the sign-in password not
+  working, the scopes an SFTP password carries (`InstanceSftpRealm.passwordScopes(canWrite)`, so a read-only tenant
+  is never refused for asking files.write; copy button), "Create an SFTP password" (a link to zenit-auth's own
+  `/account/api-keys`, where the key is minted and shown once) and "Add an SSH key" (`/account/ssh-keys`). Off: it
+  says so, and an operator gets a link to the setting. The card first POSTed the mint itself (hidden label and
+  scopes): the key was minted, but hawkeye's client answered that cross-page form response by reloading the Files
+  tab, so the one-time plaintext was never shown. A link is the honest shape until that is fixed (section 10, open).
+- **Open, not built here.**
+  - Activity rows of one SFTP session are NOT grouped: zenit core's `ActivityLog` writes `SESSION_ID` only through
+    `EditingSessions` (no public `record` takes a display group) and the fold is zenit core plus zenit-cms, both held
+    by other sessions during W3. Without a writer the session id would be plumbing without a consumer, so
+    `SftpRealm.mount` still carries none. Rows do carry origin `sftp`, the peer address and the client version. Needs:
+    a core `ActivityLog.record(..., displayGroup)` overload, the fold, then the session id through `SftpRealm.mount`.
+  - The "Open sessions" list with End (W4) and the `docs/deploy-native.md` port note.
+  - Whether an operation during an instance move refuses cleanly against the migrate lease (4.4) was not exercised.
+  - **Decision for Jelle: operators.** Measured on the scratch install: an OPERATOR's key scoped to the two file
+    capabilities reaches nothing, not even an instance the operator holds a files grant on (the API lane answers 404,
+    SFTP refuses the login), because the scope narrows the operator's permissions away: no admin bypass, and the
+    instance tier's gate (`ManagePanel.ACCESS`) is then refused. The same key shape works for a tenant (their grants
+    decide; walked with the CLI client). Adding `hohenheim.manage.access` to the key let the operator's grant decide;
+    `hohenheim.admin.access` gave the whole-model bypass. So today an operator needs a grant on the instance plus a
+    key carrying the gate permission, or a key carrying admin power. Options: (a) put the gate permission into
+    `InstanceSftpRealm.FILE_SCOPES` (SSH key logins and the card's scopes) so grants decide for everyone; (b) operators
+    mint an admin-scoped SFTP password (wide); (c) operators use the browser. W3 changes nothing here.
+  - Found in hawkeye/zenit's client: a `use:Zenit.form` POST whose response is a page of ANOTHER shell (the Files
+    tab posting to `/account/api-keys`) is fetched with `__hawkeye=1`, then the client reloads the CURRENT url and
+    drops the response; for a one-time secret that loses the secret. A "mint and reveal here" button needs that fixed
+    (or a host-side mint endpoint); until then the card links.
+- **Proof.** `SftpJourneyTest` (Hohenheim, `@Tag("slow")`, MINA's client against the server the boot stage starts,
+  over a real Docker instance): wrong password refused, reported with lane sftp and scored; an account without the
+  grant and an unknown id refused alike; files.read lists ("/" leads to "data"), reads, and a write is
+  PERMISSION_DENIED in the file manager's words with nothing landed; files.write uploads a file larger than the
+  browser lane's cap (spool lane) and reads it back byte for byte, mkdir, rename, chmod, delete, rmdir, each seen in
+  the container; one `FILES_*` row per change with origin sftp and the writer as actor; a symlinked component, an
+  outside path, a climb and a write above the volume refused; a revoked grant refuses the very next request; the
+  SFTP port joins the SSH ban ports only while on; a server that cannot bind names itself in the attention band.
+  `InstanceFilesTabGateTest.theSftpCardSaysWhereToConnectAndWithWhat` renders the card off and on. Build runs 892 and
+  905; test run 907 (24 classes, 87 tests, all passed, the live lane DECLARED with
+  `hohenheim.live.require=docker-socket,netns,docker-image` so no Docker step could skip); zenit-sftp runs 906 (the new
+  long-name step red: MINA's client speaks SFTP v6, which carries no long names) and 911 (green, step 2b through a
+  version 3 client). The command-line `sftp` walk is in admin-redesign-plan.md section 34.
+

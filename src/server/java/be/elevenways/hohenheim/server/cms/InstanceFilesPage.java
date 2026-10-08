@@ -8,7 +8,17 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.files.HohenheimSftp;
 import be.elevenways.hohenheim.server.files.InstanceFiles;
+import be.elevenways.hohenheim.server.files.InstanceSftpRealm;
+import be.elevenways.zenit.auth.AuthEndpoints;
+import be.elevenways.zenit.auth.model.SshKeyModel;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.AccountRows;
+import be.elevenways.zenit.auth.server.SshKeys;
+import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.sftp.server.SftpHostKeys;
+import be.elevenways.zenit.sftp.server.SftpServer;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
@@ -32,6 +42,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Files tab on an instance: a browser over the instance's own volumes, plus an inline
@@ -113,6 +124,7 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
             return new RenderTemplateResult(
                 HohenheimTemplateIds.INSTANCE_FILES, vars);
         }
+        putSftpCard(vars, conduit, accessContext, instanceId);
 
         String panel = request.panelSlug();
         String requested = conduit.getQueryParam(HohenheimParams.FILES_PATH.getName());
@@ -159,6 +171,52 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
             vars.put("error", HandlerSupport.messageOf(conduit, refused));
         }
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_FILES, vars);
+    }
+
+    /**
+     * The "Connect with SFTP" card: where to connect, the viewer's own login name for this app, which of the viewer's
+     * credentials sign in, and the ways to make one.
+     *
+     * AIDEV-NOTE: it decides nothing. The SFTP server asks the same files.read/files.write on every request; an SFTP
+     * password is minted on zenit-auth's own API key page (which refuses a scope the viewer does not hold), so the
+     * card names the scopes to paste there and asks for files.write only when this page found it. It LINKS there and
+     * does not post the mint itself: a hawkeye form POST from this page to that page reloaded this page and dropped
+     * the one-time key (seen 2026-10-08). The sign-in password never works over SFTP (it would bypass two-step
+     * sign-in), which the card says.
+     */
+    private static void putSftpCard(@NonNull Map<String, Object> vars, @NonNull Conduit conduit,
+                                    @NonNull AccessContext accessContext, int instanceId) {
+        boolean enabled = HohenheimSftp.isEnabled();
+        SftpServer server = HohenheimSftp.server();
+        boolean canWrite = Boolean.TRUE.equals(vars.get("canWrite"));
+        vars.put("sftpShown", true);
+        vars.put("sftpEnabled", enabled);
+        vars.put("sftpRunning", server != null);
+        vars.put("sftpOperator", HohenheimAccess.isAdmin(accessContext));
+        vars.put("sftpSettingsTarget", AttentionCollector.sftpSettingsTarget());
+        if (!enabled) {
+            return;
+        }
+        String host = HohenheimSftp.publicHost();
+        vars.put("sftpHost", host != null ? host : Objects.toString(DeleteImpact.arrivalHostname(conduit), ""));
+        vars.put("sftpPort", String.valueOf(server != null ? server.port() : HohenheimSftp.enabledPort()));
+        String fingerprint = SftpHostKeys.fingerprint();
+        vars.put("sftpFingerprint", fingerprint == null ? "" : fingerprint);
+
+        PrincipalRef account = accessContext.principal().reference();
+        Row user = account == null ? null : AccountRows.currentEnabledByPrincipalId(account.id());
+        String email = user == null ? null : user.get(UserModel.EMAIL);
+        vars.put("sftpUsername", email == null ? "" : InstanceSftpRealm.username(email, instanceId));
+        List<String> keys = new ArrayList<>();
+        if (user != null) {
+            for (Row key : SshKeys.of(user.get(UserModel.ID))) {
+                keys.add(key.get(SshKeyModel.LABEL));
+            }
+        }
+        vars.put("sftpKeys", String.join(", ", keys));
+        vars.put("sftpPasswordTarget", AuthEndpoints.GET_ACCOUNT_API_KEYS);
+        vars.put("sftpPasswordScopes", String.join(" ", InstanceSftpRealm.passwordScopes(canWrite)));
+        vars.put("sftpKeysTarget", AuthEndpoints.GET_ACCOUNT_SSH_KEYS);
     }
 
     /** One crumb per path segment from the volume root down, each a browsable target. */

@@ -13528,6 +13528,22 @@
   "settings.hohenheim.files.max_entries.help": "Upper bound on the entries one directory listing returns; a larger directory refuses to list rather than show a truncated listing.",
   "settings.hohenheim.files.max_file_kb.label": "Max file size",
   "settings.hohenheim.files.max_file_kb.help": "Upper bound in KiB for one file read or written through the file manager, enforced during the transfer so a partial file never lands.",
+  "settings.hohenheim.sftp.enabled.label": "SFTP for app files",
+  "settings.hohenheim.sftp.enabled.help": "Run Hohenheim's own SFTP server: accounts sign in with an SFTP password or their SSH key and reach the same files, under the same rights, as the Files tab. Never the host's sshd or its accounts.",
+  "settings.hohenheim.sftp.port.label": "SFTP port",
+  "settings.hohenheim.sftp.port.help": "TCP port the SFTP server listens on; while SFTP is on it also joins the SSH ban rule, so an address banned for SSH brute force is dropped here too.",
+  "settings.hohenheim.sftp.bind_address.label": "SFTP bind address",
+  "settings.hohenheim.sftp.bind_address.help": "Address the SFTP server binds to; blank listens on every address.",
+  "settings.hohenheim.sftp.public_host.label": "SFTP address shown",
+  "settings.hohenheim.sftp.public_host.help": "The address the Files tab tells people to connect to; blank shows the address the admin page was opened on.",
+  "settings.hohenheim.sftp.max_file_mb.label": "Max SFTP file size",
+  "settings.hohenheim.sftp.max_file_mb.help": "Largest file in MiB one SFTP read or upload moves; separate from the Files tab's limit because SFTP spools to disk.",
+  "settings.hohenheim.sftp.max_sessions.label": "Max SFTP sessions",
+  "settings.hohenheim.sftp.max_sessions.help": "Open SFTP sessions across all accounts; one more is refused when it signs in.",
+  "settings.hohenheim.sftp.max_sessions_per_account.label": "Max SFTP sessions per account",
+  "settings.hohenheim.sftp.max_sessions_per_account.help": "Open SFTP sessions one account may hold at once.",
+  "settings.hohenheim.sftp.idle_timeout_minutes.label": "SFTP idle timeout",
+  "settings.hohenheim.sftp.idle_timeout_minutes.help": "Minutes without traffic after which an SFTP session is closed.",
   "settings.hohenheim.hosts.contact_max_age_minutes.label": "Host contact maximum age (minutes)",
   "settings.hohenheim.hosts.contact_max_age_minutes.help": "Minutes since a host's daemon last answered after which new workloads are no longer placed on it, while workloads already on it stay untouched; 0 or less removes the bound.",
   "settings.hohenheim.incus.controller_presence_grace_hours.label": "Controller presence grace (hours)",
@@ -13727,6 +13743,8 @@
   "settings.hohenheim.previews.help": "Bounded-lifetime per-branch preview environments of git-sourced Docker sites, served on generated hostnames under one base domain",
   "settings.hohenheim.files.label": "Instance files",
   "settings.hohenheim.files.help": "Bounds on the per-instance file manager (browse, edit, upload, download)",
+  "settings.hohenheim.sftp.label": "Connect with SFTP",
+  "settings.hohenheim.sftp.help": "Hohenheim's own SFTP server for app files, signed in with SFTP passwords and account SSH keys",
   "settings.hohenheim.backup.label": "Instance backups",
   "settings.hohenheim.backup.help": "Instance snapshots (host-local) and encrypted off-host backup exports",
   "settings.spamservice.label": "Spamservice",
@@ -16144,5 +16162,97 @@
       "scope": "database_status",
       "case": "sentence"
     }
-  ]
+  ],
+  "sftp_title": {
+    "text": "Connect with SFTP",
+    "scope": "instance_files"
+  },
+  "sftp_intro": {
+    "text": "Use FileZilla, WinSCP or sftp. You reach the same files as here, with the same rights, and every change shows in this app's History.",
+    "scope": "instance_files"
+  },
+  "sftp_off": {
+    "text": "SFTP is off on this server.",
+    "scope": "instance_files"
+  },
+  "sftp_off_hint": {
+    "text": "An administrator can turn it on in the settings.",
+    "scope": "instance_files"
+  },
+  "sftp_not_running": {
+    "text": "SFTP is on but its server is not running, so connecting fails for now.",
+    "scope": "instance_files"
+  },
+  "sftp_address": {
+    "text": "Address",
+    "scope": "instance_files"
+  },
+  "sftp_port": {
+    "text": "Port",
+    "scope": "instance_files"
+  },
+  "sftp_username": {
+    "text": "Username",
+    "scope": "instance_files"
+  },
+  "sftp_copy_username": {
+    "text": "Copy the username",
+    "scope": "instance_files"
+  },
+  "sftp_sign_in_with": {
+    "text": "Sign in with",
+    "scope": "instance_files"
+  },
+  "sftp_with_keys": {
+    "text": "Your SSH key ({$keys}), or an SFTP password",
+    "scope": "instance_files"
+  },
+  "sftp_with_password": {
+    "text": "An SFTP password, or an SSH key you add to your account",
+    "scope": "instance_files"
+  },
+  "sftp_fingerprint": {
+    "text": "Server fingerprint",
+    "scope": "instance_files"
+  },
+  "sftp_no_login_password": {
+    "text": "Your sign-in password does not work here: create an SFTP password, an API key with the scopes below, which you can revoke on its own.",
+    "scope": "instance_files"
+  },
+  "sftp_password_scopes": {
+    "text": "SFTP password scopes",
+    "scope": "instance_files"
+  },
+  "sftp_copy_scopes": {
+    "text": "Copy the scopes",
+    "scope": "instance_files"
+  },
+  "sftp_create_password": {
+    "text": "Create an SFTP password",
+    "scope": "instance_files"
+  },
+  "sftp_add_key": {
+    "text": "Add an SSH key",
+    "scope": "instance_files"
+  },
+  "sftp_running_hint": {
+    "text": "Listing folders needs the app to be running; start it first if it is stopped.",
+    "scope": "instance_files"
+  },
+  "sftp_open_settings": {
+    "text": "Open the SFTP settings",
+    "scope": "instance_files"
+  },
+  "files_mode_refused": {
+    "text": "Only permission bits from 0000 to 0777 can be set",
+    "scope": "violations"
+  },
+  "files_link_refused": {
+    "text": "A symbolic link cannot be changed here",
+    "scope": "violations"
+  },
+  "sftp_server": {
+    "text": "SFTP is on but not running",
+    "scope": "attention_title"
+  }
 }

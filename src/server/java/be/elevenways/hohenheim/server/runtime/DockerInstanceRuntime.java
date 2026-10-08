@@ -547,6 +547,15 @@ public final class DockerInstanceRuntime
      * the directory's owner.
      */
     private static final String CHOWN_SCRIPT = "chown -h \"$HH_FM_OWNER\" \"$HH_FM_PATH\"";
+    /**
+     * The service refuses a symlink LEAF before it asks, and chmod has no portable
+     * no-follow flag: the leaf race is the class note's in-container TOCTOU, bounded the
+     * same way. The mode is permission bits only (no setuid/setgid/sticky), checked by the
+     * service, so even a won race cannot mint a setuid binary.
+     */
+    private static final String CHMOD_SCRIPT = "chmod \"$HH_FM_MODE\" \"$HH_FM_PATH\"";
+    /** {@code -h}: the entry's own time, never a link target's; {@code -c}: never creates. */
+    private static final String TOUCH_SCRIPT = "touch -h -c -m -d \"$HH_FM_TIME\" \"$HH_FM_PATH\"";
 
     @Override
     public @NonNull List<Entry> listDirectory(@NonNull String handle, @NonNull String path,
@@ -637,6 +646,12 @@ public final class DockerInstanceRuntime
     }
 
     @Override
+    public long readFileTo(@NonNull String handle, @NonNull String path, @NonNull Path out,
+                           long maxBytes) throws IOException {
+        return this.docker.getArchiveFileTo(handle, path, out, maxBytes);
+    }
+
+    @Override
     public void writeFile(@NonNull String handle, @NonNull String path, byte @NonNull [] content,
                           @NonNull String mode, @NonNull Map<String, String> ownerLabels)
             throws IOException {
@@ -656,6 +671,42 @@ public final class DockerInstanceRuntime
         } finally {
             FileTrees.deleteQuietly(staging);
         }
+        ownByDirectory(handle, path, directory);
+    }
+
+    @Override
+    public void writeFileFrom(@NonNull String handle, @NonNull String path, @NonNull Path source,
+                              @NonNull String mode, @NonNull Map<String, String> ownerLabels)
+            throws IOException {
+        requireOurs(handle, ownerLabels, "write a file into");
+        int slash = path.lastIndexOf('/');
+        String directory = slash <= 0 ? "/" : path.substring(0, slash);
+        applyMode(source, mode);
+        // One file entry named after the target, its bytes streamed from the source file.
+        this.docker.putArchiveFile(handle, directory, source, path.substring(slash + 1));
+        ownByDirectory(handle, path, directory);
+    }
+
+    @Override
+    public void setMode(@NonNull String handle, @NonNull String path, @NonNull String mode,
+                        @NonNull Map<String, String> ownerLabels) throws IOException {
+        requireOurs(handle, ownerLabels, "change a file's mode in");
+        runFileScript(handle, CHMOD_SCRIPT, Map.of("HH_FM_PATH", path, "HH_FM_MODE", mode));
+    }
+
+    @Override
+    public void setModified(@NonNull String handle, @NonNull String path, long epochSeconds,
+                            @NonNull Map<String, String> ownerLabels) throws IOException {
+        requireOurs(handle, ownerLabels, "change a file's time in");
+        runFileScript(handle, TOUCH_SCRIPT,
+            Map.of("HH_FM_PATH", path, "HH_FM_TIME", "@" + epochSeconds));
+    }
+
+    /**
+     * Hand a just-extracted file to whoever owns the directory it landed in.
+     */
+    private void ownByDirectory(@NonNull String handle, @NonNull String path,
+                                @NonNull String directory) throws IOException {
         // The extraction landed the file owned by the CONTROLLER's uid (the tar entry
         // carries the staging file's owner: root on a root controller). Hand it back to
         // whoever owns the directory it lives in, so a non-root workload can still write

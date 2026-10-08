@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server.files;
 
 import be.elevenways.domino.common.DominoFile;
-import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -9,14 +8,11 @@ import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.api.ApiConduits;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.cms.InstanceFilesPage;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteLocation;
 import be.elevenways.zenit.common.routing.ReturnPath;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -85,14 +81,12 @@ public final class InstanceFileEndpoints {
             String action = string(form, "action");
             String path = string(form, "path");
             String back = string(form, "directory");
-            HohenheimActivityAction performed;
             try {
-                performed = perform(instanceId, action, form, path);
+                perform(instanceId, action, form, path);
             } catch (Violations refused) {
                 return HandlerSupport.redirectUntyped(filesUrl(conduit, instanceId,
                     back.isEmpty() ? parentOf(path) : back, refused));
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, performed, path);
             return HandlerSupport.redirectUntyped(filesUrl(conduit, instanceId,
                 back.isEmpty() ? parentOf(path) : back, null));
         });
@@ -157,11 +151,10 @@ public final class InstanceFileEndpoints {
             Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
             String path = string(form, "path");
             try {
-                new InstanceFiles().write(instanceId, path, contentOf(form));
+                new FileVerbs().write(instanceId, path, contentOf(form));
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.FILES_WRITE, path);
             return ApiConduits.json(Map.of("id", instanceId, "path", path, "status", "written"));
         });
 
@@ -174,13 +167,11 @@ public final class InstanceFileEndpoints {
             Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
             String action = string(form, "action");
             String path = string(form, "path");
-            HohenheimActivityAction performed;
             try {
-                performed = perform(instanceId, action, form, path);
+                perform(instanceId, action, form, path);
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-            ActivityLog.record(Models.get(InstanceModel.class), instanceId, performed, path);
             return ApiConduits.json(Map.of("id", instanceId, "path", path, "action", action));
         });
     }
@@ -188,40 +179,22 @@ public final class InstanceFileEndpoints {
     // -- the ONE dispatch both lanes share ------------------------------------
 
     /**
-     * Every mutating verb, in one place, so the HTML form and the API call cannot drift on
-     * what an action means.
+     * The form's action names, mapped onto the shared {@link FileVerbs} (which perform AND
+     * record), so the HTML form and the API call cannot drift on what an action means.
      *
-     * @return the activity verb the performed action is recorded under
      * @throws Violations {@code files_unknown_action} for anything not named here
      */
-    private static @NonNull HohenheimActivityAction perform(int instanceId, @NonNull String action,
-                                                            @NonNull Map<String, Object> form,
-                                                            @NonNull String path) {
-        InstanceFiles files = new InstanceFiles();
-        return switch (action) {
-            case "save" -> {
-                files.write(instanceId, path, contentOf(form));
-                yield HohenheimActivityAction.FILES_SAVE;
-            }
-            case "upload" -> {
-                files.write(instanceId, path, uploadOf(form));
-                yield HohenheimActivityAction.FILES_UPLOAD;
-            }
-            case "mkdir" -> {
-                files.makeDirectory(instanceId, path);
-                yield HohenheimActivityAction.FILES_MKDIR;
-            }
-            case "rename" -> {
-                files.rename(instanceId, path, string(form, "target"));
-                yield HohenheimActivityAction.FILES_RENAME;
-            }
-            case "delete" -> {
-                files.delete(instanceId, path);
-                yield HohenheimActivityAction.FILES_DELETE;
-            }
-            default -> throw Violations.ofForm(
-                HohenheimViolations.text("files_unknown_action"));
-        };
+    private static void perform(int instanceId, @NonNull String action, @NonNull Map<String, Object> form,
+                                @NonNull String path) {
+        FileVerbs verbs = new FileVerbs();
+        switch (action) {
+            case "save" -> verbs.save(instanceId, path, contentOf(form));
+            case "upload" -> verbs.upload(instanceId, path, uploadOf(form));
+            case "mkdir" -> verbs.makeDirectory(instanceId, path);
+            case "rename" -> verbs.rename(instanceId, path, string(form, "target"));
+            case "delete" -> verbs.delete(instanceId, path);
+            default -> throw Violations.ofForm(HohenheimViolations.text("files_unknown_action"));
+        }
     }
 
     /**
@@ -283,16 +256,10 @@ public final class InstanceFileEndpoints {
     // -- plumbing -------------------------------------------------------------
 
     /**
-     * Resolve the route's instance for an API caller: absent, trashed and not-permitted are
-     * ONE 404, and a session principal is refused outright (the HTML routes are not the
+     * Resolve the route's instance for an API caller: absent, trashed, generated and
+     * not-permitted are ONE 404 ({@link InstanceFiles#reachableInstance}, the scope SFTP
+     * reaches too), and a session principal is refused outright (the HTML routes are not the
      * automation API -- that is what makes csrfExempt safe here).
-     *
-     * AIDEV-NOTE: the {@link InstanceModel#liveAuthored} clause is the SAME scope
-     * {@code InstanceApi.visibleInstances}/{@code visibleInstance} and TenantScopes.INSTANCES
-     * apply, read from its one home so the lanes cannot drift. docs/paas-api.md says the automation API "never lists or drives"
-     * a product-tier-generated instance; without this clause the file lane was the one
-     * v1 route that could address one (latent -- files.read has no impliedBy and nothing
-     * plants it on a generated row -- but an operator can hand-grant it).
      *
      * @return the row, or null when the response has already been ended
      */
@@ -302,14 +269,8 @@ public final class InstanceFileEndpoints {
             return null;
         }
         Integer instanceId = conduit.getParameter(HohenheimEndpoints.INSTANCE_ID);
-        Row row = instanceId == null ? null : Models.get(InstanceModel.class).find()
-            .where(InstanceModel.ID.eq(instanceId))
-            .where(InstanceModel.liveAuthored())
-            .first();
-        // Visibility rides files.read: an id whose files the caller may not even LIST must
-        // read as nonexistent, not as forbidden.
-        if (row == null || !HohenheimAccess.hasInstanceCapability(ctx, instanceId,
-                HohenheimAccess.FILES_READ)) {
+        Row row = instanceId == null ? null : InstanceFiles.reachableInstance(ctx, instanceId);
+        if (row == null) {
             conduit.notFound();
             return null;
         }

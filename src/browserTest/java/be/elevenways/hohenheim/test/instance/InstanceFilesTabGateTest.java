@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -8,6 +9,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.BeforeAll;
@@ -132,6 +134,51 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
                 .body())
             .as("step 3: the Docker tier still browses")
             .doesNotContain("data-files-unsupported");
+    }
+
+    /**
+     * The Files tab's "Connect with SFTP" card: off, it says so (and points an operator at the setting); on, it names
+     * the address, the port, the viewer's own login name for this app, and the password scopes narrowed to what the
+     * viewer holds, minted on the account's own API key page.
+     */
+    @Test
+    void theSftpCardSaysWhereToConnectAndWithWhat() throws Exception {
+        String operatorPage = "/admin/instances/" + dockerInstanceId + "/page/files";
+        String readerPage = "/manage/instances/" + dockerInstanceId + "/page/files";
+
+        // 1. SFTP off: the card says so; the operator is pointed at the setting, a tenant is not.
+        String offForOperator = httpGet(operatorPage, sessionToken).body();
+        assertThat(offForOperator).as("step 1: the card renders while SFTP is off").contains("data-sftp-card");
+        assertThat(offForOperator).as("step 1: an operator is linked to the SFTP settings")
+            .contains("data-sftp-settings");
+        String offForReader = httpGet(readerPage, readerSession).body();
+        assertThat(offForReader).as("step 1: a tenant sees the card too").contains("data-sftp-card");
+        assertThat(offForReader).as("step 1: but no link to settings it cannot open")
+            .doesNotContain("data-sftp-settings").doesNotContain("data-sftp-username");
+
+        // 2. SFTP on (its server not started in this suite): where, as whom, and a password narrowed to files.read.
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Sftp.ENABLED, true);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Sftp.PORT, 2022);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Sftp.PUBLIC_HOST, "files.example.test");
+        try {
+            String on = httpGet(readerPage, readerSession).body();
+            assertThat(on).as("step 2: the address shown is the configured public host")
+                .contains("files.example.test");
+            assertThat(on).as("step 2: and the port").contains("2022");
+            assertThat(on).as("step 2: the login name is the viewer's email and this app's id")
+                .contains("files-reader@hohenheim.local." + dockerInstanceId);
+            assertThat(on).as("step 2: a read-only viewer's password scopes name files.read only")
+                .contains("cap:hohenheim:instance#files.read")
+                .doesNotContain("instance#files.write");
+            assertThat(on).as("step 2: the password is minted on the account's own API key page")
+                .contains("href=\"/account/api-keys\"");
+            assertThat(on).as("step 2: a server that is not running says so")
+                .contains("data-sftp-not-running");
+        } finally {
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Sftp.ENABLED, false);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Sftp.PORT, 2022);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Sftp.PUBLIC_HOST, null);
+        }
     }
 
     /**

@@ -1510,3 +1510,40 @@ Section 32 was taken by CORE1 while this fork ran, so D12 is section 33.
   AppsListJourneyTest, SiteRefusalVerdictJourneyTest, ServerOverviewTest, DatabaseAdminTest, SharedDatabaseEngineTest,
   InstanceDatabaseSurfaceTest, TlsCertificateTest, ProxyListenerSupervisionTest, InstanceConsoleCrashRestartTest,
   DashboardVocabularyDriftTest and the four microcopy gates.
+
+## 34. SFTP-W3/W4 decisions (fork SFTP-W3, 2026-10-08)
+
+Hohenheim's own SFTP server for app files, wired over zenit-sftp (W2), and the Files tab's "Connect with SFTP" card.
+The as-built record with every mechanism is `docs/sftp-design.md` section 10; this section keeps the decisions.
+
+- Home: zemble `home` answered EXTEND_EXISTING `SftpRealm` (zenit-sftp, high confidence): W3 implements the SPI and
+  wires it; nothing new in the module but one cosmetic fix (an `ls -l` long name printed the owner as
+  "Owner[getName=1]"; MINA reads the principal's `toString`).
+- Settings `hohenheim.sftp.*`, all host-only, off by default, in the Apps section after Files. The server starts last
+  in `ServerMain.start` with no role gate (every node that renders the panel serves the Files tab); a bind failure is
+  an attention item linking to the setting, never a refused boot.
+- One lane, three transports: `FileVerbs` (perform AND record) is now what the Files tab, `/api/v1` and SFTP call;
+  `InstanceFiles.reachableInstance` is the one "absent, trashed, generated and not permitted read alike" scope the API
+  lane and the SFTP realm share. An SFTP path IS the container path, so History rows name the same paths.
+- Bans need no new code: the module's `SSH_*` events (lane `sftp`) reach the existing in-process sink and score as
+  `BanScope.SSH`; the SSH ban rule's ports gain `hohenheim.sftp.port` while SFTP is on.
+- The card LINKS to `/account/api-keys` and names the scopes to paste, instead of posting the mint itself: the posted
+  form minted the key, then hawkeye's client reloaded the Files tab and the one-time key was never shown (a
+  cross-shell `use:Zenit.form` response is dropped; reported, not fixed here).
+- Decision for Jelle: an operator's files-scoped key reaches nothing (the scope narrows the operator's permissions
+  away, so the instance gate refuses), while the same key works for a tenant. Options and measurements:
+  `sftp-design.md` section 10. Unchanged here.
+- Not built: activity rows grouped per SFTP session (needs a zenit core `ActivityLog` display-group writer and the
+  fold; core was held by other sessions), the open-sessions list with End, `spool_budget_mb`.
+- Walk (scratch server from the jar of build 905, fresh database, `/setup`, `hohenheim.sftp` on port 4514; by SQL an
+  instance Survival with a hand-started labelled container and volume, a tenant account with files grants): shots
+  `docs/hohenheim-ux-mockups-2026-09-30/shots/sftp-w3/` (workspace repo). 01 the operator's Files tab card; 02 the
+  tenant's /manage twin; 03 History showing "File uploaded, Tara Tenant via API key: SFTP, SFTP,
+  /data/hello-from-cli.txt". OpenSSH's `sftp` (10.5) signed in as `tenant@scratch.test.1` with a password minted from
+  the card's link, listed `/` (data) and `/data`, uploaded a file the container then held, and downloaded one.
+- Proof: builds 892 and 905; test run 907 (SftpJourneyTest, InstanceFilesTabGateTest, InstanceFilesLiveTest,
+  ApiWireFilesLiveTest, InstanceFilesContainmentTest, InstanceFileUploadTest, TenantInstanceApiTest,
+  SettingsGroupCoverageTest, HohenheimSettingAuthorityTest, the four microcopy gates, ThreatScorerTest, NftServiceTest,
+  HohenheimSecurityTest, SlowLaneGuardTest, BrowserTestLaneGuardTest, MigrationIntegrityTest, AdminSettingsMountsTest,
+  AdminPagesTest, DashboardAttentionJourneyTest, DashboardRoleGatingTest, DockerArchiveSafetyTest: 87 passed, live
+  needs declared); zenit-sftp 906 red, 911 green.

@@ -1076,6 +1076,19 @@ public class DockerClient {
     }
 
     /**
+     * {@link #putArchiveFiles} for ONE host file stored under another name: the tar entry is
+     * {@code name}, its bytes stream from {@code source} wherever that file lives, so a
+     * spooled upload lands without being copied to a staging directory first.
+     *
+     * @param name a plain relative entry name, refused like any {@link #putArchiveFiles} name
+     */
+    public void putArchiveFile(String containerId, String targetDir, Path source, String name)
+            throws IOException {
+        String entry = entryNameOf(name);
+        putArchive(containerId, targetDir, writer -> writer.add(source, entry));
+    }
+
+    /**
      * Like {@link #putArchiveFromDirectory}/{@link #putArchiveFiles}, but for a
      * {@code targetDir} that need NOT exist in the image: the tar is extracted at
      * {@code /} with every entry prefixed by the target path, so the daemon creates the

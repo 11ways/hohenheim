@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.security;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.security.BanScope;
 import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.server.files.HohenheimSftp;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -205,11 +206,23 @@ public class NftService {
             List.of(80, 443));
     }
 
-    /** Parse the security.nftables_ssh_ports setting; blank or garbage falls back to 22. */
+    /**
+     * Parse the security.nftables_ssh_ports setting (blank or garbage falls back to 22), plus
+     * the SFTP server's port while SFTP is on.
+     *
+     * AIDEV-NOTE: the SFTP port is DERIVED from hohenheim.sftp.port, never a second hand-kept
+     * list: its failed logins are the same SSH event types (BanScope.SSH), so an address
+     * banned for hammering either one is dropped at both.
+     */
     public static @NonNull List<Integer> configuredSshPorts() {
-        return parsePorts(
+        List<Integer> ports = new ArrayList<>(parsePorts(
             Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NFTABLES_SSH_PORTS),
-            List.of(SSH_PORT));
+            List.of(SSH_PORT)));
+        Integer sftp = HohenheimSftp.enabledPort();
+        if (sftp != null && !ports.contains(sftp)) {
+            ports.add(sftp);
+        }
+        return List.copyOf(ports);
     }
 
     private static @NonNull List<Integer> parsePorts(@Nullable String raw,

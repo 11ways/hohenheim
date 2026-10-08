@@ -63,7 +63,10 @@ class SettingsGroupCoverageTest {
         // sitting on InstanceCapacity.readingIsFresh, which argues at length that neither
         // bound subsumes the other, and would have set the precedent that every host knob
         // lands wherever its first consumer happened to read it.
-        "hosts");
+        "hosts",
+        // SFTP to app files (SFTP-W3, 2026-10-08): its own group beside "files", because every value is host-only
+        // and read once when the server starts, while the file manager's bounds are ordinary admin settings.
+        "sftp");
 
     @Test
     void everyDeclaredSettingsGroupIsGuaranteedBeforeValuesLoad() {
