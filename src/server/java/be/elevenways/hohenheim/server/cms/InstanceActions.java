@@ -71,19 +71,19 @@ final class InstanceActions {
     static @NonNull List<PanelAction<Row>> placedOperator() {
         return List.of(SiteActions.openSiteAction(OPEN_SITE, AppHealth::openUrlOfInstance, AppHealth.instances(false)),
             deployAction(false),
-            stopAction(), restartAction(), snapshotAction(), backupAction(),
+            stopAction(), restartAction(false), snapshotAction(), backupAction(),
             appUpdateAction(false), consoleCommandAction(), exposeAction(), rollbackAction(),
             installAction(), reinstallAction(), captureTemplateAction(), migrateAction(),
             destroyWithDataAction(), checkHostAction());
     }
 
     /**
-     * The delegated panel's placed subset: power without restart, the two artifact actions, the app update and the
-     * console line.
+     * The delegated panel's placed subset: power (deploy, restart, stop; board Manage-App), the two artifact actions,
+     * the app update and the console line.
      */
     static @NonNull List<PanelAction<Row>> placedDelegated() {
         return List.of(SiteActions.openSiteAction(OPEN_SITE, AppHealth::openUrlOfInstance, AppHealth.instances(true)),
-            deployAction(true),
+            deployAction(true), restartAction(true),
             stopAction(), snapshotAction(), backupAction(), appUpdateAction(true), consoleCommandAction());
     }
 
@@ -133,15 +133,19 @@ final class InstanceActions {
             .build();
     }
 
-    /** Stop and start again: the restart operation, ONE lock hold across both halves. */
-    private static @NonNull PanelAction<Row> restartAction() {
+    /**
+     * Stop and start again: the restart operation, ONE lock hold across both halves.
+     *
+     * @param delegated whether the button is drawn on /manage, where the host is operator inventory
+     */
+    private static @NonNull PanelAction<Row> restartAction(boolean delegated) {
         return PanelAction.<Row, InstanceOperations.PowerResult>places(InstanceOperations.RESTART, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("restarted_toast")
                     .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
             .label(Microcopy.of("restart").withFilter("scope", "instance"))
             .icon(Icon.of("rotate-right"))
             .inlineInRow(false)
-            .disabledWhen(row -> hostRefusal(row, false))
+            .disabledWhen(row -> hostRefusal(row, delegated))
             .confirmation(ConfirmationSpec.builder()
                 .title(Microcopy.of("restart").withFilter("scope", "instance"))
                 .body(Microcopy.of("restart_confirm").withFilter("scope", "instance"))

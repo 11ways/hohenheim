@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.auth.server.GrantAdministration;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -313,6 +314,11 @@ public final class InstanceOverview {
      * What this delegate may do here (board Manage-App), in the instance vocabulary's own labels, and what stays the
      * operator's. It reads the same capability walk every tab and action is gated by, so it cannot promise a door
      * that refuses.
+     *
+     * AIDEV-NOTE: sharing is the Access tab's own gate ({@link GrantAdministration#mayAdministerRecordAccess}), never
+     * MANAGE: every instance capability is delegable, so a VIEW holder may already hand VIEW on, and a card saying
+     * "who has access is up to the operator" sat beside the tab that lets them do it. Removing the app stays the
+     * operator's whatever the grant: the /manage instance entry offers no delete.
      */
     private static @NonNull WidgetInstance yourPart(int instanceId, @NonNull AccessContext access,
                                                     @NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
@@ -323,13 +329,21 @@ public final class InstanceOverview {
                 held.add(capability.label().resolve(locales, resolver));
             }
         }
-        List<WidgetFact> facts = new ArrayList<>();
-        facts.add(WidgetFact.of(text("you_can", "instance_overview", locales, resolver),
-            held.isEmpty() ? text("you_can_look", "instance_overview", locales, resolver) : String.join(", ", held)));
-        if (!HohenheimAccess.hasInstanceCapability(access, instanceId, HohenheimAccess.MANAGE)) {
-            facts.add(WidgetFact.of(text("operator_decides", "instance_overview", locales, resolver),
-                text("operator_decides_detail", "instance_overview", locales, resolver)));
+        boolean shares = GrantAdministration.mayAdministerRecordAccess(access, InstanceModel.MODEL_ID, instanceId);
+        String can;
+        if (held.isEmpty()) {
+            can = text(shares ? "you_can_look_share" : "you_can_look", "instance_overview", locales, resolver);
+        } else {
+            if (shares) {
+                held.add(text("you_can_share", "instance_overview", locales, resolver));
+            }
+            can = String.join(", ", held);
         }
+        List<WidgetFact> facts = new ArrayList<>();
+        facts.add(WidgetFact.of(text("you_can", "instance_overview", locales, resolver), can));
+        facts.add(WidgetFact.of(text("operator_decides", "instance_overview", locales, resolver),
+            text(shares ? "operator_decides_removal" : "operator_decides_detail", "instance_overview", locales,
+                resolver)));
         return CardWidget.of(Microcopy.of("your_part").withFilter("scope", "instance_overview"),
             new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));
     }

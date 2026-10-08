@@ -58,10 +58,11 @@ class InstanceRecordRouteTest {
         List<String> operator = ids(InstanceParts.admin().actions());
         List<String> delegated = ids(InstanceParts.manage().actions());
 
-        // 1. The delegated panel offers exactly the app's own address, power, the two artifacts, the app update and
-        //    the console line.
+        // 1. The delegated panel offers exactly the app's own address, power (deploy, restart and stop, board
+        //    Manage-App), the two artifacts, the app update and the console line.
         assertThat(delegated).as("step 1: the delegated instance verbs")
-            .containsExactly("instance_open_site", "start_instance", "stop_instance", "snapshot_instance",
+            .containsExactly("instance_open_site", "start_instance", "restart_instance", "stop_instance",
+                "snapshot_instance",
                 "backup_instance", "app_update_instance", "console_command_instance");
 
         // 2. Every one of them is an operator verb too: one builder, two panels.

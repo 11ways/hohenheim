@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
+import be.elevenways.zenit.widget.common.builtin.ColumnSplit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -67,13 +68,13 @@ public final class ManageDashboard extends PanelDashboard {
         widgets.add(AdminDashboard.section(new WidgetInstance(HohenheimWidgets.ATTENTION.id(), Map.of())
             .withData(attention(apps))));
         List<WidgetInstance> lower = new ArrayList<>(2);
-        lower.add(new WidgetInstance(HohenheimWidgets.APPS.id(), Map.of())
-            .withData(AdminDashboard.summaries(apps, accessContext)));
+        lower.add(new WidgetInstance(HohenheimWidgets.APPS.id(), Map.of()).withData(AdminDashboard.appsBand(
+            Microcopy.of("apps").withFilter("scope", "manage_dashboard"), apps, accessContext)));
         List<UsageLine> usage = TenantUsage.of(accessContext);
         if (!usage.isEmpty()) {
             lower.add(new WidgetInstance(HohenheimWidgets.TENANT_USAGE.id(), Map.of()).withData(usage));
         }
-        widgets.add(AdminDashboard.section(AdminDashboard.columns(lower)));
+        widgets.add(AdminDashboard.section(AdminDashboard.columns(lower, ColumnSplit.LEAD)));
         return new WidgetTree(widgets);
     }
 
