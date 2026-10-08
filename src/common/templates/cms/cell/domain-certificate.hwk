@@ -1,10 +1,13 @@
-{#- Domain certificate cell: the coverage badge, the covering certificate linked for a reader who may open it,
-    and its expiry. Blank for a hostname no certificate applies to (TLS passthrough, a non-exact match). -#}
+{#- An address's HTTPS cell: the coverage badge in words, why HTTPS does not work when it does not, and the covering
+    certificate (linked for a reader who may open it) with its expiry. Blank for a hostname no certificate applies to
+    (a non-exact match). -#}
 {% declare value: DomainCertCell %}
 {% if value != null %}
 <span class="hh-cert-coverage" attr:data-cert-status={% value.status %}>
-    {% if value.url != null %}<a href={% value.url %}><pl-badge variant={% value.variant %}>{{ value.name }}</pl-badge></a>{% else %}<pl-badge variant={% value.variant %}>{{ value.label }}</pl-badge>{% /if %}
-    {#- The badge and the expiry are two lines of one cell (the cell stacks them). -#}
+    <pl-badge variant={% value.variant %}>{{ value.label }}</pl-badge>
+    {% if value.detail != null %}<span class="hh-state-line-detail" data-cert-detail>{{ value.detail }}</span>{% /if %}
+    {#- The certificate, then its expiry: lines under the badge (the cell stacks its lines). -#}
+    {% if value.url != null %}<a class="hh-cert-expiry" href={% value.url %} data-cert-link>{{ value.name }}</a>{% /if %}
     {% if value.expiresIso != null %}
     <span class="hh-cert-expiry">{{ t("expires", scope: "site_domains") }} <pl-relative-time datetime={% value.expiresIso %} title={% value.expiresIso %}></pl-relative-time></span>
     {% /if %}

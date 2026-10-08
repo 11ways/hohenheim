@@ -2049,11 +2049,11 @@
       "case": "sentence"
     },
     {
-      "text": "Auth providers",
+      "text": "Sign-in providers",
       "scope": "auth_provider"
     },
     {
-      "text": "auth providers",
+      "text": "sign-in providers",
       "scope": "auth_provider",
       "case": "sentence"
     },
@@ -2166,11 +2166,11 @@
       "case": "sentence"
     },
     {
-      "text": "IP bans",
+      "text": "Blocked addresses",
       "scope": "ban"
     },
     {
-      "text": "IP bans",
+      "text": "blocked addresses",
       "scope": "ban",
       "case": "sentence"
     },
@@ -2247,11 +2247,11 @@
       "case": "sentence"
     },
     {
-      "text": "Released hostnames",
+      "text": "Released addresses",
       "scope": "released_claim"
     },
     {
-      "text": "released hostnames",
+      "text": "released addresses",
       "scope": "released_claim",
       "case": "sentence"
     },
@@ -3843,7 +3843,7 @@
       "scope": "dns_peer"
     },
     {
-      "text": "Delete this auth provider? Its stored credentials and realm settings go with it. A provider still gating a site or named by an access rule is refused, because the proxy would fail those sites closed.",
+      "text": "Delete this sign-in provider? Its stored credentials and realm settings go with it. A provider still gating a site or named by an access rule is refused, because the proxy would fail those sites closed.",
       "scope": "auth_provider"
     },
     {
@@ -4155,7 +4155,7 @@
   ],
   "lift_hint": [
     {
-      "text": "Unban this IP immediately, in the app and in the firewall.",
+      "text": "Unblock this address right away, in the app and in the firewall.",
       "scope": "ban"
     },
     {
@@ -4165,7 +4165,7 @@
   ],
   "lift_confirm": [
     {
-      "text": "Lift this ban? The IP can reach all proxied sites again right away.",
+      "text": "Unblock this address? It can reach every app on this server again right away.",
       "scope": "ban"
     },
     {
@@ -4257,62 +4257,146 @@
     "text": "Bans created (30 days)",
     "scope": "dashboard"
   },
-  "domain_miss": {
-    "text": "Unmatched domain request",
-    "scope": "security_event_type"
-  },
-  "login_failed": {
-    "text": "Failed login",
-    "scope": "security_event_type"
-  },
-  "lockout": {
-    "text": "Account lockout",
-    "scope": "security_event_type"
-  },
-  "rate_limited": {
-    "text": "Rate limited",
-    "scope": "security_event_type"
-  },
-  "csrf_failure": {
-    "text": "CSRF failure",
-    "scope": "security_event_type"
-  },
-  "permission_denied": {
-    "text": "Permission denied",
-    "scope": "security_event_type"
-  },
-  "ws_origin_refused": {
-    "text": "WebSocket origin refused",
-    "scope": "security_event_type"
-  },
-  "ws_auth_refused": {
-    "text": "WebSocket authentication refused",
-    "scope": "security_event_type"
-  },
-  "ssh_invalid_user": {
-    "text": "SSH login as a non-existent user",
-    "scope": "security_event_type"
-  },
-  "ssh_password_failed": {
-    "text": "SSH password refused",
-    "scope": "security_event_type"
-  },
-  "ssh_publickey_failed": {
-    "text": "SSH key refused",
-    "scope": "security_event_type"
-  },
-  "ssh_preauth_abort": {
-    "text": "SSH connection dropped before authenticating",
-    "scope": "security_event_type"
-  },
-  "ssh_max_attempts": {
-    "text": "SSH authentication attempts exhausted",
-    "scope": "security_event_type"
-  },
-  "ssh_protocol_abuse": {
-    "text": "Malformed SSH handshake",
-    "scope": "security_event_type"
-  },
+  "domain_miss": [
+    {
+      "text": "Unmatched domain request",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{Tried 1 name this server does not serve}}\n* {{Tried {$count} names this server does not serve}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "login_failed": [
+    {
+      "text": "Failed login",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{Failed to sign in once}}\n* {{Failed to sign in {$count} times}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "lockout": [
+    {
+      "text": "Account lockout",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{Got locked out of signing in once}}\n* {{Got locked out of signing in {$count} times}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "rate_limited": [
+    {
+      "text": "Rate limited",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{Went over a rate limit once}}\n* {{Went over a rate limit {$count} times}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "csrf_failure": [
+    {
+      "text": "CSRF failure",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{Sent 1 form without a valid security token}}\n* {{Sent {$count} forms without a valid security token}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "permission_denied": [
+    {
+      "text": "Permission denied",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{Opened 1 page it may not see}}\n* {{Opened {$count} pages it may not see}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "ws_origin_refused": [
+    {
+      "text": "WebSocket origin refused",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{Opened 1 live connection from another site}}\n* {{Opened {$count} live connections from another site}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "ws_auth_refused": [
+    {
+      "text": "WebSocket authentication refused",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{Opened 1 live connection without signing in}}\n* {{Opened {$count} live connections without signing in}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "ssh_invalid_user": [
+    {
+      "text": "SSH login as a non-existent user",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{Tried SSH as 1 user that does not exist}}\n* {{Tried SSH as {$count} users that do not exist}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "ssh_password_failed": [
+    {
+      "text": "SSH password refused",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{Gave 1 wrong SSH password}}\n* {{Gave {$count} wrong SSH passwords}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "ssh_publickey_failed": [
+    {
+      "text": "SSH key refused",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{Offered 1 SSH key that was refused}}\n* {{Offered {$count} SSH keys that were refused}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "ssh_preauth_abort": [
+    {
+      "text": "SSH connection dropped before authenticating",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{Dropped 1 SSH connection before signing in}}\n* {{Dropped {$count} SSH connections before signing in}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "ssh_max_attempts": [
+    {
+      "text": "SSH authentication attempts exhausted",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{Ran out of SSH sign-in attempts once}}\n* {{Ran out of SSH sign-in attempts {$count} times}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "ssh_protocol_abuse": [
+    {
+      "text": "Malformed SSH handshake",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{Sent 1 malformed SSH handshake}}\n* {{Sent {$count} malformed SSH handshakes}}",
+      "scope": "ban_cause"
+    }
+  ],
   "ban_scope": {
     "text": "Scope",
     "scope": "hohenheim_field"
@@ -8751,11 +8835,11 @@
       "case": "sentence"
     },
     {
-      "text": "auth provider",
+      "text": "sign-in provider",
       "scope": "auth_provider"
     },
     {
-      "text": "auth provider",
+      "text": "sign-in provider",
       "scope": "auth_provider",
       "case": "sentence"
     },
@@ -8769,11 +8853,11 @@
       "case": "sentence"
     },
     {
-      "text": "IP ban",
+      "text": "blocked address",
       "scope": "ban"
     },
     {
-      "text": "IP ban",
+      "text": "blocked address",
       "scope": "ban",
       "case": "sentence"
     },
@@ -9021,11 +9105,11 @@
       "case": "sentence"
     },
     {
-      "text": "released hostname",
+      "text": "released address",
       "scope": "released_claim"
     },
     {
-      "text": "released hostname",
+      "text": "released address",
       "scope": "released_claim",
       "case": "sentence"
     },
@@ -10179,7 +10263,7 @@
       "scope": "certificate"
     },
     {
-      "text": "Reusable IP allow and deny rules you can attach to a site.",
+      "text": "Who may reach a protected path: networks, passwords and sign-in providers, shared between apps.",
       "scope": "access_list"
     },
     {
@@ -10187,7 +10271,7 @@
       "scope": "git_provider"
     },
     {
-      "text": "Hostnames released from a site and held in quarantine for a while, so another tenant cannot immediately take over the traffic they still deliver.",
+      "text": "Addresses released from an app and held in quarantine for a while, so another tenant cannot immediately take over the traffic they still deliver.",
       "scope": "released_claim"
     },
     {
@@ -10219,7 +10303,7 @@
       "scope": "spamservice"
     },
     {
-      "text": "IP addresses currently blocked from reaching this server.",
+      "text": "Addresses blocked from reaching this server, and why.",
       "scope": "ban"
     },
     {
@@ -11383,10 +11467,16 @@
     "text": "The data root cannot enforce size limits or take snapshots, so workspaces and applications cannot be placed on this host. Mount a btrfs filesystem at the data path's volumes directory, then check this host again.",
     "scope": "server_overview"
   },
-  "create_title": {
-    "text": "New instance",
-    "scope": "instance"
-  },
+  "create_title": [
+    {
+      "text": "New instance",
+      "scope": "instance"
+    },
+    {
+      "text": "Block an address",
+      "scope": "ban"
+    }
+  ],
   "edit_title": {
     "text": "Edit instance",
     "scope": "instance"
@@ -11723,10 +11813,16 @@
     "text": "Workload isolation",
     "scope": "notification_event"
   },
-  "login_succeeded": {
-    "text": "Successful login",
-    "scope": "security_event_type"
-  },
+  "login_succeeded": [
+    {
+      "text": "Successful login",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{Signed in once}}\n* {{Signed in {$count} times}}",
+      "scope": "ban_cause"
+    }
+  ],
   "runtime_image_not_applicable": {
     "text": "This kind of instance does not run inside a runtime image; leave this empty.",
     "scope": "instance"
@@ -13976,7 +14072,7 @@
       "scope": "nav_cluster"
     },
     {
-      "text": "Addresses, DNS zones, certificates and released hostnames.",
+      "text": "Addresses, certificates, DNS zones and released addresses.",
       "scope": "nav_cluster_hint"
     }
   ],
@@ -13986,7 +14082,7 @@
       "scope": "nav_cluster"
     },
     {
-      "text": "Access lists, users, roles, bans and abuse protection.",
+      "text": "Who may reach protected paths, who is blocked, and who may manage this installation.",
       "scope": "nav_cluster_hint"
     }
   ],
@@ -14931,5 +15027,41 @@
     }
   ],
   "stop_forcing_https_toast": { "text": "HTTPS is no longer forced; visitors reach the site over plain HTTP", "scope": "site" },
-  "stop_forcing_https_confirm": { "text": "Visitors will reach the names that have no working certificate over plain, unencrypted HTTP. Force HTTPS again once a certificate works.", "scope": "site" }
+  "stop_forcing_https_confirm": { "text": "Visitors will reach the names that have no working certificate over plain, unencrypted HTTP. Force HTTPS again once a certificate works.", "scope": "site" },
+  "other_event": {
+    "text": ".match {$count :number}\none {{Set off 1 security event: {$event}}}\n* {{Set off {$count} security events: {$event}}}",
+    "scope": "ban_cause"
+  },
+  "legacy": {
+    "text": "Went over the limit for: {$event}",
+    "scope": "ban_cause"
+  },
+  "https_passthrough": {
+    "text": "The app handles HTTPS itself",
+    "scope": "site_domains"
+  },
+  "https_being_issued": {
+    "text": "The certificate is being issued",
+    "scope": "site_domains"
+  },
+  "https_uncovered": {
+    "text": "No certificate covers this name, so visitors get plain HTTP",
+    "scope": "site_domains"
+  },
+  "https_uncovered_excluded": {
+    "text": "No certificate covers this name, and Let's Encrypt is told never to ask for one",
+    "scope": "site_domains"
+  },
+  "https_certificate_failing": {
+    "text": "Its certificate is not working",
+    "scope": "site_domains"
+  },
+  "https_forced_uncovered": {
+    "text": "HTTPS is forced, but no working certificate covers this name",
+    "scope": "site_domains"
+  },
+  "https_forced_excluded": {
+    "text": "HTTPS is forced, but no working certificate covers this name and Let's Encrypt is told never to ask for one: upload one, or stop forcing HTTPS",
+    "scope": "site_domains"
+  }
 }

@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.SecurityEventTypes;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
@@ -60,12 +61,21 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
         // 3. A list nothing uses says how to put it to use.
         assertThat(adminGet("/admin/access-lists/" + unused + "/page/rules").body())
             .as("step 3: an unused list says nothing uses it").contains("Nothing uses this list yet");
+
+        // 4. The lists page says what a list is for, and makes a list through its one header action: no quick-add bar
+        //    beside the search (board Access-List).
+        assertThat(lists).as("step 4: the lead reads as the board").contains("Who may reach a protected path");
+        assertThat(lists).as("step 4: no quick-add bar").doesNotContain("data-cms-quick-add-open");
     }
 
     @Test
     void theBlockedAddressesOpenOnWhatIsBlockedNow() throws Exception {
         ban("203.0.113.41", "Tried names this server does not serve", true);
         ban("203.0.113.42", "An old block", false);
+        Row legacy = ban("203.0.113.43", "score 26 over threshold", true);
+        legacy.set(BanModel.SOURCE, BanModel.SOURCE_AUTO);
+        legacy.set(BanModel.EVENT_TYPE, SecurityEventTypes.DOMAIN_MISS);
+        Models.get(BanModel.class).save(legacy);
 
         // 1. The list opens on the addresses blocked NOW, a default the reader can remove.
         String now = adminGet("/admin/bans").body();
@@ -75,6 +85,18 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
         assertThat(now).as("step 1: a lifted block stays out of the default view").doesNotContain("203.0.113.42");
         assertThat(now.replaceAll("<[^>]+>", " ")).as("step 1: the columns read address, by and until")
             .containsPattern("\\bAddress\\b").containsPattern("\\bBy\\b").containsPattern("\\bUntil\\b");
+
+        // 2. An automatic block stored with the old score line reads as what tipped it, never as a score.
+        assertThat(now).as("step 2: the old score line reads as its event")
+            .contains("Went over the limit for: Unmatched domain request")
+            .doesNotContain("score 26 over threshold");
+
+        // 3. The page is the blocked addresses, blocked through its one header action and its form; no quick-add
+        //    bar (board Access-Blocked).
+        assertThat(now).as("step 3: named as the board names it").contains("Blocked addresses");
+        assertThat(now).as("step 3: the header action").contains("Block an address");
+        assertThat(now).as("step 3: no quick-add bar").doesNotContain("data-cms-quick-add-open");
+        assertThat(now).as("step 3: the old words are gone").doesNotContain("IP bans");
     }
 
     @Test
@@ -95,6 +117,10 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
         assertThat(providers).as("step 2: a used-by column").contains("Used by");
         assertThat(providers).as("step 2: one list's rule uses the provider").contains("1 place");
         assertThat(providers).as("step 2: an unused provider says so").contains("Not used yet");
+
+        // 3. The providers are named as the board names them.
+        assertThat(access).as("step 3: the tab reads sign-in providers").contains("Sign-in providers")
+            .doesNotContain("Auth providers");
     }
 
     private static Row site(String name) {
@@ -134,7 +160,7 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
         Models.get(ProtectedPathModel.class).save(row);
     }
 
-    private static void ban(String ip, String reason, boolean active) {
+    private static Row ban(String ip, String reason, boolean active) {
         Row ban = Models.get(BanModel.class).createEmptyRow();
         ban.set(BanModel.IP, ip);
         ban.set(BanModel.REASON, reason);
@@ -145,6 +171,7 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
             ban.set(BanModel.LIFTED_AT, Now.instant());
         }
         Models.get(BanModel.class).save(ban);
+        return ban;
     }
 
     private static Row provider(String name) {

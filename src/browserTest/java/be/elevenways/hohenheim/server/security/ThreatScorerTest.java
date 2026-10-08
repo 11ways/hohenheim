@@ -120,7 +120,7 @@ class ThreatScorerTest {
     void crossingTheThresholdFiresTheAutoBanTrigger() {
         ThreatScorer scorer = newScorer();
         List<String> banned = new ArrayList<>();
-        scorer.setAutoBanTrigger((ip, type, score) ->
+        scorer.setAutoBanTrigger((ip, type, score, events) ->
             banned.add(ip + "|" + type));
 
         for (int i = 0; i < BAN_THRESHOLD; i++) {
@@ -132,11 +132,58 @@ class ThreatScorerTest {
         assertThat(banned).contains("10.0.2.1|" + MISS);
     }
 
+    /**
+     * The trigger carries the ban's evidence: how many events of the tipping type fell inside the window, which is
+     * what the ban's reason says in words. Events, not points, and a forgiving hit forgives points only.
+     */
+    @Test
+    void theTriggerCountsTheTippingEventsNotThePoints() {
+        ThreatScorer scorer = newScorer();
+        List<String> fired = new ArrayList<>();
+        scorer.setAutoBanTrigger((ip, type, score, events) -> fired.add(type + "|" + events));
+
+        // 1. A domain-miss sweep crosses the threshold at its 26th miss: 26 events of weight 1.
+        for (int i = 0; i < BAN_THRESHOLD + 1; i++) {
+            scorer.recordEvent("10.0.9.1", MISS, 1);
+        }
+        assertThat(fired).as("step 1: the sweep's 26 misses are its evidence").containsExactly(MISS + "|26");
+
+        // 2. A weighted type (a failed login weighs 3) crosses at its 9th event: 27 points, 9 events.
+        fired.clear();
+        for (int i = 0; i < 9; i++) {
+            scorer.recordEvent("10.0.9.2", SecurityEventTypes.AUTH_LOGIN_FAILED, 1);
+        }
+        assertThat(fired).as("step 2: nine failed sign-ins, not 27 points")
+            .containsExactly(SecurityEventTypes.AUTH_LOGIN_FAILED + "|9");
+
+        // 3. A counted report stands for that many events, and only the tipping type is counted.
+        fired.clear();
+        scorer.recordEvent("10.0.9.3", SecurityEventTypes.CSRF_FAILURE, 1);
+        scorer.recordEvent("10.0.9.3", MISS, 24);
+        assertThat(fired).as("step 3: the 24 misses that tipped it, not the CSRF failure before them")
+            .containsExactly(MISS + "|24");
+
+        // 4. Forgiveness lowers the score, never the events already set off: the next miss after two forgiving hits
+        //    still names every miss in the window.
+        fired.clear();
+        ThreatScorer forgiving = newScorer();
+        forgiving.setAutoBanTrigger((ip, type, score, events) -> fired.add(type + "|" + events));
+        for (int i = 0; i < BAN_THRESHOLD; i++) {
+            forgiving.recordEvent("10.0.9.4", MISS, 1);
+        }
+        forgiving.recordHit("10.0.9.4");
+        for (int i = 0; i < DECAY_PER_HIT + 1; i++) {
+            forgiving.recordEvent("10.0.9.4", MISS, 1);
+        }
+        assertThat(fired).as("step 4: the crossing after a forgiving hit counts all 28 misses")
+            .containsExactly(MISS + "|28");
+    }
+
     @Test
     void v6AddressesScoreAsTheirSlash64() {
         ThreatScorer scorer = newScorer();
         List<String> banned = new ArrayList<>();
-        scorer.setAutoBanTrigger((ip, type, score) -> banned.add(ip));
+        scorer.setAutoBanTrigger((ip, type, score, events) -> banned.add(ip));
 
         // Rotating addresses inside ONE /64 accumulate on a single actor key.
         for (int i = 0; i < BAN_THRESHOLD + 1; i++) {

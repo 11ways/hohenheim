@@ -57,7 +57,7 @@ class HohenheimSecurityTest {
         ThreatScorer scorer = new ThreatScorer(() -> 1_000_000_000L, () -> 300, () -> 25,
             () -> 0, () -> 1);
         List<String> banned = new ArrayList<>();
-        scorer.setAutoBanTrigger((ip, type, score) -> banned.add(ip));
+        scorer.setAutoBanTrigger((ip, type, score, events) -> banned.add(ip));
 
         // 1. Two hundred webhook refusals from one forge address: never a ban.
         for (int i = 0; i < 200; i++) {

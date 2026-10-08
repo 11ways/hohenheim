@@ -106,9 +106,12 @@ public final class ThreatScorer {
      * Callback fired when an actor's weighted score crosses the ban threshold.
      * The ip is the ACTOR KEY: the exact address for v4, the {@code <network>/64}
      * for v6 (rotating addresses inside one /64 share a score).
+     *
+     * @param events how many events of {@code eventType} this actor set off inside the window, the
+     *               ban's evidence in words ("tried 26 names"); a successful hit forgives score, never events
      */
     public interface AutoBanTrigger {
-        void onThresholdCrossed(String ip, String eventType, int score);
+        void onThresholdCrossed(String ip, String eventType, int score, int events);
     }
 
     private final LongSupplier clock;
@@ -130,14 +133,41 @@ public final class ThreatScorer {
 
     private final ConcurrentHashMap<String, Entry> entries = new ConcurrentHashMap<>();
 
-    /** A ring buffer of score-point timestamps; slot value 0 means empty/forgiven. */
+    /**
+     * A ring buffer of score-point timestamps (slot value 0 means empty/forgiven), and a ring of the events behind
+     * them, one slot per event whatever its weight.
+     */
     private static final class Entry {
         final long[] pointTimestamps;
         int head;
+        final long[] eventTimestamps;
+        final String[] eventTypes;
+        int eventHead;
         long lastTouchMs;
 
         Entry(int capacity) {
             this.pointTimestamps = new long[capacity];
+            this.eventTimestamps = new long[capacity];
+            this.eventTypes = new String[capacity];
+        }
+
+        synchronized void addEvents(long now, String type, int events) {
+            for (int i = 0; i < events; i++) {
+                eventTimestamps[eventHead] = now;
+                eventTypes[eventHead] = type;
+                eventHead = (eventHead + 1) % eventTimestamps.length;
+            }
+        }
+
+        /** How many events of this type fell inside the window, capped at the ring's capacity. */
+        synchronized int recentEventCount(long windowStart, String type) {
+            int count = 0;
+            for (int i = 0; i < eventTimestamps.length; i++) {
+                if (eventTimestamps[i] > windowStart && Objects.equals(eventTypes[i], type)) {
+                    count++;
+                }
+            }
+            return count;
         }
 
         synchronized void addPoints(long now, int points) {
@@ -273,8 +303,8 @@ public final class ThreatScorer {
      * itself).
      */
     public int recordEvent(String ip, String type, int count) {
-        int points = Math.max(1, weightOf(type)) * Math.max(1, count);
-        return record(ip, type, points);
+        int events = Math.max(1, count);
+        return record(ip, type, Math.max(1, weightOf(type)) * events, events);
     }
 
     /**
@@ -303,11 +333,11 @@ public final class ThreatScorer {
                             @Nullable Map<String, String> detail) {
         int weight = weightOf(type, detail);
         if (weight > 0) {
-            record(ip, type, weight);
+            record(ip, type, weight, 1);
         }
     }
 
-    private int record(String ip, String type, int points) {
+    private int record(String ip, String type, int points, int events) {
         refreshSettings();
         long now = clock.getAsLong();
 
@@ -315,16 +345,18 @@ public final class ThreatScorer {
         Entry entry = entries.computeIfAbsent(key,
             k -> new Entry(Math.max(64, banThreshold * 2)));
         entry.addPoints(now, Math.min(points, entry.pointTimestamps.length));
+        entry.addEvents(now, type, Math.min(events, entry.eventTimestamps.length));
 
         if (entries.size() > MAX_ENTRIES) {
             long cutoff = now - EVICT_AGE_MS;
             entries.entrySet().removeIf(e -> e.getValue().lastTouchMs < cutoff);
         }
 
-        int score = entry.recentPointCount(now - windowSeconds * 1000L);
+        long windowStart = now - windowSeconds * 1000L;
+        int score = entry.recentPointCount(windowStart);
         AutoBanTrigger trigger = this.autoBanTrigger;
         if (trigger != null && score > banThreshold) {
-            trigger.onThresholdCrossed(key, type, score);
+            trigger.onThresholdCrossed(key, type, score, entry.recentEventCount(windowStart, type));
         }
         return score;
     }

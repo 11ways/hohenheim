@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.security.BanStateCell;
 import be.elevenways.hohenheim.server.security.BanService;
+import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.typed.CoreTypes;
@@ -15,7 +16,6 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
@@ -155,6 +155,7 @@ public final class BanParts {
             .defaultSort(SortSpec.desc("created_at"))
             .build();
         FormSpec form = FormSpec.builder()
+            .createTitle(banText("create_title"))
             .add(BanModel.IP)
             .add(BanModel.REASON)
             // The DERIVED entry, never a bare Plain: an EnumField in Plain renders as free text and is outside the
@@ -175,8 +176,7 @@ public final class BanParts {
             .navOrder(40)
             // The cause of an automatic ban in the reader's own words, off the ONE description registry the event
             // vocabulary declares into; an undescribed type keeps its dotted spelling.
-            .reads(ResourceReads.rows().mapCells((ban, column) ->
-                BanModel.EVENT_TYPE.getName().equals(column.name()) ? eventLabel(ban) : null))
+            .reads(ResourceReads.rows().mapCells(BanParts::cell))
             .list(ResourceList.rows(table).chrome(CmsSupport.FILTERABLE_LIST).facets().ruleFilters()
                 .search(BanModel.IP, BanModel.REASON)
                 // Opens on what is blocked NOW: a default the reader removes to see lifted and expired bans.
@@ -186,10 +186,10 @@ public final class BanParts {
                     BanStateCell.of(Boolean.TRUE.equals(ban.get(BanModel.ACTIVE)),
                         ban.get(BanModel.LIFTED_AT), ban.get(BanModel.EXPIRES_AT), Now.instant()))
                 .build())
-            // The quick-add bar IS the manual "ban an IP" flow: three answers.
+            // Blocking an address is the header's one action and its form (board Access-Blocked); the list carries no
+            // quick-add bar beside it.
             .form(ResourceForm.<Row>of(form)
                 .bindings(bindings())
-                .quickCreate(QuickCreateSpec.of(BanModel.IP.getName(), BanModel.REASON.getName(), DURATION_NAME))
                 .build())
             .writes(ResourceMutations.rows().create(BanParts::create).build())
             .actions(List.of(PanelAction.<Row, Void>places(LIFT, ActionPlacement.ROW, (request, result) ->
@@ -227,6 +227,22 @@ public final class BanParts {
 
     private static @NonNull Microcopy banText(@NonNull String key) {
         return Microcopy.of(key).withFilter("scope", "ban");
+    }
+
+    /**
+     * A ban's cells in words: the event that tripped it by its description, and an automatic ban's reason stored as
+     * the old score line read as that event instead ({@link HohenheimSecurity#legacyCause}).
+     */
+    private static @Nullable Object cell(@NonNull Row ban, @NonNull ColumnSpec column) {
+        if (BanModel.EVENT_TYPE.getName().equals(column.name())) {
+            return eventLabel(ban);
+        }
+        if (BanModel.REASON.getName().equals(column.name())
+                && BanModel.SOURCE_AUTO.equals(ban.get(BanModel.SOURCE))) {
+            Microcopy cause = HohenheimSecurity.legacyCause(ban.get(BanModel.REASON), ban.get(BanModel.EVENT_TYPE));
+            return cause == null ? null : CmsSupport.resolvedText(cause);
+        }
+        return null;
     }
 
     private static @Nullable String eventLabel(@NonNull Row ban) {

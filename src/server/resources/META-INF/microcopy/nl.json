@@ -2049,11 +2049,11 @@
       "case": "sentence"
     },
     {
-      "text": "Authenticatieproviders",
+      "text": "Aanmeldproviders",
       "scope": "auth_provider"
     },
     {
-      "text": "authenticatieproviders",
+      "text": "aanmeldproviders",
       "scope": "auth_provider",
       "case": "sentence"
     },
@@ -2166,11 +2166,11 @@
       "case": "sentence"
     },
     {
-      "text": "IP-verbanningen",
+      "text": "Geblokkeerde adressen",
       "scope": "ban"
     },
     {
-      "text": "IP-verbanningen",
+      "text": "geblokkeerde adressen",
       "scope": "ban",
       "case": "sentence"
     },
@@ -2247,11 +2247,11 @@
       "case": "sentence"
     },
     {
-      "text": "Vrijgegeven hostnamen",
+      "text": "Vrijgegeven adressen",
       "scope": "released_claim"
     },
     {
-      "text": "vrijgegeven hostnamen",
+      "text": "vrijgegeven adressen",
       "scope": "released_claim",
       "case": "sentence"
     },
@@ -3843,7 +3843,7 @@
       "scope": "dns_peer"
     },
     {
-      "text": "Deze auth-provider verwijderen? Zijn opgeslagen referenties en realm-instellingen verdwijnen mee. Een provider die nog een site bewaakt of waarnaar een toegangsregel verwijst wordt geweigerd, omdat de proxy die sites dan volledig zou sluiten.",
+      "text": "Deze aanmeldprovider verwijderen? Zijn opgeslagen referenties en realm-instellingen verdwijnen mee. Een provider die nog een site bewaakt of waarnaar een toegangsregel verwijst wordt geweigerd, omdat de proxy die sites dan volledig zou sluiten.",
       "scope": "auth_provider"
     },
     {
@@ -4155,7 +4155,7 @@
   ],
   "lift_hint": [
     {
-      "text": "Hef de verbanning onmiddellijk op, in de app en in de firewall.",
+      "text": "Deblokkeer dit adres meteen, in de app en in de firewall.",
       "scope": "ban"
     },
     {
@@ -4165,7 +4165,7 @@
   ],
   "lift_confirm": [
     {
-      "text": "Deze verbanning opheffen? Het IP-adres kan meteen alle sites weer bereiken.",
+      "text": "Dit adres deblokkeren? Het kan meteen weer elke app op deze server bereiken.",
       "scope": "ban"
     },
     {
@@ -4257,62 +4257,146 @@
     "text": "Aangemaakte verbanningen (30 dagen)",
     "scope": "dashboard"
   },
-  "domain_miss": {
-    "text": "Onbekend domein opgevraagd",
-    "scope": "security_event_type"
-  },
-  "login_failed": {
-    "text": "Mislukte aanmelding",
-    "scope": "security_event_type"
-  },
-  "lockout": {
-    "text": "Account vergrendeld",
-    "scope": "security_event_type"
-  },
-  "rate_limited": {
-    "text": "Verzoekslimiet overschreden",
-    "scope": "security_event_type"
-  },
-  "csrf_failure": {
-    "text": "CSRF-fout",
-    "scope": "security_event_type"
-  },
-  "permission_denied": {
-    "text": "Toegang geweigerd",
-    "scope": "security_event_type"
-  },
-  "ws_origin_refused": {
-    "text": "WebSocket-origin geweigerd",
-    "scope": "security_event_type"
-  },
-  "ws_auth_refused": {
-    "text": "WebSocket-authenticatie geweigerd",
-    "scope": "security_event_type"
-  },
-  "ssh_invalid_user": {
-    "text": "SSH-aanmelding als onbestaande gebruiker",
-    "scope": "security_event_type"
-  },
-  "ssh_password_failed": {
-    "text": "SSH-wachtwoord geweigerd",
-    "scope": "security_event_type"
-  },
-  "ssh_publickey_failed": {
-    "text": "SSH-sleutel geweigerd",
-    "scope": "security_event_type"
-  },
-  "ssh_preauth_abort": {
-    "text": "SSH-verbinding verbroken voor authenticatie",
-    "scope": "security_event_type"
-  },
-  "ssh_max_attempts": {
-    "text": "SSH-authenticatiepogingen uitgeput",
-    "scope": "security_event_type"
-  },
-  "ssh_protocol_abuse": {
-    "text": "Ongeldige SSH-handshake",
-    "scope": "security_event_type"
-  },
+  "domain_miss": [
+    {
+      "text": "Onbekend domein opgevraagd",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{Vroeg naar 1 naam die deze server niet bedient}}\n* {{Vroeg naar {$count} namen die deze server niet bedient}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "login_failed": [
+    {
+      "text": "Mislukte aanmelding",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 mislukte aanmelding}}\n* {{{$count} mislukte aanmeldingen}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "lockout": [
+    {
+      "text": "Account vergrendeld",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 keer buitengesloten bij het aanmelden}}\n* {{{$count} keer buitengesloten bij het aanmelden}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "rate_limited": [
+    {
+      "text": "Verzoekslimiet overschreden",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 keer over een snelheidslimiet}}\n* {{{$count} keer over een snelheidslimiet}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "csrf_failure": [
+    {
+      "text": "CSRF-fout",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 formulier zonder geldig beveiligingstoken}}\n* {{{$count} formulieren zonder geldig beveiligingstoken}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "permission_denied": [
+    {
+      "text": "Toegang geweigerd",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 pagina geopend die het niet mag zien}}\n* {{{$count} pagina's geopend die het niet mag zien}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "ws_origin_refused": [
+    {
+      "text": "WebSocket-origin geweigerd",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 live-verbinding vanaf een andere site}}\n* {{{$count} live-verbindingen vanaf een andere site}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "ws_auth_refused": [
+    {
+      "text": "WebSocket-authenticatie geweigerd",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 live-verbinding zonder aanmelding}}\n* {{{$count} live-verbindingen zonder aanmelding}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "ssh_invalid_user": [
+    {
+      "text": "SSH-aanmelding als onbestaande gebruiker",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{SSH geprobeerd als 1 gebruiker die niet bestaat}}\n* {{SSH geprobeerd als {$count} gebruikers die niet bestaan}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "ssh_password_failed": [
+    {
+      "text": "SSH-wachtwoord geweigerd",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 fout SSH-wachtwoord}}\n* {{{$count} foute SSH-wachtwoorden}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "ssh_publickey_failed": [
+    {
+      "text": "SSH-sleutel geweigerd",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 geweigerde SSH-sleutel}}\n* {{{$count} geweigerde SSH-sleutels}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "ssh_preauth_abort": [
+    {
+      "text": "SSH-verbinding verbroken voor authenticatie",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 SSH-verbinding verbroken voor de aanmelding}}\n* {{{$count} SSH-verbindingen verbroken voor de aanmelding}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "ssh_max_attempts": [
+    {
+      "text": "SSH-authenticatiepogingen uitgeput",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 keer door de SSH-aanmeldpogingen heen}}\n* {{{$count} keer door de SSH-aanmeldpogingen heen}}",
+      "scope": "ban_cause"
+    }
+  ],
+  "ssh_protocol_abuse": [
+    {
+      "text": "Ongeldige SSH-handshake",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 misvormde SSH-handshake}}\n* {{{$count} misvormde SSH-handshakes}}",
+      "scope": "ban_cause"
+    }
+  ],
   "ban_scope": {
     "text": "Bereik",
     "scope": "hohenheim_field"
@@ -8751,11 +8835,11 @@
       "case": "sentence"
     },
     {
-      "text": "authenticatieprovider",
+      "text": "aanmeldprovider",
       "scope": "auth_provider"
     },
     {
-      "text": "authenticatieprovider",
+      "text": "aanmeldprovider",
       "scope": "auth_provider",
       "case": "sentence"
     },
@@ -8769,11 +8853,11 @@
       "case": "sentence"
     },
     {
-      "text": "IP-verbanning",
+      "text": "geblokkeerd adres",
       "scope": "ban"
     },
     {
-      "text": "IP-verbanning",
+      "text": "geblokkeerd adres",
       "scope": "ban",
       "case": "sentence"
     },
@@ -9021,11 +9105,11 @@
       "case": "sentence"
     },
     {
-      "text": "vrijgegeven hostnaam",
+      "text": "vrijgegeven adres",
       "scope": "released_claim"
     },
     {
-      "text": "vrijgegeven hostnaam",
+      "text": "vrijgegeven adres",
       "scope": "released_claim",
       "case": "sentence"
     },
@@ -10179,7 +10263,7 @@
       "scope": "certificate"
     },
     {
-      "text": "Herbruikbare IP-toegangsregels die je aan een site kunt koppelen.",
+      "text": "Wie een beveiligd pad mag bereiken: netwerken, wachtwoorden en aanmeldproviders, te delen tussen apps.",
       "scope": "access_list"
     },
     {
@@ -10187,7 +10271,7 @@
       "scope": "git_provider"
     },
     {
-      "text": "Hostnamen die van een site zijn losgekoppeld en een tijd in quarantaine blijven, zodat een andere tenant het verkeer dat ze nog leveren niet meteen kan overnemen.",
+      "text": "Adressen die van een app zijn losgekoppeld en een tijd in quarantaine blijven, zodat een andere tenant het verkeer dat ze nog leveren niet meteen kan overnemen.",
       "scope": "released_claim"
     },
     {
@@ -10219,7 +10303,7 @@
       "scope": "spamservice"
     },
     {
-      "text": "IP-adressen die momenteel geen toegang tot deze server hebben.",
+      "text": "Adressen die deze server niet mogen bereiken, en waarom.",
       "scope": "ban"
     },
     {
@@ -11383,10 +11467,16 @@
     "text": "De dataroot kan geen groottelimieten afdwingen of snapshots nemen, dus workspaces en applicaties kunnen niet op deze host geplaatst worden. Mount een btrfs-bestandssysteem op de volumes-map van het datapad en controleer deze host daarna opnieuw.",
     "scope": "server_overview"
   },
-  "create_title": {
-    "text": "Nieuwe instantie",
-    "scope": "instance"
-  },
+  "create_title": [
+    {
+      "text": "Nieuwe instantie",
+      "scope": "instance"
+    },
+    {
+      "text": "Een adres blokkeren",
+      "scope": "ban"
+    }
+  ],
   "edit_title": {
     "text": "Instantie bewerken",
     "scope": "instance"
@@ -11723,10 +11813,16 @@
     "text": "Workload-isolatie",
     "scope": "notification_event"
   },
-  "login_succeeded": {
-    "text": "Geslaagde aanmelding",
-    "scope": "security_event_type"
-  },
+  "login_succeeded": [
+    {
+      "text": "Geslaagde aanmelding",
+      "scope": "security_event_type"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 keer aangemeld}}\n* {{{$count} keer aangemeld}}",
+      "scope": "ban_cause"
+    }
+  ],
   "runtime_image_not_applicable": {
     "text": "Dit soort instantie draait niet in een runtime-image; laat dit leeg.",
     "scope": "instance"
@@ -13976,7 +14072,7 @@
       "scope": "nav_cluster"
     },
     {
-      "text": "Adressen, DNS-zones, certificaten en vrijgegeven hostnamen.",
+      "text": "Adressen, certificaten, DNS-zones en vrijgegeven adressen.",
       "scope": "nav_cluster_hint"
     }
   ],
@@ -13986,7 +14082,7 @@
       "scope": "nav_cluster"
     },
     {
-      "text": "Toegangslijsten, gebruikers, rollen, bans en misbruikbescherming.",
+      "text": "Wie beveiligde paden mag bereiken, wie geblokkeerd is, en wie deze installatie mag beheren.",
       "scope": "nav_cluster_hint"
     }
   ],
@@ -14931,5 +15027,41 @@
     }
   ],
   "stop_forcing_https_toast": { "text": "HTTPS is niet langer verplicht; bezoekers bereiken de site via gewone HTTP", "scope": "site" },
-  "stop_forcing_https_confirm": { "text": "Bezoekers bereiken de namen zonder werkend certificaat dan via gewone, onversleutelde HTTP. Verplicht HTTPS opnieuw zodra een certificaat werkt.", "scope": "site" }
+  "stop_forcing_https_confirm": { "text": "Bezoekers bereiken de namen zonder werkend certificaat dan via gewone, onversleutelde HTTP. Verplicht HTTPS opnieuw zodra een certificaat werkt.", "scope": "site" },
+  "other_event": {
+    "text": ".match {$count :number}\none {{1 beveiligingsgebeurtenis: {$event}}}\n* {{{$count} beveiligingsgebeurtenissen: {$event}}}",
+    "scope": "ban_cause"
+  },
+  "legacy": {
+    "text": "Over de limiet voor: {$event}",
+    "scope": "ban_cause"
+  },
+  "https_passthrough": {
+    "text": "De app regelt HTTPS zelf",
+    "scope": "site_domains"
+  },
+  "https_being_issued": {
+    "text": "Het certificaat wordt uitgegeven",
+    "scope": "site_domains"
+  },
+  "https_uncovered": {
+    "text": "Geen certificaat dekt deze naam, dus bezoekers krijgen gewoon HTTP",
+    "scope": "site_domains"
+  },
+  "https_uncovered_excluded": {
+    "text": "Geen certificaat dekt deze naam, en Let's Encrypt mag er nooit een aanvragen",
+    "scope": "site_domains"
+  },
+  "https_certificate_failing": {
+    "text": "Het certificaat werkt niet",
+    "scope": "site_domains"
+  },
+  "https_forced_uncovered": {
+    "text": "HTTPS is verplicht, maar geen werkend certificaat dekt deze naam",
+    "scope": "site_domains"
+  },
+  "https_forced_excluded": {
+    "text": "HTTPS is verplicht, maar geen werkend certificaat dekt deze naam en Let's Encrypt mag er nooit een aanvragen: upload er een, of zet HTTPS verplichten uit",
+    "scope": "site_domains"
+  }
 }

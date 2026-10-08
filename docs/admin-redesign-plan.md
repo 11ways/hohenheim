@@ -779,3 +779,36 @@ Order: W6 as planned. G5 needs nothing from W1-W5 except the `put_online` operat
   at the edge), and a constant series with derived bounds is drawn mid-height instead of on the floor. The Metrics tab
   starts every chart at zero, tops CPU at its limit (`InstanceStats.cpuCeiling`) and memory at the cap the runtime
   reports (`InstanceStats.memoryCeiling`); a steady 117.9 MB of 512 MB is a level line a quarter up, not the floor.
+
+## 21. D7c decisions (fork D7c, 2026-10-08)
+
+- An address's HTTPS badge is always the word ("Works", "Not working", "No certificate"), never the covering
+  certificate's name; the certificate links on its own line under it with its expiry (`DomainCertCell`,
+  `cms/cell/domain-certificate.hwk`). The cell had drawn the certificate's NAME as the badge whenever the reader could
+  open it, which is why Starfleet's working names read "admin.starfleet.life" in green instead of "Works".
+- A name whose HTTPS does not work says why beside the badge (`DomainParts.httpsDetail`): forced without a working
+  certificate; forced and excluded from Let's Encrypt (the name another server holds the certificate for, so the row
+  rightly offers no "Get a certificate": the request action's own applicability); no certificate, so plain HTTP; a
+  failing certificate; one being issued; a passthrough app handling HTTPS itself. Starfleet's comms.starfleet.life is
+  forced and excluded, which is why it read "Not working" with no action.
+- A certificate's covered names read as words ("a.test, www.a.test") in its list rows (both twins), through
+  `CertificateCoverage.namesOf`: the stored `domain_names_text` stays comma-joined data.
+- A cluster member's landing page heads with the cluster's name over its tabs (zenit-cms `ClusterTabsState.title`,
+  `cluster-tabs.hwk`). The name is a quiet line, not a heading: the board draws the cluster as the page heading with no
+  member heading, but member pages come from several framework templates that each own their h1, so the member keeps
+  its h1 and the area's name sits above the strip. Changing every member template's heading is a separate step if the
+  quiet line is not enough.
+- Copy in the boards' words, en and nl: Blocked addresses (create: "Block an address"), Sign-in providers, Released
+  addresses, the access lists' lead "Who may reach a protected path", the cluster hints.
+- No quick-add bar on Access lists or Blocked addresses (boards Access-List, Access-Blocked): each makes records
+  through its one header action and its form. Lists for one path are made by Protect a path.
+- An automatic ban's reason says what tipped it: the threat scorer keeps a ring of the events behind its points and
+  hands the trigger how many events of the tipping type fell inside the window (`AutoBanTrigger` gains `events`;
+  forgiveness lowers points, never events). The reason is stored resolved in the installation's content locale, like
+  every stored reason (`HohenheimViolations.textOf`): "Tried 26 names this server does not serve". The causes derive
+  from the same per-type copy key as the event labels (`HohenheimSecurity.EVENT_CAUSES`, drift-tested in en and nl
+  beside `EVENT_LABELS`). Automatic bans stored with the old "score N over threshold" line read as their event
+  ("Went over the limit for: Unmatched domain request"); nothing rewrites stored rows.
+- Blocked on zenit-auth (its push waits on the arcana checkout, and the copy is zenit-auth's catalog): the Users and
+  Roles tabs read "People" per the board, and the People list's Role column. Not done: "Recent misses" and the
+  never-block list on the Blocked page (W8b's needs-building), "Lift" as the button word.

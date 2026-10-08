@@ -117,7 +117,7 @@ class Ipv6BanGranularityTest {
         AtomicLong now = new AtomicLong(1_000_000_000L);
         BanService service = newService(true);
         ThreatScorer scorer = new ThreatScorer(now::get, () -> 300, () -> 25, () -> 2, () -> 1);
-        scorer.setAutoBanTrigger((ip, type, score) ->
+        scorer.setAutoBanTrigger((ip, type, score, events) ->
             service.autoBan(ip, type, "score " + score + " over threshold"));
 
         // An actor rotating through addresses of one /64 crosses the shared threshold.

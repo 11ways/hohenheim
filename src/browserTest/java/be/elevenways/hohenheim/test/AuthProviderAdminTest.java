@@ -100,7 +100,7 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         waitForHydration();
 
         String body = page.locator("body").textContent();
-        assertThat(body).contains("Auth providers");
+        assertThat(body).contains("Sign-in providers");
         assertThat(body).contains("Staff Gate");
         // The sidebar deliberately does NOT carry this entry any more: auth providers are
         // reached from the Sites list header (AdminNavigationJourneyTest step 6 pins the
