@@ -1377,10 +1377,8 @@ public class HohenheimEndpoints {
         .build();
 
     /**
-     * VM framebuffer rescue console: server-captured VGA snapshots down (binary frames),
-     * keyboard/mouse input up (DRY frames). requiresLogin at the handshake plus the
-     * handler's per-record CONSOLE check (see VmFramebufferHandler's note on the verb),
-     * revalidated mid-session (revoked = 1008).
+     * A VM's screen: zenit-kvm's binary screen protocol, fed by the VM's SPICE server (VmScreens). requiresLogin at
+     * the handshake plus the per-record screen gate, asked again on every revalidation (revoked = 1008).
      */
     public static final WebSocketEndpoint VM_FRAMEBUFFER = WebSocketEndpoint.builder()
         .identifier(HohenheimIds.id("vm_framebuffer"))

@@ -1768,7 +1768,7 @@
       "console": "tty"
     },
     {
-      "text": "Live VGA-uitvoer van deze VM, opgevangen aan de hypervisorzijde. Werkt voordat de gastagent actief is.",
+      "text": "Het scherm van deze VM, gelezen uit de SPICE-console van de hypervisor. Werkt voordat de gastagent actief is.",
       "scope": "instance_framebuffer"
     },
     {
@@ -8545,7 +8545,15 @@
     "scope": "instance"
   },
   "hint": {
-    "text": "Klik op het scherm om toetsenbordinvoer op te vangen; invoer gaat naar de VM.",
+    "text": "Klik op het scherm om in de VM te typen. Een kijker tegelijk bestuurt: vraag de besturing om over te nemen.",
+    "scope": "instance_framebuffer"
+  },
+  "take_control": {
+    "text": "Besturing vragen",
+    "scope": "instance_framebuffer"
+  },
+  "release_control": {
+    "text": "Besturing teruggeven",
     "scope": "instance_framebuffer"
   },
   "capture_template": [

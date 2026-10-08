@@ -287,21 +287,6 @@ public class IncusClient {
         return castMap(operation);
     }
 
-    /**
-     * One PNG snapshot of the instance's live VGA framebuffer (the hypervisor-side
-     * screenshot Incus renders from the SPICE surface; works before the guest agent is
-     * up, which is the rescue console's whole point). Returns the raw image bytes.
-     */
-    public byte @NonNull [] vgaScreenshot(@NonNull String name) throws IOException {
-        Http11.Raw raw = this.transport.exchange("GET",
-            "/1.0/instances/" + name + "/console?type=vga", null, DEFAULT_TIMEOUT_MS);
-        if (raw.status() >= 200 && raw.status() < 300) {
-            return raw.body();
-        }
-        envelopeOf(raw);   // throws the typed refusal (e.g. "Instance is not running")
-        throw new IOException("unreachable");
-    }
-
     /** The instance's console log ring buffer (plain text, NOT an envelope). */
     public @NonNull String consoleLog(@NonNull String name) throws IOException {
         Http11.Raw raw = this.transport.exchange("GET", "/1.0/instances/" + name + "/console",
@@ -803,12 +788,36 @@ public class IncusClient {
         return finished;
     }
 
-    /** Open the websocket of one operation stream ({@code fds} secret). */
-    public @NonNull IncusWebSocket operationWebSocket(@NonNull String operationPath,
-                                                      @NonNull String secret)
-            throws IOException {
-        return this.transport.openWebSocket(operationPath + "/websocket?secret=" + secret,
+    /** Open the websocket of one operation stream; every call is a fresh connection to that stream. */
+    public @NonNull IncusWebSocket operationWebSocket(@NonNull OperationSocket socket) throws IOException {
+        return this.transport.openWebSocket(socket.operationPath() + "/websocket?secret=" + socket.secret(),
             DEFAULT_TIMEOUT_MS);
+    }
+
+    /**
+     * The first stream an operation opened: the operation's path and its {@code fds["0"]} secret.
+     *
+     * @param operationPath {@code /1.0/operations/<id>}
+     * @param secret        the secret its websocket links with
+     */
+    public record OperationSocket(@NonNull String operationPath, @NonNull String secret) {
+
+        /**
+         * @param operation an operation as the daemon returned it
+         * @param what      what the operation is, for the refusal
+         * @throws IOException when it carries no id or no stream secret
+         */
+        public static @NonNull OperationSocket of(@NonNull Map<String, Object> operation, @NonNull String what)
+                throws IOException {
+            Object id = operation.get("id");
+            String secret = operation.get("metadata") instanceof Map<?, ?> meta
+                && meta.get("fds") instanceof Map<?, ?> fds
+                && fds.get("0") instanceof String value ? value : null;
+            if (id == null || secret == null) {
+                throw new IOException(what + " carried no websocket secret");
+            }
+            return new OperationSocket("/1.0/operations/" + id, secret);
+        }
     }
 
     // -- envelope plumbing ----------------------------------------------------
