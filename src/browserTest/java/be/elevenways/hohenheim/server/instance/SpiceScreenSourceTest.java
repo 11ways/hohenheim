@@ -31,7 +31,6 @@ import be.elevenways.zenit.kvm.common.ScreenCapability;
 import be.elevenways.zenit.kvm.common.ScreenMessage;
 import be.elevenways.zenit.kvm.common.ScreenProtocol;
 import be.elevenways.zenit.kvm.common.ScreenStatus;
-import be.elevenways.zenit.kvm.common.VideoCodec;
 import be.elevenways.zenit.kvm.server.ScreenAccess;
 import be.elevenways.zenit.kvm.server.ScreenOptions;
 import be.elevenways.zenit.kvm.server.ScreenSession;
@@ -49,16 +48,15 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
-import static be.elevenways.pepperglass.session.VideoCodec.H264;
 import static be.elevenways.pepperglass.session.VideoCodec.MJPEG;
 import static be.elevenways.pepperglass.session.VideoCodec.VP8;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The SPICE screen source between a Pepperglass session and a zenit-kvm session, its Pepperglass side driven event by
- * event: the primary surface, MJPEG frames passed through or drawn, VP8 and H.264 frames passed through with their
- * codec strings, the cursor, playback, the guest's clipboard and microphone reach the viewer; a paste reaches the
- * guest, a USB device without a way in is let go, and the SPICE session's end ends the screen.
+ * event: it offers resizing and no WebCodecs video; the primary surface, MJPEG frames passed through or drawn, the
+ * cursor, playback, the guest's clipboard and microphone reach the viewer while a VP8 frame is dropped; a paste
+ * reaches the guest, a USB device without a way in is let go, and the SPICE session's end ends the screen.
  *
  * @author Jelle De Loecker
  * @since 0.2.0
@@ -94,14 +92,18 @@ class SpiceScreenSourceTest {
                     channel.drainUntilClosed();
                 })
                 .start()) {
-            SpiceScreenSource source = new SpiceScreenSource(() -> SessionOptions.builder("127.0.0.1",
-                spice.port()));
+            SpiceScreenSource source = new SpiceScreenSource(() -> VmSpice.Link.direct(SessionOptions.builder(
+                "127.0.0.1", spice.port())));
             current = ScreenSession.open(source, ScreenOptions.DEFAULTS);
             ACCESS.grant(ANN, ScreenAccess.CONTROL);
             RecordingScreenSocket viewer = RecordingScreenSocket.as(ScreenAccessTable.principal(ANN)).autoAck(true)
                 .open(ENDPOINT);
             viewer.send(new ScreenMessage.ViewerHello(ScreenProtocol.VERSION,
                 ScreenCapability.maskOf(ScreenCapability.values())));
+            int offered = viewer.await(ScreenMessage.Hello.class, hello -> true).capabilities();
+            assertThat(ScreenCapability.RESIZE.in(offered)).as("the guest takes the controller's size").isTrue();
+            assertThat(ScreenCapability.VIDEO_H264.in(offered) || ScreenCapability.VIDEO_VP8.in(offered)
+                || ScreenCapability.VIDEO_VP9.in(offered)).as("and no WebCodecs video is offered").isFalse();
 
             // 1. The primary surface becomes the screen's surface.
             DisplaySurface primary = new DisplaySurface(0, true,
@@ -128,84 +130,68 @@ class SpiceScreenSourceTest {
                 .as("step 3: the visible part shows the frame, scaled up").isTrue();
             assertThat(viewer.picture().pixel(22, 2)).as("step 3: the covered part keeps the surface").isZero();
 
-            // 4. VP8 starts at its key frame, as vp8, and its delta frames follow; the stream's end ends it.
+            // 4. Only MJPEG is announced to the SPICE server, so a VP8 frame cannot come; one that does is dropped
+            //    instead of reaching a viewer that may have no decoder for it.
             VideoStream vp8 = new VideoStream(0, 0, 3, VP8, 32, 32,
                 new Rect(0, 8, 16, 16), Clip.NONE, true);
-            source.streamFrameReceived(new StreamFrame(vp8, 7, new byte[] {0x01, 0x02}));
             source.streamFrameReceived(new StreamFrame(vp8, 8, new byte[] {0x10, 0x02, 0x00}));
-            source.streamFrameReceived(new StreamFrame(vp8, 9, new byte[] {0x11, 0x02}));
-            ScreenMessage.VideoStart start = viewer.await(ScreenMessage.VideoStart.class, video -> video.stream() == 3);
-            assertThat(start.codec()).as("step 4: a VP8 stream").isEqualTo(VideoCodec.VP8);
-            assertThat(start.codecString()).as("step 4: named vp8").isEqualTo("vp8");
-            viewer.await(ScreenMessage.VideoChunk.class, chunk -> chunk.stream() == 3 && !chunk.keyframe());
-            assertThat(viewer.received(ScreenMessage.VideoChunk.class)).as("step 4: the delta before the key frame"
-                + " is dropped").hasSize(2);
-            assertThat(viewer.received(ScreenMessage.VideoChunk.class).getFirst().timestampMicros())
-                .as("step 4: multimedia milliseconds become microseconds").isEqualTo(8000);
             source.streamDestroyed(vp8);
-            viewer.await(ScreenMessage.VideoEnd.class, end -> end.stream() == 3);
 
-            // 5. H.264 is named by the profile and level of its sequence parameter set.
-            VideoStream h264 = new VideoStream(0, 0, 4, H264, 32, 32,
-                new Rect(0, 8, 16, 16), Clip.NONE, true);
-            source.streamFrameReceived(new StreamFrame(h264, 10, new byte[] {0, 0, 0, 1, 0x67, 0x42, (byte) 0xC0,
-                0x1E, 0, 0, 0, 1, 0x65, (byte) 0x88}));
-            assertThat(viewer.await(ScreenMessage.VideoStart.class, video -> video.stream() == 4).codecString())
-                .as("step 5: the codec string").isEqualTo("avc1.42c01e");
-
-            // 6. The cursor's shape goes as straight RGBA, its position as it moves.
+            // 5. The cursor's shape goes as straight RGBA, its position as it moves.
             source.cursorShapeChanged(new CursorShape(1, 1, 0, 0, new int[] {0x8011FF22}, null));
             ScreenMessage.CursorShape shape = viewer.await(ScreenMessage.CursorShape.class, cursor -> true);
-            assertThat(shape.rgba()).as("step 6: ARGB became RGBA")
+            assertThat(viewer.received(ScreenMessage.VideoStart.class)).as("step 4: no video reached the viewer")
+                .isEmpty();
+            assertThat(shape.rgba()).as("step 5: ARGB became RGBA")
                 .isEqualTo(new byte[] {0x11, (byte) 0xFF, 0x22, (byte) 0x80});
             source.cursorMoved(5, 6);
             viewer.await(ScreenMessage.CursorPosition.class, position -> position.x() == 5 && position.y() == 6);
 
-            // 7. Playback starts, plays and stops as one audio stream.
+            // 6. Playback starts, plays and stops as one audio stream.
             source.playbackStarted(new AudioFormat(2, 48000), AudioEncoding.OPUS);
             source.playbackPacketReceived(new AudioPacket(20, AudioEncoding.OPUS, new byte[] {(byte) 0xF8}));
             source.playbackStopped();
             ScreenMessage.AudioStart audio = viewer.await(ScreenMessage.AudioStart.class, stream -> true);
-            assertThat(audio.codec()).as("step 7: Opus").isEqualTo(AudioCodec.OPUS);
-            assertThat(audio.sampleRate()).as("step 7: at 48 kHz").isEqualTo(48000);
+            assertThat(audio.codec()).as("step 6: Opus").isEqualTo(AudioCodec.OPUS);
+            assertThat(audio.sampleRate()).as("step 6: at 48 kHz").isEqualTo(48000);
             viewer.await(ScreenMessage.AudioChunk.class, chunk -> chunk.timestampMicros() == 20_000);
             viewer.await(ScreenMessage.AudioStop.class, stop -> true);
 
-            // 8. The guest's clipboard and its microphone request reach the controller.
+            // 7. The guest's clipboard and its microphone request reach the controller.
             source.clipboardData(Selection.CLIPBOARD, ClipboardType.UTF8_TEXT,
                 "from the guest".getBytes(StandardCharsets.UTF_8));
             ScreenMessage.Clipboard copied = viewer.await(ScreenMessage.Clipboard.class, clipboard -> true);
-            assertThat(new String(copied.data(), StandardCharsets.UTF_8)).as("step 8: the guest's text")
+            assertThat(new String(copied.data(), StandardCharsets.UTF_8)).as("step 7: the guest's text")
                 .isEqualTo("from the guest");
             source.recordingStarted(new AudioFormat(1, 44100), AudioEncoding.RAW);
             ScreenMessage.MicRequest mic = viewer.await(ScreenMessage.MicRequest.class, ScreenMessage.MicRequest::on);
-            assertThat(mic.codec()).as("step 8: raw PCM").isEqualTo(AudioCodec.PCM_S16LE);
-            assertThat(mic.sampleRate()).as("step 8: at the guest's rate").isEqualTo(44100);
+            assertThat(mic.codec()).as("step 7: raw PCM").isEqualTo(AudioCodec.PCM_S16LE);
+            assertThat(mic.sampleRate()).as("step 7: at the guest's rate").isEqualTo(44100);
 
-            // 9. Once the SPICE session is up, the controller's paste is what the guest receives when it asks.
+            // 8. Once the SPICE session is up, the controller's paste is what the guest receives when it asks.
             assertThat(ScreenMessageLog.waitUntil(() -> {
                 viewer.send(new ScreenMessage.Clipboard("text/plain;charset=utf-8",
                     "to the guest".getBytes(StandardCharsets.UTF_8)));
                 return source.clipboardRequested(Selection.CLIPBOARD, ClipboardType.UTF8_TEXT)
                     instanceof ClipboardReply.Data;
-            }, WAIT)).as("step 9: the paste is offered to the guest").isTrue();
+            }, WAIT)).as("step 8: the paste is offered to the guest").isTrue();
             ClipboardReply.Data pasted = (ClipboardReply.Data) source.clipboardRequested(Selection.CLIPBOARD,
                 ClipboardType.UTF8_TEXT);
-            assertThat(new String(pasted.data(), StandardCharsets.UTF_8)).as("step 9: its text")
+            assertThat(new String(pasted.data(), StandardCharsets.UTF_8)).as("step 8: its text")
                 .isEqualTo("to the guest");
             assertThat(source.clipboardRequested(Selection.CLIPBOARD, ClipboardType.IMAGE_PNG))
-                .as("step 9: nothing in another type").isEqualTo(ClipboardReply.NONE);
+                .as("step 8: nothing in another type").isEqualTo(ClipboardReply.NONE);
 
-            // 10. A USB device the VM has no redirection channel for is let go again.
+            // 9. A USB device the VM has no redirection channel for is let go again.
             byte[] device = {18, 1, 0, 2, 0, 0, 0, 64, 0x34, 0x12, 0x78, 0x56, 0, 1, 0, 0, 0, 1};
             byte[] configuration = {9, 2, 9, 0, 0, 1, 0, (byte) 0x80, 50};
             viewer.send(new ScreenMessage.UsbAttach(7, 0x1234, 0x5678, device, configuration, "", "", ""));
             viewer.await(ScreenMessage.UsbRelease.class, release -> release.device() == 7);
 
-            // 11. The SPICE session ending ends the screen.
+            // 10. The SPICE session ending ends the screen.
             source.disconnected(null);
             viewer.await(ScreenMessage.Status.class, status -> status.status() == ScreenStatus.ENDED);
-            assertThat(current.isEnded()).as("step 11: the screen ended").isTrue();
+            assertThat(current.isEnded()).as("step 10: the screen ended").isTrue();
         } finally {
             if (current != null) {
                 current.close();

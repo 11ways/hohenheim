@@ -4,13 +4,17 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.incus.FakeVgaConsoleDaemon;
+import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.hohenheim.server.instance.VmScreens;
 import be.elevenways.hohenheim.server.instance.VmSpice;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.pepperglass.fixture.ScriptedSpiceServer;
+import be.elevenways.pepperglass.link.Capabilities;
 import be.elevenways.pepperglass.session.SessionOptions;
 import be.elevenways.pepperglass.wire.ChannelType;
 import be.elevenways.pepperglass.wire.DisplayMessages;
@@ -19,6 +23,7 @@ import be.elevenways.pepperglass.wire.MainMessages;
 import be.elevenways.pepperglass.wire.Rect;
 import be.elevenways.pepperglass.wire.WireReader;
 import be.elevenways.pepperglass.wire.WireWriter;
+import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -36,12 +41,14 @@ import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.Cookie;
 import org.junit.jupiter.api.Test;
 
+import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -51,7 +58,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * A VM's screen through the real console page, the real screen socket and the real SPICE path (Pepperglass against
  * a scripted SPICE server standing in for the VM): the viewer sees the screen and drives it, a second viewer only
  * watches until control is handed over, and a viewer whose grant is revoked loses the view; the socket admits exactly
- * the screen mode's audience.
+ * the screen mode's audience; and through a faked Incus daemon, one console operation serves a VM's viewers up to the
+ * cap and ends with the last of them or with a source that failed.
  *
  * @author Jelle De Loecker
  * @since 0.2.0
@@ -81,7 +89,8 @@ class VmScreenJourneyTest extends HohenheimTestBase {
         VmSpice previous = VmSpice.SEAM.installed();
         BrowserContext tenantContext = null;
         try (ScriptedSpiceServer spice = this.spice()) {
-            VmSpice.SEAM.install((serverName, handle) -> SessionOptions.builder("127.0.0.1", spice.port()));
+            VmSpice.SEAM.install((serverName, handle) -> VmSpice.Link.direct(SessionOptions.builder("127.0.0.1",
+                spice.port())));
 
             // 1. The operator opens the screen mode: the VM's screen is drawn, and as its first viewer she drives it.
             navigateToApp("/admin/instances/" + instanceId + "/page/framebuffer");
@@ -157,7 +166,8 @@ class VmScreenJourneyTest extends HohenheimTestBase {
         List<int[]> grants = new ArrayList<>();
         VmSpice previous = VmSpice.SEAM.installed();
         try (ScriptedSpiceServer spice = this.spice()) {
-            VmSpice.SEAM.install((serverName, handle) -> SessionOptions.builder("127.0.0.1", spice.port()));
+            VmSpice.SEAM.install((serverName, handle) -> VmSpice.Link.direct(SessionOptions.builder("127.0.0.1",
+                spice.port())));
             for (int instanceId : new int[] {running, stopped, container, generated[0]}) {
                 grants.add(new int[] {consoleId, instanceId});
                 RecordGrants.grant(GrantSubjectType.USER, consoleId, InstanceModel.MODEL_ID, instanceId,
@@ -204,6 +214,107 @@ class VmScreenJourneyTest extends HohenheimTestBase {
             OwnedInstances.inScopeUnchecked("site", SiteModel.MODEL_ID, 424243,
                 () -> HardDeletes.byId(Models.get(InstanceModel.class), generated[0]));
             Models.get(UserModel.class).delete(viewerId);
+            Models.get(UserModel.class).delete(consoleId);
+        }
+    }
+
+    @Test
+    void oneConsoleServesAVmsViewersUpToItsCapAndEndsWithTheLastOneOrAFailedSource() throws Exception {
+        int consoleId = ApiSupport.user("screen-console-op@hohenheim.local", "Screen console op");
+        int instanceId = vm("screen-console-vm", InstanceModel.STATUS_RUNNING);
+        RecordGrants.grant(GrantSubjectType.USER, consoleId, InstanceModel.MODEL_ID, instanceId,
+            HohenheimAccess.CONSOLE, true);
+        VmSpice previous = VmSpice.SEAM.installed();
+        List<RecordingScreenSocket> viewers = new ArrayList<>();
+        try (ScriptedSpiceServer spice = this.spice()) {
+            FakeVgaConsoleDaemon daemon = new FakeVgaConsoleDaemon(spice.port());
+            VmSpice.SEAM.install((serverName, handle) -> VmSpice.incus(new IncusClient(daemon), handle));
+
+            // 1. Two viewers open the VM's screen at the same moment: both are drawn from ONE console operation,
+            //    whose control websocket holds it open.
+            CountDownLatch go = new CountDownLatch(1);
+            List<Thread> openers = new ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                openers.add(Thread.ofPlatform().start(ExecutionContext.wrap(() -> {
+                    try {
+                        go.await();
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    RecordingScreenSocket opened = open(consoleId, instanceId);
+                    synchronized (viewers) {
+                        viewers.add(opened);
+                    }
+                })));
+            }
+            go.countDown();
+            for (Thread opener : openers) {
+                opener.join(WAIT.toMillis());
+            }
+            assertThat(viewers).as("step 1: both viewers opened").hasSize(2);
+            for (RecordingScreenSocket viewer : viewers) {
+                viewer.await(ScreenMessage.FrameEnd.class, end -> true);
+                assertThat(viewer.picture().pixel(4, 4)).as("step 1: the VM's green screen").isEqualTo(0x00FF00);
+            }
+            assertThat(daemon.started()).as("step 1: one console for both viewers").isEqualTo(1);
+            assertThat(daemon.controlLinked()).as("step 1: its control websocket linked")
+                .containsExactly("/1.0/operations/op-vga-1");
+
+            // 2. The display channel announced MJPEG and no codec a viewer would need WebCodecs for.
+            Capabilities display = daemon.links().stream()
+                .filter(link -> link.type() == ChannelType.DISPLAY).findFirst().orElseThrow().channelCapabilities();
+            assertThat(display.has(Capabilities.DISPLAY_CODEC_MJPEG)).as("step 2: MJPEG announced").isTrue();
+            assertThat(display.has(Capabilities.DISPLAY_CODEC_VP8) || display.has(Capabilities.DISPLAY_CODEC_VP9)
+                || display.has(Capabilities.DISPLAY_CODEC_H264) || display.has(Capabilities.DISPLAY_CODEC_H265))
+                .as("step 2: no WebCodecs codec announced").isFalse();
+
+            // 3. The screen fills up to its cap; the next viewer reads FULL, is closed with 1013, and no second
+            //    console is forced over the first.
+            while (viewers.size() < VmScreens.MAX_VIEWERS) {
+                RecordingScreenSocket more = open(consoleId, instanceId);
+                more.await(ScreenMessage.Role.class, role -> true);
+                viewers.add(more);
+            }
+            RecordingScreenSocket turnedAway = open(consoleId, instanceId);
+            turnedAway.await(ScreenMessage.Status.class, status -> status.status() == ScreenStatus.FULL);
+            assertThat(turnedAway.awaitClose()).as("step 3: closed as try again later").isEqualTo(1013);
+            assertThat(daemon.started()).as("step 3: still one console").isEqualTo(1);
+
+            // 4. The last viewer leaving ends the session, which closes the console's control websocket and
+            //    cancels its operation: nothing is left running on the host.
+            for (RecordingScreenSocket viewer : viewers) {
+                viewer.disconnect();
+            }
+            Poll.until("step 4: the console operation ended with the last viewer", WAIT,
+                () -> daemon.running().isEmpty());
+            assertThat(daemon.requests).as("step 4: its operation was cancelled")
+                .contains("DELETE /1.0/operations/op-vga-1 null");
+        } finally {
+            VmSpice.SEAM.restoreInstalled(previous);
+        }
+
+        int closedPort;
+        try (ServerSocket probe = new ServerSocket(0)) {
+            closedPort = probe.getLocalPort();
+        }
+        try {
+            // 5. A console whose SPICE server cannot be reached fails its source: the viewer reads the screen as
+            //    unavailable, and the console it started is ended all the same.
+            FakeVgaConsoleDaemon unreachable = new FakeVgaConsoleDaemon(closedPort);
+            VmSpice.SEAM.install((serverName, handle) -> VmSpice.incus(new IncusClient(unreachable), handle));
+            RecordingScreenSocket failed = open(consoleId, instanceId);
+            failed.await(ScreenMessage.Status.class, status -> status.status() == ScreenStatus.UNAVAILABLE);
+            Poll.until("step 5: the failed console operation ended", WAIT, () -> unreachable.running().isEmpty());
+            // A source that failed before the viewer joined is looked up once more, so one or two consoles.
+            assertThat(unreachable.started()).as("step 5: its console had been started").isBetween(1, 2);
+            assertThat(unreachable.controlLinked()).as("step 5: each held by its control websocket")
+                .hasSize(unreachable.started());
+        } finally {
+            VmSpice.SEAM.restoreInstalled(previous);
+            RecordGrants.revoke(GrantSubjectType.USER, consoleId, InstanceModel.MODEL_ID, instanceId,
+                HohenheimAccess.CONSOLE);
+            HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
             Models.get(UserModel.class).delete(consoleId);
         }
     }

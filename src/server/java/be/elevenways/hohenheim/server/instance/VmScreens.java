@@ -24,11 +24,19 @@ import java.util.Map;
  * AIDEV-NOTE: the gate is the open-framebuffer operation's offer, which the screen mode's tab asks too: its holders
  * (CONSOLE, which MANAGE implies) see and may drive the screen, anyone else is closed 1008 at open and on the next
  * revalidation. Who drives at a given moment is the session's call: the first viewer, until it hands control over.
+ * One session per VM, so a second viewer never forces a second console over the first; a viewer past
+ * {@link #MAX_VIEWERS} reads that the screen is full.
  *
  * @author Jelle De Loecker
  * @since 0.2.0
  */
 public final class VmScreens {
+
+    /** Viewers one VM's screen admits at once; each may hold up to the session's queued-bytes bound. */
+    public static final int MAX_VIEWERS = 4;
+
+    private static final ScreenOptions OPTIONS = ScreenOptions.DEFAULTS.endingWhenUnwatched()
+        .withMaxViewers(MAX_VIEWERS);
 
     private static final Map<Integer, ScreenSession> LIVE = new HashMap<>();
 
@@ -61,7 +69,7 @@ public final class VmScreens {
                 return live;
             }
             opened = ScreenSession.open(new SpiceScreenSource(() -> VmSpice.SEAM.require().connect(serverName,
-                handle)), ScreenOptions.DEFAULTS.endingWhenUnwatched());
+                handle)), OPTIONS);
             LIVE.put(instanceId, opened);
         }
         opened.onEnd(() -> {

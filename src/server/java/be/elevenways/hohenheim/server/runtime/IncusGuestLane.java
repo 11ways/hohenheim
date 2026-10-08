@@ -59,7 +59,8 @@ final class IncusGuestLane {
 
     ConsoleStreamSupport.@NonNull Console openConsole(@NonNull String handle) throws IOException {
         IncusWebSocket socket = this.incus.operationWebSocket(IncusClient.OperationSocket.of(
-            this.incus.startConsole(handle), "Incus console operation of '" + handle + "'"));
+            this.incus.startConsole(handle), IncusClient.OperationSocket.DATA,
+            "Incus console operation of '" + handle + "'"));
         // /dev/console is bidirectional by construction: what we write IS delivered to
         // the workload's console, unlike Docker's discarded attach-without-OpenStdin.
         // AIDEV-NOTE: NOT declared interactive, deliberately. /dev/console of a system
