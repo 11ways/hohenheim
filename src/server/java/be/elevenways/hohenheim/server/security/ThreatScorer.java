@@ -363,12 +363,16 @@ public final class ThreatScorer {
 
     /** Whether this source actor's in-window weighted score exceeds the ban threshold. */
     public boolean isOverThreshold(String ip) {
+        return scoreOf(ip) > banThreshold;
+    }
+
+    /** @return this source actor's in-window weighted score, 0 for one never scored */
+    public int scoreOf(String ip) {
+        refreshSettings();
         Entry entry = entries.get(keyFor(ip));
         if (entry == null) {
-            return false;
+            return 0;
         }
-        refreshSettings();
-        long now = clock.getAsLong();
-        return entry.recentPointCount(now - windowSeconds * 1000L) > banThreshold;
+        return entry.recentPointCount(clock.getAsLong() - windowSeconds * 1000L);
     }
 }

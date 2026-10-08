@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.runtime;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -67,12 +68,48 @@ public interface InstanceFileSupport {
         throws IOException;
 
     /**
+     * {@link #readFile} streamed to a host file, never through the heap.
+     *
+     * @param maxBytes cap enforced DURING the transfer; over-size THROWS and leaves no
+     *                 partial {@code out}
+     * @return the bytes written to {@code out}
+     */
+    long readFileTo(@NonNull String handle, @NonNull String path, @NonNull Path out, long maxBytes)
+        throws IOException;
+
+    /**
      * Create or replace one file. The workload must carry {@code ownerLabels} -- a
      * same-named FOREIGN container is a loud refusal, never a write.
      */
     void writeFile(@NonNull String handle, @NonNull String path, byte @NonNull [] content,
                    @NonNull String mode, @NonNull Map<String, String> ownerLabels)
         throws IOException;
+
+    /**
+     * {@link #writeFile} from a host file, streamed: the content never sits in the heap.
+     *
+     * AIDEV-NOTE: {@code source}'s own permission bits are set to {@code mode}, because
+     * the archive entry carries the file's mode; a caller passes a file it owns.
+     */
+    void writeFileFrom(@NonNull String handle, @NonNull String path, @NonNull Path source,
+                       @NonNull String mode, @NonNull Map<String, String> ownerLabels)
+        throws IOException;
+
+    /**
+     * Set one entry's permission bits; never through a symlink. The workload must carry
+     * {@code ownerLabels}, exactly as for {@link #writeFile}.
+     *
+     * @param mode permission bits only (no setuid, setgid or sticky), as {@code 0644}
+     */
+    void setMode(@NonNull String handle, @NonNull String path, @NonNull String mode,
+                 @NonNull Map<String, String> ownerLabels) throws IOException;
+
+    /**
+     * Set one entry's modification time; never through a symlink. The workload must
+     * carry {@code ownerLabels}, exactly as for {@link #writeFile}.
+     */
+    void setModified(@NonNull String handle, @NonNull String path, long epochSeconds,
+                     @NonNull Map<String, String> ownerLabels) throws IOException;
 
     /** Create one directory; an existing path is a refusal, never a silent success. */
     void makeDirectory(@NonNull String handle, @NonNull String path,

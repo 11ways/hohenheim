@@ -26,6 +26,20 @@
     Zenit.Params.zenit.return_to identifier). Never spell "_return" here by hand. -#}
 {% declare returnParam: String %}
 {% declare head: RecordHeadState = null %}
+{#- The "Connect with SFTP" card, drawn for a runtime with a file lane (InstanceFilesPage.putSftpCard). -#}
+{% declare sftpShown: Boolean = false %}
+{% declare sftpEnabled: Boolean = false %}
+{% declare sftpRunning: Boolean = false %}
+{% declare sftpOperator: Boolean = false %}
+{% declare sftpHost: String = "" %}
+{% declare sftpPort: String = "" %}
+{% declare sftpUsername: String = "" %}
+{% declare sftpFingerprint: String = "" %}
+{% declare sftpKeys: String = "" %}
+{% declare sftpPasswordScopes: String = "" %}
+{% declare sftpPasswordTarget: RouteTarget = null %}
+{% declare sftpKeysTarget: RouteTarget = null %}
+{% declare sftpSettingsTarget: RouteTarget = null %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
@@ -123,6 +137,80 @@
             </pl-empty-state>
             {% /if %}
         </pl-card-content>
+    </pl-card>
+    {% /if %}
+
+    {#- Where to connect with an SFTP client and with what. It only draws: the SFTP server asks files.read and
+        files.write itself on every request, and zenit-auth's mint refuses a password scope the viewer lacks. -#}
+    {% if sftpShown %}
+    <pl-card data-sftp-card="1">
+        <pl-card-header>
+            <pl-card-title>{{ t("sftp_title", scope: "instance_files") }}</pl-card-title>
+            {% if sftpEnabled %}
+            <pl-card-description>{{ t("sftp_intro", scope: "instance_files") }}</pl-card-description>
+            <pl-card-description>{{ t("sftp_no_login_password", scope: "instance_files") }}</pl-card-description>
+            <pl-card-description>{{ t("sftp_running_hint", scope: "instance_files") }}</pl-card-description>
+            {% else %}
+            <pl-card-description>{{ t("sftp_off", scope: "instance_files") }}</pl-card-description>
+            {% if !sftpOperator %}
+            <pl-card-description>{{ t("sftp_off_hint", scope: "instance_files") }}</pl-card-description>
+            {% /if %}
+            {% /if %}
+        </pl-card-header>
+        {% if sftpEnabled %}
+        <pl-card-content>
+            {% if !sftpRunning %}
+            <pl-alert variant="warning" data-sftp-not-running="1">{{ t("sftp_not_running", scope: "instance_files") }}</pl-alert>
+            {% /if %}
+            <pl-table>
+                <pl-table-body>
+                    <pl-table-row>
+                        <pl-table-cell>{{ t("sftp_address", scope: "instance_files") }}</pl-table-cell>
+                        <pl-table-cell><code data-sftp-host="1">{{ sftpHost }}</code></pl-table-cell>
+                    </pl-table-row>
+                    <pl-table-row>
+                        <pl-table-cell>{{ t("sftp_port", scope: "instance_files") }}</pl-table-cell>
+                        <pl-table-cell><code data-sftp-port="1">{{ sftpPort }}</code></pl-table-cell>
+                    </pl-table-row>
+                    {% if sftpUsername != "" %}
+                    <pl-table-row>
+                        <pl-table-cell>{{ t("sftp_username", scope: "instance_files") }}</pl-table-cell>
+                        <pl-table-cell>
+                            <code data-sftp-username="1">{{ sftpUsername }}</code>
+                            <pl-copy-button value={% sftpUsername %} ariaLabel={% t("sftp_copy_username", scope: "instance_files") %}></pl-copy-button>
+                        </pl-table-cell>
+                    </pl-table-row>
+                    {% /if %}
+                    <pl-table-row>
+                        <pl-table-cell>{{ t("sftp_sign_in_with", scope: "instance_files") }}</pl-table-cell>
+                        <pl-table-cell data-sftp-credentials="1">{% if sftpKeys != "" %}{{ t("sftp_with_keys", scope: "instance_files", keys: sftpKeys) }}{% else %}{{ t("sftp_with_password", scope: "instance_files") }}{% /if %}</pl-table-cell>
+                    </pl-table-row>
+                    <pl-table-row>
+                        <pl-table-cell>{{ t("sftp_password_scopes", scope: "instance_files") }}</pl-table-cell>
+                        <pl-table-cell>
+                            <code data-sftp-scopes="1">{{ sftpPasswordScopes }}</code>
+                            <pl-copy-button value={% sftpPasswordScopes %} ariaLabel={% t("sftp_copy_scopes", scope: "instance_files") %}></pl-copy-button>
+                        </pl-table-cell>
+                    </pl-table-row>
+                    {% if sftpFingerprint != "" %}
+                    <pl-table-row>
+                        <pl-table-cell>{{ t("sftp_fingerprint", scope: "instance_files") }}</pl-table-cell>
+                        <pl-table-cell><code data-sftp-fingerprint="1">{{ sftpFingerprint }}</code></pl-table-cell>
+                    </pl-table-row>
+                    {% /if %}
+                </pl-table-body>
+            </pl-table>
+        </pl-card-content>
+        {% /if %}
+        <pl-card-footer>
+            {% if sftpEnabled %}
+            <pl-button variant="primary" use:Zenit.route={% sftpPasswordTarget %} data-sftp-password="1">{{ t("sftp_create_password", scope: "instance_files") }}</pl-button>
+            <pl-button variant="outline" use:Zenit.route={% sftpKeysTarget %}>{{ t("sftp_add_key", scope: "instance_files") }}</pl-button>
+            {% /if %}
+            {% if sftpOperator && (!sftpEnabled || !sftpRunning) %}
+            <pl-button variant="outline" use:Zenit.route={% sftpSettingsTarget %} data-sftp-settings="1">{{ t("sftp_open_settings", scope: "instance_files") }}</pl-button>
+            {% /if %}
+        </pl-card-footer>
     </pl-card>
     {% /if %}
 

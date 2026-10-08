@@ -1386,6 +1386,78 @@ public class HohenheimSettings {
             .build();
     }
 
+    // --- SFTP to app files ---
+    // AIDEV-NOTE: every value is host-only: the server binds a port and decides what reaches a host's files, which is
+    // power over the host (the 2026-10-07 setting-authority rule), and each one is read once when the server starts.
+    public abstract class Sftp {
+        public static final SettingGroup GROUP = HOHENHEIM.createGroup("sftp")
+            .label(Microcopy.of("settings.hohenheim.sftp.label"))
+            .describe(Microcopy.of("settings.hohenheim.sftp.help"))
+            .icon("folder-tree");
+
+        public static final SettingDefinition<Boolean> ENABLED = GROUP.buildSetting("enabled", Boolean.class)
+            .hostOnly()
+            .defaultValue(false)
+            .description("Run Hohenheim's own SFTP server for app files: accounts sign in with an SFTP password "
+                + "(an API key) or their SSH key and reach the same files, under the same files.read and "
+                + "files.write checks, as the Files tab. Never the host's sshd or its Linux accounts")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<Integer> PORT = GROUP.buildSetting("port", Integer.class)
+            .hostOnly()
+            .defaultValue(2022)
+            .description("TCP port the SFTP server listens on. While SFTP is on, this port also joins the SSH ban "
+                + "rule (security.nftables_ssh_ports), so an address banned for SSH brute force is dropped here too")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<String> BIND_ADDRESS = GROUP.buildSetting("bind_address", String.class)
+            .hostOnly()
+            .description("Address the SFTP server binds to; blank listens on every address")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<String> PUBLIC_HOST = GROUP.buildSetting("public_host", String.class)
+            .hostOnly()
+            .description("The address the Files tab tells people to connect to; blank shows the address the "
+                + "admin page itself was opened on")
+            .build();
+
+        public static final SettingDefinition<Integer> MAX_FILE_MB = GROUP.buildSetting("max_file_mb", Integer.class)
+            .hostOnly()
+            .defaultValue(4096)
+            .suffix("MiB")
+            .description("Largest file one SFTP read or upload moves. Separate from files.max_file_kb because SFTP "
+                + "spools to disk while the browser lane holds a file in memory")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<Integer> MAX_SESSIONS = GROUP.buildSetting("max_sessions", Integer.class)
+            .hostOnly()
+            .defaultValue(32)
+            .description("Open SFTP sessions across all accounts; one more is refused when it signs in")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<Integer> MAX_SESSIONS_PER_ACCOUNT = GROUP
+            .buildSetting("max_sessions_per_account", Integer.class)
+            .hostOnly()
+            .defaultValue(4)
+            .description("Open SFTP sessions of one account")
+            .restartRequired()
+            .build();
+
+        public static final SettingDefinition<Integer> IDLE_TIMEOUT_MINUTES = GROUP
+            .buildSetting("idle_timeout_minutes", Integer.class)
+            .hostOnly()
+            .defaultValue(15)
+            .suffix("min")
+            .description("A session without traffic for this long is closed")
+            .restartRequired()
+            .build();
+    }
+
     // --- Instance snapshots and backups ---
     public abstract class Backup {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("backup")

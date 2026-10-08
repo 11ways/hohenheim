@@ -35,6 +35,7 @@
             "ProcessConfinementTest",
             "ProcessNetworkIsolationTest",
             "ProclogProxyIngressTest",
+            "SftpJourneyTest",
             "StackInstancesTest",
             "StackNetworkIsolationTest",
             "StackRuntimeFlowTest",

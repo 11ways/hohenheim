@@ -408,7 +408,7 @@ final class DeleteImpact {
     }
 
     /** @return the lowercased hostname this request arrived on, or null when unknowable */
-    private static @Nullable String arrivalHostname(@Nullable Conduit conduit) {
+    static @Nullable String arrivalHostname(@Nullable Conduit conduit) {
         String requestOrigin = conduit == null ? null : conduit.getRequestOrigin();
         if (requestOrigin == null || requestOrigin.isEmpty()) {
             return null;

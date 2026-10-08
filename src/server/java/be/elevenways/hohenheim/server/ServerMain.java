@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.dns.DnsNotifier;
 import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.SecondaryZoneService;
+import be.elevenways.hohenheim.server.files.HohenheimSftp;
 import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.quota.QuotaReconciler;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -254,6 +255,11 @@ public class ServerMain {
             roleSkip(HohenheimRoles.Role.DNS,
                 "zone store, federation and DNS listeners not started");
         }
+
+        // SFTP to app files, when the operator turned it on: the Files tab's third lane, on
+        // every node that serves the Files tab. A failure to bind is kept for the dashboard's
+        // attention band, never a refused boot.
+        HohenheimSftp.startIfEnabled();
     }
 
     /**
@@ -361,6 +367,7 @@ public class ServerMain {
                 secondaryZoneService.stop();
             }
         });
+        shutdownStep("sftp server", HohenheimSftp::stop);
         shutdownStep("spamservice", () -> SpamserviceManager.get().shutdown());
         // Destroy the journalctl child; a leaked follow survives the JVM.
         shutdownStep("ssh auth watcher", SshAuthWatcher.INSTANCE::stop);

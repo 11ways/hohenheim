@@ -13528,6 +13528,22 @@
   "settings.hohenheim.files.max_entries.help": "Bovengrens op het aantal items dat een maplijst teruggeeft; een grotere map wordt niet getoond in plaats van als afgekapte lijst.",
   "settings.hohenheim.files.max_file_kb.label": "Max. bestandsgrootte",
   "settings.hohenheim.files.max_file_kb.help": "Bovengrens in KiB voor een bestand dat via het bestandsbeheer gelezen of geschreven wordt, afgedwongen tijdens de overdracht zodat er nooit een half bestand achterblijft.",
+  "settings.hohenheim.sftp.enabled.label": "SFTP voor app-bestanden",
+  "settings.hohenheim.sftp.enabled.help": "Draai de eigen SFTP-server van Hohenheim: accounts melden zich aan met een SFTP-wachtwoord of hun SSH-sleutel en bereiken dezelfde bestanden, met dezelfde rechten, als het tabblad Bestanden. Nooit de sshd of de accounts van de host.",
+  "settings.hohenheim.sftp.port.label": "SFTP-poort",
+  "settings.hohenheim.sftp.port.help": "TCP-poort waarop de SFTP-server luistert; zolang SFTP aanstaat valt ze ook onder de SSH-blokkeerregel, zodat een adres dat voor SSH-misbruik geblokkeerd is ook hier geweerd wordt.",
+  "settings.hohenheim.sftp.bind_address.label": "SFTP-bindadres",
+  "settings.hohenheim.sftp.bind_address.help": "Adres waaraan de SFTP-server bindt; leeg luistert op elk adres.",
+  "settings.hohenheim.sftp.public_host.label": "Getoond SFTP-adres",
+  "settings.hohenheim.sftp.public_host.help": "Het adres dat het tabblad Bestanden opgeeft om mee te verbinden; leeg toont het adres waarop de beheerpagina geopend werd.",
+  "settings.hohenheim.sftp.max_file_mb.label": "Max. SFTP-bestandsgrootte",
+  "settings.hohenheim.sftp.max_file_mb.help": "Grootste bestand in MiB dat een SFTP-lees- of uploadactie verplaatst; los van de limiet van het tabblad Bestanden omdat SFTP via schijf werkt.",
+  "settings.hohenheim.sftp.max_sessions.label": "Max. SFTP-sessies",
+  "settings.hohenheim.sftp.max_sessions.help": "Open SFTP-sessies over alle accounts samen; een extra sessie wordt bij het aanmelden geweigerd.",
+  "settings.hohenheim.sftp.max_sessions_per_account.label": "Max. SFTP-sessies per account",
+  "settings.hohenheim.sftp.max_sessions_per_account.help": "Open SFTP-sessies die een account tegelijk mag hebben.",
+  "settings.hohenheim.sftp.idle_timeout_minutes.label": "SFTP-inactiviteitslimiet",
+  "settings.hohenheim.sftp.idle_timeout_minutes.help": "Minuten zonder verkeer waarna een SFTP-sessie gesloten wordt.",
   "settings.hohenheim.hosts.contact_max_age_minutes.label": "Maximale leeftijd van het hostcontact (minuten)",
   "settings.hohenheim.hosts.contact_max_age_minutes.help": "Aantal minuten sinds het laatste antwoord van de daemon van een host waarna er geen nieuwe workloads meer op geplaatst worden, terwijl de workloads die er al draaien ongemoeid blijven; 0 of minder heft de grens op.",
   "settings.hohenheim.incus.controller_presence_grace_hours.label": "Respijt voor controlleraanwezigheid (uren)",
@@ -13727,6 +13743,8 @@
   "settings.hohenheim.previews.help": "Tijdelijke previewomgevingen per branch van Docker-sites uit git, bereikbaar via gegenereerde hostnamen onder één basisdomein",
   "settings.hohenheim.files.label": "Instantiebestanden",
   "settings.hohenheim.files.help": "Grenzen voor de bestandsbeheerder per instantie (bladeren, bewerken, uploaden, downloaden)",
+  "settings.hohenheim.sftp.label": "Verbinden met SFTP",
+  "settings.hohenheim.sftp.help": "De eigen SFTP-server van Hohenheim voor app-bestanden, met SFTP-wachtwoorden en SSH-sleutels van accounts",
   "settings.hohenheim.backup.label": "Instantieback-ups",
   "settings.hohenheim.backup.help": "Instantiesnapshots (lokaal op de host) en versleutelde back-upexports naar een andere host",
   "settings.spamservice.label": "Spamservice",
@@ -16144,5 +16162,97 @@
       "scope": "database_status",
       "case": "sentence"
     }
-  ]
+  ],
+  "sftp_title": {
+    "text": "Verbinden met SFTP",
+    "scope": "instance_files"
+  },
+  "sftp_intro": {
+    "text": "Gebruik FileZilla, WinSCP of sftp. Je bereikt dezelfde bestanden als hier, met dezelfde rechten, en elke wijziging verschijnt in de Geschiedenis van deze app.",
+    "scope": "instance_files"
+  },
+  "sftp_off": {
+    "text": "SFTP staat uit op deze server.",
+    "scope": "instance_files"
+  },
+  "sftp_off_hint": {
+    "text": "Een beheerder kan het aanzetten in de instellingen.",
+    "scope": "instance_files"
+  },
+  "sftp_not_running": {
+    "text": "SFTP staat aan maar de server draait niet, dus verbinden lukt voorlopig niet.",
+    "scope": "instance_files"
+  },
+  "sftp_address": {
+    "text": "Adres",
+    "scope": "instance_files"
+  },
+  "sftp_port": {
+    "text": "Poort",
+    "scope": "instance_files"
+  },
+  "sftp_username": {
+    "text": "Gebruikersnaam",
+    "scope": "instance_files"
+  },
+  "sftp_copy_username": {
+    "text": "Gebruikersnaam kopiëren",
+    "scope": "instance_files"
+  },
+  "sftp_sign_in_with": {
+    "text": "Aanmelden met",
+    "scope": "instance_files"
+  },
+  "sftp_with_keys": {
+    "text": "Je SSH-sleutel ({$keys}), of een SFTP-wachtwoord",
+    "scope": "instance_files"
+  },
+  "sftp_with_password": {
+    "text": "Een SFTP-wachtwoord, of een SSH-sleutel die je aan je account toevoegt",
+    "scope": "instance_files"
+  },
+  "sftp_fingerprint": {
+    "text": "Vingerafdruk van de server",
+    "scope": "instance_files"
+  },
+  "sftp_no_login_password": {
+    "text": "Je aanmeldwachtwoord werkt hier niet: maak een SFTP-wachtwoord aan, een API-sleutel met de scopes hieronder, die je apart kunt intrekken.",
+    "scope": "instance_files"
+  },
+  "sftp_password_scopes": {
+    "text": "Scopes voor een SFTP-wachtwoord",
+    "scope": "instance_files"
+  },
+  "sftp_copy_scopes": {
+    "text": "Scopes kopiëren",
+    "scope": "instance_files"
+  },
+  "sftp_create_password": {
+    "text": "SFTP-wachtwoord aanmaken",
+    "scope": "instance_files"
+  },
+  "sftp_add_key": {
+    "text": "SSH-sleutel toevoegen",
+    "scope": "instance_files"
+  },
+  "sftp_running_hint": {
+    "text": "Mappen tonen lukt alleen als de app draait; start ze eerst als ze gestopt is.",
+    "scope": "instance_files"
+  },
+  "sftp_open_settings": {
+    "text": "SFTP-instellingen openen",
+    "scope": "instance_files"
+  },
+  "files_mode_refused": {
+    "text": "Alleen rechten van 0000 tot 0777 kunnen ingesteld worden",
+    "scope": "violations"
+  },
+  "files_link_refused": {
+    "text": "Een symbolische koppeling kan hier niet gewijzigd worden",
+    "scope": "violations"
+  },
+  "sftp_server": {
+    "text": "SFTP staat aan maar draait niet",
+    "scope": "attention_title"
+  }
 }

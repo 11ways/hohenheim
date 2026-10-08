@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceFileSupport;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -18,12 +19,15 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * THE per-instance file manager: browse, read, write, upload, download, rename, delete
@@ -85,6 +89,9 @@ public final class InstanceFiles {
     /** Write, upload, rename, delete, mkdir. Elevated: it changes what runs. */
     public static final String WRITE = HohenheimAccess.FILES_WRITE;
 
+    /** What {@link #setMode} accepts: permission bits only, never setuid, setgid or sticky. */
+    private static final Pattern PERMISSION_BITS = Pattern.compile("0?[0-7]{3}");
+
     private final @NonNull InstanceService instances;
 
     public InstanceFiles() {
@@ -106,6 +113,27 @@ public final class InstanceFiles {
      */
     public record Entry(@NonNull String name, @NonNull String path, @NonNull String kind,
                         long size, long modified, @NonNull String mode, boolean managed) {}
+
+    /**
+     * The instance whose files a caller OUTSIDE the panel (the automation API, SFTP) may
+     * reach: live, authored, and its files readable to {@code ctx}.
+     *
+     * AIDEV-NOTE: absent, trashed, product-tier generated and not permitted are ONE answer,
+     * so probing another tenant's id reads exactly like probing a missing one. The
+     * {@link InstanceModel#liveAuthored} clause is the scope InstanceApi and
+     * TenantScopes.INSTANCES apply: docs/paas-api.md says the automation API never drives a
+     * generated instance, and visibility rides files.read because an id whose files the
+     * caller may not even list must read as nonexistent.
+     *
+     * @return the instance row, or null for every refusal alike
+     */
+    public static @Nullable Row reachableInstance(@NonNull AccessContext ctx, int instanceId) {
+        Row row = Models.get(InstanceModel.class).find()
+            .where(InstanceModel.ID.eq(instanceId))
+            .where(InstanceModel.liveAuthored())
+            .first();
+        return row == null || !HohenheimAccess.hasInstanceCapability(ctx, instanceId, READ) ? null : row;
+    }
 
     // -- read lane ------------------------------------------------------------
 
@@ -178,21 +206,64 @@ public final class InstanceFiles {
     public byte @NonNull [] read(int instanceId, @NonNull String requestedPath) {
         Opened opened = open(instanceId, READ);
         InstanceFilePath target = opened.parse(requestedPath);
-        InstanceFileSupport.Entry leaf = opened.walk(target);
+        long cap = maxFileBytes();
+        requireReadableFile(opened.walk(target), cap);
+        try {
+            return opened.files().readFile(opened.handle(), target.absolute(), cap);
+        } catch (IOException e) {
+            throw failure(e);
+        }
+    }
+
+    /**
+     * A read's leaf must be a regular file within the cap.
+     *
+     * AIDEV-NOTE: a symlink LEAF is refused for reading too: following it is the daemon's
+     * resolution, not ours, and it lands wherever the link points.
+     */
+    private static void requireReadableFile(InstanceFileSupport.@Nullable Entry leaf, long cap) {
         if (leaf == null) {
             throw refusal("files_not_found");
         }
-        // A symlink LEAF is refused for reading too: following it is the daemon's
-        // resolution, not ours, and it lands wherever the link points.
         if (leaf.kind() != InstanceFileSupport.Kind.FILE) {
             throw refusal("files_not_a_file");
         }
-        long cap = maxFileBytes();
         if (leaf.size() > cap) {
             throw tooLarge(cap);
         }
+    }
+
+    /**
+     * What one path is, without following a symlink.
+     *
+     * @return the entry, or null when nothing is there (an absent ancestor included)
+     * @throws Violations {@code files_path_refused} for a path outside the volumes or
+     *         through a symlinked or non-directory ancestor
+     */
+    public @Nullable Entry stat(int instanceId, @NonNull String requestedPath) {
+        Opened opened = open(instanceId, READ);
+        InstanceFilePath target = opened.parse(requestedPath);
+        InstanceFileSupport.Entry leaf = opened.lookup(target);
+        if (leaf == null) {
+            return null;
+        }
+        return new Entry(target.name(), target.absolute(), leaf.kind().name(), leaf.size(),
+            leaf.modified(), leaf.mode(), managedPaths(instanceId).contains(target.absolute()));
+    }
+
+    /**
+     * {@link #read} streamed to a host file, for a transport that spools to disk.
+     *
+     * @param maxBytes the caller's cap, enforced before and DURING the transfer
+     * @return the bytes written to {@code out}
+     * @throws Violations {@code files_too_large} with nothing usable left in {@code out}
+     */
+    public long readTo(int instanceId, @NonNull String requestedPath, @NonNull Path out, long maxBytes) {
+        Opened opened = open(instanceId, READ);
+        InstanceFilePath target = opened.parse(requestedPath);
+        requireReadableFile(opened.walk(target), maxBytes);
         try {
-            return opened.files().readFile(opened.handle(), target.absolute(), cap);
+            return opened.files().readFileTo(opened.handle(), target.absolute(), out, maxBytes);
         } catch (IOException e) {
             throw failure(e);
         }
@@ -207,20 +278,65 @@ public final class InstanceFiles {
         if (content.length > cap) {
             throw tooLarge(cap);
         }
-        Opened opened = resolveOpened(instanceId);
-        InstanceFilePath target = opened.parse(requestedPath);
-        requireNotManaged(instanceId, target);
-        InstanceFileSupport.Entry leaf = opened.walk(target);
-        String mode = "0644";
-        if (leaf != null) {
-            if (leaf.kind() != InstanceFileSupport.Kind.FILE) {
-                throw refusal("files_not_a_file");
-            }
-            mode = leaf.mode();
-        }
+        FileTarget target = fileTarget(instanceId, requestedPath, true);
         try {
-            opened.files().writeFile(opened.handle(), target.absolute(), content, mode,
-                opened.ownerLabels());
+            target.opened().files().writeFile(target.opened().handle(), target.path().absolute(), content,
+                target.mode(), target.opened().ownerLabels());
+        } catch (IOException e) {
+            throw failure(e);
+        }
+    }
+
+    /**
+     * {@link #write} from a host file, streamed, for a transport that spools to disk.
+     *
+     * @param replace  false when only a new file may be created: an existing one refuses
+     * @param maxBytes the caller's cap on the file
+     */
+    public void writeFrom(int instanceId, @NonNull String requestedPath, @NonNull Path source,
+                          boolean replace, long maxBytes) {
+        HohenheimAccess.requireOperationCapability(instanceId, WRITE);
+        try {
+            if (Files.size(source) > maxBytes) {
+                throw tooLarge(maxBytes);
+            }
+        } catch (IOException e) {
+            throw failure(e);
+        }
+        FileTarget target = fileTarget(instanceId, requestedPath, replace);
+        try {
+            target.opened().files().writeFileFrom(target.opened().handle(), target.path().absolute(), source,
+                target.mode(), target.opened().ownerLabels());
+        } catch (IOException e) {
+            throw failure(e);
+        }
+    }
+
+    /**
+     * Set one file's or directory's permission bits.
+     *
+     * @param mode permission bits only, as octal ({@code 0644}); setuid, setgid and sticky
+     *             refuse, so no transport can mint a setuid binary in a workload
+     */
+    public void setMode(int instanceId, @NonNull String requestedPath, @NonNull String mode) {
+        if (!PERMISSION_BITS.matcher(mode).matches()) {
+            throw refusal("files_mode_refused");
+        }
+        AttributeTarget target = attributeTarget(instanceId, requestedPath);
+        try {
+            target.opened().files().setMode(target.opened().handle(), target.path().absolute(), mode,
+                target.opened().ownerLabels());
+        } catch (IOException e) {
+            throw failure(e);
+        }
+    }
+
+    /** Set one file's or directory's modification time. */
+    public void setModified(int instanceId, @NonNull String requestedPath, long epochSeconds) {
+        AttributeTarget target = attributeTarget(instanceId, requestedPath);
+        try {
+            target.opened().files().setModified(target.opened().handle(), target.path().absolute(),
+                epochSeconds, target.opened().ownerLabels());
         } catch (IOException e) {
             throw failure(e);
         }
@@ -321,9 +437,72 @@ public final class InstanceFiles {
          */
         InstanceFileSupport.@Nullable Entry walk(@NonNull InstanceFilePath target) {
             InstanceFileSupport files = files();
-            requireContainedParents(files, handle(), target);
+            if (!containedParents(files, handle(), target)) {
+                throw InstanceFilePath.refused();
+            }
             return statOrNull(files, handle(), target.absolute());
         }
+
+        /**
+         * {@link #walk}, except an ABSENT ancestor means nothing is there instead of a
+         * refusal: a question about existence answers it, while a symlinked or
+         * non-directory ancestor is still the one refusal.
+         *
+         * @return the leaf, or null when it or an ancestor is not there
+         */
+        InstanceFileSupport.@Nullable Entry lookup(@NonNull InstanceFilePath target) {
+            InstanceFileSupport files = files();
+            if (!containedParents(files, handle(), target)) {
+                return null;
+            }
+            return statOrNull(files, handle(), target.absolute());
+        }
+    }
+
+    /** Where a whole-file write lands: the contained target and the mode it keeps. */
+    private record FileTarget(@NonNull Opened opened, @NonNull InstanceFilePath path, @NonNull String mode) {}
+
+    /**
+     * The shared preamble of both write lanes, the capability already asked: contained,
+     * not managed, and a regular file when something is there (whose mode it keeps).
+     *
+     * @param replace false when an existing file refuses
+     */
+    private @NonNull FileTarget fileTarget(int instanceId, @NonNull String requestedPath, boolean replace) {
+        Opened opened = resolveOpened(instanceId);
+        InstanceFilePath target = opened.parse(requestedPath);
+        requireNotManaged(instanceId, target);
+        InstanceFileSupport.Entry leaf = opened.walk(target);
+        if (leaf == null) {
+            return new FileTarget(opened, target, "0644");
+        }
+        if (leaf.kind() != InstanceFileSupport.Kind.FILE) {
+            throw refusal("files_not_a_file");
+        }
+        if (!replace) {
+            throw refusal("files_exists");
+        }
+        return new FileTarget(opened, target, leaf.mode());
+    }
+
+    /** An entry whose attributes change: contained, not managed, never a link or a volume root. */
+    private record AttributeTarget(@NonNull Opened opened, @NonNull InstanceFilePath path) {}
+
+    private @NonNull AttributeTarget attributeTarget(int instanceId, @NonNull String requestedPath) {
+        Opened opened = open(instanceId, WRITE);
+        InstanceFilePath target = opened.parse(requestedPath);
+        requireNotManaged(instanceId, target);
+        if (target.isVolumeRoot()) {
+            throw refusal("files_volume_root");
+        }
+        InstanceFileSupport.Entry leaf = opened.walk(target);
+        if (leaf == null) {
+            throw refusal("files_not_found");
+        }
+        if (leaf.kind() != InstanceFileSupport.Kind.FILE && leaf.kind() != InstanceFileSupport.Kind.DIRECTORY) {
+            throw refusal("files_link_refused");
+        }
+        return new AttributeTarget(opened, target);
     }
 
     /** Ask {@code capability} on the SERVICE, then resolve the instance and its browse roots. */
@@ -345,19 +524,25 @@ public final class InstanceFiles {
      * to the leaf's parent and require a real DIRECTORY. One symlink anywhere in that
      * chain and the daemon would resolve our string to a path we never named.
      *
+     * @return false when an ancestor is simply absent, which {@link Opened#walk} refuses
+     *         like any other failed walk and {@link Opened#lookup} answers as "not there"
      * @throws Violations {@code files_path_refused} -- the SAME refusal a lexically bad
      *         path gets, so the walk reveals nothing about what is where
      */
-    private static void requireContainedParents(@NonNull InstanceFileSupport files,
-                                                @NonNull String handle,
-                                                @NonNull InstanceFilePath target) {
+    private static boolean containedParents(@NonNull InstanceFileSupport files,
+                                            @NonNull String handle,
+                                            @NonNull InstanceFilePath target) {
         List<InstanceFilePath> chain = target.chainFromRoot();
         for (int i = 0; i < chain.size() - 1; i++) {
             InstanceFileSupport.Entry entry = statOrNull(files, handle, chain.get(i).absolute());
-            if (entry == null || entry.kind() != InstanceFileSupport.Kind.DIRECTORY) {
+            if (entry == null) {
+                return false;
+            }
+            if (entry.kind() != InstanceFileSupport.Kind.DIRECTORY) {
                 throw InstanceFilePath.refused();
             }
         }
+        return true;
     }
 
     /** @return the lstat, or null when the path is simply not there */

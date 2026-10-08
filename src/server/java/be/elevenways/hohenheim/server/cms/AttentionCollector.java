@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
+import be.elevenways.hohenheim.server.files.HohenheimSftp;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.security.SshAuthWatcher;
@@ -59,6 +60,7 @@ import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.byHost;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
+import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
 
 /**
  * THE entry point of the dashboard attention items: gates each role's collector on the role
@@ -127,6 +129,7 @@ public final class AttentionCollector {
         }
         failedTasks(items);
         controlPlaneBackupDestination(items);
+        sftpServer(items);
         if (HohenheimRoles.enabled(Role.DNS)) {
             DnsAttention.dnsIssues(items);
         }
@@ -144,6 +147,27 @@ public final class AttentionCollector {
             InstanceAttention.instancesLowOnDisk(items);
         }
         return items;
+    }
+
+    /**
+     * SFTP was turned on but its server is not running: nobody can connect while every Files tab says how to.
+     *
+     * AIDEV-NOTE: role-free like the server itself (HohenheimSftp); an install that never turned SFTP on gets no
+     * row, the same rule as the ssh watcher's item.
+     */
+    public static void sftpServer(@NonNull List<AttentionItem> items) {
+        String failure = HohenheimSftp.failure();
+        if (failure == null || !HohenheimSftp.isEnabled()) {
+            return;
+        }
+        items.add(item(AttentionSeverity.WARNING, "folder-tree", copy("sftp_server", "attention_title"),
+            literal(failure), sftpSettingsTarget(), action("act_open_settings")));
+    }
+
+    /** @return the settings page opened on the SFTP group, where the operator turns it on or fixes it */
+    public static @NonNull RouteTarget sftpSettingsTarget() {
+        return CmsRoutes.settingsAnchor(ADMIN, SettingsPage.DEFAULT_SLUG,
+            HohenheimSettingsSections.APPS.anchorOf(HohenheimSettings.Sftp.GROUP));
     }
 
     /** The managed-database tier's items, which the Databases list also leads with. */
