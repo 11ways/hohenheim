@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
@@ -15,6 +16,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
@@ -73,13 +75,28 @@ public final class HostAttention {
         for (Row server : Models.get(ServerModel.class).find()
                 .where(ServerModel.ADMISSION.eq(ServerModel.ADMISSION_BLOCKED))
                 .all()) {
+            List<String> failed = failedRequiredChecks(server);
             items.add(item(AttentionSeverity.WARNING, "server",
                 copy("host_not_admitted", "attention_title",
                     "name", server.get(ServerModel.NAME)),
-                copy("host_not_admitted", "attention_detail"),
+                failed.isEmpty()
+                    ? copy("host_not_admitted", "attention_detail")
+                    : copy("host_checks_failed", "attention_detail",
+                        "count", failed.size(), "checks", String.join(", ", failed)),
                 CmsRoutes.detail(ADMIN, "servers", server.get(ServerModel.ID)),
                 action("act_check_admit")));
         }
+    }
+
+    /** @return the names of the host's required preflight checks that did not pass, in the stored report's order */
+    static @NonNull List<String> failedRequiredChecks(@NonNull Row server) {
+        List<String> failed = new ArrayList<>();
+        for (PreflightCheckView check : ServerOverviewState.preflightReport(server).mustPass()) {
+            if (check.notPassing()) {
+                failed.add(check.name());
+            }
+        }
+        return failed;
     }
 
     /**

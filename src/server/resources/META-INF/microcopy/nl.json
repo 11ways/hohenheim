@@ -5672,7 +5672,7 @@
       "scope": "violations"
     },
     {
-      "text": "Host {$name} is niet toegelaten voor plaatsing",
+      "text": "{$name} kan nog geen apps draaien",
       "scope": "attention_title"
     },
     {
@@ -5741,15 +5741,15 @@
     "scope": "server"
   },
   "blocked": {
-    "text": "Geblokkeerd",
+    "text": "Wacht op zijn controles",
     "scope": "host_admission"
   },
   "admitted": {
-    "text": "Toegelaten",
+    "text": "Neemt nieuwe apps aan",
     "scope": "host_admission"
   },
   "cordoned": {
-    "text": "Afgegrendeld",
+    "text": "Neemt geen nieuwe apps aan",
     "scope": "host_admission"
   },
   "trusted_only": {
@@ -5776,7 +5776,7 @@
   },
   "posture": [
     {
-      "text": "Houding",
+      "text": "Wie hier mag draaien",
       "scope": "hohenheim_field"
     },
     {
@@ -6257,6 +6257,10 @@
     {
       "text": "Back-ups",
       "scope": "instance"
+    },
+    {
+      "text": "Backups",
+      "scope": "database_overview"
     }
   ],
   "backup_target": {
@@ -14380,10 +14384,16 @@
     "text": "Adres van {$app} · een patroon, dus geen enkele naam om na te gaan",
     "scope": "site_domains"
   },
-  "state_column": {
-    "text": "Status",
-    "scope": "certificate"
-  },
+  "state_column": [
+    {
+      "text": "Status",
+      "scope": "certificate"
+    },
+    {
+      "text": "Toestand",
+      "scope": "host_list"
+    }
+  ],
   "state_failing": {
     "text": "Vernieuwen mislukt",
     "scope": "certificate"
@@ -14476,10 +14486,16 @@
     "text": "Nu geblokkeerd",
     "scope": "ban"
   },
-  "used_by_column": {
-    "text": "Gebruikt door",
-    "scope": "auth_provider"
-  },
+  "used_by_column": [
+    {
+      "text": "Gebruikt door",
+      "scope": "auth_provider"
+    },
+    {
+      "text": "Gebruikt door",
+      "scope": "database_list"
+    }
+  ],
   "used_by_nothing": {
     "text": "Nog niet gebruikt",
     "scope": "auth_provider"
@@ -14487,5 +14503,41 @@
   "used_by_count": {
     "text": ".match {$count :number}\none {{1 plaats}}\n* {{{$count} plaatsen}}",
     "scope": "auth_provider"
-  }
+  },
+  "back_up_now": {"text": "Nu een backup maken", "scope": "database"},
+  "back_up_now_hint": {"text": "Maakt op de achtergrond een dump van deze database naast de nachtelijke backups.", "scope": "database"},
+  "back_up_started": {"text": "Backup van {$name} gestart; de dump verschijnt onder Backups zodra hij klaar is.", "scope": "database"},
+  "back_up_temporary": {"text": "Een tijdelijke database krijgt geen backup.", "scope": "database"},
+  "back_up_not_active": {"text": "Alleen van een draaiende database kan een backup gemaakt worden.", "scope": "database"},
+  "back_up_database": {"text": "{$actor} maakte een backup van database {$subject}", "scope": "hohenheim", "target": "happened"},
+  "runs_on_column": {"text": "Draait op", "scope": "database_list"},
+  "last_backup_column": {"text": "Laatste backup", "scope": "database_list"},
+  "runs_on": {"text": "Draait op", "scope": "database_overview"},
+  "how_apps_connect": {"text": "Hoe apps verbinden", "scope": "database_overview"},
+  "how_apps_connect_value": {"text": "Gekoppelde apps krijgen deze als omgevingsvariabelen; niemand hoeft ze te plakken.", "scope": "database_overview"},
+  "used_by_none": {"text": "Geen app", "scope": "database_overview"},
+  "used_by_none_detail": {"text": "Koppel hem op het tabblad Databases van een app.", "scope": "database_overview"},
+  "backup_temporary": {"text": "Geen backup", "scope": "database_overview"},
+  "backup_temporary_detail": {"text": "Tijdelijke gegevens, weg zodra hij stopt", "scope": "database_overview"},
+  "backup_never": {"text": "Nooit", "scope": "database_overview"},
+  "backup_never_detail": {"text": "Maak nu een backup, of wacht op de nachtelijke backup", "scope": "database_overview"},
+  "backup_overdue_detail": {"text": "{$size}; de nachtelijke backup schreef geen nieuwere", "scope": "database_overview"},
+  "kept": {"text": "Bewaard", "scope": "database_overview"},
+  "kept_value": {"text": ".match {$count :number}\none {{De nieuwste dump, op deze machine}}\n* {{De nieuwste {$count} dumps, op deze machine}}", "scope": "database_overview"},
+  "runs_on_dedicated": {"text": "Eigen container op {$host}", "scope": "database_overview"},
+  "runs_on_shared": {"text": "Gedeelde engine {$engine} op {$host}", "scope": "database_overview"},
+  "memory_column": {"text": "Geheugen", "scope": "host_list"},
+  "runs_column": {"text": "Draait", "scope": "host_list"},
+  "cordoned_detail": {"text": "Apps die hier al draaien, blijven draaien", "scope": "host_list"},
+  "checks_failed": {"text": ".match {$count :number}\none {{1 verplichte controle mislukt: {$checks}}}\n* {{{$count} verplichte controles mislukt: {$checks}}}", "scope": "host_list"},
+  "never_checked": {"text": "Nog niet gecontroleerd", "scope": "host_list"},
+  "checks_pass": {"text": "Zijn verplichte controles slagen; Controleren en toelaten laat hier apps draaien", "scope": "host_list"},
+  "memory_booked": {"text": "{$booked} van {$budget} geboekt", "scope": "host_list"},
+  "memory_unmeasured": {"text": "Nog niet gemeten", "scope": "host_list"},
+  "memory_stale": {"text": "Laatste meting te oud", "scope": "host_list"},
+  "runs_nothing": {"text": "Nog niets", "scope": "host_list"},
+  "runs_count": {"text": "{$apps}, {$databases}", "scope": "host_list"},
+  "apps_count": {"text": ".match {$count :number}\none {{1 app}}\n* {{{$count} apps}}", "scope": "host_list"},
+  "databases_count": {"text": ".match {$count :number}\none {{1 database}}\n* {{{$count} databases}}", "scope": "host_list"},
+  "host_checks_failed": {"text": ".match {$count :number}\none {{1 verplichte controle mislukt: {$checks}. Controleren en toelaten voert die opnieuw uit.}}\n* {{{$count} verplichte controles mislukt: {$checks}. Controleren en toelaten voert ze opnieuw uit.}}", "scope": "attention_detail"}
 }

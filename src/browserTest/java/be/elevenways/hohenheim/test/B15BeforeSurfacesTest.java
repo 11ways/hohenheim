@@ -67,6 +67,41 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class B15BeforeSurfacesTest {
 
+    /** The Hosts list's column facts as the immutable BEFORE checkpoint stored them. */
+    private static final String B15_HOST_COLUMNS = String.join("\n",
+        column("name", 0, true, true, false, "public_ipv4"), column("public_ipv4", 1, false, false, false, ""),
+        column("runtime", 2, true, true, false, ""), column("ssh_target", 3, true, true, true, ""),
+        column("admission", 4, true, true, false, ""), column("posture", 5, true, true, false, ""),
+        column("host_status", 6, true, false, false, ""));
+
+    /** The same list's column facts once W9a redrew it as board Hosts. */
+    private static final String W9A_HOST_COLUMNS = String.join("\n",
+        column("name", 0, true, true, false, "host_status"), column("public_ipv4", 1, false, false, false, ""),
+        column("state", 2, true, false, false, ""), column("host_status", 3, false, false, false, ""),
+        column("memory", 4, true, false, false, ""), column("posture", 5, true, true, false, "runs"),
+        column("runs", 6, false, false, false, ""), column("runtime", 7, false, true, false, ""),
+        column("ssh_target", 8, false, true, true, ""), column("admission", 9, false, true, false, ""));
+
+    /**
+     * AIDEV-NOTE: intended difference, W9a (2026-10-08): the Hosts list's columns were redrawn as board Hosts (state in
+     * words, memory, who may run here with what it runs under it; the address, runtime, ssh target and admission token
+     * behind the picker). The redrawn
+     * set is declared above line by line, so every other fact of a Hosts case still compares exactly.
+     */
+    private static PanelSurfaces hostColumnsRedrawn(PanelSurfaces recorded) {
+        if (!recorded.text().contains(B15_HOST_COLUMNS)) {
+            return recorded;
+        }
+        return SurfaceBaselines.parseAll(recorded.text().replace(B15_HOST_COLUMNS, W9A_HOST_COLUMNS)).getFirst();
+    }
+
+    /** One stored column fact of a list whose columns neither sort nor name a relation. */
+    private static String column(String name, int at, boolean shown, boolean filterable, boolean copyable,
+                                 String subtext) {
+        return "column " + name + " at=" + at + " shown=" + shown + " hidden=" + !shown + " sortable=false filterable="
+            + filterable + " copyable=" + copyable + " subtext=" + subtext + " relation=false";
+    }
+
     private static final String PREFIX = "b15-before-";
     private static final List<SurfaceCase> CASES = new ArrayList<>();
     private static AccessContext operatorAccess;
@@ -183,8 +218,10 @@ class B15BeforeSurfacesTest {
                 assertThat(capture.text()).as("record fixture is loaded for " + fixture.name())
                     .contains("record - found=true");
             }
-            PanelSurfaces stored = before.remove(fixture.name());
-            assertThat(stored).as("BEFORE covers " + fixture.name()).isNotNull();
+            PanelSurfaces recorded = before.remove(fixture.name());
+            assertThat(recorded).as("BEFORE covers " + fixture.name()).isNotNull();
+            PanelSurfaces stored = fixture.entrySlug().equals(ServerParts.SLUG)
+                ? hostColumnsRedrawn(recorded) : recorded;
             PlacedOperationMoves moves = PlacedOperationMoves.NONE;
             if (fixture.recordKey() != null && fixture.entrySlug().equals(ServerParts.SLUG)) {
                 var placed = ServerParts.admin().actions().stream().map(action -> action.id()).toList();

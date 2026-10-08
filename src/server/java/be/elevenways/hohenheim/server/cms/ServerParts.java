@@ -1,9 +1,20 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.activity.OperationSentences;
+import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.StateLineCell;
+import be.elevenways.hohenheim.host.HostCapacityView;
+import be.elevenways.hohenheim.host.HostMemoryCell;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.StackModel;
+import be.elevenways.hohenheim.server.instance.InstanceCapacity;
+import be.elevenways.protoblast.common.key.IdentifierKey;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.text.ByteText;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.host.HostStatusCell;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -56,8 +67,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static be.elevenways.hohenheim.server.cms.ServerWords.hostCopy;
 import static be.elevenways.hohenheim.server.cms.ServerWords.serverCopy;
@@ -71,6 +84,12 @@ import static be.elevenways.hohenheim.server.cms.ServerWords.serverCopy;
  */
 public final class ServerParts {
     public static final String SLUG = "servers";
+    private static final String STATE_COLUMN = "state";
+    private static final String MEMORY_COLUMN = "memory";
+    private static final String RUNS_COLUMN = "runs";
+    private static final long MEBIBYTE = 1024L * 1024L;
+    /** Request memo of every host's app and database counts: three queries per rendered list. */
+    private static final IdentifierKey<Map<Integer, int[]>> RUNS_COUNTS = IdentifierKey.of("hohenheim", "host_runs");
     static final StringField INCUS_TRUST_TOKEN = StringField.builder("incus_trust_token")
         .label(HohenheimFormCopy.label("incus_trust_token")).help(HohenheimFormCopy.help("incus_trust_token")).build();
     static final StringField TRUST_NOTICE = StringField.builder("trust_notice")
@@ -107,8 +126,7 @@ public final class ServerParts {
             .navGroup(NavGroup.DEFAULT).navOrder(40).icon(Icon.of("server"))
             .form(ResourceForm.<Row>of(formSpec()).bindings(bindings).landingTab(ServerOverviewState.SLUG)
                 .tabLabel(AppOverview.copy("configuration")).build())
-            .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL).facets()
-                .search(ServerModel.NAME, ServerModel.SSH_TARGET, ServerModel.PUBLIC_IPV4, ServerModel.PUBLIC_IPV6).build())
+            .list(hostList(tableSpec()))
             .reads(ResourceReads.rows().mapCells((row, column) -> "host_status".equals(column.name()) ? statusCellOf(row) : null))
             .writes(ResourceMutations.rows().create(call -> ServerInventoryWrites.create(call.values()))
                 .update(call -> { ServerInventoryWrites.update(call.record(), call.values()); return null; })
@@ -135,20 +153,128 @@ public final class ServerParts {
             .section(FormSection.advanced(ServerModel.PUBLIC_IPV4.getName(), ServerModel.PUBLIC_IPV6.getName())).build();
     }
 
+    /**
+     * Board Hosts: what each machine takes, what it holds and what it runs, with the fix for one that cannot run
+     * apps yet in the band above. The public address, runtime, ssh target and the raw admission token stay searchable
+     * or filterable behind the picker.
+     */
     static TableSpec<Row> tableSpec() {
         return TableSpec.<Row>builder()
-            .column(ColumnSpec.fromField(ServerModel.NAME).filterable().subtext("public_ipv4").build())
+            // The daemon and when it was last seen sit under the name, as the board's card line does.
+            .column(ColumnSpec.fromField(ServerModel.NAME).filterable().subtext("host_status").build())
             .column(ColumnSpec.fromField(ServerModel.PUBLIC_IPV4).hidden().build())
-            .column(ColumnSpec.fromField(ServerModel.RUNTIME).filterable().build())
-            .column(ColumnSpec.fromField(ServerModel.SSH_TARGET).filterable().copyable().build())
-            .column(ColumnSpec.fromField(ServerModel.ADMISSION).filterable().build())
-            .column(ColumnSpec.fromField(ServerModel.POSTURE).filterable().build())
-            .column(ColumnSpec.virtual("host_status", serverCopy("host_status")).renderer(HohenheimTemplateIds.CELL_HOST_STATUS).build())
+            .column(ColumnSpec.virtual(STATE_COLUMN, listCopy("state_column"))
+                .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
+            .column(ColumnSpec.virtual("host_status", serverCopy("host_status"))
+                .renderer(HohenheimTemplateIds.CELL_HOST_STATUS).hidden().build())
+            .column(ColumnSpec.virtual(MEMORY_COLUMN, listCopy("memory_column"))
+                .renderer(HohenheimTemplateIds.CELL_HOST_MEMORY).build())
+            // What it runs sits under who may run here, as the board's card ends; a sixth column pushed the table
+            // under the pinned row actions at 1440px.
+            .column(ColumnSpec.fromField(ServerModel.POSTURE).filterable().subtext(RUNS_COLUMN).build())
+            .column(ColumnSpec.virtual(RUNS_COLUMN, listCopy("runs_column")).hidden().build())
+            .column(ColumnSpec.fromField(ServerModel.RUNTIME).filterable().hidden().build())
+            .column(ColumnSpec.fromField(ServerModel.SSH_TARGET).filterable().copyable().hidden().build())
+            .column(ColumnSpec.fromField(ServerModel.ADMISSION).filterable().hidden().build())
             .filter(FilterSpec.leaf(ServerModel.NAME, CoreTypes.CONTAINS).label(FieldLabels.labelFor(ServerModel.NAME)).build())
             .filter(FilterSpec.leaf(ServerModel.RUNTIME, CoreTypes.EQUALS).label(FieldLabels.labelFor(ServerModel.RUNTIME)).build())
             .filter(FilterSpec.leaf(ServerModel.ADMISSION, CoreTypes.EQUALS).label(FieldLabels.labelFor(ServerModel.ADMISSION)).build())
             .filter(FilterSpec.leaf(ServerModel.SSH_TARGET, CoreTypes.CONTAINS).label(FieldLabels.labelFor(ServerModel.SSH_TARGET)).build())
             .build();
+    }
+
+    private static @NonNull ResourceList<Row> hostList(@NonNull TableSpec<Row> table) {
+        return ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets()
+            .search(ServerModel.NAME, ServerModel.SSH_TARGET, ServerModel.PUBLIC_IPV4, ServerModel.PUBLIC_IPV6)
+            .widgets(scope -> AttentionCollector.band(AttentionCollector.hosts()))
+            .computed(Objects.requireNonNull(table.column(STATE_COLUMN)), (row, request) -> stateCellOf(row))
+            .computed(Objects.requireNonNull(table.column(MEMORY_COLUMN)), (row, request) -> memoryCellOf(row))
+            .computed(Objects.requireNonNull(table.column(RUNS_COLUMN)), ServerParts::runsCellOf)
+            .build();
+    }
+
+    /**
+     * What the host takes, in the admission's own words, and what that means: the required checks that keep a
+     * waiting host out, or that a host taking no new apps keeps the ones it has.
+     */
+    static @NonNull StateLineCell stateCellOf(@NonNull Row server) {
+        // An unknown or missing token reads as waiting, the state that places nothing: fail closed.
+        String stored = server.get(ServerModel.ADMISSION);
+        String admission = ServerModel.ADMISSION_ADMITTED.equals(stored) || ServerModel.ADMISSION_CORDONED.equals(stored)
+            ? stored : ServerModel.ADMISSION_BLOCKED;
+        Microcopy label = Microcopy.of(admission).withFilter("scope", "host_admission");
+        return switch (admission) {
+            case ServerModel.ADMISSION_ADMITTED -> new StateLineCell(admission, BadgeVariant.SUCCESS, label, null, null);
+            case ServerModel.ADMISSION_CORDONED -> new StateLineCell(admission, BadgeVariant.SECONDARY, label,
+                listCopy("cordoned_detail"), null);
+            default -> {
+                List<String> failed = HostAttention.failedRequiredChecks(server);
+                Microcopy detail = !failed.isEmpty()
+                    ? listCopy("checks_failed").withArg("count", failed.size())
+                        .withArg("checks", String.join(", ", failed))
+                    : server.get(ServerModel.PROBED_AT) == null ? listCopy("never_checked") : listCopy("checks_pass");
+                yield new StateLineCell(admission, BadgeVariant.WARNING, label, detail, null);
+            }
+        };
+    }
+
+    /** Booked memory against the bookable budget, from the same ledger the host's overview and placement read. */
+    static @NonNull HostMemoryCell memoryCellOf(@NonNull Row server) {
+        Integer id = server.get(ServerModel.ID);
+        HostCapacityView capacity = id == null ? null : InstanceCapacity.viewOf(server, id);
+        if (capacity == null || !capacity.measured() || capacity.budgetMb() <= 0) {
+            return new HostMemoryCell(false, 0, listCopy(capacity != null && capacity.stale()
+                ? "memory_stale" : "memory_unmeasured"));
+        }
+        int percent = (int) Math.min(100, Math.round(100.0 * capacity.bookedMb() / capacity.budgetMb()));
+        return new HostMemoryCell(true, percent, listCopy("memory_booked")
+            .withArg("booked", ByteText.human(capacity.bookedMb() * MEBIBYTE))
+            .withArg("budget", ByteText.human(capacity.budgetMb() * MEBIBYTE)));
+    }
+
+    /** How many apps and managed databases the host runs, counted once per rendered list. */
+    private static @NonNull String runsCellOf(@NonNull Row server, @NonNull PanelRequest request) {
+        Conduit conduit = request.conduit();
+        Map<Integer, int[]> counts = conduit.getAttribute(RUNS_COUNTS);
+        if (counts == null) {
+            counts = runsCounts();
+            try {
+                conduit.setAttribute(RUNS_COUNTS, counts);
+            } catch (UnsupportedOperationException attributeless) {
+                // An attribute-less conduit counts again per row.
+            }
+        }
+        int[] runs = counts.getOrDefault(server.get(ServerModel.ID), new int[2]);
+        Microcopy text = runs[0] == 0 && runs[1] == 0 ? listCopy("runs_nothing")
+            : listCopy("runs_count").withArg("apps", listCopy("apps_count").withArg("count", runs[0]))
+                .withArg("databases", listCopy("databases_count").withArg("count", runs[1]));
+        return text.resolve(conduit.getLocales(), conduit.getMessageResolver());
+    }
+
+    /**
+     * Host id to {apps, databases}: the workloads and stacks the Apps list counts as apps (never a generated database
+     * container, engine or stack service) and the managed database records placed there.
+     */
+    private static @NonNull Map<Integer, int[]> runsCounts() {
+        Map<Integer, int[]> counts = new HashMap<>();
+        for (Row instance : Models.get(InstanceModel.class).find().all()) {
+            if (!InstanceParts.isGenerated(instance)) {
+                counts.computeIfAbsent(ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)),
+                    id -> new int[2])[0]++;
+            }
+        }
+        for (Row stack : Models.get(StackModel.class).find().all()) {
+            counts.computeIfAbsent(ServerModel.canonicalServerId(stack.get(StackModel.SERVER_ID)), id -> new int[2])[0]++;
+        }
+        for (Row database : Models.get(DatabaseModel.class).find().all()) {
+            counts.computeIfAbsent(ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID)),
+                id -> new int[2])[1]++;
+        }
+        return counts;
+    }
+
+    static @NonNull Microcopy listCopy(@NonNull String key) {
+        return Microcopy.of(key).withFilter("scope", "host_list");
     }
 
     static @Nullable Microcopy deleteUnavailable(Row row) {

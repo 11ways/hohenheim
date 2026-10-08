@@ -25,7 +25,6 @@ import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
-import be.elevenways.zenit.widget.common.builtin.SectionWidget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -131,8 +130,7 @@ public final class ManageDashboard extends PanelDashboard {
     }
 
     private static @NonNull WidgetInstance section(@NonNull WidgetInstance child) {
-        return new WidgetInstance(SectionWidget.ID, Map.of("css_class", "hh-dashboard-band"),
-            new WidgetTree(List.of(child)));
+        return AdminDashboard.section(child);
     }
 
 }

@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimWidgets;
+import be.elevenways.zenit.widget.common.WidgetInstance;
+import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -97,16 +100,8 @@ public final class AttentionCollector {
             ProxyAttention.routingProblems(items);
             InstanceAttention.failedDeployments(items);
         }
-        if (HohenheimRoles.enabled(Role.DATABASES)) {
-            DatabaseAttention.failedDatabases(items);
-            DatabaseAttention.unavailableAttachedDatabases(items);
-        }
-        if (HohenheimRoles.dockerRequired()) {
-            AttentionItem daemon = HostAttention.dockerUnreachable(DockerHealth.instance());
-            if (daemon != null) {
-                items.add(daemon);
-            }
-        }
+        items.addAll(databases());
+        items.addAll(hosts());
         if (HohenheimRoles.hostWorkloadsEnabled()) {
             // Stored reconciler findings only -- the sweep itself is a scheduled
             // task, never a per-render daemon probe.
@@ -118,8 +113,6 @@ public final class AttentionCollector {
             // link 404s and which no enabled role could ever act on.
             dockerFindings(items);
             dockerForeignResources(items);
-            HostAttention.stuckReleasingPorts(items,
-                Now.instant().minus(HostAttention.RELEASING_STUCK_AFTER));
         }
         failedTasks(items);
         controlPlaneBackupDestination(items);
@@ -133,9 +126,6 @@ public final class AttentionCollector {
                 items.add(sshWatch);
             }
         }
-        if (HohenheimRoles.hostWorkloadsEnabled()) {
-            HostAttention.hostsNotAdmitted(items);
-        }
         if (HohenheimRoles.enabled(Role.INSTANCES)) {
             InstanceAttention.crashedInstances(items);
             InstanceAttention.failedInstanceBackups(items);
@@ -143,6 +133,39 @@ public final class AttentionCollector {
             InstanceAttention.instancesLowOnDisk(items);
         }
         return items;
+    }
+
+    /** The managed-database tier's items, which the Databases list also leads with. */
+    public static @NonNull List<AttentionItem> databases() {
+        List<AttentionItem> items = new ArrayList<>();
+        if (HohenheimRoles.enabled(Role.DATABASES)) {
+            DatabaseAttention.failedDatabases(items);
+            DatabaseAttention.unavailableAttachedDatabases(items);
+        }
+        return items;
+    }
+
+    /** The host tier's items (the local daemon, admission, parked ports), which the Hosts list also leads with. */
+    public static @NonNull List<AttentionItem> hosts() {
+        List<AttentionItem> items = new ArrayList<>();
+        if (HohenheimRoles.dockerRequired()) {
+            AttentionItem daemon = HostAttention.dockerUnreachable(DockerHealth.instance());
+            if (daemon != null) {
+                items.add(daemon);
+            }
+        }
+        if (HohenheimRoles.hostWorkloadsEnabled()) {
+            HostAttention.hostsNotAdmitted(items);
+            HostAttention.stuckReleasingPorts(items, Now.instant().minus(HostAttention.RELEASING_STUCK_AFTER));
+        }
+        return items;
+    }
+
+    /** One list's own attention band, the dashboard's widget over that tier's items; nothing when all is well. */
+    public static @NonNull WidgetTree band(@NonNull List<AttentionItem> items) {
+        return items.isEmpty() ? new WidgetTree(List.of())
+            : new WidgetTree(List.of(AdminDashboard.section(
+                new WidgetInstance(HohenheimWidgets.ATTENTION.id(), Map.of()).withData(items))));
     }
 
     /**
