@@ -1911,3 +1911,83 @@ daystrom: still NOT deployed from this workstation; runs 27064da4; M011 step and
 
 ROLLBACK: `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20261007-232059`; the
 removed keys are in `/root/hohenheim-dep8-20261008/local.dry`.
+
+## Deploy 2026-10-08 (starfleet, DEP9): 41706aab, W9a-D7e, /manage rebuilt, zenit-kvm screens, M011 re-recorded
+
+Swapped starfleet from 2bbb17d5 to the pushed hohenheim 41706aab (jar sha256 `558592ba...3eee287b0`, 282004231
+bytes, 17 stamp rows clean; zenit 5252d2cb, zenit-cms 51be9074, zenit-forms bfbbb758, zenit-auth cf912823, plumage
+67682ead, hawkeye dcadb038, protoblast a4328b26, spamservice 453257b3, and new in the jar zenit-kvm 5dc64d55 and
+pepperglass a4d2b0be). Ships plan sections 18-25: Databases and Hosts pages (W9a), the Apps list's name link and
+problem-band fixes on another record (D7a), stored reasons as sentences, Deploys and Metrics (D7b), Domains/Access copy
+(D7c), worded host checks (D7d), the /manage tenant panel (W9b) and its host-leak fix (D7f), the D7e host page wording,
+and the live VM screen through zenit-kvm/Pepperglass (491030b7). No 2026-10-08 changelog entry asks a deployed install
+to act; the account SSH keys entry (zenit-auth `create_ssh_keys`) is not in the pushed zenit-auth yet.
+
+Before: own copies `/root/hohenheim-dep9-20261008/hohenheim.db` (`sqlite3 .backup`, integrity ok) and `local.dry`
+(sha256 equal). `--foreign-key-orphans` on a byte copy (old jar, `-Dzenit.settings.root` pointing at a copied tree whose
+`local.dry` names the copy; the root is the PARENT of `settings/`): "No row violates a declared foreign key".
+
+The first lane run REFUSED at the rehearsal: M011 (Review hardening) "modified after being applied" (54dff7b8 added
+the data step "grant the system tier's holders every settings leaf" and a dependsOn zenit-auth M014; M011 is above the
+pin mark at 010). Starfleet's `auth_grants` holds one row, user 1 `*`, and no permission groups, so the new step writes
+nothing here (GrantMigrationsTest: a root-grant holder is left alone): the 2026-09-30 ledger re-record describes this
+database exactly. Proven on a `.backup` copy first (`rerecord.sql` plus `--rehearse-migrations` with the new jar: green,
+0 applied), then applied to the LIVE file with the old jar running, after `/root/hohenheim-dep9-20261008/
+hohenheim.db.pre-rerecord` (integrity ok): `rerecord.sql` beside it, one guarded UPDATE of 011's checksum
+`51a4a79b...b100b6a852` -> `b3b5394b...c301a1c86d1` (`--migration-checksums` of the new jar), 1 change. Daystrom, if it
+is ever deployed again, needs the same check of its grants before the same re-record.
+
+Second lane run `zenit-dev deploy starfleet --pushed`: rehearsal green, zenit_migrations 105 before and after (none
+applied), healthy after both restarts (05:48/05:49 UTC), step 10 current for every repo but zenit and zenit-auth, which
+read local-ahead only because the workstation checkouts hold two unpushed commits each (the jar is the pushed heads);
+no RESTART PENDING. Preflight `/root/hohenheim-preflight-20261008-054705/`. The refused run left
+`/opt/hohenheim-rehearse-20261008-054315/` (removed by hand); `/opt/hohenheim-rehearse-20260928-235235`,
+`-20261006-233512` and `-20261007-232059` are still on the host, each a full database copy.
+
+Journal since the restart: 0 `-p err` entries; "Stored ids reconciled 0 rewritten"; no `settings.unknown_key`. Still
+logged, harmless: `settings.source_missing` for `settings/default.dry`, `comms.transports_unconfigured` for
+`zenit:chat`, and the offline commands print "hohenheim database.path is deprecated; set zenit's database.url".
+
+Logged-in pass (screenshots in the git-ignored `docs/hohenheim-ux-mockups-2026-09-30/shots/dep9/` of the workspace).
+Fixed since DEP8: clicking an app's NAME in the Apps list opens it; the app overview's problem band offers "Get a
+certificate" and "Stop forcing HTTPS"; addresses read "Works" with the certificate and expiry under it, and
+comms.starfleet.life says why it does not work; Access tabs read Blocked addresses and Sign-in providers, "Block an
+address" and "Lift" with no quick-add; /manage is the flat Overview / Apps / Domains sidebar headed "Your services", its
+attention band carries the tenant's broken app with "Open alchemy-skeleton", and the app page has "What you can do
+here". Defects seen:
+- Dashboard: stat cards are Sites / Certificates / Access lists / Active bans, not the board's Apps / Hosts /
+  Certificates / Backups; "1 Docker resource(s) have" is uncounted copy; "phoenix cannot run apps yet" says only "Use
+  Check and admit" (phoenix holds no report: "Not checked yet"); the catch-all reads "Live at **.starfleet.life"; Recent
+  activity is all sign-ins.
+- Apps list: the HTTPS column holds the app verdict ("Error page") instead of the HTTPS state, sites read Host "None"
+  (board "-"), and the "Visitors get an error page" line and "Get a certificate" are not on the row.
+- App overview (alchemy-skeleton): Recent still reads "Jelle De Loecker: Access Instance #3" and "deployed Instance #3"
+  (stored rows, record named by id); no Resources card.
+- Databases: lead "Managed database servers this installation provisions and backs up." and "New database" (board:
+  "Managed databases your apps use", "Create database"); Used by is not a link; no Engines card (needs building).
+- Hosts / host page: local reads "Takes new apps" while its Capacity card says "Evidence too old: the memory reading
+  exceeds the 168-hour freshness bound, so placement refuses this host" (last preflight 2026-08-29), and nothing raises
+  it as attention; the Hosts list shows that as "Last measurement too old" only. The host's Recent activity is ten
+  hourly "System changed local Server" rows; "Shared containers (operator risk)" and "Accepted by Jelle De Loecker
+  (warning v1)" read raw; the daemon line lacks "seen".
+- Domains > Addresses: Points here is Unknown everywhere (no public address declared on the local host); the app is
+  not a link; tabs order DNS zones before Certificates (board: Certificates second); "New address" (board "Add
+  address").
+- Access > Blocked addresses: "Blocked now" still lists a ban whose State reads Expired (until "just now", `active`
+  still 1 until the sweep) with Lift offered; old automatic reasons read "Went over the limit for: Unmatched domain
+  request" (stored "score 26 over threshold"); Users and Roles tabs (zenit-auth copy, known); no Recent misses or
+  Never block.
+- Activity: still a table without day groups, app filter or detail lines; sign-ins fill it.
+- Tenant /manage: the attention title is "Visitors get an error page" without the app's name (the admin reads
+  "Visitors of <site> ..."); the usage card shows Previews only; the app page's band offers no fix and does not say
+  who can clear it, and Public endpoint reads "This host has no public address set"; the Instances list's lead speaks
+  as the operator ("this installation runs for its tenants"), marks no sidebar row current, and its Status "Running"
+  sits beside an app whose visitors get an error page.
+Nothing was put online, protected or ordered; no host check was run.
+
+daystrom: still NOT deployed from this workstation; runs 27064da4.
+
+ROLLBACK: the preflight database already carries the re-recorded 011 checksum, which the old jar's M011 does not
+produce. Stop the service and either restore `/root/hohenheim-dep9-20261008/hohenheim.db.pre-rerecord` (remove
+`hohenheim.db-wal`/`-shm` first) or set 011's checksum back to `51a4a79b...b100b6a852` (the inverse of `rerecord.sql`),
+then `tools/deploy-host.sh --rollback starfleet --preflight /root/hohenheim-preflight-20261008-054705`.
