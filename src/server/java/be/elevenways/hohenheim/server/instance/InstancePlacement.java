@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.host.HostAdmission;
+import be.elevenways.hohenheim.server.host.PlacementRefusal;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -279,12 +281,50 @@ public final class InstancePlacement {
                     .withArg("free", Math.max(0, largestFreeMb)));
             }
             if (unmeasured != null) {
-                throw Violations.ofForm(HohenheimViolations.text("host_capacity_unproven")
-                    .withArg("name", ServerModel.labelOf(unmeasured)));
+                throw Violations.ofForm(capacityUnproven(unmeasured));
             }
             throw Violations.ofForm(HohenheimViolations.text("no_placement_available"));
         }
         return chosen;
+    }
+
+    /** @return the chooser's refusal of a host it cannot ration: no memory reading inside the freshness bound */
+    private static @NonNull Microcopy capacityUnproven(int serverId) {
+        return PlacementRefusal.CAPACITY_UNPROVEN.text().withArg("name", ServerModel.labelOf(serverId));
+    }
+
+    /**
+     * Why the chooser would place no new app on this host, or null when it would: THE host-level placement verdict
+     * the Hosts list, the host page, the attention band and the checklist read.
+     *
+     * AIDEV-NOTE: it asks what {@link #chooseForBucket} asks of every host, minus the one workload-specific question
+     * (the kind's own placeability): the admission gate for every isolation a kind on this runtime provides (refused
+     * only when all refuse, so a VM-isolated Incus host that takes VMs reads as taking apps), with the owner of a
+     * workload already there (a dedicated host takes its owner's apps), then the memory budget the chooser rations
+     * against. An admitted host the chooser never picks (a stale memory reading) therefore never reads "Takes new
+     * apps" (DEP9: Starfleet's local host, measured 2026-08-29).
+     *
+     * @return the first refusal in the gate's own words, null when an ordinary new app could land here
+     */
+    public static @Nullable Microcopy hostRefusal(@NonNull Row server) {
+        Integer serverId = server.get(ServerModel.ID);
+        if (serverId == null) {
+            return PlacementRefusal.NOT_ADMITTED.text()
+                .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME)));
+        }
+        Row resident = Models.get(InstanceModel.class).find().where(InstanceModel.SERVER_ID.eq(serverId)).first();
+        String owner = resident == null ? null : resident.get(InstanceModel.QUOTA_BUCKET);
+        Microcopy first = null;
+        for (WorkloadIsolation isolation : InstanceKinds.isolationsOn(ServerModel.runtimeOf(server))) {
+            Microcopy refusal = HostAdmission.instancePlacementRefusal(serverId, isolation, owner);
+            if (refusal == null) {
+                return InstanceCapacity.budgetMbOf(server) == null ? capacityUnproven(serverId) : null;
+            }
+            if (first == null) {
+                first = refusal;
+            }
+        }
+        return first;
     }
 
     /**

@@ -62,6 +62,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * The site domain entries' shared parts, and the admin domain resource and its /manage twin built from them.
@@ -278,7 +279,23 @@ public final class DomainParts {
     static @Nullable DomainCertCell certificateCell(@NonNull Row domain, @NonNull PanelRequest request) {
         boolean passthrough = SiteParts.tlsPassthrough(
             Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID)));
-        CertCoverage coverage = AppHealth.httpsOf(domain, passthrough, CertificateCoverage.activeNames());
+        return certificateCell(domain, passthrough, CertificateCoverage.activeNames(), request.access(),
+            request.panelSlug());
+    }
+
+    /**
+     * {@link #certificateCell(Row, PanelRequest)} over facts already read: the Apps list's HTTPS column draws its main
+     * address through it, so the two lists say one name's HTTPS in the same words.
+     *
+     * @param passthrough whether the name belongs to a TLS passthrough site
+     * @param working     the names an active certificate covers ({@code CertificateCoverage.activeNames()})
+     * @param access      who reads it, which decides whether the certificate is named and linked
+     * @param panelSlug   the panel the link points into
+     */
+    static @Nullable DomainCertCell certificateCell(@NonNull Row domain, boolean passthrough,
+                                                    @NonNull Set<String> working, @NonNull AccessContext access,
+                                                    @NonNull String panelSlug) {
+        CertCoverage coverage = AppHealth.httpsOf(domain, passthrough, working);
         if (coverage == null) {
             return null;
         }
@@ -291,12 +308,12 @@ public final class DomainParts {
         }
         Instant expiresOn = cert.get(CertificateModel.EXPIRES_ON);
         Integer certId = cert.get(CertificateModel.ID);
-        boolean canOpen = HohenheimAccess.reachesRecord(request.access(), CertificateModel.MODEL_ID, certId,
+        boolean canOpen = HohenheimAccess.reachesRecord(access, CertificateModel.MODEL_ID, certId,
             HohenheimAccess.VIEW);
         // The panel this list renders under carries a certificates entry on both faces.
         return new DomainCertCell(coverage.key(), coverage.badgeVariant(), coverage.label(), detail,
             canOpen ? String.valueOf((Object) cert.get(CertificateModel.NICE_NAME)) : null,
-            canOpen ? CmsRoutes.detail(request.panelSlug(), HohenheimSlugs.CERTIFICATES, certId).toUrl() : null,
+            canOpen ? CmsRoutes.detail(panelSlug, HohenheimSlugs.CERTIFICATES, certId).toUrl() : null,
             expiresOn != null ? expiresOn.toString() : null);
     }
 

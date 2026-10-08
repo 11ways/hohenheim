@@ -66,68 +66,39 @@ public final class HostAttention {
     }
 
     /**
-     * Enrolled hosts that are not admitted for placement.
+     * Every host that takes no new apps by its verdict ({@link HostVerdict}), and every host that holds apps back.
      *
-     * AIDEV-NOTE: this list used to say "All clear" directly beneath the onboarding card
-     * naming a host the deploy lane would refuse -- the checklist watched admission and
-     * this collector did not, so the dashboard contradicted itself on one screen. Gated
-     * on the same roles that put the Servers list in the panel, so the link always exists.
-     * CORDONED is deliberately absent: an operator drained that host on purpose, and a
-     * permanent warning over a deliberate state is how a warning stops being read.
-     *
-     * Each item is the ROOT of what its host holds back: it names how many apps wait for it (the apps whose verdict is
-     * this host's placement refusal), and the dashboard folds their own items under it. It states the checklist's
-     * admission stage, so while that step is open the step presents it.
+     * AIDEV-NOTE: ONE item per host, from the verdict the Hosts list and the host page word: a waiting host says why
+     * it waits ("Never checked yet", its failed required checks) with Check and admit; an ADMITTED host the gate
+     * refuses (a stale memory reading, a posture, a check that no longer passes) says the gate's own words with the
+     * remedy that clears them (Check again re-measures; a posture or a trust decision opens the host). DEP9 found
+     * Starfleet's local host refused by placement over a memory reading from 2026-08-29 while nothing raised it.
+     * A cordoned host is a deliberate state and raises nothing until an app waits on it (D8), and an item is the ROOT
+     * of what its host holds back: it names how many apps wait for it and the dashboard folds their own items under
+     * it. It states the checklist's admission stage, so while that step is open the step presents it. Gated on the
+     * same roles that put the Hosts list in the panel, so the link always exists.
      */
-    public static void hostsNotAdmitted(List<AttentionItem> items) {
-        hostsNotAdmitted(items, AppHealth.heldBackByHost());
+    public static void hostsTakingNoApps(List<AttentionItem> items) {
+        hostsTakingNoApps(items, AppHealth.heldBackByHost());
     }
 
     /** @param heldBack what each host holds back ({@link AppHealth#heldBackByHost}), read once for the tier */
-    static void hostsNotAdmitted(List<AttentionItem> items, Map<Integer, AppHealth.HeldBack> heldBack) {
-        for (Row server : Models.get(ServerModel.class).find()
-                .where(ServerModel.ADMISSION.eq(ServerModel.ADMISSION_BLOCKED))
-                .all()) {
+    static void hostsTakingNoApps(List<AttentionItem> items, Map<Integer, AppHealth.HeldBack> heldBack) {
+        for (Row server : Models.get(ServerModel.class).find().all()) {
             int id = server.get(ServerModel.ID);
+            HostVerdict verdict = HostVerdict.of(server);
             AppHealth.HeldBack held = heldBack.get(id);
-            List<Microcopy> failed = failedRequiredChecks(server);
-            items.add(item(AttentionSeverity.WARNING, "server",
-                copy("host_not_admitted", "attention_title",
-                    "name", server.get(ServerModel.NAME)),
-                failed.isEmpty()
-                    ? copy("host_not_admitted", "attention_detail")
-                    : copy("host_checks_failed", "attention_detail",
-                        "count", failed.size(), "checks", failed),
-                CmsRoutes.detail(ADMIN, "servers", id),
-                action("act_check_admit"))
-                .about(AttentionSubject.host(id), heldBackText(held))
-                .forStage(OnboardingStage.ADMISSION));
-        }
-    }
-
-    /**
-     * Admitted or cordoned hosts that still refuse the apps placed on them (a posture that refuses tenant workloads, a
-     * stale contact, a failed re-check): the ROOT those apps' own items fold under, in the gate's words.
-     *
-     * AIDEV-NOTE: without it the apps' items had no root to fold under and each repeated the host's refusal (D8 walk:
-     * a trusted-only host under two tenant-kind apps). A blocked host is {@link #hostsNotAdmitted}'s, and a host that
-     * holds nothing back raises nothing: a cordon or a posture is a deliberate state until an app waits on it.
-     *
-     * @param heldBack what each host holds back ({@link AppHealth#heldBackByHost}), read once for the tier
-     */
-    static void hostsHoldingAppsBack(List<AttentionItem> items, Map<Integer, AppHealth.HeldBack> heldBack) {
-        for (Map.Entry<Integer, AppHealth.HeldBack> entry : heldBack.entrySet()) {
-            Row server = Models.get(ServerModel.class).findById(entry.getKey());
-            if (server == null || ServerModel.ADMISSION_BLOCKED.equals(server.get(ServerModel.ADMISSION))) {
+            boolean raised = verdict.standing().raisesAttention();
+            if (!raised && held == null) {
                 continue;
             }
-            int id = entry.getKey();
+            Object name = server.get(ServerModel.NAME);
             items.add(item(AttentionSeverity.WARNING, "server",
-                copy("host_not_admitted", "attention_title", "name", server.get(ServerModel.NAME)),
-                entry.getValue().reason(),
-                CmsRoutes.detail(ADMIN, "servers", id),
-                action("act_open_app", "name", server.get(ServerModel.NAME)))
-                .about(AttentionSubject.host(id), heldBackText(entry.getValue()))
+                copy("host_not_admitted", "attention_title", "name", name),
+                raised ? verdict.reason() : held.reason(),
+                CmsRoutes.open(ADMIN, ServerParts.SLUG, id),
+                verdict.remedyAction(name))
+                .about(AttentionSubject.host(id), heldBackText(held))
                 .forStage(OnboardingStage.ADMISSION));
         }
     }

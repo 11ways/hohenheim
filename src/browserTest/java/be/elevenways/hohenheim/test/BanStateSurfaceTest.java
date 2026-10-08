@@ -73,19 +73,28 @@ class BanStateSurfaceTest extends HohenheimTestBase {
             .as("step 4: the record names who lifted it")
             .contains("data-path=\"lifted_by\"")
             .contains("qa-operator");
-        // The list opens on what is blocked NOW; the lifted ban shows under the explicit "not active" filter.
-        HttpResponse<String> listAfter = adminGet("/admin/bans?filter.active=false");
+        // The list opens on what is blocked NOW; the lifted ban shows under the explicit "not blocked now" filter.
+        HttpResponse<String> listAfter = adminGet("/admin/bans?filter." + BanModel.BLOCKED_NOW + "=false");
         assertThat(listAfter.body())
             .as("step 4: the list shows the lifted state")
             .contains("data-ban-state=\"" + BanStateCell.LIFTED + "\"");
 
-        // 5. The state derivation itself: a lift beats an expiry, an expiry beats active.
+        // 5. The state derivation itself: a lift beats an expiry, an expiry beats the stored active flag.
         Instant now = Now.instant();
-        assertThat(BanStateCell.of(false, now, now.plus(Duration.ofHours(1)), now).token())
-            .isEqualTo(BanStateCell.LIFTED);
-        assertThat(BanStateCell.of(true, null, now.minusSeconds(1), now).token())
-            .isEqualTo(BanStateCell.EXPIRED);
-        assertThat(BanStateCell.of(true, null, null, now).token())
+        assertThat(BanStateCell.of(stored(false, now, now.plus(Duration.ofHours(1))), now).token())
+            .as("step 5: a lift beats an expiry").isEqualTo(BanStateCell.LIFTED);
+        assertThat(BanStateCell.of(stored(true, null, now.minusSeconds(1)), now).token())
+            .as("step 5: a passed expiry beats the flag the sweep clears late").isEqualTo(BanStateCell.EXPIRED);
+        assertThat(BanStateCell.of(stored(true, null, null), now).token())
             .as("step 5: a permanent active ban is active").isEqualTo(BanStateCell.ACTIVE);
+    }
+
+    /** An unsaved ban row carrying only the facts the state reads. */
+    private static Row stored(boolean active, Instant liftedAt, Instant expiresAt) {
+        Row ban = Models.get(BanModel.class).createEmptyRow();
+        ban.set(BanModel.ACTIVE, active);
+        ban.set(BanModel.LIFTED_AT, liftedAt);
+        ban.set(BanModel.EXPIRES_AT, expiresAt);
+        return ban;
     }
 }

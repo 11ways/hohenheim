@@ -1108,3 +1108,62 @@ its one action.
   band), AdminPagesTest (the waiting host is linked once, by the step or the band), DashboardRoleGatingTest,
   SiteRefusalVerdictJourneyTest, HostsPageJourneyTest, InstancePowerAvailabilityJourneyTest, NavigationTest,
   ManagePanelJourneyTest, DashboardVocabularyDriftTest and the four microcopy gates.
+
+## 27. D9 decisions (fork D9, 2026-10-08)
+
+Places where the admin said something untrue on Starfleet (DEP9), each fixed at its cause.
+
+- A host's standing is ONE verdict of the placement gate: `InstancePlacement.hostRefusal` asks of a host what
+  `chooseForBucket` asks of every host (the admission gate for every isolation a kind on its runtime provides, with
+  the owner of a workload already there, then the memory budget the chooser rations against), minus the kind's own
+  question. `HostVerdict` (server/cms) words it for the Hosts list's state cell, the host page (badge plus a warning
+  band with the reason), the host attention item and the checklist's admission step; `HostStanding` (common) is its
+  vocabulary: Waiting for its checks, Takes new apps, Cannot take new apps (new: admitted, but the gate refuses), Takes
+  no new apps. Starfleet's local host (memory measured 2026-08-29, past the 168-hour bound) read "Takes new apps"; it
+  now reads "Cannot take new apps" with the gate's words, and raises its item with "Check again".
+- What clears a refusal is a fact on the refusal: `PlacementRefusal` (server/host) declares every placement refusal
+  key once with its `Remedy` (Check and admit, Check again, open the host); `HostAdmission`'s throw sites and the
+  chooser's capacity refusal word themselves through it. A refusal it does not declare opens the host.
+- One host item per host (`HostAttention.hostsTakingNoApps`, replacing `hostsNotAdmitted` and `hostsHoldingAppsBack`):
+  a waiting or refusing host always raises it; a cordoned or taking host only while apps wait on it (D8). Its detail
+  is the verdict's reason, so the list cell and the item say the same words ("Never checked yet" for phoenix, "1
+  required check failed: Firewall control"); the attention-only `host_not_admitted`/`host_checks_failed` details are
+  deleted in favour of the `host_list` ones. The item and the step link the host's front door,
+  `CmsRoutes.open` (`/admin/servers/<id>/open`, the Overview), not its Configuration form.
+- The check-now-required refusal names the check and what it found in words (`HostPreflight.checkLabel`, moved there
+  from ServerOverviewState so the gate can use it, and `HostPreflight.storedFinding`): "local does not pass its
+  Firewall control check, which must pass for apps to run there: nftables refused a firewall change: sudo: a password
+  is required. Fix it, then Check again". The old sentence claimed a posture history the record cannot prove for a
+  Docker check.
+- "Blocked now" is `BanModel.blockedNow` (enforced, never lifted, not past its expiry; the clock through `Now`): the
+  list's filter (a `blocked_now` rule variable in the ban source's vocabulary, replacing the `active` leaf), its
+  default, the state cell, Lift's availability, the dashboard's ban tile and BanService's own active-ban reads. An
+  expired ban the sweep has not cleared yet reads Expired, offers no Lift and is not under "Blocked now".
+- The Apps list's HTTPS column (and the dashboard's Apps band) is the app's main address's HTTPS through the
+  Addresses list's own cell (`DomainParts.certificateCell`, `DomainCertCell`): "Works", "Not working", "No
+  certificate" with the same reason; never the app verdict's "Error page". A site's all-names summary
+  (`SiteTlsCell`) stays the Sites list's.
+- The host's hourly "System changed local Server" rows were `HostProbe.recordSuccess`'s heartbeat saves, written
+  before W5b declared them internal (`ActivityLog.suppressed`); Starfleet's log has none after 2026-10-07 01:41 UTC
+  (the W5b deploy). The rows stay in the log; the host page's Recent card reads what a person did to the host
+  (`AdminActivityResource.peopleOnlyFor`, the dashboard's people-only scope narrowed to the record), so they no longer
+  fill it.
+- Words from copy: the posture reads "Shared containers" (no "(operator risk)"), the accepted risk "Accepted by
+  <actor>" (the warning version is bookkeeping), and the daemon line "Docker 20.10.5+dfsg1, seen 3 minutes ago"
+  (`HostState.OK` words itself through `state_ok` with the daemon, like a silent host).
+- Walk (scratch server from the built jar, fresh database, `/setup`; local admitted with a memory reading from
+  2026-08-29, phoenix never checked, an active and an expired-but-active ban, a forced and an unforced address without
+  a certificate, hourly system rows and one person row on local, all seeded by SQL): shots
+  `docs/hohenheim-ux-mockups-2026-09-30/shots/d9/` (workspace repo).
+- Found, not fixed here: the toast of a refusal carrying worded arguments still shows their keys (zenit `Flash`,
+  D7e item 1; zenit cannot be pushed from here). The REFUSING item's title keeps D8's "<name> cannot run apps yet",
+  which reads oddly for a host already running apps.
+- Proof: build run 829; Hohenheim test run 830 (29 classes, 106 tests: 105 passed, ServerOverviewTest step 5 failed
+  because its fixture row was system bookkeeping, now a person's act beside a bookkeeping row the card must leave
+  out) and run 831 (ServerOverviewTest, 8 passed). Journeys: HostsPageJourneyTest (new
+  `aHostThePlacementGateRefusesSaysSoEverywhere`), DashboardAttentionJourneyTest step 6, AccessPagesJourneyTest step
+  5, AppsListJourneyTest step 3, AdminPagesTest (the host link is `/open`), BanStateSurfaceTest,
+  RecordAwareQueryGateTest, DashboardVocabularyDriftTest; LandingDashboardSurfacesTest's baseline hand-edited (the
+  admission step reads "Never checked yet" and links `/admin/servers/#/open`; an app without an address has no HTTPS
+  badge). The push's duplicate gate then pointed the ban vocabulary at core's `RuleVocabulary.extend`; run 832
+  (AccessPagesJourneyTest, BanStateSurfaceTest, RecordAwareQueryGateTest, SecurityAdminTest, 7 passed) proves it.

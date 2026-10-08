@@ -12,6 +12,10 @@ import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.security.Accountability;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
+import be.elevenways.zenit.common.security.CallerChannel;
+import be.elevenways.zenit.common.security.Principal;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
@@ -170,15 +174,24 @@ class ServerOverviewTest extends HohenheimTestBase {
         assertThat(body).as("step 4: a measured fact renders").contains("docker_version");
         assertThat(body).as("step 4: with its value").contains("27.1.1");
 
-        // 5. And the host's own history: the recent-activity band is filtered on (model,
-        //    record id), so an entry written about ANOTHER host never lands here. The decoy
-        //    is what makes this a filter assertion rather than a "band exists" one.
+        // 5. And the host's own history: what a PERSON did to this host. The band is filtered on (model, record id),
+        //    so an entry about ANOTHER host never lands here (the decoy makes this a filter assertion rather than a
+        //    "band exists" one), and the system's own bookkeeping on it stays in the log and off the card (DEP9:
+        //    hourly "System changed local Server" heartbeat rows filled it).
         var servers = Models.get(ServerModel.class);
-        ActivityLog.record(servers, hostId, HohenheimActivityAction.RECONCILED, "overview band fixture");
-        ActivityLog.record(servers, hostId + 100000, HohenheimActivityAction.RECONCILED, "decoy fixture");
+        ActivityLog.record(servers, hostId, HohenheimActivityAction.RECONCILED, "system bookkeeping fixture");
+        Object bookkeeping = latestActivityId(String.valueOf(hostId));
+        Principal operator = TenantConduits.operator().principal();
+        Accountability person = Accountability.of(operator.reference(), operator.attributionLabel(),
+            new CallerChannel(AccountabilityOrigin.OFFLINE, null, null));
+        Accountability.runAs(person, () -> {
+            ActivityLog.record(servers, hostId, HohenheimActivityAction.RECONCILED, "overview band fixture");
+            ActivityLog.record(servers, hostId + 100000, HohenheimActivityAction.RECONCILED, "decoy fixture");
+        });
         Object mine = latestActivityId(String.valueOf(hostId));
         Object theirs = latestActivityId(String.valueOf(hostId + 100000));
         assertThat(mine).as("step 5: this host has an activity row").isNotNull();
+        assertThat(bookkeeping).as("step 5: and a bookkeeping row before it").isNotNull().isNotEqualTo(mine);
 
         String withBand = adminGet("/admin/servers/" + hostId + "/page/overview").body();
         assertThat(withBand).as("step 5: the overview carries a recent-activity band")
@@ -187,6 +200,8 @@ class ServerOverviewTest extends HohenheimTestBase {
             .contains("/admin/activity/" + mine);
         assertThat(withBand).as("step 5: and never another host's")
             .doesNotContain("/admin/activity/" + theirs);
+        assertThat(withBand).as("step 5: nor the system's bookkeeping on this one")
+            .doesNotContain("/admin/activity/" + bookkeeping + "\"");
     }
 
     /** The newest activity row id written about one server id, or null. */

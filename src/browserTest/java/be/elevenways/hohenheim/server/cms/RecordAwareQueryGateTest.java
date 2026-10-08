@@ -44,13 +44,13 @@ class RecordAwareQueryGateTest extends HohenheimTestBase {
         assertThat(PartsForms.fieldAccessFor(bans, BanModel.ACTIVE.getName()).decide(VIEWER))
             .as("step 1: the create form hides the active flag")
             .isEqualTo(FieldAccess.Decision.HIDDEN);
-        // ...yet across records it is queryable, so the list's Active filter stays offered.
+        // ...yet across records it is queryable, so the list's Blocked now filter, which reads it, stays offered.
         FieldQueryGate banGate = PartsForms.queryGate(bans);
         assertThat(banGate.mayQuery(BanModel.ACTIVE.getName(), VIEWER))
             .as("step 1: the active flag may be filtered by").isTrue();
         TableSpec<?> spec = PartsLists.tableSpec(bans).queryableBy(name -> banGate.mayQuery(name, VIEWER));
-        assertThat(spec.filter(BanModel.ACTIVE.getName()))
-            .as("step 1: the viewer's list still offers the Active filter").isNotNull();
+        assertThat(spec.filter(BanModel.BLOCKED_NOW))
+            .as("step 1: the viewer's list still offers the Blocked now filter").isNotNull();
 
         // 2. DNS zones: replication diagnostics show only on the zones of their role, never on the
         //    create form, and stay queryable across the zone list.

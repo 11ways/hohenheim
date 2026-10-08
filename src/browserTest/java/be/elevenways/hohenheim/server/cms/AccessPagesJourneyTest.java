@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.security.BanStateCell;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
@@ -104,6 +105,26 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
         // 4. A block without an expiry holds until it is lifted, and says so; the row action is the board's "Lift".
         assertThat(now).as("step 4: no expiry reads as until lifted").contains("Until lifted");
         assertThat(now).as("step 4: the row action reads Lift").contains("Lift").doesNotContain("Lift ban");
+        assertThat(now).as("step 4: a block that holds offers its Lift").contains("lift_ban");
+
+        // 5. A block past its expiry that the sweep has not cleared yet (stored active) is not blocked now: one
+        //    definition answers the filter, the state cell and Lift (DEP9: listed under "Blocked now" as Expired,
+        //    with Lift offered).
+        Row expired = ban("203.0.113.45", "Held until a minute ago", true);
+        expired.set(BanModel.EXPIRES_AT, Now.instant().minus(Duration.ofMinutes(1)));
+        Models.get(BanModel.class).save(expired);
+        assertThat(BanModel.blockedNow(expired, Now.instant())).as("step 5: an expired block is not blocked now")
+            .isFalse();
+        assertThat(BanStateCell.of(expired, Now.instant()).token()).as("step 5: its state reads expired")
+            .isEqualTo(BanStateCell.EXPIRED);
+        assertThat(adminGet("/admin/bans").body()).as("step 5: the default Blocked now view leaves it out")
+            .contains("203.0.113.41").doesNotContain("203.0.113.45");
+        String notBlocked = adminGet("/admin/bans?filter." + BanModel.BLOCKED_NOW + "=false").body();
+        assertThat(notBlocked).as("step 5: it is listed among the blocks that do not hold")
+            .contains("203.0.113.45").contains("data-ban-state=\"" + BanStateCell.EXPIRED + "\"")
+            .doesNotContain("203.0.113.41");
+        assertThat(notBlocked).as("step 5: and no block there offers Lift, the expired one included")
+            .doesNotContain("lift_ban");
     }
 
     @Test

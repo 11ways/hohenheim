@@ -62,13 +62,14 @@ public final class AdminSources {
     /** The registration body, callable again so a test can replay it against a fresh registry. */
     static void declare() {
         Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimPanel.SLUG), "the admin panel");
-        // Bans: feeds the active-bans stat tile (rules on `active`) and any bans-created
-        // chart (sortable doubles as the bucketable whitelist for created_at). BanParts is a
+        // Bans: feeds the blocked-now stat tile (rules on BanModel.BLOCKED_NOW, the list's own filter) and any
+        // bans-created chart (sortable doubles as the bucketable whitelist for created_at). BanParts is a
         // panel resource, so this is the model's own source; no inline create (no pick offers
         // a ban: the manual ban is the entry's quick-add bar).
         RecordSourceRegistry.INSTANCE.register(admin(RecordSource.of(BanModel.class)
             .project(BanModel.IP, BanModel.SOURCE, BanModel.ACTIVE,
                 BanModel.EXPIRES_AT, BanModel.CREATED_AT)
+            .vocabularyFrom(BanParts::filterVocabulary)
             .sortable(BanModel.CREATED_AT), BanModel.class).build());
 
         // Backup targets, for the instance form's target pick: BackupTargetParts is a panel resource, whose one

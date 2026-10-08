@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.host.PreflightFinding;
+import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -24,6 +25,7 @@ import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -87,8 +89,9 @@ class HostsPageJourneyTest extends HohenheimTestBase {
                 }
             }
             assertThat(item).as("step 3: the host tier names the waiting host").isNotNull();
-            assertThat(say(item.detail())).as("step 3: with the checks that keep it out")
-                .isEqualTo("1 required check failed: Firewall control. Check and admit runs it again.");
+            assertThat(say(item.detail())).as("step 3: with the checks that keep it out, the state cell's own words")
+                .isEqualTo(say(held.detail()));
+            assertThat(say(item.action())).as("step 3: and Check and admit").isEqualTo("Check and admit");
             assertThat(AttentionCollector.collect()).as("step 3: the dashboard reads the same item")
                 .anySatisfy(found -> assertThat(say(found.title())).isEqualTo(PREFIX + "waiting cannot run apps yet"));
 
@@ -175,6 +178,110 @@ class HostsPageJourneyTest extends HohenheimTestBase {
                 step.run();
             }
         }
+    }
+
+    @Test
+    void aHostThePlacementGateRefusesSaysSoEverywhere() throws Exception {
+        List<Runnable> cleanup = new ArrayList<>();
+        try {
+            // 1. An admitted host whose memory reading is older than the freshness bound (Starfleet's local host, last
+            //    measured 2026-08-29): the chooser never picks it, so it does not take new apps.
+            int stale = HostFixtures.admittedIncusHost(PREFIX + "stale");
+            cleanup.add(() -> deleteServer(stale));
+            HostPreflight.store(PREFIX + "stale", new HostPreflight.Report(List.of(),
+                Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024), true,
+                Now.instant().minus(Duration.ofDays(40)), null));
+            Microcopy refusal = InstancePlacement.hostRefusal(server(stale));
+            assertThat(refusal).as("step 1: the placement gate refuses it").isNotNull();
+            assertThat(refusal.key()).as("step 1: for its stale memory reading").isEqualTo("host_capacity_unproven");
+
+            // 2. The Hosts list's state, the attention item and the host page say the gate's verdict, once each, with
+            //    the action that clears it (a fresh check re-measures) and a link to the host's Overview.
+            StateLineCell cell = ServerParts.stateCellOf(server(stale));
+            assertThat(say(cell.label())).as("step 2: it never reads as taking new apps")
+                .isEqualTo("Cannot take new apps");
+            assertThat(cell.variant()).as("step 2: in the warning tone").isEqualTo(BadgeVariant.WARNING);
+            assertThat(say(cell.detail())).as("step 2: saying why in the gate's words").isEqualTo(say(refusal));
+            AttentionItem item = hostItem(PREFIX + "stale");
+            assertThat(item).as("step 2: the host tier raises it").isNotNull();
+            assertThat(say(item.detail())).as("step 2: in the same words").isEqualTo(say(refusal));
+            assertThat(say(item.action())).as("step 2: offering a fresh check").isEqualTo("Check again");
+            assertThat(item.target().toUrl()).as("step 2: on the host's Overview, never its Configuration form")
+                .isEqualTo("/admin/" + ServerParts.SLUG + "/" + stale + "/open");
+            String stalePage = adminGet("/admin/" + ServerParts.SLUG + "/" + stale + "/page/overview").body();
+            assertThat(stalePage).as("step 2: the host page wears the same state").contains("Cannot take new apps")
+                .doesNotContain("Takes new apps");
+
+            // 3. Measured again: it takes new apps and nothing names it.
+            HostPreflight.store(PREFIX + "stale", new HostPreflight.Report(List.of(),
+                Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
+            assertThat(InstancePlacement.hostRefusal(server(stale))).as("step 3: the gate places on it again").isNull();
+            assertThat(say(ServerParts.stateCellOf(server(stale)).label())).as("step 3: it takes new apps")
+                .isEqualTo("Takes new apps");
+            assertThat(hostItem(PREFIX + "stale")).as("step 3: and raises nothing").isNull();
+
+            // 4. A required check that no longer passes refuses it in words: the check's name and what it found, never
+            //    the check's token or the old "FAILED" English.
+            HostPreflight.store(PREFIX + "stale", new HostPreflight.Report(List.of(
+                HostPreflight.Check.of("nftables", HostPreflight.STATUS_FAIL, true,
+                    PreflightFinding.NFT_REFUSED.with("error", "sudo: a password is required"))),
+                Map.of(), false, Now.instant(), null));
+            Microcopy failing = InstancePlacement.hostRefusal(server(stale));
+            assertThat(failing).as("step 4: the gate refuses the failing check").isNotNull();
+            assertThat(failing.key()).as("step 4: as a check that must pass now")
+                .isEqualTo("host_preflight_check_now_required");
+            assertThat(say(failing)).as("step 4: naming the check in words")
+                .contains("Firewall control")
+                .as("step 4: with what it found").contains("nftables refused a firewall change: sudo: a password is"
+                    + " required")
+                .as("step 4: never the token or the old English").doesNotContain("nftables check")
+                .doesNotContain("FAILED");
+            assertThat(failing.resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 4: and in Dutch").contains("Beheer van de firewall");
+            assertThat(say(hostItem(PREFIX + "stale").action())).as("step 4: fixed, then checked again")
+                .isEqualTo("Check again");
+
+            // 5. A host nobody ever checked says so, in the list and in its item, with Check and admit.
+            Row fresh = Models.get(ServerModel.class).createEmptyRow();
+            fresh.set(ServerModel.NAME, PREFIX + "fresh");
+            fresh.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
+            Models.get(ServerModel.class).save(fresh);
+            int never = Models.get(ServerModel.class).findByName(PREFIX + "fresh").get(ServerModel.ID);
+            cleanup.add(() -> deleteServer(never));
+            StateLineCell waiting = ServerParts.stateCellOf(server(never));
+            assertThat(say(waiting.label())).as("step 5: a new host waits").isEqualTo("Waiting for its checks");
+            assertThat(say(waiting.detail())).as("step 5: because it was never checked").isEqualTo("Never checked yet");
+            AttentionItem neverItem = hostItem(PREFIX + "fresh");
+            assertThat(say(neverItem.detail())).as("step 5: its item says the same").isEqualTo("Never checked yet");
+            assertThat(say(neverItem.action())).as("step 5: with Check and admit").isEqualTo("Check and admit");
+
+            // 6. The host page reads its words from copy: who may run here without "(operator risk)", the accepted risk
+            //    without its warning version, and when the daemon was last seen.
+            HostPreflight.store(PREFIX + "stale", new HostPreflight.Report(List.of(
+                new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon")),
+                Map.of(), true, Now.instant(), null));
+            String page = adminGet("/admin/" + ServerParts.SLUG + "/" + stale + "/page/overview").body();
+            assertThat(page).as("step 6: the posture in the board's words").contains("Shared containers")
+                .doesNotContain("operator risk");
+            assertThat(page).as("step 6: the accepted risk names who accepted it").contains("Accepted by ")
+                .doesNotContain("(warning v");
+            assertThat(say(ServerParts.statusCellOf(server(stale)).stateText()))
+                .as("step 6: the daemon line says the time after it is when it was seen").isEqualTo("Incus, seen");
+        } finally {
+            for (Runnable step : cleanup) {
+                step.run();
+            }
+        }
+    }
+
+    /** @return the host tier's item titled for this host, null when none is */
+    private static AttentionItem hostItem(String name) {
+        for (AttentionItem candidate : AttentionCollector.hosts()) {
+            if (say(candidate.title()).equals(name + " cannot run apps yet")) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private static Row server(int id) {

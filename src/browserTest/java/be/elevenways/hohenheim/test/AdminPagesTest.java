@@ -17,6 +17,7 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.server.cms.HostAttention;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.server.cms.ProxyAttention;
 import be.elevenways.hohenheim.server.cms.AdminActivityResource;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -815,7 +816,7 @@ class AdminPagesTest extends HohenheimTestBase {
     void dashboardAttentionOnboardingAndStatsAgreeWithEachOther() throws Exception {
         var serverModel = Models.get(ServerModel.class);
         Row local = serverModel.findById(ServerModel.localServerId());
-        String admission = local.get(ServerModel.ADMISSION);
+        HostFixtures.LocalHostState captured = HostFixtures.captureLocal();
         try {
             // 1. A host that is not admitted: the amber onboarding card and the attention
             //    list must agree, so "All clear" is impossible while the card is up.
@@ -823,7 +824,7 @@ class AdminPagesTest extends HohenheimTestBase {
             serverModel.save(local);
 
             List<AttentionItem> blocked = new ArrayList<>();
-            HostAttention.hostsNotAdmitted(blocked);
+            HostAttention.hostsTakingNoApps(blocked);
             assertThat(blocked)
                 .as("step 1: a blocked host raises exactly one attention item")
                 .hasSize(1);
@@ -836,7 +837,8 @@ class AdminPagesTest extends HohenheimTestBase {
                 .isZero();
             // Drawn ONCE (D8): by the open admission step that presents the item, or by the band when no step is
             // open, never by both.
-            String host = "[href='/admin/servers/" + local.get(ServerModel.ID) + "']";
+            // The host's front door (its Overview, where Check and admit reads), never its Configuration form.
+            String host = "[href='/admin/servers/" + local.get(ServerModel.ID) + "/open']";
             var hostLinks = page.locator(".hh-attention-item > a.hh-attention-target" + host
                 + ", .hh-onboarding-step a.hh-onboarding-action" + host);
             assertThat(hostLinks.count())
@@ -872,22 +874,21 @@ class AdminPagesTest extends HohenheimTestBase {
                 .as("step 3: and so is the firewall tile that used to sit in its own grid")
                 .isEqualTo(1);
 
-            // 4. Admitting the host retracts the item; the collector answers negatively too.
-            local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-            serverModel.save(local);
+            // 4. Admitting a host the gate can place on retracts the item; the collector answers negatively too.
+            HostFixtures.makeLocalPlaceable(16L * 1024);
             List<AttentionItem> admitted = new ArrayList<>();
-            HostAttention.hostsNotAdmitted(admitted);
-            assertThat(admitted).as("step 4: an admitted host raises nothing").isEmpty();
+            HostAttention.hostsTakingNoApps(admitted);
+            assertThat(admitted).as("step 4: an admitted host the gate places on raises nothing").isEmpty();
 
             // 5. A CORDONED host is a deliberate operator state, never a warning.
+            local = serverModel.findById(ServerModel.localServerId());
             local.set(ServerModel.ADMISSION, ServerModel.ADMISSION_CORDONED);
             serverModel.save(local);
             List<AttentionItem> cordoned = new ArrayList<>();
-            HostAttention.hostsNotAdmitted(cordoned);
+            HostAttention.hostsTakingNoApps(cordoned);
             assertThat(cordoned).as("step 5: a cordoned host raises nothing either").isEmpty();
         } finally {
-            local.set(ServerModel.ADMISSION, admission);
-            serverModel.save(local);
+            captured.restore();
         }
     }
 

@@ -39,6 +39,9 @@ import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.orm.field.EnumField;
+import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.rules.RuleVocabulary;
+import be.elevenways.zenit.common.orm.query.rules.SchemaVocabulary;
 import be.elevenways.zenit.common.security.KnownSecurityEvents;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
@@ -111,7 +114,8 @@ public final class BanParts {
 
     static {
         OperationHandlers.attach(LIFT)
-            .applies(ban -> Boolean.TRUE.equals(ban.get(BanModel.ACTIVE)))
+            // Offered on what blocks its address now, the list's own "Blocked now": an expired ban has nothing to lift.
+            .applies(ban -> BanModel.blockedNow(ban, Now.instant()))
             .handle(call -> {
                 BanService.INSTANCE.lift(call.subject(),
                     Objects.requireNonNull(call.access(), "an operator lifts a ban").principal().displayName());
@@ -150,8 +154,10 @@ public final class BanParts {
                 .label(FieldLabels.labelFor(BanModel.SOURCE)).build())
             .filter(FilterSpec.leaf(BanModel.SCOPE, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(BanModel.SCOPE)).build())
-            .filter(FilterSpec.leaf(BanModel.ACTIVE, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE)
-                .label(FieldLabels.labelFor(BanModel.ACTIVE)).build())
+            // "Blocked now" is BanModel.blockedNow (enforced, unlifted, unexpired), never the stored flag the expiry
+            // sweep clears late.
+            .filter(FilterSpec.globalLeaf(BanModel.BLOCKED_NOW, banText("blocked_now"), BanModel.BLOCKED_NOW,
+                CoreTypes.IS_TRUE, CoreTypes.IS_FALSE).build())
             .filter(FilterSpec.leaf(BanModel.EVENT_TYPE, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(BanModel.EVENT_TYPE)).build())
             .defaultSort(SortSpec.desc("created_at"))
@@ -178,15 +184,15 @@ public final class BanParts {
             .navOrder(40)
             // The cause of an automatic ban in the reader's own words, off the ONE description registry the event
             // vocabulary declares into; an undescribed type keeps its dotted spelling.
-            .reads(ResourceReads.rows().mapCells(BanParts::cell))
+            .reads(ResourceReads.rows().mapCells(BanParts::cell)
+                .source(source -> source.vocabularyFrom(BanParts::filterVocabulary)))
             .list(ResourceList.rows(table).chrome(CmsSupport.FILTERABLE_LIST).facets().ruleFilters()
                 .search(BanModel.IP, BanModel.REASON)
                 // Opens on what is blocked NOW: a default the reader removes to see lifted and expired bans.
-                .defaultFilter(FilterState.empty().with(BanModel.ACTIVE.getName(), Boolean.TRUE.toString()),
-                    filter -> BanModel.ACTIVE.getName().equals(filter) ? banText("blocked_now") : null)
+                .defaultFilter(FilterState.empty().with(BanModel.BLOCKED_NOW, Boolean.TRUE.toString()),
+                    filter -> BanModel.BLOCKED_NOW.equals(filter) ? banText("blocked_now") : null)
                 .computed(Objects.requireNonNull(table.column(STATE_COLUMN)), (ban, request) ->
-                    BanStateCell.of(Boolean.TRUE.equals(ban.get(BanModel.ACTIVE)),
-                        ban.get(BanModel.LIFTED_AT), ban.get(BanModel.EXPIRES_AT), Now.instant()))
+                    BanStateCell.of(ban, Now.instant()))
                 .build())
             // Blocking an address is the header's one action and its form (board Access-Blocked); the list carries no
             // quick-add bar beside it.
@@ -225,6 +231,11 @@ public final class BanParts {
                     .acrossRecords(ctx -> FieldAccess.Decision.READONLY)));
         }
         return bindings;
+    }
+
+    /** The ban columns' rule variables plus {@link BanModel#BLOCKED_NOW}, which no column backs. */
+    static @NonNull RuleVocabulary filterVocabulary() {
+        return SchemaVocabulary.of(Models.get(BanModel.class)).extend(List.of(BanModel.blockedNowVariable()));
     }
 
     private static @NonNull Microcopy banText(@NonNull String key) {

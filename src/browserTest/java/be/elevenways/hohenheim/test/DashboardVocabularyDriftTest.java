@@ -106,11 +106,11 @@ class DashboardVocabularyDriftTest {
             .containsExactlyInAnyOrder("host_key", "incus_cert");
 
         // 2. The host-status cell's emphasis is a fact on the member: only a quarantine is loud,
-        //    only a silent host names its daemon beside the wording, only OK looks green.
+        //    only a host that answered (silent since, or seen) names its daemon in its wording, only OK looks green.
         for (HostState state : HostState.values()) {
             assertThat(state.loud()).as("step 2: %s loud", state).isEqualTo(state == HostState.QUARANTINED);
             assertThat(state.namesDaemon()).as("step 2: %s names its daemon", state)
-                .isEqualTo(state == HostState.SILENT);
+                .isEqualTo(state == HostState.SILENT || state == HostState.OK);
             assertThat(state.dot() == StatusDotStatus.ONLINE).as("step 2: %s green", state).isEqualTo(state == HostState.OK);
         }
     }

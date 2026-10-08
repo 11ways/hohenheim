@@ -5,7 +5,6 @@ import be.elevenways.protoblast.common.dry.BlastDrySerializers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.plumage.component.StatusDotStatus;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * The STORED health verdict for a host, with the two facts every surface renders it
@@ -38,15 +37,15 @@ public enum HostState {
     NEVER_PROBED("never_probed", StatusDotStatus.IDLE, "state_never_probed", false, false),
 
     /** Reached recently with no error: the ONLY state that is allowed to look green. */
-    OK("ok", StatusDotStatus.ONLINE, null, false, false);
+    OK("ok", StatusDotStatus.ONLINE, "state_ok", false, true);
 
     private final String token;
     private final StatusDotStatus dot;
-    private final @Nullable String wordingKey;
+    private final String wordingKey;
     private final boolean loud;
     private final boolean namesDaemon;
 
-    HostState(String token, StatusDotStatus dot, @Nullable String wordingKey, boolean loud,
+    HostState(String token, StatusDotStatus dot, String wordingKey, boolean loud,
               boolean namesDaemon) {
         this.token = token;
         this.dot = dot;
@@ -70,19 +69,17 @@ public enum HostState {
         return this.loud;
     }
 
-    /** Whether the daemon label is shown BESIDE the wording (a silent host still names what it runs). */
+    /**
+     * Whether the wording names the daemon ({@code {$daemon}}): a host that answered says what answered and that the
+     * time after it is when it was last seen ("Docker 27.1, seen 3 minutes ago").
+     */
     public boolean namesDaemon() {
         return this.namesDaemon;
     }
 
-    /**
-     * The wording shown beside the dot.
-     *
-     * @return null for {@link #OK}, which shows the daemon label instead of a state word
-     */
-    public @Nullable Microcopy wording() {
-        return this.wordingKey == null
-            ? null : Microcopy.of(this.wordingKey).withFilter("scope", "server");
+    /** @return the wording shown beside the dot, before its arguments */
+    public @NonNull Microcopy wording() {
+        return Microcopy.of(this.wordingKey).withFilter("scope", "server");
     }
 
     static {

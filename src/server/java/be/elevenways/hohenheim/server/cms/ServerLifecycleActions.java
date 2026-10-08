@@ -149,7 +149,7 @@ final class ServerLifecycleActions {
             () -> report[0] = HostPreflight.runAndStore(name));
         List<Microcopy> failed = report[0].checks().stream()
             .filter(check -> check.required() && check.failed())
-            .map(check -> ServerOverviewState.checkLabel(check.name()))
+            .map(check -> HostPreflight.checkLabel(check.name()))
             .toList();
         if (!awaitsAdmission(row)) {
             return failed.isEmpty() ? serverCopy("host_checked").withArg("name", name)

@@ -5773,10 +5773,6 @@
     {
       "text": "{$name} cannot run apps yet",
       "scope": "attention_title"
-    },
-    {
-      "text": "Use Check and admit on the host, or nothing can be deployed there.",
-      "scope": "attention_detail"
     }
   ],
   "instance_placement_blocked": {
@@ -5866,7 +5862,7 @@
     }
   ],
   "shared_container": {
-    "text": "Shared containers (operator risk)",
+    "text": "Shared containers",
     "scope": "host_posture"
   },
   "vm_isolated": {
@@ -6058,7 +6054,7 @@
     "scope": "violations"
   },
   "host_preflight_check_now_required": {
-    "text": "Host '{$name}' last passed preflight under a different posture: the {$check} check FAILED and only counted as advisory then, and the posture it declares now requires it; fix that check and run preflight again",
+    "text": "{$name} does not pass its {$check} check, which must pass for apps to run there: {$finding}. Fix it, then Check again",
     "scope": "violations"
   },
   "host_capacity_reached": {
@@ -6066,7 +6062,7 @@
     "scope": "violations"
   },
   "host_capacity_unproven": {
-    "text": "Host '{$name}' has no recent memory reading, so nothing can be placed on it: run preflight on this host, which records the total memory every placement is judged against",
+    "text": "{$name} has no recent memory reading, so no new app is placed there; Check again measures it",
     "scope": "violations"
   },
   "host_prepared_image_missing": {
@@ -9682,7 +9678,7 @@
     "scope": "server"
   },
   "state_silent": {
-    "text": "silent",
+    "text": "{$daemon} silent, last seen",
     "scope": "server"
   },
   "state_never_probed": {
@@ -9850,7 +9846,7 @@
     "scope": "server_overview"
   },
   "evidence_stale": {
-    "text": "Evidence too old: the memory reading exceeds the {$hours}-hour freshness bound, so placement refuses this host until preflight re-measures it. Last measured",
+    "text": "The memory reading is older than {$hours} hours, so no new app is placed here until Check again measures it. Last measured",
     "scope": "server_overview"
   },
   "workloads": {
@@ -10178,11 +10174,11 @@
     "scope": "server_overview"
   },
   "ack_current": {
-    "text": "Accepted by {$actor} (warning v{$version})",
+    "text": "Accepted by {$actor}",
     "scope": "server_overview"
   },
   "ack_stale": {
-    "text": "Acceptance out of date (warning v{$version})",
+    "text": "Accepted for an earlier warning; accept it again",
     "scope": "server_overview"
   },
   "ack_missing": {
@@ -14070,10 +14066,16 @@
     "text": "Stack",
     "scope": "app_list"
   },
-  "state_ok": {
-    "text": "Working",
-    "scope": "app_list"
-  },
+  "state_ok": [
+    {
+      "text": "Working",
+      "scope": "app_list"
+    },
+    {
+      "text": "{$daemon}, seen",
+      "scope": "server"
+    }
+  ],
   "state_attention": {
     "text": "Needs attention",
     "scope": "app_list"
@@ -15037,7 +15039,7 @@
   "runs_column": {"text": "Runs", "scope": "host_list"},
   "cordoned_detail": {"text": "Apps already here keep running", "scope": "host_list"},
   "checks_failed": {"text": ".match {$count :number}\none {{1 required check failed: {$checks}}}\n* {{{$count} required checks failed: {$checks}}}", "scope": "host_list"},
-  "never_checked": {"text": "Not checked yet", "scope": "host_list"},
+  "never_checked": {"text": "Never checked yet", "scope": "host_list"},
   "checks_pass": {"text": "Its required checks pass; Check and admit lets apps run here", "scope": "host_list"},
   "memory_booked": {"text": "{$booked} of {$budget} booked", "scope": "host_list"},
   "memory_unmeasured": {"text": "Not measured yet", "scope": "host_list"},
@@ -15046,7 +15048,6 @@
   "runs_count": {"text": "{$apps}, {$databases}", "scope": "host_list"},
   "apps_count": {"text": ".match {$count :number}\none {{1 app}}\n* {{{$count} apps}}", "scope": "host_list"},
   "databases_count": {"text": ".match {$count :number}\none {{1 database}}\n* {{{$count} databases}}", "scope": "host_list"},
-  "host_checks_failed": {"text": ".match {$count :number}\none {{1 required check failed: {$checks}. Check and admit runs it again.}}\n* {{{$count} required checks failed: {$checks}. Check and admit runs them again.}}", "scope": "attention_detail"},
   "stop_forcing_https": [
     {
       "text": "Stop forcing HTTPS",
@@ -15647,5 +15648,13 @@
       "text": "Some requests to what it serves fail.",
       "scope": "attention_detail"
     }
-  ]
+  ],
+  "refusing": {
+    "text": "Cannot take new apps",
+    "scope": "host_admission"
+  },
+  "act_check_again": {
+    "text": "Check again",
+    "scope": "attention_action"
+  }
 }

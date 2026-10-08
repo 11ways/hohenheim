@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
+import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -16,6 +17,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -249,5 +251,22 @@ public final class InstanceKinds {
             }
         }
         return kinds;
+    }
+
+    /**
+     * The isolations the registered kinds that run on {@code runtime} provide: what a host of that runtime could be
+     * asked to place.
+     *
+     * @return the isolations, SHARED_KERNEL alone for a runtime no kind declares (the weakest, the conservative answer)
+     */
+    public static @NonNull Set<WorkloadIsolation> isolationsOn(@NonNull String runtime) {
+        Set<WorkloadIsolation> isolations = EnumSet.noneOf(WorkloadIsolation.class);
+        for (Identifier id : InstanceKindRegistry.REGISTRY.ids()) {
+            InstanceKindHandler handler = handlerFor(id);
+            if (handler != null && handler.supportedRuntimes().contains(runtime)) {
+                isolations.add(handler.isolation());
+            }
+        }
+        return isolations.isEmpty() ? EnumSet.of(WorkloadIsolation.SHARED_KERNEL) : isolations;
     }
 }

@@ -156,9 +156,7 @@ public final class AttentionCollector {
             }
         }
         if (HohenheimRoles.hostWorkloadsEnabled()) {
-            Map<Integer, AppHealth.HeldBack> heldBack = AppHealth.heldBackByHost();
-            HostAttention.hostsNotAdmitted(items, heldBack);
-            HostAttention.hostsHoldingAppsBack(items, heldBack);
+            HostAttention.hostsTakingNoApps(items, AppHealth.heldBackByHost());
             HostAttention.stuckReleasingPorts(items, Now.instant().minus(HostAttention.RELEASING_STUCK_AFTER));
         }
         return items;

@@ -13,14 +13,18 @@ import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.cms.AppDirectory.App;
 import be.elevenways.hohenheim.server.cms.AppDirectory.Source;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
-import be.elevenways.hohenheim.site.SiteTlsCell;
+import be.elevenways.hohenheim.CertCoverage;
+import be.elevenways.hohenheim.site.DomainCertCell;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -125,35 +129,44 @@ class AppsListJourneyTest extends HohenheimTestBase {
             // 3. Websites: their upstream's kind, their first name, no host, the HTTPS state of their names, and the
             //    site's own overview.
             assertRow(apps.get(PREFIX + "proxy"), Source.WEBSITE, "Proxy to an address", "proxy.apps-journey.test",
-                null, SiteTlsCell.MISSING, "/admin/sites/" + proxy.get(SiteModel.ID) + "/page/overview", "step 3");
+                null, CertCoverage.NONE, "/admin/sites/" + proxy.get(SiteModel.ID) + "/page/overview", "step 3");
             assertRow(apps.get(PREFIX + "redirect"), Source.WEBSITE, "Redirect", "redirect.apps-journey.test",
-                null, SiteTlsCell.MISSING, "/admin/sites/" + redirect.get(SiteModel.ID) + "/page/overview", "step 3");
+                null, CertCoverage.NONE, "/admin/sites/" + redirect.get(SiteModel.ID) + "/page/overview", "step 3");
             assertRow(apps.get(PREFIX + "static"), Source.WEBSITE, "Static files", "static.apps-journey.test",
-                null, SiteTlsCell.BROKEN, "/admin/sites/" + files.get(SiteModel.ID) + "/page/overview", "step 3");
+                null, CertCoverage.ERROR, "/admin/sites/" + files.get(SiteModel.ID) + "/page/overview", "step 3");
             assertThat(apps.get(PREFIX + "static").health().tone())
                 .as("step 3: a name forced to HTTPS without a certificate is the broken verdict the site page shows")
                 .isEqualTo(HealthTone.BROKEN);
+            // The HTTPS column is the main address's HTTPS, never the app's verdict: the Addresses list's own words.
+            DomainCertCell staticHttps = apps.get(PREFIX + "static").https();
+            assertThat(say(staticHttps.label())).as("step 3: the forced name reads as the Addresses list says it")
+                .isEqualTo("Not working").isNotEqualTo("Error page");
+            assertThat(say(staticHttps.detail())).as("step 3: with the Addresses list's reason beside it")
+                .isEqualTo(say(DomainParts.httpsDetail(domainOf(files), CertCoverage.ERROR, null)));
+            assertThat(say(apps.get(PREFIX + "proxy").https().label()))
+                .as("step 3: an unforced name without a certificate says so in the same words")
+                .isEqualTo(say(CertCoverage.NONE.label()));
             assertRow(apps.get(PREFIX + "passthrough"), Source.WEBSITE, "TLS passthrough",
-                "passthrough.apps-journey.test", null, SiteTlsCell.NOT_USED,
+                "passthrough.apps-journey.test", null, CertCoverage.NOT_USED,
                 "/admin/sites/" + passthrough.get(SiteModel.ID) + "/page/overview", "step 3");
 
             // 4. Workloads: their kind, the names of the sites serving them (or the port they publish, or nothing),
             //    the host they run on, and the workload's own overview.
             App dockerApp = apps.get(PREFIX + "docker");
             assertRow(dockerApp, Source.WORKLOAD, "Docker container", "docker.apps-journey.test", host,
-                SiteTlsCell.MISSING, "/admin/instances/" + docker.get(InstanceModel.ID) + "/page/overview", "step 4");
+                CertCoverage.NONE, "/admin/instances/" + docker.get(InstanceModel.ID) + "/page/overview", "step 4");
             assertThat(dockerApp.address().moreCount()).as("step 4: the second name of its site counts as one more")
                 .isEqualTo(1);
             assertRow(apps.get(PREFIX + "lxc"), Source.WORKLOAD, "System container (LXC)", null, incusHost,
-                SiteTlsCell.NONE, "/admin/instances/" + lxc.get(InstanceModel.ID) + "/page/overview", "step 4");
+                null, "/admin/instances/" + lxc.get(InstanceModel.ID) + "/page/overview", "step 4");
             App vmApp = apps.get(PREFIX + "vm");
             assertThat(vmApp.addressText()).as("step 4: a machine no site serves is reached at the port it publishes")
                 .endsWith(":25588");
-            assertRow(vmApp, Source.WORKLOAD, "Virtual machine", vmApp.addressText(), incusHost, SiteTlsCell.NONE,
+            assertRow(vmApp, Source.WORKLOAD, "Virtual machine", vmApp.addressText(), incusHost, null,
                 "/admin/instances/" + vm.get(InstanceModel.ID) + "/page/overview", "step 4");
 
             // 5. A stack: one row naming its members, on its host, opening its services.
-            assertRow(apps.get(PREFIX + "stack"), Source.STACK, "Stack with 2 services", null, host, SiteTlsCell.NONE,
+            assertRow(apps.get(PREFIX + "stack"), Source.STACK, "Stack with 2 services", null, host, null,
                 "/admin/stacks/" + stack.get(StackModel.ID) + "/page/services", "step 5");
             assertThat(apps.get(PREFIX + "stack").health().tone()).as("step 5: an active stack is working")
                 .isEqualTo(HealthTone.OK);
@@ -214,15 +227,26 @@ class AppsListJourneyTest extends HohenheimTestBase {
         }
     }
 
-    private static void assertRow(App app, Source source, String kind, String address, String host, String https,
-                                  String target, String step) {
+    private static void assertRow(App app, Source source, String kind, String address, String host,
+                                  CertCoverage https, String target, String step) {
         assertThat(app).as(step + ": the app is listed").isNotNull();
         assertThat(app.source()).as(step + ": " + app.name() + " is read from its record").isEqualTo(source);
         assertThat(app.kind()).as(step + ": " + app.name() + "'s kind").isEqualTo(kind);
         assertThat(app.addressText()).as(step + ": " + app.name() + "'s address").isEqualTo(address);
         assertThat(app.host()).as(step + ": " + app.name() + "'s host").isEqualTo(host);
-        assertThat(app.https().token()).as(step + ": " + app.name() + "'s HTTPS state").isEqualTo(https);
+        assertThat(app.https() == null ? null : app.https().status()).as(step + ": " + app.name() + "'s HTTPS state")
+            .isEqualTo(https == null ? null : https.key());
         assertThat(app.target().toUrl()).as(step + ": " + app.name() + " opens its record page").isEqualTo(target);
+    }
+
+    /** @return the one name stored for this site */
+    private static Row domainOf(Row site) {
+        return Models.get(SiteDomainModel.class).find()
+            .where(SiteDomainModel.SITE_ID.eq(site.get(SiteModel.ID))).first();
+    }
+
+    private static String say(Microcopy copy) {
+        return copy == null ? "" : copy.resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver());
     }
 
     private static Row site(List<Runnable> cleanup, String name, String kind, Map<String, Object> settings,
