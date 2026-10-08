@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.server.cms.DnsRecordParts;
 import be.elevenways.hohenheim.server.cms.DnsOperations;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -50,7 +49,7 @@ class DnsRecordTypeSurfaceTest extends HohenheimTestBase {
         //    list renders from AND what invoke re-checks (ResourcePageEndpoints 404s a
         //    hidden action). An operator context passes the capability walk, so type is
         //    the deciding axis.
-        Row admin = AuthModels.users().find()
+        Row admin = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         AccessContext operator = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(((Integer) admin.get(UserModel.ID)).longValue(),

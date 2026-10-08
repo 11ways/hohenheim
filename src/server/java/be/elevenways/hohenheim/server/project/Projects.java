@@ -16,7 +16,6 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.GroupMembershipToken;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.PermissionResolver;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -103,7 +102,7 @@ public final class Projects {
     /** The membership permission of a project's group ({@code group.<slug>}). */
     public static @NonNull String membershipPermissionOf(@NonNull Row project) {
         Integer groupId = project.get(ProjectModel.GROUP_ID);
-        Row group = groupId == null ? null : AuthModels.permissionGroups().findById(groupId);
+        Row group = groupId == null ? null : Models.get(PermissionGroupModel.class).findById(groupId);
         String slug = group == null ? null : group.get(PermissionGroupModel.SLUG);
         if (slug == null) {
             throw new IllegalStateException("Project " + project.get(ProjectModel.ID)
@@ -243,7 +242,7 @@ public final class Projects {
      */
     public static @NonNull List<Member> directMembersOf(@NonNull Row project) {
         List<Member> members = new ArrayList<>();
-        for (Row grant : AuthModels.grants().find()
+        for (Row grant : Models.get(GrantModel.class).find()
                 .where(GrantModel.PERMISSION.eq(membershipPermissionOf(project)))
                 .all()) {
             String type = grant.get(GrantModel.SUBJECT_TYPE);
@@ -305,7 +304,7 @@ public final class Projects {
 
     /** Create the project's backing permission group; slug from the name, unique. */
     static int createGroupFor(@NonNull String projectName) {
-        Model groups = AuthModels.permissionGroups();
+        Model groups = Models.get(PermissionGroupModel.class);
         String base = GROUP_SLUG_PREFIX + safeSlug(projectName);
         String slug = base;
         int attempt = 2;
@@ -322,7 +321,7 @@ public final class Projects {
 
     /** Keep the group's TITLE and provenance mirroring a renamed project (the slug never moves). */
     static void syncGroupTitle(int groupId, @NonNull String projectName) {
-        Row group = AuthModels.permissionGroups().findById(groupId);
+        Row group = Models.get(PermissionGroupModel.class).findById(groupId);
         if (group == null) {
             return;
         }
@@ -333,7 +332,7 @@ public final class Projects {
         }
         group.set(PermissionGroupModel.TITLE, projectName);
         group.set(PermissionGroupModel.DESCRIPTION, description);
-        AuthModels.permissionGroups().save(group);
+        Models.get(PermissionGroupModel.class).save(group);
     }
 
     /**
@@ -380,23 +379,23 @@ public final class Projects {
      * call, never an assumed hook.
      */
     static void removeGroupFor(int groupId) {
-        Row group = AuthModels.permissionGroups().findById(groupId);
+        Row group = Models.get(PermissionGroupModel.class).findById(groupId);
         String slug = group == null ? null : group.get(PermissionGroupModel.SLUG);
         // A slug-less group names no membership token, so there is nothing to sweep.
         if (slug != null) {
             String permission = GroupMembershipToken.of(slug);
             List<Integer> doomed = new ArrayList<>();
-            for (Row grant : AuthModels.grants().find()
+            for (Row grant : Models.get(GrantModel.class).find()
                     .where(GrantModel.PERMISSION.eq(permission)).all()) {
                 doomed.add(grant.get(GrantModel.ID));
             }
             for (Integer grantId : doomed) {
-                AuthModels.grants().delete(grantId);
+                Models.get(GrantModel.class).delete(grantId);
             }
         }
         RecordGrants.revokeAllForSubject(GrantSubjectType.GROUP, groupId);
         if (group != null) {
-            AuthModels.permissionGroups().delete(groupId);
+            Models.get(PermissionGroupModel.class).delete(groupId);
         }
     }
 

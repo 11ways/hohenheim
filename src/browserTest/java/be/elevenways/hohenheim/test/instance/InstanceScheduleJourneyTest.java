@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -110,7 +109,7 @@ class InstanceScheduleJourneyTest extends HohenheimTestBase {
             .as("step 3: the target model is stamped").isEqualTo(InstanceModel.MODEL_ID.toString());
         assertThat(schedule.get(RecordScheduleModel.RECORD_ID))
             .as("step 3: the target record is the instance").isEqualTo(String.valueOf(instanceId));
-        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         assertThat(schedule.get(RecordScheduleModel.RUN_AS))
             .as("step 3: the chain runs as the editor")
             .isEqualTo(((Integer) admin.get(UserModel.ID)).longValue());

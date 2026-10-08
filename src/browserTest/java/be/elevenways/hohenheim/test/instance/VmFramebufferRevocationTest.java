@@ -12,7 +12,7 @@ import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
-import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -172,8 +172,8 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
             RecordGrants.revoke(GrantSubjectType.USER, viewUserId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.VIEW);
             HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
-            AuthModels.users().delete(consoleUserId);
-            AuthModels.users().delete(viewUserId);
+            Models.get(UserModel.class).delete(consoleUserId);
+            Models.get(UserModel.class).delete(viewUserId);
         }
     }
 
@@ -202,7 +202,7 @@ class VmFramebufferRevocationTest extends HohenheimTestBase {
         RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
             HohenheimAccess.MANAGE);
         HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
-        AuthModels.users().delete(userId);
+        Models.get(UserModel.class).delete(userId);
     }
 
     /** A fake source: an ever-changing snapshot (so a frame always sends) + recorded input. */

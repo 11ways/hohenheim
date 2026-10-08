@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.spamservice.client.ManagedClient;
 import be.elevenways.spamservice.client.ManagedClientKey;
@@ -25,7 +26,12 @@ import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.UuidField;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.CallerChannel;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.zenit.common.setting.SettingDefinition;
+import be.elevenways.zenit.common.setting.SettingGroup;
 import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.test.support.SettingAuthorityTestSupport;
 import be.elevenways.zenit.test.support.TestAccessContexts;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -37,11 +43,13 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -150,6 +158,10 @@ class SpamserviceCmsContractTest {
         assertThat(snapshot.settings().get("network.port").readOnly()).isTrue();
         assertThat(snapshot.settings().get("network.port").provenance()).isEqualTo("env:PORT");
         assertThat(snapshot.rootGroup().getChildGroup("scoring").getDefinition("threshold").isRestartRequired()).isTrue();
+        assertThat(SettingAuthorityTestSupport.problems(definitionsUnder(snapshot.rootGroup())))
+            .as("every remote setting declares its read and write authority").isEmpty();
+        assertThat(snapshot.rootGroup().getChildGroup("scoring").getDefinition("threshold").getReadPermission())
+            .as("only the system tier reads the spam service").isEqualTo(HohenheimSources.ADMIN_SYSTEM);
 
         // The host owns group copy only: labels localize without changing remote definitions or snapshot facts.
         var scoring = snapshot.rootGroup().getChildGroup("scoring");
@@ -181,12 +193,28 @@ class SpamserviceCmsContractTest {
         assertThat(scoring.getDefinition("threshold").getDescription()).isEqualTo("Cutoff");
         assertThat(scoring.isAdvanced()).as("translated labels do not change remote grouping facts").isFalse();
 
-        assertThat(backend.validate(new SettingsBackend.Patch("r1", List.of(
-            SettingsBackend.Change.set("network.port", "9000")))))
+        // The spam service is written with the controller key: a delegated admin, nobody, or system work without the
+        // system tier is refused before any write leaves this host, and only the system tier writes.
+        SettingsBackend.Patch threshold = new SettingsBackend.Patch("r1", List.of(
+            SettingsBackend.Change.set("scoring.threshold", "60")));
+        AccessContext delegated = TestAccessContexts.withPermissions(HohenheimSources.ADMIN_ACCESS.value());
+        assertThat(as(delegated, () -> backend.apply(threshold)).refusals()).extracting(SettingsBackend.Refusal::kind)
+            .as("a delegated admin may not change the spam service")
+            .containsExactly(SettingsBackend.RefusalKind.NOT_PERMITTED);
+        assertThat(ExecutionIdentity.supply(null, () -> backend.validate(threshold)))
+            .extracting(SettingsBackend.Refusal::kind)
+            .as("nor may a write without identity").containsExactly(SettingsBackend.RefusalKind.NOT_PERMITTED);
+        assertThat(backend.validate(threshold)).extracting(SettingsBackend.Refusal::kind)
+            .as("nor the harness's system work, whose purpose holds no system tier")
+            .containsExactly(SettingsBackend.RefusalKind.NOT_PERMITTED);
+        assertThat(patchBody.get()).as("nothing was sent").isNull();
+
+        AccessContext operator = TestAccessContexts.withPermissions(HohenheimSources.ADMIN_SYSTEM.value());
+        assertThat(as(operator, () -> backend.validate(
+            new SettingsBackend.Patch("r1", List.of(SettingsBackend.Change.set("network.port", "9000"))))))
             .extracting(SettingsBackend.Refusal::kind).containsExactly(SettingsBackend.RefusalKind.READ_ONLY);
 
-        SettingsBackend.ApplyResult result = backend.apply(new SettingsBackend.Patch("r1", List.of(
-            SettingsBackend.Change.set("scoring.threshold", "60"))));
+        SettingsBackend.ApplyResult result = as(operator, () -> backend.apply(threshold));
         assertThat(result.succeeded()).isTrue();
         assertThat(result.restartRequired()).isTrue();
         assertThat(result.revision()).isEqualTo("r2");
@@ -197,8 +225,22 @@ class SpamserviceCmsContractTest {
         SettingsBackend.Snapshot unavailable = backend.snapshot();
         assertThat(unavailable.available()).isFalse();
         assertThat(unavailable.settings()).containsKeys("scoring.threshold", "datasets.token", "network.port");
-        assertThat(backend.apply(new SettingsBackend.Patch("r1", List.of(
-            SettingsBackend.Change.set("scoring.threshold", "70")))).succeeded()).isFalse();
+        assertThat(as(operator, () -> backend.apply(
+            new SettingsBackend.Patch("r1", List.of(SettingsBackend.Change.set("scoring.threshold", "70")))))
+            .succeeded()).isFalse();
+    }
+
+    private static List<SettingDefinition<?>> definitionsUnder(SettingGroup group) {
+        List<SettingDefinition<?>> definitions = new ArrayList<>(group.getSettingDefinitions().values());
+        for (SettingGroup child : group.getChildGroups().values()) {
+            definitions.addAll(definitionsUnder(child));
+        }
+        return definitions;
+    }
+
+    /** Runs {@code body} as {@code caller} itself; inside the harness's system frame actingFor keeps system authority. */
+    private static <T> T as(AccessContext caller, Supplier<T> body) {
+        return ExecutionIdentity.supply(ExecutionIdentity.caller(caller, CallerChannel.of(caller)), body);
     }
 
     @Test

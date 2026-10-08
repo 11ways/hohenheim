@@ -23,7 +23,6 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.test.support.PanelSurfaces;
 import be.elevenways.zenit.cms.test.support.SurfaceCase;
@@ -110,7 +109,7 @@ class B15BeforeSurfacesTest {
     static void seed() throws Exception {
         TestDatabases.freshBootedDatasource();
         HohenheimTestBase.seedAuthenticatedAdmin();
-        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         AccessContext operator = access(admin.get(UserModel.ID), "Test Admin");
         operatorAccess = operator;
         int tenantId = ApiSupport.user(PREFIX + "member@capture.test", "B15 Member");

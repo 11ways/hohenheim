@@ -29,7 +29,6 @@ import be.elevenways.zenit.cms.server.panel.PartsLists;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.server.resource.ActivityAdmin;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.orm.activity.ActivityActions;
@@ -104,13 +103,13 @@ class AdminActivityListTest extends HohenheimTestBase {
             applied, access).stream().map(row -> row.get(ActivityModel.RECORD_ID)).toList())
             .as("step 4: account names sort Alpha before Zelda, not by their ids").containsExactly(second, first);
 
-        Row user = AuthModels.users().findById(zeldaId);
+        Row user = Models.get(UserModel.class).findById(zeldaId);
         user.set(UserModel.DISPLAY_NAME, null);
-        AuthModels.users().save(user);
+        Models.get(UserModel.class).save(user);
         Microcopy email = (Microcopy) PartsReads.cellValue(null, resource, null, zelda, column(resource, "actor"));
         assertThat(email.resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()))
             .as("step 5: missing display name falls back to the stored email").isEqualTo(user.get(UserModel.EMAIL));
-        AuthModels.users().find().where(UserModel.ID.eq(zeldaId)).delete();
+        Models.get(UserModel.class).find().where(UserModel.ID.eq(zeldaId)).delete();
         Microcopy deleted = (Microcopy) PartsReads.cellValue(null, resource, null, zelda, column(resource, "actor"));
         assertThat(deleted.resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()))
             .as("step 6: a deleted author is named as unknown, never by its id").isEqualTo("Account no longer known");

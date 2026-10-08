@@ -7,7 +7,6 @@ import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -51,7 +50,7 @@ class AccessListApiTest extends HohenheimTestBase {
         // cover both it and the access-list capability vocabulary.
         GrantService.createDirectGrant(GrantSubjectType.USER, tenantId, MANAGE_ACCESS, true);
 
-        int adminId = AuthModels.users().find()
+        int adminId = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
         keyAdmin = ApiKeyService.create(adminId, PREFIX + "admin", List.of("hohenheim.*"), null)
             .plaintext();

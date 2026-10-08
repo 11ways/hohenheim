@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.zenit.common.Zenit;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,6 +61,18 @@ class HohenheimSettingsRulesTest {
                 .as("step 5: 40000-40499 is a valid window").doesNotThrowAnyException();
             assertThat(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Instances.PUBLIC_PORT_FIRST))
                 .isEqualTo(40000);
+
+            // 6. The nixpacks pin is a numeric release, never a path, a tag or a shell fragment.
+            String version = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Builds.NIXPACKS_VERSION);
+            for (String invalid : List.of("latest", "1.41", "../other", "1.41.0;id")) {
+                assertThatThrownBy(() -> Zenit.SETTINGS_VALUES.setValue(
+                        HohenheimSettings.Builds.NIXPACKS_VERSION, invalid))
+                    .as("step 6: nixpacks pin %s is refused by its rule", invalid)
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining(HohenheimSettings.Builds.NIXPACKS_RELEASE_VERSION.getName());
+            }
+            assertThat(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Builds.NIXPACKS_VERSION))
+                .as("step 6: and the pin in force is unchanged").isEqualTo(version);
         } finally {
             // The group's keys live under "hohenheim" in the framework tree since 2026-09-26.
             Zenit.SETTINGS_VALUES.loadFromMap(Map.of("hohenheim", Map.of(

@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
@@ -72,6 +71,6 @@ class ProjectIdentityTest extends HohenheimTestBase {
     }
 
     private static String slugOf(int groupId) {
-        return AuthModels.permissionGroups().findById(groupId).get(PermissionGroupModel.SLUG);
+        return Models.get(PermissionGroupModel.class).findById(groupId).get(PermissionGroupModel.SLUG);
     }
 }

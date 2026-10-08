@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -60,25 +60,25 @@ public final class TenantConduits {
      * fresh database that only needs an operator caller and a class that logs one in never seed a second account.
      */
     public static Row operatorUser() {
-        Row existing = AuthModels.users().find().where(UserModel.EMAIL.eq(OPERATOR_EMAIL)).first();
+        Row existing = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq(OPERATOR_EMAIL)).first();
         if (existing != null) {
             return existing;
         }
-        Row user = AuthModels.users().createEmptyRow();
+        Row user = Models.get(UserModel.class).createEmptyRow();
         user.set(UserModel.EMAIL, OPERATOR_EMAIL);
         user.set(UserModel.DISPLAY_NAME, "Test Admin");
         user.set(UserModel.ENABLED, true);
         user.set(UserModel.CREATED_AT, Now.instant());
         user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
+        Models.get(UserModel.class).save(user);
         ZenitAuth.markSeeded();   // a user exists, so the setup gate must not redirect
         // Grant everything (the /setup admin's shape) so the panels' access checks pass.
-        Row grant = AuthModels.grants().createEmptyRow();
+        Row grant = Models.get(GrantModel.class).createEmptyRow();
         grant.set(GrantModel.SUBJECT_TYPE, GrantSubjectType.USER.key());
         grant.set(GrantModel.SUBJECT_ID, user.get(UserModel.ID));
         grant.set(GrantModel.PERMISSION, "*");
         grant.set(GrantModel.VALUE, true);
-        AuthModels.grants().save(grant);
+        Models.get(GrantModel.class).save(grant);
         return user;
     }
 

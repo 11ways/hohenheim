@@ -9,7 +9,6 @@ import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
@@ -63,7 +62,7 @@ class SiteApiTest extends HohenheimTestBase {
         catchAllSiteId = site(PREFIX + "catch-all", true);
         domain(catchAllSiteId, "**." + ZONE, SiteDomainModel.MATCH_WILDCARD);
 
-        int adminId = AuthModels.users().find()
+        int adminId = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
         keyAdmin = ApiKeyService.create(adminId, PREFIX + "admin", List.of("hohenheim.*"), null)
             .plaintext();

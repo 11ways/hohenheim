@@ -21,7 +21,6 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -59,7 +58,7 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
         tenantId = ApiSupport.user("tpl-tenant@hohenheim.local", "Template Tenant");
         tenantPrincipal = new UserPrincipal(tenantId, "Template Tenant");
 
-        Row admin = AuthModels.users().find()
+        Row admin = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         adminPrincipal = new UserPrincipal(admin.get(UserModel.ID), "Test Admin");
     }

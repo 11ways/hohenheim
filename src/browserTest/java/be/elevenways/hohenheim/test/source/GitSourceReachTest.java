@@ -17,7 +17,6 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.GrantService;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -345,7 +344,7 @@ class GitSourceReachTest extends HohenheimTestBase {
 
     /** The seeded operator account (it holds "*"), as a request caller rather than the test body's system work. */
     private static UserPrincipal operator() {
-        int id = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
+        int id = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
             .get(UserModel.ID);
         return new UserPrincipal(id, "Test Admin");
     }

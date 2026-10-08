@@ -6,7 +6,6 @@ import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.data.RecordSourceQuery;
@@ -37,7 +36,7 @@ class SoftDeleteSurfacesTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        int adminId = AuthModels.users().find()
+        int adminId = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
         keyAdmin = ApiKeyService.create(adminId, NAME + "-admin", List.of("hohenheim.*"), null)
             .plaintext();

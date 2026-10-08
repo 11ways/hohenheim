@@ -293,9 +293,10 @@ public final class HohenheimPanel extends Panel {
             page.mount(section.mount());
         }
         return page.frameworkAdvanced()
-            // The page edits the operator-trusted endpoints (auth_proteus is fetched with any-address reach) and the
-            // private-network opt-ins, so the delegable panel entry alone never reaches it.
-            .requirePermission(HohenheimSources.ADMIN_SYSTEM)
+            // The operator-trusted keys carry their own authority (host-only, or hohenheim.admin.system for the
+            // auth_proteus login, the proxy trust lists, the build images and the spam service), so the page is an
+            // ordinary admin peer.
+            .requirePermission(HohenheimSources.ADMIN_ACCESS)
             .navGroup(NavGroup.SYSTEM)
             .navOrder(95)
             .description(Microcopy.of("nav_hint").withFilter("scope", "settings"))

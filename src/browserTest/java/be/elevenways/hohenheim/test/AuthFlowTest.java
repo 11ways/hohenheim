@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.zenit.auth.AuthKeys;
-import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.ZenitAuth;
@@ -67,7 +67,7 @@ class AuthFlowTest extends HohenheimTestBase {
     void authenticatedShellOffersAccountAndSignsOut() {
         // Sign out on a THROWAWAY session: the class-shared one must survive
         // for every later test class in this JVM.
-        Row user = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Row user = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         Session throwaway = Zenit.getSessionStore().create();
         throwaway.set(AuthKeys.USER_ID, ((Integer) user.get(UserModel.ID)).longValue());
         throwaway.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());

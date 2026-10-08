@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.test.support.GlobalTextSearchMoves;
@@ -46,7 +46,7 @@ class SpamserviceAdminSurfacesBrowserTest extends HohenheimTestBase {
     @Test
     void theRemoteSpamserviceEntriesOfferWhatTheyOfferedBeforeTheMove() {
         SurfaceBaselines stored = SurfaceBaselines.load(SpamserviceAdminSurfacesBrowserTest.class, BASELINE);
-        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         AccessContext operator = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(admin.get(UserModel.ID), "Test Admin")));
 

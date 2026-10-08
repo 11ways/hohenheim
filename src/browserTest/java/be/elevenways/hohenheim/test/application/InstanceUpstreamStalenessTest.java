@@ -212,6 +212,10 @@ class InstanceUpstreamStalenessTest {
             InstanceService service = new InstanceService();
             InstanceStatusReconciler reconciler = new InstanceStatusReconciler();
             int instanceId = container("crasher");
+            // Restart is the default; this journey needs a death with no console watcher.
+            Row instance = Models.get(InstanceModel.class).findById(instanceId);
+            instance.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_NONE);
+            Models.get(InstanceModel.class).save(instance);
             int siteId = siteExposing(instanceId, "crasher");
             String handle = FakeDockerDaemon.handleOf(instanceId);
             try {

@@ -23,7 +23,7 @@ import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -357,7 +357,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             for (int record : List.of(id, agentlessId, absentId)) {
                 HardDeletes.byId(Models.get(InstanceModel.class), record);
             }
-            AuthModels.users().delete(userId);
+            Models.get(UserModel.class).delete(userId);
             // Give back both working credentials borrowed from a real machine, and PRINT
             // the outcome: a cleanup that fails silently leaves root access behind.
             System.out.println("=== cleanup: shared objects -> "

@@ -12,7 +12,6 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -63,7 +62,7 @@ class DatabaseCapacityApiTest extends HohenheimTestBase {
         defaultedId = database(PREFIX + "defaulted", hostId, null, null);
         sharedId = database(PREFIX + "shared", hostId, engineId, null);
 
-        int adminId = AuthModels.users().find()
+        int adminId = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first().get(UserModel.ID);
         keyAdmin = ApiKeyService.create(adminId, PREFIX + "admin", List.of("hohenheim.*"), null)
             .plaintext();

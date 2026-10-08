@@ -30,7 +30,10 @@ public class HohenheimSettings {
     // chain loads: hohenheim.* in settings/local.dry, or ZENIT__HOHENHEIM__* in the environment.
     // The retired settings/hohenheim.dry is adopted into local.dry and HOHENHEIM__* refused
     // (HohenheimRetiredNames).
+    // Hohenheim's own settings are the ordinary admin tier's; the operator-trusted ones ask ADMIN_SYSTEM themselves.
     public static final SettingGroup HOHENHEIM = Zenit.SETTINGS.createGroup("hohenheim")
+        .readPermission(HohenheimSources.ADMIN_ACCESS)
+        .writePermission(HohenheimSources.ADMIN_ACCESS)
         .label(Microcopy.of("settings.hohenheim.label"));
 
     // Nested groups below are force-loaded at compile time via @BlastAutoLoad
@@ -46,12 +49,14 @@ public class HohenheimSettings {
             .icon("route");
 
         public static final SettingDefinition<Integer> HTTP_PORT = GROUP.buildSetting("http_port", Integer.class)
+            .hostOnly()
             .defaultValue(80)
             .description("HTTP proxy listen port")
             .restartRequired()
             .build();
 
         public static final SettingDefinition<String> HTTP_SOCKET_PATH = GROUP.buildSetting("http_socket_path", String.class)
+            .hostOnly()
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.ANY)
             .description("Optional Unix socket path for the HTTP proxy instead of a public TCP listener. "
                 + "The socket bridges to a loopback TCP port, so on a multi-user host any local account "
@@ -63,6 +68,7 @@ public class HohenheimSettings {
             .build();
 
         public static final SettingDefinition<String> HTTP_SOCKET_PERMISSIONS = GROUP.buildSetting("http_socket_permissions", String.class)
+            .hostOnly()
             .defaultValue("0660")
             .description("Octal permissions applied to the HTTP proxy Unix socket (limits socket access only, "
                 + "not the internal loopback port)")
@@ -70,6 +76,7 @@ public class HohenheimSettings {
             .build();
 
         public static final SettingDefinition<Integer> HTTPS_PORT = GROUP.buildSetting("https_port", Integer.class)
+            .hostOnly()
             .defaultValue(443)
             .description("HTTPS proxy listen port")
             .restartRequired()
@@ -87,6 +94,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<List<String>> PROXY_PROTOCOL_TRUSTED_SOURCES = GROUP
             .buildStringListSetting("proxy_protocol_trusted_sources")
+            .writePermission(HohenheimSources.ADMIN_SYSTEM)
             .defaultValue(List.of())
             .coercer(Proxy::coerceIpNetworks)
             .description("IP addresses and CIDR ranges allowed to supply an inbound PROXY protocol v2 header "
@@ -128,6 +136,7 @@ public class HohenheimSettings {
             .build();
 
         public static final SettingDefinition<String> FALLBACK_ADDRESS = GROUP.buildSetting("fallback_address", String.class)
+            .hostOnly()
             .description("Address for requests that match no site")
             .build();
 
@@ -137,6 +146,7 @@ public class HohenheimSettings {
             .build();
 
         public static final SettingDefinition<String> IPV6_ADDRESS = GROUP.buildSetting("ipv6_address", String.class)
+            .hostOnly()
             .description("Optional IPv6 address for dedicated proxy listeners")
             .restartRequired()
             .build();
@@ -163,6 +173,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<List<String>> TRUSTED_PROXY_KEYS = GROUP
             .buildStringListSetting("trusted_proxy_keys")
+            .writePermission(HohenheimSources.ADMIN_SYSTEM)
             .defaultValue(List.of())
             .description("X-Hohenheim-Key values accepted from trusted upstream HTTP proxies")
             .secret()
@@ -202,7 +213,8 @@ public class HohenheimSettings {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("roles")
             .label(Microcopy.of("settings.hohenheim.roles.label"))
             .describe(Microcopy.of("settings.hohenheim.roles.help"))
-            .icon("server");
+            .icon("server")
+            .hostOnly();
 
         public static final SettingDefinition<Boolean> PROXY = GROUP.buildSetting("proxy", Boolean.class)
             .defaultValue(true)
@@ -279,11 +291,13 @@ public class HohenheimSettings {
          */
         public static final SettingDefinition<String> ACME_DIRECTORY_URL = GROUP
             .buildSetting("acme_directory_url", String.class)
+            .hostOnly()
             .description("ACME directory URL of the certificate authority; empty uses "
                 + "Let's Encrypt (production or staging per the staging switch)")
             .build();
 
         public static final SettingDefinition<String> DNS_HOOK_COMMAND = GROUP.buildSetting("dns_hook_command", String.class)
+            .hostOnly()
             .description("Executable DNS-01 hook; called as: command present|cleanup record-name record-value")
             .restartRequired()
             .build();
@@ -303,6 +317,7 @@ public class HohenheimSettings {
             .icon("sitemap");
 
         public static final SettingDefinition<Boolean> ENABLED = GROUP.buildSetting("enabled", Boolean.class)
+            .hostOnly()
             .defaultValue(false)
             .description("Serve the configured DNS zones authoritatively on UDP and TCP. "
                 + "The registrar must delegate each zone to this server before answers matter, "
@@ -311,12 +326,14 @@ public class HohenheimSettings {
             .build();
 
         public static final SettingDefinition<String> BIND_ADDRESS = GROUP.buildSetting("bind_address", String.class)
+            .hostOnly()
             .defaultValue("0.0.0.0")
             .description("Address the DNS listeners bind to")
             .restartRequired()
             .build();
 
         public static final SettingDefinition<Integer> PORT = GROUP.buildSetting("port", Integer.class)
+            .hostOnly()
             .defaultValue(53)
             .description("DNS listen port (UDP and TCP); port 53 usually needs elevated privileges "
                 + "or a capability like CAP_NET_BIND_SERVICE")
@@ -395,6 +412,7 @@ public class HohenheimSettings {
             .build();
 
         public static final SettingDefinition<String> ACCESS_PATH = GROUP.buildSetting("access_path", String.class)
+            .hostOnly()
             .defaultValue("/var/log/hohenheim/access.log")
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.FILE)
             .description("Access log file path")
@@ -406,6 +424,7 @@ public class HohenheimSettings {
             .build();
 
         public static final SettingDefinition<String> DOMAIN_MISSES_PATH = GROUP.buildSetting("domain_misses_path", String.class)
+            .hostOnly()
             .defaultValue("/var/log/hohenheim/domain-misses.log")
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.FILE)
             .description("Domain-miss log file path (the fail2ban jail's logpath)")
@@ -420,6 +439,7 @@ public class HohenheimSettings {
             .icon("folder");
 
         public static final SettingDefinition<String> DATA_PATH = GROUP.buildSetting("data_path", String.class)
+            .hostOnly()
             .defaultValue("data")
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.DIRECTORY)
             .description("Base directory for persistent data (git repos, etc.)")
@@ -441,6 +461,7 @@ public class HohenheimSettings {
          */
         public static final SettingDefinition<String> VOLUME_ROOT = GROUP
             .buildSetting("volume_root", String.class)
+            .hostOnly()
             .description("Directory on the workload HOST that carries instance volumes; "
                 + "empty derives it from the data path. Set it when the controller and "
                 + "its hosts do not share a filesystem")
@@ -459,6 +480,7 @@ public class HohenheimSettings {
          */
         public static final SettingDefinition<Integer> VOLUME_UID_BASE = GROUP
             .buildSetting("volume_uid_base", Integer.class)
+            .hostOnly()
             .defaultValue(200000)
             .description("First host uid workspaces are mapped to; a workspace runs as "
                 + "this number plus its instance id. There is no unix account on the "
@@ -485,8 +507,10 @@ public class HohenheimSettings {
                 + "(that is the one removal which destroys data)")
             .build();
 
+        /** Host-only: only the host knows whether other applications share its Docker daemon. */
         public static final SettingDefinition<Boolean> RECLAIM_UNTRACKED = GROUP
             .buildSetting("reclaim_untracked", Boolean.class)
+            .hostOnly()
             .defaultValue(false)
             .description("Also remove images that carry no tag or digest at all. Hohenheim "
                 + "cannot prove those are its own -- they may be an external build's "
@@ -555,6 +579,7 @@ public class HohenheimSettings {
         // settings file still carrying them loads fine (an undeclared key is dropped with an
         // UNKNOWN_KEY slog).
         public static final SettingDefinition<String> PATH = GROUP.buildSetting("path", String.class)
+            .hostOnly()
             .defaultValue("hohenheim.db")
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.FILE)
             .description("DEPRECATED: SQLite database file used when zenit's database.url is "
@@ -564,12 +589,14 @@ public class HohenheimSettings {
             .build();
 
         public static final SettingDefinition<String> URL = GROUP.buildSetting("url", String.class)
+            .hostOnly()
             .description("DEPRECATED: SQLite JDBC URL used instead of 'path' when zenit's "
                 + "database.url is unset. Hohenheim refuses any engine other than SQLite at boot")
             .restartRequired()
             .build();
 
         public static final SettingDefinition<String> BACKUP_PATH = GROUP.buildSetting("backup_path", String.class)
+            .hostOnly()
             .defaultValue("data/backups")
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.DIRECTORY)
             .description("Directory for scheduled managed-database dumps")
@@ -590,6 +617,7 @@ public class HohenheimSettings {
          */
         public static final SettingDefinition<String> CONTROL_PLANE_BACKUP_TARGET =
             GROUP.buildSetting("control_plane_backup_target", String.class)
+                .hostOnly()
                 .description("Name of the backup target that receives control-plane recovery "
                     + "archives (database + field-encryption keyring). REQUIRED: pick a target "
                     + "in a different failure domain, because a local copy dies with the disk "
@@ -724,18 +752,21 @@ public class HohenheimSettings {
         }
 
         public static final SettingDefinition<Boolean> NFTABLES_ENABLED = GROUP.buildSetting("nftables_enabled", Boolean.class)
+            .hostOnly()
             .defaultValue(false)
             .description("Also enforce bans in the kernel via nftables (requires passwordless "
                 + "sudo for nft; the table 'inet hohenheim' is owned by Hohenheim)")
             .build();
 
         public static final SettingDefinition<String> NFTABLES_PORTS = GROUP.buildSetting("nftables_ports", String.class)
+            .hostOnly()
             .defaultValue("80,443")
             .description("Comma-separated TCP ports the nftables ban rule is scoped to; "
                 + "never widen this to ports like 22 or 53 that other services depend on")
             .build();
 
         public static final SettingDefinition<String> NFTABLES_SSH_PORTS = GROUP.buildSetting("nftables_ssh_ports", String.class)
+            .hostOnly()
             .defaultValue("22")
             .description("Comma-separated TCP ports the SECOND nftables ban rule is scoped to, "
                 + "the one SSH brute-force bans land in. It is a separate set from "
@@ -744,6 +775,7 @@ public class HohenheimSettings {
             .build();
 
         public static final SettingDefinition<Boolean> SSH_WATCH_ENABLED = GROUP.buildSetting("ssh_watch_enabled", Boolean.class)
+            .hostOnly()
             .defaultValue(false)
             .description("Watch the local sshd journal for brute-force patterns (invalid users, "
                 + "failed passwords and keys, preauth aborts) and feed them to the same threat "
@@ -808,35 +840,20 @@ public class HohenheimSettings {
             .describe(Microcopy.of("settings.hohenheim.process.help"))
             .icon("terminal");
 
-        // AIDEV-NOTE: enforcement is UNCONDITIONAL by default and there is no
-        // "enable it later" gate: a control that refuses to turn the secure state ON
-        // while sites are misconfigured only ever keeps an install insecure. A site
-        // without its own claimed uid faults individually at handler creation
-        // (WorkloadIdentity.forSite -> FaultedSiteHandler), which is the refusal an
-        // operator can act on. Turning this OFF stays an explicit operator decision,
-        // and never loosens tenant-managed sites (WorkloadIdentity.isTenantManaged).
-        public static final SettingDefinition<Boolean> REQUIRE_DEDICATED_USER = GROUP
-            .buildSetting("require_dedicated_user", Boolean.class)
-            .defaultValue(true)
-            .description("Refuse to start a managed site process without its own exclusively-claimed "
-                + "system user. With a shared or absent user, same-uid workloads can read each "
-                + "other's process environments (IPC tokens, database credentials). Sites another "
-                + "tenant manages are ALWAYS required to have a dedicated user, regardless of "
-                + "this setting")
-            .build();
-
         // AIDEV-NOTE: the host-process twin of security.container_pids_limit, and a
         // SEPARATE setting rather than a reuse of it: that one caps one container's own
-        // pid cgroup, this one caps a site UID whose children are counted by the kernel
-        // against the whole host's process table. They are the same number by default and
-        // are tuned for different reasons.
+        // pid cgroup, this one is the RLIMIT_NPROC SystemUsers.execution sets on a host
+        // process run as another system user (the managed spam service, a git command as a
+        // run-as user), whose processes the kernel counts per uid against the whole host's
+        // process table. They are the same number by default and are tuned for different
+        // reasons.
         public static final SettingDefinition<Integer> PIDS_LIMIT = GROUP
             .buildSetting("pids_limit", Integer.class)
             .defaultValue(512)
-            .description("Maximum number of processes one managed site's child may have "
-                + "(TasksMax on its cgroup scope, plus RLIMIT_NPROC on its dedicated "
-                + "system user). A fork bomb in a site's code then exhausts its own budget "
-                + "instead of the host's process table. 0 or less falls back to the default")
+            .description("Maximum number of processes a host process Hohenheim runs as another "
+                + "system user (the managed spam service, a git command) may have under that "
+                + "user (RLIMIT_NPROC). A fork bomb then exhausts that user's budget instead of "
+                + "the host's process table. 0 or less falls back to the default")
             .build();
     }
 
@@ -845,7 +862,8 @@ public class HohenheimSettings {
         public static final SettingGroup GROUP = HOHENHEIM.createGroup("auth_proteus")
             .label(Microcopy.of("settings.hohenheim.auth_proteus.label"))
             .describe(Microcopy.of("settings.hohenheim.auth_proteus.help"))
-            .icon("user");
+            .icon("user")
+            .writePermission(HohenheimSources.ADMIN_SYSTEM);
 
         public static final SettingDefinition<Boolean> ENABLED = GROUP.buildSetting("enabled", Boolean.class)
             .defaultValue(false)
@@ -854,6 +872,7 @@ public class HohenheimSettings {
             .build();
 
         public static final SettingDefinition<String> ENDPOINT = GROUP.buildSetting("endpoint", String.class)
+            .hostOnly()
             .description("Proteus realm server URL")
             .restartRequired()
             .build();
@@ -1078,6 +1097,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> PUBLIC_PORT_FIRST = GROUP
             .buildSetting("public_port_first", Integer.class)
+            .hostOnly()
             .defaultValue(30000)
             .description("First host port of the pre-allocation window for declared "
                 + "public/UDP instance publications. Keep the window clear of the kernel "
@@ -1087,6 +1107,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> PUBLIC_PORT_COUNT = GROUP
             .buildSetting("public_port_count", Integer.class)
+            .hostOnly()
             .defaultValue(2000)
             .description("Size of the pre-allocation window; allocation refuses loudly "
                 + "when every port in it is claimed or observed bound")
@@ -1139,6 +1160,7 @@ public class HohenheimSettings {
         // a host bind mount and createContainer refuses those structurally.
         public static final SettingDefinition<String> BUILDER_IMAGE = GROUP
             .buildSetting("builder_image", String.class)
+            .writePermission(HohenheimSources.ADMIN_SYSTEM)
             .defaultValue("gcr.io/kaniko-project/executor:v1.23.2")
             .description("Daemonless image-builder used for Dockerfile builds. It must be "
                 + "able to build without the Docker daemon: the sandbox has no socket, no "
@@ -1152,6 +1174,7 @@ public class HohenheimSettings {
         // has no business fetching anything.
         public static final SettingDefinition<String> DETECTOR_IMAGE = GROUP
             .buildSetting("detector_image", String.class)
+            .writePermission(HohenheimSources.ADMIN_SYSTEM)
             .defaultValue("alpine:3.21")
             .description("Base image the nixpacks detection phase runs in. It only needs "
                 + "a POSIX shell; the pinned nixpacks binary is staged in by the sandbox "
@@ -1160,14 +1183,28 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<String> NIXPACKS_VERSION = GROUP
             .buildSetting("nixpacks_version", String.class)
+            .hostOnly()
             .defaultValue("1.41.0")
             .description("Pinned nixpacks release the buildpack lane detects with. Bump "
                 + "it together with nixpacks_sha256 -- a mismatched pair refuses every "
                 + "nixpacks build")
             .build();
 
+        // The version selects the cached executable's directory and forms the release URL.
+        public static final SettingsRule NIXPACKS_RELEASE_VERSION =
+            SettingsRule.named("hohenheim_builds_nixpacks_release_version")
+                .reads(NIXPACKS_VERSION)
+                .check(proposed -> {
+                    String version = proposed.get(NIXPACKS_VERSION);
+                    return version != null && version.matches("[0-9]+\\.[0-9]+\\.[0-9]+") ? null
+                        : "builds.nixpacks_version must be a numeric major.minor.patch release";
+                })
+                .says(HohenheimViolations.text("setting_nixpacks_release_version"))
+                .addTo(Zenit.SETTINGS_VALUES);
+
         public static final SettingDefinition<String> NIXPACKS_SHA256 = GROUP
             .buildSetting("nixpacks_sha256", String.class)
+            .hostOnly()
             .defaultValue("0f55de7874507b9cf7502113120bd96f2ab6979f78d10eaf2eb2ade9207b3af6")
             .description("sha256 of the pinned nixpacks x86_64-musl release archive. The "
                 + "download is verified against it before anything is extracted; a "
@@ -1358,6 +1395,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<String> SNAPSHOT_PATH = GROUP
             .buildSetting("snapshot_path", String.class)
+            .hostOnly()
             .defaultValue("data/snapshots")
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.DIRECTORY)
             .description("Directory for instance snapshots. A snapshot is NOT a backup: it "
@@ -1367,6 +1405,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<String> STAGING_PATH = GROUP
             .buildSetting("staging_path", String.class)
+            .hostOnly()
             .defaultValue("data/backup-staging")
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.DIRECTORY)
             .description("Working directory for building and verifying backup archives "

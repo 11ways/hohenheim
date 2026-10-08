@@ -19,7 +19,6 @@ import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
@@ -473,10 +472,10 @@ class ManagePanelTest extends HohenheimTestBase {
         assertThat(operatorGet("/manage").statusCode()).isEqualTo(403);
         assertThat(operatorGet("/manage/sites").statusCode()).isEqualTo(403);
 
-        Row group = AuthModels.permissionGroups().createEmptyRow();
+        Row group = Models.get(PermissionGroupModel.class).createEmptyRow();
         group.set(PermissionGroupModel.SLUG, "manage-operators");
         group.set(PermissionGroupModel.TITLE, "Manage Operators");
-        AuthModels.permissionGroups().save(group);
+        Models.get(PermissionGroupModel.class).save(group);
         Integer groupId = group.get(PermissionGroupModel.ID);
 
         GrantService.createDirectGrant(GrantSubjectType.USER, operatorId, "group.manage-operators", true);

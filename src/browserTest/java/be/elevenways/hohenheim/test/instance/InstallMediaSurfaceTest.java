@@ -40,7 +40,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
@@ -648,7 +648,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
                 .as("step 4: the media permission is what opens the tab")
                 .isEqualTo(200);
         } finally {
-            AuthModels.users().delete(operatorId);
+            Models.get(UserModel.class).delete(operatorId);
         }
     }
 

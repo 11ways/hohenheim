@@ -101,6 +101,14 @@ class PageTitleLocalizationTest {
         ShippedCatalogs catalogs = new ShippedCatalogs();
         List<String> broken = new ArrayList<>();
 
+        Microcopy putOnlineTitle = Microcopy.of("put_online").withFilter("scope", "put_online");
+        for (String tag : List.of("en", "nl")) {
+            LocaleChain chain = LocaleChain.ofTags(tag);
+            if (catalogs.resolveSource(putOnlineTitle.key(), chain, putOnlineTitle.filters()) == null) {
+                broken.add(tag + " put_online[scope=put_online] is not shipped");
+            }
+        }
+
         for (String scope : List.of("instance_device", "schedule_step",
                 "dns_secondaries", "dns_zone_file", "dns_zone_records", "dev_sessions",
                 "site_databases", "database_restore", "spamservice_sample",

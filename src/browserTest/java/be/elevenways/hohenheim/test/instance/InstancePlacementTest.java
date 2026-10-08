@@ -30,7 +30,6 @@ import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -917,19 +916,19 @@ class InstancePlacementTest {
      * datasource the harness never seeded.
      */
     private static @NonNull AccessContext adminContext() {
-        Row user = AuthModels.users().createEmptyRow();
+        Row user = Models.get(UserModel.class).createEmptyRow();
         user.set(UserModel.EMAIL, "placement-operator@hohenheim.local");
         user.set(UserModel.DISPLAY_NAME, "Placement Operator");
         user.set(UserModel.ENABLED, true);
         user.set(UserModel.CREATED_AT, Now.instant());
         user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
-        Row grant = AuthModels.grants().createEmptyRow();
+        Models.get(UserModel.class).save(user);
+        Row grant = Models.get(GrantModel.class).createEmptyRow();
         grant.set(GrantModel.SUBJECT_TYPE, GrantSubjectType.USER.key());
         grant.set(GrantModel.SUBJECT_ID, user.get(UserModel.ID));
         grant.set(GrantModel.PERMISSION, "*");
         grant.set(GrantModel.VALUE, true);
-        AuthModels.grants().save(grant);
+        Models.get(GrantModel.class).save(grant);
         return TestAccessContexts.contextFor(new UserPrincipal(
             ((Integer) user.get(UserModel.ID)).longValue(), "Placement Operator"));
     }

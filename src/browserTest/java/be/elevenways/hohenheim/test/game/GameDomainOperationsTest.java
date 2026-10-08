@@ -13,7 +13,6 @@ import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.operation.ZenitPlacementSurface;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -78,7 +77,7 @@ class GameDomainOperationsTest extends HohenheimTestBase {
         secret.set(InstanceVariableModel.SECRET_VALUE, "game-ops-forwarding-secret");
         variables.save(secret);
 
-        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         operator = contextFor(new UserPrincipal(admin.get(UserModel.ID), "Test Admin"));
         tenant = contextFor(new UserPrincipal(ApiSupport.user(PREFIX + "tenant@hohenheim.local"), "Game Tenant"));
     }

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.spamservice.client.SettingEntry;
 import be.elevenways.spamservice.client.SettingsApplyResult;
@@ -9,6 +10,8 @@ import be.elevenways.spamservice.client.SpamserviceClient;
 import be.elevenways.zenit.cms.server.page.SettingsBackend;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.setting.SettingGroup;
+import be.elevenways.zenit.server.setting.SettingAccess;
+import be.elevenways.zenit.server.setting.SettingsEditor;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -136,8 +139,12 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
     }
 
     private static @NonNull BuiltSnapshot buildData(be.elevenways.spamservice.client.SettingsSnapshot remote) {
+        // The spam service is read and written with its controller key, an operator credential: only the system tier
+        // sees or changes it.
         SettingGroup root = new SettingGroup("spamservice").label(Microcopy.of("settings.spamservice.label"))
-            .describe(Microcopy.of("settings.spamservice.help"));
+            .describe(Microcopy.of("settings.spamservice.help"))
+            .readPermission(HohenheimSources.ADMIN_SYSTEM)
+            .writePermission(HohenheimSources.ADMIN_SYSTEM);
         Map<String, SettingGroup> groups = new LinkedHashMap<>();
         groups.put("", root);
         Map<String, SettingState> states = new LinkedHashMap<>();
@@ -242,6 +249,11 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
             SettingEntry entry = built.entries().get(change.path());
             if (definition == null || entry == null) {
                 refusals.add(new Refusal(change.path(), RefusalKind.NOT_ALLOWED, "Unknown setting path"));
+                continue;
+            }
+            SettingsEditor.RejectionKind refused = SettingAccess.writeRefusal(definition, SettingAccess.saver());
+            if (refused != null) {
+                refusals.add(new Refusal(change.path(), RefusalKind.of(refused), null));
                 continue;
             }
             if (entry.readonly()) {

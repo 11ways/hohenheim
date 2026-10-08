@@ -8,7 +8,6 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -53,7 +52,7 @@ class ManageDnsRecordOneAnswerTest extends HohenheimTestBase {
         int userId = ApiSupport.user("one-answer-tenant@hohenheim.local", "One Answer Tenant");
         tenant = new UserPrincipal(userId, "One Answer Tenant");
 
-        Row admin = AuthModels.users().find()
+        Row admin = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         operator = new UserPrincipal(admin.get(UserModel.ID), "Test Admin");
     }

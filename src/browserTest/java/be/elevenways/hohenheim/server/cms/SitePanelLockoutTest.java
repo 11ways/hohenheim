@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.zenit.common.operation.Operation;
@@ -191,7 +190,7 @@ class SitePanelLockoutTest extends HohenheimTestBase {
     }
 
     private static AccessContext arrivingAt(String origin) {
-        Row admin = AuthModels.users().find()
+        Row admin = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         return AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(admin.get(UserModel.ID), "Test Admin"), origin));

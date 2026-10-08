@@ -4098,7 +4098,7 @@
     "scope": "permission"
   },
   "hohenheim_admin_system": {
-    "text": "Edit the installation settings",
+    "text": "Edit the operator-trusted installation settings",
     "scope": "permission"
   },
   "hohenheim_manage_access": {
@@ -13263,6 +13263,10 @@
     "text": "Keep images for at least 1 hour",
     "scope": "violations"
   },
+  "setting_nixpacks_release_version": {
+    "text": "Use a numeric Nixpacks release version in major.minor.patch form, such as 1.41.0",
+    "scope": "violations"
+  },
   "setting_public_port_window": {
     "text": "The public port window must start above 1024 and end at or below {$max}",
     "scope": "violations"
@@ -13373,10 +13377,8 @@
   "settings.hohenheim.previews.lifetime_minutes.help": "Minutes a preview lives before the expiry sweep reclaims it, extended by redeploying the same ref; values below 1 use the default.",
   "settings.hohenheim.previews.max_per_owner.label": "Max previews per owner",
   "settings.hohenheim.previews.max_per_owner.help": "Concurrent live previews one owner may hold, enforced through the quota ledger; 0 or less means no cap.",
-  "settings.hohenheim.process.pids_limit.label": "Site process limit",
-  "settings.hohenheim.process.pids_limit.help": "Maximum number of processes one managed site's child may have, so a fork bomb exhausts its own budget instead of the host's process table; 0 or less uses the default.",
-  "settings.hohenheim.process.require_dedicated_user.label": "Require dedicated user",
-  "settings.hohenheim.process.require_dedicated_user.help": "Refuses to start a managed site process without its own exclusively claimed system user; sites another tenant manages always require one.",
+  "settings.hohenheim.process.pids_limit.label": "Run-as process limit",
+  "settings.hohenheim.process.pids_limit.help": "Maximum number of processes a host process Hohenheim runs as another system user (the managed spam service, a git command) may have under that user, so a fork bomb exhausts that user's budget instead of the host's process table; 0 or less uses the default.",
   "settings.hohenheim.proxy.connection_prologue_timeout_seconds.label": "Connection prologue timeout",
   "settings.hohenheim.proxy.connection_prologue_timeout_seconds.help": "Maximum time a public connection may take to send what Hohenheim reads before routing it: an optional PROXY v2 header and, on the HTTPS port, the TLS ClientHello.",
   "settings.hohenheim.proxy.fallback_address.label": "Fallback address",
@@ -13527,7 +13529,7 @@
   "settings.hohenheim.security.label": "Security",
   "settings.hohenheim.security.help": "Container isolation, hostname-scan detection, native IP bans, spamservice reputation and the released-hostname quarantine",
   "settings.hohenheim.process.label": "Processes",
-  "settings.hohenheim.process.help": "Workload identity for managed child processes",
+  "settings.hohenheim.process.help": "Limits on host processes Hohenheim runs as another system user",
   "settings.hohenheim.auth_proteus.label": "Proteus SSO",
   "settings.hohenheim.auth_proteus.help": "Offer Proteus single sign-on next to password login",
   "settings.hohenheim.proxy_auth.label": "Proxy auth",

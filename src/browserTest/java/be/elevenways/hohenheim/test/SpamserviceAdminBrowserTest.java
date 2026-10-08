@@ -48,7 +48,8 @@ class SpamserviceAdminBrowserTest extends HohenheimTestBase {
 
         navigateToApp("/admin/settings");
         waitForHydration();
-        assertThat(page.locator("body").innerText()).contains("Spamservice");
+        assertThat(page.locator(".cms-settings-nav a[data-cms-settings-nav='setting-spamservice']").innerText())
+            .as("the settings mount uses the same product-neutral label").isEqualTo("Abuse protection");
 
         navigateToApp("/admin/spamservice-reputation");
         waitForHydration();

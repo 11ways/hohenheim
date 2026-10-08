@@ -7,7 +7,6 @@ import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -57,7 +56,7 @@ class TenantHostnameClaimTest extends HohenheimTestBase {
         int userB = ApiSupport.user("claim-b@hohenheim.local", "Claim Tenant B");
         tenantA = new UserPrincipal(userA, "Claim Tenant A");
         tenantB = new UserPrincipal(userB, "Claim Tenant B");
-        Row adminRow = AuthModels.users().find()
+        Row adminRow = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         admin = new UserPrincipal(adminRow.get(UserModel.ID), "Test Admin");
 

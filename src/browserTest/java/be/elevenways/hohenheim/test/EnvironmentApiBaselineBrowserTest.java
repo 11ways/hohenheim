@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -84,7 +83,7 @@ class EnvironmentApiBaselineBrowserTest extends HohenheimTestBase {
         memberKey = ApiKeyService.create(memberId, PREFIX + "member",
             List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE),
                 CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.MANAGE)), null).plaintext();
-        int admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
+        int admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
             .get(UserModel.ID);
         adminKey = ApiKeyService.create(admin, PREFIX + "admin", List.of("hohenheim.*"), null).plaintext();
     }

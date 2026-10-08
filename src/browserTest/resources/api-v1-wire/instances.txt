@@ -1,7 +1,7 @@
 ## list instances
 > GET /api/v1/instances
 < 200 application/json; charset=utf-8
-{"instances":[{"crash_policy":"none","created_at":"2026-01-02T03:04:05Z","id":1,"install_state":"none","kind":"hohenheim:fake_native","name":"wire-instance","status":"created","template":""},{"crash_policy":"none","created_at":"2026-01-02T03:04:05Z","id":3,"install_state":"none","kind":"hohenheim:fake_device_capable","name":"wire-devices","status":"created","template":""}]}
+{"instances":[{"crash_policy":"restart","created_at":"2026-01-02T03:04:05Z","id":1,"install_state":"none","kind":"hohenheim:fake_native","name":"wire-instance","status":"created","template":""},{"crash_policy":"restart","created_at":"2026-01-02T03:04:05Z","id":3,"install_state":"none","kind":"hohenheim:fake_device_capable","name":"wire-devices","status":"created","template":""}]}
 
 ## list instances as a browser session
 > GET /api/v1/instances
@@ -11,7 +11,7 @@
 ## read an instance
 > GET /api/v1/instances/1
 < 200 application/json; charset=utf-8
-{"crash_policy":"none","created_at":"2026-01-02T03:04:05Z","id":1,"install_state":"none","kind":"hohenheim:fake_native","name":"wire-instance","status":"created","template":""}
+{"crash_policy":"restart","created_at":"2026-01-02T03:04:05Z","id":1,"install_state":"none","kind":"hohenheim:fake_native","name":"wire-instance","status":"created","template":""}
 
 ## read an invisible instance
 > GET /api/v1/instances/2
@@ -141,7 +141,7 @@
 ## create an instance
 > POST /api/v1/instances (application/x-www-form-urlencoded, 178 bytes)
 < 200 application/json; charset=utf-8
-{"crash_policy":"none","created_at":"(per-run CREATED_AT)","id":5,"install_state":"none","kind":"hohenheim:application","name":"wire-created","status":"created","template":""}
+{"crash_policy":"restart","created_at":"(per-run CREATED_AT)","id":5,"install_state":"none","kind":"hohenheim:application","name":"wire-created","status":"created","template":""}
 
 ## create from an unknown template
 > POST /api/v1/instances (application/x-www-form-urlencoded, 38 bytes)

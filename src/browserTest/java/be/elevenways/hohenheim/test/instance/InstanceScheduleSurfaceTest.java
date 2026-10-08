@@ -28,7 +28,6 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.server.panel.PartsLists;
@@ -387,7 +386,7 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
      */
     @Test
     void anUnconstrainedWalkAnswerNeverEnumerates() {
-        Row admin = AuthModels.users().find()
+        Row admin = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         AccessContext operator = contextOf(admin.get(UserModel.ID), "Test Admin");
         AccessContext viewer = contextOf(viewerId, "Schedule Viewer");

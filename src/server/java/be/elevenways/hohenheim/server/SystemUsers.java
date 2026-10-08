@@ -65,22 +65,12 @@ public final class SystemUsers {
         return process;
     }
 
-    /** Describes a process with an explicit environment, optional uid drop, and optional new session. */
-    public static @NonNull Subprocess execution(@Nullable RunAsUser runAs,
-                                                Map<String, String> environment,
-                                                List<String> command,
-                                                boolean newSession) {
-        return execution(runAs, environment, command, newSession, List.of());
-    }
-
     /**
-     * The same description with a CONFINEMENT prefix (a cgroup scope, see
-     * {@link ProcessConfinement#scopePrefix}) wrapped around the spawn.
+     * Describes a process with an explicit environment, optional uid drop, and optional new session.
      *
      * AIDEV-NOTE: the layer order is load-bearing in both directions and is the whole
      * hardening floor of the host-process tier. OUTSIDE the privilege drop: setsid (the
-     * session leader must not be sudo's child, see below) and the cgroup scope (created by
-     * the DAEMON's identity -- the site uid has no manager to ask). INSIDE it:
+     * session leader must not be sudo's child, see below). INSIDE it:
      * {@code prlimit --nproc} and {@code setpriv --no-new-privs}, and they may not move
      * out. no_new_privs set BEFORE sudo would make the setuid-root sudo binary fail
      * outright, and RLIMIT_NPROC is counted per REAL UID, so setting it while the daemon's
@@ -99,8 +89,7 @@ public final class SystemUsers {
     public static @NonNull Subprocess execution(@Nullable RunAsUser runAs,
                                                 Map<String, String> environment,
                                                 List<String> command,
-                                                boolean newSession,
-                                                List<String> confinementPrefix) {
+                                                boolean newSession) {
         List<String> result = new ArrayList<>();
         if (newSession) {
             // Keep the session leader outside sudo: sudo may fork a command monitor, but
@@ -109,7 +98,6 @@ public final class SystemUsers {
             result.add("--wait");
             result.add("--");
         }
-        result.addAll(confinementPrefix);
         if (runAs != null) {
             result.add("/usr/bin/sudo");
             result.add("-n");

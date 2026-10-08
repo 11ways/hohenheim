@@ -7,12 +7,13 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.CertificateOperations;
+import be.elevenways.hohenheim.server.cms.HohenheimSettingsSections;
 import be.elevenways.hohenheim.server.cms.InstanceQuotaParts;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.server.cms.HostAttention;
@@ -26,7 +27,10 @@ import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.cms.server.page.SettingsBackend;
+import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.server.ServerZenitRuntime;
+import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.test.support.RateLimitExemption;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
@@ -61,7 +65,7 @@ class AdminPagesTest extends HohenheimTestBase {
     // Settings
     // -----------------------------------------------------------------------
 
-    /** One settings page load: render, save, reset, path browser and a rejected raw POST. */
+    /** One settings page load: render, host-only rows, save, reset and rejected raw POSTs. */
     @Test
     void settingsPageRendersSavesResetsAndRefusesInvalidValues() throws Exception {
         // Sections are LAZY since zenit-cms 380f48f: a bare load renders only the first
@@ -96,8 +100,13 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(page.locator(
             "[data-path='https.dns_propagation_seconds'] pl-number-input [slot='suffix']").innerText().trim())
             .isEqualTo("s");
-        assertThat(page.locator(
-            "[data-path='general.storage.data_path'] zf-path-input [data-zf-path-browse]").count()).isEqualTo(1);
+        // The data directory is host power: its row shows the value and says the host changes it, never an input.
+        String dataPath = "[data-cms-setting]:has([data-path='general.storage.data_path'])";
+        assertThat(page.locator(dataPath + "[data-host-only][data-read-only]").count())
+            .as("the data directory is host-only").isEqualTo(1);
+        assertThat(page.locator(dataPath + " zf-path-input").count()).as("with no path input").isZero();
+        assertThat(page.locator(dataPath + " [data-cms-setting-host-only]").count())
+            .as("and a note naming who changes it").isEqualTo(1);
         for (String path : new String[] {
             "framework.network.request_body_size_limit",
             "framework.network.request_individual_file_size_limit",
@@ -158,8 +167,8 @@ class AdminPagesTest extends HohenheimTestBase {
             + "setting-https,setting-general-storage,setting-proxy-auth_proteus,"
             + "setting-framework-network,setting-framework-compression");
         waitForHydration();
-        var fallback = page.locator("[data-path='proxy.proxy.fallback_address'] input");
-        fallback.fill("http://127.0.0.1:9999");
+        var prologue = page.locator("[data-path='proxy.proxy.connection_prologue_timeout_seconds'] input");
+        prologue.fill("9");
         var threshold = page.locator("[data-path='blocking.domain_miss_threshold'] input");
         threshold.fill("7");
         page.click(neverBan + " .pl-select-field");
@@ -185,7 +194,7 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(Files.isRegularFile(settingsDry)).isTrue();
         Map<?, ?> parsed = (Map<?, ?>) ((Map<?, ?>) Zenit.DRY.parse(Files.readString(settingsDry))).get("hohenheim");
         Map<?, ?> proxy = (Map<?, ?>) parsed.get("proxy");
-        assertThat(String.valueOf(proxy.get("fallback_address"))).isEqualTo("http://127.0.0.1:9999");
+        assertThat(((Number) proxy.get("connection_prologue_timeout_seconds")).intValue()).isEqualTo(9);
         Map<?, ?> security = (Map<?, ?>) parsed.get("security");
         assertThat(((Number) security.get("domain_miss_threshold")).intValue()).isEqualTo(7);
         assertThat(security.get("never_ban"))
@@ -223,67 +232,41 @@ class AdminPagesTest extends HohenheimTestBase {
         security = (Map<?, ?>) parsed.get("security");
         assertThat(security.containsKey("never_ban")).isFalse();
 
-        // The save above PRG-reloads the page: the browse click below lands on a
-        // dead listener unless the reloaded page has finished hydrating first. Settle
-        // on the RELOADED document before waiting for hydration -- the cleared never_ban
-        // editor only exists after the reload, whereas the still-hydrated pre-reload page
-        // satisfies waitForHydration() on its own, before the navigation even starts.
-        page.waitForCondition(() -> page.locator(chips).count() == 0);
-        waitForHydration();
-
-        // The filesystem-path browser picks a server directory; the pick is
-        // deliberately left unsaved (it must never reach the settings file).
-        //
-        // AIDEV-NOTE: this source declares ONE root, "/", and a single-root browser opens
-        // INSIDE it -- there is no root-list step to click through any more (zenit-forms
-        // 7da018e replaced it with the listing's own multi-root switcher). So the first
-        // option is a CHILD of "/", and what this pins is that the option navigated into
-        // is the directory the footer then chooses: a picker that chose something other
-        // than where the operator is standing is the defect worth catching.
-        var pathField = page.locator("[data-path='general.storage.data_path']");
-        pathField.locator("[data-zf-path-browse]").click();
-        var dialog = page.locator("he-bottom .pl-dialog-modal[data-open]");
-        dialog.waitFor();
-        page.waitForCondition(() -> "/".equals(currentDirectory(dialog)));
-        // The FILTER owns focus once the listing is in: the modal focused its close
-        // button at open time (the only focusable thing while loading), so typed text
-        // went nowhere until the field was clicked.
-        page.waitForCondition(() -> filterHasFocus());
-        assertThat(currentDirectory(dialog))
-            .as("a single-root browser opens inside its declared root")
-            .isEqualTo("/");
-        var firstEntry = dialog.locator("pl-command-item").first();
-        // Directories sort first, so the first row is a child DIRECTORY of "/". Its path
-        // is read from the rendered name rather than the element's value, which
-        // pl-command-item carries as a property and never reflects as an attribute.
-        String entryName = firstEntry.locator(".zf-path-entry-name").textContent().trim();
-        assertThat(entryName)
-            .as("the root listing offers a real child to descend into")
-            .isNotEmpty().doesNotContain("/");
-        String entryPath = "/" + entryName;
-        firstEntry.locator("div[role='option']").click();
-        page.waitForCondition(() -> entryPath.equals(currentDirectory(dialog)));
-        // Descending re-renders the list and used to drop focus on the body.
-        page.waitForCondition(() -> filterHasFocus());
-        dialog.locator("[data-zf-path-choose-directory]").click();
-        assertThat(pathField.locator("input").inputValue())
-            .as("the chosen path is the directory the browser was standing in")
-            .isEqualTo(entryPath);
-
         // A number input sanitizes garbage client-side, so exercise the server
-        // rejection with a raw POST: an uncoercible port must rerender with a
+        // rejection with a raw POST: an uncoercible threshold must rerender with a
         // violation instead of persisting anything.
-        Integer before = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT);
+        Integer before = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD);
         var response = adminPostForm("/admin/settings",
-            "proxy.proxy.http_port=not-a-port&proxy.proxy.http_port__base=" + before);
+            "blocking.domain_miss_threshold=not-a-number&blocking.domain_miss_threshold__base=" + before);
 
         // Validation failure rerenders the page (no PRG redirect).
         assertThat(response.statusCode()).isEqualTo(200);
 
         String raw = Files.exists(settingsDry) ? Files.readString(settingsDry) : "";
-        assertThat(raw).doesNotContain("not-a-port");
-        assertThat(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT))
+        assertThat(raw).doesNotContain("not-a-number");
+        assertThat(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD))
             .isEqualTo(before);
+
+        // A crafted POST of a host-only key changes nothing: the page never collects a key it renders read-only.
+        Integer port = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT);
+        adminPostForm("/admin/settings", "proxy.proxy.http_port=65001&proxy.proxy.http_port__base=" + port);
+        assertThat(Files.exists(settingsDry) ? Files.readString(settingsDry) : "").doesNotContain("65001");
+        assertThat(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.HTTP_PORT)).isEqualTo(port);
+
+        // Reclaiming untracked images may delete another application's images on a shared Docker host, which only the
+        // host knows about: a crafted POST and a patch straight to the backend, even the top administrator's, change
+        // nothing.
+        Boolean untracked = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Stacks.RECLAIM_UNTRACKED);
+        adminPostForm("/admin/settings", "apps.stacks.reclaim_untracked=" + !untracked
+            + "&apps.stacks.reclaim_untracked__base=" + untracked);
+        SettingsBackend.ApplyResult patched = ExecutionIdentity.supply(
+            ExecutionIdentity.actingFor(TestAccessContexts.allAllowed()),
+            () -> HohenheimSettingsSections.APPS.mount().backend().apply(new SettingsBackend.Patch("",
+                List.of(SettingsBackend.Change.set("stacks.reclaim_untracked", !untracked)))));
+        assertThat(patched.refusals()).extracting(SettingsBackend.Refusal::kind)
+            .as("the backend refuses the patch as host-only").containsExactly(SettingsBackend.RefusalKind.HOST_ONLY);
+        assertThat(Files.exists(settingsDry) ? Files.readString(settingsDry) : "").doesNotContain("reclaim_untracked");
+        assertThat(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Stacks.RECLAIM_UNTRACKED)).isEqualTo(untracked);
     }
 
     /** Whether the path browser's filter input is the document's active element. */
@@ -629,7 +612,7 @@ class AdminPagesTest extends HohenheimTestBase {
     // Site record pages
     // -----------------------------------------------------------------------
 
-    /** Site detail fields, the toggle action label, the retired processes tab and the domains tab. */
+    /** Site detail fields, the path browser, the toggle action label, the retired processes tab and the domains tab. */
     @Test
     void siteRecordPagesRenderFieldsActionsTabsAndDomains() throws Exception {
         var siteModel = Models.get(SiteModel.class);
@@ -664,6 +647,46 @@ class AdminPagesTest extends HohenheimTestBase {
                 .isEqualTo("ms");
             assertThat(page.locator(
                 "pl-field[data-path='settings.root_path'] zf-path-input [data-zf-path-browse]").count()).isEqualTo(1);
+
+            // The filesystem-path browser picks a server directory; the pick is
+            // deliberately left unsaved (it must never reach the record).
+            //
+            // AIDEV-NOTE: this source declares ONE root, "/", and a single-root browser opens
+            // INSIDE it -- there is no root-list step to click through any more (zenit-forms
+            // 7da018e replaced it with the listing's own multi-root switcher). So the first
+            // option is a CHILD of "/", and what this pins is that the option navigated into
+            // is the directory the footer then chooses: a picker that chose something other
+            // than where the operator is standing is the defect worth catching. It lives on a
+            // static site's root because every path SETTING is host-only and renders no browser.
+            var pathField = page.locator("pl-field[data-path='settings.root_path']");
+            pathField.locator("[data-zf-path-browse]").click();
+            var dialog = page.locator("he-bottom .pl-dialog-modal[data-open]");
+            dialog.waitFor();
+            page.waitForCondition(() -> "/".equals(currentDirectory(dialog)));
+            // The FILTER owns focus once the listing is in: the modal focused its close
+            // button at open time (the only focusable thing while loading), so typed text
+            // went nowhere until the field was clicked.
+            page.waitForCondition(() -> filterHasFocus());
+            assertThat(currentDirectory(dialog))
+                .as("a single-root browser opens inside its declared root")
+                .isEqualTo("/");
+            var firstEntry = dialog.locator("pl-command-item").first();
+            // Directories sort first, so the first row is a child DIRECTORY of "/". Its path
+            // is read from the rendered name rather than the element's value, which
+            // pl-command-item carries as a property and never reflects as an attribute.
+            String entryName = firstEntry.locator(".zf-path-entry-name").textContent().trim();
+            assertThat(entryName)
+                .as("the root listing offers a real child to descend into")
+                .isNotEmpty().doesNotContain("/");
+            String entryPath = "/" + entryName;
+            firstEntry.locator("div[role='option']").click();
+            page.waitForCondition(() -> entryPath.equals(currentDirectory(dialog)));
+            // Descending re-renders the list and used to drop focus on the body.
+            page.waitForCondition(() -> filterHasFocus());
+            dialog.locator("[data-zf-path-choose-directory]").click();
+            assertThat(pathField.locator("input").inputValue())
+                .as("the chosen path is the directory the browser was standing in")
+                .isEqualTo(entryPath);
 
             // Enabled record: the action reads "Disable", never "Enable/disable". Disabling
             // carries a DESTRUCTIVE confirmation (hostnames stop answering), and the record
@@ -976,7 +999,7 @@ class AdminPagesTest extends HohenheimTestBase {
         } finally {
             Models.get(InstanceQuotaModel.class).delete(quota.get(InstanceQuotaModel.ID));
             Models.get(InstanceQuotaModel.class).delete(dangling.get(InstanceQuotaModel.ID));
-            AuthModels.users().delete(ownerId);
+            Models.get(UserModel.class).delete(ownerId);
         }
     }
 
@@ -1018,7 +1041,7 @@ class AdminPagesTest extends HohenheimTestBase {
                 .contains("Activity Label Actor");
         } finally {
             Models.get(ActivityModel.class).delete(entry.get(ActivityModel.ID));
-            AuthModels.users().delete(actorId);
+            Models.get(UserModel.class).delete(actorId);
         }
     }
 }

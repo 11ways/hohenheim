@@ -26,7 +26,7 @@ import be.elevenways.zenit.auth.model.ApiKeyModel;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.PermissionHolders;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
@@ -318,7 +318,7 @@ class HohenheimUpgradeJourneyTest {
             .as("step 4c: the column's default is the restart policy").isEqualTo("'" + InstanceModel.CRASH_DEFAULT + "'");
 
         // 5. The API key keeps its scopes, its zenit-auth model scope under today's spelling, and authenticates.
-        Row key = AuthModels.apiKeys().find().noCache().where(ApiKeyModel.LABEL.eq("upgrade-key")).first();
+        Row key = Models.get(ApiKeyModel.class).find().noCache().where(ApiKeyModel.LABEL.eq("upgrade-key")).first();
         assertThat(key.get(ApiKeyModel.SCOPES))
             .as("step 5: every scope kept, in order, the model scope read today")
             .isEqualTo(List.of("cap:hohenheim:instance#power", "cap:zenit:user#read", "hohenheim.admin.access"));
@@ -330,7 +330,7 @@ class HohenheimUpgradeJourneyTest {
             .containsExactly("cap:hohenheim:instance#power", "cap:zenit:user#read", "hohenheim.admin.access");
 
         // 6. Activity on framework models reads through today's model ids; no old spelling is left behind.
-        List<ActivityEntry> userHistory = history(AuthModels.users(), operatorId);
+        List<ActivityEntry> userHistory = history(Models.get(UserModel.class), operatorId);
         assertThat(userHistory).as("step 6: the operator's creation is in its history")
             .anySatisfy(entry -> assertThat(entry.action()).isEqualTo(ZenitActivityAction.CREATE.id().toString()));
         assertThat(strings(url, "SELECT DISTINCT model FROM zenit_activity"))

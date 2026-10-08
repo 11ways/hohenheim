@@ -13,7 +13,7 @@ import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.host.LiveIncusHost;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -121,7 +121,7 @@ class VmFramebufferConsoleLiveTest extends HohenheimTestBase {
             RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
                 HohenheimAccess.MANAGE);
             HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
-            AuthModels.users().delete(userId);
+            Models.get(UserModel.class).delete(userId);
             try {
                 System.out.println("=== cleanup: shared objects -> "
                     + remote.releaseControllerSharedObjects());

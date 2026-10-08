@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -47,7 +46,7 @@ class CertificateDownloadCredentialTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seed() {
-        Row admin = AuthModels.users().find()
+        Row admin = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         // The harness admin holds "*", so the key below is narrowed by its SCOPE alone --
         // exactly the credential an operator mints for automation. Both nodes are needed:

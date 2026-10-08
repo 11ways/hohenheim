@@ -176,10 +176,10 @@ public final class TestDatabases {
      * `Models.get(X)` resolve the default per call, so ordinary ORM access follows a swap by
      * itself -- but two consumers bind a datasource ONCE and keep it forever, and both go
      * silently wrong rather than failing:
-     *   - zenit-auth: AuthModels.datasource plus the session store, permission resolver and
-     *     capability checkers built over it. After a swap, users()/grants()/sessions() answer
-     *     from the PREVIOUS database, so a seeded admin is invisible and a minted session
-     *     stops resolving. ZenitAuth.initForTests exists for exactly this and had no callers.
+     *   - zenit-auth: ZenitAuth.initForTests binds every auth model to one datasource INSTANCE
+     *     (AuthModels.bind) and rebuilds the services over them. After a swap, the user, grant
+     *     and session models answer from the PREVIOUS database until that rebind, so a seeded
+     *     admin is invisible and a minted session stops resolving.
      *   - the task service: TaskService captures SystemTaskModel/SystemTaskHistoryModel/
      *     TaskClaimManager at construction, so every later cron tick claims and writes
      *     history into the abandoned file.

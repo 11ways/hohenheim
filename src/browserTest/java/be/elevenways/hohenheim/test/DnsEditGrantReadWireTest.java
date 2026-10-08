@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
-import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
@@ -110,7 +110,7 @@ class DnsEditGrantReadWireTest extends HohenheimTestBase {
         } finally {
             KnownCapabilities.replace(DnsRecordModel.MODEL_ID, currentView);
             Models.get(DnsZoneModel.class).delete(zone);
-            AuthModels.users().delete(account);
+            Models.get(UserModel.class).delete(account);
         }
     }
 }

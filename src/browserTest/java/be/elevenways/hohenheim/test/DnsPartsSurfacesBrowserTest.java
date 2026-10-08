@@ -15,7 +15,7 @@ import be.elevenways.hohenheim.server.cms.DnsOperations;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -32,7 +32,7 @@ class DnsPartsSurfacesBrowserTest extends HohenheimTestBase {
         int remote = DnsFixtures.apiPeer("dns-parts-remote", "https://peer.invalid");
         DynamicDnsService.mintFor(address);
         DnsZoneStore.INSTANCE.reload();
-        var admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        var admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         AccessContext operator = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(admin.get(UserModel.ID), "Test Admin")));
         SurfaceBaselines stored = SurfaceBaselines.load(DnsPartsSurfacesBrowserTest.class,

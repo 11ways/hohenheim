@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.test.support.EndpointConduit;
@@ -99,7 +98,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
 
     @BeforeAll
     static void mintApiKey() {
-        Row user = AuthModels.users().find()
+        Row user = Models.get(UserModel.class).find()
             .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         apiKey = ApiKeyService.create(user.get(UserModel.ID), "dns-central-test",
             List.of("hohenheim.*"), null).plaintext();
@@ -360,7 +359,7 @@ class DnsCentralEditTest extends HohenheimTestBase {
     /** The Records tab's render for the test administrator, with the host zone stamped read-only or not. */
     @SuppressWarnings("unchecked")
     private static Map<String, Object> renderRecordsTab(int zoneId, boolean hostReadOnly) {
-        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         Conduit conduit = EndpointConduit.at("/admin/dns-zones/" + zoneId + "/page/records")
             .withAttribute(ConduitAttributes.PRINCIPAL, new UserPrincipal(admin.get(UserModel.ID), "Test Admin"))
             .setParameter(CmsEndpoints.RESOURCE_PARAM, "dns-zones")

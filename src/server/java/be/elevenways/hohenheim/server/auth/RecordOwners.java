@@ -5,7 +5,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.auth.server.GrantAdministration;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.auth.server.ZenitAuth;
@@ -173,12 +173,12 @@ final class RecordOwners {
         }
         String label = switch (parsed.type()) {
             case USER -> {
-                Row user = AuthModels.users().findById(parsed.id());
+                Row user = Models.get(UserModel.class).findById(parsed.id());
                 yield user == null ? null : firstNonBlank(user.get(UserModel.DISPLAY_NAME),
                     user.get(UserModel.EMAIL));
             }
             case GROUP -> {
-                Row group = AuthModels.permissionGroups().findById(parsed.id());
+                Row group = Models.get(PermissionGroupModel.class).findById(parsed.id());
                 yield group == null ? null : firstNonBlank(group.get(PermissionGroupModel.TITLE),
                     group.get(PermissionGroupModel.SLUG));
             }

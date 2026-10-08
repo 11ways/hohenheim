@@ -6,13 +6,11 @@ import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.cms.DnsRecordParts;
 import be.elevenways.hohenheim.server.cms.DnsZoneFilePage;
 import be.elevenways.hohenheim.server.cms.DnsZoneParts;
-import be.elevenways.hohenheim.server.cms.SiteParts;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
@@ -20,22 +18,18 @@ import be.elevenways.zenit.cms.common.render.CmsRefusalCopy;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
-import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
-import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
-import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.test.support.TestPermissions;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -113,11 +107,14 @@ class DnsZoneImportReadOnlyTest extends HohenheimTestBase {
         ZonesUnderSites(Map<Integer, Integer> siteOfZone) {
             super(Identifier.of("hohenheim_test", "zones_under_sites"), "zones-under-sites",
                 Microcopy.of("zones_under_sites"), TestPermissions.declared("hohenheim_test.zones_under_sites"));
-            PanelResource<Row> sites = SiteParts.admin();
-            PanelResource<Row> owner = PanelResource.builder(sites.id(), sites.slug(), sites.subject())
-                .label(sites.label()).reads(sites.reads()).list(sites.list()).form(sites.form())
-                .writes(sites.writes()).archive(sites.archive()).authority(sites.authority())
-                .tabs(ResourceTabs.none()).build();
+            // Only the parent's identity and archive state matter here, not the admin's forms and tabs.
+            PanelResource<Row> owner = PanelResource.builder(
+                    Identifier.of("hohenheim_test", "zone_owners"), HohenheimSlugs.SITES,
+                    SubjectType.record(SiteModel.MODEL_ID))
+                .label(Microcopy.literal("Sites")).reads(ResourceReads.rows())
+                .list(ResourceList.rows(TableSpec.<Row>builder().columnFromField(SiteModel.NAME)
+                    .filter(ResourceList.archivedFilter(false)).build()).archivedLane().build())
+                .build();
             this.peers = List.of(owner, PanelResource.builder(
                     Identifier.of("hohenheim_test", "site_owned_zones"), DnsZoneParts.SLUG,
                     SubjectType.record(DnsZoneModel.MODEL_ID))
@@ -135,7 +132,7 @@ class DnsZoneImportReadOnlyTest extends HohenheimTestBase {
     }
 
     private static UserPrincipal adminPrincipal() {
-        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         return new UserPrincipal(admin.get(UserModel.ID), "Test Admin");
     }
 }

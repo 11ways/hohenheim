@@ -9,7 +9,6 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthModels;
 import be.elevenways.hohenheim.server.cms.StackOperations;
 import be.elevenways.hohenheim.server.cms.StackParts;
 import be.elevenways.zenit.cms.common.render.table.SynthesizedRowActions;
@@ -117,7 +116,7 @@ class StackSurfacesBrowserTest extends HohenheimTestBase {
     }
 
     private static UserPrincipal operatorPrincipal() {
-        Row admin = AuthModels.users().find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
+        Row admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
         return new UserPrincipal(admin.get(UserModel.ID), "Test Admin");
     }
 

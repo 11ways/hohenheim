@@ -11,7 +11,7 @@ import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthModels;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 
@@ -68,13 +68,13 @@ public final class ApiSupport {
 
     /** An enabled user row; returns its id. */
     public static int user(String email, String name) {
-        Row user = AuthModels.users().createEmptyRow();
+        Row user = Models.get(UserModel.class).createEmptyRow();
         user.set(UserModel.EMAIL, email);
         user.set(UserModel.DISPLAY_NAME, name);
         user.set(UserModel.ENABLED, true);
         user.set(UserModel.CREATED_AT, Now.instant());
         user.set(UserModel.UPDATED_AT, Now.instant());
-        AuthModels.users().save(user);
+        Models.get(UserModel.class).save(user);
         return user.get(UserModel.ID);
     }
 
