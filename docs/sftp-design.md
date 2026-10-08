@@ -1,6 +1,7 @@
 # SFTP for app files: design
 
-Status: design, 2026-10-08 (fork SFTP-D). No code yet. Jelle approved SFTP on 2026-10-08: Hohenheim runs its OWN
+Status: W1 and W2 landed 2026-10-08 (zenit-auth keys; the `zenit-sftp` module); W3 (Hohenheim wiring) is next.
+Jelle approved SFTP on 2026-10-08: Hohenheim runs its OWN
 SFTP server on its own port, never the host sshd or host Linux accounts, gated by the browser file manager's
 capabilities and logged in the same activity log.
 
@@ -73,13 +74,15 @@ from editing M011 (section 4.3).
   (`HohenheimActivityAction.java:61-66`). Reads are not recorded. The verb dispatch `perform` (`:197-225`) is
   private to the endpoints.
 
-### 2.2 Module interface (`zenit-sftp`, stopped at the boundary)
+### 2.2 Module interface (`zenit-sftp`, as landed in W2)
 
 ```java
-SftpServer.on(SftpConfig config)          // port, bind address, limits, idle timeout
-    .hostKeys(SftpHostKeyStore store)     // load-or-generate; the module's own encrypted table
-    .realm(SftpRealm realm)               // the consumer: what a username's mount name means
-    .start();                             // a boot stage; stop() on shutdown
+SftpServer server = SftpServer.on(new SftpConfig(bindAddress, port, maxSessions, maxSessionsPerAccount,
+        idleTimeout, maxFileBytes, spoolDirectory, SftpConfig.FAILED_LOGINS))
+    .realm(realm)                         // the consumer: what a username's mount name means
+    .start();                             // loads or generates the host key (the module's own encrypted table)
+server.hostKeyFingerprint();  server.sessions().open();  server.sessions().end(id);  server.stop();
+SftpHostKeys.fingerprint();               // the stored fingerprint, null before the first start
 
 interface SftpRealm {
     /** @return null for absent, trashed AND not permitted alike: one uniform refusal */
@@ -88,14 +91,19 @@ interface SftpRealm {
     @NonNull List<String> keyScopes();
 }
 
-interface SftpMount {                     // every call may throw Violations; the module maps them to status codes
-    List<SftpEntry> list(String path);  SftpEntry stat(String path);
+interface SftpMount {                     // every call may throw IOException, DomainRefusal or Violations
+    List<SftpEntry> list(String path);  @Nullable SftpEntry stat(String path);   // stat: null = nothing there
     long readTo(String path, Path spool, long maxBytes);
     void writeFrom(String path, Path spool, boolean replace);
     void makeDirectory(String path);  void rename(String from, String to);  void delete(String path);
     void setMode(String path, String octal);  void setModified(String path, long epochSeconds);
 }
+record SftpEntry(String name, Kind kind /* FILE, DIRECTORY, SYMLINK, OTHER */, long size, long modified, String mode)
 ```
+
+W2 dropped the planned `.hostKeys(SftpHostKeyStore)` step: there is one store (the module's table), so a seam for
+it would have had no second implementation. A `DomainRefusal` maps by its reason's status (404 no such file, 401/403
+permission denied, else failure), a `Violations` is a failure, both worded in the account's locale.
 
 The module, not the consumer, guarantees per operation:
 1. `PrincipalRevalidation.holds(principal)` (`zenit/.../PrincipalRevalidation.java:24`) before every request; a
@@ -257,11 +265,35 @@ add/list/remove plus revalidation. zenit: transport-neutral `FailureBudget`.
     `COMMAND_ID` only (`ActivityLog.java` page grouping, `countGroups`); `SESSION_ID` is read only by
     `EditingSessions`. The first writer of SFTP session rows is W3, so the fold (zenit core read plus zenit-cms list)
     ships there with its journey.
-- **SFTP-W2, the module** (`zenit-sftp`, after Q1): MINA server lifecycle and host key store; auth bridge (API key
-  password, SSH key via the account-by-key lookup, username split, uniform refusal); the key principal and its
-  revalidation; `FailureBudget` overload; `SftpRealm`/`SftpMount` with per-operation revalidation, execution
-  identity and status mapping; session registry; the module journey.
-- **SFTP-W3, Hohenheim wiring**: streaming seam (`readFileTo`/`writeFileFrom`, plus `setMode`/`setModified`) on
+- **SFTP-W2, the module: COMMITTED 2026-10-08** (new repo `zenit-sftp`; zenit, zenit-auth, protoblast catalog;
+  changelog `2026-10-08-zenit-sftp.md`). zemble `home`: the server NEW_MECHANISM (best home zenit-auth by hit count;
+  the module per section 1 and Jelle's Q1 yes), the budget EXTEND_EXISTING `FailureBudget`, the host key
+  fingerprint EXTEND_EXISTING `SshPublicKey`.
+  - zenit core: `FailureBudget.begin(remoteIp, policy, scope)` (same buckets as an HTTP sign-in from that address;
+    `FailureBudgetHttpTest.peerJourney`), `AccountabilityOrigin.SFTP` ("sftp", acts for a person, en/nl).
+  - zenit-auth: `SshKeys.signIn(fingerprint, scopes)` (stamps `last_used_at`) minting `SshKeyPrincipal`, a sealed
+    `ScopedAccountPrincipal` member carrying the key id; revalidation shares one owner check with API keys.
+  - zenit-sftp: MINA SSHD 2.19.0 (SFTP subsystem only, one channel, no shell/exec/forwarding); login
+    `<email>.<mount>` split at the last dot, API key password or account key, one uniform refusal, security events
+    `SSH_INVALID_USER`/`SSH_PASSWORD_FAILED`/`SSH_PUBLICKEY_FAILED` (lane `sftp`); per-peer `FailureBudget` reserved
+    before verifying. An offered key no account registered refunds its reservation: clients offer every key they
+    hold, so counting them locked a user with several keys out after a few connections (found by the journey).
+    Every request: `PrincipalRevalidation` (false closes the connection), the account's `ExecutionIdentity`
+    (origin SFTP, peer ip, client version), the realm asked for the mount again, a per-request stat memo. Refusals
+    worded in the account's locale; reads and uploads spooled, an upload committed only on the client's CLOSE.
+    `SftpSessions` (caps, `open()`, `end(id)`), Ed25519 host key in `sftp_host_keys` (field-encrypted private key).
+    JDK 25 printed no MINA warning (only sqlite-jdbc's native-access notice).
+  - Known limits: a write the mount refuses surfaces on CLOSE, after the upload was spooled (the SPI has no
+    "may write" question); chown, links, server-side copy and locks answer OP_UNSUPPORTED; the account's
+    `MessageResolver` must be the host's shipped catalogs (a booted host installs them).
+  - Tests: `SftpJourneyTest` (MINA client, temp-dir realm: uniform login refusal, read vs write, revoked grant and
+    revoked password, key login and key removal, budget, caps, host key across a restart), `SftpCopyTest`;
+    `ScopedPrincipalRevalidationTest` key journey; `FailureBudgetHttpTest`, `ActivityTextTest`.
+- **SFTP-W3, Hohenheim wiring**: `serverImplementation libs.zenit.sftp.server`; `InstanceSftpRealm` (mount name =
+  instance id, `stat` null for not found, `files_*` Violations mapped so not-found is a 404 refusal); the
+  session's display group reaches the mount (W2's `SftpRealm.mount` carries no session id: W3 adds it, minted at
+  login, the same id `SftpSessionInfo.id` lists); a `SecurityEventSink` feeding `ThreatScorer` from lane `sftp`;
+  streaming seam (`readFileTo`/`writeFileFrom`, plus `setMode`/`setModified`) on
   the Docker driver; `FileVerbs` shared by HTML, API and SFTP; `InstanceSftpRealm`, settings group, ban-port
   derivation, ThreatScorer feed; the `SESSION_ID` activity fold; `SftpJourneyTest`.
 - **SFTP-W4, UI**: the Files tab card and `/manage` twin, "Create an SFTP password", open sessions with End,
