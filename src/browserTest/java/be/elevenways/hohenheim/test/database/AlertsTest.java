@@ -5,7 +5,10 @@ import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
@@ -23,6 +26,7 @@ import be.elevenways.zenit.comms.server.CommsDispatcher;
 import be.elevenways.zenit.comms.server.CommsInboxModel;
 import be.elevenways.zenit.comms.server.CommsInboxOwners;
 import be.elevenways.zenit.comms.server.transport.TransportTypes;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -139,7 +143,7 @@ class AlertsTest {
         assertThat(Alerts.recipientFor(bad_discord)).isNull();
 
         // A send with only unmappable channels queues nothing and does not throw.
-        assertThat(Alerts.send(NotificationEvents.BACKUP_FAILED, "s", "m")).isZero();
+        assertThat(Alerts.send(NotificationEvents.BACKUP_FAILED, Alerts.INSTALLATION, lit("s"), lit("m"))).isZero();
     }
 
     @Test
@@ -152,11 +156,13 @@ class AlertsTest {
                 receiver.url("/deploys"), List.of(NotificationEvents.DEPLOY_FAILED.token()));
 
             // A backup event reaches only the receive-all channel.
-            assertThat(Alerts.send(NotificationEvents.BACKUP_FAILED, "Backup", "boom")).isEqualTo(1);
+            assertThat(Alerts.send(NotificationEvents.BACKUP_FAILED, Alerts.INSTALLATION, lit("Backup"), lit("boom")))
+                .isEqualTo(1);
             assertThat(receiver.lastPath.get()).isEqualTo("/all");
 
             // A deploy event reaches both.
-            assertThat(Alerts.send(NotificationEvents.DEPLOY_FAILED, "Deploy", "boom")).isEqualTo(2);
+            assertThat(Alerts.send(NotificationEvents.DEPLOY_FAILED, Alerts.INSTALLATION, lit("Deploy"), lit("boom")))
+                .isEqualTo(2);
 
             // Every queued delivery ended up SENT in the durable outbox.
             List<Row> rows = Models.get(CommsDeliveryModel.class).find().all();
@@ -177,7 +183,7 @@ class AlertsTest {
         try {
             addChannel("gen", NotificationChannelModel.FORMAT_GENERIC, receiver.url("/g"), null);
 
-            Alerts.send(NotificationEvents.CERT_EXPIRING, "Expiring", "cert x is old");
+            Alerts.send(NotificationEvents.CERT_EXPIRING, Alerts.INSTALLATION, lit("Expiring"), lit("cert x is old"));
 
             String body = receiver.lastBody.get();
             assertThat(body)
@@ -233,7 +239,8 @@ class AlertsTest {
             .isEqualTo(CommsInboxOwners.userKey(admin));
 
         // 2. The alert is queued for that inbox, and reports it as reached.
-        assertThat(Alerts.send(NotificationEvents.BACKUP_FAILED, "Backup failed", "disk full"))
+        assertThat(Alerts.send(NotificationEvents.BACKUP_FAILED, Alerts.INSTALLATION, lit("Backup failed"),
+            lit("disk full")))
             .as("an alert with no configured channel still reaches the administrator")
             .isEqualTo(1);
 
@@ -261,7 +268,7 @@ class AlertsTest {
         // 5. The catalog lane: an alert composed of Microcopy (resolved per reader, never
         //    pre-rendered English) is queued the same way, through the one never-throwing
         //    helper every failure path uses.
-        assertThat(Alerts.trySend(NotificationEvents.BACKUP_FAILED,
+        assertThat(Alerts.trySend(NotificationEvents.BACKUP_FAILED, Alerts.about(DatabaseModel.MODEL_ID, "shop"),
                 Microcopy.of("database_backup_failed_subject").withFilter("scope", "alert")
                     .withArg("name", "shop"),
                 Microcopy.of("database_backup_failed_body").withFilter("scope", "alert")
@@ -270,6 +277,41 @@ class AlertsTest {
             .isEqualTo(1);
         assertThat(Models.get(CommsInboxModel.class).find().all())
             .as("step 5: as a second inbox item").hasSize(2);
+
+        // 6. A host that stops answering is worded for a person, its technical detail after the words, and its
+        //    repeats fold into the one item the administrator still holds: event and subject are its repeat key.
+        String phoenix = Alerts.about(ServerModel.MODEL_ID, 41);
+        for (int occurrence = 0; occurrence < 3; occurrence++) {
+            Alerts.send(NotificationEvents.HOST_UNREACHABLE, phoenix,
+                Alerts.copy("host_unreachable_subject").withArg("name", "phoenix"),
+                Alerts.copy("host_unreachable_body").withArg("failure", HostProbe.FailureKind.UNREACHABLE.label())
+                    .withArg("detail", "kex_exchange_identification: read: Connection reset by peer"));
+        }
+        List<Row> hostItems = Models.get(CommsInboxModel.class).find()
+            .where(CommsInboxModel.REPEAT_KEY.eq("host_unreachable:" + phoenix)).all();
+        assertThat(hostItems).as("step 6: three occurrences about one host are one item").hasSize(1);
+        assertThat((Integer) hostItems.get(0).get(CommsInboxModel.REPEATS))
+            .as("step 6: which says how often it came").isEqualTo(3);
+        assertThat((String) hostItems.get(0).get(CommsInboxModel.TITLE))
+            .as("step 6: the headline names the host in words, no token in brackets")
+            .isEqualTo("phoenix stopped answering");
+        assertThat((String) hostItems.get(0).get(CommsInboxModel.BODY))
+            .as("step 6: the raw ssh error stays available as the detail after the words")
+            .endsWith(": kex_exchange_identification: read: Connection reset by peer");
+
+        // 7. The same event about another host is its own item, and an alert writes no activity: its delivery rows
+        //    and inbox items are bookkeeping, never a row a person's command is headed by.
+        long activity = Models.get(ActivityModel.class).find().count();
+        Alerts.send(NotificationEvents.HOST_UNREACHABLE, Alerts.about(ServerModel.MODEL_ID, 42),
+            Alerts.copy("host_unreachable_subject").withArg("name", "kumulus"), null);
+        assertThat(Models.get(CommsInboxModel.class).find().all())
+            .as("step 7: another host's alert stands beside it").hasSize(4);
+        assertThat(Models.get(ActivityModel.class).find().count())
+            .as("step 7: sending it recorded no activity").isEqualTo(activity);
+    }
+
+    private static Microcopy lit(String text) {
+        return Microcopy.literal(text);
     }
 
     /**

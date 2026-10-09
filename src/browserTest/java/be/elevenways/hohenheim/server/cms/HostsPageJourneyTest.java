@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -78,8 +79,8 @@ class HostsPageJourneyTest extends HohenheimTestBase {
                 .isEqualTo("Apps already here keep running");
             StateLineCell held = ServerParts.stateCellOf(server(waiting));
             assertThat(say(held.label())).as("step 2: a blocked host waits").isEqualTo("Waiting for its checks");
-            assertThat(say(held.detail())).as("step 2: naming only the REQUIRED checks that failed, in words")
-                .isEqualTo("1 required check failed: Firewall control");
+            assertThat(held.detail()).as("step 2: why it waits is the band's item, never repeated in its row")
+                .isNull();
 
             // 3. The same failure leads the list and the dashboard, as one attention item with its fix.
             AttentionItem item = null;
@@ -89,8 +90,8 @@ class HostsPageJourneyTest extends HohenheimTestBase {
                 }
             }
             assertThat(item).as("step 3: the host tier names the waiting host").isNotNull();
-            assertThat(say(item.detail())).as("step 3: with the checks that keep it out, the state cell's own words")
-                .isEqualTo(say(held.detail()));
+            assertThat(say(item.detail())).as("step 3: naming only the REQUIRED checks that failed, in words")
+                .isEqualTo("1 required check failed: Firewall control");
             assertThat(say(item.action())).as("step 3: and Check and admit").isEqualTo("Check and admit");
             assertThat(AttentionCollector.collect()).as("step 3: the dashboard reads the same item")
                 .anySatisfy(found -> assertThat(say(found.title())).isEqualTo(PREFIX + "waiting cannot run apps yet"));
@@ -118,6 +119,8 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             assertThat(list.body()).as("step 5: the admission in words")
                 .contains("Takes new apps", "Takes no new apps", "Waiting for its checks")
                 .as("step 5: why the waiting host waits").contains("1 required check failed: Firewall control")
+                .as("step 5: the board's verb").contains("Add host").doesNotContain("New host")
+                .as("step 5: the board's lead").contains("The machines your apps run on.")
                 .as("step 5: never a check's code").doesNotContain("failed: nftables")
                 .as("step 5: what each host runs").contains("1 app, 0 databases").contains("Nothing yet")
                 .as("step 5: the attention band above the list").contains(PREFIX + "waiting cannot run apps yet")
@@ -201,7 +204,10 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             assertThat(say(cell.label())).as("step 2: it never reads as taking new apps")
                 .isEqualTo("Cannot take new apps");
             assertThat(cell.variant()).as("step 2: in the warning tone").isEqualTo(BadgeVariant.WARNING);
-            assertThat(say(cell.detail())).as("step 2: saying why in the gate's words").isEqualTo(say(refusal));
+            assertThat(cell.detail()).as("step 2: why is the band's item, never repeated word for word in the row")
+                .isNull();
+            assertThat(say(refusal)).as("step 2: the gate's words name no button and join no clauses with ';'")
+                .isEqualTo("The memory of " + PREFIX + "stale was measured too long ago to place a new app there");
             AttentionItem item = hostItem(PREFIX + "stale");
             assertThat(item).as("step 2: the host tier raises it").isNotNull();
             assertThat(say(item.title())).as("step 2: titled as an admitted host that takes nothing new, never as one"
@@ -215,14 +221,36 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             String stalePage = adminGet("/admin/" + ServerParts.SLUG + "/" + stale + "/page/overview").body();
             assertThat(stalePage).as("step 2: the host page wears the same state").contains("Cannot take new apps")
                 .doesNotContain("Takes new apps");
+            assertThat(stalePage).as("step 2: its capacity says when memory was last measured")
+                .contains("Memory last measured ").contains("too long ago to place new apps here")
+                .as("step 2: and lists no empty facts after it").doesNotContain("Nothing to show")
+                .as("step 2: and names no button in prose").doesNotContain("Check again measures");
 
-            // 3. Measured again: it takes new apps and nothing names it.
-            HostPreflight.store(PREFIX + "stale", new HostPreflight.Report(List.of(),
-                Map.of(HostPreflight.MEM_TOTAL_FACT, 16L * 1024 * 1024 * 1024), true, Now.instant(), null));
+            // 3. The cause on Starfleet (DEP10): only a full preflight wrote the memory reading, so a host the hourly
+            //    sweep reached every hour still went stale. The heartbeat now records the daemon's memory total: the
+            //    reading is fresh again, while the checks, their time and the preflight verdict stay as stored.
+            Instant preflightAt = server(stale).get(ServerModel.PROBED_AT);
+            HostProbe.recordSuccess(PREFIX + "stale", Map.of("MemTotal", 16L * 1024 * 1024 * 1024));
+            assertThat(HostPreflight.factMeasuredAt(server(stale), HostPreflight.MEM_TOTAL_FACT))
+                .as("step 3: the heartbeat measured the memory now")
+                .isAfter(Now.instant().minus(Duration.ofMinutes(1)));
+            assertThat((Instant) server(stale).get(ServerModel.PROBED_AT))
+                .as("step 3: the preflight's own time is untouched").isEqualTo(preflightAt);
             assertThat(InstancePlacement.hostRefusal(server(stale))).as("step 3: the gate places on it again").isNull();
             assertThat(say(ServerParts.stateCellOf(server(stale)).label())).as("step 3: it takes new apps")
                 .isEqualTo("Takes new apps");
             assertThat(hostItem(PREFIX + "stale")).as("step 3: and raises nothing").isNull();
+            // A quarantined host's answer proves nothing about which machine gave it, so it measures nothing.
+            Row quarantined = server(stale);
+            quarantined.set(ServerModel.QUARANTINED_AT, Now.instant());
+            Models.get(ServerModel.class).save(quarantined);
+            Instant measured = HostPreflight.factMeasuredAt(server(stale), HostPreflight.MEM_TOTAL_FACT);
+            HostProbe.recordSuccess(PREFIX + "stale", Map.of("MemTotal", 8L * 1024 * 1024 * 1024));
+            assertThat(HostPreflight.factMeasuredAt(server(stale), HostPreflight.MEM_TOTAL_FACT))
+                .as("step 3: a quarantined host's heartbeat measures nothing").isEqualTo(measured);
+            Row released = server(stale);
+            released.set(ServerModel.QUARANTINED_AT, null);
+            Models.get(ServerModel.class).save(released);
 
             // 4. A required check that no longer passes refuses it in words: the check's name and what it found, never
             //    the check's token or the old "FAILED" English.
@@ -254,7 +282,7 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             cleanup.add(() -> deleteServer(never));
             StateLineCell waiting = ServerParts.stateCellOf(server(never));
             assertThat(say(waiting.label())).as("step 5: a new host waits").isEqualTo("Waiting for its checks");
-            assertThat(say(waiting.detail())).as("step 5: because it was never checked").isEqualTo("Never checked yet");
+            assertThat(waiting.detail()).as("step 5: why is its item's, never repeated in the row").isNull();
             AttentionItem neverItem = hostItem(PREFIX + "fresh");
             assertThat(say(neverItem.title())).as("step 5: a host never admitted cannot run apps yet")
                 .isEqualTo(PREFIX + "fresh cannot run apps yet");

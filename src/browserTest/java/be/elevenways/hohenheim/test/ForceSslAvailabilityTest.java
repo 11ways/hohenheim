@@ -170,7 +170,7 @@ class ForceSslAvailabilityTest {
             .contains("200").contains("cleartext-content");
         assertThat(proxy.getDispatcher().forcedSites().bySetting())
             .as("step 4b: and the dispatcher names no site the setting sends to HTTPS for it")
-            .doesNotContain("Plain Site");
+            .doesNotContain((Integer) plain.get(SiteModel.ID));
         Models.get(CertificateModel.class).delete(unloadable);
         proxy.reload();
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.FORCE_HTTPS, false);

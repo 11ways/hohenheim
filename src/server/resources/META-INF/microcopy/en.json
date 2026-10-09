@@ -6227,11 +6227,11 @@
     "scope": "violations"
   },
   "host_kernel_lane_unproven": {
-    "text": "{$name} has not proven it can check its apps' isolation: its last check could not change the firewall on that machine. Fix the {$check} check, then Check again",
+    "text": "{$name} has not proven it can check its apps' isolation: its last check could not change the firewall on that machine, so its {$check} check has to pass first",
     "scope": "violations"
   },
   "host_preflight_check_now_required": {
-    "text": "{$name} does not pass its {$check} check, which must pass for apps to run there: {$finding}. Fix it, then Check again",
+    "text": "{$name} does not pass its {$check} check, which apps need to run there: {$finding}",
     "scope": "violations"
   },
   "host_capacity_reached": {
@@ -6239,7 +6239,7 @@
     "scope": "violations"
   },
   "host_capacity_unproven": {
-    "text": "{$name} has no recent memory reading, so no new app is placed there; Check again measures it",
+    "text": "The memory of {$name} was measured too long ago to place a new app there",
     "scope": "violations"
   },
   "host_prepared_image_missing": {
@@ -9837,7 +9837,7 @@
     "scope": "server"
   },
   "probe_now_hint": {
-    "text": "Contact the daemon once and store the outcome. Page views never probe.",
+    "text": "Asks the host whether it answers and measures its memory, without running its checks.",
     "scope": "server"
   },
   "host_probe_ok": {
@@ -10023,11 +10023,11 @@
     }
   ],
   "unmeasured_body": {
-    "text": "No usable memory reading exists, so this host has no placement budget. Run preflight to measure it; a zero bar here would wrongly read as an empty host.",
+    "text": "No memory reading yet, so no new app is placed here.",
     "scope": "server_overview"
   },
   "evidence_stale": {
-    "text": "The memory reading is older than {$hours} hours, so no new app is placed here until Check again measures it. Last measured",
+    "text": "Memory last measured {$ago}, too long ago to place new apps here.",
     "scope": "server_overview"
   },
   "workloads": {
@@ -10474,7 +10474,7 @@
       "scope": "project"
     },
     {
-      "text": "The machines that run workloads, with their admission state and capacity.",
+      "text": "The machines your apps run on.",
       "scope": "server"
     },
     {
@@ -11650,6 +11650,10 @@
     {
       "text": "Create database",
       "scope": "database"
+    },
+    {
+      "text": "Add host",
+      "scope": "server"
     }
   ],
   "edit_title": {
@@ -12398,20 +12402,10 @@
     "text": "This zone is not served or lists no NS records, so there is nothing to check.",
     "scope": "dns_zone"
   },
-  "dns_secondary_stale": [
-    {
-      "text": "Secondary {$peer} of zone {$origin} is stale",
-      "scope": "attention_title"
-    },
-    {
-      "text": "It serves serial {$served} while this primary serves {$serial}.",
-      "scope": "attention_detail"
-    },
-    {
-      "text": "DNS secondary stale",
-      "scope": "notification_event"
-    }
-  ],
+  "dns_secondary_stale": {
+    "text": "DNS secondary stale",
+    "scope": "notification_event"
+  },
   "dns_delegation_broken": [
     {
       "text": "Delegation of zone {$origin} needs attention",
@@ -13411,19 +13405,19 @@
     "scope": "alert"
   },
   "isolation_contained_subject": {
-    "text": ".match {$count :number}\none {{{$sweep}: 1 workload contained}}\n* {{{$sweep}: {$count} workloads contained}}",
+    "text": ".match {$count :number}\none {{{$sweep}: 1 app was cut off to keep it apart}}\n* {{{$sweep}: {$count} apps were cut off to keep them apart}}",
     "scope": "alert"
   },
   "isolation_unconfirmed_subject": {
-    "text": ".match {$count :number}\none {{{$sweep}: isolation unconfirmed on 1 subject}}\n* {{{$sweep}: isolation unconfirmed on {$count} subjects}}",
+    "text": ".match {$count :number}\none {{{$sweep}: 1 thing could not be confirmed as kept apart}}\n* {{{$sweep}: {$count} things could not be confirmed as kept apart}}",
     "scope": "alert"
   },
   "data_integrity_subject": {
-    "text": ".match {$count :number}\none {{Orphaned rows in the control-plane database (1 table link)}}\n* {{Orphaned rows in the control-plane database ({$count} table links)}}",
+    "text": "Some records in Hohenheim's own database point at records that no longer exist",
     "scope": "alert"
   },
   "data_integrity_body": {
-    "text": "These rows point at records that no longer exist, and writes touching them fail: {$detail}. List and repair them offline with --foreign-key-orphans.",
+    "text": "Changes that touch them fail until they are repaired; list and repair them offline with the --foreign-key-orphans command. Found: {$detail}",
     "scope": "alert"
   },
   "database_move_leftover": {
@@ -14087,10 +14081,6 @@
   },
   "pattern_note": {
     "text": "Matches several names",
-    "scope": "app_overview"
-  },
-  "pattern": {
-    "text": "Pattern",
     "scope": "app_overview"
   },
   "list_admits_everyone": {
@@ -15910,7 +15900,7 @@
     "scope": "dashboard"
   },
   "stat_backups_none": {
-    "text": "No app has a backup target",
+    "text": "No app or database is backed up yet",
     "scope": "dashboard"
   },
   "tally_waiting": {
@@ -16254,5 +16244,121 @@
   "sftp_server": {
     "text": "SFTP is on but not running",
     "scope": "attention_title"
+  },
+  "host_unreachable_subject": {
+    "text": "{$name} stopped answering",
+    "scope": "alert"
+  },
+  "host_unreachable_body": {
+    "text": "{$failure}. What the connection reported: {$detail}",
+    "scope": "alert"
+  },
+  "dns_secondary_stale_body": {
+    "text": "{$lag}. Resolvers that ask it can get old answers until it catches up.",
+    "scope": "alert"
+  },
+  "dns_delegation_broken_body": {
+    "text": "{$verdict}. What the check found: {$detail}",
+    "scope": "alert"
+  },
+  "listener_down_subject": {
+    "text": "Hohenheim no longer answers on {$protocol}",
+    "scope": "alert"
+  },
+  "listener_down_body": {
+    "text": "Its listener stopped and starting it again failed: {$reason}",
+    "scope": "alert"
+  },
+  "cert_expiring_subject": {
+    "text": ".match {$days :number}\none {{Certificate {$name} expires in 1 day}}\n* {{Certificate {$name} expires in {$days} days}}",
+    "scope": "alert"
+  },
+  "cert_expiring_body": {
+    "text": "Renew or replace it before {$date}; automatic renewal has not done so yet.",
+    "scope": "alert"
+  },
+  "cert_renewal_failed_subject": {
+    "text": "Renewing certificate {$name} fails",
+    "scope": "alert"
+  },
+  "cert_renewal_failed_body": {
+    "text": "Hohenheim keeps trying, waiting longer each time; the Certificates page shows the newest error. What failed: {$reason}",
+    "scope": "alert"
+  },
+  "stack_failed_subject": {
+    "text": "Stack {$name} failed",
+    "scope": "alert"
+  },
+  "stack_degraded_subject": {
+    "text": "Stack {$name} runs with problems",
+    "scope": "alert"
+  },
+  "stack_unhealthy_body": {
+    "text": "Not all of its services run as they should. Their states: {$states}",
+    "scope": "alert"
+  },
+  "crash_loop_subject": {
+    "text": "{$name} keeps stopping",
+    "scope": "alert"
+  },
+  "crash_loop_body": {
+    "text": "{$name} exited again and again without anyone stopping it, so it is not restarted automatically until its next deploy. Its console output may say why.",
+    "scope": "alert"
+  },
+  "spamservice_outage_subject": {
+    "text": "Abuse protection cannot reach Spamservice",
+    "scope": "alert"
+  },
+  "spamservice_outage_body": {
+    "text": ".match {$minutes :number}\none {{Spamservice has not answered for 1 minute, so reputation bans and security-event reports are skipped until it does. Last failure, {$source}: {$detail}}}\n* {{Spamservice has not answered for {$minutes} minutes, so reputation bans and security-event reports are skipped until it does. Last failure, {$source}: {$detail}}}",
+    "scope": "alert"
+  },
+  "spamservice_recovered_subject": {
+    "text": "Spamservice answers again",
+    "scope": "alert"
+  },
+  "spamservice_recovered_body": {
+    "text": "Its {$source} calls succeed again, so reputation bans and security-event reports work normally.",
+    "scope": "alert"
+  },
+  "auto_ban_budget_subject": {
+    "text": "Automatic bans are paused",
+    "scope": "alert"
+  },
+  "auto_ban_budget_body": {
+    "text": ".match {$budget :number}\none {{1 automatic ban was made in the last hour, the most allowed, so new ones are skipped until it is an hour old. A trigger may be running away, or its events may be poisoned. Manual bans still work.}}\n* {{{$budget} automatic bans were made in the last hour, the most allowed, so new ones are skipped until the oldest is an hour old. A trigger may be running away, or its events may be poisoned. Manual bans still work.}}",
+    "scope": "alert"
+  },
+  "dns_secondaries_stale": {
+    "text": ".match {$count :number}\none {{{$peers} has an old copy of {$origin}}}\n* {{{$peers} have an old copy of {$origin}}}",
+    "scope": "attention_title"
+  },
+  "dns_secondary_no_host": {
+    "text": "{$peer} has no transfer address, so it cannot be asked for the zone",
+    "scope": "attention_detail"
+  },
+  "dns_secondary_silent": {
+    "text": "{$peer} gave no answer for the zone ({$error})",
+    "scope": "attention_detail"
+  },
+  "dns_secondary_behind": {
+    "text": "{$peer} serves serial {$served}; this server serves {$serial}",
+    "scope": "attention_detail"
+  },
+  "dns_secondaries_lag": {
+    "text": "{$lags}.",
+    "scope": "attention_detail"
+  },
+  "per_name": {
+    "text": "Per name",
+    "scope": "site_domains"
+  },
+  "https_pattern": {
+    "text": "A pattern answers many names; HTTPS works for each one a certificate covers.",
+    "scope": "site_domains"
+  },
+  "isolation_body": {
+    "text": "{$said}. What the sweep found: {$detail}",
+    "scope": "alert"
   }
 }

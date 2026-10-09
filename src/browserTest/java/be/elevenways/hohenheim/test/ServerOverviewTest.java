@@ -237,6 +237,10 @@ class ServerOverviewTest extends HohenheimTestBase {
         assertThat(stale.body())
             .as("step 1: and no usage bar renders over a number nobody re-read")
             .doesNotContain("<pl-usage-bar");
+        assertThat(stale.body())
+            .as("step 1: the reason says when the memory was last measured, never a dangling \"Last measured\"")
+            .contains("Memory last measured ").contains(" ago, too long ago to place new apps here.")
+            .as("step 1: and no empty fact list follows it").doesNotContain("Nothing to show");
 
         // 2. A fresh measurement turns into a real usage bar with the booked numbers.
         HostPreflight.store("overview-capacity", new HostPreflight.Report(List.of(),

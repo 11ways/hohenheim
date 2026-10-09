@@ -1112,7 +1112,7 @@ public class DatabaseService extends DatasourceScoped {
                 // line is not visibility: the operator is ALERTED, by name.
                 Blast.log("DB-MOVE: the old dedicated engine of", name,
                     "could not be destroyed after the move -", e.getMessage());
-                Alerts.trySend(NotificationEvents.DATABASE_MOVE_LEFTOVER,
+                Alerts.trySend(NotificationEvents.DATABASE_MOVE_LEFTOVER, Alerts.about(DatabaseModel.MODEL_ID, name),
                     Microcopy.of("database_move_leftover_subject").withFilter("scope", "alert")
                         .withArg("name", name),
                     Microcopy.of("database_move_leftover_body").withFilter("scope", "alert")

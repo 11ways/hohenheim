@@ -14,6 +14,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Instant;
 import java.util.Map;
 
 /**
@@ -136,13 +137,34 @@ public final class HostProbe {
      * clear a pin verdict. See {@link ServerModel#QUARANTINED_AT}.
      */
     public static void recordSuccess(@NonNull String serverName) {
+        recordSuccess(serverName, null);
+    }
+
+    /**
+     * {@link #recordSuccess(String)} with what the daemon answered: its memory total is the host's memory reading
+     * ({@link HostPreflight#recordMemoryReading}), so every heartbeat keeps the reading placement rations against
+     * fresh.
+     *
+     * AIDEV-NOTE: before D13a only a full preflight (Check again) wrote the reading, so a host whose hourly sweep
+     * answered for weeks still refused every new app once its last preflight passed the freshness bound: Starfleet's
+     * local host, seen 50 minutes ago, last measured 2026-08-29. The heartbeat records the same docker-info
+     * MemTotal the preflight records, nothing else of the report: no check, no probed_at, no verdict.
+     *
+     * @param info the daemon's {@code /info} answer, null when the contact carried none
+     */
+    public static void recordSuccess(@NonNull String serverName, @Nullable Map<String, Object> info) {
         Row server = Models.get(ServerModel.class).findByName(serverName);
         if (server == null) {
             return;
         }
-        server.set(ServerModel.LAST_SEEN_AT, Now.instant());
+        Instant now = Now.instant();
+        server.set(ServerModel.LAST_SEEN_AT, now);
         server.set(ServerModel.LAST_ERROR_KIND, null);
         server.set(ServerModel.LAST_ERROR, null);
+        // A quarantined host's answer proves nothing about which machine answered (its pin decides): no reading.
+        if (info != null && server.get(ServerModel.QUARANTINED_AT) == null) {
+            HostPreflight.recordMemoryReading(server, info, now);
+        }
         // A heartbeat is bookkeeping, never activity: see HohenheimActivity.
         ActivityLog.suppressed(() -> Models.get(ServerModel.class).save(server));
     }
@@ -173,8 +195,10 @@ public final class HostProbe {
         ActivityLog.suppressed(() -> Models.get(ServerModel.class).save(server));
         if (previous == null || previous.isBlank()) {
             Alerts.trySend(NotificationEvents.HOST_UNREACHABLE,
-                "Host '" + serverName + "' stopped answering (" + outcome.kind().token + ")",
-                outcome.detail());
+                Alerts.about(ServerModel.MODEL_ID, server.get(ServerModel.ID)),
+                Alerts.copy("host_unreachable_subject").withArg("name", serverName),
+                Alerts.copy("host_unreachable_body").withArg("failure", outcome.kind().label())
+                    .withArg("detail", outcome.detail() != null ? outcome.detail() : "-"));
         }
     }
 

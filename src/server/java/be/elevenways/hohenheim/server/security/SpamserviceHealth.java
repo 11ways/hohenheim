@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.security;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -37,7 +38,7 @@ public final class SpamserviceHealth {
     private final Map<String, CapabilityState> capabilities = new LinkedHashMap<>();
 
     private SpamserviceHealth() {
-        this(Now::millis, Alerts::send);
+        this(Now::millis, SecurityNotifier.ALERTS);
     }
 
     /** Test constructor: inject the clock and the notification sink. */
@@ -63,7 +64,6 @@ public final class SpamserviceHealth {
      */
     public void recordFailure(@NonNull String source, @Nullable String detail) {
         boolean notifyOutage = false;
-        long failures;
         long spanMs = 0;
         synchronized (this.lock) {
             CapabilityState state = this.capabilities.computeIfAbsent(source, ignored -> new CapabilityState());
@@ -72,7 +72,6 @@ public final class SpamserviceHealth {
                 state.firstFailureAtMs = now;
             }
             state.consecutiveFailures++;
-            failures = state.consecutiveFailures;
             if (!state.outageNotified
                     && state.consecutiveFailures >= FAILURE_COUNT_THRESHOLD
                     && now - state.firstFailureAtMs >= FAILURE_SPAN_MS) {
@@ -82,12 +81,10 @@ public final class SpamserviceHealth {
             }
         }
         if (notifyOutage) {
-            notify(NotificationEvents.SPAMSERVICE_OUTAGE, "Spamservice unreachable",
-                "Spamservice has been failing for " + (spanMs / 60_000) + " minute(s) ("
-                    + failures + " consecutive failures; last: " + source
-                    + (detail != null ? " - " + detail : "")
-                    + "). Reputation bans and security-event provisioning are degraded"
-                    + " (fail-open) until it recovers.");
+            notify(NotificationEvents.SPAMSERVICE_OUTAGE, Alerts.copy("spamservice_outage_subject"),
+                Alerts.copy("spamservice_outage_body").withArg("minutes", spanMs / 60_000)
+                    .withArg("source", source)
+                    .withArg("detail", detail != null ? detail : "-"));
         }
     }
 
@@ -104,13 +101,12 @@ public final class SpamserviceHealth {
             state.outageNotified = false;
         }
         if (notifyRecovery) {
-            notify(NotificationEvents.SPAMSERVICE_RECOVERED, "Spamservice recovered",
-                "Spamservice " + source + " calls are succeeding again; reputation bans and"
-                    + " security-event provisioning are back to normal.");
+            notify(NotificationEvents.SPAMSERVICE_RECOVERED, Alerts.copy("spamservice_recovered_subject"),
+                Alerts.copy("spamservice_recovered_body").withArg("source", source));
         }
     }
 
-    private void notify(@NonNull NotificationEvents event, @NonNull String subject, @NonNull String message) {
+    private void notify(@NonNull NotificationEvents event, @NonNull Microcopy subject, @NonNull Microcopy message) {
         try {
             this.notifier.send(event, subject, message);
         } catch (RuntimeException e) {

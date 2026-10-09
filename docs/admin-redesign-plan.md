@@ -1547,3 +1547,117 @@ The as-built record with every mechanism is `docs/sftp-design.md` section 10; th
   HohenheimSecurityTest, SlowLaneGuardTest, BrowserTestLaneGuardTest, MigrationIntegrityTest, AdminSettingsMountsTest,
   AdminPagesTest, DashboardAttentionJourneyTest, DashboardRoleGatingTest, DockerArchiveSafetyTest: 87 passed, live
   needs declared); zenit-sftp 906 red, 911 green.
+
+## 35. D13a decisions (fork D13a, 2026-10-09)
+
+DEP10's walk of Starfleet (`docs/deploy-starfleet.md`, last section) against boards Main and Hosts, plus adopting
+D13-FW's framework changes (changelogs `2026-10-08-cluster-landing-one-heading`, `-cron-words-and-task-list`,
+`-inbox-repeat-key`) and zenit-auth's People/Roles change (`2026-10-08-zenit-auth-people-and-roles`).
+
+- Home: `zemble home` answered NEW_MECHANISM in apps for both the app-name rule and the heartbeat's memory reading,
+  next to the existing homes it listed (`AppDirectory`, `DomainParts`; `HostProbe`, `HostPreflight`,
+  `InstanceCapacity`); each extends the existing class, nothing new beside it.
+- One heading on cluster members: the inbox and the abuse-protection overview render `zenitcms:page-header` (its
+  `zenitcms:page-title` draws no h1 while `headedByCluster`), so Activity and Access read as one h1 over their tabs.
+- Alerts name what they are about: `Alerts.send/trySend(event, about, subject, message)`; `about` is the subject's
+  identity (`Alerts.about(model, id)`, `Alerts.INSTALLATION`), never the wording. `AlertNotification.toInbox` sets the
+  repeat key `event + ":" + about`, so phoenix's eight "stopped answering" items are one item saying "8 times". The
+  String overloads are gone: every alert is catalog copy in en and nl, a headline for a person and the technical
+  detail after the words ("phoenix stopped answering" / "Its host key is not pinned yet. What the connection
+  reported: ..."; "Some records in Hohenheim's own database point at records that no longer exist" / "... Found:
+  auth_passwords -> auth_users: 5 orphaned rows"; "kuifje has an old copy of starfleet.life" / "kuifje gave no
+  answer for the zone (no authoritative SOA answer from ...)"). Real plurals (`HohenheimDatabase.orphanedRows`, the
+  CLI too). `SecurityNotifier` carries Microcopy; its production sink is `SecurityNotifier.ALERTS`. An alert's
+  delivery rows and inbox items are written under `ActivityLog.suppressed`: inside Probe now they were headed by
+  the command's sentence ("Jelle checked whether Comms delivery #3 answers", found on the walk).
+- Sidebar counts follow board Main: the Apps entry carries the apps with a problem (`PanelResource.navBadge`,
+  `AppDirectory.withProblem`, the same count as the Apps tile through `AppDirectory.Count`, one exhaustive switch over
+  `HealthTone`); the inbox's unread count leaves the sidebar (decision: a lasting condition reaches Needs attention
+  at its root; the inbox is the history of what was sent). `AppDirectory.read` is memoised per request
+  (`CmsSupport.memo`), because the badge, the dashboard and the Apps list of one page all ask. AdminInboxBadgeTest is
+  deleted (replacement: DashboardAttentionJourneyTest step 8 asserts both entries' counts).
+- A stale DNS secondary is ONE item per zone, its root (`AttentionSubject.zone`), worded by
+  `DnsSecondaryFreshness.staleTitle/lagOf`, the same words the DNS_SECONDARY_STALE alert says, with "Open the
+  secondaries". Cause of "never reaches Needs attention" on Starfleet: it did, for 39 minutes. kuifje's link was
+  behind from before 2026-10-07 03:00 UTC and caught up by AXFR at 03:39 (`behind_since` cleared); the item left with
+  the lag, while the alert sat unread in the inbox a day later with no word that it recovered.
+- Backups count database dumps: `DatabaseParts.BackupState`/`backupOf` is the one database backup verdict (the Last
+  backup cell reads it; TEMPORARY is not counted, DONE is a dump newer than 36 hours). The tile reads "<ok> of
+  <total>" over workloads with a backup target plus persistent managed databases, "Newest <ago>, <size>" over both.
+  Closes section 28's needs-building item. Empty words: "No app or database is backed up yet".
+- One app, one name: `AppDirectory.nameOf(site)` names the app a site belongs to as the Apps list does (the
+  workload's name when the site serves a non-generated, live instance, else the site's). Cause of the two names: the
+  attention items (`ProxyAttention`), the Addresses App column and lead (`DomainParts`) and the HTTPS-unavailable
+  item read `SiteModel.NAME` ("Alchemy skeleton") while the lists name the workload ("alchemy-skeleton"). The
+  dispatcher's `ForcedSites` now carries site ids, named by the panel. The /manage Addresses twin names the site for
+  a reader who does not reach the workload (`nameOf(site, false)`).
+- A pattern's HTTPS is said, never an empty cell: `CertCoverage.PATTERN` ("Per name", "A pattern answers many names;
+  HTTPS works for each one a certificate covers."), returned by `AppHealth.httpsOf` for a non-exact name. The
+  catch-all's trailing badge on the dashboard and its Addresses HTTPS cell read it; the app overview's pattern badge
+  reads the same member (its own "Pattern" copy is deleted).
+- Memory reading, the cause: only a full preflight wrote it (`HostPreflight.store`, called by Check again), and no
+  task re-runs a preflight. The hourly Docker sweep's heartbeat (`HostProbe.recordSuccess`) wrote only
+  `last_seen_at`, and Probe now read the daemon's MemTotal and threw it away. Starfleet's local host was seen every
+  hour while its reading aged from 2026-08-29 past the 168-hour bound. Fix: `HostProbe.recordSuccess(name, info)`
+  records the daemon's memory total through `HostPreflight.recordMemoryReading` (the fact and its `facts_at` stamp
+  only, never a check, `probed_at` or the verdict), from the sweep (`DockerReconciler.sweepAll`, one extra
+  `/info` per host per hour) and from Probe now. A quarantined host's answer measures nothing.
+- Host words: the gate's refusals no longer name a button or join clauses with ";" ("The memory of local was
+  measured too long ago to place a new app there"; the failing-check and kernel-lane refusals likewise); Capacity
+  says "Memory last measured <ago>, too long ago to place new apps here." and draws no empty fact list; a host with no
+  reading says "No memory reading yet, so no new app is placed here."
+- Workloads list each booking once (`ServerOverviewState.workloadsOf`): the instance a database engine or a dedicated
+  database runs as is not listed beside its owner; the owner's row shows the owned instance's booked memory (the
+  ledger's number), a shared database none. Cause: the list queried instances, databases and engines separately and
+  never removed owned instances; the ledger itself always booked the engine once.
+- Recent activity on a host: one Check again wrote two rows (the volume probe's save, then the report's); Starfleet's
+  ten identical rows were three per preflight (plus the then-unsuppressed heartbeat) from 2026-08-29, before
+  operations recorded commands. `VolumeBackends.store` is bookkeeping (`ActivityLog.suppressed`), so a press is one
+  row, "Jelle checked local". Old rows are history and stay.
+- One clear action on the host page: Check again (board Host-Admit's one verb); Probe now moves to More
+  (`inlineOnRecord(false)`) with a hint saying what it does without running the checks.
+- Hosts list: a standing that raises an attention item has no reason line in its row (`HostVerdict.cell`); the band
+  says it once. "Add host" (`FormSpec.createTitle`), lead "The machines your apps run on.".
+- `/admin/hosts` stays a 404: zenit-cms declares no slug aliases and CLAUDE.md forbids them; the list stays at
+  `/admin/servers`.
+- Task list adoption: SettingsTasksMountTest finds a schedule by its declared label and asserts its cron in words.
+  Roles: AdminNavigationJourneyTest expects no Roles tab (roles stay a member, reachable at /admin/roles).
+- Framework defects found (not edited here, zenit/zenit-cms are other agents'): (1) an activity card's subtitle is
+  `ActivityText.humanizeModelToken` of the stored token ("Server" for `hohenheim:server`), never the model's label
+  ("Host"), in zenit core and zenit-cms `ActivitySources.subtitle`; on a record's own Recent card the subtitle
+  repeats the page's kind anyway. (2) `cms-nav-badge` renders empty on the server and fills after hydration, so a
+  screenshot taken while the page still loads shows no badge.
+- Not done, seen on the walk: the "HTTPS is unavailable" item and a site's error-page item both speak for one site
+  while no certificate exists (the site's cause is its address, whose own item stays silent while HTTPS is
+  unavailable, so the fold finds no shown root); a workload's start-failure detail quotes the daemon/gate English
+  verbatim (D12's MESSAGE cause); the probe's "Last error" on the host page is raw English. Alert events with no
+  dashboard root while the inbox badge is gone: CERT_EXPIRING (the tile shows the next expiry), STACK_HEALTH,
+  AUTO_BAN_BUDGET_EXHAUSTED, DATABASE_MOVE_LEFTOVER.
+- Walk (scratch server from the built jar, fresh database, `/setup`; by SQL a Starfleet-like state: local admitted
+  with shared containers accepted and a 2026-08-29 memory reading, phoenix never checked, alchemy-skeleton behind the
+  site "Alchemy skeleton" forcing HTTPS on skeleton.d13a.test, a catch-all on `**.d13a.test`, the shared engine
+  mongo-local with its owned instance dbengine-mongo-local (512 MB) and the database skeleton-mongo with a 16-hour-old
+  dump, zone d13a.test with kuifje stale; the engine and database passwords encrypted with the scratch keyring):
+  shots `docs/hohenheim-ux-mockups-2026-09-30/shots/d13a/` (workspace repo). 01 dashboard (Apps badge 2, no
+  Activity badge, kuifje's item, Backups "1 of 1, Newest 16 hours ago, 4.0 MB", the catch-all "Per name", every
+  surface saying alchemy-skeleton); 02 Hosts (Add host, the board's lead, badges without repeated sentences); 03 local
+  with the stale reading (Check again plus More, the capacity line, mongo-local booked once); 04 after Probe now
+  (31.0 GB measured just now, "Takes new apps", booked 1.0 GB = the two 512 MB bookings); 05/05b after Check again
+  (the refusal without "Fix it, then Check again", one "checked local" row); 06 inbox under the Activity heading
+  ("3 times", worded headlines with their detail); 07 Addresses (App alchemy-skeleton, catch-all "Per name").
+- Verification: hohenheim run 958 (log `20261009-015614`), the 37 classes the wave touches, 139 of 139 passed:
+  AlertsTest, DnsFederationHealthTest, DashboardAttentionJourneyTest, DatabasesPageJourneyTest, AppsListJourneyTest,
+  HostsPageJourneyTest, ServerOverviewTest, VolumeBackendProbeTest, SettingsTasksMountTest,
+  SpamserviceAdminBrowserTest, InboxPagerTest, AdminNavigationJourneyTest, ForceSslAvailabilityTest,
+  LandingDashboardSurfacesTest, DashboardVocabularyDriftTest, DeclaredMicrocopyKeysTest, MicrocopyCatalogParsesTest,
+  MicrocopyCatalogScopeTest, MicrocopyManifestDriftTest, SpamserviceHealthTest, BanServiceTest,
+  SecurityReportEnvTest, CertExpiryAlertTest, IsolationVisibilityTest, DomainsListJourneyTest, AppOverviewJourneyTest,
+  AdminPagesTest, HostEvidenceTest, HostCheckAndAdmitJourneyTest, B15BeforeSurfacesTest, InstancePlacementTest,
+  ForeignKeyIntegrityTest, OnboardingChecklistTest, DashboardRoleGatingTest, ManagePanelJourneyTest,
+  RoutingProblemsTest, SiteRefusalVerdictJourneyTest. Earlier runs proved nothing whole: `20261009-004738` and
+  `20261009-010908` were aborted by the default 900s filtered budget (the second had 5 wording failures, fixed:
+  the DNS lag's closing period, the pattern's PATTERN coverage, the app-name titles, the hosts row without its
+  reason); `20261009-013339` was stopped before its verdict. AlertsTest's solo task printed nothing for 900s in
+  `20261009-004738` (the phase's whole budget, no test started); it did not reproduce: in `20261009-013339` and 958
+  the same solo task booted and passed all six tests on this tree, so no cause was found and none is claimed. The
+  set needs a raised budget (run 958: 1954s, about 550s of it rebuilding upstreams).

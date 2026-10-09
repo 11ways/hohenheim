@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
@@ -28,11 +29,14 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.TaskCatalog;
 import be.elevenways.zenit.common.task.TaskDescriptor;
 import be.elevenways.zenit.common.task.TaskStatus;
@@ -50,6 +54,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -247,8 +252,16 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 .contains("href=\"/admin/servers\"").contains(">1<").contains("1 refuses new apps");
             assertThat(tile(dashboard, "certificates")).as("step 8: no certificate, so no line about one")
                 .contains("href=\"/admin/certificates\"").contains(">0<").doesNotContain("class=\"description\"");
-            assertThat(tile(dashboard, "backups")).as("step 8: no app with a backup target says so")
-                .contains("href=\"/admin/instance-backups\"").contains("No app has a backup target");
+            assertThat(tile(dashboard, "backups")).as("step 8: nothing backed up says so")
+                .contains("href=\"/admin/instance-backups\"").contains("No app or database is backed up yet");
+            // The one count the sidebar carries (board Main): the apps with a problem, as the Apps tile says them;
+            // the inbox's unread alerts no longer badge Activity.
+            Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
+            AccessContext operator = TenantConduits.operator();
+            assertThat(admin.entryBySlug(AppParts.SLUG).navBadge(operator))
+                .as("step 8: the sidebar badges Apps with its 2 problems, the tile's own count").isEqualTo(2L);
+            assertThat(admin.entryBySlug("inbox").navBadge(operator))
+                .as("step 8: the inbox's unread alerts no longer badge Activity").isNull();
             assertThat(dashboard).as("step 8: the tiles the board replaced are gone")
                 .doesNotContain("href=\"/admin/access-lists\"").doesNotContain("Active bans");
 
@@ -328,7 +341,8 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 .isEqualTo("Visitors of its site get an error page");
             assertThat(causedBy(unfolded, workload)).as("step 1: unfolded, the site's item is caused by it")
                 .singleElement().satisfies(item -> assertThat(say(item.title()))
-                    .isEqualTo("Visitors of " + PREFIX + "shop get an error page"));
+                    .as("step 1: naming the app as the Apps list does, its workload's name (D13a)")
+                    .isEqualTo("Visitors of " + PREFIX + "crashed get an error page"));
 
             // 2. ...and folded, the band draws the cause once: the workload's item with its action, never the site's.
             List<AttentionItem> band = DashboardAttention.read(unfolded, true).attention();
@@ -337,7 +351,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             String dashboard = adminGet("/admin/dashboard").body();
             assertThat(dashboard).as("step 2: the rendered dashboard says it once, at its root")
                 .contains("Visitors of its site get an error page")
-                .doesNotContain("Visitors of " + PREFIX + "shop get an error page");
+                .doesNotContain("Visitors of " + PREFIX + "crashed get an error page");
 
             // 3. A failed deploy of an application that does not run is the same shape: the deploy's item is the
             //    root, with its way to the deploy, and the application's site folds under it.

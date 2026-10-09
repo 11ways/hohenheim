@@ -692,8 +692,12 @@ public class SiteDispatcher implements HttpHandler {
      */
     public List<String> forceSslSiteNames() {
         ForcedSites forced = forcedSites();
-        Set<String> names = new TreeSet<>(forced.own());
-        names.addAll(forced.bySetting());
+        Set<String> names = new TreeSet<>();
+        for (RouteEntry entry : this.routes.entries()) {
+            if (forced.own().contains(entry.siteId) || forced.bySetting().contains(entry.siteId)) {
+                names.add(entry.siteName);
+            }
+        }
         return List.copyOf(names);
     }
 
@@ -702,16 +706,17 @@ public class SiteDispatcher implements HttpHandler {
      * global Force HTTPS setting (a pattern, or a name a working certificate covers). A site with both is its own.
      *
      * AIDEV-NOTE: D10a's dashboard said "sites that force SSL" of a catch-all and a certified name that forced nothing
-     * themselves: the setting (on by default) sent them. The reader names each by its cause.
+     * themselves: the setting (on by default) sent them. The reader names each by its cause, and names it by site id so
+     * the panel can say the app's name (D13a: one app, one name), never the route's copy of the site's title.
      */
     public ForcedSites forcedSites() {
-        Set<String> own = new TreeSet<>();
-        Set<String> bySetting = new TreeSet<>();
+        Set<Integer> own = new TreeSet<>();
+        Set<Integer> bySetting = new TreeSet<>();
         for (RouteEntry entry : this.routes.entries()) {
             if (entry.forceSsl) {
-                own.add(entry.siteName);
+                own.add(entry.siteId);
             } else if (forcedBySetting(entry)) {
-                bySetting.add(entry.siteName);
+                bySetting.add(entry.siteId);
             }
         }
         bySetting.removeAll(own);
@@ -719,10 +724,10 @@ public class SiteDispatcher implements HttpHandler {
     }
 
     /**
-     * @param own       sites with an address forcing HTTPS itself, in name order
-     * @param bySetting sites only the global Force HTTPS setting sends to HTTPS, in name order
+     * @param own       sites with an address forcing HTTPS itself, by site id
+     * @param bySetting sites only the global Force HTTPS setting sends to HTTPS, by site id
      */
-    public record ForcedSites(List<String> own, List<String> bySetting) {
+    public record ForcedSites(List<Integer> own, List<Integer> bySetting) {
 
         /** @return whether no site is sent to HTTPS */
         public boolean isEmpty() {

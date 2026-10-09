@@ -144,7 +144,8 @@ public final class ServerParts {
     }
 
     static FormSpec formSpec() {
-        return FormSpec.builder().add(ServerModel.NAME).add(FieldFormEntryRegistry.INSTANCE.deriveEntry(ServerModel.RUNTIME))
+        return FormSpec.builder().createTitle(serverCopy("create_title"))
+            .add(ServerModel.NAME).add(FieldFormEntryRegistry.INSTANCE.deriveEntry(ServerModel.RUNTIME))
             .add(ServerModel.SSH_TARGET).add(ServerModel.INCUS_URL).add(INCUS_TRUST_TOKEN)
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(ServerModel.POSTURE))
             .add(ServerModel.PUBLIC_IPV4).add(ServerModel.PUBLIC_IPV6)

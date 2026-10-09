@@ -86,11 +86,9 @@ public class CheckForeignKeys extends ScheduledTask {
         String previous = LAST_REPORTED.getAndSet(signature);
         if (!signature.equals(previous)) {
             Blast.log("DATABASE INTEGRITY: orphaned rows found -", summary);
-            Alerts.trySend(NotificationEvents.DATA_INTEGRITY,
-                Microcopy.of("data_integrity_subject").withFilter("scope", "alert")
-                    .withArg("count", summary.size()),
-                Microcopy.of("data_integrity_body").withFilter("scope", "alert")
-                    .withArg("detail", signature));
+            Alerts.trySend(NotificationEvents.DATA_INTEGRITY, Alerts.INSTALLATION,
+                Alerts.copy("data_integrity_subject"),
+                Alerts.copy("data_integrity_body").withArg("detail", summary));
         }
         throw new IllegalStateException("Orphaned rows violate declared foreign keys (inspect and"
             + " repair offline with --foreign-key-orphans): " + String.join("; ", summary));

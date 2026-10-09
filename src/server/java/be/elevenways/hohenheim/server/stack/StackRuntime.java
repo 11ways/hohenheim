@@ -397,9 +397,10 @@ public class StackRuntime {
             if (turnedBad) {
                 // The states that TRIGGERED the transition, not a fresh Docker round-trip
                 // that may already show something else.
-                Alerts.trySend(NotificationEvents.STACK_HEALTH,
-                    "Stack '" + spec.name() + "' is " + next,
-                    "Service states: " + states);
+                Alerts.trySend(NotificationEvents.STACK_HEALTH, Alerts.about(StackModel.MODEL_ID, stackId),
+                    Alerts.copy(StackModel.STATUS_FAILED.equals(next) ? "stack_failed_subject"
+                        : "stack_degraded_subject").withArg("name", spec.name()),
+                    Alerts.copy("stack_unhealthy_body").withArg("states", String.valueOf(states)));
             }
         }
         return next;

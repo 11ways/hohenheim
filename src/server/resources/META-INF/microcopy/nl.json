@@ -6227,11 +6227,11 @@
     "scope": "violations"
   },
   "host_kernel_lane_unproven": {
-    "text": "{$name} heeft niet bewezen dat het de isolatie van zijn apps kan controleren: de laatste controle kon de firewall op die machine niet aanpassen. Los de controle {$check} op en kies dan Opnieuw controleren",
+    "text": "{$name} heeft niet bewezen dat het de isolatie van zijn apps kan controleren: de laatste controle kon de firewall op die machine niet aanpassen, dus de controle {$check} moet eerst slagen",
     "scope": "violations"
   },
   "host_preflight_check_now_required": {
-    "text": "{$name} slaagt niet voor de controle {$check}, die moet slagen om er apps te draaien: {$finding}. Los het op en kies dan Opnieuw controleren",
+    "text": "{$name} slaagt niet voor de controle {$check}, die apps nodig hebben om er te draaien: {$finding}",
     "scope": "violations"
   },
   "host_capacity_reached": {
@@ -6239,7 +6239,7 @@
     "scope": "violations"
   },
   "host_capacity_unproven": {
-    "text": "{$name} heeft geen recente geheugenmeting, dus er komt geen nieuwe app op; Opnieuw controleren meet het",
+    "text": "Het geheugen van {$name} is te lang geleden gemeten om er een nieuwe app te plaatsen",
     "scope": "violations"
   },
   "host_prepared_image_missing": {
@@ -9837,7 +9837,7 @@
     "scope": "server"
   },
   "probe_now_hint": {
-    "text": "Bevraag de daemon eenmalig en sla het resultaat op. Paginaweergaven peilen nooit.",
+    "text": "Vraagt de host of hij antwoordt en meet zijn geheugen, zonder zijn controles uit te voeren.",
     "scope": "server"
   },
   "host_probe_ok": {
@@ -10023,11 +10023,11 @@
     }
   ],
   "unmeasured_body": {
-    "text": "Er is geen bruikbare geheugenmeting, dus deze host heeft geen plaatsingsbudget. Voer preflight uit om te meten; een lege balk zou hier onterecht als een lege host lezen.",
+    "text": "Nog geen geheugenmeting, dus hier komt geen nieuwe app.",
     "scope": "server_overview"
   },
   "evidence_stale": {
-    "text": "De geheugenmeting is ouder dan {$hours} uur, dus er komt geen nieuwe app op deze host tot Opnieuw controleren ze meet. Laatst gemeten",
+    "text": "Geheugen het laatst gemeten {$ago}, te lang geleden om hier nieuwe apps te plaatsen.",
     "scope": "server_overview"
   },
   "workloads": {
@@ -10474,7 +10474,7 @@
       "scope": "project"
     },
     {
-      "text": "De machines die workloads draaien, met hun toelatingsstatus en capaciteit.",
+      "text": "De machines waarop je apps draaien.",
       "scope": "server"
     },
     {
@@ -11650,6 +11650,10 @@
     {
       "text": "Databank aanmaken",
       "scope": "database"
+    },
+    {
+      "text": "Host toevoegen",
+      "scope": "server"
     }
   ],
   "edit_title": {
@@ -12398,20 +12402,10 @@
     "text": "Deze zone wordt niet geserveerd of heeft geen NS-records, dus er valt niets te controleren.",
     "scope": "dns_zone"
   },
-  "dns_secondary_stale": [
-    {
-      "text": "Secundaire {$peer} van zone {$origin} is verouderd",
-      "scope": "attention_title"
-    },
-    {
-      "text": "Ze serveert serienummer {$served} terwijl deze primaire {$serial} serveert.",
-      "scope": "attention_detail"
-    },
-    {
-      "text": "DNS-secundaire verouderd",
-      "scope": "notification_event"
-    }
-  ],
+  "dns_secondary_stale": {
+    "text": "DNS-secundaire verouderd",
+    "scope": "notification_event"
+  },
   "dns_delegation_broken": [
     {
       "text": "Delegatie van zone {$origin} vraagt aandacht",
@@ -13411,19 +13405,19 @@
     "scope": "alert"
   },
   "isolation_contained_subject": {
-    "text": ".match {$count :number}\none {{{$sweep}: 1 workload ingeperkt}}\n* {{{$sweep}: {$count} workloads ingeperkt}}",
+    "text": ".match {$count :number}\none {{{$sweep}: 1 app is afgesloten om het apart te houden}}\n* {{{$sweep}: {$count} apps zijn afgesloten om ze apart te houden}}",
     "scope": "alert"
   },
   "isolation_unconfirmed_subject": {
-    "text": ".match {$count :number}\none {{{$sweep}: isolatie onbevestigd voor 1 onderwerp}}\n* {{{$sweep}: isolatie onbevestigd voor {$count} onderwerpen}}",
+    "text": ".match {$count :number}\none {{{$sweep}: van 1 ding is niet bevestigd dat het apart blijft}}\n* {{{$sweep}: van {$count} dingen is niet bevestigd dat ze apart blijven}}",
     "scope": "alert"
   },
   "data_integrity_subject": {
-    "text": ".match {$count :number}\none {{Verweesde rijen in de controlevlakdatabase (1 tabelkoppeling)}}\n* {{Verweesde rijen in de controlevlakdatabase ({$count} tabelkoppelingen)}}",
+    "text": "Sommige records in de eigen database van Hohenheim verwijzen naar records die niet meer bestaan",
     "scope": "alert"
   },
   "data_integrity_body": {
-    "text": "Deze rijen verwijzen naar records die niet meer bestaan, en schrijfacties die ze raken mislukken: {$detail}. Toon en herstel ze offline met --foreign-key-orphans.",
+    "text": "Wijzigingen die ze raken mislukken tot ze hersteld zijn; toon en herstel ze offline met het commando --foreign-key-orphans. Gevonden: {$detail}",
     "scope": "alert"
   },
   "database_move_leftover": {
@@ -14087,10 +14081,6 @@
   },
   "pattern_note": {
     "text": "Past op meerdere namen",
-    "scope": "app_overview"
-  },
-  "pattern": {
-    "text": "Patroon",
     "scope": "app_overview"
   },
   "list_admits_everyone": {
@@ -15910,7 +15900,7 @@
     "scope": "dashboard"
   },
   "stat_backups_none": {
-    "text": "Geen enkele app heeft een back-updoel",
+    "text": "Nog geen app of database heeft een back-up",
     "scope": "dashboard"
   },
   "tally_waiting": {
@@ -16254,5 +16244,121 @@
   "sftp_server": {
     "text": "SFTP staat aan maar draait niet",
     "scope": "attention_title"
+  },
+  "host_unreachable_subject": {
+    "text": "{$name} antwoordt niet meer",
+    "scope": "alert"
+  },
+  "host_unreachable_body": {
+    "text": "{$failure}. Wat de verbinding meldde: {$detail}",
+    "scope": "alert"
+  },
+  "dns_secondary_stale_body": {
+    "text": "{$lag}. Resolvers die het vragen kunnen oude antwoorden krijgen tot het bijgewerkt is.",
+    "scope": "alert"
+  },
+  "dns_delegation_broken_body": {
+    "text": "{$verdict}. Wat de controle vond: {$detail}",
+    "scope": "alert"
+  },
+  "listener_down_subject": {
+    "text": "Hohenheim antwoordt niet meer op {$protocol}",
+    "scope": "alert"
+  },
+  "listener_down_body": {
+    "text": "De listener stopte en opnieuw starten mislukte: {$reason}",
+    "scope": "alert"
+  },
+  "cert_expiring_subject": {
+    "text": ".match {$days :number}\none {{Certificaat {$name} verloopt over 1 dag}}\n* {{Certificaat {$name} verloopt over {$days} dagen}}",
+    "scope": "alert"
+  },
+  "cert_expiring_body": {
+    "text": "Vernieuw of vervang het voor {$date}; automatische vernieuwing deed dat nog niet.",
+    "scope": "alert"
+  },
+  "cert_renewal_failed_subject": {
+    "text": "Certificaat {$name} vernieuwen mislukt",
+    "scope": "alert"
+  },
+  "cert_renewal_failed_body": {
+    "text": "Hohenheim blijft het proberen en wacht telkens langer; de pagina Certificaten toont de nieuwste fout. Wat mislukte: {$reason}",
+    "scope": "alert"
+  },
+  "stack_failed_subject": {
+    "text": "Stack {$name} is mislukt",
+    "scope": "alert"
+  },
+  "stack_degraded_subject": {
+    "text": "Stack {$name} draait met problemen",
+    "scope": "alert"
+  },
+  "stack_unhealthy_body": {
+    "text": "Niet al zijn services draaien zoals het hoort. Hun toestand: {$states}",
+    "scope": "alert"
+  },
+  "crash_loop_subject": {
+    "text": "{$name} blijft stoppen",
+    "scope": "alert"
+  },
+  "crash_loop_body": {
+    "text": "{$name} stopte keer op keer zonder dat iemand het stopte, dus het wordt niet meer automatisch herstart tot de volgende deploy. De console-uitvoer zegt misschien waarom.",
+    "scope": "alert"
+  },
+  "spamservice_outage_subject": {
+    "text": "Misbruikbescherming bereikt Spamservice niet",
+    "scope": "alert"
+  },
+  "spamservice_outage_body": {
+    "text": ".match {$minutes :number}\none {{Spamservice antwoordt al 1 minuut niet, dus reputatiebans en meldingen van beveiligingsgebeurtenissen worden overgeslagen tot het weer antwoordt. Laatste fout, {$source}: {$detail}}}\n* {{Spamservice antwoordt al {$minutes} minuten niet, dus reputatiebans en meldingen van beveiligingsgebeurtenissen worden overgeslagen tot het weer antwoordt. Laatste fout, {$source}: {$detail}}}",
+    "scope": "alert"
+  },
+  "spamservice_recovered_subject": {
+    "text": "Spamservice antwoordt weer",
+    "scope": "alert"
+  },
+  "spamservice_recovered_body": {
+    "text": "De aanroepen voor {$source} lukken weer, dus reputatiebans en meldingen van beveiligingsgebeurtenissen werken weer normaal.",
+    "scope": "alert"
+  },
+  "auto_ban_budget_subject": {
+    "text": "Automatische bans zijn gepauzeerd",
+    "scope": "alert"
+  },
+  "auto_ban_budget_body": {
+    "text": ".match {$budget :number}\none {{Er is het voorbije uur 1 automatische ban gemaakt, het maximum, dus nieuwe worden overgeslagen tot die een uur oud is. Een trigger kan op hol geslagen zijn, of zijn gebeurtenissen kunnen vervalst zijn. Handmatige bans werken nog.}}\n* {{Er zijn het voorbije uur {$budget} automatische bans gemaakt, het maximum, dus nieuwe worden overgeslagen tot de oudste een uur oud is. Een trigger kan op hol geslagen zijn, of zijn gebeurtenissen kunnen vervalst zijn. Handmatige bans werken nog.}}",
+    "scope": "alert"
+  },
+  "dns_secondaries_stale": {
+    "text": ".match {$count :number}\none {{{$peers} heeft een oude kopie van {$origin}}}\n* {{{$peers} hebben een oude kopie van {$origin}}}",
+    "scope": "attention_title"
+  },
+  "dns_secondary_no_host": {
+    "text": "{$peer} heeft geen transferadres, dus kan het niet naar de zone gevraagd worden",
+    "scope": "attention_detail"
+  },
+  "dns_secondary_silent": {
+    "text": "{$peer} gaf geen antwoord voor de zone ({$error})",
+    "scope": "attention_detail"
+  },
+  "dns_secondary_behind": {
+    "text": "{$peer} serveert serienummer {$served}; deze server serveert {$serial}",
+    "scope": "attention_detail"
+  },
+  "dns_secondaries_lag": {
+    "text": "{$lags}.",
+    "scope": "attention_detail"
+  },
+  "per_name": {
+    "text": "Per naam",
+    "scope": "site_domains"
+  },
+  "https_pattern": {
+    "text": "Een patroon beantwoordt veel namen; HTTPS werkt voor elke naam die een certificaat dekt.",
+    "scope": "site_domains"
+  },
+  "isolation_body": {
+    "text": "{$said}. Wat de controle vond: {$detail}",
+    "scope": "alert"
   }
 }

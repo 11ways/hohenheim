@@ -347,7 +347,8 @@ public final class InstanceOperationHandlers {
             ? Microcopy.of("instance_backup_unknown_body").withFilter("scope", "alert").withArg("name", name)
             : Microcopy.of("instance_backup_failed_body").withFilter("scope", "alert").withArg("name", name)
                 .withArg("reason", reasonOf(failure.cause()));
-        Alerts.trySend(NotificationEvents.BACKUP_FAILED, subject, body);
+        Alerts.trySend(NotificationEvents.BACKUP_FAILED, Alerts.about(InstanceModel.MODEL_ID, key == null ? "-" : key),
+            subject, body);
     }
 
     /** @return what failed, in words a person reads: a refusal's shown words, else the failure's message */

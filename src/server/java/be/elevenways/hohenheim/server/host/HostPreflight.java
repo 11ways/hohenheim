@@ -205,7 +205,7 @@ public final class HostPreflight {
             facts.put(HostFact.OS_TYPE.token(), stringOf(info.get("OSType")));
             facts.put(HostFact.ARCHITECTURE.token(), stringOf(info.get("Architecture")));
             facts.put(HostFact.NCPU.token(), numberOf(info.get("NCPU")));
-            facts.put(HostFact.MEM_TOTAL.token(), numberOf(info.get("MemTotal")));
+            facts.put(HostFact.MEM_TOTAL.token(), memTotalOf(info));
             facts.put(HostFact.CGROUP_VERSION.token(), stringOf(info.get("CgroupVersion")));
             facts.put(HostFact.CGROUP_DRIVER.token(), stringOf(info.get("CgroupDriver")));
             facts.put(HostFact.CONTAINERS.token(), numberOf(info.get("Containers")));
@@ -767,6 +767,31 @@ public final class HostPreflight {
             "server", serverName,
             "passed", report.passed(),
             "checks", checkMap.size()));
+    }
+
+    /**
+     * Records the host's memory reading from a daemon's {@code /info} answer on the row, stamped {@code at}, without
+     * saving it: the heartbeat's half of {@link #store}, which leaves every check, {@code probed_at} and the preflight
+     * verdict as the last preflight stored them.
+     *
+     * @param info a Docker {@code /info} answer, or the Incus probe's answer bridged onto its shape
+     */
+    public static void recordMemoryReading(@NonNull Row server, @NonNull Map<String, Object> info,
+                                           @NonNull Instant at) {
+        if (!(memTotalOf(info) instanceof Number bytes) || bytes.longValue() <= 0) {
+            return;
+        }
+        Map<String, Object> capabilities = new LinkedHashMap<>(storedMap(server, null));
+        Map<String, Object> factsAt = new LinkedHashMap<>(storedMap(server, FACTS_AT_KEY));
+        capabilities.put(MEM_TOTAL_FACT, bytes);
+        factsAt.put(MEM_TOTAL_FACT, at.toString());
+        capabilities.put(FACTS_AT_KEY, factsAt);
+        server.set(ServerModel.CAPABILITIES, capabilities);
+    }
+
+    /** @return the memory total a daemon's {@code /info} answer reports: the reading preflight and heartbeat share */
+    private static @NonNull Object memTotalOf(@NonNull Map<String, Object> info) {
+        return numberOf(info.get("MemTotal"));
     }
 
     /**

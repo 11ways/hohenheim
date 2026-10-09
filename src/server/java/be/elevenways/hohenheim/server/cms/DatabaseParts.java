@@ -893,34 +893,77 @@ public final class DatabaseParts {
         return new WidgetTree(List.of(AdminDashboard.section(card)));
     }
 
+    /** Where a database's backups stand: the Last backup cell and the dashboard's Backups tile read one verdict. */
+    enum BackupState {
+
+        /** A temporary database is never backed up, by design. */
+        TEMPORARY,
+
+        /** A persistent database with no stored dump. */
+        NEVER,
+
+        /** The newest dump is older than the nightly backup allows ({@link #BACKUP_OVERDUE_AFTER}). */
+        OVERDUE,
+
+        /** The newest dump is recent. */
+        DONE;
+
+        /** @return whether the database is meant to have backups at all, so a count of backed-up things holds it */
+        boolean expectsBackups() {
+            return switch (this) {
+                case TEMPORARY -> false;
+                case NEVER, OVERDUE, DONE -> true;
+            };
+        }
+    }
+
+    /**
+     * @param state  where its backups stand
+     * @param newest its newest stored dump, null when it has none or is temporary
+     */
+    record BackupReading(@NonNull BackupState state, DatabaseBackups.@Nullable Stored newest) {}
+
+    /** @return where this database's backups stand, read from the dumps on disk ({@link DatabaseBackups}) */
+    static @NonNull BackupReading backupOf(@NonNull Row database) {
+        if (Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL))) {
+            return new BackupReading(BackupState.TEMPORARY, null);
+        }
+        String name = database.get(DatabaseModel.NAME);
+        DatabaseBackups.Stored newest = name == null ? null : DatabaseBackups.newest(name);
+        if (newest == null) {
+            return new BackupReading(BackupState.NEVER, null);
+        }
+        return new BackupReading(newest.at().isBefore(Now.instant().minus(BACKUP_OVERDUE_AFTER))
+            ? BackupState.OVERDUE : BackupState.DONE, newest);
+    }
+
     /**
      * The newest stored dump as a word and a line: how long ago and how big, a warning when it is older than the
      * nightly backup allows, "Never" as a warning while a persistent database has none, and "Not backed up" for a
      * temporary one.
      */
     private static @NonNull StateLineCell lastBackupCell(@NonNull Row database, @NonNull PanelRequest request) {
-        if (Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL))) {
-            return new StateLineCell("temporary", BadgeVariant.OUTLINE,
+        BackupReading backup = backupOf(database);
+        DatabaseBackups.Stored newest = backup.newest();
+        return switch (backup.state()) {
+            case TEMPORARY -> new StateLineCell("temporary", BadgeVariant.OUTLINE,
                 Microcopy.of("backup_temporary").withFilter("scope", "database_overview"),
                 Microcopy.of("backup_temporary_detail").withFilter("scope", "database_overview"), null);
-        }
-        String name = database.get(DatabaseModel.NAME);
-        DatabaseBackups.Stored newest = name == null ? null : DatabaseBackups.newest(name);
-        if (newest == null) {
-            return new StateLineCell("never", BadgeVariant.WARNING,
+            case NEVER -> new StateLineCell("never", BadgeVariant.WARNING,
                 Microcopy.of("backup_never").withFilter("scope", "database_overview"),
                 Microcopy.of("backup_never_detail").withFilter("scope", "database_overview"), null);
-        }
+            case OVERDUE -> new StateLineCell("overdue", BadgeVariant.WARNING, Microcopy.literal(ago(newest, request)),
+                Microcopy.of("backup_overdue_detail").withFilter("scope", "database_overview")
+                    .withArg("size", ByteText.human(newest.bytes())), null);
+            case DONE -> new StateLineCell("done", BadgeVariant.SUCCESS, Microcopy.literal(ago(newest, request)),
+                Microcopy.literal(ByteText.human(newest.bytes())), null);
+        };
+    }
+
+    private static @NonNull String ago(DatabaseBackups.@NonNull Stored dump, @NonNull PanelRequest request) {
         Conduit conduit = request.conduit();
-        String ago = RelativeTime.ago(newest.at(),
+        return RelativeTime.ago(dump.at(),
             RelativeTimeWording.resolve(conduit.getLocales(), conduit.getMessageResolver()));
-        String size = ByteText.human(newest.bytes());
-        if (newest.at().isBefore(Now.instant().minus(BACKUP_OVERDUE_AFTER))) {
-            return new StateLineCell("overdue", BadgeVariant.WARNING, Microcopy.literal(ago),
-                Microcopy.of("backup_overdue_detail").withFilter("scope", "database_overview").withArg("size", size),
-                null);
-        }
-        return new StateLineCell("done", BadgeVariant.SUCCESS, Microcopy.literal(ago), Microcopy.literal(size), null);
     }
 
     /** The state column every database and engine list draws in place of the stored status. */

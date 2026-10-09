@@ -18,7 +18,6 @@ import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.BoundEndpoint;
 import be.elevenways.zenit.common.routing.RouteTarget;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -26,7 +25,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * The operator's own notification inbox: the shipped zenit-comms surface mounted
@@ -41,6 +39,10 @@ import java.util.Set;
  * Ownership is the module's: {@code CommsInbox} scopes every read to the
  * requesting principal, so this page shows the reader their OWN items and the
  * panel permission is the only gate it needs.
+ *
+ * AIDEV-NOTE: no sidebar badge (board Main, D13a): the one count the sidebar carries is the Apps entry's apps with a
+ * problem. A lasting condition an alert reports reaches the dashboard's Needs attention at its root; the inbox is the
+ * history of what was sent, its repeats folded by the alert's repeat key (AlertNotification).
  */
 public final class AdminInboxPage extends PanelPage {
 
@@ -60,25 +62,6 @@ public final class AdminInboxPage extends PanelPage {
         return Microcopy.of("nav_hint").withFilter("scope", "admin_inbox");
     }
 
-    /**
-     * The reader's unread items, so an alert that lands while any page of the panel is open is
-     * seen without opening the inbox.
-     *
-     * AIDEV-NOTE: counted by comms for the request's own recipient, exactly as the page lists; a
-     * request-less context (a nav projection outside a request) has no recipient, so no badge.
-     */
-    @Override
-    public @Nullable Long navBadge(@NonNull AccessContext access) {
-        Conduit conduit = access.conduit();
-        return conduit == null ? null : CommsInbox.unreadCount(conduit);
-    }
-
-    /** Re-counted in place whenever an inbox item lands or is read (a delivery, a mark-read). */
-    @Override
-    public @NonNull Set<Identifier> navBadgeFeeds() {
-        return Set.of(CommsInbox.FEED);
-    }
-
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
         Conduit conduit = request.conduit();
@@ -90,6 +73,7 @@ public final class AdminInboxPage extends PanelPage {
 
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", label().resolve(conduit.getLocales(), conduit.getMessageResolver()));
+        vars.put("lead", description());
         vars.put("items", items);
         vars.put("markAllTarget", CommsInbox.markAllTarget(conduit));
         vars.put("pager", Pager.of(window, total, page -> pageUrl(page).toUrl()));

@@ -27,17 +27,25 @@ import java.util.Map;
  * A caller holding only free text (an exception message, an operator-authored string) wraps
  * it as {@code Microcopy.literal}, which never touches the resolver.
  *
+ * AIDEV-NOTE: the inbox item's repeat key is the event and what the alert is about, never its wording: a host that
+ * stops answering eight times is one item that says "8 times" (zenit-comms folds it), and an archived item is closed,
+ * so the next occurrence opens a new one.
+ *
  * @author  Jelle De Loecker
  * @since   0.2.0
  */
 public final class AlertNotification extends Notification {
 
     private final String event;
+    private final String about;
     private final Microcopy subject;
     private final @Nullable Microcopy message;
 
-    public AlertNotification(@NonNull String event, @NonNull Microcopy subject, @Nullable Microcopy message) {
+    /** @param about what the alert is about ({@link Alerts#about}), the scope of its repeat key */
+    public AlertNotification(@NonNull String event, @NonNull String about, @NonNull Microcopy subject,
+                             @Nullable Microcopy message) {
         this.event = event;
+        this.about = about;
         this.subject = subject;
         this.message = message;
     }
@@ -75,7 +83,8 @@ public final class AlertNotification extends Notification {
         return new InboxMessage()
             .setTitle(this.subject)
             .setBody(this.message)
-            .setIcon("bell");
+            .setIcon("bell")
+            .setRepeatKey(this.event + ":" + this.about);
     }
 
     @Override

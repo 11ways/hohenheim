@@ -150,6 +150,11 @@ public final class AppParts {
             .recordLabel(copy("singular"))
             .description(Microcopy.of("nav_hint").withFilter("scope", "app"))
             .icon(Icon.of("cubes"))
+            // The one count the sidebar carries (board Main): the apps with a problem, as the Apps tile says them.
+            .navBadge(access -> {
+                int problems = AppDirectory.withProblem(apps(panelSlug, access));
+                return problems == 0 ? null : (long) problems;
+            })
             .health(ResourceHealth.of((app, access) -> app.health()))
             .list(list.rowLink((app, request) -> app.target()).build())
             .reads(ResourceReads.<App>typed(App::key)

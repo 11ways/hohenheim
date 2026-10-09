@@ -177,8 +177,13 @@ public class HohenheimDatabase {
             counts.merge(violation.table() + " -> " + violation.parent(), 1, Integer::sum);
         }
         List<String> lines = new ArrayList<>();
-        counts.forEach((pair, count) -> lines.add(pair + ": " + count + " orphaned row(s)"));
+        counts.forEach((pair, count) -> lines.add(pair + ": " + orphanedRows(count)));
         return lines;
+    }
+
+    /** @return "1 orphaned row", "5 orphaned rows": the technical detail line counts in a real plural */
+    public static @NonNull String orphanedRows(long count) {
+        return count == 1 ? "1 orphaned row" : count + " orphaned rows";
     }
 
     /**
@@ -196,7 +201,7 @@ public class HohenheimDatabase {
         if (violations.isEmpty()) {
             return;
         }
-        Blast.log("DATABASE INTEGRITY:", violations.size(), "row(s) violate a declared foreign key;"
+        Blast.log("DATABASE INTEGRITY:", orphanedRows(violations.size()), "violate a declared foreign key;"
             + " writes touching them will fail. Inspect with --foreign-key-orphans:", summarize(violations));
     }
 

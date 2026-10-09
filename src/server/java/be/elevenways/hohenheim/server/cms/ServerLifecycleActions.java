@@ -77,7 +77,10 @@ final class ServerLifecycleActions {
                     .withArg("name", name).withArg("kind", summary != null && summary.errorKind() != null
                         ? HostProbe.FailureKind.labelOf(summary.errorKind()) : HostProbe.FailureKind.UNREACHABLE.label()));
                 return serverCopy("host_probe_ok").withArg("name", name).withArg("summary", formatSummary(summary, label));
-            }, row -> true).description(serverCopy("probe_now_hint")).icon(Icon.of("heart-pulse")).inlineInRow(false).build(),
+            // Check again is the host page's one verb (board Host-Admit): it measures everything a probe does and the
+            // hourly sweep keeps the contact and the memory reading fresh, so the bare probe waits in the More menu.
+            }, row -> true).description(serverCopy("probe_now_hint")).icon(Icon.of("heart-pulse")).inlineInRow(false)
+                .inlineOnRecord(false).build(),
             place("check_host", serverCopy("check_and_admit"), ServerLifecycleActions::checkHost, row -> true)
                 .dynamicLabel(row -> serverCopy(awaitsAdmission(row) ? "check_and_admit" : "check_again"))
                 .description(serverCopy("check_and_admit_hint"))

@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -80,8 +81,11 @@ public final class DnsDelegationHealth {
 
         if (report.verdict().severity() != null && report.verdict() != previous) {
             Alerts.trySend(NotificationEvents.DNS_DELEGATION_BROKEN,
-                "Delegation of zone " + originString + ": " + report.verdict().token(),
-                report.detail());
+                Alerts.about(DnsZoneModel.MODEL_ID, zone.get(DnsZoneModel.ID)),
+                Microcopy.of("dns_delegation_broken").withFilter("scope", "attention_title")
+                    .withArg("origin", originString),
+                Alerts.copy("dns_delegation_broken_body").withArg("verdict", report.verdict().label())
+                    .withArg("detail", report.detail() != null ? report.detail() : "-"));
             Blast.slog("dns.delegation_verdict", Map.of(
                 "zone", originString, "verdict", report.verdict().token(),
                 "previous", previous != null ? previous.token() : "none"));

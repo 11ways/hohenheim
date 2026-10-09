@@ -90,7 +90,7 @@ public class ServerService extends DatasourceScoped {
         }
         HostProbe.Outcome outcome = ServerModel.isIncus(row) ? probeIncus(row) : probe(row);
         if (outcome.reachable()) {
-            exec(() -> HostProbe.recordSuccess(name));
+            exec(() -> HostProbe.recordSuccess(name, outcome.info()));
         } else {
             exec(() -> HostProbe.recordFailure(name, outcome));
         }

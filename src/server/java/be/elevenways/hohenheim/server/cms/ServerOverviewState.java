@@ -31,6 +31,8 @@ import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.RelativeTime;
+import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -59,8 +61,11 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.UnaryOperator;
 
 /**
@@ -175,12 +180,16 @@ public final class ServerOverviewState {
             new WidgetInstance(HohenheimWidgets.HOST_PREFLIGHT.id(), Map.of()).withData(preflightReport(server))))));
 
         HostCapacityView capacity = capacityOf(server, serverId);
-        bands.add(band(new WidgetTree(List.of(
-            new WidgetInstance(UsageBarWidget.ID,
+        List<WidgetInstance> capacityBand = new ArrayList<>();
+        capacityBand.add(new WidgetInstance(UsageBarWidget.ID,
                 Map.of("label", HohenheimWidgetCopy.localized("capacity", "server_overview")))
-                .withData(capacityUsage(capacity, locales, resolver)),
-            new WidgetInstance(FactListWidget.ID, Map.of())
-                .withData(capacityFacts(capacity, locales, resolver))))));
+            .withData(capacityUsage(capacity, locales, resolver)));
+        // Without a usable reading there is nothing booked against a budget to list: no empty "Nothing to show".
+        if (capacity.measured()) {
+            capacityBand.add(new WidgetInstance(FactListWidget.ID, Map.of())
+                .withData(capacityFacts(capacity, locales, resolver)));
+        }
+        bands.add(band(new WidgetTree(capacityBand)));
 
         bands.add(band(new WidgetTree(List.of(
             new WidgetInstance(HohenheimWidgets.HOST_WORKLOADS.id(), Map.of())
@@ -418,9 +427,11 @@ public final class ServerOverviewState {
                                                     @NonNull LocaleChain locales,
                                                     @Nullable MessageResolver resolver) {
         if (!capacity.measured()) {
-            String reason = capacity.stale()
+            // The reason carries when it was last measured: the unmeasured bar has no time slot of its own.
+            String reason = capacity.stale() && capacity.measuredAtIso() != null
                 ? Microcopy.of("evidence_stale").withFilter("scope", "server_overview")
-                    .withArg("hours", String.valueOf(capacity.maxAgeHours()))
+                    .withArg("ago", RelativeTime.ago(Instant.parse(capacity.measuredAtIso()),
+                        resolver == null ? null : RelativeTimeWording.resolve(locales, resolver)))
                     .resolve(locales, resolver)
                 : text("unmeasured_body", locales, resolver);
             return UsageData.unmeasured(reason);
@@ -448,15 +459,38 @@ public final class ServerOverviewState {
     // -- workloads -----------------------------------------------------------------
 
     /**
-     * The SAME three populations {@link ServerModel#refuseRemovalWhileOwned} counts:
-     * live instances, stacks and managed databases referencing this host.
+     * What runs on this host, once each: its instances, stacks, managed databases and database engines, the records
+     * {@link ServerModel#refuseRemovalWhileOwned} counts, with the memory each books in the capacity ledger.
+     *
+     * AIDEV-NOTE: a database engine, and a dedicated database, runs as an instance it owns (generated_for); the ledger
+     * books that instance once. The owner row is the one an operator recognises and the one that blocks removal, so it
+     * stands for the booking and its owned instance is not listed again (DEP10: dbengine-mongo-local and mongo-local,
+     * 512 MB each, one engine). An owned instance whose owner is not on this host (a move in flight) stays listed, so
+     * nothing booked here goes missing.
      */
-    private static @NonNull List<WorkloadView> workloadsOf(@NonNull String panel,
-                                                           int serverId) {
+    static @NonNull List<WorkloadView> workloadsOf(@NonNull String panel, int serverId) {
+        List<Row> databases = Models.get(DatabaseModel.class).find()
+            .where(DatabaseModel.SERVER_ID.eq(serverId)).all();
+        List<Row> engines = Models.get(DatabaseEngineModel.class).find()
+            .where(DatabaseEngineModel.SERVER_ID.eq(serverId)).all();
+        Set<String> owners = new HashSet<>();
+        for (Row database : databases) {
+            owners.add(ownerKey(DatabaseModel.MODEL_ID, database.get(DatabaseModel.ID)));
+        }
+        for (Row engine : engines) {
+            owners.add(ownerKey(DatabaseEngineModel.MODEL_ID, engine.get(DatabaseEngineModel.ID)));
+        }
+        Map<String, Row> owned = new HashMap<>();
         List<WorkloadView> workloads = new ArrayList<>();
         for (Row instance : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.SERVER_ID.eq(serverId))
                 .all()) {
+            String owner = ownerKey(instance.get(InstanceModel.GENERATED_FOR_MODEL),
+                instance.get(InstanceModel.GENERATED_FOR_ID));
+            if (owners.contains(owner)) {
+                owned.put(owner, instance);
+                continue;
+            }
             workloads.add(new WorkloadView(
                 String.valueOf((Object) instance.get(InstanceModel.NAME)),
                 WorkloadTier.INSTANCE,
@@ -475,30 +509,33 @@ public final class ServerOverviewState {
                 null,
                 CmsRoutes.detail(panel, "stacks", stack.get(StackModel.ID))));
         }
-        for (Row database : Models.get(DatabaseModel.class).find()
-                .where(DatabaseModel.SERVER_ID.eq(serverId)).all()) {
+        for (Row database : databases) {
+            Row instance = owned.get(ownerKey(DatabaseModel.MODEL_ID, database.get(DatabaseModel.ID)));
             workloads.add(new WorkloadView(
                 String.valueOf((Object) database.get(DatabaseModel.NAME)),
                 WorkloadTier.DATABASE,
                 // What it does, never the stored "active" (DatabaseVerdict): the list and the attention band agree.
                 DatabaseVerdict.ofDatabase(database).badge(),
-                database.get(DatabaseModel.MEMORY_LIMIT_MB),
+                // A shared database books nothing of its own: its engine does.
+                instance == null ? null : instance.get(InstanceModel.CAPACITY_MB),
                 CmsRoutes.detail(panel, "databases", database.get(DatabaseModel.ID))));
         }
-        // A shared engine holds the host's memory the same way a database used to: it owns
-        // its own instance and is booked once, so a host page that listed only the records
-        // would under-report exactly the container that carries them all.
-        for (Row engine : Models.get(DatabaseEngineModel.class).find()
-                .where(DatabaseEngineModel.SERVER_ID.eq(serverId)).all()) {
+        for (Row engine : engines) {
+            Row instance = owned.get(ownerKey(DatabaseEngineModel.MODEL_ID, engine.get(DatabaseEngineModel.ID)));
             workloads.add(new WorkloadView(
                 String.valueOf((Object) engine.get(DatabaseEngineModel.NAME)),
                 WorkloadTier.DATABASE_ENGINE,
                 DatabaseVerdict.ofEngine(engine).badge(),
-                engine.get(DatabaseEngineModel.MEMORY_LIMIT_MB),
+                instance == null ? null : instance.get(InstanceModel.CAPACITY_MB),
                 CmsRoutes.detail(panel, DatabaseParts.ENGINES_SLUG,
                     engine.get(DatabaseEngineModel.ID))));
         }
         return workloads;
+    }
+
+    /** @return the owning record of a generated instance as one key; never matches for an instance nothing owns */
+    private static @NonNull String ownerKey(@Nullable Object model, @Nullable Object id) {
+        return model == null || id == null ? "" : model + "#" + id;
     }
 
     // -- helpers -------------------------------------------------------------------

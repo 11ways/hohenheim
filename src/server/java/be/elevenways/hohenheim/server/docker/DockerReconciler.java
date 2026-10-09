@@ -430,11 +430,12 @@ public final class DockerReconciler {
         Map<String, List<Finding>> results = new LinkedHashMap<>();
         for (String serverName : servers.dockerNames()) {
             try {
-                results.put(serverName, sweepServer(serverName, servers.clientFor(serverName)));
+                DockerClient client = servers.clientFor(serverName);
+                results.put(serverName, sweepServer(serverName, client));
                 // The sweep IS a successful daemon contact: the scheduled reconcile
-                // doubles as the host heartbeat, so last_seen_at stays honest without
-                // a second per-host probe loop.
-                HostProbe.recordSuccess(serverName);
+                // doubles as the host heartbeat, so last_seen_at and the memory reading
+                // placement rations against stay honest without a second per-host probe loop.
+                HostProbe.recordSuccess(serverName, infoOf(client, serverName));
             } catch (Exception e) {
                 Blast.log("DOCKER RECONCILE: could not sweep server", serverName, "-", e.getMessage());
                 HostProbe.recordFailure(serverName,
@@ -442,6 +443,19 @@ public final class DockerReconciler {
             }
         }
         return results;
+    }
+
+    /**
+     * The daemon's {@code /info} answer for the heartbeat's memory reading; null when only that call fails, which
+     * leaves the reading as it was (the listing already proved the daemon answers).
+     */
+    private static @Nullable Map<String, Object> infoOf(@NonNull DockerClient client, @NonNull String serverName) {
+        try {
+            return client.info();
+        } catch (Exception unread) {
+            Blast.log("DOCKER RECONCILE: no memory reading from", serverName, "-", unread.getMessage());
+            return null;
+        }
     }
 
     /**

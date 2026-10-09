@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
+import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
@@ -20,7 +21,10 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.xbill.DNS.Type;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
@@ -69,38 +73,51 @@ public final class DnsAttention {
     }
 
     /**
-     * A linked secondary that has served an old serial, or nothing, for longer than the
-     * stale window -- read off the link rows the probe task writes, never probed here.
+     * The zones whose linked secondaries have served an old serial, or nothing, for longer than the stale window: ONE
+     * item per zone, its root, naming every stale secondary -- read off the link rows the probe task writes, never
+     * probed here.
+     *
+     * AIDEV-NOTE: the headline and each secondary's words are {@link DnsSecondaryFreshness}'s, the same the
+     * DNS_SECONDARY_STALE alert says, so the inbox and the dashboard name one lag alike; what the probe saw (no
+     * authoritative answer from host:port) is the detail after the words. The item lasts as long as the lag: a
+     * secondary that catches up clears its link's behind_since and the item with it (Starfleet's kuifje, 2026-10-07:
+     * stale for 39 minutes, its alert still unread a day later).
      */
     public static void staleDnsSecondaries(List<AttentionItem> items) {
         DnsZoneModel zones = Models.get(DnsZoneModel.class);
         DnsPeerModel peers = Models.get(DnsPeerModel.class);
+        Map<Integer, List<Row[]>> staleByZone = new LinkedHashMap<>();
         for (Row link : Models.get(DnsZonePeerModel.class).find().all()) {
             if (!DnsSecondaryFreshness.isStale(link)) {
                 continue;
             }
             Integer zoneId = link.get(DnsZonePeerModel.ZONE_ID);
             Integer peerId = link.get(DnsZonePeerModel.PEER_ID);
-            Row zone = zoneId != null ? zones.findById(zoneId) : null;
             Row peer = peerId != null ? peers.findById(peerId) : null;
-            if (zone == null || !Boolean.TRUE.equals(zone.get(DnsZoneModel.ENABLED))) {
-                continue;
+            if (zoneId != null && peer != null) {
+                staleByZone.computeIfAbsent(zoneId, id -> new ArrayList<>()).add(new Row[] {link, peer});
             }
-            String error = link.get(DnsZonePeerModel.PROBE_ERROR);
-            Integer served = link.get(DnsZonePeerModel.SERVED_SERIAL);
-            Microcopy detail = error != null
-                ? literal(error)
-                : copy("dns_secondary_stale", "attention_detail",
-                    "served", served != null ? served : 0,
-                    "serial", zone.get(DnsZoneModel.SERIAL) != null ? zone.get(DnsZoneModel.SERIAL) : 0);
+        }
+        staleByZone.forEach((zoneId, stale) -> {
+            Row zone = zones.findById(zoneId);
+            if (zone == null || !Boolean.TRUE.equals(zone.get(DnsZoneModel.ENABLED))) {
+                return;
+            }
+            Integer serial = zone.get(DnsZoneModel.SERIAL);
+            List<String> names = new ArrayList<>();
+            List<Microcopy> lags = new ArrayList<>();
+            for (Row[] pair : stale) {
+                names.add(String.valueOf((Object) pair[1].get(DnsPeerModel.NAME)));
+                lags.add(DnsSecondaryFreshness.lagOf(pair[1], pair[0], serial != null ? serial : 0));
+            }
+            Microcopy detail = copy("dns_secondaries_lag", "attention_detail", "lags", lags);
             items.add(item(AttentionSeverity.WARNING, "handshake",
-                copy("dns_secondary_stale", "attention_title",
-                    "peer", peer != null ? String.valueOf(peer.get(DnsPeerModel.NAME)) : "#" + peerId,
-                    "origin", String.valueOf(zone.get(DnsZoneModel.ORIGIN))),
+                DnsSecondaryFreshness.staleTitle(names, String.valueOf((Object) zone.get(DnsZoneModel.ORIGIN))),
                 detail,
                 CmsRoutes.subpage(ADMIN, DnsZoneParts.SLUG, zoneId, "secondaries"),
-                action("act_open_secondaries")));
-        }
+                action("act_open_secondaries"))
+                .about(AttentionSubject.zone(zoneId), null));
+        });
     }
 
     /**

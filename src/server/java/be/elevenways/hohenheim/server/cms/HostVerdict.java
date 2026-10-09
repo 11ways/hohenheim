@@ -65,10 +65,14 @@ record HostVerdict(@NonNull HostStanding standing, @Nullable Microcopy reason,
         return this.standing == HostStanding.TAKING;
     }
 
-    /** @return the Hosts list's state cell: the standing in words with why */
+    /**
+     * @return the Hosts list's state cell: the standing in words, with why only where no attention item says it; a
+     *         standing that raises one ({@link HostStanding#raisesAttention}) has its reason in the list's band above,
+     *         so the row does not repeat that sentence word for word (board Hosts: the card shows the badge)
+     */
     @NonNull StateLineCell cell() {
-        return new StateLineCell(this.standing.token(), this.standing.variant(), this.standing.label(), this.reason,
-            null);
+        return new StateLineCell(this.standing.token(), this.standing.variant(), this.standing.label(),
+            this.standing.raisesAttention() ? null : this.reason, null);
     }
 
     /**

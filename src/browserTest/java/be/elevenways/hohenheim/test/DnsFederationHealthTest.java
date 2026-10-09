@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
 import be.elevenways.hohenheim.model.DnsPeerModel;
@@ -21,6 +22,9 @@ import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolvers;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.comms.CommsChannel;
@@ -169,7 +173,12 @@ class DnsFederationHealthTest {
             List<AttentionItem> items = staleItems();
             assertThat(items).as("step 3: the stale secondary is an item").hasSize(1);
             assertThat(items.get(0).severity()).isEqualTo(AttentionSeverity.WARNING);
-            assertThat(items.get(0).title().key()).isEqualTo("dns_secondary_stale");
+            assertThat(en(items.get(0).title())).as("step 3: the item is worded at its root, the zone")
+                .isEqualTo("fresh-peer has an old copy of " + ORIGIN);
+            assertThat(en(items.get(0).detail())).as("step 3: its detail says why, with the serials")
+                .isEqualTo("fresh-peer serves serial " + ourSerial + "; this server serves " + bumped + ".");
+            assertThat(items.get(0).about()).as("step 3: the zone is the item's subject")
+                .isEqualTo(AttentionSubject.zone(zoneId));
             assertThat(items.get(0).target()).as("step 3: the item links to the zone").isNotNull();
 
             // 4. The peer catches up: current again, stamps cleared, item gone.
@@ -607,6 +616,10 @@ class DnsFederationHealthTest {
         List<AttentionItem> items = new ArrayList<>();
         DnsAttention.staleDnsSecondaries(items);
         return items;
+    }
+
+    private static String en(Microcopy copy) {
+        return copy.resolve(LocaleChain.ofTags("en"), MessageResolvers.getDefault());
     }
 
     private static List<AttentionItem> delegationItems() {

@@ -7,12 +7,14 @@
 {% declare summary: Map<String, Object> %}
 {% declare sections: List<Map<String, Object>> %}
 {% declare error: String = "" %}
+{#- True on the Access cluster's landing, headed by its cluster (CmsClusterDecorator): the page header draws no h1. -#}
+{% declare headedByCluster: Boolean = false %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 {% setTitle(title) %}
 <section class="cms-resource-list-page">
-    <header class="cms-resource-list-header"><h1>{{ title }}</h1></header>
+    {% render "zenitcms:page-header" var:title=title %}
     {% if !connected %}<pl-alert variant="warning">{{ t("disconnected", scope: "spamservice") }}</pl-alert>{% /if %}
     {% if error != "" %}<pl-alert variant="destructive">{{ error }}</pl-alert>{% /if %}
     <pl-card class="hh-spamservice-sections">

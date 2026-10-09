@@ -1104,6 +1104,7 @@ public final class ReleaseEngine {
             ? Models.get(InstanceModel.class).findById(ownerId) : null;
         String name = owner != null ? owner.get(InstanceModel.NAME) : "#" + ownerId;
         Alerts.trySend(NotificationEvents.DEPLOY_FAILED,
+            String.valueOf((Object) op.get(ReleaseOperationModel.FOR_MODEL)) + "#" + ownerId,
             Microcopy.of("deploy_failed_subject").withFilter("scope", "alert").withArg("name", name),
             Microcopy.of("deploy_failed_body").withFilter("scope", "alert").withArg("name", name)
                 .withArg("reason", failureReason == null || failureReason.isBlank() ? "-" : failureReason));

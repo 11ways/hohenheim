@@ -48,7 +48,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -151,13 +150,14 @@ final class AppOverview {
         }
         if (!AppHealth.exact(domain)) {
             notes.add(text("pattern_note", locales, resolver));
-            return new AppAddress(hostname, url, copy("pattern"), BadgeVariant.OUTLINE, String.join(" · ", notes));
+            return new AppAddress(hostname, url, CertCoverage.PATTERN.label(), CertCoverage.PATTERN.badgeVariant(),
+                String.join(" · ", notes));
         }
         boolean forced = Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL));
         if (forced) {
             notes.add(text("https_forced", locales, resolver));
         }
-        CertCoverage coverage = Objects.requireNonNull(AppHealth.httpsOf(domain, false, working));
+        CertCoverage coverage = AppHealth.httpsOf(domain, false, working);
         return new AppAddress(hostname, url, coverage.label(), coverage.badgeVariant(), String.join(" · ", notes));
     }
 

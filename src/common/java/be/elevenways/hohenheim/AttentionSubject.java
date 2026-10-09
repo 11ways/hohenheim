@@ -2,6 +2,7 @@ package be.elevenways.hohenheim;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -32,6 +33,11 @@ public record AttentionSubject(@NonNull Identifier model, int id) {
     /** @return the managed database with this id */
     public static @NonNull AttentionSubject database(int databaseId) {
         return new AttentionSubject(DatabaseModel.MODEL_ID, databaseId);
+    }
+
+    /** @return the DNS zone with this id */
+    public static @NonNull AttentionSubject zone(int zoneId) {
+        return new AttentionSubject(DnsZoneModel.MODEL_ID, zoneId);
     }
 
     /** @return the site address (domain row) with this id */
