@@ -9,11 +9,11 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
+import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationGate;
@@ -63,7 +63,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.ByteArrayInputStream;
 import java.io.StringReader;
 import java.security.cert.CertificateFactory;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -223,13 +222,13 @@ public final class CertificateParts {
         Integer errorCount = cert.get(CertificateModel.ERROR_COUNT);
         int errors = errorCount == null ? 0 : errorCount;
         Instant expires = cert.get(CertificateModel.EXPIRES_ON);
-        Long days = expires == null ? null : Duration.between(Now.instant(), expires).toDays();
+        Long days = expires == null ? null : CertificateExpiry.daysLeft(expires);
         if (CertificateModel.STATUS_ERROR.equals(status) || errors > 0) {
             Microcopy detail = days == null
                 ? Microcopy.of("state_failing_unissued").withFilter("scope", "certificate")
-                    .withArg("count", String.valueOf(Math.max(errors, 1)))
+                    .withArg("count", Math.max(errors, 1))
                 : Microcopy.of("state_failing_detail").withFilter("scope", "certificate")
-                    .withArg("count", String.valueOf(Math.max(errors, 1))).withArg("days", String.valueOf(days));
+                    .withArg("count", Math.max(errors, 1)).withArg("expiry", CertificateExpiry.inSentence(expires));
             String error = cert.get(CertificateModel.RENEWAL_ERROR);
             return new StateLineCell("renewal_failing", BadgeVariant.DESTRUCTIVE,
                 Microcopy.of("state_failing").withFilter("scope", "certificate"), detail,
@@ -253,9 +252,8 @@ public final class CertificateParts {
             : Boolean.TRUE.equals(cert.get(CertificateModel.AUTO_RENEW))
                 && CertificateModel.PROVIDER_LETSENCRYPT.equals(cert.get(CertificateModel.PROVIDER))
                 ? Microcopy.of("state_renews_detail").withFilter("scope", "certificate")
-                    .withArg("days", String.valueOf(days))
-                : Microcopy.of("state_valid_detail").withFilter("scope", "certificate")
-                    .withArg("days", String.valueOf(days));
+                    .withArg("expiry", CertificateExpiry.inSentence(expires))
+                : CertificateExpiry.of(expires);
         return new StateLineCell("works", BadgeVariant.SUCCESS,
             Microcopy.of("state_works").withFilter("scope", "certificate"), valid, null);
     }

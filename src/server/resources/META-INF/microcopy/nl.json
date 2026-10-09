@@ -268,6 +268,16 @@
     {
       "text": "Inloggegevens",
       "scope": "database"
+    },
+    {
+      "text": "Houder van inloggegevens",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "inloggegevens",
+      "scope": "capability",
+      "case": "sentence"
     }
   ],
   "key": [
@@ -1047,10 +1057,16 @@
     "text": "Webhook-URL kopiëren",
     "scope": "deployments"
   },
-  "cpu": {
-    "text": "CPU",
-    "scope": "instance_stats"
-  },
+  "cpu": [
+    {
+      "text": "CPU",
+      "scope": "instance_stats"
+    },
+    {
+      "text": "CPU",
+      "scope": "instance_overview"
+    }
+  ],
   "database": [
     {
       "text": "Database",
@@ -1063,6 +1079,10 @@
     {
       "text": "Database {$name}",
       "scope": "attention_title"
+    },
+    {
+      "text": "Database",
+      "scope": "instance_overview"
     }
   ],
   "database_not_running": {
@@ -1070,11 +1090,11 @@
     "scope": "attention_title"
   },
   "site_unrouted": {
-    "text": "Site {$name} ontbreekt in de routering",
+    "text": "Niemand kan {$name} bereiken",
     "scope": "attention_title"
   },
   "site_refusing": {
-    "text": "Site {$name} is gerouteerd maar weigert verzoeken",
+    "text": "{$name} antwoordt niet zoals het is ingesteld",
     "scope": "attention_title"
   },
   "unknown_kind": {
@@ -1086,7 +1106,7 @@
     "scope": "routing_problem"
   },
   "handler_faulted": {
-    "text": "Elke bezoeker wordt geweigerd: {$detail}",
+    "text": "Het weigert elk verzoek: {$detail}",
     "scope": "routing_problem"
   },
   "duplicate_route": {
@@ -1543,6 +1563,10 @@
     {
       "text": "Geheugen",
       "scope": "tenant_usage"
+    },
+    {
+      "text": "Geheugen",
+      "scope": "instance_overview"
     }
   ],
   "no_logs": {
@@ -1765,6 +1789,10 @@
     {
       "text": "Gestart",
       "scope": "depends_condition"
+    },
+    {
+      "text": "Gestart",
+      "scope": "instance_overview"
     }
   ],
   "starting": [
@@ -4275,14 +4303,38 @@
     "text": "Installatiemedia beheren",
     "scope": "permission"
   },
-  "manage": {
-    "text": "Beheren",
-    "scope": "capability"
-  },
-  "view": {
-    "text": "Bekijken",
-    "scope": "capability"
-  },
+  "manage": [
+    {
+      "text": "Beheren",
+      "scope": "capability"
+    },
+    {
+      "text": "Huurder",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "beheren",
+      "scope": "capability",
+      "case": "sentence"
+    }
+  ],
+  "view": [
+    {
+      "text": "Bekijken",
+      "scope": "capability"
+    },
+    {
+      "text": "Kijker",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "bekijken",
+      "scope": "capability",
+      "case": "sentence"
+    }
+  ],
   "edit": [
     {
       "text": "Bewerken",
@@ -4295,12 +4347,34 @@
     {
       "text": "Bewerken",
       "scope": "access_rule"
+    },
+    {
+      "text": "Bewerker",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "bewerken",
+      "scope": "capability",
+      "case": "sentence"
     }
   ],
-  "dyndns": {
-    "text": "Dynamische DNS-token",
-    "scope": "capability"
-  },
+  "dyndns": [
+    {
+      "text": "Dynamische DNS-token",
+      "scope": "capability"
+    },
+    {
+      "text": "Gebruiker van dynamische DNS",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "dynamische DNS-token",
+      "scope": "capability",
+      "case": "sentence"
+    }
+  ],
   "security": {
     "text": "Beveiliging",
     "scope": "hohenheim_nav"
@@ -6522,10 +6596,22 @@
     "text": "Web",
     "scope": "ban_scope"
   },
-  "snapshots": {
-    "text": "Snapshots",
-    "scope": "capability"
-  },
+  "snapshots": [
+    {
+      "text": "Snapshots",
+      "scope": "capability"
+    },
+    {
+      "text": "Snapshotbeheerder",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "snapshots",
+      "scope": "capability",
+      "case": "sentence"
+    }
+  ],
   "backups": [
     {
       "text": "Back-ups",
@@ -6542,6 +6628,20 @@
     {
       "text": ".match {$count :number}\none {{1 back-up}}\n* {{{$count} back-ups}}",
       "scope": "count"
+    },
+    {
+      "text": "Back-upbeheerder",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "back-ups",
+      "scope": "capability",
+      "case": "sentence"
+    },
+    {
+      "text": "Back-ups",
+      "scope": "instance_overview"
     }
   ],
   "backup_target": {
@@ -7184,10 +7284,22 @@
     "text": "Plak de inhoud van het geëxporteerde .template.json; de ingebedde checksum wordt gecontroleerd",
     "scope": "template_import"
   },
-  "image_any": {
-    "text": "Willekeurige images draaien",
-    "scope": "capability"
-  },
+  "image_any": [
+    {
+      "text": "Willekeurige images draaien",
+      "scope": "capability"
+    },
+    {
+      "text": "Imagegebruiker",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "willekeurige images draaien",
+      "scope": "capability",
+      "case": "sentence"
+    }
+  ],
   "console": [
     {
       "text": "Console",
@@ -7200,6 +7312,16 @@
     {
       "text": "De eigen uitvoer van de workload, live, en een regel naar het hoofdproces.",
       "scope": "console_mode"
+    },
+    {
+      "text": "Consolegebruiker",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "console",
+      "scope": "capability",
+      "case": "sentence"
     }
   ],
   "console_unsupported": {
@@ -7401,6 +7523,16 @@
     {
       "text": "Stroom",
       "scope": "capability"
+    },
+    {
+      "text": "Stroombeheerder",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "stroom",
+      "scope": "capability",
+      "case": "sentence"
     }
   ],
   "exec_command": [
@@ -7609,10 +7741,22 @@
     "text": "Beheerde databanken aanmaken",
     "scope": "permission"
   },
-  "files_read": {
-    "text": "Bestanden lezen",
-    "scope": "capability"
-  },
+  "files_read": [
+    {
+      "text": "Bestanden lezen",
+      "scope": "capability"
+    },
+    {
+      "text": "Bestandslezer",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "bestanden lezen",
+      "scope": "capability",
+      "case": "sentence"
+    }
+  ],
   "files_write": [
     {
       "text": "Bestanden schrijven",
@@ -7627,6 +7771,21 @@
       "text": "{$actor} schreef een bestand in {$subject}",
       "scope": "hohenheim",
       "target": "happened"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 bestand geschreven}}\n* {{{$count} bestanden geschreven}}",
+      "scope": "hohenheim",
+      "target": "activity_batch"
+    },
+    {
+      "text": "Bestandsschrijver",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "bestanden schrijven",
+      "scope": "capability",
+      "case": "sentence"
     }
   ],
   "stats": {
@@ -9468,10 +9627,22 @@
     "text": "Soort",
     "scope": "project"
   },
-  "config": {
-    "text": "Configureren",
-    "scope": "capability"
-  },
+  "config": [
+    {
+      "text": "Configureren",
+      "scope": "capability"
+    },
+    {
+      "text": "Configurator",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "configureren",
+      "scope": "capability",
+      "case": "sentence"
+    }
+  ],
   "destroy": [
     {
       "text": "Vernietigen",
@@ -9480,6 +9651,16 @@
     {
       "text": "Verwijderen met data",
       "scope": "instance_volume"
+    },
+    {
+      "text": "Verwijderaar",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "vernietigen",
+      "scope": "capability",
+      "case": "sentence"
     }
   ],
   "exec": [
@@ -9500,6 +9681,16 @@
       "text": "{$actor} voerde een commando uit in {$subject}",
       "scope": "hohenheim",
       "target": "happened"
+    },
+    {
+      "text": "Opdrachtuitvoerder",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "opdrachten uitvoeren",
+      "scope": "capability",
+      "case": "sentence"
     }
   ],
   "run": [
@@ -11344,6 +11535,16 @@
     {
       "text": "Een terminal in de workload, als de eigen gebruiker van de workload.",
       "scope": "console_mode"
+    },
+    {
+      "text": "Shellgebruiker",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "shell",
+      "scope": "capability",
+      "case": "sentence"
     }
   ],
   "stop_grace_seconds": [
@@ -12294,10 +12495,6 @@
     "text": "Wacht op het certificaat",
     "scope": "site_domains"
   },
-  "expires": {
-    "text": "verloopt",
-    "scope": "site_domains"
-  },
   "manage_record_name": {
     "text": "De volledige naam, bijvoorbeeld www.example.com; ze moet onder een hostnaam van een site vallen die je beheert",
     "scope": "help"
@@ -12932,6 +13129,11 @@
       "text": "{$actor} bewaarde een bestand in {$subject}",
       "scope": "hohenheim",
       "target": "happened"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 bestand opgeslagen}}\n* {{{$count} bestanden opgeslagen}}",
+      "scope": "hohenheim",
+      "target": "activity_batch"
     }
   ],
   "files_upload": [
@@ -12944,6 +13146,11 @@
       "text": "{$actor} uploadde een bestand naar {$subject}",
       "scope": "hohenheim",
       "target": "happened"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 bestand opgeladen}}\n* {{{$count} bestanden opgeladen}}",
+      "scope": "hohenheim",
+      "target": "activity_batch"
     }
   ],
   "files_mkdir": [
@@ -12956,6 +13163,11 @@
       "text": "{$actor} maakte een map in {$subject}",
       "scope": "hohenheim",
       "target": "happened"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 map aangemaakt}}\n* {{{$count} mappen aangemaakt}}",
+      "scope": "hohenheim",
+      "target": "activity_batch"
     }
   ],
   "files_rename": [
@@ -12968,6 +13180,11 @@
       "text": "{$actor} hernoemde een bestand in {$subject}",
       "scope": "hohenheim",
       "target": "happened"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 bestand hernoemd}}\n* {{{$count} bestanden hernoemd}}",
+      "scope": "hohenheim",
+      "target": "activity_batch"
     }
   ],
   "files_delete": [
@@ -12980,6 +13197,11 @@
       "text": "{$actor} verwijderde een bestand in {$subject}",
       "scope": "hohenheim",
       "target": "happened"
+    },
+    {
+      "text": ".match {$count :number}\none {{1 bestand verwijderd}}\n* {{{$count} bestanden verwijderd}}",
+      "scope": "hohenheim",
+      "target": "activity_batch"
     }
   ],
   "restored_backup": [
@@ -13420,10 +13642,16 @@
     "text": "Wijzigingen die ze raken mislukken tot ze hersteld zijn; toon en herstel ze offline met het commando --foreign-key-orphans. Gevonden: {$detail}",
     "scope": "alert"
   },
-  "database_move_leftover": {
-    "text": "Oude database-engine achtergebleven na een verhuizing",
-    "scope": "notification_event"
-  },
+  "database_move_leftover": [
+    {
+      "text": "Oude database-engine achtergebleven na een verhuizing",
+      "scope": "notification_event"
+    },
+    {
+      "text": "De oude engine {$engine} op {$host} kon niet verwijderd worden en houdt nog zijn poort, geheugen en een kopie van de gegevens vast.",
+      "scope": "attention_detail"
+    }
+  ],
   "data_integrity": {
     "text": "Verweesde databaserijen",
     "scope": "notification_event"
@@ -15094,11 +15322,11 @@
     "scope": "certificate"
   },
   "state_failing_detail": {
-    "text": "{$count} keer mislukt · nog {$days} dagen geldig",
+    "text": ".match {$count :number}\none {{1 keer mislukt · {$expiry}}}\n* {{{$count} keer mislukt · {$expiry}}}",
     "scope": "certificate"
   },
   "state_failing_unissued": {
-    "text": "{$count} keer mislukt; nog niet uitgegeven",
+    "text": ".match {$count :number}\none {{1 keer mislukt; nog niet uitgegeven}}\n* {{{$count} keer mislukt; nog niet uitgegeven}}",
     "scope": "certificate"
   },
   "state_waiting_dns": {
@@ -15122,11 +15350,7 @@
     "scope": "certificate"
   },
   "state_renews_detail": {
-    "text": "Nog {$days} dagen geldig, vernieuwt zichzelf",
-    "scope": "certificate"
-  },
-  "state_valid_detail": {
-    "text": "Nog {$days} dagen geldig",
+    "text": "Vernieuwt zichzelf; {$expiry}",
     "scope": "certificate"
   },
   "lets_in_column": {
@@ -15527,10 +15751,17 @@
     "text": "Het bekijken en toegang delen; vraag de beheerder om meer",
     "scope": "instance_overview"
   },
-  "you_can_share": {
-    "text": "Toegang delen",
-    "scope": "instance_overview"
-  },
+  "you_can_share": [
+    {
+      "text": "Toegang delen",
+      "scope": "instance_overview"
+    },
+    {
+      "text": "toegang delen",
+      "scope": "instance_overview",
+      "case": "sentence"
+    }
+  ],
   "your_part": {
     "text": "Wat je hier kunt doen",
     "scope": "instance_overview"
@@ -15888,7 +16119,7 @@
     "scope": "dashboard"
   },
   "stat_certs_next": {
-    "text": ".match {$days :number}\none {{Eerstvolgende vervalt over 1 dag}}\n* {{Eerstvolgende vervalt over {$days} dagen}}",
+    "text": "De eerstvolgende {$expiry}",
     "scope": "dashboard"
   },
   "stat_backups_value": {
@@ -16270,7 +16501,7 @@
     "scope": "alert"
   },
   "cert_expiring_subject": {
-    "text": ".match {$days :number}\none {{Certificaat {$name} verloopt over 1 dag}}\n* {{Certificaat {$name} verloopt over {$days} dagen}}",
+    "text": "Certificaat {$name} {$expiry}",
     "scope": "alert"
   },
   "cert_expiring_body": {
@@ -16360,5 +16591,154 @@
   "isolation_body": {
     "text": "{$said}. Wat de controle vond: {$detail}",
     "scope": "alert"
+  },
+  "certificate_expiry": [
+    {
+      "text": ".match {$days :number}\none {{Verloopt over 1 dag}}\n* {{Verloopt over {$days} dagen}}",
+      "scope": "certificate"
+    },
+    {
+      "text": ".match {$days :number}\none {{verloopt over 1 dag}}\n* {{verloopt over {$days} dagen}}",
+      "scope": "certificate",
+      "case": "sentence"
+    }
+  ],
+  "certificate_expires_today": [
+    {
+      "text": "Verloopt vandaag",
+      "scope": "certificate"
+    },
+    {
+      "text": "verloopt vandaag",
+      "scope": "certificate",
+      "case": "sentence"
+    }
+  ],
+  "certificate_expired": [
+    {
+      "text": ".match {$days :number}\none {{1 dag geleden verlopen}}\n* {{{$days} dagen geleden verlopen}}",
+      "scope": "certificate"
+    },
+    {
+      "text": ".match {$days :number}\none {{1 dag geleden verlopen}}\n* {{{$days} dagen geleden verlopen}}",
+      "scope": "certificate",
+      "case": "sentence"
+    }
+  ],
+  "certificate_note": {
+    "text": "certificaat {$expiry}",
+    "scope": "app_overview"
+  },
+  "manage_site_description": {
+    "text": "zijn adressen, instellingen en beschermde paden",
+    "scope": "capability"
+  },
+  "manage_instance_description": {
+    "text": "starten en stoppen, de console, instellingen en verwijderen",
+    "scope": "capability"
+  },
+  "manage_database_description": {
+    "text": "de inloggegevens, back-ups en verwijderen",
+    "scope": "capability"
+  },
+  "manage_git_provider_description": {
+    "text": "gebruiken voor deploys, wijzigen en verwijderen",
+    "scope": "capability"
+  },
+  "manage_access_list_description": {
+    "text": "de regels en wie erdoor mag",
+    "scope": "capability"
+  },
+  "view_description": {
+    "text": "bekijken, niets wijzigen",
+    "scope": "capability"
+  },
+  "edit_record_description": {
+    "text": "het record wijzigen",
+    "scope": "capability"
+  },
+  "view_certificate_description": {
+    "text": "bekijken en gebruiken voor zijn namen",
+    "scope": "capability"
+  },
+  "certificate_expiring": {
+    "text": "Het certificaat {$name} {$expiry}",
+    "scope": "attention_title"
+  },
+  "certificate_renewal_failing": {
+    "text": "Vernieuwen mislukte: {$reason}",
+    "scope": "attention_detail"
+  },
+  "certificate_renewal_late": {
+    "text": "Het vernieuwt zichzelf, maar is nog niet vernieuwd; Hohenheim blijft het proberen.",
+    "scope": "attention_detail"
+  },
+  "certificate_never_renews": {
+    "text": "Het vernieuwt zichzelf niet: upload een nieuw, of vraag er een aan bij Let's Encrypt.",
+    "scope": "attention_detail"
+  },
+  "stack_degraded": {
+    "text": "Een deel van {$name} draait niet",
+    "scope": "attention_title"
+  },
+  "stack_failed_detail": {
+    "text": "Geen van zijn services draait.",
+    "scope": "app_health"
+  },
+  "act_open_bans": {
+    "text": "Geblokkeerde adressen openen",
+    "scope": "attention_action"
+  },
+  "fix": {
+    "text": "Oplossing",
+    "scope": "app_list"
+  },
+  "live_not_running": {
+    "text": "Het draait niet, dus het gebruikt niets.",
+    "scope": "instance_overview"
+  },
+  "live_unwatched": {
+    "text": "Live gelezen zolang het tabblad Metingen open staat; niemand heeft het nu open.",
+    "scope": "instance_overview"
+  },
+  "memory_no_limit": {
+    "text": "Het gebruikt {$used}, zonder limiet om dat tegen af te zetten.",
+    "scope": "instance_overview"
+  },
+  "cpu_first_reading": {
+    "text": "De eerste meting heeft nog geen CPU-cijfer.",
+    "scope": "instance_overview"
+  },
+  "cores": {
+    "text": ".match {$count :number}\none {{1 kern}}\n* {{{$count} kernen}}",
+    "scope": "instance_overview"
+  },
+  "database_value": {
+    "text": "{$name} ({$engine})",
+    "scope": "instance_overview"
+  },
+  "database_value_state": {
+    "text": "{$name} ({$engine}, {$state})",
+    "scope": "instance_overview"
+  },
+  "backups_no_target": {
+    "text": "Geen back-updoel, dus er worden er geen gemaakt",
+    "scope": "instance_overview"
+  },
+  "backups_none_yet": {
+    "text": "Nog geen gemaakt",
+    "scope": "instance_overview"
+  },
+  "backups_last": {
+    "text": "Laatste {$ago}, {$size}",
+    "scope": "instance_overview"
+  },
+  "backups_last_failed": {
+    "text": "De laatste mislukte {$ago}",
+    "scope": "instance_overview"
+  },
+  "https_not_working": {
+    "text": "HTTPS werkt niet",
+    "scope": "app_health"
   }
 }

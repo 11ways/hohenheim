@@ -166,7 +166,7 @@ public final class AppParts {
                 .title(App::name));
     }
 
-    /** The table: state glyph, app, address, kind, host (operator only), HTTPS; the filter columns stay hidden. */
+    /** The table: state glyph, app, address, kind, host (operator only), HTTPS, fix; the filter columns stay hidden. */
     private static @NonNull TableSpec<App> table(boolean withHost) {
         TableSpec.Builder<App> table = TableSpec.<App>builder()
             .column(ResourceHealth.column())
@@ -179,9 +179,12 @@ public final class AppParts {
             // A website no instance serves runs on no host: the board's dash, never the framework's "None".
             table.column(ColumnSpec.fromField(HOST).sortable().absent(copy("host_none")).build());
         }
-        // The main address's HTTPS in the Addresses list's words and cell, never the app's overall verdict.
+        // The main address's HTTPS in the Addresses list's words and cell, never the app's overall verdict; then the
+        // fix its verdict offers (board Apps-List's "Get a certificate"), drawn as its own record's band offers it.
         table.column(ColumnSpec.virtual("https", copy("https")).renderer(HohenheimTemplateIds.CELL_DOMAIN_CERTIFICATE)
                 .build())
+            .column(ColumnSpec.virtual("fix", copy("fix")).renderer(HohenheimTemplateIds.CELL_APP_FIX).labelHidden()
+                .alignment(ColumnSpec.Alignment.RIGHT).build())
             .column(ColumnSpec.fromField(TYPE).hidden().build())
             .column(ColumnSpec.fromField(STATE).hidden().build())
             .filter(FilterSpec.leaf(TYPE, CoreTypes.EQUALS).label(copy("kind")).build());
@@ -199,6 +202,7 @@ public final class AppParts {
             case "kind" -> app.kind();
             case "host" -> app.host();
             case "https" -> app.https();
+            case "fix" -> app.fix();
             case "type" -> app.source().token();
             case "state" -> app.health().tone().token();
             default -> null;

@@ -1,30 +1,41 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.widget.common.data.UsageData;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * An app's record page leads with ONE verdict, and the list says the same: live and healthy, an error page visitors
- * get, and a workload that cannot start yet, each with the fix it needs.
+ * get, and a workload that cannot start yet, each with the fix it needs. A workload's overview says what it uses,
+ * since when it runs, the database it uses and its backups.
  *
  * @author Jelle De Loecker
  * @since  0.2.0
@@ -275,6 +286,98 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             ServerMain.adoptProxyServer(previous);
             proxy.stop();
             HardDeletes.row(Models.get(SiteModel.class), site);
+        }
+    }
+
+    @Test
+    void aWorkloadsOverviewSaysWhatItUsesSinceWhenAndWhatItHolds() throws Exception {
+        List<Runnable> cleanup = new ArrayList<>();
+        Row instance = instance("app-journey-details");
+        cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), instance));
+        LocaleChain en = LocaleChain.ofTags("en");
+        try {
+            // 1. Memory and CPU are read live, while someone watches the Metrics tab: a stopped workload uses none, and
+            //    a running one nobody watches is not measured, in words, never a zero.
+            List<UsageData> idle = InstanceOverview.liveUsage(instance, List.of(), en, Zenit.getMessageResolver());
+            assertThat(idle).as("step 1: a stopped workload's memory and CPU are not measured")
+                .allMatch(usage -> !usage.measured());
+            assertThat(idle.get(0).unmeasuredReason()).as("step 1: because it does not run")
+                .isEqualTo("It is not running, so it uses none.");
+            instance.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
+            Models.get(InstanceModel.class).save(instance);
+            assertThat(InstanceOverview.liveUsage(instance, List.of(), en, Zenit.getMessageResolver()).get(1)
+                .unmeasuredReason()).as("step 1: or because nobody watches it now")
+                .isEqualTo("Read live while its Metrics tab is open; nobody has it open now.");
+
+            // 2. With samples held, memory is measured against its limit and CPU is the samples' mean (the first,
+            //    which carries no CPU figure, left out) against the cores the daemon reports.
+            long mib = 1024L * 1024L;
+            List<InstanceStats.Sample> samples = List.of(
+                new InstanceStats.Sample(1_000L, 0, 100 * mib, 1024 * mib, 0, 0, 2),
+                new InstanceStats.Sample(2_000L, 24.0, 200 * mib, 1024 * mib, 0, 0, 2),
+                new InstanceStats.Sample(3_000L, 36.0, 300 * mib, 1024 * mib, 0, 0, 2));
+            List<UsageData> live = InstanceOverview.liveUsage(instance, samples, en, Zenit.getMessageResolver());
+            assertThat(live.get(0).used()).as("step 2: memory is the newest reading").isEqualTo(300 * mib);
+            assertThat(live.get(0).max()).as("step 2: of its limit").isEqualTo(1024 * mib);
+            assertThat(live.get(1).used()).as("step 2: CPU is the mean, the first sample left out").isEqualTo(30L);
+            assertThat(live.get(1).max()).as("step 2: of its two cores").isEqualTo(200L);
+            assertThat(live.get(1).maxLabel()).as("step 2: said as cores").isEqualTo("2 cores");
+
+            // 3. The overview draws Memory, Root disk and CPU (board App-Overview), and Details say when it started
+            //    (its last start's activity row), the database it uses with that database's state, and its backups.
+            ActivityLog.record(Models.get(InstanceModel.class), instance.get(InstanceModel.ID),
+                HohenheimActivityAction.DEPLOYED, "app-journey-details");
+            assertThat(InstanceOverview.lastStartOf(instance.get(InstanceModel.ID)))
+                .as("step 3: its last start is the newest start row").isNotNull();
+            DatabaseModel databases = Models.get(DatabaseModel.class);
+            Row database = databases.createEmptyRow();
+            Map.of(DatabaseModel.NAME.getName(), (Object) "app-journey-shop", DatabaseModel.ENGINE.getName(), "mysql",
+                DatabaseModel.PLACEMENT.getName(), DatabaseModel.PLACEMENT_DEDICATED,
+                DatabaseModel.DB_NAME.getName(), "shopdb", DatabaseModel.DB_USER.getName(), "shopuser",
+                DatabaseModel.DB_PASSWORD.getName(), "shop-secret-password", DatabaseModel.EPHEMERAL.getName(), true,
+                DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE).forEach(database::set);
+            databases.save(database);
+            cleanup.add(() -> HardDeletes.row(databases, database));
+            InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
+            Row link = links.createEmptyRow();
+            link.set(InstanceDatabaseModel.INSTANCE_ID, instance.get(InstanceModel.ID));
+            link.set(InstanceDatabaseModel.DATABASE_ID, database.get(DatabaseModel.ID));
+            link.set(InstanceDatabaseModel.ENV_PREFIX, "DB");
+            links.save(link);
+            cleanup.add(() -> HardDeletes.row(links, link));
+            String page = adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview").body();
+            assertThat(page).as("step 3: Resources shows memory, the root disk and CPU")
+                .contains("Memory").contains("Root disk").contains("CPU");
+            assertThat(page).as("step 3: Details say when it started").contains("Started");
+            assertThat(page).as("step 3: the database it uses, by name and engine, with its state while it does not "
+                    + "serve, linked to its page")
+                .contains("app-journey-shop (MySQL, not running)")
+                .contains("/admin/databases/" + database.get(DatabaseModel.ID) + "/open");
+            assertThat(page).as("step 3: and its backups").contains("No backup target, so none are made");
+
+            // 4. Recent folds one batch to one row (ActivitySources.onePerCommand): an SFTP session's uploads read as
+            //    "Uploaded 2 files", in the file verb's own batch words.
+            ActivityLog.inBatch("sftp:app-journey", () -> {
+                ActivityLog.record(Models.get(InstanceModel.class), instance.get(InstanceModel.ID),
+                    HohenheimActivityAction.FILES_UPLOAD, "/data/a.txt");
+                ActivityLog.record(Models.get(InstanceModel.class), instance.get(InstanceModel.ID),
+                    HohenheimActivityAction.FILES_UPLOAD, "/data/b.txt");
+            });
+            assertThat(HohenheimActivityAction.FILES_UPLOAD.batchLabel().withArg("count", 312)
+                .resolve(en, Zenit.getMessageResolver())).as("step 4: a batch of uploads reads in words")
+                .isEqualTo("Uploaded 312 files");
+            assertThat(HohenheimActivityAction.FILES_DELETE.batchLabel().withArg("count", 1)
+                .resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver())).as("step 4: in Dutch, one")
+                .isEqualTo("1 bestand verwijderd");
+            assertThat(HohenheimActivityAction.DEPLOYED.batchLabel())
+                .as("step 4: a verb written one at a time has none")
+                .isNull();
+            String recent = adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview").body();
+            assertThat(recent).as("step 4: the Recent card names the batch once").contains("Uploaded 2 files");
+        } finally {
+            for (int i = cleanup.size() - 1; i >= 0; i--) {
+                cleanup.get(i).run();
+            }
         }
     }
 

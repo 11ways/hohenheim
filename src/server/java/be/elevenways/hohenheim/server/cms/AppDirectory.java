@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.app.AppFix;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -15,17 +16,25 @@ import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
+import be.elevenways.zenit.cms.common.render.action.LinkActionState;
+import be.elevenways.zenit.cms.common.render.action.RecordActionsData;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
+import be.elevenways.zenit.cms.server.panel.PartsReads;
+import be.elevenways.zenit.cms.server.render.action.RecordActionBands;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.routing.ReturnPath;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
@@ -90,10 +99,13 @@ final class AppDirectory {
      *                    words; null without an exact address
      * @param health      the verdict its own record page leads with
      * @param target      its record page's front door
+     * @param fix         the first fix that verdict names which this viewer may use, as its record's band offers it;
+     *                    null when it names none (the Apps list's row action, board Apps-List)
      */
     record App(@NonNull String key, @NonNull Source source, int id, @NonNull String name, @NonNull String kind,
                @NonNull SiteHostnamesCell address, @Nullable String addressText, @Nullable String host,
-               @Nullable DomainCertCell https, @NonNull RecordHealth health, @NonNull RouteTarget target) {
+               @Nullable DomainCertCell https, @NonNull RecordHealth health, @NonNull RouteTarget target,
+               @Nullable AppFix fix) {
 
         /** @return how the dashboard and the sidebar count this app, by the verdict its record page leads with */
         @NonNull Count count() {
@@ -189,14 +201,16 @@ final class AppDirectory {
                 names.addAll(domains.getOrDefault(site.get(SiteModel.ID), List.of()));
             }
             SiteHostnamesCell address = names.isEmpty() ? endpointAddress(id) : SiteParts.hostnamesCellOf(names);
+            RecordHealth health = workloadHealth.apply(instance);
             apps.add(new App(Source.WORKLOAD.token() + "-" + id, Source.WORKLOAD, id,
                 String.valueOf((Object) instance.get(InstanceModel.NAME)),
                 WidgetBadge.of(InstanceModel.KIND, instance.get(InstanceModel.KIND), words.locales, words.resolver)
                     .label(),
                 address, address.primary(),
                 delegated ? null : hostOf(instance.get(InstanceModel.SERVER_ID)),
-                mainHttps(names, served, working, access, panel.slug()), workloadHealth.apply(instance),
-                InstanceParts.recordRoute(panel.slug(), instance, null)));
+                mainHttps(names, served, working, access, panel.slug()), health,
+                InstanceParts.recordRoute(panel.slug(), instance, null),
+                fixOf(panel, access, InstanceParts.SLUG, instance, health)));
         }
 
         Function<Row, RecordHealth> websiteHealth = AppHealth.sites(delegated).read(websites, access);
@@ -205,11 +219,12 @@ final class AppDirectory {
             int id = site.get(SiteModel.ID);
             List<Row> names = domains.getOrDefault(id, List.of());
             SiteHostnamesCell address = SiteParts.hostnamesCellOf(names);
+            RecordHealth health = websiteHealth.apply(site);
             apps.add(new App(Source.WEBSITE.token() + "-" + id, Source.WEBSITE, id,
                 String.valueOf((Object) site.get(SiteModel.NAME)), words.say(SiteParts.upstreamLabel(site)),
                 address, address.primary(), websiteHost(site, servedBy),
-                mainHttps(names, List.of(site), working, access, panel.slug()), websiteHealth.apply(site),
-                SiteParts.recordRoute(panel.slug(), id)));
+                mainHttps(names, List.of(site), working, access, panel.slug()), health,
+                SiteParts.recordRoute(panel.slug(), id), fixOf(panel, access, HohenheimSlugs.SITES, site, health)));
         }
 
         Function<Row, RecordHealth> stackHealth = AppHealth.stacks().read(stacks, access);
@@ -223,10 +238,58 @@ final class AppDirectory {
                 new SiteHostnamesCell(null, 0), null,
                 delegated ? null : hostOf(stack.get(StackModel.SERVER_ID)),
                 null, stackHealth.apply(stack),
-                CmsRoutes.subpage(panel.slug(), StackParts.SLUG, id, StackServicesPage.SLUG)));
+                CmsRoutes.subpage(panel.slug(), StackParts.SLUG, id, StackServicesPage.SLUG), null));
         }
         apps.sort(Comparator.comparing((App app) -> app.name().toLowerCase(Locale.ROOT)).thenComparing(App::key));
         return List.copyOf(apps);
+    }
+
+    /**
+     * The first fix an app's verdict names that this viewer may use, offered exactly as the record's own band offers it
+     * ({@link RecordActionBands#named}: the entry's gates and scope, its confirmation, through that record's action
+     * family): an address's "Get a certificate", a workload's "Restart". A fix the reader may not use, or one offered
+     * dead, is passed over; the row shows nothing rather than a refusal.
+     *
+     * AIDEV-NOTE: the fixes are ROW actions of the record behind the app (the workload, the site) or, for a workload
+     * speaking for its site, of that site ({@link RecordHealth#fixesOn}), never actions of the Apps list's own subject,
+     * so the list draws them through a cell. A verdict read without a request (a sidebar badge off-request) offers
+     * none.
+     *
+     * @param ownSlug the entry of the record the app is read from
+     * @param own     that record
+     */
+    private static @Nullable AppFix fixOf(@NonNull Panel panel, @NonNull AccessContext access, @NonNull String ownSlug,
+                                          @NonNull Row own, @NonNull RecordHealth health) {
+        Conduit conduit = access.conduit();
+        if (health.fixes().isEmpty() || conduit == null) {
+            return null;
+        }
+        RecordHealth.FixesOn on = health.fixesOn();
+        PanelEntry entry = panel.entryBySlug(on != null ? on.entrySlug() : ownSlug);
+        if (entry == null || !panel.admits(entry, access)) {
+            return null;
+        }
+        Object record = on == null ? own
+            : PartsReads.loadRow(new PanelRequest(panel, conduit, access, ReturnPath.of(null)), entry, on.recordKey(),
+                access);
+        if (record == null) {
+            return null;
+        }
+        RecordActionsData offered = RecordActionBands.named(panel, entry, record, access,
+            CmsRoutes.list(panel.slug(), AppParts.SLUG).toUrl(), health.fixes());
+        for (Identifier fix : health.fixes()) {
+            for (LinkActionState link : offered.inlineLinks()) {
+                if (link.id().equals(fix)) {
+                    return new AppFix(link, null);
+                }
+            }
+            for (InvokeActionState invoke : offered.inlineInvokes()) {
+                if (invoke.id().equals(fix) && invoke.disabledReason() == null) {
+                    return new AppFix(null, invoke);
+                }
+            }
+        }
+        return null;
     }
 
     /**

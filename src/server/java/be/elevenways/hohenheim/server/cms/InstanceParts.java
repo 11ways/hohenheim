@@ -126,8 +126,10 @@ public final class InstanceParts {
     public static @NonNull PanelResource<Row> admin() {
         TableSpec<Row> table = adminTable();
         return entry("instance")
-            // Reached through the Apps list, whose toolbar links this list (HohenheimPanel's sidebar note).
+            // Reached through the Apps list, whose toolbar links this list (HohenheimPanel's sidebar note); its pages
+            // mark Apps in the sidebar.
             .showInNav(false)
+            .standsUnder(AppParts.SLUG)
             .health(AppHealth.instances(false))
             // Soft-deleted rows are invisible (the model's soft-delete behaviour hides them from every default find);
             // everything else is LISTED, generated rows included -- with a "Managed by" column instead of a hole in
@@ -180,8 +182,9 @@ public final class InstanceParts {
      */
     public static @NonNull PanelResource<Row> manage() {
         return entry("manage_instance")
-            // Reached from the Apps list's toolbar (ManagePanel's sidebar note).
+            // Reached from the Apps list's toolbar (ManagePanel's sidebar note); its pages mark Apps in the sidebar.
             .showInNav(false)
+            .standsUnder(AppParts.SLUG)
             .health(AppHealth.instances(true))
             // Admins see every live instance; everyone else only the ones the walk confirms view on, which is what
             // makes an unowned id read as MISSING rather than forbidden. Generated (product-tier-owned) instances stay

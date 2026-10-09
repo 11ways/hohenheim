@@ -331,6 +331,28 @@ public final class BanService {
         return Math.max(1, configured != null ? configured : 50);
     }
 
+    /**
+     * The automatic-ban budget as it stands now: whether the last hour spent it and how many bans it skipped since.
+     *
+     * @param budget  the most automatic bans one sliding hour may make
+     * @param made    how many the last hour made
+     * @param skipped how many were skipped since the budget ran out; 0 once it has room again
+     */
+    public record AutoBanBudget(int budget, int made, long skipped) {
+
+        /** @return whether new automatic bans are skipped right now */
+        public boolean exhausted() {
+            return this.made >= this.budget;
+        }
+    }
+
+    /** @return the budget now, the window pruned to the last hour first (AUTO_BAN_BUDGET_EXHAUSTED's condition) */
+    public synchronized @NonNull AutoBanBudget autoBanBudget() {
+        int budget = configuredAutoBanBudget();
+        pruneAutoBanBudget(this.clock.getAsLong(), budget);
+        return new AutoBanBudget(budget, this.completedAutoBans.size(), this.budgetSuppressed);
+    }
+
     private void pruneAutoBanBudget(long now, int budget) {
         long cutoff = now - AUTO_BAN_WINDOW_MS;
         while (!this.completedAutoBans.isEmpty()

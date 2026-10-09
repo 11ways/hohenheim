@@ -8,8 +8,8 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
+import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.RelativeTime;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -22,7 +22,6 @@ import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -114,8 +113,7 @@ final class DashboardStats {
                                                        AppDirectory.@NonNull Wording words) {
         List<Row> certificates = AppDirectory.listed(panel, HohenheimSlugs.CERTIFICATES, access);
         int attention = 0;
-        Long nextDays = null;
-        Instant now = Now.instant();
+        Instant next = null;
         for (Row certificate : certificates) {
             StateLineCell state = CertificateParts.stateCell(certificate);
             if (state.variant() != BadgeVariant.SUCCESS) {
@@ -123,13 +121,12 @@ final class DashboardStats {
                 continue;
             }
             Instant expires = certificate.get(CertificateModel.EXPIRES_ON);
-            if (expires != null) {
-                long days = Duration.between(now, expires).toDays();
-                nextDays = nextDays == null ? days : Math.min(nextDays, days);
+            if (expires != null && (next == null || expires.isBefore(next))) {
+                next = expires;
             }
         }
         Microcopy detail = attention > 0 ? copy("stat_certs_attention").withArg("count", attention)
-            : nextDays != null ? copy("stat_certs_next").withArg("days", nextDays)
+            : next != null ? copy("stat_certs_next").withArg("expiry", CertificateExpiry.inSentence(next))
             : null;
         return tile("certificates", words.say(Microcopy.of("plural").withFilter("scope", "certificate")),
             String.valueOf(certificates.size()), detail == null ? null : words.say(detail), "lock", panel,

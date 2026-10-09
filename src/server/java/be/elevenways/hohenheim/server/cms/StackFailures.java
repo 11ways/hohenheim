@@ -34,16 +34,23 @@ final class StackFailures {
      * deployment did not fail (a monitor-observed failure has no deployment reason).
      */
     static @Nullable String reasonOf(@NonNull Row stack) {
+        Row deployment = failedDeploymentOf(stack);
+        String error = deployment == null ? null : deployment.get(StackDeploymentModel.ERROR);
+        return error == null || error.isBlank() ? null : error;
+    }
+
+    /**
+     * The newest deployment of a FAILED stack when that deployment failed, else null: a failed stack without one is
+     * the status monitor's observation (its services stopped after a good deploy).
+     */
+    static @Nullable Row failedDeploymentOf(@NonNull Row stack) {
         if (!StackModel.STATUS_FAILED.equals(stack.get(StackModel.STATUS))) {
             return null;
         }
         Row deployment = latestDeploymentOf(stack.get(StackModel.ID));
-        if (deployment == null
-                || !StackDeploymentModel.STATUS_FAILED.equals(deployment.get(StackDeploymentModel.STATUS))) {
-            return null;
-        }
-        String error = deployment.get(StackDeploymentModel.ERROR);
-        return error == null || error.isBlank() ? null : error;
+        return deployment != null
+            && StackDeploymentModel.STATUS_FAILED.equals(deployment.get(StackDeploymentModel.STATUS))
+            ? deployment : null;
     }
 
     /**

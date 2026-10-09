@@ -1,0 +1,9 @@
+{#- An app row's one fix (board Apps-List), drawn by the framework's own action partials so its gate, confirmation and
+    dead reason are the record band's. Blank for an app that needs none or a reader who may not use it. -#}
+{% declare value: AppFix %}
+{% if value != null %}
+<span class="hh-app-fix" data-app-fix>
+    {% if value.link != null %}{% render "zenitcms:action/link" var:action=value.link var:size="sm" %}{% /if %}
+    {% if value.invoke != null %}{% render "zenitcms:action/invoke" var:action=value.invoke %}{% /if %}
+</span>
+{% /if %}

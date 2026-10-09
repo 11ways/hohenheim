@@ -192,7 +192,7 @@ class RoutingProblemsTest {
 
     /**
      * Every routing-problem reason reads as a sentence in both shipped locales, and its
-     * severity is the reason's own unrouted fact.
+     * severity is the reason's own facts: unrouted or refusing every visitor is an error.
      *
      * AIDEV-NOTE: the detail key is DERIVED from the member's name, which the manifest and
      * Java key scans cannot see, so this walk over the enum is the gate: a reason added
@@ -210,8 +210,14 @@ class RoutingProblemsTest {
             // 1. One item, whose severity is the reason's own fact.
             assertThat(items).as("step 1: %s raises exactly one item", reason).hasSize(1);
             AttentionItem item = items.get(0);
-            assertThat(item.severity()).as("step 1: %s severity follows unrouted()", reason)
-                .isEqualTo(reason.unrouted() ? AttentionSeverity.ERROR : AttentionSeverity.WARNING);
+            assertThat(item.severity())
+                .as("step 1: %s is an error when it is unrouted or refuses every visitor", reason)
+                .isEqualTo(reason.unrouted() || reason.refusesEveryVisitor() ? AttentionSeverity.ERROR
+                    : AttentionSeverity.WARNING);
+            assertThat(item.title().resolve(LocaleChain.ofTags("en"), catalogs))
+                .as("step 1: %s is titled by the app's name as a person says it, never 'Site ...'", reason)
+                .startsWith(reason.unrouted() ? "Nobody can reach Reason Site" : "Reason Site does not answer")
+                .doesNotContain("Site Reason Site");
 
             // 2. Title and detail both resolve to real copy in en AND nl.
             for (String tag : List.of("en", "nl")) {

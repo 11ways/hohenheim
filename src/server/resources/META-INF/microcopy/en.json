@@ -268,6 +268,16 @@
     {
       "text": "Credentials",
       "scope": "database"
+    },
+    {
+      "text": "Credentials holder",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "credentials",
+      "scope": "capability",
+      "case": "sentence"
     }
   ],
   "key": [
@@ -1047,10 +1057,16 @@
     "text": "Copy webhook URL",
     "scope": "deployments"
   },
-  "cpu": {
-    "text": "CPU",
-    "scope": "instance_stats"
-  },
+  "cpu": [
+    {
+      "text": "CPU",
+      "scope": "instance_stats"
+    },
+    {
+      "text": "CPU",
+      "scope": "instance_overview"
+    }
+  ],
   "database": [
     {
       "text": "Database",
@@ -1063,6 +1079,10 @@
     {
       "text": "Database {$name}",
       "scope": "attention_title"
+    },
+    {
+      "text": "Database",
+      "scope": "instance_overview"
     }
   ],
   "database_not_running": {
@@ -1070,11 +1090,11 @@
     "scope": "attention_title"
   },
   "site_unrouted": {
-    "text": "Site {$name} is missing from routing",
+    "text": "Nobody can reach {$name}",
     "scope": "attention_title"
   },
   "site_refusing": {
-    "text": "Site {$name} is routed but refuses requests",
+    "text": "{$name} does not answer as it is set up",
     "scope": "attention_title"
   },
   "unknown_kind": {
@@ -1086,7 +1106,7 @@
     "scope": "routing_problem"
   },
   "handler_faulted": {
-    "text": "Every visitor is turned away: {$detail}",
+    "text": "It refuses every request: {$detail}",
     "scope": "routing_problem"
   },
   "duplicate_route": {
@@ -1543,6 +1563,10 @@
     {
       "text": "Memory",
       "scope": "tenant_usage"
+    },
+    {
+      "text": "Memory",
+      "scope": "instance_overview"
     }
   ],
   "no_logs": {
@@ -1765,6 +1789,10 @@
     {
       "text": "Started",
       "scope": "depends_condition"
+    },
+    {
+      "text": "Started",
+      "scope": "instance_overview"
     }
   ],
   "starting": [
@@ -4275,14 +4303,38 @@
     "text": "Manage install media",
     "scope": "permission"
   },
-  "manage": {
-    "text": "Manage",
-    "scope": "capability"
-  },
-  "view": {
-    "text": "View",
-    "scope": "capability"
-  },
+  "manage": [
+    {
+      "text": "Manage",
+      "scope": "capability"
+    },
+    {
+      "text": "Tenant",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "manage",
+      "scope": "capability",
+      "case": "sentence"
+    }
+  ],
+  "view": [
+    {
+      "text": "View",
+      "scope": "capability"
+    },
+    {
+      "text": "Viewer",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "view",
+      "scope": "capability",
+      "case": "sentence"
+    }
+  ],
   "edit": [
     {
       "text": "Edit",
@@ -4295,12 +4347,34 @@
     {
       "text": "Edit",
       "scope": "access_rule"
+    },
+    {
+      "text": "Editor",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "edit",
+      "scope": "capability",
+      "case": "sentence"
     }
   ],
-  "dyndns": {
-    "text": "Dynamic DNS token",
-    "scope": "capability"
-  },
+  "dyndns": [
+    {
+      "text": "Dynamic DNS token",
+      "scope": "capability"
+    },
+    {
+      "text": "Dynamic DNS user",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "dynamic DNS token",
+      "scope": "capability",
+      "case": "sentence"
+    }
+  ],
   "security": {
     "text": "Security",
     "scope": "hohenheim_nav"
@@ -6522,10 +6596,22 @@
     "text": "Web",
     "scope": "ban_scope"
   },
-  "snapshots": {
-    "text": "Snapshots",
-    "scope": "capability"
-  },
+  "snapshots": [
+    {
+      "text": "Snapshots",
+      "scope": "capability"
+    },
+    {
+      "text": "Snapshot keeper",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "snapshots",
+      "scope": "capability",
+      "case": "sentence"
+    }
+  ],
   "backups": [
     {
       "text": "Backups",
@@ -6542,6 +6628,20 @@
     {
       "text": ".match {$count :number}\none {{1 backup}}\n* {{{$count} backups}}",
       "scope": "count"
+    },
+    {
+      "text": "Backup keeper",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "backups",
+      "scope": "capability",
+      "case": "sentence"
+    },
+    {
+      "text": "Backups",
+      "scope": "instance_overview"
     }
   ],
   "backup_target": {
@@ -7184,10 +7284,22 @@
     "text": "Paste the exported .template.json contents; the embedded checksum is verified",
     "scope": "template_import"
   },
-  "image_any": {
-    "text": "Run arbitrary images",
-    "scope": "capability"
-  },
+  "image_any": [
+    {
+      "text": "Run arbitrary images",
+      "scope": "capability"
+    },
+    {
+      "text": "Image runner",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "run arbitrary images",
+      "scope": "capability",
+      "case": "sentence"
+    }
+  ],
   "console": [
     {
       "text": "Console",
@@ -7200,6 +7312,16 @@
     {
       "text": "The workload's own output, live, and a line to its main process.",
       "scope": "console_mode"
+    },
+    {
+      "text": "Console user",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "console",
+      "scope": "capability",
+      "case": "sentence"
     }
   ],
   "console_unsupported": {
@@ -7401,6 +7523,16 @@
     {
       "text": "Power",
       "scope": "capability"
+    },
+    {
+      "text": "Power operator",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "power",
+      "scope": "capability",
+      "case": "sentence"
     }
   ],
   "exec_command": [
@@ -7609,10 +7741,22 @@
     "text": "Create managed databases",
     "scope": "permission"
   },
-  "files_read": {
-    "text": "Read files",
-    "scope": "capability"
-  },
+  "files_read": [
+    {
+      "text": "Read files",
+      "scope": "capability"
+    },
+    {
+      "text": "File reader",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "read files",
+      "scope": "capability",
+      "case": "sentence"
+    }
+  ],
   "files_write": [
     {
       "text": "Write files",
@@ -7627,6 +7771,21 @@
       "text": "{$actor} wrote a file in {$subject}",
       "scope": "hohenheim",
       "target": "happened"
+    },
+    {
+      "text": ".match {$count :number}\none {{Wrote 1 file}}\n* {{Wrote {$count} files}}",
+      "scope": "hohenheim",
+      "target": "activity_batch"
+    },
+    {
+      "text": "File writer",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "write files",
+      "scope": "capability",
+      "case": "sentence"
     }
   ],
   "stats": {
@@ -9468,10 +9627,22 @@
     "text": "Kind",
     "scope": "project"
   },
-  "config": {
-    "text": "Configure",
-    "scope": "capability"
-  },
+  "config": [
+    {
+      "text": "Configure",
+      "scope": "capability"
+    },
+    {
+      "text": "Configurator",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "configure",
+      "scope": "capability",
+      "case": "sentence"
+    }
+  ],
   "destroy": [
     {
       "text": "Destroy",
@@ -9480,6 +9651,16 @@
     {
       "text": "Delete with data",
       "scope": "instance_volume"
+    },
+    {
+      "text": "Remover",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "destroy",
+      "scope": "capability",
+      "case": "sentence"
     }
   ],
   "exec": [
@@ -9500,6 +9681,16 @@
       "text": "{$actor} ran a command in {$subject}",
       "scope": "hohenheim",
       "target": "happened"
+    },
+    {
+      "text": "Command runner",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "run commands",
+      "scope": "capability",
+      "case": "sentence"
     }
   ],
   "run": [
@@ -11344,6 +11535,16 @@
     {
       "text": "A terminal inside the workload, as the workload's own user.",
       "scope": "console_mode"
+    },
+    {
+      "text": "Shell user",
+      "scope": "capability",
+      "context": "holder"
+    },
+    {
+      "text": "shell",
+      "scope": "capability",
+      "case": "sentence"
     }
   ],
   "stop_grace_seconds": [
@@ -12294,10 +12495,6 @@
     "text": "Waiting for the certificate",
     "scope": "site_domains"
   },
-  "expires": {
-    "text": "expires",
-    "scope": "site_domains"
-  },
   "manage_record_name": {
     "text": "The full name, for example www.example.com; it must sit under a hostname of a site you manage",
     "scope": "help"
@@ -12932,6 +13129,11 @@
       "text": "{$actor} saved a file in {$subject}",
       "scope": "hohenheim",
       "target": "happened"
+    },
+    {
+      "text": ".match {$count :number}\none {{Saved 1 file}}\n* {{Saved {$count} files}}",
+      "scope": "hohenheim",
+      "target": "activity_batch"
     }
   ],
   "files_upload": [
@@ -12944,6 +13146,11 @@
       "text": "{$actor} uploaded a file to {$subject}",
       "scope": "hohenheim",
       "target": "happened"
+    },
+    {
+      "text": ".match {$count :number}\none {{Uploaded 1 file}}\n* {{Uploaded {$count} files}}",
+      "scope": "hohenheim",
+      "target": "activity_batch"
     }
   ],
   "files_mkdir": [
@@ -12956,6 +13163,11 @@
       "text": "{$actor} created a folder in {$subject}",
       "scope": "hohenheim",
       "target": "happened"
+    },
+    {
+      "text": ".match {$count :number}\none {{Created 1 folder}}\n* {{Created {$count} folders}}",
+      "scope": "hohenheim",
+      "target": "activity_batch"
     }
   ],
   "files_rename": [
@@ -12968,6 +13180,11 @@
       "text": "{$actor} renamed a file in {$subject}",
       "scope": "hohenheim",
       "target": "happened"
+    },
+    {
+      "text": ".match {$count :number}\none {{Renamed 1 file}}\n* {{Renamed {$count} files}}",
+      "scope": "hohenheim",
+      "target": "activity_batch"
     }
   ],
   "files_delete": [
@@ -12980,6 +13197,11 @@
       "text": "{$actor} deleted a file in {$subject}",
       "scope": "hohenheim",
       "target": "happened"
+    },
+    {
+      "text": ".match {$count :number}\none {{Deleted 1 file}}\n* {{Deleted {$count} files}}",
+      "scope": "hohenheim",
+      "target": "activity_batch"
     }
   ],
   "restored_backup": [
@@ -13420,10 +13642,16 @@
     "text": "Changes that touch them fail until they are repaired; list and repair them offline with the --foreign-key-orphans command. Found: {$detail}",
     "scope": "alert"
   },
-  "database_move_leftover": {
-    "text": "Old database engine left after a move",
-    "scope": "notification_event"
-  },
+  "database_move_leftover": [
+    {
+      "text": "Old database engine left after a move",
+      "scope": "notification_event"
+    },
+    {
+      "text": "Its old engine {$engine} on {$host} could not be removed and still holds its port, memory and a copy of the data.",
+      "scope": "attention_detail"
+    }
+  ],
   "data_integrity": {
     "text": "Orphaned database rows",
     "scope": "notification_event"
@@ -15094,11 +15322,11 @@
     "scope": "certificate"
   },
   "state_failing_detail": {
-    "text": "Failed {$count} times · valid for {$days} more days",
+    "text": ".match {$count :number}\none {{Failed once · {$expiry}}}\n* {{Failed {$count} times · {$expiry}}}",
     "scope": "certificate"
   },
   "state_failing_unissued": {
-    "text": "Failed {$count} times; not issued yet",
+    "text": ".match {$count :number}\none {{Failed once; not issued yet}}\n* {{Failed {$count} times; not issued yet}}",
     "scope": "certificate"
   },
   "state_waiting_dns": {
@@ -15122,11 +15350,7 @@
     "scope": "certificate"
   },
   "state_renews_detail": {
-    "text": "Valid for {$days} more days, renews itself",
-    "scope": "certificate"
-  },
-  "state_valid_detail": {
-    "text": "Valid for {$days} more days",
+    "text": "Renews itself; {$expiry}",
     "scope": "certificate"
   },
   "lets_in_column": {
@@ -15527,10 +15751,17 @@
     "text": "Look at it and share access; ask the operator for more",
     "scope": "instance_overview"
   },
-  "you_can_share": {
-    "text": "Share access",
-    "scope": "instance_overview"
-  },
+  "you_can_share": [
+    {
+      "text": "Share access",
+      "scope": "instance_overview"
+    },
+    {
+      "text": "share access",
+      "scope": "instance_overview",
+      "case": "sentence"
+    }
+  ],
   "your_part": {
     "text": "What you can do here",
     "scope": "instance_overview"
@@ -15888,7 +16119,7 @@
     "scope": "dashboard"
   },
   "stat_certs_next": {
-    "text": ".match {$days :number}\none {{Next expiry in 1 day}}\n* {{Next expiry in {$days} days}}",
+    "text": "Next one {$expiry}",
     "scope": "dashboard"
   },
   "stat_backups_value": {
@@ -16270,7 +16501,7 @@
     "scope": "alert"
   },
   "cert_expiring_subject": {
-    "text": ".match {$days :number}\none {{Certificate {$name} expires in 1 day}}\n* {{Certificate {$name} expires in {$days} days}}",
+    "text": "Certificate {$name} {$expiry}",
     "scope": "alert"
   },
   "cert_expiring_body": {
@@ -16360,5 +16591,154 @@
   "isolation_body": {
     "text": "{$said}. What the sweep found: {$detail}",
     "scope": "alert"
+  },
+  "certificate_expiry": [
+    {
+      "text": ".match {$days :number}\none {{Expires in 1 day}}\n* {{Expires in {$days} days}}",
+      "scope": "certificate"
+    },
+    {
+      "text": ".match {$days :number}\none {{expires in 1 day}}\n* {{expires in {$days} days}}",
+      "scope": "certificate",
+      "case": "sentence"
+    }
+  ],
+  "certificate_expires_today": [
+    {
+      "text": "Expires today",
+      "scope": "certificate"
+    },
+    {
+      "text": "expires today",
+      "scope": "certificate",
+      "case": "sentence"
+    }
+  ],
+  "certificate_expired": [
+    {
+      "text": ".match {$days :number}\none {{Expired 1 day ago}}\n* {{Expired {$days} days ago}}",
+      "scope": "certificate"
+    },
+    {
+      "text": ".match {$days :number}\none {{expired 1 day ago}}\n* {{expired {$days} days ago}}",
+      "scope": "certificate",
+      "case": "sentence"
+    }
+  ],
+  "certificate_note": {
+    "text": "certificate {$expiry}",
+    "scope": "app_overview"
+  },
+  "manage_site_description": {
+    "text": "its addresses, settings and protected paths",
+    "scope": "capability"
+  },
+  "manage_instance_description": {
+    "text": "start and stop it, its console, settings and removal",
+    "scope": "capability"
+  },
+  "manage_database_description": {
+    "text": "its credentials, backups and removal",
+    "scope": "capability"
+  },
+  "manage_git_provider_description": {
+    "text": "use it for deploys, change it and remove it",
+    "scope": "capability"
+  },
+  "manage_access_list_description": {
+    "text": "its rules and who it lets in",
+    "scope": "capability"
+  },
+  "view_description": {
+    "text": "see it, change nothing",
+    "scope": "capability"
+  },
+  "edit_record_description": {
+    "text": "change the record",
+    "scope": "capability"
+  },
+  "view_certificate_description": {
+    "text": "see it and use it for its names",
+    "scope": "capability"
+  },
+  "certificate_expiring": {
+    "text": "The certificate {$name} {$expiry}",
+    "scope": "attention_title"
+  },
+  "certificate_renewal_failing": {
+    "text": "Renewing it failed: {$reason}",
+    "scope": "attention_detail"
+  },
+  "certificate_renewal_late": {
+    "text": "It renews itself, but has not been renewed yet; Hohenheim keeps trying.",
+    "scope": "attention_detail"
+  },
+  "certificate_never_renews": {
+    "text": "It does not renew itself: upload a new one, or get one from Let's Encrypt.",
+    "scope": "attention_detail"
+  },
+  "stack_degraded": {
+    "text": "Part of {$name} is not running",
+    "scope": "attention_title"
+  },
+  "stack_failed_detail": {
+    "text": "None of its services is running.",
+    "scope": "app_health"
+  },
+  "act_open_bans": {
+    "text": "Open blocked addresses",
+    "scope": "attention_action"
+  },
+  "fix": {
+    "text": "Fix",
+    "scope": "app_list"
+  },
+  "live_not_running": {
+    "text": "It is not running, so it uses none.",
+    "scope": "instance_overview"
+  },
+  "live_unwatched": {
+    "text": "Read live while its Metrics tab is open; nobody has it open now.",
+    "scope": "instance_overview"
+  },
+  "memory_no_limit": {
+    "text": "It uses {$used}, with no limit to measure that against.",
+    "scope": "instance_overview"
+  },
+  "cpu_first_reading": {
+    "text": "The first reading carries no CPU figure yet.",
+    "scope": "instance_overview"
+  },
+  "cores": {
+    "text": ".match {$count :number}\none {{1 core}}\n* {{{$count} cores}}",
+    "scope": "instance_overview"
+  },
+  "database_value": {
+    "text": "{$name} ({$engine})",
+    "scope": "instance_overview"
+  },
+  "database_value_state": {
+    "text": "{$name} ({$engine}, {$state})",
+    "scope": "instance_overview"
+  },
+  "backups_no_target": {
+    "text": "No backup target, so none are made",
+    "scope": "instance_overview"
+  },
+  "backups_none_yet": {
+    "text": "None made yet",
+    "scope": "instance_overview"
+  },
+  "backups_last": {
+    "text": "Last one {$ago}, {$size}",
+    "scope": "instance_overview"
+  },
+  "backups_last_failed": {
+    "text": "The last one failed {$ago}",
+    "scope": "instance_overview"
+  },
+  "https_not_working": {
+    "text": "HTTPS does not work",
+    "scope": "app_health"
   }
 }

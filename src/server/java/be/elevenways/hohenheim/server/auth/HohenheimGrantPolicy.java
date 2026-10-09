@@ -78,6 +78,7 @@ final class HohenheimGrantPolicy {
         KnownCapabilities.register(SiteModel.MODEL_ID,
             KnownCapability.of(MANAGE)
                 .label(Microcopy.of("manage").withFilter("scope", "capability"))
+                .describe(Microcopy.of("manage_site_description").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable());
         RecordCapabilityRules.declare(SiteModel.MODEL_ID,
@@ -108,11 +109,13 @@ final class HohenheimGrantPolicy {
             // delete offer's subject read) then includes edit-grant holders, never a per-scope union.
             KnownCapability.of(VIEW)
                 .label(Microcopy.of("view").withFilter("scope", "capability"))
+                .describe(Microcopy.of("view_description").withFilter("scope", "capability"))
                 .impliedBy(EDIT)
                 .asDelegable()
                 .asOwnerImplied(),
             KnownCapability.of(EDIT)
                 .label(Microcopy.of("edit").withFilter("scope", "capability"))
+                .describe(Microcopy.of("edit_record_description").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable()
                 .asOwnerImplied(),
@@ -157,6 +160,7 @@ final class HohenheimGrantPolicy {
         KnownCapabilities.register(InstanceModel.MODEL_ID,
             KnownCapability.of(MANAGE)
                 .label(Microcopy.of("manage").withFilter("scope", "capability"))
+                .describe(Microcopy.of("manage_instance_description").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable(),
             // Seeing the record is implied by every verb that operates on it: an operator
@@ -172,6 +176,7 @@ final class HohenheimGrantPolicy {
             // while proving the files tab's own gate.
             KnownCapability.of(VIEW)
                 .label(Microcopy.of("view").withFilter("scope", "capability"))
+                .describe(Microcopy.of("view_description").withFilter("scope", "capability"))
                 .asDelegable()
                 .impliedBy(MANAGE, CONSOLE, POWER, CONFIG, DESTROY,
                     FILES_READ, SNAPSHOTS, BACKUPS, SHELL),
@@ -292,10 +297,12 @@ final class HohenheimGrantPolicy {
         KnownCapabilities.register(DatabaseModel.MODEL_ID,
             KnownCapability.of(MANAGE)
                 .label(Microcopy.of("manage").withFilter("scope", "capability"))
+                .describe(Microcopy.of("manage_database_description").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable(),
             KnownCapability.of(VIEW)
                 .label(Microcopy.of("view").withFilter("scope", "capability"))
+                .describe(Microcopy.of("view_description").withFilter("scope", "capability"))
                 .asDelegable()
                 .impliedBy(MANAGE, CREDENTIALS, BACKUPS, DESTROY),
             KnownCapability.of(CREDENTIALS)
@@ -335,6 +342,7 @@ final class HohenheimGrantPolicy {
         KnownCapabilities.register(GitProviderModel.MODEL_ID,
             KnownCapability.of(MANAGE)
                 .label(Microcopy.of("manage").withFilter("scope", "capability"))
+                .describe(Microcopy.of("manage_git_provider_description").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable());
         RecordCapabilityRules.declare(GitProviderModel.MODEL_ID,
@@ -352,6 +360,7 @@ final class HohenheimGrantPolicy {
         KnownCapabilities.register(AccessListModel.MODEL_ID,
             KnownCapability.of(MANAGE)
                 .label(Microcopy.of("manage").withFilter("scope", "capability"))
+                .describe(Microcopy.of("manage_access_list_description").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable());
         RecordCapabilityRules.declare(AccessListModel.MODEL_ID,
@@ -370,6 +379,7 @@ final class HohenheimGrantPolicy {
         KnownCapabilities.register(CertificateModel.MODEL_ID,
             KnownCapability.of(VIEW)
                 .label(Microcopy.of("view").withFilter("scope", "capability"))
+                .describe(Microcopy.of("view_certificate_description").withFilter("scope", "capability"))
                 .asDelegable()
                 .asOwnerImplied());
         RecordCapabilityRules.declare(CertificateModel.MODEL_ID,

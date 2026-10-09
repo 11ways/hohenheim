@@ -202,9 +202,9 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             .contains("/manage/instances/" + this.appId + "/page/console")
             .contains("/manage/instances/" + this.appId + "/page/files");
         assertThat(granted)
-            .as("step 7: the card lists the capabilities and the sharing")
+            .as("step 7: the card lists the capabilities and the sharing, as one sentence (case=sentence)")
             .doesNotContain("Look at it and share access; ask the operator for more")
-            .contains("Console, Read files, Share access");
+            .contains("Console, read files, share access");
 
         // 7b. Granted power, the app page offers Restart beside Deploy (board Manage-App).
         RecordGrants.grant(GrantSubjectType.USER, this.tenantId, InstanceModel.MODEL_ID, this.appId,

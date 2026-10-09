@@ -24,6 +24,7 @@ import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.files.HohenheimSftp;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -72,7 +73,7 @@ import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
  * dashboard costs queries and never an SSH/HTTPS round trip per workload; reachability and
  * liveness are observed by their own scheduled sweeps (InstanceStatusReconciler, the host
  * probe) and read back here. The per-role collectors are ProxyAttention, DatabaseAttention,
- * HostAttention, InstanceAttention, DnsAttention and FirewallAttention.
+ * HostAttention, InstanceAttention, StackAttention, DnsAttention and FirewallAttention.
  *
  * @author Jelle De Loecker
  * @since 0.2.0
@@ -105,6 +106,7 @@ public final class AttentionCollector {
                 ? AppHealth.sitesHeldBack() : Map.of();
         if (HohenheimRoles.enabled(Role.PROXY)) {
             ProxyAttention.errorCertificates(items);
+            ProxyAttention.expiringCertificates(items);
             ProxyAttention.failedProxyListeners(items);
             ProxyAttention.httpsUnavailableWithForceSsl(items);
             ProxyAttention.forcedWithoutCertificate(items);
@@ -133,8 +135,15 @@ public final class AttentionCollector {
         if (HohenheimRoles.enabled(Role.DNS)) {
             DnsAttention.dnsIssues(items);
         }
+        if (HohenheimRoles.enabled(Role.STACKS)) {
+            StackAttention.unhealthyStacks(items);
+        }
         if (HohenheimRoles.enabled(Role.FIREWALL)) {
             FirewallAttention.spamserviceIssue(items);
+            AttentionItem budget = FirewallAttention.autoBanBudget(BanService.INSTANCE.autoBanBudget());
+            if (budget != null) {
+                items.add(budget);
+            }
             AttentionItem sshWatch = FirewallAttention.sshWatchIssue(SshAuthWatcher.INSTANCE.snapshot());
             if (sshWatch != null) {
                 items.add(sshWatch);
@@ -175,6 +184,7 @@ public final class AttentionCollector {
         List<AttentionItem> items = new ArrayList<>();
         if (HohenheimRoles.enabled(Role.DATABASES)) {
             DatabaseAttention.failedDatabases(items);
+            DatabaseAttention.moveLeftovers(items);
             DatabaseAttention.unavailableAttachedDatabases(items);
         }
         return items;

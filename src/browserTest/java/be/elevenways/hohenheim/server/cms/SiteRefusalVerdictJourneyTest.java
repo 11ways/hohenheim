@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -75,7 +76,7 @@ class SiteRefusalVerdictJourneyTest extends HohenheimTestBase {
             assertThat(verdict.tone()).as("step 3: visitors get an error page").isEqualTo(HealthTone.BROKEN);
             assertThat(say(verdict.headline())).as("step 3: headed as one").isEqualTo("Visitors get an error page");
             assertThat(say(verdict.detail())).as("step 3: with the proxy's own reason")
-                .isEqualTo("Every visitor is turned away: it names no app to serve")
+                .isEqualTo("It refuses every request: it names no app to serve")
                 .as("step 3: never the generic one").doesNotContain("does not answer");
             assertThat(verdict.fixes()).as("step 3: and offers the fix: the site's own configuration")
                 .containsExactly(SiteActions.CHANGE_CONFIGURATION);
@@ -89,7 +90,12 @@ class SiteRefusalVerdictJourneyTest extends HohenheimTestBase {
             ProxyAttention.routingProblems(items, proxy.getDispatcher().routingProblems());
             assertThat(items).as("step 4: the dashboard names the same reason")
                 .anySatisfy(item -> assertThat(say(item.detail()))
-                    .isEqualTo("Every visitor is turned away: it names no app to serve"));
+                    .isEqualTo("It refuses every request: it names no app to serve"));
+            assertThat(items).as("step 4: titled by the app's name in a person's words, an error like its verdict")
+                .anySatisfy(item -> {
+                    assertThat(say(item.title())).isEqualTo(PREFIX + "site does not answer as it is set up");
+                    assertThat(item.severity()).isEqualTo(AttentionSeverity.ERROR);
+                });
 
             // 5. A site whose app does not answer reads like every other item: what visitors get, why in the app's
             //    own verdict, and the way to it; the refused site is not drawn a second time as merely "down".

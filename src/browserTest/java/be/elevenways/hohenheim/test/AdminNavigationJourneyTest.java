@@ -1,11 +1,19 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.DnsRecordModel;
+import be.elevenways.hohenheim.model.GitProviderModel;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.AppParts;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -14,8 +22,12 @@ import be.elevenways.zenit.cms.common.panel.PanelCluster;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelNav;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.KnownCapabilities;
+import be.elevenways.zenit.common.security.KnownCapability;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
@@ -208,6 +220,60 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
             .as("step 7: the delegated Sites list offers no /admin sibling links")
             .doesNotContain("/admin/auth-providers")
             .doesNotContain("/admin/builds");
+
+        // 8. What an app is made of stands under Apps (PanelEntry.standsUnder): an app's own page marks the Apps entry
+        //    in the sidebar, on both panels, though its list keeps out of the sidebar.
+        for (String slug : List.of("sites", "instances", "stacks", "projects")) {
+            PanelEntry hidden = admin.entryBySlug(slug);
+            assertThat(hidden).as("step 8: '" + slug + "' is registered").isNotNull();
+            assertThat(PanelNav.sidebarEntryOf(admin, hidden).slug())
+                .as("step 8: a page of '" + slug + "' marks Apps in the sidebar").isEqualTo(AppParts.SLUG);
+        }
+        for (String slug : List.of("sites", "instances")) {
+            assertThat(PanelNav.sidebarEntryOf(manage, manage.entryBySlug(slug)).slug())
+                .as("step 8: a tenant's page of '" + slug + "' marks their Apps").isEqualTo(AppParts.SLUG);
+        }
+
+        // 9. A person opens on what they can manage (zenit-auth's "Can manage" tab, slug reach), before their
+        //    credentials.
+        List<String> personTabs = ((PanelResource<?>) admin.entryBySlug("users")).tabs().declared().stream()
+            .map(RecordTab::slug).toList();
+        assertThat(personTabs).as("step 9: a person's page has zenit-auth's Can manage tab").contains("reach");
+        assertThat(personTabs.indexOf("reach")).as("step 9: before their credentials")
+            .isLessThan(personTabs.indexOf("credentials"));
+
+        // 10. The People list and Can manage read every capability a person can hold in words, in en and nl: as a
+        //     holder ("Tenant of Survival"), in a sentence ("Console, power, configure"), and, for a level held alone,
+        //     with what it allows ("Manage: its addresses, settings and protected paths").
+        List<String> unworded = new ArrayList<>();
+        for (Identifier model : List.of(SiteModel.MODEL_ID, InstanceModel.MODEL_ID, DatabaseModel.MODEL_ID,
+                DnsRecordModel.MODEL_ID, GitProviderModel.MODEL_ID, AccessListModel.MODEL_ID,
+                CertificateModel.MODEL_ID)) {
+            for (KnownCapability capability : KnownCapabilities.forModel(model)) {
+                Microcopy label = capability.label();
+                if (label == null) {
+                    continue;
+                }
+                for (String tag : List.of("en", "nl")) {
+                    String plain = label.tryResolve(LocaleChain.ofTags(tag), MessageResolvers.getDefault());
+                    String holder = label.withFilter("context", "holder")
+                        .tryResolve(LocaleChain.ofTags(tag), MessageResolvers.getDefault());
+                    String sentence = label.withFilter("case", "sentence")
+                        .tryResolve(LocaleChain.ofTags(tag), MessageResolvers.getDefault());
+                    if (holder == null || holder.equals(plain) || sentence == null || sentence.equals(plain)) {
+                        unworded.add(tag + " " + model + "#" + capability.capability());
+                    }
+                }
+            }
+        }
+        assertThat(unworded).as("step 10: every capability has its holder and sentence spelling").isEmpty();
+        assertThat(Microcopy.of("manage").withFilter("scope", "capability").withFilter("context", "holder")
+            .tryResolve(LocaleChain.ofTags("en"), MessageResolvers.getDefault()))
+            .as("step 10: who manages a record is its tenant (board Access-People)").isEqualTo("Tenant");
+        KnownCapability siteManage = KnownCapabilities.forModel(SiteModel.MODEL_ID).get(0);
+        assertThat(siteManage.description()).as("step 10: a level held alone says what it allows").isNotNull();
+        assertThat(siteManage.description().tryResolve(LocaleChain.ofTags("nl"), MessageResolvers.getDefault()))
+            .as("step 10: in Dutch too").isEqualTo("zijn adressen, instellingen en beschermde paden");
     }
 
     /** A sidebar entry's description resolves in both shipped locales, never to its raw key. */

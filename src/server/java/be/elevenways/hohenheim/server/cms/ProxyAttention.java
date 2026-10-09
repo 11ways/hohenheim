@@ -13,8 +13,11 @@ import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.RoutingProblem;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
+import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
+import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -22,6 +25,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -55,9 +60,10 @@ public final class ProxyAttention {
      * 2026 port-443 outage stayed invisible for six days partly because the only listener
      * attention item required force_ssl sites; this one fires on listener state alone.
      *
-     * AIDEV-NOTE: a failed HTTPS listener is the ROOT of every site sent to HTTPS refusing plain HTTP: it says so as
-     * what it holds back, and {@link #httpsUnavailableWithForceSsl} stays silent while it does, so the one cause is
-     * one item.
+     * AIDEV-NOTE: a failed HTTPS listener is the ROOT of every site sent to HTTPS refusing plain HTTP: it is about the
+     * installation's HTTPS ({@link AttentionSubject#httpsTermination()}), which those sites' verdicts name as their
+     * cause, says what it holds back, and {@link #httpsUnavailableWithForceSsl} stays silent while it does, so the one
+     * cause is one item.
      */
     public static void failedProxyListeners(List<AttentionItem> items) {
         var proxy = ServerMain.getProxyServer();
@@ -75,7 +81,7 @@ public final class ProxyAttention {
                 literal(proxy.getHttpsFailureReason()),
                 CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES),
                 action("act_open_certificates"))
-                .holding(refusedOverHttp(proxy)));
+                .about(AttentionSubject.httpsTermination(), refusedOverHttp(proxy)));
         } else if (httpsDegraded(proxy)) {
             // Partial mode: passthrough listens but termination failed, so the listener
             // reads healthy while every force_ssl vhost answers 503.
@@ -84,7 +90,7 @@ public final class ProxyAttention {
                 literal(proxy.getHttpsFailureReason()),
                 CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES),
                 action("act_open_certificates"))
-                .holding(refusedOverHttp(proxy)));
+                .about(AttentionSubject.httpsTermination(), refusedOverHttp(proxy)));
         }
     }
 
@@ -122,7 +128,7 @@ public final class ProxyAttention {
                 : copy("https_certificates_unloaded", "attention_detail", "count", active),
             CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES),
             action("act_open_certificates"))
-            .holding(refused));
+            .about(AttentionSubject.httpsTermination(), refused));
     }
 
     /**
@@ -155,8 +161,7 @@ public final class ProxyAttention {
      * refusing site at once, and repeating each name would bury the cause.
      */
     public static void forcedWithoutCertificate(List<AttentionItem> items) {
-        var proxy = ServerMain.getProxyServer();
-        if (proxy != null && !proxy.isHttpsTerminationAvailable()) {
+        if (!AppHealth.httpsTerminates()) {
             return;
         }
         Set<String> working = AppHealth.workingNames();
@@ -200,6 +205,36 @@ public final class ProxyAttention {
                 copy("open_protected_path", "attention_detail"),
                 CmsRoutes.detail(ADMIN, ProtectedPathParts.SLUG, path.get(ProtectedPathModel.ID)),
                 action("act_protect_path", "path", path.get(ProtectedPathModel.PATH))));
+        }
+    }
+
+    /**
+     * Working certificates that expire within the expiry alert's window ({@code CERT_EXPIRING}, the same rows the alert
+     * fires for): an upload never renews itself and a Let's Encrypt certificate this close is one whose renewal is
+     * stuck, so the condition stays here until it is renewed or replaced, where the alert said it once. A failed one
+     * is {@link #errorCertificates}'s item.
+     */
+    public static void expiringCertificates(List<AttentionItem> items) {
+        Instant cutoff = Now.instant().plus(AcmeService.EXPIRY_ALERT_DAYS, ChronoUnit.DAYS);
+        for (Row cert : Models.get(CertificateModel.class).findExpiringSoon(cutoff)) {
+            Instant expires = cert.get(CertificateModel.EXPIRES_ON);
+            if (expires == null || !CertificateModel.STATUS_ACTIVE.equals(cert.get(CertificateModel.STATUS))) {
+                continue;
+            }
+            String renewalError = cert.get(CertificateModel.RENEWAL_ERROR);
+            boolean renews = Boolean.TRUE.equals(cert.get(CertificateModel.AUTO_RENEW))
+                && CertificateModel.PROVIDER_LETSENCRYPT.equals(cert.get(CertificateModel.PROVIDER));
+            Microcopy detail = renewalError != null && !renewalError.isBlank()
+                ? copy("certificate_renewal_failing", "attention_detail", "reason", renewalError)
+                : copy(renews ? "certificate_renewal_late" : "certificate_never_renews", "attention_detail");
+            AttentionSeverity severity = CertificateExpiry.daysLeft(expires) < 0 ? AttentionSeverity.ERROR
+                : AttentionSeverity.WARNING;
+            items.add(item(severity, "certificate",
+                copy("certificate_expiring", "attention_title", "name", cert.get(CertificateModel.NICE_NAME),
+                    "expiry", CertificateExpiry.inSentence(expires)),
+                detail,
+                CmsRoutes.detail(ADMIN, HohenheimSlugs.CERTIFICATES, cert.get(CertificateModel.ID)),
+                action("act_open_certificate")));
         }
     }
 
@@ -277,11 +312,11 @@ public final class ProxyAttention {
      *
      * AIDEV-NOTE: these used to reach the log only, so an enabled site could vanish from
      * routing (every hostname it owns answering 404) or answer 503 for every request while
-     * this panel said "All clear". The two shapes get different titles and severities off
-     * {@link RoutingProblem.Reason#unrouted()}: MISSING from routing is an error, routed but
-     * refusing is a warning. The detail sentence is keyed by the reason's own name under the
-     * {@code routing_problem} scope, so the reason vocabulary keeps its one home on the enum;
-     * RoutingProblemsTest binds every member to a shipped sentence in en and nl.
+     * this panel said "All clear". The two shapes get different titles off
+     * {@link RoutingProblem.Reason#unrouted()}; missing from routing or refusing every visitor is an error (the
+     * site's verdict is broken either way), refusing only some requests a warning. The detail sentence is keyed by
+     * the reason's own name under the {@code routing_problem} scope, so the reason vocabulary keeps its one home on
+     * the enum; RoutingProblemsTest binds every member to a shipped sentence in en and nl.
      *
      * @param problems the dispatcher's recorded problems, injectable so the projection is testable
      */
@@ -290,7 +325,9 @@ public final class ProxyAttention {
         for (RoutingProblem problem : problems) {
             boolean unrouted = problem.reason().unrouted();
             String name = AppDirectory.nameOfSite(problem.siteId(), problem.siteName());
-            items.add(item(unrouted ? AttentionSeverity.ERROR : AttentionSeverity.WARNING, "route",
+            // A site that turns every visitor away is as broken as one missing from routing (its app row's glyph).
+            boolean broken = unrouted || problem.reason().refusesEveryVisitor();
+            items.add(item(broken ? AttentionSeverity.ERROR : AttentionSeverity.WARNING, "route",
                 copy(unrouted ? "site_unrouted" : "site_refusing", "attention_title",
                     "name", name),
                 reasonOf(problem),
