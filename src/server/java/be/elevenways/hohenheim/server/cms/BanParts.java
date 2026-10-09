@@ -7,7 +7,20 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.security.BanStateCell;
 import be.elevenways.hohenheim.server.security.BanService;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
+import be.elevenways.hohenheim.server.security.IpLiterals;
+import be.elevenways.hohenheim.server.security.ThreatScorer;
+import be.elevenways.protoblast.common.time.RelativeTime;
+import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.zenit.cms.common.resource.ListScope;
+import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.widget.common.WidgetInstance;
+import be.elevenways.zenit.widget.common.WidgetTree;
+import be.elevenways.zenit.widget.common.builtin.CardWidget;
+import be.elevenways.zenit.widget.common.builtin.FactListWidget;
+import be.elevenways.zenit.widget.common.data.WidgetFact;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.typed.CoreTypes;
@@ -50,6 +63,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -193,6 +207,8 @@ public final class BanParts {
                     filter -> BanModel.BLOCKED_NOW.equals(filter) ? banText("blocked_now") : null)
                 .computed(Objects.requireNonNull(table.column(STATE_COLUMN)), (ban, request) ->
                     BanStateCell.of(ban, Now.instant()))
+                // Under the list (board Access-Blocked): who is close to being blocked, and who never is.
+                .widgetsBelow(BanParts::belowList)
                 .build())
             // Blocking an address is the header's one action and its form (board Access-Blocked); the list carries no
             // quick-add bar beside it.
@@ -212,6 +228,83 @@ public final class BanParts {
                 .build()))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
+    }
+
+    /** How far back "Recent misses" reaches, and how many addresses it names. */
+    static final Duration RECENT_MISSES = Duration.ofHours(1);
+    private static final int RECENT_MISSES_SHOWN = 10;
+
+    /** The names one recent-miss line spells out before "and N more". */
+    private static final int MISSED_NAMES_SHOWN = 2;
+
+    /** The Recent misses and Never block cards under the list. */
+    private static @NonNull WidgetTree belowList(@NonNull ListScope scope) {
+        Conduit conduit = scope.accessContext().conduit();
+        if (conduit == null) {
+            return WidgetTree.empty();
+        }
+        return new WidgetTree(List.of(AdminDashboard.section(recentMissesCard(conduit)),
+            AdminDashboard.section(neverBlockCard(conduit))));
+    }
+
+    /**
+     * Requests for names this server does not serve, per address, from the threat scorer that blocks for them
+     * ({@link ThreatScorer#recentMisses}): what the address asked for and when it last did.
+     *
+     * AIDEV-NOTE: read from the scorer's memory, never a stored event table: it is the state the automatic block
+     * acts on, and it holds the names a stored event (threshold-gated, Spamservice's) never had.
+     */
+    private static @NonNull WidgetInstance recentMissesCard(@NonNull Conduit conduit) {
+        ThreatScorer scorer = HohenheimSecurity.scorer();
+        List<ThreatScorer.Misses> misses = scorer.recentMisses(Now.millis() - RECENT_MISSES.toMillis(),
+            RECENT_MISSES_SHOWN);
+        RelativeTimeWording wording = RelativeTimeWording.resolve(conduit.getLocales(), conduit.getMessageResolver());
+        List<WidgetFact> facts = new ArrayList<>();
+        for (ThreatScorer.Misses missed : misses) {
+            List<String> names = missed.names();
+            int shown = Math.min(MISSED_NAMES_SHOWN, names.size());
+            facts.add(WidgetFact.of(missed.actor(), banText(names.size() > shown ? "missed_names_more" : "missed_names")
+                .withArg("names", String.join(", ", names.subList(0, shown)))
+                .withArg("more", names.size() - shown)
+                .withArg("ago", RelativeTime.ago(Instant.ofEpochMilli(missed.lastMs()), wording))
+                .resolve(conduit.getLocales(), conduit.getMessageResolver())));
+        }
+        WidgetTree body = facts.isEmpty()
+            ? new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(List.of(
+                WidgetFact.of(banText("no_misses").resolve(conduit.getLocales(), conduit.getMessageResolver()),
+                    null)))))
+            : new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts)));
+        return new WidgetInstance(CardWidget.ID, Map.of("title", banText("recent_misses_title"),
+            "lead", banText("recent_misses_lead").withArg("threshold", scorer.banThreshold())
+                .withArg("minutes", Math.max(1, scorer.windowSeconds() / 60))), body);
+    }
+
+    /**
+     * The addresses never blocked: the {@code security.never_ban} setting as it stands, changed where every setting
+     * is (the Blocking section's security group).
+     */
+    private static @NonNull WidgetInstance neverBlockCard(@NonNull Conduit conduit) {
+        List<String> entries = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NEVER_BAN);
+        List<WidgetFact> facts = new ArrayList<>();
+        for (String entry : entries == null ? List.<String>of() : entries) {
+            if (entry != null && !entry.isBlank()) {
+                String trimmed = entry.trim();
+                int slash = trimmed.indexOf('/');
+                String key = IpLiterals.isLiteral(trimmed) ? "never_block_address"
+                    : slash > 0 && IpLiterals.isLiteral(trimmed.substring(0, slash)) ? "never_block_network"
+                    : "never_block_name";
+                facts.add(WidgetFact.of(entry.trim(), banText(key).resolve(conduit.getLocales(),
+                    conduit.getMessageResolver())));
+            }
+        }
+        facts.add(WidgetFact.of(banText("never_block_server").resolve(conduit.getLocales(),
+            conduit.getMessageResolver()), banText("never_block_own").resolve(conduit.getLocales(),
+            conduit.getMessageResolver())));
+        WidgetInstance card = new WidgetInstance(CardWidget.ID, Map.of("title", banText("never_block_title"),
+            "lead", banText(facts.size() > 1 ? "never_block_lead" : "never_block_empty")),
+            new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));
+        return CardWidget.withLink(card, banText("never_block_change"),
+            AttentionCollector.securitySettingsTarget().toUrl(), "gear");
     }
 
     /**

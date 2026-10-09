@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
+import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.ServerMain;
@@ -63,6 +64,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.ByteArrayInputStream;
 import java.io.StringReader;
 import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -127,6 +129,9 @@ public final class CertificateParts {
     private static final DateTimeFormatter WALL_CLOCK = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private static final FormSpec ADMIN_FORM = FormSpec.builder()
+        // The create is the upload (board Certificates: "Get a certificate" orders one, "Upload a certificate" saves
+        // your own); the header's request action stands beside it.
+        .createTitle(Microcopy.of("create_title").withFilter("scope", "certificate"))
         .add(CertificateModel.NICE_NAME)
         .add(CertificateModel.CERTIFICATE_PEM)
         .add(CertificateModel.PRIVATE_KEY_PEM)
@@ -211,13 +216,22 @@ public final class CertificateParts {
 
     /**
      * What a certificate's state means to an operator, in a word and a line: a failing renewal and how long the
-     * certificate still holds, a manual DNS order waiting for its record, or that it works and until when.
+     * certificate still holds, a manual DNS order waiting for its record, one not issued yet, expired, stored as
+     * working but not loaded by the proxy, expiring inside the expiry alert's window, or that it works and until when.
      *
-     * AIDEV-NOTE: a renewal that failed is "failing" even while the old certificate still serves (status active with
-     * an error count): that is the one an operator must act on before it expires. Its last error rides along as the
-     * cell's note, so the list answers why without opening the certificate.
+     * AIDEV-NOTE: THE certificate state: the Certificates list, the dashboard's Certificates tile (a state that is not
+     * SUCCESS needs a look) and the expiring item's window ({@link AcmeService#EXPIRY_ALERT_DAYS}) read it, so the
+     * list never says "Works" beside a dashboard that counts the certificate as needing a look. A renewal that failed
+     * is "failing" even while the old certificate still serves (status active with an error count): that is the one
+     * an operator must act on before it expires; its last error rides along as the cell's note. A stored active row
+     * the proxy did not load serves nobody (D11's Shop), whatever its expiry says.
      */
     static @NonNull StateLineCell stateCell(@NonNull Row cert) {
+        return stateCell(cert, CertificateCoverage.loaded(cert));
+    }
+
+    /** {@link #stateCell(Row)} with whether the running proxy loaded the row. */
+    static @NonNull StateLineCell stateCell(@NonNull Row cert, boolean loaded) {
         String status = cert.get(CertificateModel.STATUS);
         Integer errorCount = cert.get(CertificateModel.ERROR_COUNT);
         int errors = errorCount == null ? 0 : errorCount;
@@ -242,15 +256,29 @@ public final class CertificateParts {
                     Microcopy.of("state_waiting_dns").withFilter("scope", "certificate"),
                     Microcopy.of("state_waiting_dns_detail").withFilter("scope", "certificate"), null)
                 : new StateLineCell("issuing", BadgeVariant.WARNING,
-                    Microcopy.of("state_issuing").withFilter("scope", "certificate"), null, null);
+                    Microcopy.of("state_issuing").withFilter("scope", "certificate"),
+                    Microcopy.of("state_issuing_detail").withFilter("scope", "certificate"), null);
         }
         if (days != null && days < 0) {
             return new StateLineCell("expired", BadgeVariant.DESTRUCTIVE,
-                Microcopy.of("state_expired").withFilter("scope", "certificate"), null, null);
+                Microcopy.of("state_expired").withFilter("scope", "certificate"), CertificateExpiry.of(expires), null);
+        }
+        if (!loaded) {
+            return new StateLineCell("not_loaded", BadgeVariant.DESTRUCTIVE,
+                Microcopy.of("state_not_loaded").withFilter("scope", "certificate"),
+                Microcopy.of("state_not_loaded_detail").withFilter("scope", "certificate"), null);
+        }
+        boolean renews = Boolean.TRUE.equals(cert.get(CertificateModel.AUTO_RENEW))
+            && CertificateModel.PROVIDER_LETSENCRYPT.equals(cert.get(CertificateModel.PROVIDER));
+        if (days != null && days <= AcmeService.EXPIRY_ALERT_DAYS) {
+            return new StateLineCell("expiring", BadgeVariant.WARNING,
+                Microcopy.of("state_expiring").withFilter("scope", "certificate"),
+                Microcopy.of(renews ? "state_expiring_renews_detail" : "state_expiring_upload_detail")
+                    .withFilter("scope", "certificate").withArg("expiry", CertificateExpiry.inSentence(expires)),
+                null);
         }
         Microcopy valid = days == null ? null
-            : Boolean.TRUE.equals(cert.get(CertificateModel.AUTO_RENEW))
-                && CertificateModel.PROVIDER_LETSENCRYPT.equals(cert.get(CertificateModel.PROVIDER))
+            : renews
                 ? Microcopy.of("state_renews_detail").withFilter("scope", "certificate")
                     .withArg("expiry", CertificateExpiry.inSentence(expires))
                 : CertificateExpiry.of(expires);
@@ -450,7 +478,7 @@ public final class CertificateParts {
     /** An uploaded certificate: refused unless its certificate and key both parse; reachable from tests. */
     static @NonNull Object create(@NonNull Map<String, Object> submitted) {
         Map<String, Object> values = CmsSupport.mutable(submitted);
-        validatePems(values, null);
+        describe(values, validatePems(values, null));
         Row row = Models.get(CertificateModel.class).createEmptyRow();
         values.forEach(row::set);
         row.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_CUSTOM);
@@ -462,12 +490,31 @@ public final class CertificateParts {
 
     private static void update(@NonNull Row existing, @NonNull Map<String, Object> submitted) {
         Map<String, Object> values = CmsSupport.mutable(submitted);
-        validatePems(values, existing);
+        X509Certificate leaf = validatePems(values, existing);
+        if (values.containsKey(CertificateModel.CERTIFICATE_PEM.getName())) {
+            describe(values, leaf);
+        }
         if (CertificateModel.DNS_PUBLISHER_MANUAL.equals(existing.get(CertificateModel.DNS_PUBLISHER))) {
             values.put(CertificateModel.AUTO_RENEW.getName(), false);
         }
         values.forEach(existing::set);
         Models.get(CertificateModel.class).save(existing);
+    }
+
+    /**
+     * What an uploaded certificate says about itself, stored beside it: the names it covers and when it was issued and
+     * expires, which the list's state, the expiry alert and the HTTPS cells read.
+     *
+     * AIDEV-NOTE: an upload stored none of these before D13d, so it read "Works" with no expiry, never "Expiring",
+     * and covered no name in the stored rows.
+     */
+    private static void describe(@NonNull Map<String, Object> values, @Nullable X509Certificate leaf) {
+        if (leaf == null) {
+            return;
+        }
+        values.put(CertificateModel.DOMAIN_NAMES_TEXT.getName(), String.join(",", CertificateStore.hostnamesOf(leaf)));
+        values.put(CertificateModel.ISSUED_ON.getName(), leaf.getNotBefore().toInstant());
+        values.put(CertificateModel.EXPIRES_ON.getName(), leaf.getNotAfter().toInstant());
     }
 
     /**
@@ -481,18 +528,21 @@ public final class CertificateParts {
      * and a row that cannot parse must not be saved further.
      *
      * @param existing the stored certificate, or null on a create
+     * @return the certificate's leaf (the first in the PEM), null when the PEM holds none
      */
-    private static void validatePems(@NonNull Map<String, Object> coerced,
-                                     @Nullable Row existing) {
+    private static @Nullable X509Certificate validatePems(@NonNull Map<String, Object> coerced,
+                                                          @Nullable Row existing) {
         String certPem = CmsSupport.textOf(coerced, existing, CertificateModel.CERTIFICATE_PEM);
         String keyPem = CmsSupport.textOf(coerced, existing, CertificateModel.PRIVATE_KEY_PEM);
         String name = CmsSupport.textOf(coerced, existing, CertificateModel.NICE_NAME);
         if (name.isEmpty() || certPem.isEmpty() || keyPem.isEmpty()) {
             throw Violations.ofForm(CmsSupport.violationText("cert_fields_required"));
         }
+        X509Certificate leaf;
         try {
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
-            cf.generateCertificates(new ByteArrayInputStream(certPem.getBytes()));
+            var certificates = cf.generateCertificates(new ByteArrayInputStream(certPem.getBytes()));
+            leaf = certificates.isEmpty() ? null : (X509Certificate) certificates.iterator().next();
         } catch (Exception e) {
             throw Violations.ofField("certificate_pem", null,
                 CmsSupport.violationText("cert_pem_invalid").withArg("detail", e.getMessage()));
@@ -503,6 +553,7 @@ public final class CertificateParts {
             throw Violations.ofField("private_key_pem", null,
                 CmsSupport.violationText("key_pem_invalid").withArg("detail", e.getMessage()));
         }
+        return leaf;
     }
 
 

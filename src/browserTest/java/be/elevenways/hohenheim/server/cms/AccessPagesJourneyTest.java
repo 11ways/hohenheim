@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.BanModel;
@@ -8,8 +9,10 @@ import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.security.BanStateCell;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
+import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
@@ -18,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -71,7 +75,7 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
 
     @Test
     void theBlockedAddressesOpenOnWhatIsBlockedNow() throws Exception {
-        ban("203.0.113.41", "Tried names this server does not serve", true);
+        ban("203.0.113.41", "Tried 26 names this server does not serve", true);
         ban("203.0.113.42", "An old block", false);
         Row legacy = ban("203.0.113.43", "score 26 over threshold", true);
         legacy.set(BanModel.SOURCE, BanModel.SOURCE_AUTO);
@@ -85,15 +89,19 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
         String now = adminGet("/admin/bans").body();
         assertThat(now).as("step 1: the default reads as blocked now").contains("Blocked now");
         assertThat(now).as("step 1: a blocked address is listed with why").contains("203.0.113.41")
-            .contains("Tried names this server does not serve");
+            .contains("Tried 26 names this server does not serve");
         assertThat(now).as("step 1: a lifted block stays out of the default view").doesNotContain("203.0.113.42");
         assertThat(now.replaceAll("<[^>]+>", " ")).as("step 1: the columns read address, by and until")
             .containsPattern("\\bAddress\\b").containsPattern("\\bBy\\b").containsPattern("\\bUntil\\b");
 
-        // 2. An automatic block stored with the old score line reads as what tipped it, never as a score.
-        assertThat(now).as("step 2: the old score line reads as its event")
-            .contains("Went over the limit for: Unmatched domain request")
-            .doesNotContain("score 26 over threshold");
+        // 2. An automatic block stored with the old score line reads as what tipped it in the current style, from its
+        //    stored event type: never as a score, never as "Went over the limit for" (DEP10, 08b).
+        String legacyRow = now.substring(now.indexOf("203.0.113.43"));
+        assertThat(legacyRow.substring(0, Math.min(legacyRow.length(), 1500)))
+            .as("step 2: the old score line reads as its event, without a count it never recorded")
+            .contains("Tried names this server does not serve");
+        assertThat(now).as("step 2: the score and the old wording are gone")
+            .doesNotContain("score 26 over threshold").doesNotContain("Went over the limit");
 
         // 3. The page is the blocked addresses, blocked through its one header action and its form; no quick-add
         //    bar (board Access-Blocked).
@@ -125,6 +133,36 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
             .doesNotContain("203.0.113.41");
         assertThat(notBlocked).as("step 5: and no block there offers Lift, the expired one included")
             .doesNotContain("lift_ban");
+
+        // 6. Recent misses (board Access-Blocked): the threat scorer's requests for names this server does not serve,
+        //    one line per address, the most recent names first and the rest counted.
+        String scanner = "198.51.100." + (100 + (int) (Math.random() * 100));
+        HohenheimSecurity.scorer().recordMiss(scanner, "admin.example.net");
+        HohenheimSecurity.scorer().recordMiss(scanner, "git.example.com");
+        HohenheimSecurity.scorer().recordMiss(scanner, "WWW.Example.org");
+        String misses = adminGet("/admin/bans").body();
+        assertThat(misses).as("step 6: the card under the list").contains("Recent misses")
+            .contains("Requests for names this server does not serve, the past hour");
+        String missLine = misses.substring(misses.indexOf(scanner));
+        assertThat(missLine.substring(0, Math.min(missLine.length(), 800)))
+            .as("step 6: the address's line names its newest misses and counts the rest")
+            .contains("Asked for www.example.org, git.example.com and 1 more");
+
+        // 7. Never block: the security.never_ban setting as it stands, with the way to change it in settings.
+        List<String> previous = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NEVER_BAN);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, List.of("203.0.113.0/28"));
+        try {
+            String never = adminGet("/admin/bans").body();
+            assertThat(never).as("step 7: the Never block card").contains("Never block")
+                .contains("203.0.113.0/28")
+                .as("step 7: this server's own addresses are never blocked either")
+                .contains("Its own addresses and local networks").contains("Every address in this network");
+            assertThat(never.replace("&amp;", "&")).as("step 7: changed where every setting is, the security group")
+                .contains("Change in settings")
+                .contains(AttentionCollector.securitySettingsTarget().toUrl());
+        } finally {
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.NEVER_BAN, previous);
+        }
     }
 
     @Test

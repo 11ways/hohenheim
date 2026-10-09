@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
+import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.tls.HostnameReach;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
@@ -20,9 +21,12 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.test.support.OutboundFixture;
 import org.junit.jupiter.api.Test;
 
+import java.net.InetAddress;
 import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -46,8 +50,13 @@ class DomainsListJourneyTest extends HohenheimTestBase {
         var servers = Models.get(ServerModel.class);
         Row local = servers.findById(ServerModel.localServerId());
         String declared = local.get(ServerModel.PUBLIC_IPV4);
+        String moved = "moved-" + suffix + ".test";
+        String caughtPattern = "*.pattern-" + suffix + ".test";
         try (OutboundFixture pointsHere = OutboundFixture.route(here, 9);
-             OutboundFixture pointsAway = OutboundFixture.route(elsewhere, 9)) {
+             OutboundFixture pointsAway = OutboundFixture.route(elsewhere, 9);
+             OutboundFixture caught = OutboundFixture.route(
+                 Objects.requireNonNull(HostnameReach.sampleOf(caughtPattern)), 9);
+             OutboundFixture movedName = OutboundFixture.route(moved, 9)) {
             local.set(ServerModel.PUBLIC_IPV4, pointsHere.publicAddress().getHostAddress());
             servers.save(local);
 
@@ -55,14 +64,20 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             Row hereRow = domain(site, here, false);
             Row awayRow = domain(site, elsewhere, true);
             Row coveredRow = domain(site, covered, true);
-            Row pattern = domain(site, "*.pattern-" + suffix + ".test", false);
+            Row pattern = domain(site, caughtPattern, false);
+            Row regex = Models.get(SiteDomainModel.class).createEmptyRow();
+            regex.set(SiteDomainModel.SITE_ID, site.get(SiteModel.ID));
+            regex.set(SiteDomainModel.HOSTNAME, "^re-" + suffix + "\\.test$");
+            regex.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_REGEX);
+            Models.get(SiteDomainModel.class).save(regex);
             Row excluded = domain(site, "elsewhere-cert-" + suffix + ".test", true);
             excluded.set(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT, true);
             Models.get(SiteDomainModel.class).save(excluded);
             certificate("Covered " + suffix, covered + "," + "www." + covered);
 
             // 1. Points here: a name resolving to this host's declared address says yes; one resolving elsewhere says
-            //    no and names where it points; a pattern has no single name and no answer.
+            //    no and names where it points; a wildcard pattern (a catch-all) answers through one name it catches,
+            //    and a regex, which no name stands for, says it is per name (DEP10: the catch-all's cell was empty).
             StateLineCell yes = DomainParts.reachCell(hereRow, HostnameReach.LOOKUP_WAIT_MS);
             assertThat(yes).as("step 1: an exact name gets an answer").isNotNull();
             assertThat(yes.state()).as("step 1: the name points here").isEqualTo("points_here");
@@ -71,8 +86,15 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             assertThat(String.valueOf(no.detail().args().get("addresses")))
                 .as("step 1: naming the address it points to")
                 .isEqualTo(pointsAway.publicAddress().getHostAddress());
-            assertThat(DomainParts.reachCell(pattern, HostnameReach.LOOKUP_WAIT_MS))
-                .as("step 1: a pattern has no answer").isNull();
+            StateLineCell catchAll = DomainParts.reachCell(pattern, HostnameReach.LOOKUP_WAIT_MS);
+            assertThat(catchAll.state()).as("step 1: the names a catch-all catches point elsewhere")
+                .isEqualTo("points_elsewhere");
+            assertThat(catchAll.detail().key()).as("step 1: said of the names it catches")
+                .isEqualTo("points_elsewhere_caught_detail");
+            assertThat(String.valueOf(catchAll.detail().args().get("addresses")))
+                .as("step 1: where the sample name points").isEqualTo(caught.publicAddress().getHostAddress());
+            assertThat(DomainParts.reachCell(regex, HostnameReach.LOOKUP_WAIT_MS).state())
+                .as("step 1: a regex is judged per name").isEqualTo("per_name");
 
             // 2. HTTPS: a name forced to HTTPS without a working certificate is the error page visitors get, a covered
             //    name works, an unforced name without one has none, and a pattern works per name a certificate covers.
@@ -193,6 +215,43 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             } finally {
                 ServerMain.adoptProxyServer(previous);
                 proxy.stop();
+            }
+
+            // 10. "Check again" (the row's action) looks a name up past the minute an answer is remembered: the name
+            //     reads where it pointed until then, and where it points now right after.
+            Row movedRow = domain(site, moved, false);
+            assertThat(DomainParts.reachCell(movedRow, HostnameReach.LOOKUP_WAIT_MS).state())
+                .as("step 10: the name points elsewhere").isEqualTo("points_elsewhere");
+            local = servers.findById(ServerModel.localServerId());
+            local.set(ServerModel.PUBLIC_IPV4, movedName.publicAddress().getHostAddress());
+            servers.save(local);
+            assertThat(DomainParts.reachCell(movedRow, HostnameReach.LOOKUP_WAIT_MS).state())
+                .as("step 10: the remembered answer stands until it is checked again").isEqualTo("points_elsewhere");
+            HttpResponse<String> checked = adminPostForm("/admin/" + DomainParts.SLUG + "/invoke/"
+                + DomainParts.CHECK_REACH.id().toString().replace(':', '.') + "?ids=" + movedRow.get(SiteDomainModel.ID),
+                "");
+            assertThat(checked.statusCode()).as("step 10: the check runs").isLessThan(400);
+            assertThat(DomainParts.reachCell(movedRow, HostnameReach.LOOKUP_WAIT_MS).state())
+                .as("step 10: checked again, it points here").isEqualTo("points_here");
+            assertThat(adminGet("/admin/domains?q=" + suffix).body()).as("step 10: the rows offer it")
+                .contains("check_address_reach");
+
+            // 11. With no public address declared, a name resolving to an address this machine holds points here
+            //     (DEP10: Starfleet declares none, holds its public address on eth0, and every name read Unknown).
+            String held = UpdateSystemIpAddresses.ensureDiscovered().stream()
+                .map(address -> address.contains("%") ? address.substring(0, address.indexOf('%')) : address)
+                .filter(address -> !address.startsWith("127.") && !address.equals("::1")
+                    && !address.toLowerCase(Locale.ROOT).startsWith("fe80:"))
+                .findFirst().orElse(null);
+            assertThat(held).as("step 11: this machine holds an address besides loopback").isNotNull();
+            local = servers.findById(ServerModel.localServerId());
+            local.set(ServerModel.PUBLIC_IPV4, null);
+            servers.save(local);
+            String heldName = "held-" + suffix + ".test";
+            try (OutboundFixture heldFixture = OutboundFixture.routeResolved(heldName, InetAddress.getByName(held), 9)) {
+                assertThat(DomainParts.reachCell(domain(site, heldName, false), HostnameReach.LOOKUP_WAIT_MS).state())
+                    .as("step 11: an address the machine holds is this host's, declared or not")
+                    .isEqualTo("points_here");
             }
         } finally {
             local = servers.findById(ServerModel.localServerId());

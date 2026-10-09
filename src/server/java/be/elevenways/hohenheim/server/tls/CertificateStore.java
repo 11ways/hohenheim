@@ -41,15 +41,18 @@ public class CertificateStore {
         final X509ExtendedKeyManager keyManager;
         final Map<String, String> hostnameToAlias;
         final Map<String, String> preferredHostnameToAlias;
+        final Set<String> loadedAliases;
         final int count;
 
         Snapshot(X509ExtendedKeyManager keyManager,
                  Map<String, String> hostnameToAlias,
                  Map<String, String> preferredHostnameToAlias,
+                 Set<String> loadedAliases,
                  int count) {
             this.keyManager = keyManager;
             this.hostnameToAlias = hostnameToAlias;
             this.preferredHostnameToAlias = preferredHostnameToAlias;
+            this.loadedAliases = loadedAliases;
             this.count = count;
         }
     }
@@ -61,7 +64,7 @@ public class CertificateStore {
     private volatile long generation;
 
     public CertificateStore() {
-        this.snapshot = new Snapshot(null, Map.of(), Map.of(), 0);
+        this.snapshot = new Snapshot(null, Map.of(), Map.of(), Set.of(), 0);
     }
 
     /**
@@ -161,6 +164,16 @@ public class CertificateStore {
         return snapshot.hostnameToAlias.keySet();
     }
 
+    /** @return whether the certificate row with this id is one the current snapshot loaded (an alias it serves) */
+    public boolean holds(int certificateId) {
+        return snapshot.loadedAliases.contains(aliasOf(certificateId));
+    }
+
+    /** The key store alias of a certificate row: the one spelling the snapshot and {@link #holds} share. */
+    private static String aliasOf(Object certificateId) {
+        return "cert-" + certificateId;
+    }
+
     // -----------------------------------------------------------------------
     // Snapshot construction (all private, no shared mutable state)
     // -----------------------------------------------------------------------
@@ -188,7 +201,8 @@ public class CertificateStore {
 
         X509ExtendedKeyManager keyManager = buildKeyManager(keyStore);
         Map<String, String> preferredAliases = buildPreferredAliases(domains, loadedAliases);
-        return new Snapshot(keyManager, Map.copyOf(hostnameToAlias), Map.copyOf(preferredAliases), loaded);
+        return new Snapshot(keyManager, Map.copyOf(hostnameToAlias), Map.copyOf(preferredAliases),
+            Set.copyOf(loadedAliases), loaded);
     }
 
     private static Map<String, String> buildPreferredAliases(List<Row> domains,
@@ -203,7 +217,7 @@ public class CertificateStore {
                 continue;
             }
 
-            String alias = "cert-" + certificateId;
+            String alias = aliasOf(certificateId);
             if (!loadedAliases.contains(alias)) {
                 continue;
             }
@@ -219,7 +233,7 @@ public class CertificateStore {
         String certPem = cert.get(CertificateModel.CERTIFICATE_PEM);
         String keyPem = cert.get(CertificateModel.PRIVATE_KEY_PEM);
         Object idRaw = cert.get(CertificateModel.ID);
-        String alias = "cert-" + idRaw;
+        String alias = aliasOf(idRaw);
 
         if (certPem == null || keyPem == null) return null;
 
@@ -232,7 +246,7 @@ public class CertificateStore {
 
         keyStore.setKeyEntry(alias, privateKey, KEYSTORE_PASSWORD, chain);
 
-        Set<String> hostnames = extractHostnames(chain[0]);
+        Set<String> hostnames = hostnamesOf(chain[0]);
         for (String hostname : hostnames) {
             hostnameToAlias.put(hostname.toLowerCase(Locale.ROOT), alias);
         }
@@ -288,8 +302,12 @@ public class CertificateStore {
         return chain.toArray(new X509Certificate[0]);
     }
 
-    private static Set<String> extractHostnames(X509Certificate cert) {
-        Set<String> hostnames = new HashSet<>();
+    /**
+     * The names a certificate answers for: its subject CN, then its DNS subject alternative names, in that order.
+     * Read by the key store's alias map and by an upload, which stores them as the certificate's covered names.
+     */
+    public static Set<String> hostnamesOf(X509Certificate cert) {
+        Set<String> hostnames = new LinkedHashSet<>();
 
         // CN from subject
         String dn = cert.getSubjectX500Principal().getName();

@@ -228,11 +228,22 @@ final class CertificateOperationHandlers {
         for (String hostname : hostnames) {
             HostnameReach.Reach reach = HostnameReach.of(hostname);
             switch (reach.verdict()) {
-                case POINTS_ELSEWHERE -> throw refused(error("does_not_point_here").withArg("hostname", hostname)
-                    .withArg("addresses", String.join(", ", reach.addresses())));
-                case UNRESOLVED -> throw refused(error("does_not_resolve").withArg("hostname", hostname));
-                // of() waits for the resolver, so CHECKING never comes from it; nobody is refused on it either way.
-                case POINTS_HERE, UNKNOWN, CHECKING -> {
+                // Refused only where a public address is DECLARED, the basis this pre-check always had: a held one
+                // may sit behind a CDN or a floating address that still forwards the challenge (Reach#declared).
+                case POINTS_ELSEWHERE -> {
+                    if (reach.declared()) {
+                        throw refused(error("does_not_point_here").withArg("hostname", hostname)
+                            .withArg("addresses", String.join(", ", reach.addresses())));
+                    }
+                }
+                case UNRESOLVED -> {
+                    if (reach.declared()) {
+                        throw refused(error("does_not_resolve").withArg("hostname", hostname));
+                    }
+                }
+                // of() waits for the resolver, so CHECKING and NOT_CHECKED never come from it; nobody is refused on
+                // them either way.
+                case POINTS_HERE, UNKNOWN, CHECKING, NOT_CHECKED -> {
                 }
             }
         }

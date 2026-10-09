@@ -2,9 +2,14 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.test.ProxyTestSupport;
+import be.elevenways.hohenheim.test.TlsCertificateTest;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -12,6 +17,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
+import java.security.KeyPair;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
@@ -82,6 +88,90 @@ class CertificatesJourneyTest extends HohenheimTestBase {
             });
         assertThat(Models.get(CertificateModel.class).find().count()).as("step 5: nothing was written")
             .isEqualTo(before);
+    }
+
+    @Test
+    void everyCertificateIsListedByTheStateTheDashboardCounts() throws Exception {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+
+        // 1. A working certificate inside the expiry alert's window is "Expiring", the dashboard's item and tile:
+        //    a Let's Encrypt one that should have renewed already, an upload that never renews itself.
+        Row late = certificate("late-" + suffix, CertificateModel.STATUS_ACTIVE, 0, 10,
+            CertificateModel.CHALLENGE_HTTP, null);
+        StateLineCell lateCell = CertificateParts.stateCell(late);
+        assertThat(lateCell.state()).as("step 1: expiring").isEqualTo("expiring");
+        assertThat(lateCell.variant()).as("step 1: needs a look, so the dashboard tile counts it")
+            .isNotEqualTo(BadgeVariant.SUCCESS);
+        assertThat(lateCell.detail().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+            .as("step 1: not renewed yet, in the one expiry wording").matches("Not renewed yet; expires in (9|10) days");
+        Row upload = certificate("upload-" + suffix, CertificateModel.STATUS_ACTIVE, 0, 10,
+            CertificateModel.CHALLENGE_HTTP, null);
+        upload.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_CUSTOM);
+        Models.get(CertificateModel.class).save(upload);
+        assertThat(CertificateParts.stateCell(upload).detail().key()).as("step 1: an upload never renews itself")
+            .isEqualTo("state_expiring_upload_detail");
+
+        // 2. An order not issued yet and an expired certificate say so.
+        Row issuing = certificate("issuing-" + suffix, CertificateModel.STATUS_PENDING, 0, null,
+            CertificateModel.CHALLENGE_HTTP, null);
+        StateLineCell issuingCell = CertificateParts.stateCell(issuing);
+        assertThat(issuingCell.state()).as("step 2: not issued yet").isEqualTo("issuing");
+        assertThat(issuingCell.label().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+            .as("step 2: in the board's words").isEqualTo("Not issued yet");
+        Row expired = certificate("expired-" + suffix, CertificateModel.STATUS_ACTIVE, 0, -3,
+            CertificateModel.CHALLENGE_HTTP, null);
+        assertThat(CertificateParts.stateCell(expired).state()).as("step 2: expired").isEqualTo("expired");
+
+        // 3. A row stored as working that the running proxy did not load serves no one: "Failed to load", never
+        //    "Works" (the dashboard's HTTPS verdicts read the same store).
+        Row works = certificate("works-" + suffix, CertificateModel.STATUS_ACTIVE, 0, 80,
+            CertificateModel.CHALLENGE_HTTP, null);
+        assertThat(CertificateParts.stateCell(works).state()).as("step 3: without a proxy the stored row is all there is")
+            .isEqualTo("works");
+        ProxyServer previous = ServerMain.getProxyServer();
+        ProxyServer proxy = ProxyTestSupport.startProxy();
+        ServerMain.adoptProxyServer(proxy);
+        try {
+            StateLineCell unloaded = CertificateParts.stateCell(works);
+            assertThat(unloaded.state()).as("step 3: the proxy loaded nothing for it").isEqualTo("not_loaded");
+            assertThat(unloaded.label().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 3: in words").isEqualTo("Failed to load");
+            assertThat(unloaded.variant()).as("step 3: a destructive state").isEqualTo(BadgeVariant.DESTRUCTIVE);
+            assertThat(adminGet("/admin/certificates?q=works-" + suffix).body())
+                .as("step 3: the list says so").contains("data-state=\"not_loaded\"");
+        } finally {
+            ServerMain.adoptProxyServer(previous);
+            proxy.stop();
+        }
+
+        // 4. The list shows every certificate with its state, and the header offers the board's two ways to get
+        //    one: "Get a certificate" (Let's Encrypt) beside "Upload a certificate", no generic "New certificate".
+        String page = adminGet("/admin/certificates?q=" + suffix).body();
+        assertThat(page).as("step 4: expiring").contains("data-state=\"expiring\"")
+            .as("step 4: not issued yet").contains("data-state=\"issuing\"")
+            .as("step 4: expired").contains("data-state=\"expired\"")
+            .as("step 4: working").contains("data-state=\"works\"");
+        assertThat(page).as("step 4: get one from Let's Encrypt").contains("Get a certificate")
+            .as("step 4: or upload your own").contains("Upload a certificate")
+            .as("step 4: the generic create is gone").doesNotContain("New certificate");
+
+        // 5. An uploaded certificate stores what it says about itself: the names it covers and when it expires, so it
+        //    reads "Works" with its expiry (and "Expiring" in its last days) like an issued one.
+        KeyPair keys = TlsCertificateTest.generateKeyPair();
+        String uploadedName = "uploaded-" + suffix + ".test";
+        Object id = CertificateParts.create(Map.of(
+            CertificateModel.NICE_NAME.getName(), "Uploaded " + suffix,
+            CertificateModel.CERTIFICATE_PEM.getName(),
+            TlsCertificateTest.certToPem(TlsCertificateTest.generateSelfSignedCert(keys, uploadedName)),
+            CertificateModel.PRIVATE_KEY_PEM.getName(), TlsCertificateTest.keyToPem(keys)));
+        Row uploaded = Models.get(CertificateModel.class).findById((Integer) id);
+        assertThat((String) uploaded.get(CertificateModel.DOMAIN_NAMES_TEXT)).as("step 5: the names it covers")
+            .isEqualTo(uploadedName);
+        assertThat((Object) uploaded.get(CertificateModel.EXPIRES_ON)).as("step 5: its expiry is stored").isNotNull();
+        StateLineCell uploadedCell = CertificateParts.stateCell(uploaded);
+        assertThat(uploadedCell.state()).as("step 5: it works").isEqualTo("works");
+        assertThat(uploadedCell.detail().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+            .as("step 5: saying when it expires").matches("Expires in 36[45] days");
     }
 
     private static Row certificate(String name, String status, int errors, Integer daysLeft, String challenge,

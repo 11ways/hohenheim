@@ -1838,3 +1838,92 @@ subject, one problem shown once at its root with its consequences folded under i
   Journeys: DashboardAttentionJourneyTest (new `aHostWithoutPerAppFirewallRulesIsTheOneRootOfWhatItRefused` steps
   1-6; `whatAnAlertSaidOnceStaysOnTheDashboardAtItsRoot` step 4 rewritten and new 4b), AppOverviewJourneyTest (new
   `aFailedStartIsOneVerdictWithItsCause` steps 1-4), InstancePowerAuditTest step 3b, ServerOverviewTest step 5.
+
+## 38. D13d decisions (fork D13d, 2026-10-09)
+
+DEP10's Domains defects (shots `dep10/07`, `dep10/07b`; boards Domains, Certificates, Certificate-New, Address-Edit) and
+Blocked addresses (shot `dep10/08b`, board Access-Blocked); defect list items 7 and 8 of `deploy-starfleet.md`.
+
+- Home: no new mechanism. `zemble home` for the Blocked cards answered NEW_MECHANISM in apps (BanParts, ThreatScorer,
+  NeverBanHostnames named); they extend zenit-cms's `ResourceList.widgetsBelow` (the Databases Engines card's shape)
+  and the scorer's own state. "Points here" extends W8a's `HostnameReach`, the machine's addresses come from the
+  existing `UpdateSystemIpAddresses` (the own-IP ban guard's list), the certificate state extends W8a's
+  `CertificateParts.stateCell`, the legacy ban wording extends D7c's `HohenheimSecurity.EVENT_CAUSES`.
+- "Points here" read Unknown on Starfleet because the lookup never compared anything: `HostnameReach.of` answered
+  UNKNOWN before resolving whenever the local host declared no public address, and Starfleet's `local` declares none
+  (read by SQL on the host: `public_ipv4`/`public_ipv6` empty) while eth0 holds 104.223.42.142. The lookup ran, was
+  cached and the cell read the fact it was given; the fact was wrong. Now a name resolving to any address this
+  machine holds (loopback and link-local aside, the interface zone stripped) points here, declared or not; a name
+  resolving elsewhere is "No" when a public address is declared or held, and "Cannot tell" (with where it points and
+  why) only for a host behind private addresses that declares nothing. The resolution happens first, so a name that
+  does not resolve says so on any host. `UpdateSystemIpAddresses.ensureDiscovered()` is the one "discover if empty"
+  (moved from `HohenheimSecurity.ensureLocalAddresses`, deleted).
+- The certificate pre-check (`CertificateOperationHandlers.refuseUnreachable`) keeps its old basis: it refuses
+  POINTS_ELSEWHERE and UNRESOLVED only while the host DECLARES a public address (`Reach.declared`), as before. A held
+  public address behind a CDN or a floating address must not lose its Let's Encrypt orders to a display improvement
+  (run 1024 caught the unresolved half: CertificateAuthorityTest read "does not resolve" before "not served").
+- "Not checked yet" (`Verdict.NOT_CHECKED`) is a name with no answer and no lookup running: every lookup place was
+  taken, so none started. A lookup that runs past the page budget stays "Checking". A failed lookup reads "does not
+  resolve" (it read UNKNOWN). A check can be triggered: the row action "Check again" (`DomainParts.CHECK_REACH`,
+  admin only, in the row's menu) forgets the remembered answer (`HostnameReach.forget`) and looks the name up again;
+  it records "X checked where Y points".
+- The catch-all row: every column says something. Points here asks one sample name a wildcard pattern catches
+  (`HostnameReach.sampleOf`, `*`/`**` become `hohenheim-check`): with a wildcard DNS record (Starfleet's zone has
+  one) it reads "Yes, names it catches point here (checked with ...)", without one "Per name, each needs its own
+  record"; a regex reads "Per name". HTTPS already read "Per name" (b357fa23, after DEP10's jar). The address page's
+  lead uses the same answer for a pattern (`address_lead_pattern` deleted; replacement `address_lead`).
+- Certificates list all rows; Starfleet holds two certificates (plus the hidden ACME account row), both working, and
+  DEP10's list showed both. What was missing were the states: `stateCell` is THE certificate state, read by the list
+  and the dashboard tile, and now says "Expiring" inside the expiry alert's window (`AcmeService.EXPIRY_ALERT_DAYS`,
+  the dashboard item's window; "Not renewed yet" or "Does not renew itself"), "Failed to load" for an active row the
+  running proxy did not load (`CertificateStore.holds`, `CertificateCoverage.loaded`; D11's Shop case read "Works"
+  here while the HTTPS cells said broken), "Not issued yet" for a pending order and "Expired 3 days ago". The tile
+  counts every state but Works as needing a look, so an expiring certificate is counted where the dashboard item
+  names it. The header reads the board's two ways: "Get a certificate" (the request operation, inline in the header)
+  and "Upload a certificate" (the create's title); "New certificate" and the `request` copy key are gone
+  (replacement: `get_certificate`).
+- Old-format automatic bans ("score 26 over threshold", 305 rows on Starfleet) read in the current style from their
+  stored event type, without the count they never recorded: "Tried names this server does not serve". Every cause in
+  `EVENT_CAUSES` has a `target: uncounted` spelling in en and nl, drift-tested; nothing rewrites stored rows. The
+  `legacy` key ("Went over the limit for") is deleted (replacement: the uncounted causes).
+- Recent misses: read from the threat scorer that blocks for them (`ThreatScorer.recordMiss`/`recentMisses`), which
+  now keeps the distinct names each actor asked for (at most 64, with when). No table: Hohenheim stores no security
+  events (Spamservice's are threshold-gated and remote), and the scorer is the state the automatic block acts on. A
+  restart forgets misses as it forgets scores. One line per address for the past hour: "Asked for a, b and 38 more,
+  10 minutes ago"; the lead states the live threshold and window. Never block: the `security.never_ban` setting as it
+  stands plus "this server's own addresses and local networks", with "Change in settings" to the security group
+  (`AttentionCollector.securitySettingsTarget`, renamed from `isolationSettingsTarget`). This reverses W8b's "never
+  block stays in Settings, not repeated": the board places it here, and the setting stays its one home.
+- Found on the walk and fixed: an uploaded certificate stored neither its names nor its dates, so it read "Works"
+  with no expiry, could never read "Expiring", and covered no name in the stored rows (the Addresses HTTPS cell drew
+  no certificate line for it). The upload now stores what the certificate says (`CertificateParts.describe`: names
+  from `CertificateStore.hostnamesOf`, the key store's own reading, made public; issued and expiry dates). The Never
+  block card's entries read what they cover ("Every address in this network", "Every address this name resolves
+  to", "This server: its own addresses and local networks"); a fact without a value rendered "Unknown".
+- Seen, not changed: an inline header invoke is drawn in the list's toolbar row (zenit-cms), so "Get a certificate"
+  sits beside Filter rather than beside "Upload a certificate" as on the board; with Let's Encrypt off it is
+  disabled. The Certificate-New board's one page for both ways, "Read the certificate" before saving, the Blocked
+  list's State column (not on the board) and its "in 47 minutes" wording stay as they are.
+- Walk (scratch server from the jar of the override build, the tree before the pre-check fix, which no shot shows; fresh
+  database, `/setup`; by SQL: local declaring
+  104.223.42.142 because this workstation's resolver strips answers pointing into its own networks, so no name could
+  resolve to an address it holds; sites Shop, Docs and a catch-all `**.starfleet.life`; certificates stored-but-
+  unloadable, pending, manual DNS, failing three times, expired; an old-format and a new-format automatic ban and a
+  manual one; two uploads through "Upload a certificate"; misses as real requests to the proxy with unserved Host
+  headers). Shots `docs/hohenheim-ux-mockups-2026-09-30/shots/d13d/` (workspace repo): 01 Addresses: Yes, Not yet, No
+  with where it points, the catch-all "Yes, names it catches point here", HTTPS "Per name", the upload's certificate
+  line and expiry; 02 Certificates: Not issued yet, Waiting for a DNS record, Expired 3 days ago, Expiring (upload, 9
+  days), Renewal failing, Failed to load, Works; header "Upload a certificate" and "Get a certificate"; 03 Blocked
+  addresses: the old-format row "Tried names this server does not serve", Recent misses per address, Never block with
+  "Change in settings". "Check again" was used from a row's menu ("Looked up again"). The held-address path is the
+  journey's step 11 (this machine's own addresses), not the walk.
+- Proof: build runs 1020 and the override build (`--skip-deps --thrash-override`: other sessions moved every upstream);
+  test run 1024 (29 classes, 144 tests: 141 passed) with three causes fixed after it: the pre-check's unresolved half
+  above, the check action's surface target (an invoke route, hand-edited), and `system.txt`'s Blocked addresses cases
+  still naming the `active` filter W8b replaced by `blocked_now` (stale since W8b, hand-edited); run 1028
+  (ManagePanelSurfacesBrowserTest, SystemSurfacesBrowserTest, CertificateAuthorityTest, DomainsListJourneyTest,
+  HostnameReachBudgetTest, PutOnlineJourneyTest: 15 of 15). Journeys: DomainsListJourneyTest (step 1 rewritten for
+  the catch-all and a regex, new steps 10 "Check again" and 11 a held address), CertificatesJourneyTest (new
+  `everyCertificateIsListedByTheStateTheDashboardCounts` steps 1-5), AccessPagesJourneyTest (step 2 rewritten, new
+  steps 6 Recent misses and 7 Never block), SecurityEventTypeLabelsTest (step 3 rewritten, new step 5: every cause
+  reads uncounted in en and nl); baselines `certificates.txt`, `manage-slice-three.txt`, `system.txt`.

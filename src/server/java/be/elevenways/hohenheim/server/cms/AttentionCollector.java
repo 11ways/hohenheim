@@ -180,8 +180,11 @@ public final class AttentionCollector {
             HohenheimSettingsSections.APPS.anchorOf(HohenheimSettings.Sftp.GROUP));
     }
 
-    /** @return the settings page opened on the group holding per-workload firewall enforcement */
-    static @NonNull RouteTarget isolationSettingsTarget() {
+    /**
+     * @return the settings page opened on the security group: per-workload firewall enforcement and the addresses
+     *         never blocked
+     */
+    static @NonNull RouteTarget securitySettingsTarget() {
         return CmsRoutes.settingsAnchor(ADMIN, SettingsPage.DEFAULT_SLUG,
             HohenheimSettingsSections.BLOCKING.anchorOf(HohenheimSettings.Security.GROUP));
     }

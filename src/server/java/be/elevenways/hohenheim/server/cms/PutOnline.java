@@ -259,6 +259,7 @@ public final class PutOnline {
             case UNRESOLVED -> copy("reach_unresolved");
             case UNKNOWN -> copy("reach_unknown");
             case CHECKING -> copy("reach_checking");
+            case NOT_CHECKED -> copy("reach_not_checked");
         };
         return new SummaryLine(copy("reach_label"), verdict.withArg("hostname", hostname)
             .withArg("addresses", String.join(", ", reach.addresses())));

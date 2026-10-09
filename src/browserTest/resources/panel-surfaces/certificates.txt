@@ -21,7 +21,7 @@ filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_te
 filter status at=3 kind=SELECT facet=true param=filter.status
 filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
 filter created_at at=5 kind=TEXT facet=false param=filter.created_at
-header hohenheim:request_certificate at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
+header hohenheim:request_certificate at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
 tab overview at=0 landing=true view=true
 tab history at=1 landing=false view=false
 tab access at=2 landing=false view=false
@@ -58,7 +58,7 @@ filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_te
 filter status at=3 kind=SELECT facet=true param=filter.status
 filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
 filter created_at at=5 kind=TEXT facet=false param=filter.created_at
-header hohenheim:request_certificate at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
+header hohenheim:request_certificate at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:download_certificate at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{entry}/{record}/download
 row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_domains%252Cscope%3Dcertificate,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
@@ -119,7 +119,7 @@ filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_te
 filter status at=3 kind=SELECT facet=true param=filter.status
 filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
 filter created_at at=5 kind=TEXT facet=false param=filter.created_at
-header hohenheim:request_certificate at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
+header hohenheim:request_certificate at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:download_certificate at=1 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{entry}/{record}/download
 row hohenheim:reissue_certificate at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:reissue_notice%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.reissue_certificate?ids%3D{record}
@@ -178,7 +178,7 @@ filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_te
 filter status at=3 kind=SELECT facet=true param=filter.status
 filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
 filter created_at at=5 kind=TEXT facet=false param=filter.created_at
-header hohenheim:request_certificate at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
+header hohenheim:request_certificate at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
 tab overview at=0 landing=true view=true
 tab history at=1 landing=false view=false
 tab access at=2 landing=false view=false
@@ -210,7 +210,7 @@ filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_te
 filter status at=3 kind=SELECT facet=true param=filter.status
 filter expires_on at=4 kind=TEXT facet=false param=filter.expires_on
 filter created_at at=5 kind=TEXT facet=false param=filter.created_at
-header hohenheim:request_certificate at=0 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
+header hohenheim:request_certificate at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_certificate
 tab overview at=0 landing=true view=true
 tab history at=1 landing=false view=false
 tab access at=2 landing=false view=false

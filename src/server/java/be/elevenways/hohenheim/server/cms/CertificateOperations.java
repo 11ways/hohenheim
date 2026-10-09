@@ -106,7 +106,7 @@ public final class CertificateOperations {
     /** A new certificate for the names the operator lists; the certificate list's header action. */
     public static final Operation<Void, Order, Integer> REQUEST = Operation.declare(HohenheimIds.id("request_certificate"))
         .happened(OperationSentences.of("request_certificate"))
-        .label(copy("request"))
+        .label(copy("get_certificate"))
         .description(copy("uses_production"))
         .icon(Icon.of("lock"))
         .noSubject()
@@ -171,12 +171,13 @@ public final class CertificateOperations {
         CertificateOperationHandlers.init();
     }
 
-    /** @return the certificate list's header action */
+    /** @return the certificate list's header action, "Get a certificate" beside the upload (board Certificates) */
     static @NonNull PanelAction<Row> requestAction() {
         init();
         return PanelAction.<Row, Integer>places(REQUEST, ActionPlacement.HEADER, CertificateOperations::opened)
             .confirmation(ConfirmationSpec.generic(copy("uses_production"), false))
             .inSheet()
+            .inlineInHeader(true)
             .build();
     }
 
