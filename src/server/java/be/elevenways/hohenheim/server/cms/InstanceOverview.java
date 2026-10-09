@@ -196,23 +196,34 @@ public final class InstanceOverview {
 
     /**
      * When this workload last started: the newest row of {@link HohenheimActivityAction#DEPLOYED}, which every start of
-     * a container records (InstanceService's deploy, an application's release); null when the activity log holds none
-     * (switched off, pruned), and then the card says only that it runs.
+     * a container records (InstanceService's deploy, an application's release), unless a start that failed came after
+     * it; null when the activity log holds none (switched off, pruned), and then the card says only that it runs.
      *
      * AIDEV-NOTE: a restart the container runtime does on its own (Docker's restart policy) writes no row, so this is
-     * the last start Hohenheim made; no stored column or daemon call says more, and this page dials no daemon.
+     * the last start Hohenheim made; no stored column or daemon call says more, and this page dials no daemon. A newer
+     * failed start (a cause whose {@link HohenheimActivityAction#errorPhase()} is START) means the start this row
+     * records is not what runs now, so the card names no start rather than an old one beside "could not be started"
+     * (D13b's shop read "Started 2 hours ago" under a minute-old failed start).
      */
     static @Nullable Instant lastStartOf(int instanceId) {
         if (Models.get(ActivityModel.MODEL_ID) == null) {
             return null;
         }
+        List<String> outcomes = new ArrayList<>();
+        for (HohenheimActivityAction action : HohenheimActivityAction.values()) {
+            if (action == HohenheimActivityAction.DEPLOYED || (action.errorCause().isCause()
+                    && action.errorPhase() == HohenheimActivityAction.ErrorPhase.START)) {
+                outcomes.add(action.id().toString());
+            }
+        }
         Row row = Models.get(ActivityModel.class).find()
             .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
             .where(ActivityModel.RECORD_ID.eq(String.valueOf(instanceId)))
-            .where(ActivityModel.ACTION.eq(HohenheimActivityAction.DEPLOYED.id().toString()))
+            .where(ActivityModel.ACTION.in(outcomes))
             .orderBy(ActivityModel.ID, SortOrder.DESC)
             .first();
-        return row == null ? null : row.get(ActivityModel.CREATED_AT);
+        return row == null || !HohenheimActivityAction.DEPLOYED.id().toString().equals(row.get(ActivityModel.ACTION))
+            ? null : row.get(ActivityModel.CREATED_AT);
     }
 
     /**

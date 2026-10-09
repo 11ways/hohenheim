@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionSubject;
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
@@ -25,6 +26,8 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.security.BanService;
+import be.elevenways.hohenheim.server.security.IsolationUnenforceable;
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.task.IsolationFindings;
 import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -40,7 +43,9 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
+import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -54,6 +59,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -597,17 +603,140 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 .assign(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_SHARED).bypassBehaviours().updateAll();
             List<AttentionItem> after = new ArrayList<>();
             DatabaseAttention.moveLeftovers(after);
-            AttentionItem left = titled(after,
-                "Database " + PREFIX + "moved moved, but its old engine is still running");
-            assertThat(say(left.detail())).as("step 4: naming the leftover and its host")
+            assertThat(mine(after)).as("step 4: a moved database with no engine to run on is one item, its own")
+                .isEmpty();
+            List<AttentionItem> databases = new ArrayList<>();
+            DatabaseAttention.failedDatabases(databases);
+            AttentionItem left = titled(databases, "Database " + PREFIX + "moved is not running");
+            assertThat(left.about()).as("step 4: the database is the root").isEqualTo(AttentionSubject.database(movedId));
+            assertThat(say(left.detail())).as("step 4: saying why it does not run")
+                .isEqualTo("It has no engine to run on");
+            assertThat(say(left.note())).as("step 4: and, under it, the leftover and its host")
                 .isEqualTo("Its old engine " + leftover.get(InstanceModel.NAME) + " on " + ServerModel.nameOf(local)
                     + " could not be removed and still holds its port, memory and a copy of the data.");
             assertThat(say(left.action())).as("step 4: with the way to the database").isEqualTo("Open the database");
+
+            // 4b. The leftover's own refused start is the database's too (D13c): removing it is the fix, so its item
+            //     names the database as its root and Needs attention draws the database alone.
+            int leftoverId = leftover.get(InstanceModel.ID);
+            OwnedInstances.inScopeUnchecked(DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, movedId, () ->
+                Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(leftoverId))
+                    .assign(InstanceModel.STATUS, InstanceModel.STATUS_ERROR).bypassBehaviours().updateAll());
+            ActivityLog.record(Models.get(InstanceModel.class), leftoverId,
+                HohenheimActivityAction.WORKLOAD_ISOLATION_REFUSED, null);
+            List<AttentionItem> crashed = new ArrayList<>();
+            InstanceAttention.crashedInstances(crashed);
+            AttentionItem leftoverStop = titled(crashed, leftover.get(InstanceModel.NAME) + " could not be started");
+            assertThat(leftoverStop.causedBy()).as("step 4b: the leftover's stop is caused by its database")
+                .isEqualTo(AttentionSubject.database(movedId));
+            List<String> band = DashboardAttention.band(AttentionCollector.collect()).stream()
+                .map(item -> say(item.title())).toList();
+            assertThat(band).as("step 4b: the band draws the database, not the leftover's stop")
+                .contains(say(left.title()))
+                .doesNotContain(say(leftoverStop.title()));
 
             // 5. The dashboard's collector gathers each of them.
             List<String> collected = AttentionCollector.collect().stream().map(item -> say(item.title())).toList();
             assertThat(collected).as("step 5: every one of them reaches Needs attention")
                 .contains(say(uploaded.title()), say(stopped.title()), say(part.title()), say(left.title()));
+        } finally {
+            for (int i = cleanup.size() - 1; i >= 0; i--) {
+                cleanup.get(i).run();
+            }
+        }
+    }
+
+    @Test
+    @Timeout(90)
+    void aHostWithoutPerAppFirewallRulesIsTheOneRootOfWhatItRefused() throws Exception {
+        List<Runnable> cleanup = new ArrayList<>();
+        int local = ServerModel.localServerId();
+        AttentionSubject localHost = AttentionSubject.host(local);
+        String host = ServerModel.nameOf(local);
+        boolean[] enforced = {false};
+        WorkloadNetworkPolicy.overrideForTest(new WorkloadNetworkPolicy((args, stdin) -> {
+            throw new AssertionError("the dashboard never runs nft");
+        }, () -> enforced[0]));
+        cleanup.add(() -> WorkloadNetworkPolicy.overrideForTest(null));
+        HostFixtures.LocalHostState captured = HostFixtures.captureLocal();
+        cleanup.add(captured::restore);
+        try {
+            // Local takes new apps, so nothing but its firewall rules holds the app back.
+            HostFixtures.makeLocalPlaceable(16L * 1024);
+
+            // 1. The deploy lane's refusal for switched-off enforcement is typed, also when another failure wraps it, so
+            //    a start it refused records that host fact (WORKLOAD_ISOLATION_REFUSED) instead of the English.
+            assertThat(IsolationUnenforceable.in(new IOException("create failed",
+                new IsolationUnenforceable("REFUSED to deploy 'x-net'")))).as("step 1: the refusal is typed").isTrue();
+            assertThat(IsolationUnenforceable.in(new IOException("pull failed")))
+                .as("step 1: any other failure is not it").isFalse();
+
+            // 2. An app whose start local refused for it reads "could not be started", says why in words (never the
+            //    refusal's setting keys), and names local as its root; its own verdict reads the same.
+            Row app = instance(PREFIX + "unisolated", local);
+            int appId = app.get(InstanceModel.ID);
+            cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), app));
+            Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(appId))
+                .assign(InstanceModel.STATUS, InstanceModel.STATUS_ERROR).bypassBehaviours().updateAll();
+            ActivityLog.record(Models.get(InstanceModel.class), appId,
+                HohenheimActivityAction.WORKLOAD_ISOLATION_REFUSED, null);
+            List<AttentionItem> crashed = new ArrayList<>();
+            InstanceAttention.crashedInstances(crashed);
+            AttentionItem refused = titled(crashed, PREFIX + "unisolated could not be started");
+            assertThat(say(refused.detail())).as("step 2: why, in words")
+                .isEqualTo("Per-app firewall rules are switched off on " + host + ", so it may not start there.");
+            assertThat(refused.causedBy()).as("step 2: its root is local").isEqualTo(localHost);
+            RecordHealth verdict = AppHealth.instances(false)
+                .read(Models.get(InstanceModel.class).findById(appId), TenantConduits.operator());
+            assertThat(say(verdict.headline())).as("step 2: its verdict reads a failed start").isEqualTo("Could not start");
+            assertThat(say(verdict.detail())).as("step 2: for the same reason").isEqualTo(say(refused.detail()));
+
+            // 3. local is ONE item, the root: the condition in words, the setting and the sudo need as its technical
+            //    note, what it held back, and the way to the setting.
+            AttentionItem root = AttentionCollector.hosts().stream()
+                .filter(item -> localHost.equals(item.about()) && say(item.title()).startsWith("Per-app firewall"))
+                .findFirst().orElse(null);
+            assertThat(root).as("step 3: local raises the item").isNotNull();
+            assertThat(say(root.title())).as("step 3: titled by the condition")
+                .isEqualTo("Per-app firewall rules are switched off on " + host);
+            assertThat(root.title().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 3: in Dutch too").isEqualTo("Firewallregels per app staan uit op " + host);
+            assertThat(say(root.detail())).as("step 3: saying what it means")
+                .isEqualTo("An app that needs its own network may not start there, and the isolation of the apps "
+                    + "that run there cannot be checked.");
+            assertThat(say(root.note())).as("step 3: with the technical words under it")
+                .isEqualTo("Technically: the setting security.nftables_enabled is off; switching it on needs "
+                    + "passwordless sudo for nft on " + host + ".");
+            assertThat(say(root.heldBack())).as("step 3: and the start it refused").isEqualTo("1 app could not start");
+            assertThat(root.severity()).as("step 3: an app that cannot start is an error")
+                .isEqualTo(AttentionSeverity.ERROR);
+            assertThat(say(root.action())).as("step 3: leading to the setting").isEqualTo("Open settings");
+            assertThat(root.target().toUrl()).as("step 3: on the settings page").startsWith("/admin/settings");
+
+            // 4. The isolation sweep that cannot check local failed for the same cause: its run names local as root.
+            Row run = failedRun(VerifyWorkloadIsolation.ID.toString(), "per-app firewall rules are switched off");
+            cleanup.add(() -> HardDeletes.row(Models.get(SystemTaskHistoryModel.class), run));
+            List<AttentionItem> tasks = new ArrayList<>();
+            AttentionCollector.failedTasks(tasks);
+            AttentionItem sweep = tasks.stream().filter(item -> item.target() != null && item.target().toUrl()
+                .equals("/admin/task-runs/" + run.get(SystemTaskHistoryModel.ID) + "/open")).findFirst().orElseThrow();
+            assertThat(sweep.causedBy()).as("step 4: the sweep's failure is caused by local").isEqualTo(localHost);
+
+            // 5. Needs attention draws local's item once and none of what it holds back.
+            List<String> band = DashboardAttention.band(AttentionCollector.collect()).stream()
+                .map(item -> say(item.title())).toList();
+            assertThat(band).as("step 5: the root once").containsOnlyOnce(say(root.title()));
+            assertThat(band).as("step 5: neither the refused app nor the sweep beside it")
+                .doesNotContain(say(refused.title()), say(sweep.title()));
+
+            // 6. With enforcement on, local raises nothing and the app is its own root again.
+            enforced[0] = true;
+            assertThat(AttentionCollector.hosts()).as("step 6: no item for local")
+                .noneMatch(item -> say(item.title()).startsWith("Per-app firewall"));
+            List<AttentionItem> later = new ArrayList<>();
+            InstanceAttention.crashedInstances(later);
+            assertThat(titled(later, PREFIX + "unisolated could not be started").causedBy())
+                .as("step 6: the app stands on its own").isNull();
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();

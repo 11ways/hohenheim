@@ -167,7 +167,8 @@ class InstancePowerAuditTest {
                 .hasSize(2);
 
             // 3b. The ERROR names what caused it (D12): the failed start is recorded as the cause, with the failure's
-            //     own message, and the dashboard item words it, never "exited unexpectedly".
+            //     own message, and the dashboard item words it, never "exited unexpectedly". Since D13c its title says
+            //     the start failed and its detail is what refused it, never that sentence twice.
             List<Row> causes = activityFor(id, HohenheimActivityAction.WORKLOAD_START_FAILED.id().toString());
             assertThat(causes).as("step 3b: the error's cause is recorded once").hasSize(1);
             assertThat((String) causes.get(0).get(ActivityModel.DETAIL))
@@ -176,11 +177,13 @@ class InstancePowerAuditTest {
             InstanceAttention.crashedInstances(items);
             AttentionItem item = items.stream().filter(candidate -> candidate.target().toUrl()
                 .contains("/instances/" + id + "/")).findFirst().orElseThrow();
-            assertThat(item.detail().key()).as("step 3b: the item's detail is the cause and its reason")
-                .isEqualTo("error_cause_reason");
+            assertThat(item.title().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 3b: the item says the start failed").isEqualTo("audit-restart could not be started");
+            assertThat(item.detail().key()).as("step 3b: the item's detail is what refused it")
+                .isEqualTo("start_failed_reason");
             assertThat(item.detail().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
                 .as("step 3b: in words that say what happened")
-                .startsWith("audit-restart could not be started: ")
+                .startsWith("What refused it: ")
                 .doesNotContain("exited unexpectedly");
 
             FakeNativeDaemons.daemonOf(hostId).remove(handle);

@@ -177,16 +177,17 @@ class ServerOverviewTest extends HohenheimTestBase {
         // 5. And the host's own history: what a PERSON did to this host. The band is filtered on (model, record id),
         //    so an entry about ANOTHER host never lands here (the decoy makes this a filter assertion rather than a
         //    "band exists" one), and the system's own bookkeeping on it stays in the log and off the card (DEP9:
-        //    hourly "System changed local Server" heartbeat rows filled it).
+        //    hourly "System changed local Server" heartbeat rows filled it). The fixture verb is a listed one: a
+        //    reconcile's correction is internal (D13c) and no feed lists it whoever made it.
         var servers = Models.get(ServerModel.class);
-        ActivityLog.record(servers, hostId, HohenheimActivityAction.RECONCILED, "system bookkeeping fixture");
+        ActivityLog.record(servers, hostId, HohenheimActivityAction.TESTED, "system bookkeeping fixture");
         Object bookkeeping = latestActivityId(String.valueOf(hostId));
         Principal operator = TenantConduits.operator().principal();
         Accountability person = Accountability.of(operator.reference(), operator.attributionLabel(),
             new CallerChannel(AccountabilityOrigin.OFFLINE, null, null));
         Accountability.runAs(person, () -> {
-            ActivityLog.record(servers, hostId, HohenheimActivityAction.RECONCILED, "overview band fixture");
-            ActivityLog.record(servers, hostId + 100000, HohenheimActivityAction.RECONCILED, "decoy fixture");
+            ActivityLog.record(servers, hostId, HohenheimActivityAction.TESTED, "overview band fixture");
+            ActivityLog.record(servers, hostId + 100000, HohenheimActivityAction.TESTED, "decoy fixture");
         });
         Object mine = latestActivityId(String.valueOf(hostId));
         Object theirs = latestActivityId(String.valueOf(hostId + 100000));

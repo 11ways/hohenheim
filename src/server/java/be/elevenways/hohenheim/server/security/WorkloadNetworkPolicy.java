@@ -139,11 +139,11 @@ public final class WorkloadNetworkPolicy {
      * namespace instead ({@code PrivateNetns} in browserTest).
      *
      * @param workload named in the refusal so the operator knows what did not deploy
-     * @throws IOException when kernel enforcement is switched off on this host
+     * @throws IsolationUnenforceable when kernel enforcement is switched off on this host
      */
     public void requireEnabled(@NonNull String workload) throws IOException {
         if (!isEnabled()) {
-            throw new IOException("REFUSED to deploy '" + workload + "': per-workload network"
+            throw new IsolationUnenforceable("REFUSED to deploy '" + workload + "': per-workload network"
                 + " policy is not enforceable on this host (security.nftables_enabled is off)."
                 + " A tenant workload that starts without it can reach the host, the cloud"
                 + " metadata service and every other container on the daemon, so it does not"

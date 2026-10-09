@@ -140,11 +140,11 @@ public final class ProcessNetworkPolicy {
      * The refusal that keeps this tier's contract identical to every other one: a site
      * process that cannot be isolated does not start, and the refusal names it.
      *
-     * @throws IOException when kernel enforcement is switched off on this host
+     * @throws IsolationUnenforceable when kernel enforcement is switched off on this host
      */
     public void requireEnabled(@NonNull String site) throws IOException {
         if (!isEnabled()) {
-            throw new IOException("REFUSED to start site '" + site + "': per-process network"
+            throw new IsolationUnenforceable("REFUSED to start site '" + site + "': per-process network"
                 + " policy is not enforceable on this host (security.nftables_enabled is off)."
                 + " A site process runs in the host's own network namespace, so without it the"
                 + " site can reach the cloud metadata service and every service on the host's"

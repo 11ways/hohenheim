@@ -27,6 +27,7 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
+import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.typed.CoreTypes;
@@ -179,6 +180,12 @@ public final class AttentionCollector {
             HohenheimSettingsSections.APPS.anchorOf(HohenheimSettings.Sftp.GROUP));
     }
 
+    /** @return the settings page opened on the group holding per-workload firewall enforcement */
+    static @NonNull RouteTarget isolationSettingsTarget() {
+        return CmsRoutes.settingsAnchor(ADMIN, SettingsPage.DEFAULT_SLUG,
+            HohenheimSettingsSections.BLOCKING.anchorOf(HohenheimSettings.Security.GROUP));
+    }
+
     /** The managed-database tier's items, which the Databases list also leads with. */
     public static @NonNull List<AttentionItem> databases() {
         List<AttentionItem> items = new ArrayList<>();
@@ -201,6 +208,7 @@ public final class AttentionCollector {
         }
         if (HohenheimRoles.hostWorkloadsEnabled()) {
             HostAttention.hostsTakingNoApps(items, AppHealth.heldBackByHost());
+            HostAttention.isolationUnenforced(items);
             HostAttention.stuckReleasingPorts(items, Now.instant().minus(HostAttention.RELEASING_STUCK_AFTER));
         }
         return items;
@@ -379,11 +387,15 @@ public final class AttentionCollector {
             Row run = latest.get(0);
             if (TaskStatus.FAILED.name().equals(run.get(SystemTaskHistoryModel.STATUS))) {
                 Microcopy reason = failureOf(run.get(SystemTaskHistoryModel.ERROR));
+                // The isolation sweep cannot check a host whose firewall rules are switched off: that host's item
+                // is the root and this run's failure folds under it.
                 items.add(item(AttentionSeverity.WARNING, "clock",
                     copy("task_failed", "attention_title", "task", descriptor.label()),
                     reason != null ? reason : copy("last_run_failed", "attention_detail"),
                     CmsRoutes.open(ADMIN, TaskAdmin.RUNS_SLUG, run.get(SystemTaskHistoryModel.ID)),
-                    action("act_show_run")));
+                    action("act_show_run"))
+                    .causedBy(VerifyWorkloadIsolation.ID.toString().equals(descriptor.typePath())
+                        && HohenheimRoles.hostWorkloadsEnabled() ? HostAttention.isolationRootOfSweep() : null));
             }
         }
     }

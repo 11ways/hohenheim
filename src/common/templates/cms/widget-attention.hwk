@@ -3,7 +3,9 @@
    as runtime widget data; WidgetTree transport carries them transparently.
    A row that leads somewhere says what going there does (its action), so the
    link's name is the problem plus its fix and the chevron is decoration. A
-   root says what it holds back (heldBack); the dashboard folded those items. #}
+   root says what it holds back (heldBack); the dashboard folded those items.
+   A note is a further line under the detail (a second fact, or the technical
+   words after the worded ones). #}
 {% declare widget: WidgetInstance %}
 {% declare data: List<AttentionItem> %}
 
@@ -15,6 +17,9 @@
     <span class="hh-attention-title">{{ item.title }}</span>
     {% if item.detail != null %}
     <span class="hh-attention-detail">{{ item.detail }}</span>
+    {% /if %}
+    {% if item.note != null %}
+    <span class="hh-attention-detail" data-attention-note>{{ item.note }}</span>
     {% /if %}
     {% if item.heldBack != null %}
     <span class="hh-attention-detail" data-attention-held-back>{{ item.heldBack }}</span>

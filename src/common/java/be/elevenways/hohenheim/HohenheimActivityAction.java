@@ -6,6 +6,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.activity.ActivityAction;
 import be.elevenways.zenit.common.orm.activity.ActivityActions;
 import be.elevenways.zenit.common.orm.activity.ActivitySeverity;
+import be.elevenways.zenit.common.orm.activity.ActivityVisibility;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -72,7 +73,9 @@ public enum HohenheimActivityAction implements ActivityAction {
     FILES_WRITE("files_write", Grouping.BATCHED),
     DELETED_DATA("deleted_data"),
     SETTLED_INTERRUPTED("settled_interrupted"),
-    RECONCILED("reconciled"),
+    // A correction of a record's stored status to what its host answered is bookkeeping: what followed it (the restart
+    // it queued, the cause it recorded) is the row a person reads, and the full log lists it through the internal filter.
+    RECONCILED("reconciled", ActivityVisibility.INTERNAL),
     BACKUP("backup"),
     SNAPSHOT("snapshot"),
     SHELL_OPEN("shell_open"),
@@ -87,7 +90,8 @@ public enum HohenheimActivityAction implements ActivityAction {
     // sentence is the dashboard's crash detail, so the item says what happened instead of guessing a crash.
     WORKLOAD_EXITED("workload_exited", ErrorCause.EXIT_CODE),
     WORKLOAD_CRASH_LOOPED("workload_crash_looped", ErrorCause.PLAIN),
-    WORKLOAD_START_FAILED("workload_start_failed", ErrorCause.MESSAGE),
+    WORKLOAD_START_FAILED("workload_start_failed", ErrorCause.MESSAGE, ErrorPhase.START),
+    WORKLOAD_ISOLATION_REFUSED("workload_isolation_refused", ErrorCause.HOST_ISOLATION, ErrorPhase.START),
     WORKLOAD_NEVER_READY("workload_never_ready", ErrorCause.PLAIN),
     WORKLOAD_STOP_FAILED("workload_stop_failed", ErrorCause.MESSAGE),
     WORKLOAD_REMOVE_FAILED("workload_remove_failed", ErrorCause.MESSAGE),
@@ -108,7 +112,13 @@ public enum HohenheimActivityAction implements ActivityAction {
         EXIT_CODE,
 
         /** A cause whose row's detail is the failure's own message, verbatim. */
-        MESSAGE;
+        MESSAGE,
+
+        /**
+         * A cause whose root is its host: per-workload firewall rules are switched off there, so the workload was refused
+         * before it could run; its row carries no detail, the host's own item says why.
+         */
+        HOST_ISOLATION;
 
         /** @return whether a verb with this fact is the cause of an ERROR status */
         public boolean isCause() {
@@ -127,6 +137,16 @@ public enum HohenheimActivityAction implements ActivityAction {
         ActivityActions.legacyKey("deleted", ZenitActivityAction.DELETE);
     }
 
+    /** When a cause verb's error came: while the workload ran, or before it ever started. */
+    public enum ErrorPhase {
+
+        /** It ran, then stopped (an exit, a crash loop, a failed restore); also every verb that is no cause. */
+        RUNNING,
+
+        /** It never started: the start itself failed or was refused. */
+        START
+    }
+
     /** Whether one session writes many rows of a verb, so a batch of it reads in its own words. */
     public enum Grouping {
 
@@ -141,24 +161,47 @@ public enum HohenheimActivityAction implements ActivityAction {
     private final @NonNull Identifier id;
     private final @NonNull ErrorCause errorCause;
     private final @NonNull Grouping grouping;
+    private final @NonNull ErrorPhase errorPhase;
+    private final @NonNull ActivityVisibility visibility;
 
     HohenheimActivityAction(@NonNull String value) {
-        this(value, ErrorCause.NONE, Grouping.SINGLE);
+        this(value, ErrorCause.NONE, ErrorPhase.RUNNING, Grouping.SINGLE, ActivityVisibility.LISTED);
     }
 
     HohenheimActivityAction(@NonNull String value, @NonNull ErrorCause errorCause) {
-        this(value, errorCause, Grouping.SINGLE);
+        this(value, errorCause, ErrorPhase.RUNNING, Grouping.SINGLE, ActivityVisibility.LISTED);
+    }
+
+    HohenheimActivityAction(@NonNull String value, @NonNull ErrorCause errorCause, @NonNull ErrorPhase errorPhase) {
+        this(value, errorCause, errorPhase, Grouping.SINGLE, ActivityVisibility.LISTED);
     }
 
     HohenheimActivityAction(@NonNull String value, @NonNull Grouping grouping) {
-        this(value, ErrorCause.NONE, grouping);
+        this(value, ErrorCause.NONE, ErrorPhase.RUNNING, grouping, ActivityVisibility.LISTED);
     }
 
-    HohenheimActivityAction(@NonNull String value, @NonNull ErrorCause errorCause, @NonNull Grouping grouping) {
+    HohenheimActivityAction(@NonNull String value, @NonNull ActivityVisibility visibility) {
+        this(value, ErrorCause.NONE, ErrorPhase.RUNNING, Grouping.SINGLE, visibility);
+    }
+
+    HohenheimActivityAction(@NonNull String value, @NonNull ErrorCause errorCause, @NonNull ErrorPhase errorPhase,
+                            @NonNull Grouping grouping, @NonNull ActivityVisibility visibility) {
         this.value = value;
         this.id = HohenheimIds.id(value);
         this.errorCause = errorCause;
+        this.errorPhase = errorPhase;
         this.grouping = grouping;
+        this.visibility = visibility;
+    }
+
+    /** @return when this cause verb's error came; RUNNING for a verb that is no cause */
+    public @NonNull ErrorPhase errorPhase() {
+        return this.errorPhase;
+    }
+
+    @Override
+    public @NonNull ActivityVisibility visibility() {
+        return this.visibility;
     }
 
     /** @return whether many rows of this verb are written at a time */

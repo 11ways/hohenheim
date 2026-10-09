@@ -72,6 +72,8 @@ public final class InstanceAttention {
      * AIDEV-NOTE: the crashed workload is the ROOT of what its sites' visitors get: each such site's verdict names the
      * workload as its cause ({@link AppHealth}), so the dashboard folds their "error page" items under this one, which
      * says how many sites it keeps from their visitors and keeps the workload's own action.
+     * Its own root, where it has one ({@link WorkloadErrors#rootOf}: the database whose old engine it is, the host that
+     * refused its start), holds it in turn, so a whole chain reads as that one item.
      *
      * @param sitesHeld what each record keeps from visitors ({@link AppHealth#sitesHeldBack}), read once for the tier
      */
@@ -81,11 +83,12 @@ public final class InstanceAttention {
                 .all()) {
             AttentionSubject subject = AttentionSubject.instance(instance.get(InstanceModel.ID));
             items.add(item(AttentionSeverity.ERROR, "box",
-                AppHealth.Stoppage.AFTER_ERROR.title(instance.get(InstanceModel.NAME)),
+                WorkloadErrors.stoppageOf(instance).title(instance.get(InstanceModel.NAME)),
                 WorkloadErrors.detailOf(instance, true),
                 InstanceParts.recordRoute(ADMIN, instance, InstanceConsolePage.SLUG),
                 action("act_open_console"))
-                .about(subject, sitesHeldText(sitesHeld.get(subject))));
+                .about(subject, sitesHeldText(sitesHeld.get(subject)))
+                .causedBy(WorkloadErrors.rootOf(instance)));
         }
     }
 

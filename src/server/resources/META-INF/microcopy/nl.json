@@ -16740,5 +16740,57 @@
   "https_not_working": {
     "text": "HTTPS werkt niet",
     "scope": "app_health"
+  },
+  "workload_isolation_refused": [
+    {
+      "text": "Geweigerd zonder firewallregels",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$subject} kon niet starten zonder eigen firewallregels",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "start_failed": [
+    {
+      "text": "Kon niet starten",
+      "scope": "app_health"
+    },
+    {
+      "text": "{$name} kon niet starten",
+      "scope": "attention_title"
+    }
+  ],
+  "start_refused_isolation": {
+    "text": "Firewallregels per app staan uit op {$host}, dus het mag daar niet starten.",
+    "scope": "attention_detail"
+  },
+  "start_failed_reason": {
+    "text": "Wat het weigerde: {$reason}",
+    "scope": "attention_detail"
+  },
+  "database_not_serving": {
+    "text": "Zijn database {$name} is {$state}.",
+    "scope": "app_health"
+  },
+  "isolation_unenforced": [
+    {
+      "text": "Firewallregels per app staan uit op {$host}",
+      "scope": "attention_title"
+    },
+    {
+      "text": "Een app die een eigen netwerk nodig heeft mag daar niet starten, en de isolatie van de apps die er draaien kan niet gecontroleerd worden.",
+      "scope": "attention_detail"
+    }
+  ],
+  "isolation_unenforced_note": {
+    "text": "Technisch: de instelling security.nftables_enabled staat uit; aanzetten vraagt sudo zonder wachtwoord voor nft op {$host}.",
+    "scope": "attention_detail"
+  },
+  "could_not_start_held": {
+    "text": ".match {$count :number}\none {{1 app kon niet starten}}\n* {{{$count} apps konden niet starten}}",
+    "scope": "attention_detail"
   }
 }

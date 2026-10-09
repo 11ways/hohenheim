@@ -293,7 +293,7 @@ public final class InstanceBackups {
                     if (application) {
                         InstanceOperationGuard.stampError(this.instances.leases(), instanceId,
                             resolved.serverId(), owner.get(InstanceModel.NAME),
-                            HohenheimActivityAction.WORKLOAD_START_FAILED, restartFailed.getMessage());
+                            InstanceOperationGuard.startFailureOf(restartFailed), restartFailed.getMessage());
                     }
                     failedRow(instanceId, targetId, null,
                         "Backup failed: prior serving workload could not be restarted");

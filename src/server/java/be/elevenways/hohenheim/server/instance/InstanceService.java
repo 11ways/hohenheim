@@ -389,7 +389,7 @@ public final class InstanceService {
             // Fence first, ledger second: a fenced-out loser must not park the
             // winner's claims. Whatever the previous deploy held is unverifiable
             // for a still-fenced controller: park, never delete.
-            stampGuardedError(resolved, HohenheimActivityAction.WORKLOAD_START_FAILED, e.getMessage());
+            stampGuardedError(resolved, InstanceOperationGuard.startFailureOf(e), e.getMessage());
             PortLedger.releaseOwner(InstanceModel.MODEL_ID, instanceId);
             throw HohenheimViolations.instanceRefusal("instance_deploy_failed", resolved.row(), e);
         } catch (Violations refused) {
