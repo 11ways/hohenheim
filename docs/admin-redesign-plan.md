@@ -1753,3 +1753,88 @@ D13a's leftovers on the dashboard (shot `d13a/08`), DEP10's Apps list and app ov
   AppOverviewJourneyTest (new `aWorkloadsOverviewSaysWhatItUsesSinceWhenAndWhatItHolds` steps 1-4),
   AdminNavigationJourneyTest (new steps 8-10), RoutingProblemsTest, SiteRefusalVerdictJourneyTest,
   CertificatesJourneyTest, ManagePanelJourneyTest, InstanceOverviewTest.
+
+## 37. D13c decisions (fork D13c, 2026-10-09)
+
+D13b's dashboard and shop overview (shots `d13b/01`, `d13b/03`, boards Main and App-Overview): one verdict per
+subject, one problem shown once at its root with its consequences folded under it.
+
+- Home: no new mechanism. The folds extend D8/D11's `AttentionItem.about/causedBy` and `DashboardAttention.fold`; the
+  verdict words extend `AppHealth.Stoppage` and `WorkloadErrors`; the host item lives in `HostAttention` beside
+  `hostsTakingNoApps`. New pieces are a typed refusal (`IsolationUnenforceable`), one verb, two facts on the verb
+  enum and one `AttentionItem` component (`note`).
+- One database, one item. The causal reading of `d13b/01`: archive was moved to a shared engine and has none
+  (`database_no_engine`), so the DATABASE is the root. Its old engine db-archive (`DatabaseAttention.leftoverOf`: an
+  engine instance generated for a database whose placement is now shared) serves nothing; its stoppage and its being
+  left behind are facts about that database, not problems with their own fix (removing it is done from the database,
+  never by restarting it). So: while the database's own verdict raises an item, that item carries the leftover as its
+  `note` ("Its old engine db-archive on local could not be removed and still holds ...") and `moveLeftovers` raises
+  nothing beside it; while the database serves, the leftover item stands, `about` the database. The leftover's own
+  ERROR item is `causedBy` the database (`WorkloadErrors.rootOf`, the leftover rule first), so it folds; and with a
+  root another record holds, its verdict offers no Restart. A dedicated engine that crashed under a database still
+  reads twice (database item and engine item); not changed here: the engine's crash detail would be lost, which needs
+  the database's verdict to carry the engine's cause first.
+- Visitors of shop get an error page: the causal chain by what the jar records. d13b's shop was never refused for
+  its database: `requireDatabasesReady` only checks the database record is active, and the start went on to the
+  network policy, which refused it (the D13c walk reproduced it: `REFUSED to deploy 'hohenheim-...-instance-1-net':
+  ... security.nftables_enabled is off`). So shop's root is the host (below), and its site's error page folds under
+  shop's item (existing `Verdict.causedBy(instance)`), which folds under local's. Where a workload DOES run and its
+  site does not answer while a database it uses does not serve, the site's verdict now names that database
+  (`DatabaseAttention.firstNotServing`, "Its database shop-db is not running."), so the error page folds under the
+  database's item.
+- One host cause, one item. `security.nftables_enabled` off refuses every PRIVATE-network workload's start and leaves
+  the isolation sweep unable to check the host. `WorkloadNetworkPolicy/ProcessNetworkPolicy.requireEnabled` now throw
+  `IsolationUnenforceable` (an `IOException`, same technical message); the start lane records it as
+  `WORKLOAD_ISOLATION_REFUSED` (`InstanceOperationGuard.startFailureOf`, cause fact `ErrorCause.HOST_ISOLATION`, no
+  detail stored) instead of `WORKLOAD_START_FAILED` with the English. `HostAttention.isolationUnenforced`: one item per
+  host without enforcement that refused a start or carries live workloads while the sweep's newest run failed, `about`
+  the host: "Per-app firewall rules are switched off on local" / "An app that needs its own network may not start
+  there, and the isolation of the apps that run there cannot be checked." / note "Technically: the setting
+  security.nftables_enabled is off; switching it on needs passwordless sudo for nft on local." / "1 app could not
+  start", action Open settings (the Blocking section's security group). The refused workloads' items and the failed
+  `verify_workload_isolation` run are `causedBy` that host while enforcement stays off (`isolationRootOfSweep`). en
+  and nl. Decision recorded: the switch is ONE setting for every host today (`forServer` reads the same supplier), so
+  N hosts would read N items; they are host-rooted as the deploy lane and the sweep ask it per host, and because the
+  other half of the fix (sudo for nft) is per host.
+- A failed start reads as one. `HohenheimActivityAction.ErrorPhase` (START for `WORKLOAD_START_FAILED` and
+  `WORKLOAD_ISOLATION_REFUSED`) picks `Stoppage.START_FAILED` ("Could not start", "shop could not be started") over
+  "Stopped after an error" on the band, the app's verdict and the dashboard item; its detail is why ("What refused
+  it: ...", or the host sentence), never the sentence twice. Started (`InstanceOverview.lastStartOf`) names the newest
+  DEPLOYED row only when no failed start came after it.
+- Status "Running" beside a failed start (`d13b/03`) was a seeded state no code path writes: a failed start stamps
+  `error` (`stampError`), the status sweep skips `error`, and a crash restart that a gate refuses first leaves
+  `stopped`. Status stays the stored lifecycle badge ("Error"), which now agrees with the band; Started also guards a
+  stale running claim.
+- Reconcile rows: `RECONCILED` is `ActivityVisibility.INTERNAL`, not batched. A correction is bookkeeping about the
+  stored status; what followed (the queued restart's DEPLOYED or failed-start row, a crash cause) is what a person
+  reads, and corrections are minutes apart, never one session, so `ActivityLog.inBatch` has nothing to fold. The app
+  overview's Recent card now reads the framework's feed rule `ActivitySources.recent()` (listed rows, one per command)
+  instead of `onePerCommand()` alone, which is why the d13b card listed them. ServerOverviewTest's band fixture used
+  RECONCILED as "a person's verb"; it uses TESTED now.
+- Seen, not fixed: a crash restart a placement gate refuses (posture, a failing required check) writes only a log
+  line, so the app reads "Not running / Start it" with no word why. The scratch's local also showed a container
+  `hohenheim-u2fud3qp-instance-2` from an earlier scratch as a colliding Docker name (not created by D13c).
+- Walk (scratch server from the built jar, fresh database, `/setup`; by SQL: local admitted, its required checks
+  passing and its posture accepted in the UI, shop-db a dedicated MySQL whose engine is stopped, archive moved to a
+  shared placement with no engine and its old engine db-archive left in error with a recorded isolation refusal,
+  shop on local using shop-db behind shop.d13c.test with a 2-hour-old start row; nftables off, the scratch default).
+  shop's crash restart then really ran into the refusal and recorded `workload_isolation_refused` (the jar of build
+  run 1005); the isolation sweep failed for real. Shots `docs/hohenheim-ux-mockups-2026-09-30/shots/d13c/` (workspace
+  repo), from the jar of the final tree (`zenit-dev build --skip-deps --thrash-override`, invocation
+  20261009-061638-208385): 01 dashboard: "Database shop-db is not running" (1 app uses it), "Database archive is not
+  running" with the leftover as its note, "Per-app firewall rules are switched off on local" with its technical note
+  and "1 app could not start"; no shop, db-archive or Check app isolation items. 02 shop: "Could not start / Per-app
+  firewall rules are switched off on local, so it may not start there.", Status Error, no Started, Recent without
+  reconcile rows. 03 shop seeded running (a fresh start row) while shop-db does not run and its upstream does not
+  answer: "Visitors get an error page / Its database shop-db is not running.", Started a minute ago; the dashboard
+  then had no shop item (it folded under shop-db). The colliding-name and unmanaged-resources items on the shots are
+  the dev machine's own Docker state.
+- Proof: build runs 1005 (hohenheim against the last green upstream publish, `--skip-deps`: zenit-cms's own worktree,
+  another session's, failed its `checkDirectClockReads` gate) and the override build above; test run 1008 (19
+  classes, 69 tests: 65 passed) with four causes fixed after it: the new dashboard journey's local was not placeable
+  (it makes it so now), the Recent card still used `onePerCommand()` alone, ServerOverviewTest used RECONCILED as a
+  person's verb, InstancePowerAuditTest expected the old "could not be started: <reason>" detail; run 1010 (those
+  classes plus InstanceOverviewTest, AppsListJourneyTest, ManagePanelJourneyTest, InstanceAttentionTest: 33 of 33).
+  Journeys: DashboardAttentionJourneyTest (new `aHostWithoutPerAppFirewallRulesIsTheOneRootOfWhatItRefused` steps
+  1-6; `whatAnAlertSaidOnceStaysOnTheDashboardAtItsRoot` step 4 rewritten and new 4b), AppOverviewJourneyTest (new
+  `aFailedStartIsOneVerdictWithItsCause` steps 1-4), InstancePowerAuditTest step 3b, ServerOverviewTest step 5.

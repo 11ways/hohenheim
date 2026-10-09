@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
@@ -18,6 +19,7 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
+import be.elevenways.zenit.common.orm.activity.ActivityVisibility;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.widget.common.data.UsageData;
@@ -379,6 +381,95 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 cleanup.get(i).run();
             }
         }
+    }
+
+    @Test
+    void aFailedStartIsOneVerdictWithItsCause() throws Exception {
+        List<Runnable> cleanup = new ArrayList<>();
+        Row instance = instance("app-journey-verdict");
+        int id = instance.get(InstanceModel.ID);
+        cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), instance));
+        HostFixtures.LocalHostState localBefore = HostFixtures.captureLocal();
+        cleanup.add(localBefore::restore);
+        ProxyServer previous = ServerMain.getProxyServer();
+        try {
+            // 1. A running workload Hohenheim started names that start under Started.
+            HostFixtures.makeLocalPlaceable(16L * 1024);
+            status(id, InstanceModel.STATUS_RUNNING);
+            ActivityLog.record(Models.get(InstanceModel.class), id, HohenheimActivityAction.DEPLOYED, null);
+            assertThat(InstanceOverview.lastStartOf(id)).as("step 1: its last start is named").isNotNull();
+
+            // 2. Its next start fails: the stored status says error, the verdict reads a start that failed with why,
+            //    and Started names no older start beside it.
+            ActivityLog.record(Models.get(InstanceModel.class), id, HohenheimActivityAction.WORKLOAD_START_FAILED,
+                "image app-journey:missing was not found");
+            status(id, InstanceModel.STATUS_ERROR);
+            String failed = adminGet("/admin/instances/" + id + "/page/overview").body();
+            assertThat(failed).as("step 2: the band reads a failed start, with what refused it")
+                .contains("Could not start")
+                .contains("What refused it: image app-journey:missing was not found")
+                .doesNotContain("Stopped after an error");
+            assertThat(InstanceOverview.lastStartOf(id)).as("step 2: no start is named after a failed one").isNull();
+            // A record left claiming running beside that failed start (D13b's seeded shop) still names no start.
+            status(id, InstanceModel.STATUS_RUNNING);
+            assertThat(InstanceOverview.lastStartOf(id)).as("step 2: nor for a stale running claim").isNull();
+
+            // 3. Hohenheim correcting a stored status is bookkeeping: its rows stay out of Recent (the full log lists
+            //    them through the internal filter), so Recent reads what happened, the failed start.
+            assertThat(HohenheimActivityAction.RECONCILED.visibility()).as("step 3: the reconcile verb is internal")
+                .isEqualTo(ActivityVisibility.INTERNAL);
+            ActivityLog.record(Models.get(InstanceModel.class), id, HohenheimActivityAction.RECONCILED,
+                "running -> stopped");
+            String recent = adminGet("/admin/instances/" + id + "/page/overview").body();
+            assertThat(recent).as("step 3: Recent leaves the correction out")
+                .doesNotContain("in line with its host")
+                .contains("app-journey-verdict could not be started");
+
+            // 4. The workload runs, but its database does not and its site does not answer: the database is the
+            //    cause, so the band says which database and the site's error page names it as its root.
+            DatabaseModel databases = Models.get(DatabaseModel.class);
+            Row database = databases.createEmptyRow();
+            Map.of(DatabaseModel.NAME.getName(), (Object) "app-journey-verdict-db", DatabaseModel.ENGINE.getName(),
+                "mysql", DatabaseModel.PLACEMENT.getName(), DatabaseModel.PLACEMENT_DEDICATED,
+                DatabaseModel.DB_NAME.getName(), "verdictdb", DatabaseModel.DB_USER.getName(), "verdictuser",
+                DatabaseModel.DB_PASSWORD.getName(), "verdict-secret-password", DatabaseModel.EPHEMERAL.getName(), true,
+                DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE).forEach(database::set);
+            databases.save(database);
+            cleanup.add(() -> HardDeletes.row(databases, database));
+            InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
+            Row link = links.createEmptyRow();
+            link.set(InstanceDatabaseModel.INSTANCE_ID, id);
+            link.set(InstanceDatabaseModel.DATABASE_ID, database.get(DatabaseModel.ID));
+            link.set(InstanceDatabaseModel.ENV_PREFIX, "DB");
+            links.save(link);
+            cleanup.add(() -> HardDeletes.row(links, link));
+            ActivityLog.record(Models.get(InstanceModel.class), id, HohenheimActivityAction.DEPLOYED, null);
+            Row site = ProxyTestSupport.setupInstanceSite("app-journey-verdict-site", "app-journey-verdict-site", id);
+            cleanup.add(() -> HardDeletes.row(Models.get(SiteModel.class), site));
+            ProxyTestSupport.addDomain(site, "verdict.app-journey.test", "exact", null, false);
+            ProxyServer proxy = ProxyTestSupport.startProxy();
+            cleanup.add(proxy::stop);
+            ServerMain.adoptProxyServer(proxy);
+            cleanup.add(() -> ServerMain.adoptProxyServer(previous));
+            Poll.until("step 4: the site's verdict names its database", Duration.ofSeconds(10), () ->
+                AttentionSubject.database(database.get(DatabaseModel.ID)).equals(AppHealth.siteReading(
+                    Models.get(SiteModel.class).findById(site.get(SiteModel.ID))).cause()));
+            String down = adminGet("/admin/instances/" + id + "/page/overview").body();
+            assertThat(down).as("step 4: the band says visitors get an error page because of the database")
+                .contains("Visitors get an error page")
+                .contains("Its database app-journey-verdict-db is not running.");
+            assertThat(InstanceOverview.lastStartOf(id)).as("step 4: it started, so Started names that start")
+                .isNotNull();
+        } finally {
+            for (int i = cleanup.size() - 1; i >= 0; i--) {
+                cleanup.get(i).run();
+            }
+        }
+    }
+
+    private static void status(int instanceId, String status) {
+        Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+            .assign(InstanceModel.STATUS, status).bypassBehaviours().updateAll();
     }
 
     /** Whether the site's overview states this health tone; for polling, so a failed request is a failure. */

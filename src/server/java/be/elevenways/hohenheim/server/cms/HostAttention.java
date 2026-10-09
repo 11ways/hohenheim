@@ -7,22 +7,30 @@ import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.host.HostStanding;
 import be.elevenways.hohenheim.host.PreflightCheckView;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
+import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.task.TaskStatus;
+import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.byHost;
@@ -102,6 +110,100 @@ public final class HostAttention {
                 .about(AttentionSubject.host(id), heldBackText(held))
                 .forStage(OnboardingStage.ADMISSION));
         }
+    }
+
+    /**
+     * Every host where per-workload firewall rules are switched off while something there needs them: ONE item per
+     * host, the root of the starts it refused and of the isolation sweep that cannot check it.
+     *
+     * AIDEV-NOTE: D13b's dashboard showed this one cause three times in the deploy lane's and the sweep's raw English
+     * ("Check app isolation failed: per-app firewall rules are switched off there", "db-archive stopped after an
+     * error: REFUSED to deploy '...-net': ... security.nftables_enabled is off ..."). A refused start records
+     * {@code WORKLOAD_ISOLATION_REFUSED} (its cause's fact is HOST_ISOLATION), so the workload's item names this host
+     * as its root ({@link WorkloadErrors#rootOf}) and folds under this one, which counts it; the sweep's failed run
+     * folds here too ({@link #isolationRootOfSweep}). The switch ({@code security.nftables_enabled}) is one setting
+     * for every host today, asked per host through {@link WorkloadNetworkPolicy#forServer} as the deploy lane and the
+     * sweep ask it; switching it on also needs passwordless sudo for nft on each host, which is why the item names
+     * the host. The setting's key and the sudo need are the technical note under the words.
+     */
+    static void isolationUnenforced(@NonNull List<AttentionItem> items) {
+        Map<Integer, Integer> held = isolationHeld();
+        for (int host : isolationRoots(held)) {
+            Object name = ServerModel.nameOf(host);
+            int apps = held.getOrDefault(host, 0);
+            items.add(item(apps > 0 ? AttentionSeverity.ERROR : AttentionSeverity.WARNING, "shield-halved",
+                copy("isolation_unenforced", "attention_title", "host", name),
+                copy("isolation_unenforced", "attention_detail"),
+                AttentionCollector.isolationSettingsTarget(), action("act_open_settings"))
+                .about(AttentionSubject.host(host),
+                    apps == 0 ? null : copy("could_not_start_held", "attention_detail", "count", apps))
+                .withNote(copy("isolation_unenforced_note", "attention_detail", "host", name)));
+        }
+    }
+
+    /**
+     * @return the host whose switched-off firewall rules are why the workload isolation sweep's newest run failed, so
+     *         its failed-task item folds under that host's item; null when no such root is shown
+     */
+    static @Nullable AttentionSubject isolationRootOfSweep() {
+        List<Integer> roots = isolationRoots(isolationHeld());
+        return roots.isEmpty() ? null : AttentionSubject.host(roots.get(0));
+    }
+
+    /** @return whether per-workload network policy is enforced on this host, as its deploy lane asks it */
+    static boolean enforcesIsolation(int serverId) {
+        return WorkloadNetworkPolicy.forServer(ServerModel.nameOf(serverId)).isEnabled();
+    }
+
+    /** @return per host, how many errored workloads it refused to start for its switched-off firewall rules */
+    private static @NonNull Map<Integer, Integer> isolationHeld() {
+        Map<Integer, Integer> held = new LinkedHashMap<>();
+        for (Row instance : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_ERROR))
+                .all()) {
+            AttentionSubject root = WorkloadErrors.rootOf(instance);
+            if (root != null && ServerModel.MODEL_ID.equals(root.model())) {
+                held.merge(root.id(), 1, Integer::sum);
+            }
+        }
+        return held;
+    }
+
+    /**
+     * @return the hosts without enforcement that hold back a start, or carry live workloads while the isolation
+     *         sweep's newest run failed (it cannot check them)
+     */
+    private static @NonNull List<Integer> isolationRoots(@NonNull Map<Integer, Integer> held) {
+        Set<Integer> unchecked = new HashSet<>();
+        if (isolationSweepFailed()) {
+            for (Row instance : Models.get(InstanceModel.class).find()
+                    .where(InstanceModel.STATUS.in(InstanceModel.LIVE_GUEST_STATUSES))
+                    .all()) {
+                unchecked.add(ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)));
+            }
+        }
+        List<Integer> roots = new ArrayList<>();
+        for (Row server : Models.get(ServerModel.class).find().all()) {
+            int id = server.get(ServerModel.ID);
+            if (ServerModel.isIncus(server) || enforcesIsolation(id)) {
+                continue;   // the Incus tier keeps workloads apart by its own sweep
+            }
+            if (held.containsKey(id) || unchecked.contains(id)) {
+                roots.add(id);
+            }
+        }
+        return roots;
+    }
+
+    /** @return whether the workload isolation sweep's newest run failed */
+    private static boolean isolationSweepFailed() {
+        if (Models.get(SystemTaskHistoryModel.MODEL_ID) == null) {
+            return false;
+        }
+        List<Row> newest = Models.get(SystemTaskHistoryModel.class)
+            .findRecentForType(VerifyWorkloadIsolation.ID.toString(), 1);
+        return !newest.isEmpty()
+            && TaskStatus.FAILED.name().equals(newest.get(0).get(SystemTaskHistoryModel.STATUS));
     }
 
     /** @return "2 apps wait for it", null when the host holds nothing back */

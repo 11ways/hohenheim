@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.host.HostLeases;
+import be.elevenways.hohenheim.server.security.IsolationUnenforceable;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -183,6 +184,15 @@ final class InstanceOperationGuard {
         requireCause(InstanceModel.STATUS_ERROR, cause);
         write(leases, instanceId, serverId, InstanceModel.STATUS_ERROR, instanceName);
         recordCause(instanceId, cause, detail);
+    }
+
+    /**
+     * @return the cause verb a failed start records: its host's switched-off per-workload firewall rules when that is
+     *         what refused it (the dashboard then folds the workload under its host), else the failure's own message
+     */
+    static @NonNull HohenheimActivityAction startFailureOf(@NonNull Throwable failure) {
+        return IsolationUnenforceable.in(failure) ? HohenheimActivityAction.WORKLOAD_ISOLATION_REFUSED
+            : HohenheimActivityAction.WORKLOAD_START_FAILED;
     }
 
     /** The fenced status write behind {@link #stamp} and {@link #stampError}. */
@@ -364,7 +374,12 @@ final class InstanceOperationGuard {
 
     /** Records the cause on the record's activity, its detail the first line of what the cause declares. */
     private static void recordCause(int instanceId, @NonNull HohenheimActivityAction cause, @Nullable String detail) {
-        String line = detail == null ? null : detail.strip().lines().findFirst().orElse(null);
+        // The row carries the detail its cause's fact declares, and nothing where it declares none.
+        String kept = switch (cause.errorCause()) {
+            case EXIT_CODE, MESSAGE -> detail;
+            case NONE, PLAIN, HOST_ISOLATION -> null;
+        };
+        String line = kept == null ? null : kept.strip().lines().findFirst().orElse(null);
         ActivityLog.record(Models.get(InstanceModel.class), instanceId, cause,
             line == null || line.isBlank() ? null : line);
     }

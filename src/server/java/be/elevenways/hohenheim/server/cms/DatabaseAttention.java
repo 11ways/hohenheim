@@ -15,8 +15,11 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -50,6 +53,7 @@ public final class DatabaseAttention {
      */
     static void failedDatabases(List<AttentionItem> items) {
         Map<Integer, List<Row>> usedBy = InstanceDatabaseLinks.liveInstancesByDatabase();
+        Map<Integer, Row> leftovers = leftovers();
         for (Row row : Models.get(DatabaseModel.class).find().all()) {
             DatabaseVerdict verdict = DatabaseVerdict.ofDatabase(row);
             Microcopy title = verdict.state().attentionTitle(row.get(DatabaseModel.NAME));
@@ -58,10 +62,12 @@ public final class DatabaseAttention {
                 continue;
             }
             int apps = usedBy.getOrDefault(id, List.of()).size();
+            Row leftover = leftovers.get(id);
             items.add(item(verdict.state().severity(), "database", title, verdict.reason(),
                 CmsRoutes.open(ADMIN, DatabaseParts.SLUG, id), action("act_open_database"))
                 .about(AttentionSubject.database(id),
-                    apps == 0 ? null : copy("apps_use_it", "attention_detail", "count", apps)));
+                    apps == 0 ? null : copy("apps_use_it", "attention_detail", "count", apps))
+                .withNote(leftover == null ? null : leftoverLine(leftover)));
         }
         // An ACTIVE record carrying a reason is the one shape a status alone cannot show:
         // a failed move rolled the record back onto its untouched dedicated engine and
@@ -91,23 +97,79 @@ public final class DatabaseAttention {
      *
      * AIDEV-NOTE: the leftover is found from the record, never from the alert: an engine instance generated for a
      * database whose placement is no longer dedicated serves nothing ({@code EngineHost.serving} reads the engine).
+     *
+     * AIDEV-NOTE: one item per database. While the database itself does not serve, its own item ({@link
+     * #failedDatabases}) is the root and says the leftover as its note, so this item is not drawn beside it. Either way
+     * the leftover engine's own stoppage folds under the database ({@link WorkloadErrors#rootOf}): it serves nothing,
+     * and removing it is the fix, never restarting it.
      */
     static void moveLeftovers(List<AttentionItem> items) {
+        leftovers().forEach((databaseId, instance) -> {
+            Row database = Models.get(DatabaseModel.class).findById(databaseId);
+            if (database == null
+                    || DatabaseVerdict.ofDatabase(database).state().attentionTitle(database.get(DatabaseModel.NAME))
+                        != null) {
+                return;
+            }
+            items.add(item(AttentionSeverity.WARNING, "database",
+                Alerts.copy("database_move_leftover_subject").withArg("name", database.get(DatabaseModel.NAME)),
+                leftoverLine(instance), CmsRoutes.open(ADMIN, DatabaseParts.SLUG, databaseId),
+                action("act_open_database"))
+                .about(AttentionSubject.database(databaseId), null));
+        });
+    }
+
+    /** @return every engine instance a move left behind, keyed by the database it was generated for */
+    private static @NonNull Map<Integer, Row> leftovers() {
+        Map<Integer, Row> found = new LinkedHashMap<>();
         for (Row instance : Models.get(InstanceModel.class).find()
                 .where(InstanceModel.GENERATED_FOR_MODEL.eq(DatabaseModel.MODEL_ID.toString()))
                 .all()) {
-            Integer databaseId = instance.get(InstanceModel.GENERATED_FOR_ID);
-            Row database = databaseId == null ? null : Models.get(DatabaseModel.class).findById(databaseId);
-            if (database == null || !DatabaseModel.PLACEMENT_SHARED.equals(database.get(DatabaseModel.PLACEMENT))) {
-                continue;
+            Row database = leftoverOf(instance);
+            if (database != null) {
+                found.putIfAbsent(database.get(DatabaseModel.ID), instance);
             }
-            Object name = database.get(DatabaseModel.NAME);
-            items.add(item(AttentionSeverity.WARNING, "database",
-                Alerts.copy("database_move_leftover_subject").withArg("name", name),
-                copy("database_move_leftover", "attention_detail", "engine", instance.get(InstanceModel.NAME),
-                    "host", ServerModel.nameOf(ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)))),
-                CmsRoutes.open(ADMIN, DatabaseParts.SLUG, databaseId), action("act_open_database")));
         }
+        return found;
+    }
+
+    /**
+     * @return the database this instance is the old engine of, left behind by a move to a shared engine; null when it
+     *         is no such leftover (any other instance, or the engine a dedicated database runs on)
+     */
+    static @Nullable Row leftoverOf(@NonNull Row instance) {
+        if (!DatabaseModel.MODEL_ID.toString().equals(instance.get(InstanceModel.GENERATED_FOR_MODEL))) {
+            return null;
+        }
+        Integer databaseId = instance.get(InstanceModel.GENERATED_FOR_ID);
+        Row database = databaseId == null ? null : Models.get(DatabaseModel.class).findById(databaseId);
+        return database != null && DatabaseModel.PLACEMENT_SHARED.equals(database.get(DatabaseModel.PLACEMENT))
+            ? database : null;
+    }
+
+    /** @return the leftover in the alert's words: which old engine, on which host, still holding what */
+    private static @NonNull Microcopy leftoverLine(@NonNull Row instance) {
+        return copy("database_move_leftover", "attention_detail", "engine", instance.get(InstanceModel.NAME),
+            "host", ServerModel.nameOf(ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID))));
+    }
+
+    /**
+     * @return the first database this workload uses that does not serve (its {@link DatabaseVerdict}), null when every
+     *         one serves or it uses none
+     */
+    static @Nullable Row firstNotServing(int instanceId) {
+        InstanceDatabaseModel links = Models.get(InstanceDatabaseModel.class);
+        if (links == null) {
+            return null;
+        }
+        for (Row link : links.findByInstanceId(instanceId)) {
+            Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
+            Row database = databaseId == null ? null : Models.get(DatabaseModel.class).findById(databaseId);
+            if (database != null && !DatabaseVerdict.ofDatabase(database).serves()) {
+                return database;
+            }
+        }
+        return null;
     }
 
     /** A shared engine that could not be brought up serves every database on it nothing. */

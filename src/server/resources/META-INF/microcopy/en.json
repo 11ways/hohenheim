@@ -16740,5 +16740,57 @@
   "https_not_working": {
     "text": "HTTPS does not work",
     "scope": "app_health"
+  },
+  "workload_isolation_refused": [
+    {
+      "text": "Refused without firewall rules",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$subject} could not be started without its own firewall rules",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ],
+  "start_failed": [
+    {
+      "text": "Could not start",
+      "scope": "app_health"
+    },
+    {
+      "text": "{$name} could not be started",
+      "scope": "attention_title"
+    }
+  ],
+  "start_refused_isolation": {
+    "text": "Per-app firewall rules are switched off on {$host}, so it may not start there.",
+    "scope": "attention_detail"
+  },
+  "start_failed_reason": {
+    "text": "What refused it: {$reason}",
+    "scope": "attention_detail"
+  },
+  "database_not_serving": {
+    "text": "Its database {$name} is {$state}.",
+    "scope": "app_health"
+  },
+  "isolation_unenforced": [
+    {
+      "text": "Per-app firewall rules are switched off on {$host}",
+      "scope": "attention_title"
+    },
+    {
+      "text": "An app that needs its own network may not start there, and the isolation of the apps that run there cannot be checked.",
+      "scope": "attention_detail"
+    }
+  ],
+  "isolation_unenforced_note": {
+    "text": "Technically: the setting security.nftables_enabled is off; switching it on needs passwordless sudo for nft on {$host}.",
+    "scope": "attention_detail"
+  },
+  "could_not_start_held": {
+    "text": ".match {$count :number}\none {{1 app could not start}}\n* {{{$count} apps could not start}}",
+    "scope": "attention_detail"
   }
 }

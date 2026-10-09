@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
@@ -47,14 +50,71 @@ final class WorkloadErrors {
         }
         Microcopy sentence = cause.happened().withArg("subject", instance.get(InstanceModel.NAME));
         String detail = withDetail ? recorded.get(ActivityModel.DETAIL) : null;
-        if (detail == null || detail.isBlank()) {
-            return sentence;
-        }
+        boolean none = detail == null || detail.isBlank();
+        // A start that failed is headed "could not be started" by its title (Stoppage.START_FAILED), so its detail is
+        // why, never that sentence again.
         return switch (cause.errorCause()) {
-            case EXIT_CODE -> copy("error_cause_exit_code").withArg("cause", sentence).withArg("code", detail);
-            case MESSAGE -> copy("error_cause_reason").withArg("cause", sentence).withArg("reason", detail);
+            case HOST_ISOLATION -> withDetail ? copy("start_refused_isolation").withArg("host",
+                ServerModel.nameOf(ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)))) : sentence;
+            case EXIT_CODE -> none ? sentence
+                : copy("error_cause_exit_code").withArg("cause", sentence).withArg("code", detail);
+            case MESSAGE -> none ? sentence : switch (cause.errorPhase()) {
+                case START -> copy("start_failed_reason").withArg("reason", detail);
+                case RUNNING -> copy("error_cause_reason").withArg("cause", sentence).withArg("reason", detail);
+            };
             case PLAIN, NONE -> sentence;
         };
+    }
+
+    /**
+     * @return how this workload's ERROR reads: a start that failed ("Could not start") or a stop after it ran, by its
+     *         recorded cause's {@link HohenheimActivityAction#errorPhase()}; a stop after an error when none is recorded
+     */
+    static AppHealth.@NonNull Stoppage stoppageOf(@NonNull Row instance) {
+        HohenheimActivityAction cause = causeOf(instance);
+        if (cause == null) {
+            return AppHealth.Stoppage.AFTER_ERROR;
+        }
+        return switch (cause.errorPhase()) {
+            case START -> AppHealth.Stoppage.START_FAILED;
+            case RUNNING -> AppHealth.Stoppage.AFTER_ERROR;
+        };
+    }
+
+    /**
+     * The record whose own item is this errored workload's root, so the dashboard folds the workload's item under it.
+     *
+     * AIDEV-NOTE: an old engine a move left behind belongs to its database ({@link DatabaseAttention#leftoverOf}):
+     * removing it is the fix, never restarting it, and the database's item names it. A start its host refused because
+     * per-workload firewall rules are switched off there ({@link HohenheimActivityAction.ErrorCause#HOST_ISOLATION})
+     * is its host's for as long as they stay off ({@link HostAttention#isolationUnenforced}); once they are on, a
+     * restart is this workload's own fix again.
+     *
+     * @return the root, null when the workload's item is its own root
+     */
+    static @Nullable AttentionSubject rootOf(@NonNull Row instance) {
+        Row database = DatabaseAttention.leftoverOf(instance);
+        if (database != null) {
+            return AttentionSubject.database(database.get(DatabaseModel.ID));
+        }
+        HohenheimActivityAction cause = causeOf(instance);
+        if (cause == null) {
+            return null;
+        }
+        return switch (cause.errorCause()) {
+            case HOST_ISOLATION -> {
+                int host = ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
+                yield HostAttention.enforcesIsolation(host) ? null : AttentionSubject.host(host);
+            }
+            case NONE, PLAIN, EXIT_CODE, MESSAGE -> null;
+        };
+    }
+
+    /** @return the cause verb recorded for this workload's ERROR, null when none is */
+    private static @Nullable HohenheimActivityAction causeOf(@NonNull Row instance) {
+        Integer id = instance.get(InstanceModel.ID);
+        Row recorded = id == null ? null : newestCause(id);
+        return recorded == null ? null : causeOf(recorded.get(ActivityModel.ACTION));
     }
 
     /** @return the newest cause row recorded on this workload, null when none is */

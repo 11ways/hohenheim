@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceStatus;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
@@ -218,6 +219,16 @@ final class AppHealth {
         }
         SiteHealth live = facts.live.get(siteId);
         if (live == SiteHealth.DOWN) {
+            // A workload that runs while its database does not serve: the database is the cause, its own item the
+            // root ("Database shop-db is not running"), so this site's error page folds under it.
+            Row database = instance == null ? null : DatabaseAttention.firstNotServing(instance.get(InstanceModel.ID));
+            if (database != null) {
+                return Verdict.causedBy(AttentionSubject.database(database.get(DatabaseModel.ID)),
+                    RecordHealth.broken(copy("error_page")).detail(copy("database_not_serving")
+                        .withArg("name", database.get(DatabaseModel.NAME))
+                        .withArg("state", DatabaseVerdict.ofDatabase(database).state().label()
+                            .withFilter("case", "sentence"))));
+            }
             return Verdict.notServing(RecordHealth.broken(copy("error_page")).detail(copy("upstream_down")));
         }
         Row open = firstOpenPath(facts.paths.getOrDefault(siteId, List.of()));
@@ -306,10 +317,14 @@ final class AppHealth {
                 delegated, viewer);
             // What stopped it, as its recorded cause says (the dashboard item's detail too); a tenant reads the sentence
             // without the daemon's own message.
-            case ERROR -> delegated
-                ? RecordHealth.broken(Stoppage.AFTER_ERROR.headline()).detail(WorkloadErrors.detailOf(instance, false))
-                : RecordHealth.broken(Stoppage.AFTER_ERROR.headline()).detail(WorkloadErrors.detailOf(instance, true))
-                    .fixedBy(InstanceOperations.RESTART.id());
+            case ERROR -> {
+                RecordHealth stopped = RecordHealth.broken(WorkloadErrors.stoppageOf(instance).headline())
+                    .detail(WorkloadErrors.detailOf(instance, !delegated));
+                // Restart is its fix, unless its root is another record's (the host that refuses its start, the
+                // database whose old engine it is): a restart would be refused or bring back what should go.
+                yield delegated || WorkloadErrors.rootOf(instance) != null ? stopped
+                    : stopped.fixedBy(InstanceOperations.RESTART.id());
+            }
             case STOPPED, CREATED -> {
                 RecordHealth broken = siteBrokenOnItsOwn(facts.sitesByInstance.get(instance.get(InstanceModel.ID)),
                     facts.sites, delegated, viewer);
@@ -354,7 +369,9 @@ final class AppHealth {
             return switch (stoppage) {
                 case DEPLOY_FAILED -> RecordHealth.broken(stoppage.headline())
                     .detail(reason == null ? null : Microcopy.literal(reason));
-                case AFTER_ERROR -> RecordHealth.broken(stoppage.headline()).detail(copy("stack_failed_detail"));
+                // A stack's stoppage is never a start that failed (stackStoppage); its services stopped either way.
+                case AFTER_ERROR, START_FAILED -> RecordHealth.broken(stoppage.headline())
+                    .detail(copy("stack_failed_detail"));
             };
         }
         if (StackModel.STATUS_DEGRADED.equals(status)) {
@@ -669,7 +686,9 @@ final class AppHealth {
      *
      * AIDEV-NOTE: AFTER_ERROR is the stored ERROR status, which a crash, a failed start, a failed migration and a
      * failed maintenance hold all stamp; "after an error" is what every one of them is, "after a crash" is not. Which
-     * one it was is the recorded cause ({@link WorkloadErrors}), the verdict's and the item's detail.
+     * one it was is the recorded cause ({@link WorkloadErrors}), the verdict's and the item's detail. One exception has
+     * its own words: a start that failed never ran, so it "could not be started" (START_FAILED,
+     * {@link WorkloadErrors#stoppageOf}), never "stopped".
      */
     enum Stoppage {
 
@@ -677,7 +696,10 @@ final class AppHealth {
         AFTER_ERROR("stopped_after_error"),
 
         /** Its newest deploy failed. */
-        DEPLOY_FAILED("deploy_failed");
+        DEPLOY_FAILED("deploy_failed"),
+
+        /** The runtime stamped it ERROR because its start failed or was refused: it never ran ("Could not start"). */
+        START_FAILED("start_failed");
 
         private final String key;
 

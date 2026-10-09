@@ -247,8 +247,9 @@ final class AppOverview {
     static @NonNull WidgetInstance recent(@NonNull Model model, @NonNull Integer id) {
         return CardWidget.of(copy("recent"), new WidgetTree(List.of(new WidgetInstance(RecordsWidget.ID, Map.of(
             "source", CmsSupport.ACTIVITY_SOURCE,
-            // One row per command or batch: an SFTP session's 312 uploads read as one "Uploaded 312 files".
-            "rules", Condition.all(ActivityRules.forRecord(model, id), ActivitySources.onePerCommand()),
+            // What people did (no bookkeeping verb such as a reconcile's correction), one row per command or batch:
+            // an SFTP session's 312 uploads read as one "Uploaded 312 files".
+            "rules", Condition.all(ActivityRules.forRecord(model, id), ActivitySources.recent()),
             "sort", ActivityModel.CREATED_AT.getName(),
             "descending", true,
             "limit", 6)))));
