@@ -10,7 +10,6 @@ import be.elevenways.hohenheim.server.instance.InstanceShell;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
-import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
@@ -18,7 +17,6 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -70,17 +68,11 @@ public final class InstanceShellPage implements ConsoleModes.Mode {
 
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
-        Conduit conduit = request.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
         String status = instance.get(InstanceModel.STATUS);
 
-        Map<String, Object> vars = new HashMap<>();
-        vars.put("title", instance.get(InstanceModel.NAME));
-        vars.put("instanceName", instance.get(InstanceModel.NAME));
-        vars.put("instanceId", instanceId);
+        Map<String, Object> vars = this.modes.vars(request, instance, this);
         vars.put("running", InstanceModel.STATUS_RUNNING.equals(status));
-        vars.put("head", recordHead(conduit));
-        vars.put("consoleModes", this.modes.views(request, instance, SLUG));
         vars.put("maxSessions", InstanceShell.MAX_SESSIONS_PER_INSTANCE);
         vars.put("idleMinutes", (int) (InstanceShell.IDLE_TIMEOUT_MS / 60_000));
         // AIDEV-NOTE: WebSocketEndpoint is not a RouteTarget and has no with(...), and

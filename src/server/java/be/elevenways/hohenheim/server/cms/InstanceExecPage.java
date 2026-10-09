@@ -27,7 +27,6 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -90,10 +89,7 @@ public final class InstanceExecPage implements ConsoleModes.Mode {
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
         Conduit conduit = request.conduit();
         boolean running = InstanceModel.STATUS_RUNNING.equals(instance.get(InstanceModel.STATUS));
-        Map<String, Object> vars = new HashMap<>();
-        vars.put("title", instance.get(InstanceModel.NAME));
-        vars.put("instanceName", instance.get(InstanceModel.NAME));
-        vars.put("instanceId", instance.get(InstanceModel.ID));
+        Map<String, Object> vars = this.modes.vars(request, instance, this);
         vars.put("running", running);
         if (running && PageActions.open(request, this, instance, EXEC.id()) instanceof PageActions.Form form) {
             vars.put("document", form.state());
@@ -101,8 +97,6 @@ public final class InstanceExecPage implements ConsoleModes.Mode {
         InstanceExecResults.Run run = InstanceExecResults.pop(conduit, instance.get(InstanceModel.ID));
         vars.put("execOutput", run == null ? "" : run.output());
         vars.put("execExit", run == null ? "" : run.exitCode());
-        vars.put("head", recordHead(conduit));
-        vars.put("consoleModes", this.modes.views(request, instance, SLUG));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_EXEC, vars);
     }
 

@@ -81,7 +81,7 @@ public final class SpamserviceReputationPage extends PanelPage {
                 try {
                     ReputationDiagnostic diagnostic = client.diagnoseReputation(ip);
                     vars.put("result", Map.of("ip", diagnostic.ip(), "subnet", diagnostic.subnet()));
-                    vars.put("datasets", entries(diagnostic.datasets()));
+                    vars.put("datasets", SpamserviceRemoteStore.nameValueRows(diagnostic.datasets()));
                     vars.put("negative", categories(diagnostic.events()));
                     vars.put("positive", categories(diagnostic.positive()));
                     ReputationScore score = weighted(diagnostic, settings);
@@ -145,11 +145,6 @@ public final class SpamserviceReputationPage extends PanelPage {
         Map<String, Long> result = new LinkedHashMap<>();
         values.forEach((category, value) -> result.put(category, count(value)));
         return result;
-    }
-
-    private static List<Map<String, Object>> entries(Map<String, Object> values) {
-        return values.entrySet().stream().map(entry -> Map.<String, Object>of(
-            "name", entry.getKey(), "value", String.valueOf(entry.getValue()))).toList();
     }
 
     private static String resolve(Conduit conduit, String key) {

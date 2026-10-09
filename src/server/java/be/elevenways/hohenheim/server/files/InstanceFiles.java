@@ -322,7 +322,7 @@ public final class InstanceFiles {
         if (!PERMISSION_BITS.matcher(mode).matches()) {
             throw refusal("files_mode_refused");
         }
-        AttributeTarget target = attributeTarget(instanceId, requestedPath);
+        ExistingTarget target = attributeTarget(instanceId, requestedPath);
         try {
             target.opened().files().setMode(target.opened().handle(), target.path().absolute(), mode,
                 target.opened().ownerLabels());
@@ -333,7 +333,7 @@ public final class InstanceFiles {
 
     /** Set one file's or directory's modification time. */
     public void setModified(int instanceId, @NonNull String requestedPath, long epochSeconds) {
-        AttributeTarget target = attributeTarget(instanceId, requestedPath);
+        ExistingTarget target = attributeTarget(instanceId, requestedPath);
         try {
             target.opened().files().setModified(target.opened().handle(), target.path().absolute(),
                 epochSeconds, target.opened().ownerLabels());
@@ -385,19 +385,11 @@ public final class InstanceFiles {
 
     /** Delete a file, a symlink, or a directory tree; never the volume root itself. */
     public void delete(int instanceId, @NonNull String requestedPath) {
-        Opened opened = open(instanceId, WRITE);
-        InstanceFilePath target = opened.parse(requestedPath);
-        requireNotManaged(instanceId, target);
-        if (target.isVolumeRoot()) {
-            throw refusal("files_volume_root");
-        }
-        InstanceFileSupport.Entry leaf = opened.walk(target);
-        if (leaf == null) {
-            throw refusal("files_not_found");
-        }
+        ExistingTarget target = existingTarget(instanceId, requestedPath);
+        Opened opened = target.opened();
         try {
-            opened.files().delete(opened.handle(), target.absolute(),
-                leaf.kind() == InstanceFileSupport.Kind.DIRECTORY, opened.ownerLabels());
+            opened.files().delete(opened.handle(), target.path().absolute(),
+                target.leaf().kind() == InstanceFileSupport.Kind.DIRECTORY, opened.ownerLabels());
         } catch (IOException e) {
             throw failure(e);
         }
@@ -485,10 +477,11 @@ public final class InstanceFiles {
         return new FileTarget(opened, target, leaf.mode());
     }
 
-    /** An entry whose attributes change: contained, not managed, never a link or a volume root. */
-    private record AttributeTarget(@NonNull Opened opened, @NonNull InstanceFilePath path) {}
+    /** An existing entry a write changes: WRITE asked, contained, not managed, never a volume root. */
+    private record ExistingTarget(@NonNull Opened opened, @NonNull InstanceFilePath path,
+                                  InstanceFileSupport.@NonNull Entry leaf) {}
 
-    private @NonNull AttributeTarget attributeTarget(int instanceId, @NonNull String requestedPath) {
+    private @NonNull ExistingTarget existingTarget(int instanceId, @NonNull String requestedPath) {
         Opened opened = open(instanceId, WRITE);
         InstanceFilePath target = opened.parse(requestedPath);
         requireNotManaged(instanceId, target);
@@ -499,10 +492,17 @@ public final class InstanceFiles {
         if (leaf == null) {
             throw refusal("files_not_found");
         }
-        if (leaf.kind() != InstanceFileSupport.Kind.FILE && leaf.kind() != InstanceFileSupport.Kind.DIRECTORY) {
+        return new ExistingTarget(opened, target, leaf);
+    }
+
+    /** {@link #existingTarget}, never a link: the entry whose attributes change. */
+    private @NonNull ExistingTarget attributeTarget(int instanceId, @NonNull String requestedPath) {
+        ExistingTarget target = existingTarget(instanceId, requestedPath);
+        InstanceFileSupport.Kind kind = target.leaf().kind();
+        if (kind != InstanceFileSupport.Kind.FILE && kind != InstanceFileSupport.Kind.DIRECTORY) {
             throw refusal("files_link_refused");
         }
-        return new AttributeTarget(opened, target);
+        return target;
     }
 
     /** Ask {@code capability} on the SERVICE, then resolve the instance and its browse roots. */

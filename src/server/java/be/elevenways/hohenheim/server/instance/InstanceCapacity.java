@@ -228,7 +228,7 @@ public final class InstanceCapacity {
      *         gone cannot be deployed either, so booking nothing for it is honest)
      */
     public static int footprintMbOf(@NonNull Row instance) {
-        InstanceKindHandler handler = InstanceKinds.getHandler(instance.get(InstanceModel.KIND));
+        InstanceKindHandler handler = InstanceKinds.handlerOf(instance);
         if (handler == null) {
             return 0;
         }

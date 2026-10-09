@@ -8,7 +8,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
-import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 
 import java.util.List;
@@ -142,7 +141,7 @@ public class RuntimeImageModel extends Model {
 
     /** @return the enabled images, name-ordered (the picker's offer) */
     public List<Row> findEnabled() {
-        return find().where(ENABLED.eq(true)).orderBy(NAME, SortOrder.ASC).all();
+        return EnabledRows.byName(this, ENABLED, NAME);
     }
 
     /** @return the image with this name, or null */

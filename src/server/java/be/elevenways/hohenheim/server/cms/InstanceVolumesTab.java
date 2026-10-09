@@ -60,7 +60,7 @@ public final class InstanceVolumesTab implements RecordTab.Rendered<Row> {
     }
 
     static boolean volumeCapable(@NonNull Row record) {
-        InstanceKindHandler handler = InstanceKinds.getHandler(record.get(InstanceModel.KIND));
+        InstanceKindHandler handler = InstanceKinds.handlerOf(record);
         return handler != null && handler.supportsVolumes();
     }
 

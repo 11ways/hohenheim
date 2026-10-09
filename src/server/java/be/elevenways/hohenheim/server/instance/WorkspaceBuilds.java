@@ -102,7 +102,7 @@ public final class WorkspaceBuilds {
             return false;
         }
 
-        InstanceKindHandler handler = InstanceKinds.getHandler(instance.get(InstanceModel.KIND));
+        InstanceKindHandler handler = InstanceKinds.handlerOf(instance);
 
         if (handler == null || !WorkspaceKind.ID.equals(handler.typeId())) {
             return false;

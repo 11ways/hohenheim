@@ -62,7 +62,7 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
      */
     @Override
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext access) {
-        InstanceKindHandler handler = InstanceKinds.getHandler(record.get(InstanceModel.KIND));
+        InstanceKindHandler handler = InstanceKinds.handlerOf(record);
         return handler != null && handler.supportsDevices();
     }
 
@@ -112,7 +112,7 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
         // Install media is OPERATOR-ONLY (InstanceDevices.attachCdrom refuses a tenant
         // with the uniform refusal) and VM-only -- both gates repeated here so the
         // affordance is offered exactly where the funnel would accept it.
-        InstanceKindHandler handler = InstanceKinds.getHandler(instance.get(InstanceModel.KIND));
+        InstanceKindHandler handler = InstanceKinds.handlerOf(instance);
         boolean canAttachMedia = handler != null && handler.supportsInstallMedia()
             && (!DeviceType.CDROM.operatorOnly() || HohenheimAccess.isAdmin(accessContext));
         vars.put("addMediaTarget", canAttachMedia

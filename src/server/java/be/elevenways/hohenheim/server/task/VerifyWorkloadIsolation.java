@@ -312,8 +312,7 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
             if (!allowed) {
                 continue;
             }
-            InstanceKindHandler handler = InstanceKinds.getHandler(
-                row.get(InstanceModel.KIND));
+            InstanceKindHandler handler = InstanceKinds.handlerOf(row);
             if (handler == null
                     || !handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER)) {
                 continue;   // unknown kinds fail their own lanes; Incus has its own sweep

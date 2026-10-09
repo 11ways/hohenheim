@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.util;
 
+import be.elevenways.protoblast.server.io.BulkInputStream;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -429,14 +430,7 @@ public final class Tar {
 
         /** The current entry's content; reading past its size answers EOF. */
         public @NonNull InputStream body() {
-            return new InputStream() {
-                @Override
-                public int read() throws IOException {
-                    byte[] one = new byte[1];
-                    int n = read(one, 0, 1);
-                    return n < 0 ? -1 : one[0] & 0xFF;
-                }
-
+            return new BulkInputStream() {
                 @Override
                 public int read(byte @NonNull [] buffer, int offset, int length)
                         throws IOException {

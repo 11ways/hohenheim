@@ -17,7 +17,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
@@ -45,8 +44,8 @@ public final class SpamserviceSampleAnalysisPage implements RecordTab.Rendered<S
         vars.put("title", CmsSupport.pageTitle(conduit, "spamservice_sample",
             value(record.ip(), record.id())));
         vars.put("summary", summary(detail));
-        vars.put("location", entries(detail.location()));
-        vars.put("asn", entries(detail.asn()));
+        vars.put("location", SpamserviceRemoteStore.nameValueRows(detail.location()));
+        vars.put("asn", SpamserviceRemoteStore.nameValueRows(detail.asn()));
         vars.put("properties", detail.properties().stream().map(property -> Map.<String, Object>of(
             "name", property.name(), "value", value(property.value(), ""),
             "language", value(property.language(), ""))).toList());
@@ -72,11 +71,6 @@ public final class SpamserviceSampleAnalysisPage implements RecordTab.Rendered<S
         result.put("flags", value(row.flags(), ""));
         result.put("createdAt", row.createdAt() != null ? row.createdAt().toString() : "");
         return result;
-    }
-
-    private static List<Map<String, Object>> entries(Map<String, Object> values) {
-        return values.entrySet().stream().map(entry -> Map.<String, Object>of(
-            "name", entry.getKey(), "value", String.valueOf(entry.getValue()))).toList();
     }
 
     private static String value(@Nullable String value, String fallback) {

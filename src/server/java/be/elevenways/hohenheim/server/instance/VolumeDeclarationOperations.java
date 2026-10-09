@@ -100,7 +100,7 @@ public final class VolumeDeclarationOperations {
     private static int requireOwner(@Nullable Integer owner) {
         Row row = owner == null ? null : Models.get(InstanceModel.class).findById(owner);
         if (row == null) throw HohenheimViolations.ofField("instance_id", owner, "unknown_instance");
-        InstanceKindHandler handler = InstanceKinds.getHandler(row.get(InstanceModel.KIND));
+        InstanceKindHandler handler = InstanceKinds.handlerOf(row);
         if (handler == null || !handler.supportsVolumes()) {
             throw HohenheimViolations.ofField("instance_id", owner, "volume_kind_unsupported");
         }

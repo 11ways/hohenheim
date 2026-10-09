@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.util.Watchdog;
+import be.elevenways.protoblast.server.io.BulkInputStream;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.ByteArrayOutputStream;
@@ -213,19 +214,12 @@ final class DockerWire {
      * positive length, so this retries with a 1ms pause -- bounded in CPU, unbounded in time
      * (the lane watchdog owns the deadline by closing the connection).
      */
-    static final class ConnectionInputStream extends InputStream {
+    static final class ConnectionInputStream extends BulkInputStream {
 
         private final DockerStreamConnection connection;
 
         ConnectionInputStream(@NonNull DockerStreamConnection connection) {
             this.connection = connection;
-        }
-
-        @Override
-        public int read() throws IOException {
-            byte[] one = new byte[1];
-            int n = this.read(one, 0, 1);
-            return n < 0 ? -1 : one[0] & 0xFF;
         }
 
         @Override

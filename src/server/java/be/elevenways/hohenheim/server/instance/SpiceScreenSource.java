@@ -21,6 +21,7 @@ import be.elevenways.pepperglass.session.VideoStream;
 import be.elevenways.pepperglass.wire.Rect;
 import be.elevenways.pepperglass.wire.SpiceException;
 import be.elevenways.protoblast.common.input.KeyCode;
+import be.elevenways.protoblast.server.io.BulkInputStream;
 import be.elevenways.zenit.kvm.common.AudioCodec;
 import be.elevenways.zenit.kvm.common.RectEncoding;
 import be.elevenways.zenit.kvm.common.ScreenCapability;
@@ -648,7 +649,7 @@ final class SpiceScreenSource implements ScreenSource, SessionListener {
      * AIDEV-NOTE: a full buffer makes the controller's next chunk wait, which holds back its acknowledgement and so
      * the browser; a guest that stops reading fails the upload instead of stalling input for good.
      */
-    private static final class Upload extends InputStream {
+    private static final class Upload extends BulkInputStream {
 
         static final byte[] END = new byte[0];
 
@@ -667,12 +668,6 @@ final class SpiceScreenSource implements ScreenSource, SessionListener {
             this.aborted = true;
             this.chunks.clear();
             this.chunks.offer(END);
-        }
-
-        @Override
-        public int read() throws IOException {
-            byte[] one = new byte[1];
-            return this.read(one, 0, 1) < 0 ? -1 : one[0] & 0xFF;
         }
 
         @Override

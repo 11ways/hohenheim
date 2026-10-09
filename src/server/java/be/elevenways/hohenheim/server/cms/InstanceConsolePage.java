@@ -103,11 +103,8 @@ public final class InstanceConsolePage implements ConsoleModes.Mode {
         String stopCommand = template != null
             ? template.get(InstanceTemplateModel.STOP_COMMAND) : null;
 
-        Map<String, Object> vars = new HashMap<>();
+        Map<String, Object> vars = this.modes.vars(request, instance, this);
         this.addStoredLogs(conduit, request.panelSlug(), vars, instanceId);
-        vars.put("title", instance.get(InstanceModel.NAME));
-        vars.put("instanceName", instance.get(InstanceModel.NAME));
-        vars.put("instanceId", instanceId);
         vars.put("status", status == null ? InstanceModel.STATUS_CREATED : status);
         vars.put("running", InstanceModel.STATUS_RUNNING.equals(status)
             || InstanceModel.STATUS_STARTING.equals(status));
@@ -135,8 +132,6 @@ public final class InstanceConsolePage implements ConsoleModes.Mode {
         // its own declaration here -- endpoint-derived, never concatenated.
         vars.put("consoleWsUrl", HohenheimEndpoints.INSTANCE_CONSOLE.toUrl(
             Map.of(HohenheimEndpoints.INSTANCE_ID, instanceId)));
-        vars.put("head", recordHead(conduit));
-        vars.put("consoleModes", this.modes.views(request, instance, SLUG));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_CONSOLE, vars);
     }
 

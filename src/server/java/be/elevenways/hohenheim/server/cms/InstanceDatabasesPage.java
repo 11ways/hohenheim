@@ -60,7 +60,7 @@ public final class InstanceDatabasesPage implements RecordTab.Rendered<Row> {
      */
     @Override
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext access) {
-        InstanceKindHandler handler = InstanceKinds.getHandler(record.get(InstanceModel.KIND));
+        InstanceKindHandler handler = InstanceKinds.handlerOf(record);
         return handler != null && handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER);
     }
 

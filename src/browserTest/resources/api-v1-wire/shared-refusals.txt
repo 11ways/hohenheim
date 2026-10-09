@@ -66,7 +66,7 @@
 ## backup call 6 of a five-call window
 > POST /api/v1/instances/999999/backup (application/x-www-form-urlencoded, 0 bytes)
 < 429 application/json; charset=utf-8
-{"code":"RATE_LIMITED","message":"Too many requests","status":429}
+{"code":"RATE_LIMITED","message":"Too many requests. Please wait a moment and try again.","status":429}
 
 ## an artifact over the upload cap
 > POST /api/v1/sites/1/artifact (application/octet-stream, 1048577 bytes)
