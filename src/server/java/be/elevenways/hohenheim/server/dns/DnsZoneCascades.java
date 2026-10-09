@@ -19,7 +19,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * AIDEV-NOTE: moved here from {@code DnsZoneResource.deleteRow} on 2026-08-29, so a zone
  * removed by anything other than the admin form (a direct model delete, the peer API) no
  * longer strands its records; the zone-peer sweep was never on the resource at all, so a
- * deleted zone left links behind that only {@code DnsZoneSecondariesPage} could see. The
+ * deleted zone left links behind that only the zone's Secondaries tab could see. The
  * SWEEPING scope is required, not decoration: a generated row is un-deletable through
  * every tenant path (GeneratedDnsRecords' remove guard), and a cascade from the declaring
  * container is the one legitimate exception -- the record the challenge was published

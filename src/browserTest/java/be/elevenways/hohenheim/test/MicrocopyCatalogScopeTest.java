@@ -45,7 +45,7 @@ class MicrocopyCatalogScopeTest {
                 "instance_kind_description", "instance_migrate", "instance_overview", "instance_provisioning",
                 "instance_quota", "instance_schedule", "instance_shell", "instance_snapshot", "instance_stats",
                 "instance_status", "instance_template", "instance_variable", "instance_volume", "isolation_finding",
-                "manage",
+                "manage", "manage_app",
                 "manage_dashboard", "nav_cluster", "nav_cluster_hint", "notification_channel", "notification_event",
                 "notification_format", "onboarding", "onboarding_checklist", "permission", "port_exposure",
                 "port_protocol", "power_operation", "preview_deployment", "preview_status", "project", "project_member",

@@ -56,6 +56,10 @@ import java.util.Map;
  * AIDEV-NOTE: intended difference, the tenant's delete door (D7f, 2026-10-08): the /manage twin offers the verified
  * destroy to a holder of {@code destroy}, which the fixture's MANAGE grant implies, so the tenant's record case gains
  * {@code verb DELETE} and the delete row, hand-written as the operator's own delete row. Nothing else moved.
+ *
+ * AIDEV-NOTE: intended difference, DRY type names (DD1, 2026-10-09): a picker's binding digest hashes its resolver's
+ * DRY-serialized configuration, and protoblast's DRY type names changed that text, so the host and runtime-image
+ * resolvers and the repository and branch resolvers carry new digests. Only those digests were re-recorded.
  */
 class InstanceSurfacesBrowserTest extends HohenheimTestBase {
 

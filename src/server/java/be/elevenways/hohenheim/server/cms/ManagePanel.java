@@ -18,7 +18,6 @@ import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
@@ -153,8 +152,7 @@ public final class ManagePanel extends Panel {
         // The managed-database tier's tenant projection: allocate, read credentials
         // (its own capability, its own tab), back up and destroy your OWN databases.
         HohenheimPanel.addIf(peers, DatabaseParts.manage(), Role.DATABASES);
-        // Needs BOTH tiers to exist: it joins an instance to a managed database.
-        if (HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES)) {
+        if (InstanceAttachmentParts.databasesServed()) {
             peers.add(InstanceAttachmentParts.databasesManage());
         }
         // The project tier's tenant projection: which projects the principal is a

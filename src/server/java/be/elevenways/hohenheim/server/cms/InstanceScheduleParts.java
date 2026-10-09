@@ -138,7 +138,7 @@ public final class InstanceScheduleParts {
                 .quickCreate(QUICK_CREATE)
                 .quickCreatePresets(InstanceScheduleParts::quickCreatePresets)
                 // A schedule's front door is its chain: a fresh schedule runs NOTHING until it has a step.
-                .landingTab(InstanceScheduleStepsPage.SLUG)
+                .landingTab(InstanceScheduleStepParts.TAB)
                 .build())
             // A schedule is found by its name or by the cron expression an operator remembers writing.
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL)

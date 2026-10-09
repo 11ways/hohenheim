@@ -39,11 +39,6 @@ public final class HohenheimParams {
         ParameterDefinition.builder(Integer.class).name("instance_id")
             .stringResolver(Integer::parseInt).build();
 
-    /** Prefill for a create form whose record belongs to an instance template. */
-    public static final ParameterDefinition<Integer> TEMPLATE_ID_PREFILL =
-        ParameterDefinition.builder(Integer.class).name("template_id")
-            .stringResolver(Integer::parseInt).build();
-
     /** Prefill for the site create form's upstream kind (the Expose action). */
     public static final ParameterDefinition<String> UPSTREAM_KIND_PREFILL =
         ParameterDefinition.builder(String.class).name("upstream_kind")
@@ -62,11 +57,6 @@ public final class HohenheimParams {
     /** Prefill for a create form whose record belongs to a stack service. */
     public static final ParameterDefinition<Integer> STACK_SERVICE_ID_PREFILL =
         ParameterDefinition.builder(Integer.class).name("stack_service_id")
-            .stringResolver(Integer::parseInt).build();
-
-    /** Prefill for a create form whose record belongs to a record schedule. */
-    public static final ParameterDefinition<Integer> SCHEDULE_ID_PREFILL =
-        ParameterDefinition.builder(Integer.class).name("schedule_id")
             .stringResolver(Integer::parseInt).build();
 
     /** Prefill for the record-schedule create form (the scheduled record's own id). */

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
@@ -147,11 +148,12 @@ class InstanceChildSurfacesBrowserTest extends HohenheimTestBase {
         stored.get(BACKUPS).check(capture(SurfaceCase.of(ADMIN, BACKUPS, "operator", operator)
             .selecting(List.of(completeBackupId, failedBackupId), "sel")));
 
-        // 3. The parent prefills the create forms carry from their tabs.
+        // 3. The parent prefills the create forms carry from their tabs: the files' own parameter, the steps' child
+        //    list create under the schedule.
         stored.get(FILES).check(capture(SurfaceCase.of(ADMIN, FILES, "operator", operator).named(ADMIN + "." + FILES
             + ".operator.prefill").withParameter(HohenheimParams.INSTANCE_ID_PREFILL.getName(), instanceId)));
         stored.get(STEPS).check(capture(SurfaceCase.of(ADMIN, STEPS, "operator", operator).named(ADMIN + "." + STEPS
-            + ".operator.prefill").withParameter(HohenheimParams.SCHEDULE_ID_PREFILL.getName(), scheduleId)));
+            + ".operator.prefill").withParameter(CmsEndpoints.PARENT_PARAM.getName(), scheduleId)));
 
         // 4. The /manage twins for the tenants holding their capability on the instance.
         stored.get(BACKUPS).check(capture(SurfaceCase.of(MANAGE, BACKUPS, "tenant-backups", tenantBackups)));
@@ -201,7 +203,6 @@ class InstanceChildSurfacesBrowserTest extends HohenheimTestBase {
             .key(QUOTAS, "quota", quotaId)
             .key(FILES, "file", fileId)
             .key(SCHEDULES, "schedule", scheduleId)
-            .key(HohenheimParams.SCHEDULE_ID_PREFILL.getName(), "schedule", scheduleId)
             .key(STEPS, "step", stepId)
             .key(RUNS, "run", runId));
     }

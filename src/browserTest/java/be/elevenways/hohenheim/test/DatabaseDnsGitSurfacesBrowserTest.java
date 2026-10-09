@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.game.GameDomainOperations;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
@@ -63,6 +63,11 @@ import java.util.Map;
  * host, the placement, its engine and the tmpfs flag behind the picker), the placed "Back up now" row action and the
  * Overview landing tab before Restore, each hand-inserted beside the legacy capture. With Edit and "Back up now"
  * filling the two inline row slots, the dump download link moves to the overflow band.
+ *
+ * AIDEV-NOTE: intended difference, the Secondaries tab as a child list (DD1, 2026-10-09): the zone-peer list carries
+ * the eight columns the hand-built tab drew (transfer host, freshness, served serial, probed, AXFR serial, last AXFR,
+ * NOTIFY result, last NOTIFY), hand-inserted after the peer name; its prefill case opens the create form under the
+ * zone ({@code ?parent=}), whose controls are unchanged.
  */
 class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
 
@@ -185,7 +190,7 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
         stored.check(capture(SurfaceCase.of(ADMIN, ZONE_PEERS, "operator", operator)
             .onRecord(zonePeerId, "link")));
         stored.check(capture(SurfaceCase.of(ADMIN, ZONE_PEERS, "operator", operator).named(ADMIN + "." + ZONE_PEERS
-            + ".operator.prefill").withParameter(HohenheimParams.ZONE_ID_PREFILL.getName(), primaryZoneId)));
+            + ".operator.prefill").withParameter(CmsEndpoints.PARENT_PARAM.getName(), primaryZoneId)));
         stored.check(capture(SurfaceCase.of(ADMIN, GIT_PROVIDERS, "operator", operator)
             .selecting(List.of(sharedProviderId, tenantProviderId), "sel")));
 

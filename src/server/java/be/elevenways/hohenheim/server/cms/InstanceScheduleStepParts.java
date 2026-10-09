@@ -1,12 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.resource.ChildList;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceAuthority;
@@ -19,6 +19,7 @@ import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.resource.RowSave;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
+import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FieldAccess;
@@ -59,6 +60,14 @@ public final class InstanceScheduleStepParts {
     /** Both twins' slug. */
     public static final String SLUG = "instance-schedule-steps";
 
+    /** The schedule's tab listing its chain: its front door, since a schedule without steps runs nothing. */
+    public static final String TAB = "steps";
+
+    /** The Steps tab's embedded section over this entry, in chain order. */
+    public static final ChildList<Row> STEPS = ChildList.<Row>sections(TAB,
+            Microcopy.of("plural").withFilter("scope", "schedule_step"), SLUG)
+        .hide(SLUG, RecordScheduleStepModel.SCHEDULE_ID.getName());
+
     /** Request-scoped memo of schedule rows, keyed by schedule id (render-only reads). */
     private static final IdentifierKey<Map<Integer, Row>> SCHEDULE_ROWS =
         IdentifierKey.of("hohenheim", "schedule_step_schedule_rows");
@@ -97,6 +106,7 @@ public final class InstanceScheduleStepParts {
             .column(ColumnSpec.fromField(RecordScheduleStepModel.ACTION).subtext("offset_seconds").build())
             .column(ColumnSpec.fromField(RecordScheduleStepModel.OFFSET_SECONDS).hidden().build())
             .column(ColumnSpec.fromField(RecordScheduleStepModel.FAILURE_POLICY).build())
+            .defaultSort(SortSpec.asc(RecordScheduleStepModel.POSITION.getName()))
             .build();
         return PanelResource.builder(id, SLUG, InstanceScheduleOperations.STEP)
             .label(Microcopy.of("plural").withFilter("scope", "schedule_step"))
@@ -106,8 +116,7 @@ public final class InstanceScheduleStepParts {
             .navOrder(19)
             .showInNav(false)
             .standsUnder(InstanceScheduleParts.SLUG)
-            .parent(ResourceParent.of(InstanceScheduleParts.SLUG, RecordScheduleStepModel.SCHEDULE_ID)
-                .tab(InstanceScheduleStepsPage.SLUG))
+            .parent(ResourceParent.of(InstanceScheduleParts.SLUG, RecordScheduleStepModel.SCHEDULE_ID).tab(TAB))
             // A step IS its action; the label is read off the action registry's own declaration.
             .reads(ResourceReads.rows().title(step -> {
                 String action = CmsSupport.enumLabel(RecordScheduleStepModel.ACTION,
@@ -120,47 +129,24 @@ public final class InstanceScheduleStepParts {
                 .bindings(List.of(ResourceFieldBinding.of(RecordScheduleStepModel.SCHEDULE_ID.getName(),
                     FieldAccess.customRecordAware((ctx, record) -> record == null
                         ? FieldAccess.Decision.EDITABLE : FieldAccess.Decision.READONLY))))
-                .createDefaults(request -> {
-                    Map<String, Object> values = new LinkedHashMap<>(form.defaultValues());
-                    Integer scheduleId = CmsSupport.prefill(request.conduit(), HohenheimParams.SCHEDULE_ID_PREFILL);
-                    if (scheduleId != null) {
-                        values.put(RecordScheduleStepModel.SCHEDULE_ID.getName(), scheduleId);
-                    }
-                    return Map.copyOf(values);
-                })
                 .build())
-            .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).build())
+            .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL)
+                .emptyDescription(Microcopy.of("empty_description").withFilter("scope", "schedule_step")).build())
             .writes(ResourceMutations.rows().create().update().delete(InstanceScheduleOperations.DELETE_STEP)
                 .beforeSave(save -> authorize(save))
                 .afterSave(save -> RecordSchedules.chainEditedBy(
                     save.row().get(RecordScheduleStepModel.SCHEDULE_ID), save.access()))
                 .build())
+            // Adding a step shapes the chain, so a create under a schedule (its Steps tab, the create form, the
+            // submit) follows CONFIG on the schedule's instance; a schedule that does not exist, or is no instance
+            // schedule, takes none. A create naming no schedule is judged by authorize(), the enforced gate.
             .authority(ResourceAuthority.<Row>builder()
-                .create(null, InstanceScheduleStepParts::creatableBy)
+                .createUnder((schedule, access) -> {
+                    Row parent = schedule instanceof Integer key ? scheduleForRender(access, key) : null;
+                    return parent != null && InstanceScheduleParts.writableBy(parent, access);
+                })
                 .update(null, InstanceScheduleStepParts::writableBy)
                 .build());
-    }
-
-    /**
-     * Adding a step shapes the chain, so the create affordance follows CONFIG on the schedule's instance.
-     *
-     * AIDEV-NOTE: the AFFORDANCE face. Create is record-less, so the schedule is read off the request (the
-     * {@code ?schedule_id=} prefill, else the schedule whose Steps tab is rendering); where the request names none (a
-     * bare create submit) this answers true and {@link #authorize} is the enforced gate. A named schedule that does
-     * not exist, or is not an instance schedule, offers nothing.
-     */
-    static boolean creatableBy(@NonNull AccessContext access) {
-        Conduit conduit = access.conduit();
-        if (conduit == null) {
-            return true;
-        }
-        Integer scheduleId = CmsSupport.scopedParentId(conduit, HohenheimParams.SCHEDULE_ID_PREFILL.getName(),
-            InstanceScheduleParts.SLUG);
-        if (scheduleId == null) {
-            return true;
-        }
-        Row schedule = scheduleForRender(access, scheduleId);
-        return schedule != null && InstanceScheduleParts.writableBy(schedule, access);
     }
 
     /**

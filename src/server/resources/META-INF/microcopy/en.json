@@ -280,12 +280,6 @@
       "case": "sentence"
     }
   ],
-  "key": [
-    {
-      "text": "Key",
-      "scope": "template_contents"
-    }
-  ],
   "value": [
     {
       "text": "Value",
@@ -566,10 +560,6 @@
     {
       "text": "Image",
       "scope": "stack_services"
-    },
-    {
-      "text": "Image",
-      "scope": "template_contents"
     }
   ],
   "image_tag": [
@@ -848,10 +838,6 @@
     {
       "text": "Container bind mounts in host-path:container-path form.",
       "scope": "help"
-    },
-    {
-      "text": "Declared volumes",
-      "scope": "template_contents"
     }
   ],
   "wait_for_ready": [
@@ -979,10 +965,6 @@
     {
       "text": "Attach database",
       "scope": "site_databases"
-    },
-    {
-      "text": "Add secondary",
-      "scope": "dns_secondaries"
     }
   ],
   "auto_deploy_disabled": {
@@ -1185,20 +1167,12 @@
       "scope": "dev_sessions"
     },
     {
-      "text": "No secondaries configured",
-      "scope": "dns_secondaries"
-    },
-    {
       "text": "No services yet",
       "scope": "stack_services"
     },
     {
       "text": "No deployments yet",
       "scope": "stack_deployments"
-    },
-    {
-      "text": "No steps yet",
-      "scope": "schedule_step"
     },
     {
       "text": "This directory is empty",
@@ -1287,10 +1261,6 @@
     {
       "text": "Database engine. Fixed after creation; destroy and recreate to change it.",
       "scope": "help"
-    },
-    {
-      "text": "Engine",
-      "scope": "template_contents"
     }
   ],
   "env_prefix": [
@@ -2048,10 +2018,6 @@
     {
       "text": "Name",
       "scope": "instance_files"
-    },
-    {
-      "text": "Name",
-      "scope": "template_contents"
     },
     {
       "text": "App",
@@ -2871,10 +2837,6 @@
     {
       "text": "Databases",
       "scope": "site"
-    },
-    {
-      "text": "Declared databases",
-      "scope": "template_contents"
     },
     {
       "text": "Databases",
@@ -3967,10 +3929,6 @@
     "text": "None",
     "scope": "dns_peer"
   },
-  "peer": {
-    "text": "Peer",
-    "scope": "dns_secondaries"
-  },
   "transfer_host": {
     "text": "Transfer host",
     "scope": "dns_secondaries"
@@ -5011,10 +4969,6 @@
     {
       "text": "Type",
       "scope": "spamservice_event"
-    },
-    {
-      "text": "Type",
-      "scope": "template_contents"
     },
     {
       "text": "Type",
@@ -7208,32 +7162,12 @@
     "text": "Reinstall {$name}? This template's policy WIPES its data volumes first. Type the instance name to confirm.",
     "scope": "instance"
   },
-  "add_variable": {
-    "text": "Add variable",
-    "scope": "template_contents"
-  },
-  "label": {
-    "text": "Label",
-    "scope": "template_contents"
-  },
   "required": [
-    {
-      "text": "Required",
-      "scope": "template_contents"
-    },
     {
       "text": "Required",
       "scope": "server_overview"
     }
   ],
-  "default": {
-    "text": "Default",
-    "scope": "template_contents"
-  },
-  "yes": {
-    "text": "Yes",
-    "scope": "template_contents"
-  },
   "path": [
     {
       "text": "Path",
@@ -7254,10 +7188,6 @@
       "scope": "instance_files"
     }
   ],
-  "no_variables": {
-    "text": "No variables",
-    "scope": "template_contents"
-  },
   "no_variables_description": {
     "text": "This template declares no variables yet.",
     "scope": "template_contents"
@@ -7505,10 +7435,6 @@
   },
   "add": [
     {
-      "text": "Add step",
-      "scope": "schedule_step"
-    },
-    {
       "text": "Add to this directory",
       "scope": "instance_files"
     },
@@ -7541,15 +7467,7 @@
     "text": "This schedule has not run yet.",
     "scope": "instance_schedule"
   },
-  "order": {
-    "text": "Order",
-    "scope": "schedule_step"
-  },
   "action": [
-    {
-      "text": "Action",
-      "scope": "schedule_step"
-    },
     {
       "text": "Action",
       "scope": "instance_migrate"
@@ -7559,15 +7477,7 @@
       "scope": "protect_path"
     }
   ],
-  "offset": {
-    "text": "Offset",
-    "scope": "schedule_step"
-  },
   "on_failure": [
-    {
-      "text": "On failure",
-      "scope": "schedule_step"
-    },
     {
       "text": "On failure",
       "scope": "restart_policy"
@@ -9899,10 +9809,6 @@
       "scope": "schedule_step"
     },
     {
-      "text": "{$name} - Secondaries",
-      "scope": "dns_secondaries"
-    },
-    {
       "text": "{$name} - Zone file",
       "scope": "dns_zone_file"
     },
@@ -11819,10 +11725,6 @@
     {
       "text": "Exclusive",
       "scope": "instance_volume"
-    },
-    {
-      "text": "Exclusive",
-      "scope": "template_contents"
     }
   ],
   "never_measured": {
@@ -12738,24 +12640,8 @@
     "text": "Engine image override for the created database; leave blank for the engine's default image.",
     "scope": "help"
   },
-  "add_database": {
-    "text": "Add database",
-    "scope": "template_contents"
-  },
-  "no_databases": {
-    "text": "No declared databases",
-    "scope": "template_contents"
-  },
   "no_databases_description": {
     "text": "This template declares no managed databases; an instance created from it has to attach one by hand.",
-    "scope": "template_contents"
-  },
-  "add_volume": {
-    "text": "Add volume",
-    "scope": "template_contents"
-  },
-  "no_volumes": {
-    "text": "No declared volumes",
     "scope": "template_contents"
   },
   "no_volumes_description": {
@@ -12765,10 +12651,6 @@
   "template_volume_name_taken": {
     "text": "This template already declares a volume named '{$name}'. Two declarations of one name become a single volume on every instance, so one of them would be lost.",
     "scope": "violations"
-  },
-  "prefix": {
-    "text": "Env prefix",
-    "scope": "template_contents"
   },
   "template_required": {
     "text": "Choose a template",

@@ -41,6 +41,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * The additionally assigned B15 template children and snapshot offers, captured before their parts migration.
  *
+ * AIDEV-NOTE: intended difference, the Contents tab as a child list (DD1, 2026-10-09): the variables list carries the
+ * default value column the hand-built tab drew, hand-inserted after required in both variables cases, and its record
+ * case the inline cell that column offers.
+ *
  * @author Jelle De Loecker
  * @since 0.1.0
  */

@@ -16,6 +16,7 @@ import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.resource.ChildList;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RelatedPage;
@@ -41,6 +42,7 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
 
@@ -84,9 +86,28 @@ public final class InstanceTemplateParts {
             .writes(ResourceMutations.rows().create().update().delete().build())
             .actions(List.of(createInstance(HohenheimIds.id("template_create_instance"), null), export(),
                 approve(), unapprove()))
-            .tabs(ResourceTabs.<Row>of(List.of(new TemplateContentsPage())).withHistory().withContributions())
+            .tabs(ResourceTabs.<Row>of(List.of(contentsTab())).withHistory().withContributions())
             .relatedPages(RelatedPage.toPeer(HohenheimSlugs.INSTANCE_TEMPLATES_IMPORT))
             .build();
+    }
+
+    /**
+     * The Contents tab: the framework's child list with a section per declaration kind (variables, config files, the
+     * managed databases where this boot serves them, volumes), each narrowed to the template.
+     */
+    private static @NonNull ChildList<Row> contentsTab() {
+        List<String> sections = new ArrayList<>(List.of(TemplateChildParts.VARIABLES, TemplateChildParts.FILES));
+        if (InstanceAttachmentParts.databasesServed()) {
+            sections.add(TemplateChildParts.DATABASES);
+        }
+        sections.add(TemplateChildParts.VOLUMES);
+        ChildList<Row> tab = ChildList.<Row>sections(TemplateChildParts.TAB,
+                Microcopy.of("contents").withFilter("scope", "instance_template"), sections.toArray(String[]::new))
+            .icon(Icon.of("list-check"));
+        for (String section : sections) {
+            tab.hide(section, TemplateChildParts.OWNER_COLUMN);
+        }
+        return tab;
     }
 
     /** The tenant's catalog: approved templates only (operators see every one), to pick from and nothing more. */

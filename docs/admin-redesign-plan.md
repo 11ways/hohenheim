@@ -2175,3 +2175,28 @@ Waves (one agent at a time in this repo):
 
 Framework phase (not now): HostVerdict/DatabaseVerdict onto RecordHealth needs a word-badge face in zenit-cms;
 `Conduit.memo`; protoblast scoped copy factory; `standsUnder` defaulting from `ResourceParent`.
+
+### DD1 decisions
+
+- Converted: the zone Secondaries tab is `ChildList.of(DnsZonePeerParts.SLUG)` (the eight facts the hand tab drew are
+  the zone-peer list's own columns; freshness is a `StateLineCell` with the probe error under it); the template
+  Contents tab is `ChildList.sections` over the four declaration entries (databases only where
+  `InstanceAttachmentParts.databasesServed()`, the one home of the both-tiers condition three panel sites spelled);
+  the schedule Steps tab embeds `InstanceScheduleStepParts.STEPS` through `ChildListSections.embedded` (the
+  provisioning precedent) above its recent runs, which stay hand-drawn: the run entry has no parent and no /manage
+  twin. Steps sort by position; step create is `createUnder` on the schedule (`creatableBy` deleted).
+- Retired: `DnsZoneSecondariesPage`, `TemplateContentsPage` and their templates, the steps table, `TEMPLATE_ID_PREFILL`
+  and `SCHEDULE_ID_PREFILL` (create links are `CmsRoutes.createUnder`), 30 dead catalog entries (en and nl).
+- Framework gap, not converted: `InstanceVolumesTab`, `InstanceDevicesPage`, `InstanceDatabasesPage`. ChildList has
+  no `secondaryTab()` (AdminUiSurfaceTest pins these in "More"; a ChildList always sits on the strip) and a ChildList
+  section draws no lead sentence (the volumes and databases tabs' hint). Wrapping a ChildList in a rendered tab only
+  to set those would be an app workaround. Once zenit-cms offers both, these three convert, `INSTANCE_ID_PREFILL`
+  and `DEVICE_TYPE_PREFILL` lose their tab consumers, a read-only volume twin joins /manage, and the devices tab's
+  three typed Add buttons need either `ChildList.headerLink`s or one create whose form asks the type.
+- Not retired: `.hh-tab-tools` still serves those three tabs plus dns-zone-records, dns-zone-remote-records,
+  stack-services and instance-provisioning, none in DD1's list.
+- Baselines: `instances.txt` only needed the four picker digests protoblast 8f8e35f (DRY type names per payload)
+  moved; the filter kinds, invoke routes and `delete_instance` already compare through `PlacedOperationMoves`.
+  `MicrocopyCatalogScopeTest` owns `manage_app` (72255d2a added `nav_hint{scope=manage_app}` without it).
+- Runs: 1056 (29 classes, 75 of 78 green; the three reds were the digests, the variables list's new inline cell and
+  the scope list), then 1058 (those three, green; 1057 could not run: memory held by other sessions).

@@ -26,6 +26,7 @@ import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ChildList;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RelatedPage;
@@ -125,8 +126,20 @@ public final class DnsZoneParts {
                 PanelAction.<Row, CmsActionResult>places(DnsOperations.CHECK_HEALTH, ActionPlacement.ROW,
                     (request, result) -> result.value()).build()))
             .tabs(ResourceTabs.<Row>of(List.of(new DnsZoneRecordsPage(), new DnsZoneFilePage(),
-                new DnsZoneSecondariesPage())).withHistory().withContributions())
+                secondariesTab())).withHistory().withContributions())
             .relatedPages(parts.relatedPages().toArray(RelatedPage[]::new)).build();
+    }
+
+    /**
+     * The Secondaries tab: the framework's child list over the zone-peer entry, narrowed to the zone. A secondary zone
+     * has none: its authority lives on its own primary.
+     */
+    private static @NonNull ChildList<Row> secondariesTab() {
+        return ChildList.<Row>of(DnsZonePeerParts.SLUG)
+            .label(Microcopy.of("secondaries").withFilter("scope", "dns_zone"))
+            .icon(Icon.of("handshake"))
+            .hide(DnsZonePeerParts.SLUG, DnsZonePeerModel.ZONE_ID.getName())
+            .visibleWhen((zone, access) -> !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone)));
     }
 
     /** One week: the ceiling for cache TTLs. */

@@ -121,8 +121,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, AuthProviderParts.admin(), Role.PROXY);
         addIf(peers, DatabaseParts.admin(), Role.DATABASES);
         addIf(peers, DatabaseParts.engines(), Role.DATABASES);
-        // Needs BOTH tiers to exist: it joins an instance to a managed database.
-        if (HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES)) {
+        if (InstanceAttachmentParts.databasesServed()) {
             peers.add(InstanceAttachmentParts.databasesAdmin());
         }
         addIf(peers, InstanceParts.admin(), Role.INSTANCES);
@@ -132,7 +131,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, TemplateChildParts.volumes(), Role.INSTANCES);
         // A declared database is created through the managed-database tier at
         // instance create, so the declaration form needs both tiers like the attachment.
-        if (HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES)) {
+        if (InstanceAttachmentParts.databasesServed()) {
             peers.add(TemplateChildParts.databases());
         }
         addIf(peers, InstanceFileParts.admin(), Role.INSTANCES);

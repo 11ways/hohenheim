@@ -11,6 +11,8 @@ import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.instance.InstanceAttachmentOperationHandlers;
@@ -84,6 +86,14 @@ public final class InstanceAttachmentParts {
     public static final RowScope DATABASE_ROWS = RowScope.within(() -> InstanceDatabaseModel.INSTANCE_ID.isNotNull());
 
     private InstanceAttachmentParts() {
+    }
+
+    /**
+     * Whether this boot serves database attachments: they join an instance to a managed database, so both tiers must
+     * run; a template's declared databases follow the same answer.
+     */
+    public static boolean databasesServed() {
+        return HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES);
     }
 
     // -- devices -----------------------------------------------------------------------------------------------------

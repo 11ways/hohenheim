@@ -24,7 +24,6 @@ public final class HohenheimTemplateIds {
     public static final Identifier DNS_ZONE_FILE = Identifier.of("hohenheim", "cms/dns-zone-file");
     public static final Identifier DNS_ZONE_RECORDS = Identifier.of("hohenheim", "cms/dns-zone-records");
     public static final Identifier DNS_ZONE_REMOTE_RECORDS = Identifier.of("hohenheim", "cms/dns-zone-remote-records");
-    public static final Identifier DNS_ZONE_SECONDARIES = Identifier.of("hohenheim", "cms/dns-zone-secondaries");
     public static final Identifier INBOX = Identifier.of("hohenheim", "cms/inbox");
     public static final Identifier INSTANCE_CONSOLE = Identifier.of("hohenheim", "cms/instance-console");
     public static final Identifier INSTANCE_DATABASES = Identifier.of("hohenheim", "cms/instance-databases");
@@ -49,7 +48,6 @@ public final class HohenheimTemplateIds {
         Identifier.of("hohenheim", "cms/spamservice-sample-analysis");
     public static final Identifier STACK_DEPLOYMENTS = Identifier.of("hohenheim", "cms/stack-deployments");
     public static final Identifier STACK_SERVICES = Identifier.of("hohenheim", "cms/stack-services");
-    public static final Identifier TEMPLATE_CONTENTS = Identifier.of("hohenheim", "cms/template-contents");
     public static final Identifier TEMPLATE_IMPORT = Identifier.of("hohenheim", "cms/template-import");
 
     // Dashboard and overview widget display templates (HohenheimWidgets).

@@ -280,12 +280,6 @@
       "case": "sentence"
     }
   ],
-  "key": [
-    {
-      "text": "Sleutel",
-      "scope": "template_contents"
-    }
-  ],
   "value": [
     {
       "text": "Waarde",
@@ -566,10 +560,6 @@
     {
       "text": "Image",
       "scope": "stack_services"
-    },
-    {
-      "text": "Image",
-      "scope": "template_contents"
     }
   ],
   "image_tag": [
@@ -848,10 +838,6 @@
     {
       "text": "Containerkoppelingen in de vorm hostpad:containerpad.",
       "scope": "help"
-    },
-    {
-      "text": "Gedeclareerde volumes",
-      "scope": "template_contents"
     }
   ],
   "wait_for_ready": [
@@ -979,10 +965,6 @@
     {
       "text": "Database koppelen",
       "scope": "site_databases"
-    },
-    {
-      "text": "Secondary toevoegen",
-      "scope": "dns_secondaries"
     }
   ],
   "auto_deploy_disabled": {
@@ -1185,20 +1167,12 @@
       "scope": "dev_sessions"
     },
     {
-      "text": "Geen secondaries geconfigureerd",
-      "scope": "dns_secondaries"
-    },
-    {
       "text": "Nog geen services",
       "scope": "stack_services"
     },
     {
       "text": "Nog geen deployments",
       "scope": "stack_deployments"
-    },
-    {
-      "text": "Nog geen stappen",
-      "scope": "schedule_step"
     },
     {
       "text": "Deze map is leeg",
@@ -1287,10 +1261,6 @@
     {
       "text": "Database-engine. Vast na aanmaak; vernietig en maak opnieuw aan om te wijzigen.",
       "scope": "help"
-    },
-    {
-      "text": "Engine",
-      "scope": "template_contents"
     }
   ],
   "env_prefix": [
@@ -2048,10 +2018,6 @@
     {
       "text": "Naam",
       "scope": "instance_files"
-    },
-    {
-      "text": "Naam",
-      "scope": "template_contents"
     },
     {
       "text": "App",
@@ -2871,10 +2837,6 @@
     {
       "text": "Databanken",
       "scope": "site"
-    },
-    {
-      "text": "Gedeclareerde databanken",
-      "scope": "template_contents"
     },
     {
       "text": "Databases",
@@ -3967,10 +3929,6 @@
     "text": "Geen",
     "scope": "dns_peer"
   },
-  "peer": {
-    "text": "Peer",
-    "scope": "dns_secondaries"
-  },
   "transfer_host": {
     "text": "Transfer-host",
     "scope": "dns_secondaries"
@@ -5011,10 +4969,6 @@
     {
       "text": "Type",
       "scope": "spamservice_event"
-    },
-    {
-      "text": "Type",
-      "scope": "template_contents"
     },
     {
       "text": "Type",
@@ -7208,32 +7162,12 @@
     "text": "{$name} herinstalleren? Het beleid van dit sjabloon WIST eerst de datavolumes. Typ de instantienaam om te bevestigen.",
     "scope": "instance"
   },
-  "add_variable": {
-    "text": "Variabele toevoegen",
-    "scope": "template_contents"
-  },
-  "label": {
-    "text": "Label",
-    "scope": "template_contents"
-  },
   "required": [
-    {
-      "text": "Verplicht",
-      "scope": "template_contents"
-    },
     {
       "text": "Vereist",
       "scope": "server_overview"
     }
   ],
-  "default": {
-    "text": "Standaard",
-    "scope": "template_contents"
-  },
-  "yes": {
-    "text": "Ja",
-    "scope": "template_contents"
-  },
   "path": [
     {
       "text": "Pad",
@@ -7254,10 +7188,6 @@
       "scope": "instance_files"
     }
   ],
-  "no_variables": {
-    "text": "Geen variabelen",
-    "scope": "template_contents"
-  },
   "no_variables_description": {
     "text": "Dit sjabloon heeft nog geen variabelen.",
     "scope": "template_contents"
@@ -7505,10 +7435,6 @@
   },
   "add": [
     {
-      "text": "Stap toevoegen",
-      "scope": "schedule_step"
-    },
-    {
       "text": "Toevoegen aan deze map",
       "scope": "instance_files"
     },
@@ -7541,15 +7467,7 @@
     "text": "Deze planning is nog niet uitgevoerd.",
     "scope": "instance_schedule"
   },
-  "order": {
-    "text": "Volgorde",
-    "scope": "schedule_step"
-  },
   "action": [
-    {
-      "text": "Actie",
-      "scope": "schedule_step"
-    },
     {
       "text": "Actie",
       "scope": "instance_migrate"
@@ -7559,15 +7477,7 @@
       "scope": "protect_path"
     }
   ],
-  "offset": {
-    "text": "Wachttijd",
-    "scope": "schedule_step"
-  },
   "on_failure": [
-    {
-      "text": "Bij falen",
-      "scope": "schedule_step"
-    },
     {
       "text": "Bij fout",
       "scope": "restart_policy"
@@ -9899,10 +9809,6 @@
       "scope": "schedule_step"
     },
     {
-      "text": "{$name} - Secundairen",
-      "scope": "dns_secondaries"
-    },
-    {
       "text": "{$name} - Zonebestand",
       "scope": "dns_zone_file"
     },
@@ -11819,10 +11725,6 @@
     {
       "text": "Exclusief",
       "scope": "instance_volume"
-    },
-    {
-      "text": "Exclusief",
-      "scope": "template_contents"
     }
   ],
   "never_measured": {
@@ -12738,24 +12640,8 @@
     "text": "Image-override voor de aangemaakte databank; laat leeg voor de standaardimage van de engine.",
     "scope": "help"
   },
-  "add_database": {
-    "text": "Databank toevoegen",
-    "scope": "template_contents"
-  },
-  "no_databases": {
-    "text": "Geen gedeclareerde databanken",
-    "scope": "template_contents"
-  },
   "no_databases_description": {
     "text": "Dit sjabloon declareert geen beheerde databanken; een instantie uit dit sjabloon moet er zelf een koppelen.",
-    "scope": "template_contents"
-  },
-  "add_volume": {
-    "text": "Volume toevoegen",
-    "scope": "template_contents"
-  },
-  "no_volumes": {
-    "text": "Geen gedeclareerde volumes",
     "scope": "template_contents"
   },
   "no_volumes_description": {
@@ -12765,10 +12651,6 @@
   "template_volume_name_taken": {
     "text": "Dit sjabloon declareert al een volume met de naam '{$name}'. Twee declaraties van een naam worden een enkel volume op elke instantie, dus een ervan zou verloren gaan.",
     "scope": "violations"
-  },
-  "prefix": {
-    "text": "Env-voorvoegsel",
-    "scope": "template_contents"
   },
   "template_required": {
     "text": "Kies een sjabloon",

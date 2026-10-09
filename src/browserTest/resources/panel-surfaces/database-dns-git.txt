@@ -47,6 +47,14 @@ verb CREATE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
 column zone_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column peer_name at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column transfer_host at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column freshness at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column served_serial at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column probed_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column last_axfr_serial at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column last_axfr_at at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column last_notify_outcome at=8 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column last_notify_at at=9 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 tab history at=0 landing=false view=false
 control CREATE%20zone_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.dns_zone,rules:,siblings:,resolver:,clearable:true,creatable:true
 control CREATE%20peer_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
@@ -163,6 +171,14 @@ verb DELETE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
 column zone_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column peer_name at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column transfer_host at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column freshness at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column served_serial at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column probed_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column last_axfr_serial at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column last_axfr_at at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column last_notify_outcome at=8 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column last_notify_at at=9 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
@@ -177,6 +193,14 @@ verb CREATE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
 column zone_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column peer_name at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column transfer_host at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column freshness at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column served_serial at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column probed_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column last_axfr_serial at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column last_axfr_at at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column last_notify_outcome at=8 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column last_notify_at at=9 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 tab history at=0 landing=false view=false
 control CREATE%20zone_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.dns_zone,rules:,siblings:,resolver:,clearable:true,creatable:true
 control CREATE%20peer_id at=1 kind=zenitforms:form/select input=number required=false readonly=false options=<host> binding=searchable:false,clearable:true,presentation:DEFAULT
