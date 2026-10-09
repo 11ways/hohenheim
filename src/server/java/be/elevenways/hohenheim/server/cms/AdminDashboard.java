@@ -6,6 +6,7 @@ import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.render.action.LinkActionState;
 import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimWidgets;
@@ -152,8 +153,12 @@ public final class AdminDashboard extends PanelDashboard {
     }
 
     /**
-     * The dashboard's Apps band under the placement's heading, its rows: health, name, what and where, and whether
-     * HTTPS works.
+     * The dashboard's Apps band under the placement's heading, its rows: health, name, what and where, and its badge:
+     * whether HTTPS works, or, for an app with a problem HTTPS does not explain, its verdict.
+     *
+     * AIDEV-NOTE: the badge is the app's root, as the board's rows read ("No certificate" on the app HTTPS breaks,
+     * "Deploying" on one deploying): D13c's shop could not start and its badge read "No certificate", a fact true of
+     * its address and not why it was down. The HTTPS badge stays where it is the cause (it reads broken itself).
      */
     static @NonNull AppsBand appsBand(@NonNull Microcopy heading, @NonNull List<AppDirectory.App> apps,
                                       @NonNull AccessContext access) {
@@ -161,8 +166,10 @@ public final class AdminDashboard extends PanelDashboard {
         for (AppDirectory.App app : apps) {
             String detail = app.addressText() == null || app.addressText().isBlank()
                 ? app.kind() : app.kind() + " · " + app.addressText();
-            summaries.add(new AppSummary(app.name(), detail, app.target().toUrl(), app.https(),
-                HealthCellState.of(app.health(), access)));
+            boolean httpsIsTheCause = app.https() != null && CertCoverage.ERROR.key().equals(app.https().status());
+            boolean verdict = app.count() == AppDirectory.Count.PROBLEM && !httpsIsTheCause;
+            summaries.add(new AppSummary(app.name(), detail, app.target().toUrl(), verdict ? null : app.https(),
+                HealthCellState.of(app.health(), access), verdict));
         }
         return new AppsBand(heading, summaries);
     }

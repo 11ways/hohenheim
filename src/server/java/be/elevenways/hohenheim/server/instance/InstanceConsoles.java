@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -644,6 +645,9 @@ public final class InstanceConsoles {
         } catch (Violations refused) {
             Blast.log("CONSOLE: crash restart of instance", instanceId, "refused:",
                 refused.getMessage());
+            // Still under the record's claim: the refusal becomes the record's ERROR cause, never only this line.
+            InstanceOperationGuard.stampRestartRefused(leases, instanceId, serverId, name,
+                Set.of(InstanceModel.STATUS_RUNNING, InstanceModel.STATUS_STARTING), refused);
         }
     }
 

@@ -2004,3 +2004,105 @@ framework adoptions (activity face and subject filter, `standsUnder`, zenit-auth
   AdminActivityListTest (steps 1, 2, 7, 7b, 8, 10, 11 rewritten for the derived table and the sentence link; new
   `theAppFilterNarrowsTheLogToWhatHappenedToOneApp` steps 1-3), AdminSettingsMountsTest (new steps 6-7),
   SettingsTasksMountTest (new step 4), OwnerSubjectsTest (new step 1b). No panel-surface baseline changed.
+
+## 40. D13f decisions (fork D13f, 2026-10-09)
+
+DEP10 defect 12 (tenant /manage: shots `dep10/12`, `13`, `14`; boards Manage-Home, Manage-App) and the admin copy and
+verdict leftovers (board App-Overview, the D13c dashboard shot).
+
+- Home: no new mechanism in Hohenheim. `zemble home` for the worded capabilities answered NEW_MECHANISM in zenit
+  (zenit-auth's private `PeopleHoldings.words` is the only reader of capability descriptions): the card reads each
+  held capability's `KnownCapability.describe`, which is the declared fact, and the framework's own "words for what a
+  principal holds" stays a gap (below). For a tenant-safe Recent band it answered EXTEND_EXISTING `ActivitySources`
+  in zenit-cms: not built here (below). Everything else extends existing homes: `AppHealth` (one verdict), `AppDirectory.fixOf`
+  (the fix a reader may use), `WorkloadErrors` (the recorded cause), `InstanceOperationGuard` (the ERROR stamp),
+  `TenantUsage` (the usage card), `DashboardStats` and `AdminDashboard.appsBand`.
+- Attention title (item 1): the /manage landing's items are titled by the app (`AppHealth.titleOf`: the headline's key
+  in the `attention_title` scope, given the name), "Visitors of alchemy-skeleton get an error page". The problem
+  headlines are one declaring home, `AppHealth.Headline` (ten members, beside `Stoppage`); every member has its
+  naming variant in en and nl, drift-tested (DashboardAttentionJourneyTest step 7 of the new journey).
+- Who can clear it (item 1): a delegated verdict that names fixes of which the reader may use none says so
+  (`AppHealth.spokenTo`, reading `AppDirectory.fixOf`, the same offer the Apps row and the record band make): "The
+  operator of this installation can fix this." after the detail, on the band and the landing item. A reader who may
+  use a fix is offered it (granted the site, the tenant gets "Get a certificate" / "Stop forcing HTTPS") and no
+  sentence. A stopped-after-error workload now names Restart as its fix on /manage too, so a holder of power is
+  offered it and everyone else reads who can. The operator's name ("Ask Jelle De Loecker") is not built: nothing
+  declares who manages an installation (W9b's "needs building" stands).
+- Usage card (item 1): the board's five budgets are drawn capped or not; an uncapped one reads "No limit" and states
+  no amount (a granted app is charged to the operator, so an amount beside "no limit" would contradict "Your apps").
+  Which budget shows uncapped is a fact on the exhaustive `TenantUsage.shownAs` switch; websites, not a board line,
+  show only when capped. This reverses W9b's "an uncapped budget is not drawn".
+- Doors (item 1): Databases is a /manage row while the tenant holds a database or may create one
+  (`TenantDatabases.canAllocate`); Team stays a row while they are in a project (a tenant cannot create one, so it
+  has nothing to offer otherwise); Put something online stays offered where `offersTenantCatalog` says. DEP10's
+  tenant held none of these, so its sidebar was right. Recent is not built: see Framework.
+- "What you can do here" (item 1): each held instance capability that no other held capability implies, in what it
+  allows: the tenant level's description ("Start and stop it, its console, settings and removal"), and every narrow
+  verb now `describe`s itself (console "its console", power "restart and stop", config "its settings", destroy
+  "removal", files "reading its files" / "changing its files", ...; en and nl). The labels list ("Console, Power,
+  Configure, ...") is gone; a VIEW-only reader keeps "Look at it; ask the operator for more".
+- Ports (items 1 and 2): the "Public endpoint" card is "Ports" and is drawn only while the app holds a port (board
+  App-Overview draws none for an app reached through its addresses), so "No published port" / "This instance holds
+  no port claim" are gone (keys `no_endpoint`, `no_endpoint_hint` deleted; replacement: no card). A port without a
+  public address reads, to a tenant, "Reachable only from inside this installation's network for now."
+  (`InstanceEndpointView.note`), never the host's missing address.
+- Sidebar row and title (item 1): already right after D13b/D13e (`standsUnder(AppParts.SLUG)` on the /manage
+  instance twin, `CmsDocumentTitle` naming the row): the walk's app page marks Apps and is titled "Overview -
+  alchemy-skeleton - Apps"; pinned in ManagePanelJourneyTest step 6. The Apps lead on /manage is its own,
+  "Your apps, with their addresses and whether they work." (`nav_hint` scope `manage_app`).
+- Words (item 2): an instance never started reads "Not started yet" (`instance_status` `created`, everywhere the
+  status is shown); "Status confirmed" / "Never checked against the host" read "Last checked" / "Not yet".
+- Technical text (item 2): a recorded failure message (a daemon's or a gate's stored English) is never the sentence
+  a reader is given first. `WorkloadErrors.readingOf` splits the worded cause from "Technically: <message>": a
+  failed start reads "It never got to run." (key `start_failed_reason` "What refused it: ..." deleted), a failure
+  while running reads its cause sentence; the dashboard item carries the technical text as its note line, the band
+  after the words. The host page's "Last error" alert is titled by the failure's kind ("Docker not found", else "Its
+  last check failed") with the transport's text as the technical line. Deleted: `error_cause_reason` (replacement:
+  the cause sentence plus `technically`).
+- Dashboard Apps badge (item 2): an app with a problem its HTTPS does not explain wears its verdict as the badge
+  (`AppSummary.verdict`, the health cell's own words and tone); the HTTPS badge stays on a healthy app and where it is
+  the cause (its cell reads broken). D13c's shop read "No certificate" while it could not start.
+- Backups tile (item 2): "0 of 2" gains "No copy made yet" when nothing was ever copied.
+- Refused crash restart (item 2): the console watch's and the reconciler's automatic restart, refused by a start
+  gate, used to write a log line only (the reconciler had already settled the record to stopped: "Not running", no
+  reason). Both now record it (`InstanceOperationGuard.stampRestartRefused`, under the record's claim, only while the
+  status is still the one the restart started from): ERROR with the new cause verb `WORKLOAD_RESTART_REFUSED`
+  (MESSAGE, "worker stopped and its automatic restart was refused", the refusal as the technical line), and the
+  observed port claims released as on every crash settle.
+- Framework, not built here: (a) zenit-cms: a tenant-safe Recent band needs a viewer-scoped activity feed
+  (`ActivitySources` registers one installation-wide source behind one permission; the board's rows need the rows
+  about records the reader may view, the actor worded for that reader: "by you", "Automatic"); (b) zenit (or
+  zenit-auth, made public): "the words for what a principal holds on a record" lives privately in zenit-auth
+  `PeopleHoldings.words`; the card here reads the descriptions directly; (c) zenit-cms `RecordHealth` has one detail,
+  so the band's technical text follows the words in the same paragraph (the attention item has its own note line);
+  a `technical` line on the verdict would match the item; (d) nothing declares who operates an installation, so
+  "Need more? Ask Jelle De Loecker" stays "Ask the operator of this installation".
+- Seen, not changed: the verdict badge repeats the app's name where its headline carries one ("shop cannot start
+  yet" on the shop row); the headline is the verdict's own words, shared with the record page.
+- Walk (scratch server from the jar of build run 1044, the live tree: FW11's then-current framework booted; fresh
+  database, `/setup`, a tenant made in Access with the administrator's password copied by SQL; by SQL: alchemy-skeleton
+  running on a second, unadmitted host behind a forced-HTTPS address with no certificate and a reserved port, the
+  tenant holding view, console, files.read and power on it; shop with a recorded failed start (a daemon's "Conflict"
+  text), worker with a refused restart, staging never started, a persistent database never backed up, the host
+  nightstrom with a recorded "docker: command not found"). Shots `docs/hohenheim-ux-mockups-2026-09-30/shots/d13f/`
+  (workspace repo): 01 tenant home (the titled item with "The operator of this installation can fix this.", Your
+  apps, usage with four "No limit" lines and Previews 0 of 3), 02 the tenant's app page (Apps marked, the band naming
+  the operator, Ports with the tenant's note, "Its console, restart and stop, reading its files, share access"), 03
+  the tenant's Apps list and its lead, 04 the admin overview of shop (no Ports card, "Last checked: Not yet"), 05 the
+  admin dashboard (shop's item "It never got to run." with its technical line, worker's refused restart, verdict
+  badges, Backups "0 of 1 / No copy made yet"), 06 nightstrom's "Docker not found" with the technical line, 07 staging
+  "Not started yet". The local host stayed unadmitted (no Docker resource was created), so shop's band leads with its
+  host and its badge reads "shop cannot start yet" rather than "Could not start"; the dashboard journey step 1 proves
+  the "Could not start" badge on an admitted host. The scratch is deleted.
+- Proof: build run 1044 (live tree); test run 1051 (14 classes, 38 tests: 34 passed) with three causes fixed after it:
+  the band's composed detail renders its words and technical text as two copy elements, so two journeys now assert
+  them in order; the landing baseline gained the intended verdict badge of `landing-site` ("No address yet",
+  hand-edited); InstanceSurfacesBrowserTest's `instances.txt` difference is FW11's uncommitted framework (filter
+  controls, invoke routes, `hohenheim:delete_instance`), none of it a fact this change touches, so the baseline is left
+  for the framework's push. Rerun (log 20261009-102105: DashboardAttentionJourneyTest, AppOverviewJourneyTest,
+  LandingDashboardSurfacesTest: 14 of 14). Journeys: ManagePanelJourneyTest (steps 4 and 7 rewritten; new
+  `theLandingAndTheAppPageSpeakToTheTenantAsTheBoardsDo` steps 1-8), AppOverviewJourneyTest (step 2 rewritten; new
+  `theDetailsSayWhatTheStatusMeansAndPortsShowOnlyWhileHeld` steps 1-3), DashboardAttentionJourneyTest (new
+  `aProblemLeadsWithItsWordsAndItsRootWhileTheTechnicalTextFollows` steps 1-7), InstanceConsoleCrashRestartTest (new
+  `aCrashRestartTheGatesRefuseIsRecordedAsTheWorkloadsCause` steps 1-3), InstancePowerAuditTest step 3b and
+  InstanceOverviewTest step 4 rewritten; baseline `landing-dashboards.txt`.

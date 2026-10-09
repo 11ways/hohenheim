@@ -37,33 +37,63 @@ final class WorkloadErrors {
     }
 
     /**
+     * What stopped this workload with an error as one text: the worded cause, then the technical words after it.
+     *
      * @param withDetail whether the cause's stored detail (a failure's own message) may be shown; a delegated reader
      *                   gets the cause's sentence only, since a daemon's message can name the host's internals
      * @return what stopped this workload with an error, or a neutral sentence when no cause is recorded
      */
     static @NonNull Microcopy detailOf(@NonNull Row instance, boolean withDetail) {
+        Reading reading = readingOf(instance, withDetail);
+        return reading.technical() == null ? reading.worded()
+            : Microcopy.concat(List.of(reading.worded(), Microcopy.literal(" "), reading.technical()));
+    }
+
+    /**
+     * What stopped this workload with an error, worded, and the failure's own message as a separate technical line.
+     *
+     * AIDEV-NOTE: a recorded message is stored text in the daemon's or a gate's English ("Conflict. The container name
+     * ... is already in use"), never localized copy, so it is never the sentence a reader is given first: DEP10's
+     * failed starts read "What refused it: " and then that text. It follows the worded cause as "Technically: ...".
+     *
+     * @param withDetail whether the cause's stored detail may be shown, as {@link #detailOf}
+     */
+    static @NonNull Reading readingOf(@NonNull Row instance, boolean withDetail) {
         Integer id = instance.get(InstanceModel.ID);
         Row recorded = id == null ? null : newestCause(id);
         HohenheimActivityAction cause = recorded == null ? null : causeOf(recorded.get(ActivityModel.ACTION));
         if (cause == null) {
-            return copy("error_cause_unknown");
+            return new Reading(copy("error_cause_unknown"), null);
         }
         Microcopy sentence = cause.happened().withArg("subject", instance.get(InstanceModel.NAME));
         String detail = withDetail ? recorded.get(ActivityModel.DETAIL) : null;
         boolean none = detail == null || detail.isBlank();
         // A start that failed is headed "could not be started" by its title (Stoppage.START_FAILED), so its detail is
-        // why, never that sentence again.
+        // what that meant, never that sentence again.
         return switch (cause.errorCause()) {
-            case HOST_ISOLATION -> withDetail ? copy("start_refused_isolation").withArg("host",
-                ServerModel.nameOf(ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)))) : sentence;
-            case EXIT_CODE -> none ? sentence
-                : copy("error_cause_exit_code").withArg("cause", sentence).withArg("code", detail);
-            case MESSAGE -> none ? sentence : switch (cause.errorPhase()) {
-                case START -> copy("start_failed_reason").withArg("reason", detail);
-                case RUNNING -> copy("error_cause_reason").withArg("cause", sentence).withArg("reason", detail);
-            };
-            case PLAIN, NONE -> sentence;
+            case HOST_ISOLATION -> new Reading(withDetail ? copy("start_refused_isolation").withArg("host",
+                ServerModel.nameOf(ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)))) : sentence,
+                null);
+            case EXIT_CODE -> new Reading(none ? sentence
+                : copy("error_cause_exit_code").withArg("cause", sentence).withArg("code", detail), null);
+            case MESSAGE -> new Reading(switch (cause.errorPhase()) {
+                case START -> copy("start_failed_worded");
+                case RUNNING -> sentence;
+            }, none ? null : technically(detail));
+            case PLAIN, NONE -> new Reading(sentence, null);
         };
+    }
+
+    /** @return stored technical text (a daemon's or a gate's own words) as the line after the worded ones */
+    static @NonNull Microcopy technically(@NonNull String detail) {
+        return copy("technically").withArg("detail", detail);
+    }
+
+    /**
+     * @param worded    what happened, in words
+     * @param technical the failure's own message as a "Technically: ..." line, null when there is none to show
+     */
+    record Reading(@NonNull Microcopy worded, @Nullable Microcopy technical) {
     }
 
     /**

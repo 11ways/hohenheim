@@ -473,10 +473,11 @@ public final class DatabaseParts {
             .scope(TenantScopes.DATABASES)
             // The host and the engine on it are operator inventory: never a rule, sort, search or value of this list.
             .withholds(HostFields.of(DatabaseModel.MODEL_ID))
-            // NAV-ONLY (zero granted databases hide the empty list); the route stays scoped. reachesAny, because an
-            // id set cannot express every-record authority.
+            // NAV-ONLY: the row shows while the tenant holds a database or may create one (board Manage-Home, the
+            // doors drawn only where they open); the route stays scoped. reachesAny, because an id set cannot express
+            // every-record authority.
             .hasInScopeRecords(access -> HohenheimAccess.reachesAny(access, DatabaseModel.MODEL_ID,
-                HohenheimAccess.VIEW))
+                HohenheimAccess.VIEW) || TenantDatabases.canAllocate(access))
             .list(ResourceList.rows(table).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()
                 .search(DatabaseModel.NAME, DatabaseModel.DB_NAME)
                 .computed(Objects.requireNonNull(table.column(STATE_COLUMN)),

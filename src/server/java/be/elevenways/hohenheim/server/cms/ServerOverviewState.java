@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.server.host.HostFact;
 import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.server.host.PreflightFinding;
 import be.elevenways.hohenheim.server.incus.IncusEndpoint;
@@ -124,10 +125,15 @@ public final class ServerOverviewState {
                 verdict.reason().resolve(locales, resolver))));
         }
 
+        // The last failure in words (its kind's label, "Docker not found"), the transport's own text after it as the
+        // technical line: DEP10's host read "Last error" over raw ssh English.
         String lastError = blankable(server.get(ServerModel.LAST_ERROR));
         if (!lastError.isBlank()) {
+            String kind = blankable(server.get(ServerModel.LAST_ERROR_KIND));
+            String title = kind.isBlank() ? text("last_error", locales, resolver)
+                : HostProbe.FailureKind.labelOf(kind).resolve(locales, resolver);
             state.add(alert(AlertVariant.DESTRUCTIVE,
-                NoticeData.of(text("last_error", locales, resolver), lastError)));
+                NoticeData.of(title, WorkloadErrors.technically(lastError).resolve(locales, resolver))));
         }
 
         // The volume-backend FINDING and its consequence, beside admission and posture:

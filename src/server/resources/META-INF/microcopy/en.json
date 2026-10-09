@@ -1133,6 +1133,10 @@
     {
       "text": "Answers, but not reliably",
       "scope": "app_health"
+    },
+    {
+      "text": "{$name} answers, but not reliably",
+      "scope": "attention_title"
     }
   ],
   "deploy": [
@@ -5968,7 +5972,7 @@
   ],
   "created": [
     {
-      "text": "Created",
+      "text": "Not started yet",
       "scope": "instance_status"
     },
     {
@@ -6844,6 +6848,10 @@
     {
       "text": "Installation failed",
       "scope": "app_health"
+    },
+    {
+      "text": "Installing {$name} failed",
+      "scope": "attention_title"
     }
   ],
   "reinstall_no_step": {
@@ -7463,6 +7471,10 @@
       "text": "not running",
       "scope": "database_status",
       "case": "sentence"
+    },
+    {
+      "text": "{$name} is not running",
+      "scope": "attention_title"
     }
   ],
   "not_running_description": [
@@ -10130,7 +10142,7 @@
     "scope": "server_overview"
   },
   "last_error": {
-    "text": "Last error",
+    "text": "Its last check failed",
     "scope": "server_overview"
   },
   "trust_ssh": {
@@ -10482,11 +10494,11 @@
     }
   ],
   "endpoint": {
-    "text": "Public endpoint",
+    "text": "Ports",
     "scope": "instance_overview"
   },
   "endpoint_hint": {
-    "text": "The ports this instance publishes, at the address of the host it runs on.",
+    "text": "Ports it answers on directly, besides its addresses.",
     "scope": "instance_overview"
   },
   "address": [
@@ -10537,14 +10549,6 @@
   },
   "no_public_address": {
     "text": "This host has no public address set, so only its own network reaches this port.",
-    "scope": "instance_overview"
-  },
-  "no_endpoint": {
-    "text": "No published port",
-    "scope": "instance_overview"
-  },
-  "no_endpoint_hint": {
-    "text": "This instance holds no port claim, so nothing outside its network reaches it directly.",
     "scope": "instance_overview"
   },
   "unsupported": {
@@ -10873,6 +10877,10 @@
     {
       "text": "Every name a site answers on, and whether HTTPS works for it.",
       "scope": "site_domain"
+    },
+    {
+      "text": "Your apps, with their addresses and whether they work.",
+      "scope": "manage_app"
     }
   ],
   "slug": {
@@ -11886,11 +11894,11 @@
     "scope": "violations"
   },
   "status_confirmed": {
-    "text": "Status confirmed",
+    "text": "Last checked",
     "scope": "instance_overview"
   },
   "status_never_confirmed": {
-    "text": "Never checked against the host",
+    "text": "Not yet",
     "scope": "instance_overview"
   },
   "volume_backend_none_title": {
@@ -14414,6 +14422,10 @@
     {
       "text": "Switched off",
       "scope": "app_health"
+    },
+    {
+      "text": "{$name} is switched off",
+      "scope": "attention_title"
     }
   ],
   "in_trash": {
@@ -14424,18 +14436,30 @@
     "text": "Visitors get no answer until it is switched on again.",
     "scope": "app_health"
   },
-  "no_address": {
-    "text": "No address yet",
-    "scope": "app_health"
-  },
+  "no_address": [
+    {
+      "text": "No address yet",
+      "scope": "app_health"
+    },
+    {
+      "text": "{$name} has no address yet",
+      "scope": "attention_title"
+    }
+  ],
   "no_address_detail": {
     "text": "Add an address so visitors can reach it.",
     "scope": "app_health"
   },
-  "error_page": {
-    "text": "Visitors get an error page",
-    "scope": "app_health"
-  },
+  "error_page": [
+    {
+      "text": "Visitors get an error page",
+      "scope": "app_health"
+    },
+    {
+      "text": "Visitors of {$name} get an error page",
+      "scope": "attention_title"
+    }
+  ],
   "upstream_down": {
     "text": "What it serves does not answer.",
     "scope": "app_health"
@@ -14444,10 +14468,16 @@
     "text": "Its workload {$name} is not running.",
     "scope": "app_health"
   },
-  "path_open": {
-    "text": "{$path} is open to everyone",
-    "scope": "app_health"
-  },
+  "path_open": [
+    {
+      "text": "{$path} is open to everyone",
+      "scope": "app_health"
+    },
+    {
+      "text": "{$path} of {$name} is open to everyone",
+      "scope": "attention_title"
+    }
+  ],
   "path_open_detail": {
     "text": "Its access list lets everyone in, so the path is not protected.",
     "scope": "app_health"
@@ -14464,10 +14494,16 @@
     "text": "Install it again once the cause is fixed.",
     "scope": "app_health"
   },
-  "cannot_start": {
-    "text": "{$name} cannot start yet",
-    "scope": "app_health"
-  },
+  "cannot_start": [
+    {
+      "text": "{$name} cannot start yet",
+      "scope": "app_health"
+    },
+    {
+      "text": "{$name} cannot start yet",
+      "scope": "attention_title"
+    }
+  ],
   "status_unknown": {
     "text": "Status unknown",
     "scope": "app_health"
@@ -15737,10 +15773,16 @@
     "text": "a site a tenant owns may only forward to a public address",
     "scope": "site_fault"
   },
-  "routed_in_part": {
-    "text": "Not everything is routed as set up",
-    "scope": "app_health"
-  },
+  "routed_in_part": [
+    {
+      "text": "Not everything is routed as set up",
+      "scope": "app_health"
+    },
+    {
+      "text": "Not everything of {$name} is routed as set up",
+      "scope": "attention_title"
+    }
+  ],
   "until_lifted": {
     "text": "Until lifted",
     "scope": "ban"
@@ -16388,10 +16430,6 @@
     "text": "{$cause} (exit code {$code})",
     "scope": "attention_detail"
   },
-  "error_cause_reason": {
-    "text": "{$cause}: {$reason}",
-    "scope": "attention_detail"
-  },
   "error_cause_unknown": {
     "text": "No cause was recorded for this error; its console output may say what happened",
     "scope": "attention_detail"
@@ -16815,10 +16853,16 @@
     "text": "The last one failed {$ago}",
     "scope": "instance_overview"
   },
-  "https_not_working": {
-    "text": "HTTPS does not work",
-    "scope": "app_health"
-  },
+  "https_not_working": [
+    {
+      "text": "HTTPS does not work",
+      "scope": "app_health"
+    },
+    {
+      "text": "HTTPS does not work for {$name}",
+      "scope": "attention_title"
+    }
+  ],
   "workload_isolation_refused": [
     {
       "text": "Refused without firewall rules",
@@ -16843,10 +16887,6 @@
   ],
   "start_refused_isolation": {
     "text": "Per-app firewall rules are switched off on {$host}, so it may not start there.",
-    "scope": "attention_detail"
-  },
-  "start_failed_reason": {
-    "text": "What refused it: {$reason}",
     "scope": "attention_detail"
   },
   "database_not_serving": {
@@ -16995,5 +17035,85 @@
   "never_block_name": {
     "text": "Every address this name resolves to",
     "scope": "ban"
-  }
+  },
+  "operator_fixes": {
+    "text": "The operator of this installation can fix this.",
+    "scope": "app_health"
+  },
+  "console_instance_description": {
+    "text": "its console",
+    "scope": "capability"
+  },
+  "power_instance_description": {
+    "text": "restart and stop",
+    "scope": "capability"
+  },
+  "config_instance_description": {
+    "text": "its settings",
+    "scope": "capability"
+  },
+  "destroy_instance_description": {
+    "text": "removal",
+    "scope": "capability"
+  },
+  "exec_instance_description": {
+    "text": "running commands in it",
+    "scope": "capability"
+  },
+  "snapshots_instance_description": {
+    "text": "snapshots",
+    "scope": "capability"
+  },
+  "backups_instance_description": {
+    "text": "backups",
+    "scope": "capability"
+  },
+  "image_any_instance_description": {
+    "text": "running any image",
+    "scope": "capability"
+  },
+  "files_read_instance_description": {
+    "text": "reading its files",
+    "scope": "capability"
+  },
+  "files_write_instance_description": {
+    "text": "changing its files",
+    "scope": "capability"
+  },
+  "shell_instance_description": {
+    "text": "a shell inside it",
+    "scope": "capability"
+  },
+  "no_limit": {
+    "text": "No limit",
+    "scope": "tenant_usage"
+  },
+  "no_public_address_delegated": {
+    "text": "Reachable only from inside this installation's network for now.",
+    "scope": "instance_overview"
+  },
+  "start_failed_worded": {
+    "text": "It never got to run.",
+    "scope": "attention_detail"
+  },
+  "technically": {
+    "text": "Technically: {$detail}",
+    "scope": "attention_detail"
+  },
+  "stat_backups_never": {
+    "text": "No copy made yet",
+    "scope": "dashboard"
+  },
+  "workload_restart_refused": [
+    {
+      "text": "Restart refused",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$subject} stopped and its automatic restart was refused",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ]
 }

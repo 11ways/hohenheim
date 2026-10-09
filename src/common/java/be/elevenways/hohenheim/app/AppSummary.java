@@ -7,13 +7,15 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
- * One app as the dashboard's Apps band draws it (board Main): its health, its name, what it is and where, and whether
- * HTTPS works.
+ * One app as the dashboard's Apps band draws it (board Main): its health, its name, what it is and where, and its
+ * badge: whether HTTPS works, or its verdict.
  *
  * @param detail what the app is and its address ("WordPress · shop.example.com")
  * @param url    the app's own page
- * @param https  what HTTPS gives its main address, in the Addresses list's words; null without an exact address
- * @param health the verdict its record page leads with, as the Apps list's health cell draws it
+ * @param https   what HTTPS gives its main address, in the Addresses list's words; null without an exact address
+ *                or while the badge is the verdict
+ * @param health  the verdict its record page leads with, as the Apps list's health cell draws it
+ * @param verdict whether the badge reads the verdict: an app with a problem its HTTPS does not explain
  * @author Jelle De Loecker
  * @since  0.9.0
  */
@@ -23,6 +25,7 @@ public record AppSummary(
     @NonNull String detail,
     @NonNull String url,
     @Nullable DomainCertCell https,
-    @NonNull HealthCellState health
+    @NonNull HealthCellState health,
+    boolean verdict
 ) {
 }

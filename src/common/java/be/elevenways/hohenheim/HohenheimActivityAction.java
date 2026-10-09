@@ -97,7 +97,9 @@ public enum HohenheimActivityAction implements ActivityAction {
     WORKLOAD_REMOVE_FAILED("workload_remove_failed", ErrorCause.MESSAGE),
     WORKLOAD_RESTORE_FAILED("workload_restore_failed", ErrorCause.MESSAGE),
     WORKLOAD_RESTORE_INTERRUPTED("workload_restore_interrupted", ErrorCause.PLAIN),
-    WORKLOAD_COPY_LOST("workload_copy_lost", ErrorCause.PLAIN);
+    WORKLOAD_COPY_LOST("workload_copy_lost", ErrorCause.PLAIN),
+    /** It stopped and the crash policy's automatic restart was refused; the detail is the refusal's own message. */
+    WORKLOAD_RESTART_REFUSED("workload_restart_refused", ErrorCause.MESSAGE);
 
     /** Whether a verb is the cause of a workload's ERROR status, and what its row's detail then holds. */
     public enum ErrorCause {

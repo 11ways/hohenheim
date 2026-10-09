@@ -273,10 +273,13 @@ class InstanceOverviewTest extends HohenheimTestBase {
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, id);
         }
 
-        // 4. With the claim gone the page states the absence instead of an empty table.
+        // 4. With the claim gone the page draws no Ports card at all (board App-Overview: an app reached through its
+        //    addresses alone has none), never ledger words about a claim it does not hold (D13f).
         assertThat(adminGet(overviewUrl()).body())
-            .as("step 4: no claim renders an explicit empty state")
-            .contains("<pl-empty-state");
+            .as("step 4: no claim draws no Ports card")
+            .doesNotContain("data-endpoint-port")
+            .doesNotContain("holds no port claim")
+            .doesNotContain("No published port");
     }
 
     /**

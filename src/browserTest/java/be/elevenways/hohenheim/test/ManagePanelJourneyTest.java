@@ -8,18 +8,23 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.cms.AppParts;
 import be.elevenways.hohenheim.server.cms.HostFields;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.cms.OnboardingCollector;
+import be.elevenways.hohenheim.server.database.TenantDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
+import be.elevenways.zenit.cms.common.panel.PanelNav;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
@@ -140,11 +145,12 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             .contains("data-hh-dashboard-app=\"w9b-survival\"")
             .contains(">Your apps</pb-microcopy>");
 
-        // 4. An uncapped budget draws no line (the instance count has no cap yet; previews carry a default one); a
-        //    tenant who may not create is not offered Put something online.
-        assertThat(home)
-            .as("step 4: no Apps line while the instance count is uncapped")
-            .doesNotContain("data-hh-usage=\"Apps\"");
+        // 4. An uncapped budget of the board's reads "No limit" (the instance count has no cap yet; previews carry a
+        //    default one), stating no amount; a tenant who may not create is not offered Put something online.
+        String apps = usageLine(home, "Apps");
+        assertThat(apps)
+            .as("step 4: the Apps line reads No limit while the instance count is uncapped, with no amount or bar")
+            .contains("data-hh-usage-uncapped").contains("No limit").doesNotContain("pl-usage-bar");
         assertThat(home)
             .as("step 4: no Put something online for a tenant who may not create")
             .doesNotContain("/manage/put-online");
@@ -202,9 +208,9 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             .contains("/manage/instances/" + this.appId + "/page/console")
             .contains("/manage/instances/" + this.appId + "/page/files");
         assertThat(granted)
-            .as("step 7: the card lists the capabilities and the sharing, as one sentence (case=sentence)")
+            .as("step 7: the card says what each capability allows and the sharing, as one sentence (D13f)")
             .doesNotContain("Look at it and share access; ask the operator for more")
-            .contains("Console, read files, share access");
+            .contains("Its console, reading its files, share access");
 
         // 7b. Granted power, the app page offers Restart beside Deploy (board Manage-App).
         RecordGrants.grant(GrantSubjectType.USER, this.tenantId, InstanceModel.MODEL_ID, this.appId,
@@ -373,6 +379,107 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         } finally {
             local.restore();
         }
+    }
+
+    @Test
+    void theLandingAndTheAppPageSpeakToTheTenantAsTheBoardsDo() throws Exception {
+        var local = HostFixtures.captureLocal();
+        try {
+            // The app runs on a host that takes it, behind the operator's site whose address forces HTTPS without a
+            // certificate (DEP10's alchemy-skeleton): visitors get an error page, and the tenant holds no grant on
+            // the site, so no fix of that verdict is theirs to use.
+            HostFixtures.makeLocalPlaceable(16L * 1024);
+            Model instances = Models.get(InstanceModel.class);
+            instances.find().where(InstanceModel.ID.eq(this.appId))
+                .assign(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING).bypassBehaviours().updateAll();
+            Models.get(SiteDomainModel.class).find().where(SiteDomainModel.ID.eq(this.domainId))
+                .assign(SiteDomainModel.FORCE_SSL, true).bypassBehaviours().updateAll();
+
+            // 1. The landing's attention item names the app (board Manage-Home lists many), and says who can fix it.
+            String home = page("/manage/dashboard");
+            assertThat(home)
+                .as("step 1: the attention title names the app")
+                .contains("Visitors of w9b-survival get an error page")
+                .contains("HTTPS is forced, but w9b-survival.example.test has no working certificate")
+                .contains("The operator of this installation can fix this.");
+
+            // 2. The app page's problem band offers no fix the tenant cannot use and says who can clear it.
+            String overview = "/manage/instances/" + this.appId + "/page/overview";
+            String band = page(overview);
+            assertThat(band)
+                .as("step 2: the band says the operator can fix it, and offers the tenant nothing dead")
+                .contains("Visitors get an error page")
+                .contains("The operator of this installation can fix this.")
+                .doesNotContain("data-cms-record-health-fixes");
+
+            // 3. Granted the site, the tenant may use a fix: the band offers it and names nobody else.
+            RecordGrants.grant(GrantSubjectType.USER, this.tenantId, SiteModel.MODEL_ID, this.siteId,
+                HohenheimAccess.MANAGE, true);
+            assertThat(page(overview))
+                .as("step 3: the band offers the tenant's own fix and no longer sends them to the operator")
+                .contains("data-cms-record-health-fixes")
+                .doesNotContain("The operator of this installation can fix this.");
+
+            // 4. "What you can do here" says what the grant allows in words: the tenant level as its description, the
+            //    verbs it implies never listed again (DEP10: "Console, Power, Configure, Run commands, ...").
+            RecordGrants.grant(GrantSubjectType.USER, this.tenantId, InstanceModel.MODEL_ID, this.appId,
+                HohenheimAccess.MANAGE, true);
+            String managed = page(overview);
+            assertThat(managed)
+                .as("step 4: the umbrella capability reads as what it allows, its verbs not repeated")
+                .contains("Start and stop it, its console, settings and removal")
+                .doesNotContain("Console, power")
+                .doesNotContain("Power, Configure");
+
+            // 5. A port without a public address reads in the tenant's words, never the host's internals.
+            PortLedger.claim(ServerModel.localServerId(), null, 25567, "tcp", InstanceModel.MODEL_ID, this.appId,
+                "manage journey");
+            try {
+                assertThat(page(overview))
+                    .as("step 5: the port's note speaks to the tenant")
+                    .contains("data-endpoint-port=\"25567\"")
+                    .contains("Reachable only from inside this installation")
+                    .doesNotContain("This host has no public address set");
+            } finally {
+                PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, this.appId);
+            }
+
+            // 6. The app page stands under Apps: that sidebar row is the current one, and the title reads the app,
+            //    never the Instances list it is reached through.
+            Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(ManagePanel.SLUG));
+            assertThat(PanelNav.sidebarEntryOf(manage, Objects.requireNonNull(manage.entryBySlug(InstanceParts.SLUG)))
+                .slug()).as("step 6: the app page's sidebar row is Apps").isEqualTo(AppParts.SLUG);
+            String title = managed.substring(managed.indexOf("<title>") + "<title>".length(),
+                managed.indexOf("</title>"));
+            assertThat(title).as("step 6: the page title reads the app under Apps")
+                .contains("w9b-survival").doesNotContain("Instances");
+
+            // 7. The Apps list speaks to the tenant ("Your apps"), not in the operator's data model.
+            assertThat(page("/manage/apps"))
+                .as("step 7: the Apps lead is the tenant's")
+                .contains("Your apps, with their addresses and whether they work.")
+                .doesNotContain("sites, instances and stacks");
+
+            // 8. Databases is a row where the tenant may create one, as the board draws it; never a door that refuses.
+            assertThat(navLinks(page("/manage/dashboard")))
+                .as("step 8: no Databases row for a tenant who holds none and may create none")
+                .doesNotContain("/manage/databases");
+            GrantService.createDirectGrant(GrantSubjectType.USER, this.tenantId,
+                TenantDatabases.DATABASES_CREATE.value(), true);
+            assertThat(navLinks(page("/manage/dashboard")))
+                .as("step 8: a tenant who may create a database has the row")
+                .contains("/manage/databases");
+
+        } finally {
+            local.restore();
+        }
+    }
+
+    /** @return the usage card's line of one budget, up to its end */
+    private static String usageLine(String html, String label) {
+        int start = html.indexOf("data-hh-usage=\"" + label + "\"");
+        assertThat(start).as("the usage card draws a " + label + " line").isNotNegative();
+        return html.substring(start, html.indexOf("</div>", start));
     }
 
     /** The first-run checklist's "Put your first app online" step. */

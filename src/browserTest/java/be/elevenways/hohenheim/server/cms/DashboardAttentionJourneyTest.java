@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionSubject;
+import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.OnboardingState;
@@ -789,6 +790,142 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                     .as("step 3: the %s catalog counts in real plurals", language).isNull();
             }
         }
+    }
+
+    @Test
+    @Timeout(120)
+    void aProblemLeadsWithItsWordsAndItsRootWhileTheTechnicalTextFollows() throws Exception {
+        HostFixtures.LocalHostState captured = HostFixtures.captureLocal();
+        ProxyServer previous = ServerMain.getProxyServer();
+        List<Runnable> cleanup = new ArrayList<>();
+        try {
+            HostFixtures.makeLocalPlaceable(16L * 1024);
+            int local = ServerModel.localServerId();
+            ProxyServer proxy = startProxy();
+            cleanup.add(proxy::stop);
+            ServerMain.adoptProxyServer(proxy);
+            cleanup.add(() -> ServerMain.adoptProxyServer(previous));
+
+            // 1. A workload whose start the daemon refused, behind an address without a certificate (D13c's shop):
+            //    its dashboard row's badge is its root, "Could not start", never the address's "No certificate".
+            Row refused = instance(PREFIX + "refused", local);
+            cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), refused));
+            int refusedId = refused.get(InstanceModel.ID);
+            Row refusedSite = setupInstanceSite(PREFIX + "refused-site", PREFIX + "refused-site", refusedId);
+            cleanup.add(() -> HardDeletes.row(Models.get(SiteModel.class), fresh(refusedSite)));
+            addDomain(refusedSite, "refused.d13f.test", "exact", null, false);
+            ActivityLog.record(Models.get(InstanceModel.class), refusedId,
+                HohenheimActivityAction.WORKLOAD_START_FAILED, "Conflict. The container name /d13f is already in use");
+            errored(refusedId);
+            String dashboard = adminGet("/admin/dashboard").body();
+            assertThat(appRow(dashboard, PREFIX + "refused"))
+                .as("step 1: the row's badge reads the app's verdict, not its address's certificate")
+                .contains("data-hh-app-verdict=\"broken\"").contains("Could not start")
+                .doesNotContain("data-cert-status");
+
+            // 2. Its item and its page say in words what that meant, the daemon's own English as the technical line
+            //    after them, never the sentence the reader is given first (DEP10: "What refused it: ...").
+            AttentionItem refusedItem = rootOf(AttentionCollector.collect(), AttentionSubject.instance(refusedId));
+            assertThat(refusedItem).as("step 2: the failed start is a root").isNotNull();
+            assertThat(say(refusedItem.title())).as("step 2: titled by what happened")
+                .isEqualTo(PREFIX + "refused could not be started");
+            assertThat(say(refusedItem.detail())).as("step 2: its detail is the worded meaning")
+                .isEqualTo("It never got to run.");
+            assertThat(say(refusedItem.note())).as("step 2: the daemon's text is the technical line")
+                .isEqualTo("Technically: Conflict. The container name /d13f is already in use");
+            assertThat(refusedItem.note().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 2: in Dutch, the stored text kept as it is")
+                .isEqualTo("Technisch: Conflict. The container name /d13f is already in use");
+            assertThat(adminGet("/admin/instances/" + refusedId + "/page/overview").body())
+                .as("step 2: the page's band reads the words, then the technical text")
+                .contains("Could not start")
+                .containsSubsequence("It never got to run.",
+                    "Technically: Conflict. The container name /d13f is already in use")
+                .doesNotContain("What refused it");
+
+            // 3. A crash whose automatic restart the start gates refused is recorded as that, so the app does not
+            //    read "Not running" with no reason: stopped after an error, the refusal as its technical line.
+            Row restart = instance(PREFIX + "restart", local);
+            cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), restart));
+            int restartId = restart.get(InstanceModel.ID);
+            ActivityLog.record(Models.get(InstanceModel.class), restartId,
+                HohenheimActivityAction.WORKLOAD_RESTART_REFUSED, "Instance quota reached");
+            errored(restartId);
+            AttentionItem restartItem = rootOf(AttentionCollector.collect(), AttentionSubject.instance(restartId));
+            assertThat(restartItem).as("step 3: the refused restart is a root").isNotNull();
+            assertThat(List.of(say(restartItem.title()), say(restartItem.detail()), say(restartItem.note())))
+                .as("step 3: what happened, why in words, and the gate's own words after them")
+                .containsExactly(PREFIX + "restart stopped after an error",
+                    PREFIX + "restart stopped and its automatic restart was refused",
+                    "Technically: Instance quota reached");
+
+            // 4. An app whose forced address has no certificate keeps the HTTPS badge: there the address IS the cause.
+            Row forcedApp = instance(PREFIX + "forced", local);
+            cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), forcedApp));
+            Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(forcedApp.get(InstanceModel.ID)))
+                .assign(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING).bypassBehaviours().updateAll();
+            Row forcedSite = setupInstanceSite(PREFIX + "forced-site", PREFIX + "forced-site",
+                forcedApp.get(InstanceModel.ID));
+            cleanup.add(() -> HardDeletes.row(Models.get(SiteModel.class), fresh(forcedSite)));
+            forcedDomain(forcedSite, "forced.d13f.test");
+            assertThat(appRow(adminGet("/admin/dashboard").body(), PREFIX + "forced"))
+                .as("step 4: an app HTTPS breaks keeps the HTTPS badge, which names its cause")
+                .contains("data-cert-status=\"" + CertCoverage.ERROR.key() + "\"")
+                .doesNotContain("data-hh-app-verdict");
+
+            // 5. A persistent database nobody backed up yet: the Backups tile says so under its count.
+            Row database = database(cleanup, PREFIX + "unbacked");
+            Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.eq(database.get(DatabaseModel.ID)))
+                .assign(DatabaseModel.EPHEMERAL, false).bypassBehaviours().updateAll();
+            assertThat(tile(adminGet("/admin/dashboard").body(), "backups"))
+                .as("step 5: a count with nothing behind it says why").contains("0 of ").contains("No copy made yet");
+
+            // 6. A host whose last check failed reads the failure's kind in words, the transport's text after it.
+            Row lost = sshHost(PREFIX + "lost");
+            cleanup.add(() -> HardDeletes.row(Models.get(ServerModel.class), lost));
+            Models.get(ServerModel.class).find().where(ServerModel.ID.eq(lost.get(ServerModel.ID)))
+                .assign(ServerModel.LAST_ERROR_KIND, "docker_absent")
+                .assign(ServerModel.LAST_ERROR, "bash: line 1: docker: command not found")
+                .bypassBehaviours().updateAll();
+            assertThat(adminGet("/admin/servers/" + lost.get(ServerModel.ID) + "/page/overview").body())
+                .as("step 6: the host's last error leads with its kind, the raw text as the technical line")
+                .contains("Docker not found")
+                .contains("Technically: bash: line 1: docker: command not found")
+                .doesNotContain(">Last error<");
+
+            // 7. Every problem headline names its app where many apps are listed (the /manage landing's band), in en
+            //    and nl: a new headline without its attention_title variant fails here, never there as a raw key.
+            ShippedCatalogs catalogs = new ShippedCatalogs();
+            List<String> untitled = new ArrayList<>();
+            for (AppHealth.Headline headline : AppHealth.Headline.values()) {
+                Microcopy title = AppHealth.titleOf(RecordHealth.broken(headline.copy().withArg("path", "/x")),
+                    "probe-app");
+                for (String tag : List.of("en", "nl")) {
+                    String resolved = title.resolve(LocaleChain.ofTags(tag), catalogs);
+                    if (!resolved.contains("probe-app")) {
+                        untitled.add(tag + " " + headline + " -> '" + resolved + "'");
+                    }
+                }
+            }
+            assertThat(untitled).as("step 7: every problem headline has its naming title in en and nl").isEmpty();
+        } finally {
+            for (int i = cleanup.size() - 1; i >= 0; i--) {
+                cleanup.get(i).run();
+            }
+            captured.restore();
+        }
+    }
+
+    /** @return one app's row of the dashboard's Apps band, up to its end */
+    private static String appRow(String dashboard, String name) {
+        int start = dashboard.indexOf("data-hh-dashboard-app=\"" + name + "\"");
+        assertThat(start).as("the Apps band lists " + name).isNotNegative();
+        return dashboard.substring(start, dashboard.indexOf("</pl-list-item>", start));
+    }
+
+    private static void errored(int instanceId) {
+        Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+            .assign(InstanceModel.STATUS, InstanceModel.STATUS_ERROR).bypassBehaviours().updateAll();
     }
 
     private static AttentionItem titled(List<AttentionItem> items, String title) {

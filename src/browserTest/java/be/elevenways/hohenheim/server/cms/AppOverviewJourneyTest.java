@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -405,9 +406,10 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 "image app-journey:missing was not found");
             status(id, InstanceModel.STATUS_ERROR);
             String failed = adminGet("/admin/instances/" + id + "/page/overview").body();
-            assertThat(failed).as("step 2: the band reads a failed start, with what refused it")
+            assertThat(failed).as("step 2: the band reads a failed start in words, the failure's text after them")
                 .contains("Could not start")
-                .contains("What refused it: image app-journey:missing was not found")
+                .containsSubsequence("It never got to run.", "Technically: image app-journey:missing was not found")
+                .doesNotContain("What refused it")
                 .doesNotContain("Stopped after an error");
             assertThat(InstanceOverview.lastStartOf(id)).as("step 2: no start is named after a failed one").isNull();
             // A record left claiming running beside that failed start (D13b's seeded shop) still names no start.
@@ -464,6 +466,45 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();
             }
+        }
+    }
+
+    @Test
+    void theDetailsSayWhatTheStatusMeansAndPortsShowOnlyWhileHeld() throws Exception {
+        Row instance = instance("app-journey-words");
+        int id = instance.get(InstanceModel.ID);
+        try {
+            // 1. Never started and never checked: the Details card says so in words, not "Created" beside "Never
+            //    checked against the host".
+            Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(id))
+                .assign(InstanceModel.STATUS, InstanceModel.STATUS_CREATED)
+                .assign(InstanceModel.STATUS_OBSERVED_AT, null).bypassBehaviours().updateAll();
+            String created = adminGet("/admin/instances/" + id + "/page/overview").body();
+            assertThat(created).as("step 1: a workload never started reads so, and when it was last checked")
+                .contains("Not started yet")
+                .contains("Last checked")
+                .contains("Not yet")
+                .doesNotContain("Status confirmed")
+                .doesNotContain("Never checked against the host");
+
+            // 2. It holds no port: no Ports card at all (board App-Overview), never "holds no port claim".
+            assertThat(created).as("step 2: no port, no Ports card")
+                .doesNotContain("data-endpoint-port")
+                .doesNotContain("holds no port claim")
+                .doesNotContain("Public endpoint");
+
+            // 3. A port it holds on a host that declares no public address: the card is "Ports", and the operator
+            //    reads why the port reaches no further than the host's own network.
+            PortLedger.claim(ServerModel.localServerId(), null, 25566, "tcp", InstanceModel.MODEL_ID, id,
+                "app journey");
+            String ported = adminGet("/admin/instances/" + id + "/page/overview").body();
+            assertThat(ported).as("step 3: the held port is listed under Ports")
+                .contains("data-endpoint-port=\"25566\"")
+                .contains(">Ports<")
+                .contains("This host has no public address set");
+        } finally {
+            PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, id);
+            HardDeletes.row(Models.get(InstanceModel.class), instance);
         }
     }
 
