@@ -2485,11 +2485,11 @@
       "case": "sentence"
     },
     {
-      "text": "Instance templates",
+      "text": "App templates",
       "scope": "instance_template"
     },
     {
-      "text": "instance templates",
+      "text": "app templates",
       "scope": "instance_template",
       "case": "sentence"
     },
@@ -2566,11 +2566,11 @@
       "case": "sentence"
     },
     {
-      "text": "Git providers",
+      "text": "Git connections",
       "scope": "git_provider"
     },
     {
-      "text": "Git providers",
+      "text": "Git connections",
       "scope": "git_provider",
       "case": "sentence"
     },
@@ -8260,7 +8260,7 @@
     "scope": "violations"
   },
   "git_provider_unknown": {
-    "text": "Unknown git provider",
+    "text": "Unknown Git connection",
     "scope": "violations"
   },
   "git_provider_bad_base_url": {
@@ -8417,7 +8417,7 @@
   ],
   "git_provider": [
     {
-      "text": "Git provider",
+      "text": "Git connection",
       "scope": "hohenheim_field"
     },
     {
@@ -9370,11 +9370,11 @@
       "case": "sentence"
     },
     {
-      "text": "Git provider",
+      "text": "Git connection",
       "scope": "git_provider"
     },
     {
-      "text": "Git provider",
+      "text": "Git connection",
       "scope": "git_provider",
       "case": "sentence"
     },
@@ -9451,11 +9451,11 @@
       "case": "sentence"
     },
     {
-      "text": "instance template",
+      "text": "app template",
       "scope": "instance_template"
     },
     {
-      "text": "instance template",
+      "text": "app template",
       "scope": "instance_template",
       "case": "sentence"
     },
@@ -10703,7 +10703,7 @@
       "scope": "instance"
     },
     {
-      "text": "Reusable blueprints an instance is created from.",
+      "text": "Reusable blueprints an app is created from.",
       "scope": "instance_template"
     },
     {
@@ -11980,7 +11980,7 @@
     "scope": "instance_shell"
   },
   "repository_url_credential": {
-    "text": "Remove the credential from the repository URL: it would be written into the checkout's .git/config and stay there. Use a git provider instead, which hands its token to git per operation and never writes it down.",
+    "text": "Remove the credential from the repository URL: it would be written into the checkout's .git/config and stay there. Use a Git connection instead, which hands its token to git per operation and never writes it down.",
     "scope": "violations"
   },
   "repository_url_invalid": {
@@ -12048,11 +12048,11 @@
     "scope": "site"
   },
   "no_repositories": {
-    "text": "This connection lists no repositories. Check that its token is allowed to read them, then re-test the connection under Git providers.",
+    "text": "This connection lists no repositories. Check that its token is allowed to read them, then re-test the connection under Git connections.",
     "scope": "git_provider"
   },
   "no_branches": {
-    "text": "This repository lists no branches. Check that the provider's token is allowed to read it, then re-test the connection under Git providers.",
+    "text": "This repository lists no branches. Check that the provider's token is allowed to read it, then re-test the connection under Git connections.",
     "scope": "git_provider"
   },
   "delete_confirm_stranding": {
@@ -12333,7 +12333,7 @@
     "scope": "violations"
   },
   "tenant_git_provider_not_managed": {
-    "text": "You do not manage this git provider",
+    "text": "You do not manage this Git connection",
     "scope": "violations"
   },
   "tenant_access_list_not_managed": {
@@ -13411,6 +13411,10 @@
       "target": "happened"
     }
   ],
+  "app_filter": {
+    "text": "App",
+    "scope": "hohenheim"
+  },
   "people_only": {
     "text": "People only",
     "scope": "hohenheim"

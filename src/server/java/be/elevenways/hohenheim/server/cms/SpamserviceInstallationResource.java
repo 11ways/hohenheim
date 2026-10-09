@@ -46,6 +46,7 @@ public final class SpamserviceInstallationResource extends RowSingleton {
     @Override public int navOrder() { return 10; }
 
     @Override public boolean showInNav() { return false; }
+    @Override public @NonNull String standsUnder() { return SpamserviceOverviewPage.SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("download"); }
 
     static {

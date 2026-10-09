@@ -70,7 +70,6 @@ public final class HohenheimTemplateIds {
     public static final Identifier WIDGET_TENANT_USAGE = Identifier.of("hohenheim", "cms/widget-tenant-usage");
 
     // List-cell partials; a column names one through its String renderer.
-    public static final String CELL_ACTIVITY_RECORD = "hohenheim:cms/cell/activity-record";
     public static final String CELL_APP_FIX = "hohenheim:cms/cell/app-fix";
     public static final String CELL_BAN_STATE = "hohenheim:cms/cell/ban-state";
     public static final String CELL_DOMAIN_CERTIFICATE = "hohenheim:cms/cell/domain-certificate";

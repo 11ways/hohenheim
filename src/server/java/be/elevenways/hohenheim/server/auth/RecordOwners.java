@@ -156,8 +156,8 @@ final class RecordOwners {
     }
 
     /**
-     * THE human label of ONE packed subject: the user's display name (else its email) or
-     * the group's title (else its slug).
+     * THE human label of ONE packed subject: zenit-auth's name for the user
+     * ({@link UserModel#personName}) or the group's title (else its slug).
      *
      * AIDEV-NOTE: it lives beside {@link #packSubjects}/{@link #parseSubjects} because it
      * reads the SAME {@code subjectType:subjectId} vocabulary those write -- a labeller
@@ -174,8 +174,7 @@ final class RecordOwners {
         String label = switch (parsed.type()) {
             case USER -> {
                 Row user = Models.get(UserModel.class).findById(parsed.id());
-                yield user == null ? null : firstNonBlank(user.get(UserModel.DISPLAY_NAME),
-                    user.get(UserModel.EMAIL));
+                yield user == null ? null : UserModel.personName(user);
             }
             case GROUP -> {
                 Row group = Models.get(PermissionGroupModel.class).findById(parsed.id());

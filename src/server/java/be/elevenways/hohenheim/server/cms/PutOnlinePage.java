@@ -88,6 +88,7 @@ public final class PutOnlinePage extends PanelPage {
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
     @Override public boolean showInNav() { return false; }
+    @Override public @NonNull String standsUnder() { return AppParts.SLUG; }
 
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})

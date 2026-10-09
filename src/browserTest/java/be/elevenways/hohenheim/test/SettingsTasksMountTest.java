@@ -3,7 +3,13 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.server.task.BackupControlPlane;
+import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.hohenheim.server.task.CheckForeignKeys;
+import be.elevenways.hohenheim.server.task.CleanOldInstanceLogs;
+import be.elevenways.hohenheim.server.task.CleanOrphanCertificates;
+import be.elevenways.hohenheim.server.task.ReconcileDockerResources;
+import be.elevenways.hohenheim.server.task.SecuritySweep;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.zenit.cms.common.panel.Panel;
@@ -12,11 +18,15 @@ import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.cms.server.task.TaskAdmin;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.orm.SystemTaskModel;
 import be.elevenways.zenit.server.task.TaskService;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import org.junit.jupiter.api.Test;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -74,6 +84,21 @@ class SettingsTasksMountTest extends HohenheimTestBase {
                 .isNotEmpty();
         } finally {
             service.shutdown();
+        }
+
+        // 4. The tasks of board Settings-Tasks are named as the board names them; their descriptions and the board's
+        //    "Nightly 03:00" wording are the framework task list's to show (D13e, plan section 39).
+        Map<ScheduledTask, String> board = new LinkedHashMap<>();
+        board.put(new BackupDatabases(), "Back up databases");
+        board.put(new BackupControlPlane(), "Back up the control panel");
+        board.put(new SecuritySweep(), "Security sweep");
+        board.put(new CleanOldInstanceLogs(), "Clean old console output");
+        board.put(new CleanOrphanCertificates(), "Clean unused certificates");
+        board.put(new ReconcileDockerResources(), "Tidy Docker");
+        for (Map.Entry<ScheduledTask, String> task : board.entrySet()) {
+            assertThat(task.getKey().label().resolve(LocaleChain.ofTags("en"), MessageResolvers.getDefault()))
+                .as("step 4: " + task.getKey().id() + " reads as the board names it")
+                .isEqualTo(task.getValue());
         }
     }
 }

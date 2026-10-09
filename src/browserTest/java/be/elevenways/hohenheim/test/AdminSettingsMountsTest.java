@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.cms.HohenheimSettingsSections;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
@@ -93,5 +95,30 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
             .as("step 5: a requested framework group shows although the disclosure is folded").isTrue();
         assertThat(page.locator("[data-path='framework.network.request_body_size_limit']").count())
             .as("step 5: the framework keeps its shared key").isEqualTo(1);
+
+        // 6. Every group Hohenheim's sections offer is listed with its icon (board Settings), a one-group section's
+        //    own row included.
+        List<String> bare = new ArrayList<>();
+        for (HohenheimSettingsSections section : HohenheimSettingsSections.values()) {
+            for (SettingGroup group : section.groups()) {
+                String row = NAV + " [data-cms-settings-nav='" + section.anchorOf(group) + "'] pl-icon";
+                if (group.getIcon() == null || page.locator(row).count() != 1) {
+                    bare.add(section.anchorOf(group));
+                }
+            }
+        }
+        assertThat(bare).as("step 6: no Hohenheim settings row is listed without its icon").isEmpty();
+
+        // 7. The Settings cluster names its record sections as the board does: App templates and Git connections.
+        for (String[] expected : List.of(
+                new String[]{HohenheimSlugs.INSTANCE_TEMPLATES, "en", "App templates"},
+                new String[]{HohenheimSlugs.INSTANCE_TEMPLATES, "nl", "App-sjablonen"},
+                new String[]{HohenheimSlugs.GIT_PROVIDERS, "en", "Git connections"},
+                new String[]{HohenheimSlugs.GIT_PROVIDERS, "nl", "Git-koppelingen"})) {
+            assertThat(admin.entryBySlug(expected[0]).label()
+                    .tryResolve(LocaleChain.ofTags(expected[1]), MessageResolvers.getDefault()))
+                .as("step 7: the '" + expected[0] + "' tab reads as the board names it (" + expected[1] + ")")
+                .isEqualTo(expected[2]);
+        }
     }
 }

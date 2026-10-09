@@ -51,8 +51,10 @@ public final class HohenheimPanel extends Panel {
     // AIDEV-NOTE: an entry that is neither one of the eight nor a cluster member is showInNav(false), which removes
     // the sidebar row and NOTHING else, and it keeps a declared way in: Sites, Instances, Stacks and Projects from the
     // Apps list's toolbar (and every app row opens its record), the rest from the list or overview that owns them
-    // (AdminNavigationJourneyTest pins both). A new admin entry therefore picks a cluster or a home that links it; a
-    // ninth sidebar row is a design decision, not a side effect.
+    // (AdminNavigationJourneyTest pins both). It also names that home as the row it stands under (PanelEntry.standsUnder,
+    // the entry it is reached from), so its pages mark that row and their titles end with it; the journey's step 11
+    // fails an entry of either panel whose pages would mark no row. A new admin entry therefore picks a cluster or a
+    // home that links it; a ninth sidebar row is a design decision, not a side effect.
     //
     // AIDEV-NOTE: membership is read from the entries this node actually registered (clusterOf): a node without a
     // role drops that role's members, and a cluster left with none is not added at all, since the panel refuses a

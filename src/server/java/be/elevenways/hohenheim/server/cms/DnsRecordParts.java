@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
@@ -74,6 +75,8 @@ public final class DnsRecordParts {
                 .createDefaults(request -> parts.createValues(request.conduit()))
                 .inlineEditable(parts.inlineEditableFields().toArray(Field<?, ?>[]::new)).build())
             .parent(parts.parent())
+            // Its own list is kept out of the sidebar (entry); reached from a zone's Records tab.
+            .standsUnder(HohenheimSlugs.DNS_ZONES)
             .writes(ResourceMutations.rows().create(call -> parts.persistRow(call.values(), call.access()))
                 .update(call -> { parts.updateRow(call.record(), call.values(), call.access()); return null; })
                 .delete(DnsOperations.DELETE_RECORD).build())

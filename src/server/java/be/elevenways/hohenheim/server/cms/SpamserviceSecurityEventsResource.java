@@ -93,6 +93,7 @@ public final class SpamserviceSecurityEventsResource {
             .navGroup(HohenheimPanel.SECURITY_GROUP)
             .navOrder(50)
             .showInNav(false)
+            .standsUnder(SpamserviceOverviewPage.SLUG)
             .icon(Icon.of("shield-halved"))
             .reads(ResourceReads.<SecurityEventEntry>typed(SecurityEventEntry::id)
                 .load((key, access) -> {

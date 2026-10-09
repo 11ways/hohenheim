@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.dns.DnsPeerKeyResponse;
 import be.elevenways.hohenheim.model.DnsPeerModel;
@@ -57,6 +58,7 @@ public final class DnsPeerParts {
         return PanelResource.builder(parts.id(), parts.slug(), DnsOperations.PEER)
             .label(parts.label()).recordLabel(parts.recordLabel()).description(parts.description())
             .icon(parts.icon()).navGroup(parts.navGroup()).navOrder(parts.navOrder()).showInNav(false)
+            .standsUnder(HohenheimSlugs.DNS_ZONES)
             .reads(ResourceReads.rows())
             .list(ResourceList.rows(parts.tableSpec()).chrome(ListChrome.MINIMAL).facets().ruleFilters()
                 .search(parts.searchFields().toArray(Field<?, ?>[]::new)).build())

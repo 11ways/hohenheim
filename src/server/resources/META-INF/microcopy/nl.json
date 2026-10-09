@@ -2485,11 +2485,11 @@
       "case": "sentence"
     },
     {
-      "text": "Instantiesjablonen",
+      "text": "App-sjablonen",
       "scope": "instance_template"
     },
     {
-      "text": "instantiesjablonen",
+      "text": "app-sjablonen",
       "scope": "instance_template",
       "case": "sentence"
     },
@@ -2566,11 +2566,11 @@
       "case": "sentence"
     },
     {
-      "text": "Git-providers",
+      "text": "Git-koppelingen",
       "scope": "git_provider"
     },
     {
-      "text": "Git-providers",
+      "text": "Git-koppelingen",
       "scope": "git_provider",
       "case": "sentence"
     },
@@ -8260,7 +8260,7 @@
     "scope": "violations"
   },
   "git_provider_unknown": {
-    "text": "Onbekende git-provider",
+    "text": "Onbekende Git-koppeling",
     "scope": "violations"
   },
   "git_provider_bad_base_url": {
@@ -8417,7 +8417,7 @@
   ],
   "git_provider": [
     {
-      "text": "Git-provider",
+      "text": "Git-koppeling",
       "scope": "hohenheim_field"
     },
     {
@@ -9370,11 +9370,11 @@
       "case": "sentence"
     },
     {
-      "text": "Git-provider",
+      "text": "Git-koppeling",
       "scope": "git_provider"
     },
     {
-      "text": "Git-provider",
+      "text": "Git-koppeling",
       "scope": "git_provider",
       "case": "sentence"
     },
@@ -9451,11 +9451,11 @@
       "case": "sentence"
     },
     {
-      "text": "instantiesjabloon",
+      "text": "app-sjabloon",
       "scope": "instance_template"
     },
     {
-      "text": "instantiesjabloon",
+      "text": "app-sjabloon",
       "scope": "instance_template",
       "case": "sentence"
     },
@@ -10703,7 +10703,7 @@
       "scope": "instance"
     },
     {
-      "text": "Herbruikbare blauwdrukken waaruit een instantie wordt aangemaakt.",
+      "text": "Herbruikbare blauwdrukken waaruit een app wordt aangemaakt.",
       "scope": "instance_template"
     },
     {
@@ -11980,7 +11980,7 @@
     "scope": "instance_shell"
   },
   "repository_url_credential": {
-    "text": "Haal de inloggegevens uit de repository-URL: die zouden in de .git/config van de checkout terechtkomen en daar blijven staan. Gebruik een git-provider; die geeft zijn token per operatie aan git door en schrijft het nooit weg.",
+    "text": "Haal de inloggegevens uit de repository-URL: die zouden in de .git/config van de checkout terechtkomen en daar blijven staan. Gebruik een Git-koppeling; die geeft zijn token per operatie aan git door en schrijft het nooit weg.",
     "scope": "violations"
   },
   "repository_url_invalid": {
@@ -12048,11 +12048,11 @@
     "scope": "site"
   },
   "no_repositories": {
-    "text": "Deze verbinding toont geen repositories. Controleer of het token ze mag lezen en test de verbinding daarna opnieuw onder Git-providers.",
+    "text": "Deze verbinding toont geen repositories. Controleer of het token ze mag lezen en test de verbinding daarna opnieuw onder Git-koppelingen.",
     "scope": "git_provider"
   },
   "no_branches": {
-    "text": "Deze repository toont geen branches. Controleer of het token van de provider ze mag lezen en test de verbinding daarna opnieuw onder Git-providers.",
+    "text": "Deze repository toont geen branches. Controleer of het token van de provider ze mag lezen en test de verbinding daarna opnieuw onder Git-koppelingen.",
     "scope": "git_provider"
   },
   "delete_confirm_stranding": {
@@ -12333,7 +12333,7 @@
     "scope": "violations"
   },
   "tenant_git_provider_not_managed": {
-    "text": "Je beheert deze git-provider niet",
+    "text": "Je beheert deze Git-koppeling niet",
     "scope": "violations"
   },
   "tenant_access_list_not_managed": {
@@ -13411,6 +13411,10 @@
       "target": "happened"
     }
   ],
+  "app_filter": {
+    "text": "App",
+    "scope": "hohenheim"
+  },
   "people_only": {
     "text": "Alleen personen",
     "scope": "hohenheim"

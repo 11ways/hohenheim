@@ -131,6 +131,7 @@ public final class EnvironmentParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(15)
             .showInNav(false)
+            .standsUnder(ProjectParts.SLUG)
             .reads(ResourceReads.rows())
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
                 .search(EnvironmentModel.NAME, EnvironmentModel.DESCRIPTION).build())
@@ -186,6 +187,7 @@ public final class EnvironmentParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(15)
             .showInNav(false)
+            .standsUnder(SLUG)
             // List, load and create alike: a create without an environment refuses rather than landing as an orphan.
             .scope(VARIABLE_ROWS)
             .reads(ResourceReads.rows())

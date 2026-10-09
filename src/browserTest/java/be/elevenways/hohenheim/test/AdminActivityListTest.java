@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.site.ProtectPath;
 import be.elevenways.hohenheim.server.cms.PutOnline;
 import be.elevenways.zenit.common.orm.activity.ActivityText;
 import be.elevenways.zenit.cms.common.render.activity.ActivitySentenceCell;
-import be.elevenways.hohenheim.activity.ActivityRecordCell;
+import be.elevenways.hohenheim.server.cms.AdminActivityResource;
 import be.elevenways.hohenheim.server.HohenheimActivity;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.model.DnsPeerModel;
@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.server.dns.DnsFederationTrace;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -46,9 +47,11 @@ import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
@@ -190,9 +193,8 @@ class AdminActivityListTest extends HohenheimTestBase {
     @Test
     void activityListJourney() throws Exception {
 
-        // 1. The hohenheim resource still describes the SAME columns the framework
-        //    resource does: its spec is a copy (TableSpec has no toBuilder), so a column
-        //    added upstream has to fail here rather than silently vanish from the panel.
+        // 1. The hohenheim resource describes the SAME columns the framework resource does: its table derives from
+        //    ActivityAdmin.table() and adds filters only, so a column added upstream reaches the panel.
         PanelResource<Row> resource = adminActivityResource();
         List<String> ours = PartsLists.tableSpec(resource).columns().stream().map(ColumnSpec::name).toList();
         List<String> framework = ActivityAdmin.table().columns()
@@ -201,14 +203,14 @@ class AdminActivityListTest extends HohenheimTestBase {
             .as("step 1: the panel's activity columns match the framework's")
             .isEqualTo(framework);
 
-        // 2. Every filter an operator needs to reach ONE record is declared: the model,
-        //    the record id, and the origin that flips the default scope.
+        // 2. Every filter an operator needs to reach ONE record is declared: the model, the app, the record id, and the
+        //    origin that flips the default scope.
         List<String> filters = PartsLists.tableSpec(resource).filters().stream()
             .map(FilterSpec::name).toList();
         assertThat(filters)
-            .as("step 2: model, record and origin are all filterable")
-            .contains(ActivityModel.MODEL.getName(), ActivityModel.RECORD_ID.getName(),
-                ActivityModel.ORIGIN.getName());
+            .as("step 2: model, app, record and origin are all filterable")
+            .contains(ActivityModel.MODEL.getName(), AdminActivityResource.APP_FILTER,
+                ActivityModel.RECORD_ID.getName(), ActivityModel.ORIGIN.getName());
 
         seedActivityRows();
 
@@ -289,25 +291,16 @@ class AdminActivityListTest extends HohenheimTestBase {
             .as("step 6: and that label is what the list prints")
             .contains("Unknown action");
 
-        // 7. A record a registered resource serves is a LINK to that record; the label is
-        //    the title the row stored, never a fresh lookup.
-        Object linked = PartsReads.cellValue(null, resource, null, rowFor(OPERATOR_RECORD_ID),
-            column(resource, ActivityModel.RECORD_ID.getName()));
-        assertThat(linked).as("step 7: the record cell is structured").isInstanceOf(ActivityRecordCell.class);
-        ActivityRecordCell linkedCell = (ActivityRecordCell) linked;
-        assertThat(linkedCell.label())
-            .as("step 7: the link reads as the stored record title")
-            .isEqualTo(OPERATOR_TITLE);
-        assertThat(linkedCell.url())
-            .as("step 7: and points at that record's front door, which opens its landing tab")
+        // 7. A record a registered resource serves is a LINK to that record's front door, which opens its landing
+        //    tab; the sentence names it by the title the row stored, never a fresh lookup.
+        assertThat(sentenceOf(resource, OPERATOR_RECORD_ID).url())
+            .as("step 7: the sentence links the record's front door")
             .isEqualTo("/admin/servers/" + OPERATOR_RECORD_ID + "/open");
 
         // 7b. A model BOTH panels mount (sites: the admin resource and its /manage narrowing)
         //     still links into THIS panel: the admin activity list never sends an operator to
         //     /manage, whatever order the framework's panel registry iterates in.
-        ActivityRecordCell siteCell = (ActivityRecordCell) PartsReads.cellValue(null, resource, null,
-            rowFor(SITE_RECORD_ID), column(resource, ActivityModel.RECORD_ID.getName()));
-        assertThat(siteCell.url())
+        assertThat(sentenceOf(resource, SITE_RECORD_ID).url())
             .as("step 7b: a site row links to the admin site page")
             .isEqualTo("/admin/sites/" + SITE_RECORD_ID + "/open");
         assertThat(defaultList.body())
@@ -316,14 +309,12 @@ class AdminActivityListTest extends HohenheimTestBase {
             .doesNotContain("/manage/sites/" + SITE_RECORD_ID);
 
         // 8. A record no resource serves stays plain text -- named, but not linked.
-        ActivityRecordCell orphan = (ActivityRecordCell) PartsReads.cellValue(null, resource, null,
-            rowFor(UNLINKABLE_RECORD_ID), column(resource, ActivityModel.RECORD_ID.getName()));
-        assertThat(orphan.label())
-            .as("step 8: an unlinkable record is still named")
-            .isEqualTo(UNLINKABLE_TITLE);
-        assertThat(orphan.url())
-            .as("step 8: and carries no link")
+        assertThat(sentenceOf(resource, UNLINKABLE_RECORD_ID).url())
+            .as("step 8: an unlinkable record carries no link")
             .isNull();
+        assertThat(defaultList.body())
+            .as("step 8: and is still named")
+            .contains(UNLINKABLE_TITLE);
 
         // 9. The record filter narrows the log to the history of ONE record.
         HttpResponse<String> narrowed = adminGet("/admin/activity?filter.record_id="
@@ -345,15 +336,17 @@ class AdminActivityListTest extends HohenheimTestBase {
             .containsExactly(ActivityModel.CREATED_AT.getName(), ActivityAdmin.SUMMARY_COLUMN);
         assertThat(defaultList.body())
             .as("step 10: the operator row reads as one sentence")
-            .contains("Someone not signed in created " + OPERATOR_TITLE);
+            .contains("Someone not signed in created");
 
-        // 11. The sentence links to its record inside /admin, through the record's front door.
-        Object sentence = PartsReads.cellValue(null, resource, null, rowFor(SITE_RECORD_ID),
-            column(resource, ActivityAdmin.SUMMARY_COLUMN));
-        assertThat(sentence).as("step 11: the summary is the sentence cell").isInstanceOf(ActivitySentenceCell.class);
-        assertThat(((ActivitySentenceCell) sentence).url())
-            .as("step 11: and links to the admin site page")
-            .isEqualTo("/admin/sites/" + SITE_RECORD_ID + "/open");
+        // 11. Only the record's name is the link (zenit-cms a.cms-activity-subject inside span.cms-activity-sentence),
+        //     never the whole sentence.
+        assertThat(Pattern.compile("<a[^>]*cms-activity-subject[^>]*>\\s*" + OPERATOR_TITLE + "\\s*</a>")
+                .matcher(defaultList.body()).find())
+            .as("step 11: the operator row links its record's name alone")
+            .isTrue();
+        assertThat(defaultList.body())
+            .as("step 11: the sentence itself is no link")
+            .doesNotContain("a class=\"cms-activity-sentence");
 
         // 12. Hohenheim's own operations tell what happened in their own words.
         Row ran = rowFor(OPERATOR_RECORD_ID);
@@ -365,6 +358,53 @@ class AdminActivityListTest extends HohenheimTestBase {
         assertThat(ActivityText.headline(ran).resolve(LocaleChain.ofTags("nl"), new ShippedCatalogs()))
             .as("step 12: protecting a path reads as such, in Dutch too")
             .isEqualTo("Iemand die niet is aangemeld beveiligde " + OPERATOR_TITLE);
+    }
+
+    @Test
+    void theAppFilterNarrowsTheLogToWhatHappenedToOneApp() throws Exception {
+        int alpha = instance("hh-app-filter-alpha");
+        int beta = instance("hh-app-filter-beta");
+        String instanceModel = InstanceModel.MODEL_ID.toString();
+        write(instanceModel, Integer.toString(alpha), "hh-app-filter-alpha-entry", "updated",
+            Accountability.ORIGIN_WEB, Instant.parse("2996-01-01T00:00:02Z"));
+        write(instanceModel, Integer.toString(beta), "hh-app-filter-beta-entry", "updated",
+            Accountability.ORIGIN_WEB, Instant.parse("2996-01-01T00:00:01Z"));
+
+        // 1. The filter is labelled as the app it picks, in both shipped locales.
+        FilterSpec app = PartsLists.tableSpec(adminActivityResource()).filters().stream()
+            .filter(filter -> AdminActivityResource.APP_FILTER.equals(filter.name())).findFirst().orElseThrow();
+        assertThat(app.label().resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()))
+            .as("step 1: the app filter reads App").isEqualTo("App");
+        assertThat(app.label().resolve(LocaleChain.ofTags("nl"), new ShippedCatalogs()))
+            .as("step 1: in Dutch too").isEqualTo("App");
+
+        // 2. Picking one app leaves what happened to it, and nothing about another app.
+        HttpResponse<String> picked = adminGet("/admin/activity?filter." + AdminActivityResource.APP_FILTER + "="
+            + alpha);
+        assertThat(picked.statusCode()).as("step 2: the app-filtered list renders").isEqualTo(200);
+        assertThat(picked.body()).as("step 2: the picked app's entries are listed")
+            .contains("hh-app-filter-alpha-entry");
+        assertThat(picked.body()).as("step 2: another app's entries are not")
+            .doesNotContain("hh-app-filter-beta-entry");
+
+        // 3. An id no app the reader may read carries narrows to nothing, like a missing one, never to everything.
+        HttpResponse<String> guessed = adminGet("/admin/activity?filter." + AdminActivityResource.APP_FILTER
+            + "=987654321");
+        assertThat(guessed.body()).as("step 3: a guessed app shows no app's entries")
+            .doesNotContain("hh-app-filter-alpha-entry")
+            .doesNotContain("hh-app-filter-beta-entry");
+    }
+
+    /** A bare instance record, enough for the record source to title and offer it. */
+    private static int instance(String name) {
+        Row row = Models.get(InstanceModel.class).createEmptyRow();
+        row.set(InstanceModel.NAME, name);
+        row.set(InstanceModel.KIND, "hohenheim:docker_container");
+        row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
+            Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
+        row.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+        Models.get(InstanceModel.class).save(row);
+        return row.get(InstanceModel.ID);
     }
 
     @Test
@@ -503,6 +543,14 @@ class AdminActivityListTest extends HohenheimTestBase {
         ColumnSpec column = PartsLists.tableSpec(resource).column(name);
         assertThat(column).as("the activity table declares a '" + name + "' column").isNotNull();
         return column;
+    }
+
+    /** @return the sentence cell the admin list reads for the seeded row of this record */
+    private static ActivitySentenceCell sentenceOf(PanelResource<Row> resource, String recordId) {
+        Object sentence = PartsReads.cellValue(null, resource, null, rowFor(recordId),
+            column(resource, ActivityAdmin.SUMMARY_COLUMN));
+        assertThat(sentence).as("the summary is the sentence cell").isInstanceOf(ActivitySentenceCell.class);
+        return (ActivitySentenceCell) sentence;
     }
 
     private static Row rowFor(String recordId) {

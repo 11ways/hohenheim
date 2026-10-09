@@ -69,6 +69,7 @@ public final class ReconcileFindingParts {
             .label(LABEL).recordLabel(Microcopy.of("singular").withFilter("scope", "reconcile_finding"))
             .description(CmsSupport.navHint("reconcile_finding")).navGroup(NavGroup.SYSTEM)
             .navOrder(25).showInNav(false).icon(Icon.of("magnifying-glass"))
+            .standsUnder(ServerParts.SLUG)
             .form(ResourceForm.<Row>of(formSpec()).build()).reads(ResourceReads.rows())
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL.withAdvancedFilter(true).withFacetRail(true))
                 .facets().ruleFilters().exportable(true).widgets(ReconcileFindingParts::widgets)

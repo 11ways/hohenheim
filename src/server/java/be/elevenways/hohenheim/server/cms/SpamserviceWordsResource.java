@@ -74,6 +74,7 @@ public final class SpamserviceWordsResource {
             .navGroup(HohenheimPanel.SECURITY_GROUP)
             .navOrder(60)
             .showInNav(false)
+            .standsUnder(SpamserviceOverviewPage.SLUG)
             .icon(Icon.of("book"))
             .reads(ResourceReads.<SpamWordEntry>typed(SpamWordEntry::id)
                 .load((key, access) -> {

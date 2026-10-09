@@ -50,6 +50,7 @@ public final class SpamserviceReputationPage extends PanelPage {
     @Override public int navOrder() { return 70; }
 
     @Override public boolean showInNav() { return false; }
+    @Override public @NonNull String standsUnder() { return SpamserviceOverviewPage.SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("magnifying-glass"); }
 
     @Override

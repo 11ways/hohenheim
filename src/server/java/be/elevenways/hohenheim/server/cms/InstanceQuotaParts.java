@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceChildDeletes;
@@ -73,6 +74,7 @@ public final class InstanceQuotaParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(16)
             .showInNav(false)
+            .standsUnder(HohenheimSlugs.INSTANCES)
             .reads(ResourceReads.rows()
                 .mapCells((row, column) -> InstanceQuotaModel.SUBJECTS.getName().equals(column.name())
                     ? HohenheimAccess.labelSubjects(row.get(InstanceQuotaModel.SUBJECTS)) : null)

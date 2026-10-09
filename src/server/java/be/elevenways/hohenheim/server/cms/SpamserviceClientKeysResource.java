@@ -198,6 +198,7 @@ public final class SpamserviceClientKeysResource {
             .navGroup(HohenheimPanel.SECURITY_GROUP)
             .navOrder(40)
             .showInNav(false)
+            .standsUnder(SpamserviceClientsResource.SLUG)
             .icon(Icon.of("key"))
             .parent(ResourceParent.<ManagedClientKey>of(SpamserviceClientsResource.SLUG, ManagedClientKey::clientId)
                 .tab(TAB))

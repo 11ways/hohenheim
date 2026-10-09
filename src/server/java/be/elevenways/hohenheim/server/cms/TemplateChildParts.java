@@ -147,6 +147,7 @@ public final class TemplateChildParts {
             .label(Microcopy.of("plural").withFilter("scope", scope))
             .recordLabel(Microcopy.of("singular").withFilter("scope", scope))
             .navGroup(HohenheimPanel.DEPLOY_GROUP).navOrder(order).icon(icon).showInNav(false)
+            .standsUnder(HohenheimSlugs.INSTANCE_TEMPLATES)
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCE_TEMPLATES, owner).tab("contents"))
             .reads(ResourceReads.rows()).writes(ResourceMutations.rows().create().update().delete().build())
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions());
