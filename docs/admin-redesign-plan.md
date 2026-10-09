@@ -1661,3 +1661,7 @@ D13-FW's framework changes (changelogs `2026-10-08-cluster-landing-one-heading`,
   `20261009-004738` (the phase's whole budget, no test started); it did not reproduce: in `20261009-013339` and 958
   the same solo task booted and passed all six tests on this tree, so no cause was found and none is claimed. The
   set needs a raised budget (run 958: 1954s, about 550s of it rebuilding upstreams).
+- Shot `08-admin-dashboard-final-tree.png` (D13a-finish, jar of build run 965 on the committed tree, a fresh scratch
+  with alchemy-skeleton behind "Alchemy skeleton", the catch-all and kuifje stale by SQL): the Apps badge 2 after
+  hydration, kuifje's item at its zone with the lag sentence's closing period (01 predates it), every surface saying
+  alchemy-skeleton, the catch-all "Per name". Its Backups tile is 0 because this scratch seeded no database.
