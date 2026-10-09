@@ -12,13 +12,25 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 /**
  * The record an attention item is about, so an item caused by it can name it as its root.
  *
- * @param model the record's model
- * @param id    the record's id
+ * AIDEV-NOTE: one subject is no stored record: {@link #httpsTermination()}, the HTTPS this installation's proxy
+ * answers with (its listener and the certificates it loaded). While it cannot answer, every site sent to HTTPS gets
+ * an error page for that one cause, so their items fold under its item instead of each naming its own address.
+ *
+ * @param model the record's model ({@link #HTTPS_TERMINATION} for the installation's HTTPS)
+ * @param id    the record's id (0 for the installation's HTTPS, of which there is one)
  * @author Jelle De Loecker
  * @since  0.9.0
  */
 @HawkeyeClass
 public record AttentionSubject(@NonNull Identifier model, int id) {
+
+    /** The {@link #model} of {@link #httpsTermination()}, a subject no model stores. */
+    public static final Identifier HTTPS_TERMINATION = HohenheimIds.id("https_termination");
+
+    /** @return the HTTPS this installation's proxy answers with: its listener and the certificates it loaded */
+    public static @NonNull AttentionSubject httpsTermination() {
+        return new AttentionSubject(HTTPS_TERMINATION, 0);
+    }
 
     /** @return the host with this id */
     public static @NonNull AttentionSubject host(int serverId) {

@@ -1,23 +1,33 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.instance.InstanceDiskView;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
+import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceBackupModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.instance.InstanceCapacity;
+import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.RelativeTime;
+import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.auth.server.GrantAdministration;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.common.conduit.Conduit;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.KnownCapabilities;
 import be.elevenways.zenit.common.security.KnownCapability;
@@ -106,9 +116,14 @@ public final class InstanceOverview {
                 "lead", Microcopy.of("endpoint_hint").withFilter("scope", "instance_overview")),
             new WidgetTree(List.of(new WidgetInstance(HohenheimWidgets.INSTANCE_ENDPOINTS.id(), Map.of())
                 .withData(endpointsOf(instanceId))))));
-        main.add(AppOverview.resources(List.of(AppOverview.gauge(
-            Microcopy.of("disk").withFilter("scope", "instance_overview"),
-            diskUsage(instance, serverId, locales, resolver)))));
+        // Board App-Overview: memory, disk, CPU. Memory and CPU are the live stats hub's held samples, read while
+        // someone watches the Metrics tab; never a stream opened by this render.
+        List<UsageData> live = liveUsage(instance, InstanceStats.history(instanceId), locales, resolver);
+        main.add(AppOverview.resources(List.of(
+            AppOverview.gauge(Microcopy.of("memory").withFilter("scope", "instance_overview"), live.get(0)),
+            AppOverview.gauge(Microcopy.of("disk").withFilter("scope", "instance_overview"),
+                diskUsage(instance, serverId, locales, resolver)),
+            AppOverview.gauge(Microcopy.of("cpu").withFilter("scope", "instance_overview"), live.get(1)))));
 
         List<WidgetInstance> side = new ArrayList<>();
         side.add(AppOverview.details(facts(instance, serverId, panelSlug, delegated, locales, resolver)));
@@ -162,13 +177,147 @@ public final class InstanceOverview {
         // deliberately: reading it costs nothing, while dialling the daemon per render is
         // the thing the disk gauge already refuses to do.
         facts.add(statusConfirmation(instance, locales, resolver));
+        // How long it has run (board App-Overview's "Running for 2 hours"): since its last start.
+        Instant started = InstanceModel.STATUS_RUNNING.equals(instance.get(InstanceModel.STATUS))
+            ? lastStartOf(instance.get(InstanceModel.ID)) : null;
+        if (started != null) {
+            facts.add(WidgetFact.instant(text("started", "instance_overview", locales, resolver), started.toString()));
+        }
         if (!delegated) {
             facts.add(WidgetFact.link(
                 text("host", "instance_overview", locales, resolver),
                 ServerModel.nameOf(serverId),
                 CmsRoutes.subpage(panelSlug, "servers", serverId, ServerOverviewState.SLUG).toUrl()));
         }
+        facts.addAll(databaseFacts(instance.get(InstanceModel.ID), panelSlug, delegated, locales, resolver));
+        facts.add(backupFact(instance, locales, resolver));
         return facts;
+    }
+
+    /**
+     * When this workload last started: the newest row of {@link HohenheimActivityAction#DEPLOYED}, which every start of
+     * a container records (InstanceService's deploy, an application's release); null when the activity log holds none
+     * (switched off, pruned), and then the card says only that it runs.
+     *
+     * AIDEV-NOTE: a restart the container runtime does on its own (Docker's restart policy) writes no row, so this is
+     * the last start Hohenheim made; no stored column or daemon call says more, and this page dials no daemon.
+     */
+    static @Nullable Instant lastStartOf(int instanceId) {
+        if (Models.get(ActivityModel.MODEL_ID) == null) {
+            return null;
+        }
+        Row row = Models.get(ActivityModel.class).find()
+            .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
+            .where(ActivityModel.RECORD_ID.eq(String.valueOf(instanceId)))
+            .where(ActivityModel.ACTION.eq(HohenheimActivityAction.DEPLOYED.id().toString()))
+            .orderBy(ActivityModel.ID, SortOrder.DESC)
+            .first();
+        return row == null ? null : row.get(ActivityModel.CREATED_AT);
+    }
+
+    /**
+     * One Database line per managed database the workload uses (board App-Overview: "shop (MySQL)"), with the
+     * database's own state when it does not serve ({@link DatabaseVerdict}), linked to its page for the operator.
+     */
+    private static @NonNull List<WidgetFact> databaseFacts(int instanceId, @NonNull String panelSlug,
+                                                           boolean delegated, @NonNull LocaleChain locales,
+                                                           @Nullable MessageResolver resolver) {
+        List<WidgetFact> facts = new ArrayList<>();
+        String label = text("database", "instance_overview", locales, resolver);
+        for (Row link : Models.get(InstanceDatabaseModel.class).find()
+                .where(InstanceDatabaseModel.INSTANCE_ID.eq(instanceId)).all()) {
+            Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
+            Row database = databaseId == null ? null : Models.get(DatabaseModel.class).findById(databaseId);
+            if (database == null) {
+                continue;
+            }
+            DatabaseVerdict verdict = DatabaseVerdict.ofDatabase(database);
+            Microcopy state = verdict.state().label().withFilter("case", "sentence");
+            Microcopy value = (verdict.state().serves()
+                    ? Microcopy.of("database_value").withFilter("scope", "instance_overview")
+                    : Microcopy.of("database_value_state").withFilter("scope", "instance_overview")
+                        .withArg("state", state))
+                .withArg("name", database.get(DatabaseModel.NAME))
+                .withArg("engine", WidgetBadge.of(DatabaseModel.ENGINE, database.get(DatabaseModel.ENGINE), locales,
+                    resolver).label());
+            String words = value.resolve(locales, resolver);
+            facts.add(delegated ? WidgetFact.of(label, words)
+                : WidgetFact.link(label, words, CmsRoutes.open(panelSlug, DatabaseParts.SLUG, databaseId).toUrl()));
+        }
+        return facts;
+    }
+
+    /**
+     * The Backups line (board App-Overview: "last one 03:00, 212 MB"): its newest backup, failed or made, or that
+     * none is made because it has no backup target.
+     */
+    private static @NonNull WidgetFact backupFact(@NonNull Row instance, @NonNull LocaleChain locales,
+                                                  @Nullable MessageResolver resolver) {
+        String label = text("backups", "instance_overview", locales, resolver);
+        if (instance.get(InstanceModel.BACKUP_TARGET_ID) == null) {
+            return WidgetFact.of(label, text("backups_no_target", "instance_overview", locales, resolver));
+        }
+        Row newest = Models.get(InstanceBackupModel.class).newestOf(instance.get(InstanceModel.ID));
+        Instant at = newest == null ? null : newest.get(InstanceBackupModel.CREATED_AT);
+        if (newest == null || at == null) {
+            return WidgetFact.of(label, text("backups_none_yet", "instance_overview", locales, resolver));
+        }
+        RelativeTimeWording wording = resolver == null ? null : RelativeTimeWording.resolve(locales, resolver);
+        boolean made = InstanceBackupModel.STATUS_COMPLETE.equals(newest.get(InstanceBackupModel.STATUS));
+        Long size = newest.get(InstanceBackupModel.SIZE_BYTES);
+        Microcopy words = made
+            ? Microcopy.of("backups_last").withFilter("scope", "instance_overview")
+                .withArg("size", size == null ? "-" : ByteText.human(size))
+            : Microcopy.of("backups_last_failed").withFilter("scope", "instance_overview");
+        return WidgetFact.of(label, words.withArg("ago", RelativeTime.ago(at, wording)).resolve(locales, resolver));
+    }
+
+    // -- live usage ------------------------------------------------------------------
+
+    /**
+     * Memory and CPU from the samples the live stats hub holds ({@link InstanceStats#history}), which exist only while
+     * someone watches the workload's Metrics tab: a reading when there is one, NOT MEASURED in words when there is
+     * not, never a zero.
+     *
+     * AIDEV-NOTE: never opens a stream (InstanceStats.lastMemoryMb's rule): a render that started a daemon stats
+     * stream would be the per-render daemon call this page refuses. Memory is measured against the container's own
+     * limit, else what the host booked for it; CPU is the samples' mean (the first, which has no CPU figure, left out)
+     * against the cores the daemon reports.
+     *
+     * @return memory, then CPU
+     */
+    static @NonNull List<UsageData> liveUsage(@NonNull Row instance, @NonNull List<InstanceStats.Sample> samples,
+                                              @NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
+        if (!InstanceModel.STATUS_RUNNING.equals(instance.get(InstanceModel.STATUS))) {
+            UsageData idle = UsageData.unmeasured(text("live_not_running", "instance_overview", locales, resolver));
+            return List.of(idle, idle);
+        }
+        if (samples.isEmpty()) {
+            UsageData unwatched = UsageData.unmeasured(text("live_unwatched", "instance_overview", locales, resolver));
+            return List.of(unwatched, unwatched);
+        }
+        InstanceStats.Sample last = samples.get(samples.size() - 1);
+        String observed = Instant.ofEpochMilli(last.at()).toString();
+        long limit = last.memoryLimit() > 0 ? last.memoryLimit()
+            : InstanceCapacity.bookedMbOf(instance) * 1024L * 1024L;
+        UsageData memory = limit > 0
+            ? UsageData.measured(last.memoryBytes(), limit, ByteText.human(last.memoryBytes()), ByteText.human(limit),
+                observed)
+            : UsageData.unmeasured(Microcopy.of("memory_no_limit").withFilter("scope", "instance_overview")
+                .withArg("used", ByteText.human(last.memoryBytes())).resolve(locales, resolver));
+        if (samples.size() < 2) {
+            return List.of(memory,
+                UsageData.unmeasured(text("cpu_first_reading", "instance_overview", locales, resolver)));
+        }
+        double total = 0;
+        for (InstanceStats.Sample sample : samples.subList(1, samples.size())) {
+            total += sample.cpuPercent();
+        }
+        long mean = Math.round(total / (samples.size() - 1));
+        UsageData cpu = UsageData.measured(mean, 100L * last.cores(), mean + "%",
+            Microcopy.of("cores").withFilter("scope", "instance_overview").withArg("count", last.cores())
+                .resolve(locales, resolver), observed);
+        return List.of(memory, cpu);
     }
 
     // -- status ----------------------------------------------------------------------
@@ -327,7 +476,9 @@ public final class InstanceOverview {
         for (KnownCapability capability : KnownCapabilities.forModel(InstanceModel.MODEL_ID)) {
             if (capability.label() != null && !HohenheimAccess.VIEW.equals(capability.capability())
                 && HohenheimAccess.hasInstanceCapability(access, instanceId, capability.capability())) {
-                held.add(capability.label().resolve(locales, resolver));
+                // The first as declared, the rest in their sentence spelling ("Console, power, configure").
+                held.add((held.isEmpty() ? capability.label() : capability.label().withFilter("case", "sentence"))
+                    .resolve(locales, resolver));
             }
         }
         boolean shares = GrantAdministration.mayAdministerRecordAccess(access, InstanceModel.MODEL_ID, instanceId);
@@ -336,7 +487,8 @@ public final class InstanceOverview {
             can = text(shares ? "you_can_look_share" : "you_can_look", "instance_overview", locales, resolver);
         } else {
             if (shares) {
-                held.add(text("you_can_share", "instance_overview", locales, resolver));
+                held.add(Microcopy.of("you_can_share").withFilter("scope", "instance_overview")
+                    .withFilter("case", "sentence").resolve(locales, resolver));
             }
             can = String.join(", ", held);
         }

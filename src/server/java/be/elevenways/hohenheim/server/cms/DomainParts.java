@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
+import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.hohenheim.server.tls.HostnameReach;
 import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
 import be.elevenways.hohenheim.site.DomainCertCell;
@@ -363,7 +364,7 @@ public final class DomainParts {
         return new DomainCertCell(coverage.key(), coverage.badgeVariant(), coverage.label(), detail,
             canOpen ? String.valueOf((Object) cert.get(CertificateModel.NICE_NAME)) : null,
             canOpen ? CmsRoutes.detail(panelSlug, HohenheimSlugs.CERTIFICATES, certId).toUrl() : null,
-            expiresOn != null ? expiresOn.toString() : null);
+            expiresOn != null ? CertificateExpiry.of(expiresOn) : null);
     }
 
     /**

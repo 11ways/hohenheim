@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.activity.ActivitySeverity;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * The activity verbs Hohenheim declares; its created, updated and deleted rows are core's verbs.
@@ -63,12 +64,12 @@ public enum HohenheimActivityAction implements ActivityAction {
     EXEC("exec"),
     DRAINED("drained"),
     MIGRATED("migrated"),
-    FILES_SAVE("files_save"),
-    FILES_UPLOAD("files_upload"),
-    FILES_MKDIR("files_mkdir"),
-    FILES_RENAME("files_rename"),
-    FILES_DELETE("files_delete"),
-    FILES_WRITE("files_write"),
+    FILES_SAVE("files_save", Grouping.BATCHED),
+    FILES_UPLOAD("files_upload", Grouping.BATCHED),
+    FILES_MKDIR("files_mkdir", Grouping.BATCHED),
+    FILES_RENAME("files_rename", Grouping.BATCHED),
+    FILES_DELETE("files_delete", Grouping.BATCHED),
+    FILES_WRITE("files_write", Grouping.BATCHED),
     DELETED_DATA("deleted_data"),
     SETTLED_INTERRUPTED("settled_interrupted"),
     RECONCILED("reconciled"),
@@ -126,18 +127,43 @@ public enum HohenheimActivityAction implements ActivityAction {
         ActivityActions.legacyKey("deleted", ZenitActivityAction.DELETE);
     }
 
+    /** Whether one session writes many rows of a verb, so a batch of it reads in its own words. */
+    public enum Grouping {
+
+        /** One row at a time; a batch of it, if any, reads as core's "{action} ({count} times)". */
+        SINGLE,
+
+        /** Written many at a time (an SFTP session's files), so its batch reads "Uploaded 312 files". */
+        BATCHED
+    }
+
     private final @NonNull String value;
     private final @NonNull Identifier id;
     private final @NonNull ErrorCause errorCause;
+    private final @NonNull Grouping grouping;
 
     HohenheimActivityAction(@NonNull String value) {
-        this(value, ErrorCause.NONE);
+        this(value, ErrorCause.NONE, Grouping.SINGLE);
     }
 
     HohenheimActivityAction(@NonNull String value, @NonNull ErrorCause errorCause) {
+        this(value, errorCause, Grouping.SINGLE);
+    }
+
+    HohenheimActivityAction(@NonNull String value, @NonNull Grouping grouping) {
+        this(value, ErrorCause.NONE, grouping);
+    }
+
+    HohenheimActivityAction(@NonNull String value, @NonNull ErrorCause errorCause, @NonNull Grouping grouping) {
         this.value = value;
         this.id = HohenheimIds.id(value);
         this.errorCause = errorCause;
+        this.grouping = grouping;
+    }
+
+    /** @return whether many rows of this verb are written at a time */
+    public @NonNull Grouping grouping() {
+        return this.grouping;
     }
 
     /** @return whether this verb is the recorded cause of a workload's ERROR status, and what its detail holds */
@@ -168,5 +194,17 @@ public enum HohenheimActivityAction implements ActivityAction {
     @Override
     public @NonNull Microcopy happened() {
         return ActivityActions.sentence(this);
+    }
+
+    /**
+     * The words of a whole batch of this verb ("Uploaded 312 files"), shipped under {@code target=activity_batch}
+     * with the argument {@code count}; null reads core's "{action} ({count} times)".
+     */
+    @Override
+    public @Nullable Microcopy batchLabel() {
+        return switch (this.grouping) {
+            case BATCHED -> ActivityActions.batchLabel(this);
+            case SINGLE -> null;
+        };
     }
 }

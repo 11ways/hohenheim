@@ -8,27 +8,35 @@ import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.server.task.IsolationFindings;
 import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.hohenheim.test.database.EngineHandles;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
@@ -374,15 +382,16 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(rootOf(stopped, workload)).as("step 4: a stopped workload is no item of its own").isNull();
             assertThat(causedBy(stopped, workload)).as("step 4: so its site's error page stays, once").hasSize(1);
 
-            // 5. An address forced to HTTPS without a certificate is the root of its site's error page: the site's
-            //    verdict names that address, and the address's own item is about it.
+            // 5. An address forced to HTTPS without a certificate is the root of its site's error page wherever HTTPS
+            //    is served (here: no proxy in this process, so the stored rows decide): the site's verdict names that
+            //    address, and the address's own item is about it.
             Row docs = setupSite("hohenheim:static", PREFIX + "docs", PREFIX + "docs", Map.of("root_path", "/tmp"));
             sites.add(docs);
             Row forced = forcedDomain(docs, "docs.d11.test");
             AttentionSubject address = AttentionSubject.address(forced.get(SiteDomainModel.ID));
+            ServerMain.adoptProxyServer(null);
             assertThat(AppHealth.siteReading(fresh(docs)).cause())
                 .as("step 5: the site's verdict names the forced address as its cause").isEqualTo(address);
-            ServerMain.adoptProxyServer(null);
             List<AttentionItem> forcedItems = new ArrayList<>();
             ProxyAttention.forcedWithoutCertificate(forcedItems);
             ServerMain.adoptProxyServer(proxy);
@@ -410,6 +419,28 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             ProxyAttention.httpsUnavailableWithForceSsl(ownOnly);
             assertThat(say(ownOnly.get(0).heldBack())).as("step 6: without the setting only the forcing site is named")
                 .isEqualTo("Visitors of " + PREFIX + "docs get an error page: their addresses force HTTPS.");
+
+            // 6b. That one cause is shown once, at its root (D13a's dashboard said it twice): the item is about the
+            //     installation's HTTPS, the site's verdict names it as the cause instead of its address, the address
+            //     raises no item of its own, and folded, the site's error page leaves the band.
+            AttentionSubject httpsRoot = AttentionSubject.httpsTermination();
+            assertThat(ownOnly.get(0).about()).as("step 6b: HTTPS is unavailable is about the installation's HTTPS")
+                .isEqualTo(httpsRoot);
+            assertThat(AppHealth.siteReading(fresh(docs)).cause())
+                .as("step 6b: while no HTTPS is served, the forced site's cause is that, not its address")
+                .isEqualTo(httpsRoot);
+            List<AttentionItem> silent = new ArrayList<>();
+            ProxyAttention.forcedWithoutCertificate(silent);
+            assertThat(silent).as("step 6b: the address raises no item of its own meanwhile").isEmpty();
+            AttentionItem siteItem = new AttentionItem(AttentionSeverity.ERROR, "globe",
+                Microcopy.literal("Visitors of " + PREFIX + "docs get an error page"), null, null, null)
+                .causedBy(AppHealth.siteReading(fresh(docs)).cause());
+            assertThat(DashboardAttention.fold(List.of(), List.of(ownOnly.get(0), siteItem)).attention())
+                .as("step 6b: folded, the site's error page leaves the band and its root stays")
+                .containsExactly(ownOnly.get(0));
+            List<AttentionItem> httpsBand = DashboardAttention.read(AttentionCollector.collect(), true).attention();
+            assertThat(rootOf(httpsBand, httpsRoot)).as("step 6b: the dashboard's band keeps the root").isNotNull();
+            assertThat(causedBy(httpsBand, httpsRoot)).as("step 6b: and no site it keeps from visitors").isEmpty();
 
             // 7. A failing task reads by its worded name, with why its last run failed (never a class name or a
             //    stack trace) and the way to that run, whose page offers Run now.
@@ -485,6 +516,106 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
     }
 
     @Test
+    @Timeout(90)
+    void whatAnAlertSaidOnceStaysOnTheDashboardAtItsRoot() throws Exception {
+        List<Runnable> cleanup = new ArrayList<>();
+        try {
+            // 1. A certificate expiring within the alert's window (CERT_EXPIRING) is an item for as long as it does:
+            //    an upload that never renews, and a Let's Encrypt one whose renewal failed, each saying so; one that
+            //    expires later raises nothing.
+            Row upload = certificate(cleanup, PREFIX + "upload", CertificateModel.PROVIDER_CUSTOM, false, 5, null);
+            certificate(cleanup, PREFIX + "stuck", CertificateModel.PROVIDER_LETSENCRYPT, true, 10,
+                "too many requests");
+            certificate(cleanup, PREFIX + "later", CertificateModel.PROVIDER_CUSTOM, false, 40, null);
+            List<AttentionItem> certificates = new ArrayList<>();
+            ProxyAttention.expiringCertificates(certificates);
+            assertThat(mine(certificates)).as("step 1: the two expiring certificates, not the later one").hasSize(2);
+            AttentionItem uploaded = titled(certificates, "The certificate " + PREFIX + "upload expires in 5 days");
+            assertThat(uploaded.title().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 1: in Dutch too").isEqualTo("Het certificaat " + PREFIX + "upload verloopt over 5 dagen");
+            assertThat(say(uploaded.detail())).as("step 1: an upload never renews itself")
+                .isEqualTo("It does not renew itself: upload a new one, or get one from Let's Encrypt.");
+            assertThat(say(uploaded.action())).as("step 1: with the way to it").isEqualTo("Check the certificate");
+            assertThat(uploaded.target().toUrl()).as("step 1: its own page")
+                .isEqualTo(CmsRoutes.detail(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES,
+                    upload.get(CertificateModel.ID)).toUrl());
+            assertThat(say(titled(certificates, "The certificate " + PREFIX + "stuck expires in 10 days").detail()))
+                .as("step 1: a renewal that failed says why").isEqualTo("Renewing it failed: too many requests");
+
+            // 2. A stack whose services all stopped after a good deploy (STACK_HEALTH) stopped after an error, never
+            //    "its last deploy failed"; one running in part says so. Both lead to the stack's services, and the
+            //    stack's own verdict (its Apps row) says the same.
+            int local = ServerModel.localServerId();
+            Row failed = stack(cleanup, PREFIX + "stack-failed", StackModel.STATUS_FAILED, local);
+            Row degraded = stack(cleanup, PREFIX + "stack-degraded", StackModel.STATUS_DEGRADED, local);
+            List<AttentionItem> stacks = new ArrayList<>();
+            StackAttention.unhealthyStacks(stacks);
+            AttentionItem stopped = titled(stacks, PREFIX + "stack-failed stopped after an error");
+            assertThat(stopped.severity()).as("step 2: a stopped stack is an error").isEqualTo(AttentionSeverity.ERROR);
+            assertThat(say(stopped.detail())).as("step 2: saying none of its services runs")
+                .isEqualTo("None of its services is running.");
+            assertThat(say(stopped.action())).as("step 2: with the way to it")
+                .isEqualTo("Open " + PREFIX + "stack-failed");
+            assertThat(stopped.target().toUrl()).as("step 2: its services")
+                .isEqualTo("/admin/stacks/" + failed.get(StackModel.ID) + "/page/services");
+            assertThat(say(AppHealth.stackHealth(failed).headline())).as("step 2: its verdict says the same")
+                .isEqualTo("Stopped after an error");
+            AttentionItem part = titled(stacks, "Part of " + PREFIX + "stack-degraded is not running");
+            assertThat(part.severity()).as("step 2: a stack running in part is a warning")
+                .isEqualTo(AttentionSeverity.WARNING);
+            assertThat(say(part.detail())).as("step 2: in its verdict's words")
+                .isEqualTo(say(AppHealth.stackHealth(degraded).detail()));
+
+            // 3. Automatic bans paused (AUTO_BAN_BUDGET_EXHAUSTED): an item while the last hour spent the budget, in
+            //    the alert's words, leading to the blocked addresses; nothing while there is room.
+            AttentionItem paused = FirewallAttention.autoBanBudget(new BanService.AutoBanBudget(50, 50, 3));
+            assertThat(paused).as("step 3: a spent budget raises an item").isNotNull();
+            assertThat(say(paused.title())).as("step 3: titled as the alert").isEqualTo("Automatic bans are paused");
+            assertThat(say(paused.detail())).as("step 3: saying how many the hour allows")
+                .startsWith("50 automatic bans were made in the last hour");
+            assertThat(say(paused.action())).as("step 3: with the way to them").isEqualTo("Open blocked addresses");
+            assertThat(paused.target().toUrl()).as("step 3: the blocked addresses").isEqualTo("/admin/bans");
+            assertThat(FirewallAttention.autoBanBudget(new BanService.AutoBanBudget(50, 49, 0)))
+                .as("step 3: a budget with room raises nothing").isNull();
+            assertThat(BanService.INSTANCE.autoBanBudget().exhausted()).as("step 3: the live budget has room here")
+                .isFalse();
+
+            // 4. A database moved to a shared engine whose old engine could not be removed (DATABASE_MOVE_LEFTOVER):
+            //    an item naming the leftover and its host for as long as it lives, leading to the database; none while
+            //    the database still uses it.
+            Row moved = database(cleanup, PREFIX + "moved");
+            int movedId = moved.get(DatabaseModel.ID);
+            EngineHandles.plant(movedId, PREFIX + "moved", "mysql", InstanceModel.STATUS_RUNNING);
+            Row leftover = OwnedInstances.soleOwnedBy(DatabaseModel.MODEL_ID, movedId);
+            assertThat(leftover).as("step 4: the dedicated engine is planted").isNotNull();
+            cleanup.add(() -> OwnedInstances.inScopeUnchecked(DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID,
+                movedId, () -> HardDeletes.row(Models.get(InstanceModel.class), leftover)));
+            List<AttentionItem> before = new ArrayList<>();
+            DatabaseAttention.moveLeftovers(before);
+            assertThat(mine(before)).as("step 4: a database using its own engine leaves nothing over").isEmpty();
+            Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.eq(movedId))
+                .assign(DatabaseModel.PLACEMENT, DatabaseModel.PLACEMENT_SHARED).bypassBehaviours().updateAll();
+            List<AttentionItem> after = new ArrayList<>();
+            DatabaseAttention.moveLeftovers(after);
+            AttentionItem left = titled(after,
+                "Database " + PREFIX + "moved moved, but its old engine is still running");
+            assertThat(say(left.detail())).as("step 4: naming the leftover and its host")
+                .isEqualTo("Its old engine " + leftover.get(InstanceModel.NAME) + " on " + ServerModel.nameOf(local)
+                    + " could not be removed and still holds its port, memory and a copy of the data.");
+            assertThat(say(left.action())).as("step 4: with the way to the database").isEqualTo("Open the database");
+
+            // 5. The dashboard's collector gathers each of them.
+            List<String> collected = AttentionCollector.collect().stream().map(item -> say(item.title())).toList();
+            assertThat(collected).as("step 5: every one of them reaches Needs attention")
+                .contains(say(uploaded.title()), say(stopped.title()), say(part.title()), say(left.title()));
+        } finally {
+            for (int i = cleanup.size() - 1; i >= 0; i--) {
+                cleanup.get(i).run();
+            }
+        }
+    }
+
+    @Test
     void everyTaskAndEveryCountReadsInWords() throws Exception {
         ShippedCatalogs catalogs = new ShippedCatalogs();
 
@@ -529,6 +660,54 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                     .as("step 3: the %s catalog counts in real plurals", language).isNull();
             }
         }
+    }
+
+    private static AttentionItem titled(List<AttentionItem> items, String title) {
+        return items.stream().filter(item -> say(item.title()).equals(title)).findFirst()
+            .orElseThrow(() -> new AssertionError("an item is titled '" + title + "', among "
+                + items.stream().map(item -> say(item.title())).toList()));
+    }
+
+    private static Row certificate(List<Runnable> cleanup, String name, String provider, boolean autoRenew, int days,
+                                   String renewalError) {
+        CertificateModel certificates = Models.get(CertificateModel.class);
+        Row row = certificates.createEmptyRow();
+        row.set(CertificateModel.NICE_NAME, name);
+        row.set(CertificateModel.PROVIDER, provider);
+        row.set(CertificateModel.STATUS, CertificateModel.STATUS_ACTIVE);
+        row.set(CertificateModel.DOMAIN_NAMES_TEXT, name + ".d13b.test");
+        row.set(CertificateModel.AUTO_RENEW, autoRenew);
+        row.set(CertificateModel.RENEWAL_ERROR, renewalError);
+        row.set(CertificateModel.EXPIRES_ON, Now.instant().plus(Duration.ofDays(days)).plus(Duration.ofHours(1)));
+        certificates.save(row);
+        cleanup.add(() -> HardDeletes.row(certificates, row));
+        return row;
+    }
+
+    private static Row stack(List<Runnable> cleanup, String name, String status, int serverId) {
+        StackModel stacks = Models.get(StackModel.class);
+        Row row = stacks.createEmptyRow();
+        row.set(StackModel.NAME, name);
+        row.set(StackModel.SERVER_ID, serverId);
+        row.set(StackModel.STATUS, status);
+        row.set(StackModel.ENABLED, false);
+        stacks.save(row);
+        cleanup.add(() -> HardDeletes.row(stacks, row));
+        return row;
+    }
+
+    /** A dedicated managed database record, as DatabasesPageJourneyTest writes one. */
+    private static Row database(List<Runnable> cleanup, String name) {
+        DatabaseModel databases = Models.get(DatabaseModel.class);
+        Row row = databases.createEmptyRow();
+        Map.of(DatabaseModel.NAME.getName(), (Object) name, DatabaseModel.ENGINE.getName(), "mysql",
+            DatabaseModel.PLACEMENT.getName(), DatabaseModel.PLACEMENT_DEDICATED,
+            DatabaseModel.DB_NAME.getName(), "moveddb", DatabaseModel.DB_USER.getName(), "moveduser",
+            DatabaseModel.DB_PASSWORD.getName(), "moved-secret-password", DatabaseModel.EPHEMERAL.getName(), true,
+            DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE).forEach(row::set);
+        databases.save(row);
+        cleanup.add(() -> HardDeletes.row(databases, row));
+        return row;
     }
 
     private static List<AttentionItem> causedBy(List<AttentionItem> items, AttentionSubject root) {

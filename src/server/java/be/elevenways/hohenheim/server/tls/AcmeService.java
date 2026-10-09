@@ -709,8 +709,8 @@ public class AcmeService {
         }
     }
 
-    /** Days before expiry at which the expiring-soon alert fires. */
-    static final int EXPIRY_ALERT_DAYS = 14;
+    /** Days before expiry at which the expiring-soon alert fires and the dashboard raises the certificate. */
+    public static final int EXPIRY_ALERT_DAYS = 14;
 
     /**
      * Alert once per expiry cycle for certificates expiring soon: custom uploads never
@@ -732,7 +732,7 @@ public class AcmeService {
             Alerts.trySend(NotificationEvents.CERT_EXPIRING,
                 Alerts.about(CertificateModel.MODEL_ID, cert.get(CertificateModel.ID)),
                 Alerts.copy("cert_expiring_subject").withArg("name", String.valueOf(niceName))
-                    .withArg("days", Math.max(0, ChronoUnit.DAYS.between(now, expiresOn))),
+                    .withArg("expiry", CertificateExpiry.inSentence(expiresOn)),
                 Alerts.copy("cert_expiring_body").withArg("date", expiresOn.toString().substring(0, 10)));
             cert.set(CertificateModel.EXPIRY_NOTIFIED_AT, now);
             certModel.save(cert);

@@ -121,8 +121,10 @@ public final class SiteParts {
     /** @return the operator's site resource: every site, the full form, the trash and the history */
     public static @NonNull PanelResource<Row> admin() {
         return entry("site")
-            // Reached through the Apps list, whose toolbar links this list (HohenheimPanel's sidebar note).
+            // Reached through the Apps list, whose toolbar links this list (HohenheimPanel's sidebar note); its pages
+            // mark Apps in the sidebar.
             .showInNav(false)
+            .standsUnder(AppParts.SLUG)
             .health(AppHealth.sites(false))
             .list(adminList())
             .form(ResourceForm.<Row>of(SiteWrites.ADMIN_FORM)
@@ -166,8 +168,9 @@ public final class SiteParts {
      */
     public static @NonNull PanelResource<Row> manage() {
         return entry("manage_site")
-            // Reached from the Apps list's toolbar (ManagePanel's sidebar note).
+            // Reached from the Apps list's toolbar (ManagePanel's sidebar note); its pages mark Apps in the sidebar.
             .showInNav(false)
+            .standsUnder(AppParts.SLUG)
             .health(AppHealth.sites(true))
             .scope(TenantScopes.SITES)
             // NAV-ONLY (zero granted sites hide the empty list); the route itself stays scoped.

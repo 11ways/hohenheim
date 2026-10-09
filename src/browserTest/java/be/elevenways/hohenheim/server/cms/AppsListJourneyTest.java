@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -14,6 +15,7 @@ import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.cms.AppDirectory.App;
 import be.elevenways.hohenheim.server.cms.AppDirectory.Source;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.site.DomainCertCell;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -23,6 +25,7 @@ import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.common.Zenit;
@@ -31,6 +34,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,7 +47,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The Apps list reads every kind of app Hohenheim serves as one row of its own, with the kind, address, host and
  * HTTPS state the app's record page says, and opens that record page; what belongs to another record (a stack's
  * members, a database's container, a database engine) is no app. A website runs where its instance runs, and a
- * catch-all says what it catches.
+ * catch-all says what it catches. A broken row offers its verdict's fix, its glyph and HTTPS badge agree, and a
+ * certificate's expiry reads in whole days everywhere.
  *
  * @author Jelle De Loecker
  * @since  0.2.0
@@ -279,6 +284,78 @@ class AppsListJourneyTest extends HohenheimTestBase {
             assertThat(forced).as("step 11: the forced address's item offers its fix on the app by the app's name")
                 .anySatisfy(item -> assertThat(say(item.action())).isEqualTo("Fix on " + PREFIX + "docker"))
                 .noneSatisfy(item -> assertThat(say(item.action())).isEqualTo("Fix on " + PREFIX + "docker-site"));
+
+            // 12. A broken row offers its fix (board Apps-List), not only the words of it: the forced static site's
+            //     first fix is Get a certificate, leading to its addresses, drawn in its row as its band offers it.
+            //     A working app offers none.
+            App staticApp = journeyApps().get(PREFIX + "static");
+            assertThat(staticApp.fix()).as("step 12: the broken static site offers its fix").isNotNull();
+            assertThat(staticApp.fix().link()).as("step 12: one that leads somewhere").isNotNull();
+            assertThat(say(staticApp.fix().link().label())).as("step 12: Get a certificate")
+                .isEqualTo("Get a certificate");
+            String domainsTab = "/admin/sites/" + files.get(SiteModel.ID) + "/page/" + SiteParts.DOMAINS_TAB;
+            assertThat(String.valueOf(staticApp.fix().link().target())).as("step 12: to the site's addresses")
+                .contains(domainsTab);
+            assertThat(journeyApps().get(PREFIX + "redirect").fix()).as("step 12: a working app offers no fix")
+                .isNull();
+            String staticList = adminGet("/admin/apps?_search=" + PREFIX + "static").body();
+            assertThat(staticList).as("step 12: the list draws the fix in the row")
+                .contains("data-app-fix").contains("Get a certificate").contains(domainsTab);
+
+            // 13. Glyph and badge read one verdict: a stopped workload whose only name is forced to HTTPS without a
+            //     certificate is broken (its visitors get an error page whether or not it runs), as its HTTPS badge
+            //     says, on the list and on the dashboard's Apps band alike; its fix is its site's.
+            Row held = instance(cleanup, "forced-workload", "hohenheim:docker_container",
+                Map.of("image", "alpine", "command", "sleep 60"), InstanceModel.STATUS_STOPPED, local);
+            Row heldSite = site(cleanup, "forced-workload-site", "hohenheim:instance", Map.of(),
+                held.get(InstanceModel.ID));
+            domain(heldSite, "forced-workload.apps-journey.test", true);
+            App heldApp = journeyApps().get(PREFIX + "forced-workload");
+            assertThat(heldApp.https().status()).as("step 13: its HTTPS badge says not working")
+                .isEqualTo(CertCoverage.ERROR.key());
+            assertThat(heldApp.health().tone()).as("step 13: and its glyph says broken, never only 'not running'")
+                .isEqualTo(HealthTone.BROKEN);
+            assertThat(say(heldApp.health().headline())).as("step 13: in visitors' words")
+                .isEqualTo("Visitors get an error page");
+            assertThat(say(heldApp.fix().link().label())).as("step 13: offering its site's fix")
+                .isEqualTo("Get a certificate");
+            String board = adminGet("/admin/dashboard").body();
+            int heldRow = board.indexOf("data-hh-dashboard-app=\"" + PREFIX + "forced-workload\"");
+            assertThat(heldRow).as("step 13: the dashboard lists it").isNotNegative();
+            assertThat(board.substring(heldRow, board.indexOf("</pl-list-item>", heldRow)))
+                .as("step 13: with the broken glyph beside its Not working badge")
+                .contains("data-cms-health=\"broken\"").contains("Not working");
+
+            // 14. A certificate's expiry reads the same everywhere, in whole days (the dashboard's and the boards'
+            //     "in 35 days", never "a month and 5 days from now"): the app's HTTPS cell, the Certificates list.
+            Row certified = site(cleanup, "certified", "hohenheim:static", Map.of("root_path", "/tmp"), null);
+            domain(certified, "certified.apps-journey.test", false);
+            CertificateModel certificates = Models.get(CertificateModel.class);
+            Row certificate = row(cleanup, certificates, Map.of(CertificateModel.NICE_NAME.getName(), PREFIX + "cert",
+                CertificateModel.PROVIDER.getName(), CertificateModel.PROVIDER_CUSTOM,
+                CertificateModel.STATUS.getName(), CertificateModel.STATUS_ACTIVE,
+                CertificateModel.DOMAIN_NAMES_TEXT.getName(), "certified.apps-journey.test",
+                CertificateModel.EXPIRES_ON.getName(),
+                Now.instant().plus(Duration.ofDays(35)).plus(Duration.ofHours(1))));
+            DomainCertCell certifiedHttps = journeyApps().get(PREFIX + "certified").https();
+            assertThat(say(certifiedHttps.expiry())).as("step 14: the HTTPS cell counts whole days")
+                .isEqualTo("Expires in 35 days");
+            assertThat(certifiedHttps.expiry().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 14: in Dutch too").isEqualTo("Verloopt over 35 dagen");
+            assertThat(say(CertificateParts.stateCell(certificates.findById(certificate.get(CertificateModel.ID)))
+                .detail())).as("step 14: the Certificates list says the same").isEqualTo("Expires in 35 days");
+            assertThat(adminGet("/admin/apps?_search=" + PREFIX + "certified").body())
+                .as("step 14: the list draws it, never the browser's relative time")
+                .contains("Expires in 35 days").doesNotContain("pl-relative-time");
+            assertThat(say(CertificateExpiry.of(Now.instant().plus(Duration.ofHours(25)))))
+                .as("step 14: one day").isEqualTo("Expires in 1 day");
+            assertThat(say(CertificateExpiry.of(Now.instant().plus(Duration.ofHours(2)))))
+                .as("step 14: the last day").isEqualTo("Expires today");
+            assertThat(say(CertificateExpiry.of(Now.instant().minus(Duration.ofDays(3)).minus(Duration.ofHours(1)))))
+                .as("step 14: and past it").isEqualTo("Expired 3 days ago");
+            assertThat(say(CertificateExpiry.inSentence(
+                    Now.instant().plus(Duration.ofDays(12)).plus(Duration.ofHours(1)))))
+                .as("step 14: inside a sentence").isEqualTo("expires in 12 days");
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();

@@ -21,7 +21,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @param detail     why HTTPS does not work (or only partly) for this name, null when it works
  * @param name       the covering certificate's name, null for a reader who may not open it
  * @param url        the covering certificate's detail URL, null when {@code name} is
- * @param expiresIso the covering certificate's expiry, null when it has none
+ * @param expiry     when the covering certificate expires, in the one expiry wording ("Expires in 35 days"), null
+ *                   when it has no expiry
  */
 @HawkeyeClass
 public record DomainCertCell(
@@ -31,6 +32,6 @@ public record DomainCertCell(
     @Nullable Microcopy detail,
     @Nullable String name,
     @Nullable String url,
-    @Nullable String expiresIso
+    @Nullable Microcopy expiry
 ) {
 }

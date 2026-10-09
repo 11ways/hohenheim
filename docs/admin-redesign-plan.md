@@ -1665,3 +1665,91 @@ D13-FW's framework changes (changelogs `2026-10-08-cluster-landing-one-heading`,
   with alchemy-skeleton behind "Alchemy skeleton", the catch-all and kuifje stale by SQL): the Apps badge 2 after
   hydration, kuifje's item at its zone with the lag sentence's closing period (01 predates it), every surface saying
   alchemy-skeleton, the catch-all "Per name". Its Backups tile is 0 because this scratch seeded no database.
+
+## 36. D13b decisions (fork D13b, 2026-10-09)
+
+D13a's leftovers on the dashboard (shot `d13a/08`), DEP10's Apps list and app overview defects (shots `dep10/02`,
+`dep10/03`, boards Apps-List and App-Overview), and adopting the framework changes of 2026-10-08/09 (changelogs
+`zenit-auth-people-columns-and-holdings`, `zenit-auth-person-can-manage`, `activity-batches`, `hidden-entry-stands-under`).
+
+- Home: `zemble home` answered NEW_MECHANISM in apps for the HTTPS root (next to `ProxyAttention`, `AppHealth`,
+  `SiteDispatcher`); it extends the existing `AttentionSubject`/`DashboardAttention.fold` (D8/D11), nothing beside it.
+  The expiry wording, the stack items and the row fix extend `CertificateParts`, `AppHealth` and `AppDirectory`.
+- One HTTPS cause, shown once at its root: `AttentionSubject.httpsTermination()` is the installation's HTTPS (the
+  proxy's listener and the certificates it loaded), the one subject no model stores (`AttentionSubject.HTTPS_TERMINATION`,
+  id 0). "HTTPS is unavailable" and the failed/degraded HTTPS listener items are `about` it; while this proxy answers
+  no HTTPS (`AppHealth.httpsTerminates`, the one reading `forcedWithoutCertificate`'s silence shares), a site forced
+  to HTTPS names it as its verdict's cause instead of its address, so its "Visitors of X get an error page" item folds
+  under the root. Deleted: `AttentionItem.holding` (replacement: `about(AttentionSubject.httpsTermination(), ...)`).
+- Glyph and badge read one verdict: a workload that does not run (held back by its host, stopped) reads its site's
+  broken verdict when the site is broken for a cause of its own (a name forced to HTTPS without a certificate, the
+  proxy refusing its settings; `AppHealth.siteBrokenOnItsOwn`), so the row's glyph says broken beside "Not working".
+  The host item's held-back reason now reads the placement gate's words directly. A site whose stored certificate
+  cannot be served is ATTENTION "HTTPS does not work" with the HTTPS cell's own reason (`DomainParts.httpsDetail`),
+  never OK beside a red badge (found on the walk: Docs read a green check beside "Not working").
+- Routing problems in a person's words: "Nobody can reach X" (unrouted), "X does not answer as it is set up"
+  (refusing), the faulted handler's detail "It refuses every request: ..."; a site refusing every visitor is an ERROR
+  item, as its verdict is broken (`RoutingProblem.Reason.refusesEveryVisitor`).
+- Every alert that describes a lasting condition has an item at its root (none was covered before):
+  CERT_EXPIRING `ProxyAttention.expiringCertificates` (the alert's 14-day window, `AcmeService.EXPIRY_ALERT_DAYS`;
+  an upload "does not renew itself", a failed renewal says why); STACK_HEALTH `StackAttention.unhealthyStacks`
+  ("mailstack stopped after an error" / "Part of metrics is not running", to the stack's services);
+  AUTO_BAN_BUDGET_EXHAUSTED `FirewallAttention.autoBanBudget` over `BanService.autoBanBudget()` (the alert's words,
+  to the blocked addresses, while the last hour spent the budget); DATABASE_MOVE_LEFTOVER `DatabaseAttention.moveLeftovers`
+  (an engine instance generated for a database whose placement is shared, naming it and its host, to the database).
+  A failed stack's verdict now tells a failed deploy from services that died after a good one
+  (`AppHealth.stackStoppage`: "Its last deploy failed" only when the newest deployment failed).
+- Apps list rows offer their fix (board Apps-List): `AppDirectory.App.fix` is the first fix the verdict names that
+  the reader may use, offered exactly as the record's band offers it (`RecordActionBands.named` on the workload, the
+  site, or the site a workload speaks for), drawn by the framework's own `zenitcms:action/link` and
+  `zenitcms:action/invoke` partials in a label-hidden column (`cell/app-fix.hwk`, `AppFix`). A dead operation is passed
+  over. Walk: "Get a certificate", "Restart", "Change its configuration", "Check the host".
+- One expiry wording, whole days, as the boards say it ("Renews in 12 days"): `CertificateExpiry.of`/`inSentence`
+  ("Expires in 35 days", "Expires today", "Expired 3 days ago"; the `case=sentence` variant inside a sentence). Read by
+  the HTTPS cell (Apps list, Addresses), the certificates' state cells, the dashboard tile ("Next one expires in 10
+  days"), the app overview's address note, the expiring item and the CERT_EXPIRING alert. Deleted copy: `expires`
+  (site_domains) and `state_valid_detail` (replacement: `certificate_expiry`). The Certificates list's Expires date
+  column stays absolute-first (CertificateDateColumnTest's decision: a calendar column).
+- App overview (board App-Overview): Resources draws Memory, Root disk and CPU; memory and CPU are the live stats
+  hub's held samples (`InstanceStats.history`, read only while someone watches the Metrics tab, never a stream opened
+  by the render; `Sample` carries the online cores), NOT MEASURED in words otherwise. Details add Started (the newest
+  `DEPLOYED` activity row, which every container start records; no column, no migration: a restart Docker does on its
+  own writes nothing, which no stored fact would have told either), one Database line per attached database
+  ("shop-db (MySQL, not running)", linked for the operator) and Backups. Open site already heads the page while the
+  app serves (`InstanceActions.OPEN_SITE`, hidden while broken; shot 04 on a serving site). The app pages stand under
+  Apps (`standsUnder(AppParts.SLUG)` on sites, instances, stacks, projects; both panels), so the sidebar marks Apps.
+- Framework adoptions: capability labels ship the `context: holder` spelling ("Tenant", "Viewer", ...) and the
+  `case=sentence` spelling in en and nl, and each level held alone `describe`s what it allows; the tenant's "What you
+  can do here" reads one sentence ("Console, read files, share access"). FILES_* verbs are `Grouping.BATCHED` and
+  word their batch (`target=activity_batch`: "Uploaded 312 files"); the per-app Recent card folds per command
+  (`ActivitySources.onePerCommand()`). AdminNavigationJourneyTest expects zenit-auth's `reach` person tab before
+  `credentials`.
+- Found, not fixed here (framework, FW6's): the document title of an app page is "Overview - shop - Instances",
+  because `CmsDocumentTitle` composes the resource facet from `resource.label()`; it should name the sidebar entry the
+  page stands under (`PanelNav.sidebarEntryOf`, now declared by Hohenheim) so it reads "... - Apps". A zenit-cms
+  `ResourceHealth` fix column would make the Apps list's row fix generic (Hohenheim's cell is thin wiring over
+  `RecordActionBands.named`). Seen on the walk: a start refusal still quotes the gate's English (D12's MESSAGE cause).
+- Walk (scratch server from the jar of build run 979, fresh database, `/setup`; by SQL alchemy-skeleton in error
+  behind "Alchemy skeleton" forcing HTTPS, a catch-all static site nobody owns, Docs with a stored certificate
+  expiring in 35 days, an uploaded certificate expiring in 10, stacks mailstack (failed) and metrics (degraded), shop
+  running with a start row 2 hours old and the database shop-db, and archive moved to a shared engine with its old
+  engine instance left; local admitted by SQL, its posture accepted and probed in the UI): shots
+  `docs/hohenheim-ux-mockups-2026-09-30/shots/d13b/` (workspace repo). 01 dashboard: the expiring certificate, HTTPS
+  unavailable with no separate alchemy-skeleton error-page item, "D13b catch-all does not answer as it is set up",
+  the leftover engine, both stacks, the tile "Next one expires in 10 days", every Apps row's glyph agreeing with its
+  badge; 02 Apps list: Restart, Change its configuration, "Expires in 35 days", Docs attention; 03 shop: Memory, Root
+  disk and CPU not measured in words, Started, Database, Backups, Apps marked in the sidebar; 04 Docs: Open site and
+  "HTTPS does not work". The seeded shop's upstream answers nothing (no container), so its band says error page.
+- Proof: build runs 973 and 979; test run 975 (37 classes, 115 tests: 112 passed) with three causes fixed after it:
+  ManagePanelJourneyTest step 7 expected the old capitalized list (now one sentence, "share access" gained its
+  `case=sentence` spelling), InstanceOverviewTest step 2 read the whole page where the memory and CPU gauges now say
+  not measured (it reads the Root disk gauge alone now), DeclaredMicrocopyKeysTest found four overview keys whose
+  scope was applied in a later statement (applied at the key now); run 985 (those classes, the microcopy gates and
+  AppOverviewJourneyTest: 21 of 22, the disk gauge's first anchor still met the page's render data first) and run 988
+  (InstanceOverviewTest, 6 of 6). The push's duplicate gate found `AppHealth.stackStoppage` re-deriving
+  `StackFailures.reasonOf`'s "newest deployment failed" fact; both read `StackFailures.failedDeploymentOf` now, run 995
+  (DashboardAttentionJourneyTest, StackDeployFailureRecordTest, AppsListJourneyTest: 6 of 6). Journeys: DashboardAttentionJourneyTest (new `whatAnAlertSaidOnceStaysOnTheDashboardAtItsRoot`
+  steps 1-5; step 5 and new 6b of `oneCauseIsOneItemCarryingItsRootsAction`), AppsListJourneyTest (new steps 12-14),
+  AppOverviewJourneyTest (new `aWorkloadsOverviewSaysWhatItUsesSinceWhenAndWhatItHolds` steps 1-4),
+  AdminNavigationJourneyTest (new steps 8-10), RoutingProblemsTest, SiteRefusalVerdictJourneyTest,
+  CertificatesJourneyTest, ManagePanelJourneyTest, InstanceOverviewTest.

@@ -52,9 +52,10 @@ public final class InstanceStats {
      * @param memoryLimit  the cgroup limit, or 0 when the daemon reports none
      * @param rxBytes      cumulative received bytes across every interface
      * @param txBytes      cumulative transmitted bytes
+     * @param cores        the CPUs the daemon reports online for it, what {@code cpuPercent} is a share of (100 each)
      */
     public record Sample(long at, double cpuPercent, long memoryBytes, long memoryLimit,
-                         long rxBytes, long txBytes) {
+                         long rxBytes, long txBytes, int cores) {
 
         /** The wire shape both the channel and the page render from; metric keys come
          * from the one vocabulary the browser folds them back out with. */
@@ -281,6 +282,7 @@ public final class InstanceStats {
                                    @Nullable Map<String, Object> previous) {
         double cpu = 0;
         Map<String, Object> cpuStats = child(current, "cpu_stats");
+        long cores = Math.max(1, number(cpuStats, "online_cpus"));
         // AIDEV-NOTE: the previous SAMPLE, never the daemon's own precpu_stats on the first
         // observation. Docker zeroes precpu on the first stream sample, so dividing by it
         // yields the container's LIFETIME AVERAGE dressed up as an instantaneous reading --
@@ -291,7 +293,6 @@ public final class InstanceStats {
             long previousUsage = number(child(preCpuStats, "cpu_usage"), "total_usage");
             long system = number(cpuStats, "system_cpu_usage");
             long previousSystem = number(preCpuStats, "system_cpu_usage");
-            long cores = Math.max(1, number(cpuStats, "online_cpus"));
             long usageDelta = usage - previousUsage;
             long systemDelta = system - previousSystem;
             if (usageDelta > 0 && systemDelta > 0) {
@@ -314,7 +315,7 @@ public final class InstanceStats {
                 }
             }
         }
-        return new Sample(Now.millis(), cpu, memory, limit, rx, tx);
+        return new Sample(Now.millis(), cpu, memory, limit, rx, tx, (int) cores);
     }
 
     @SuppressWarnings("unchecked")

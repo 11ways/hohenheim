@@ -71,6 +71,7 @@ public final class HohenheimTemplateIds {
 
     // List-cell partials; a column names one through its String renderer.
     public static final String CELL_ACTIVITY_RECORD = "hohenheim:cms/cell/activity-record";
+    public static final String CELL_APP_FIX = "hohenheim:cms/cell/app-fix";
     public static final String CELL_BAN_STATE = "hohenheim:cms/cell/ban-state";
     public static final String CELL_DOMAIN_CERTIFICATE = "hohenheim:cms/cell/domain-certificate";
     public static final String CELL_STATE_LINE = "hohenheim:cms/cell/state-line";

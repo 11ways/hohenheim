@@ -93,10 +93,12 @@ final class AppHealth {
         InstanceFacts facts = InstanceFacts.of(instances);
         Map<Integer, HeldBack> held = new LinkedHashMap<>();
         for (Row instance : instances) {
-            Verdict verdict = instanceVerdict(instance, facts, false, null);
-            AttentionSubject cause = verdict.cause();
-            if (cause != null && ServerModel.MODEL_ID.equals(cause.model())) {
-                held.merge(cause.id(), new HeldBack(1, verdict.health().detail()),
+            AttentionSubject cause = instanceVerdict(instance, facts, false, null).cause();
+            Microcopy refusal = OwnedInstances.placementRefusal(instance);
+            if (cause != null && ServerModel.MODEL_ID.equals(cause.model()) && refusal != null) {
+                // The gate's own words, never the verdict's headline: a held app whose site is broken on its own
+                // (HTTPS forced without a certificate) leads with that site, while the host still holds it back.
+                held.merge(cause.id(), new HeldBack(1, OwnedInstances.placementReason(refusal, false, null)),
                     (first, next) -> new HeldBack(first.apps() + 1, first.reason()));
             }
         }
@@ -199,8 +201,10 @@ final class AppHealth {
         boolean passthrough = SiteParts.tlsPassthrough(site);
         Row forced = forcedUncoveredDomain(domains, facts.working, passthrough);
         if (forced != null) {
-            // The address is the cause: its own item ("Visitors of shop.example get an error page") is the root.
-            return Verdict.causedBy(AttentionSubject.address(forced.get(SiteDomainModel.ID)),
+            // The address is the cause: its own item ("Visitors of shop.example get an error page") is the root. While
+            // this proxy answers no HTTPS at all, that one cause is every forced address's: "HTTPS is unavailable".
+            return Verdict.causedBy(httpsTerminates() ? AttentionSubject.address(forced.get(SiteDomainModel.ID))
+                    : AttentionSubject.httpsTermination(),
                 RecordHealth.broken(copy("error_page"))
                     .detail(copy("forced_without_certificate").withArg("host", forced.get(SiteDomainModel.HOSTNAME)))
                     .fixedBy(SiteActions.FIX_HTTPS, SiteOperations.STOP_FORCING_HTTPS.id()));
@@ -229,6 +233,15 @@ final class AppHealth {
         }
         if (live == SiteHealth.DEGRADED) {
             return Verdict.serving(RecordHealth.attention(copy("degraded")).detail(copy("degraded_detail")));
+        }
+        // A name its stored certificate cannot be served for: plain HTTP works, HTTPS ends in an error. The verdict
+        // says it in the HTTPS cell's own reason, so an app row never reads OK beside a "Not working" HTTPS badge.
+        for (Row domain : domains) {
+            if (httpsOf(domain, passthrough, facts.working) == CertCoverage.ERROR) {
+                return Verdict.serving(RecordHealth.attention(copy("https_not_working")).detail(DomainParts.httpsDetail(
+                    domain, CertCoverage.ERROR,
+                    CertificateCoverage.coveringCertificate(domain.get(SiteDomainModel.HOSTNAME)))));
+            }
         }
         return Verdict.serving(RecordHealth.ok(liveWords(domains, facts.working, passthrough)));
     }
@@ -279,8 +292,10 @@ final class AppHealth {
             RecordHealth blocked = RecordHealth.attention(
                     copy("cannot_start").withArg("name", instance.get(InstanceModel.NAME)))
                 .detail(OwnedInstances.placementReason(refusal, delegated, viewer));
+            RecordHealth broken = siteBrokenOnItsOwn(facts.sitesByInstance.get(instance.get(InstanceModel.ID)),
+                facts.sites, delegated, viewer);
             return Verdict.heldBy(OwnedInstances.placementHost(instance),
-                delegated ? blocked : blocked.fixedBy(InstanceActions.CHECK_HOST));
+                broken != null ? broken : delegated ? blocked : blocked.fixedBy(InstanceActions.CHECK_HOST));
         }
         InstanceStatus status = InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
         if (status == null) {
@@ -295,8 +310,12 @@ final class AppHealth {
                 ? RecordHealth.broken(Stoppage.AFTER_ERROR.headline()).detail(WorkloadErrors.detailOf(instance, false))
                 : RecordHealth.broken(Stoppage.AFTER_ERROR.headline()).detail(WorkloadErrors.detailOf(instance, true))
                     .fixedBy(InstanceOperations.RESTART.id());
-            case STOPPED, CREATED -> RecordHealth.attention(copy("not_running")).detail(copy("not_running_detail"))
-                .fixedBy(InstanceOperations.START.id());
+            case STOPPED, CREATED -> {
+                RecordHealth broken = siteBrokenOnItsOwn(facts.sitesByInstance.get(instance.get(InstanceModel.ID)),
+                    facts.sites, delegated, viewer);
+                yield broken != null ? broken : RecordHealth.attention(copy("not_running"))
+                    .detail(copy("not_running_detail")).fixedBy(InstanceOperations.START.id());
+            }
             case STARTING, CAPTURING, RESTORING, MIGRATING -> RecordHealth.unknown(status.label());
         };
         // A running workload whose site turns visitors away serves nothing, though it runs.
@@ -305,15 +324,38 @@ final class AppHealth {
 
     // -- stacks ----------------------------------------------------------------------
 
+    /** A stack's verdict, for a surface that names the stack itself (its attention item). */
+    static @NonNull RecordHealth stackHealth(@NonNull Row stack) {
+        return stackVerdict(stack);
+    }
+
+    /**
+     * What stopped a failed stack: its newest deploy failing, or (the status monitor's observation, STACK_HEALTH's
+     * alert) none of its services running any more; null for a stack that is not failed.
+     *
+     * AIDEV-NOTE: a failed stack used to read "Its last deploy failed" whatever failed it, so a stack whose services
+     * died after a good deploy blamed a deploy that had worked.
+     */
+    static @Nullable Stoppage stackStoppage(@NonNull Row stack) {
+        if (!StackModel.STATUS_FAILED.equals(stack.get(StackModel.STATUS))) {
+            return null;
+        }
+        return StackFailures.failedDeploymentOf(stack) != null ? Stoppage.DEPLOY_FAILED : Stoppage.AFTER_ERROR;
+    }
+
     private static @NonNull RecordHealth stackVerdict(@NonNull Row stack) {
         String status = stack.get(StackModel.STATUS);
         if (StackModel.STATUS_ACTIVE.equals(status)) {
             return RecordHealth.ok(copy("running"));
         }
-        if (StackModel.STATUS_FAILED.equals(status)) {
+        Stoppage stoppage = stackStoppage(stack);
+        if (stoppage != null) {
             String reason = StackFailures.reasonOf(stack);
-            return RecordHealth.broken(Stoppage.DEPLOY_FAILED.headline())
-                .detail(reason == null ? null : Microcopy.literal(reason));
+            return switch (stoppage) {
+                case DEPLOY_FAILED -> RecordHealth.broken(stoppage.headline())
+                    .detail(reason == null ? null : Microcopy.literal(reason));
+                case AFTER_ERROR -> RecordHealth.broken(stoppage.headline()).detail(copy("stack_failed_detail"));
+            };
         }
         if (StackModel.STATUS_DEGRADED.equals(status)) {
             return RecordHealth.attention(copy("degraded")).detail(copy("stack_degraded_detail"));
@@ -351,6 +393,36 @@ final class AppHealth {
             }
         }
         return attention != null ? attention : RecordHealth.ok(liveHeadline(sites, facts.working));
+    }
+
+    /**
+     * The first serving site of a workload that does not run whose visitors get an error page for a cause of the site's
+     * own (an address forced to HTTPS without a certificate, the proxy refusing its settings), spoken for the workload;
+     * null when none is. Such a site is broken whether or not the workload runs, so a held back or stopped app reads
+     * broken, the way its HTTPS badge does, instead of only "cannot start" or "not running".
+     *
+     * AIDEV-NOTE: a site whose verdict names the workload or its host as the cause is excluded: that IS the workload's
+     * own state, which the workload's verdict already says in its own words.
+     */
+    private static @Nullable RecordHealth siteBrokenOnItsOwn(@Nullable List<Row> sites, @NonNull SiteFacts facts,
+                                                             boolean delegated, @Nullable AccessContext viewer) {
+        if (sites == null) {
+            return null;
+        }
+        for (Row site : sites) {
+            if (site.get(SiteModel.DELETED_AT) != null || !Boolean.TRUE.equals(site.get(SiteModel.ENABLED))
+                    || facts.domains.getOrDefault(site.get(SiteModel.ID), List.of()).isEmpty()) {
+                continue;
+            }
+            Verdict verdict = siteVerdict(site, facts, delegated, viewer);
+            AttentionSubject cause = verdict.cause();
+            boolean workloads = cause != null
+                && (InstanceModel.MODEL_ID.equals(cause.model()) || ServerModel.MODEL_ID.equals(cause.model()));
+            if (verdict.health().tone() == HealthTone.BROKEN && !workloads) {
+                return spokenFor(verdict.health(), site);
+            }
+        }
+        return null;
     }
 
     /** A site's verdict as its workload says it: the same words, the fixes still the site's own actions. */
@@ -445,8 +517,17 @@ final class AppHealth {
      * listener half is the display's own, because a visitor's handshake also needs a listener that terminates.
      */
     static @NonNull Set<String> workingNames() {
+        return httpsTerminates() ? CertificateCoverage.workingNames() : Set.of();
+    }
+
+    /**
+     * Whether this process's proxy answers HTTPS at all; true where no proxy runs in this process, which then reads
+     * the stored rows ({@link #workingNames()}). The one reading the forced address items and the site verdict's cause
+     * share, so "HTTPS is unavailable" and an address's own item never both claim one site.
+     */
+    static boolean httpsTerminates() {
         var proxy = ServerMain.getProxyServer();
-        return proxy != null && !proxy.isHttpsTerminationAvailable() ? Set.of() : CertificateCoverage.workingNames();
+        return proxy == null || proxy.isHttpsTerminationAvailable();
     }
 
     /** @return the first of these paths whose protection admits everyone, null when none does */

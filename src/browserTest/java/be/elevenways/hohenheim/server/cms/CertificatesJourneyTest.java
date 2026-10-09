@@ -3,7 +3,9 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -39,8 +41,9 @@ class CertificatesJourneyTest extends HohenheimTestBase {
         assertThat(failingCell.state()).as("step 1: a failing renewal").isEqualTo("renewal_failing");
         assertThat(String.valueOf(failingCell.detail().args().get("count"))).as("step 1: three failures")
             .isEqualTo("3");
-        assertThat(Long.parseLong(String.valueOf(failingCell.detail().args().get("days"))))
-            .as("step 1: about twelve days left").isBetween(11L, 12L);
+        assertThat(failingCell.detail().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+            .as("step 1: about twelve days left, in the one expiry wording (CertificateExpiry)")
+            .matches("Failed 3 times · expires in 1[12] days");
 
         // 2. A manual DNS order waiting for its record says so.
         Row waiting = certificate("waiting-" + suffix, CertificateModel.STATUS_PENDING, 0, null,
@@ -54,6 +57,8 @@ class CertificatesJourneyTest extends HohenheimTestBase {
         StateLineCell worksCell = CertificateParts.stateCell(works);
         assertThat(worksCell.state()).as("step 3: it works").isEqualTo("works");
         assertThat(worksCell.detail().key()).as("step 3: and renews itself").isEqualTo("state_renews_detail");
+        assertThat(worksCell.detail().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+            .as("step 3: saying when it expires in whole days").matches("Renews itself; expires in (79|80) days");
 
         // 4. The list renders the three states as words.
         HttpResponse<String> page = adminGet("/admin/certificates");

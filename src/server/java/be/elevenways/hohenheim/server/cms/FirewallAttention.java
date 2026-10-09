@@ -3,11 +3,14 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.server.notification.Alerts;
+import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
@@ -29,6 +32,21 @@ public final class FirewallAttention {
     private static final String ADMIN = HohenheimSlugs.ADMIN;
 
     private FirewallAttention() {
+    }
+
+    /**
+     * Automatic bans are paused: the last hour made as many as its budget allows, so new ones are skipped until the
+     * oldest is an hour old. AUTO_BAN_BUDGET_EXHAUSTED's condition, in the alert's own words, for as long as it lasts.
+     */
+    static @Nullable AttentionItem autoBanBudget(BanService.@NonNull AutoBanBudget budget) {
+        if (!budget.exhausted()) {
+            return null;
+        }
+        return item(AttentionSeverity.WARNING, "shield",
+            Alerts.copy("auto_ban_budget_subject"),
+            Alerts.copy("auto_ban_budget_body").withArg("budget", budget.budget()),
+            CmsRoutes.list(ADMIN, BanParts.SLUG),
+            action("act_open_bans"));
     }
 
     /** Surfaces an enabled managed Spamservice that is not currently ready. */

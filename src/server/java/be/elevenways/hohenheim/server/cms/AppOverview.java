@@ -6,18 +6,23 @@ import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.app.AppAddress;
 import be.elevenways.hohenheim.app.AppProtection;
 import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.tls.CertificateCoverage;
+import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.typed.rule.Condition;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.cms.server.panel.PanelGate;
@@ -158,6 +163,13 @@ final class AppOverview {
             notes.add(text("https_forced", locales, resolver));
         }
         CertCoverage coverage = AppHealth.httpsOf(domain, false, working);
+        Row certificate = coverage == CertCoverage.ACTIVE ? CertificateCoverage.coveringCertificate(hostname) : null;
+        Instant expires = certificate == null ? null : certificate.get(CertificateModel.EXPIRES_ON);
+        if (expires != null) {
+            // The board's "certificate valid until ...", in the one expiry wording the HTTPS cells and the tile use.
+            notes.add(copy("certificate_note").withArg("expiry", CertificateExpiry.inSentence(expires))
+                .resolve(locales, resolver));
+        }
         return new AppAddress(hostname, url, coverage.label(), coverage.badgeVariant(), String.join(" · ", notes));
     }
 
@@ -235,7 +247,8 @@ final class AppOverview {
     static @NonNull WidgetInstance recent(@NonNull Model model, @NonNull Integer id) {
         return CardWidget.of(copy("recent"), new WidgetTree(List.of(new WidgetInstance(RecordsWidget.ID, Map.of(
             "source", CmsSupport.ACTIVITY_SOURCE,
-            "rules", ActivityRules.forRecord(model, id),
+            // One row per command or batch: an SFTP session's 312 uploads read as one "Uploaded 312 files".
+            "rules", Condition.all(ActivityRules.forRecord(model, id), ActivitySources.onePerCommand()),
             "sort", ActivityModel.CREATED_AT.getName(),
             "descending", true,
             "limit", 6)))));

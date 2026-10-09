@@ -141,6 +141,20 @@ class InstanceOverviewTest extends HohenheimTestBase {
             .contains("restart_confirm");
     }
 
+    /**
+     * The Root disk gauge of a rendered overview: from its label to the CPU gauge's (board App-Overview's order is
+     * memory, disk, CPU), so the memory and CPU gauges beside it never answer for the disk.
+     */
+    private static String diskGauge(String page) {
+        // The gauge's own heading, never the page's serialized render data, which may name it too.
+        int start = page.indexOf(">Root disk<");
+        assertThat(start).as("the overview draws the Root disk gauge's heading").isNotNegative();
+        // Each gauge is one "widget widget-usage" block; the next one is the CPU gauge.
+        int end = page.indexOf("widget widget-usage", start);
+        assertThat(end).as("the CPU gauge follows the Root disk gauge").isNotNegative();
+        return page.substring(start, end);
+    }
+
     /** The placed restart operation, which the overview page projects. */
     private static PanelAction<Row> restartAction() {
         for (PanelAction<Row> action : InstanceParts.admin().actions()) {
@@ -164,10 +178,10 @@ class InstanceOverviewTest extends HohenheimTestBase {
         // The not-measured posture is the usage widget's own built-in state now (the
         // page used to spell it in a bespoke template branch); the SEMANTIC assertion is
         // unchanged -- a named state, never a bar.
-        assertThat(unmeasured.body())
+        assertThat(diskGauge(unmeasured.body()))
             .withFailMessage("step 1: an unmeasured disk does not render an explicit state")
             .contains("widget-usage-unmeasured");
-        assertThat(unmeasured.body())
+        assertThat(diskGauge(unmeasured.body()))
             .withFailMessage("step 1: a zero usage bar rendered over a disk nobody"
                 + " measured -- that reads as an empty disk")
             .doesNotContain("<pl-usage-bar");
@@ -181,7 +195,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
         instances.save(row);
         try {
             HttpResponse<String> measured = adminGet(overviewUrl());
-            assertThat(measured.body())
+            assertThat(diskGauge(measured.body()))
                 .withFailMessage("step 2: a stored disk observation still renders nowhere")
                 .doesNotContain("widget-usage-unmeasured")
                 .contains("<pl-usage-bar");
@@ -195,7 +209,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
             Row unenforced = instances.findById(instanceId);
             unenforced.set(InstanceModel.DISK_LIMIT_BYTES, 0L);
             instances.save(unenforced);
-            assertThat(adminGet(overviewUrl()).body())
+            assertThat(diskGauge(adminGet(overviewUrl()).body()))
                 .as("step 3: a zero ceiling is silence, never a full bar")
                 .contains("widget-usage-unmeasured");
         } finally {
