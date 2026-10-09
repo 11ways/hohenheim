@@ -78,6 +78,7 @@ public final class InstanceScheduleRunParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(20)
             .showInNav(false)
+            .standsUnder(InstanceScheduleParts.SLUG)
             // The run table is zenit's, shared by every host model's schedules: this entry is the instances' runs.
             .scope(RowScope.within(() -> RecordScheduleRunModel.MODEL.eq(InstanceModel.MODEL_ID.toString())))
             // Compact per-step verdicts, so "which step failed and why" reads from the list.

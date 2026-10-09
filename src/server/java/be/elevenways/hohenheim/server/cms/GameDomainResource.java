@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.game.GameDomainOperations;
 import be.elevenways.hohenheim.model.GameDomainModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -67,6 +68,7 @@ public final class GameDomainResource {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(21)
             .showInNav(false)
+            .standsUnder(HohenheimSlugs.INSTANCES)
             .reads(ResourceReads.rows().title(GameDomainResource::hostname))
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).build())
             .form(ResourceForm.<Row>of(GameDomainOperations.FORM).build())

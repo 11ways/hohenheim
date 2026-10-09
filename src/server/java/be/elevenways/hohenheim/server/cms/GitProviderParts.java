@@ -92,6 +92,7 @@ public final class GitProviderParts {
         return entry("manage_git_provider", table, form, GitProviderParts::tenantWords)
             // Reached from the Apps list's toolbar (ManagePanel's sidebar note).
             .showInNav(false)
+            .standsUnder(AppParts.SLUG)
             // Admins see every provider; everyone else only the ones the walk confirms manage on, so an unowned id
             // reads as MISSING (zenit-cms 404s an out-of-scope load) rather than forbidden.
             .scope(TenantScopes.MANAGED_GIT_PROVIDERS)

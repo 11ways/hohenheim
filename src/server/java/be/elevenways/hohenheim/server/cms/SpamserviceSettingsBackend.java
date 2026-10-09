@@ -28,6 +28,9 @@ import java.util.function.Supplier;
 /** Adapts Spamservice's metadata-rich management settings API to a SettingsPage mount. */
 public final class SpamserviceSettingsBackend implements SettingsBackend {
 
+    /** The abuse-protection section's icon in the settings list. */
+    private static final String ROOT_ICON = "robot";
+
     private final Supplier<SpamserviceClient> clientSupplier;
     private volatile @Nullable BuiltSnapshot lastSnapshot;
 
@@ -127,7 +130,7 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
         BuiltSnapshot cached = this.lastSnapshot;
         if (cached == null) {
             return new Snapshot(new SettingGroup("spamservice").label(Microcopy.of("settings.spamservice.label"))
-                    .describe(Microcopy.of("settings.spamservice.help")),
+                    .describe(Microcopy.of("settings.spamservice.help")).icon(ROOT_ICON),
                 Map.of(), "", false, null);
         }
         Snapshot snapshot = cached.snapshot();
@@ -143,6 +146,7 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
         // sees or changes it.
         SettingGroup root = new SettingGroup("spamservice").label(Microcopy.of("settings.spamservice.label"))
             .describe(Microcopy.of("settings.spamservice.help"))
+            .icon(ROOT_ICON)
             .readPermission(HohenheimSources.ADMIN_SYSTEM)
             .writePermission(HohenheimSources.ADMIN_SYSTEM);
         Map<String, SettingGroup> groups = new LinkedHashMap<>();
@@ -187,6 +191,14 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
                     default -> null;
                 };
                 if (description != null) known.describe(description);
+                // Every row of the settings list carries an icon (board Settings); a future remote group reads as a
+                // folder until this host words it.
+                known.icon(switch (key) {
+                    case "scoring" -> "gauge";
+                    case "reputation" -> "star";
+                    case "events" -> "list";
+                    default -> "folder";
+                });
                 groups.put(key, known);
             }
             current = known;

@@ -70,6 +70,7 @@ public final class InstanceFileParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(19)
             .showInNav(false)
+            .standsUnder(HohenheimSlugs.INSTANCES)
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceFileModel.INSTANCE_ID).tab("provisioning"))
             .reads(ResourceReads.rows())
             .form(ResourceForm.<Row>of(form)

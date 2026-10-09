@@ -105,6 +105,7 @@ public final class InstanceScheduleStepParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(19)
             .showInNav(false)
+            .standsUnder(InstanceScheduleParts.SLUG)
             .parent(ResourceParent.of(InstanceScheduleParts.SLUG, RecordScheduleStepModel.SCHEDULE_ID)
                 .tab(InstanceScheduleStepsPage.SLUG))
             // A step IS its action; the label is read off the action registry's own declaration.

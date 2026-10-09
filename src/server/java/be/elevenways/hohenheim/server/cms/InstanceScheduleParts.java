@@ -120,6 +120,7 @@ public final class InstanceScheduleParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(18)
             .showInNav(false)
+            .standsUnder(HohenheimSlugs.INSTANCES)
             // A record schedule's owner is polymorphic (model + record id); this panel's schedules are instances'.
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, RecordScheduleModel.RECORD_ID, RecordScheduleModel.MODEL)
                 .tab(InstanceParts.BACKUPS_TAB))

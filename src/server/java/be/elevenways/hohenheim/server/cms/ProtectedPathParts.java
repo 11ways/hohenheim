@@ -104,6 +104,7 @@ public final class ProtectedPathParts {
             .navGroup(HohenheimPanel.NETWORK_GROUP)
             .navOrder(32)
             .showInNav(false)
+            .standsUnder(HohenheimSlugs.SITES)
             .parent(ResourceParent.of(HohenheimSlugs.SITES, ProtectedPathModel.SITE_ID).tab(SLUG))
             .reads(ResourceReads.rows())
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()

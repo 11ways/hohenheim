@@ -274,6 +274,44 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         assertThat(siteManage.description()).as("step 10: a level held alone says what it allows").isNotNull();
         assertThat(siteManage.description().tryResolve(LocaleChain.ofTags("nl"), MessageResolvers.getDefault()))
             .as("step 10: in Dutch too").isEqualTo("zijn adressen, instellingen en beschermde paden");
+
+        // 11. Every page of either panel stands under a row its sidebar shows (PanelEntry.standsUnder, or the cluster
+        //     it is a member of): no hidden entry's page leaves the sidebar without a marked row.
+        for (Panel panel : List.of(admin, manage)) {
+            List<String> homeless = new ArrayList<>();
+            for (PanelEntry entry : panel.entries()) {
+                PanelEntry home = PanelNav.sidebarEntryOf(panel, entry);
+                if (!home.showInNav()) {
+                    homeless.add(entry.slug());
+                }
+            }
+            assertThat(homeless)
+                .as("step 11: every entry of /" + panel.slug() + " marks a sidebar row on its pages")
+                .isEmpty();
+        }
+
+        // 12. A hidden entry's page title ends with the sidebar row it stands under, never its own list's name.
+        Map<String, String> titledUnder = Map.of(
+            "instance-quotas", AppParts.SLUG,
+            "dns-peers", HohenheimPanel.DOMAINS_CLUSTER,
+            "spamservice-clients", HohenheimPanel.ACCESS_CLUSTER,
+            "reconcile-findings", "servers");
+        for (Map.Entry<String, String> expected : titledUnder.entrySet()) {
+            String sidebarLabel = admin.entryBySlug(expected.getValue()).label()
+                .tryResolve(LocaleChain.ofTags("en"), MessageResolvers.getDefault());
+            String body = adminGet("/admin/" + expected.getKey()).body();
+            String title = body.substring(body.indexOf("<title>") + "<title>".length(), body.indexOf("</title>"));
+            assertThat(title)
+                .as("step 12: the page of '" + expected.getKey() + "' is titled under its sidebar row")
+                .endsWith(" - " + sidebarLabel);
+        }
+
+        // 13. Databases and Hosts are rows of every admin while their roles run, empty or not, and each list offers
+        //     its create action (D13e: a scratch with roles.databases/instances/stacks off had neither row).
+        assertThat(adminGet("/admin/databases").body())
+            .as("step 13: the Databases list offers its create action").contains("/admin/databases/new");
+        assertThat(adminGet("/admin/servers").body())
+            .as("step 13: the Hosts list offers its create action").contains("/admin/servers/new");
     }
 
     /** A sidebar entry's description resolves in both shipped locales, never to its raw key. */

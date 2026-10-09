@@ -1927,3 +1927,80 @@ Blocked addresses (shot `dep10/08b`, board Access-Blocked); defect list items 7 
   `everyCertificateIsListedByTheStateTheDashboardCounts` steps 1-5), AccessPagesJourneyTest (step 2 rewritten, new
   steps 6 Recent misses and 7 Never block), SecurityEventTypeLabelsTest (step 3 rewritten, new step 5: every cause
   reads uncounted in en and nl); baselines `certificates.txt`, `manage-slice-three.txt`, `system.txt`.
+
+## 39. D13e decisions (fork D13e, 2026-10-09)
+
+The sidebar seen in D13d's walk, DEP10 defect 10 (Settings, board Settings and Settings-Tasks) and the 2026-10-09
+framework adoptions (activity face and subject filter, `standsUnder`, zenit-auth's person name).
+
+- Home: no new mechanism in Hohenheim. `zemble home` for "one settings navigation listing the cluster's record pages,
+  an icon on every section and a records card inside a section" answered UNCERTAIN between docs and zenit-cms and
+  named `SettingsPage` (consumers Arcana, Thoth, QuirkyQuarters, Hohenheim) as the existing mechanism: the missing
+  parts are zenit-cms's, listed under "Framework" below, not built here.
+- Sidebar (item 1): Databases and Hosts were missing from D13d's shots because its scratch `local.dry` set
+  `roles.databases`, `roles.instances` and `roles.stacks` to false (read from D13d's own walk command). A role that is
+  off removes its peers and their routes on purpose (`HohenheimPanel.buildEntries` AIDEV-NOTE, `HohenheimRoles`,
+  section 9: "a cluster lists only the members the node registered"; Hosts follows `hostWorkloadsEnabled`). Not
+  changed: every role defaults to on, D13c's scratch kept them on and showed all eight rows, and an empty install with
+  the default roles shows all eight (walk below). AdminNavigationJourneyTest step 13 pins that Databases and Hosts
+  offer their create action.
+- Pages of hidden entries stand under the row they are reached from (zenit-cms `PanelEntry.standsUnder`): every
+  `showInNav(false)` entry of both panels that is no cluster member names its parent (instances' children under
+  Instances, the DNS children (records, peers, zone peers) under DNS zones, the abuse-protection pages under its overview, access rules under
+  Access lists, protected paths and previews under Sites, environments under Projects, templates' children and the
+  template import and create-from-template pages under App templates, builds, releases, Put something online and the
+  tenant's templates and Git connections under Apps, unexpected workloads under Hosts). Where the entry exists on a
+  node without the obvious parent (builds and releases are registered for the proxy role too) it stands under Apps,
+  which every node registers, since the panel refuses a parent naming no entry. Step 11 of the journey fails any
+  entry of either panel whose pages would mark no sidebar row; step 12 pins four titles ending with their row. A
+  child resource now declares its parent slug twice (`ResourceParent.of(slug, ...)` and `standsUnder(slug)`), both
+  from the same constant; zenit-cms could derive the second from the first (raised, not changed).
+- Settings (item 2): "App templates" and "Git connections" are the entries' own labels (plural and singular, en and
+  nl, the git field label and the help texts naming the list); the stored model ids and slugs are unchanged. The
+  abuse-protection backend's groups carry icons (root robot, scoring gauge, reputation star, events list, an unworded
+  remote group folder); every group of Hohenheim's own sections already had one (AdminSettingsMountsTest step 6).
+  Settings-Tasks: the six tasks the board lists already carry the board's names (SettingsTasksMountTest step 4);
+  nothing else on that board is Hohenheim's to declare.
+- Activity (item 3): `AdminActivityResource.TABLE` is `ActivityAdmin.table().toBuilder()` plus the app filter
+  (`ActivityAdmin.subjectFilter("app", InstanceModel.MODEL_ID, "App")`), the record-id and the origin filters; the
+  list uses `CmsSupport.WIDE_LIST.withFiltersOpen(true)`. An app is its workload's record (J1), so the filter offers
+  instances through the instance record source and its row scope; a site-only app is not offered (its rows stay
+  reachable by the record filter). The copied column list and the record column's own cell are gone:
+  `ActivityRecordCell`, `cms/cell/activity-record.hwk` and `HohenheimTemplateIds.CELL_ACTIVITY_RECORD` are deleted;
+  their replacement is the sentence's record link (`ActivityAdmin.sentenceCell`, rendered as
+  `a.cms-activity-subject`), which already named and linked the same record.
+- `RecordOwners.subjectLabel` reads a user through `UserModel.personName` (zenit-auth b7b39c4) instead of its own
+  "name, else email" copy.
+- Framework, not built here (zenit-cms unless named): (a) one settings navigation: the Settings cluster draws its
+  members as a tab row above `SettingsPage`'s own section list, and the page cannot list sibling entries in that list,
+  so the board's single list (sections, then App templates ... Tasks, then Framework) needs a cluster or
+  `SettingsPage` option that lists the members in the section list instead of tabs; (b) a section header icon: a
+  multi-group section (`SettingsPage.Mount`) has no icon and `SettingsPageRenderer` draws its header row with none
+  (General, Backups, Notifications, Apps and deploys, Hosts, Abuse protection, Proxy); (c) zenit-comms' groups under
+  Notifications (Channels, Delivery, Hub, Watches) declare no icons; (d) the Backup targets card inside the Backups
+  section: a settings section cannot hold a records list, so backup targets stay the cluster's own tab; (e) the
+  board's per-filter empty choice ("All apps", "Everyone"): `FacetInputs.anyLabel()` is one "Any" for every
+  single-choice filter and `FilterSpec.placeholder` is a literal string, so the pickers read "App: Any"; (f) the
+  Recent activity subtitle "Server" under a host row is `ActivitySources.subtitle`, which humanizes the stored model
+  token (`ActivityText.humanizeModelToken("hohenheim:server")`, English only), not a label Hohenheim declares; "Host"
+  needs the subtitle to read a declared, localized model noun; (g) Settings-Tasks' description line and "Nightly
+  03:00" wording: `ScheduledTask.description()` is an unlocalized String the task list never shows.
+- Walk (scratch server from the jar of the final tree, default roles, fresh database, `/setup`; by SQL: instances
+  shop and blog and a generated engine instance on local, five activity rows by the administrator). Built in the
+  pushed workspace (`zenit-dev workspace create`, this tree's diff applied on top): the live worktrees of protoblast,
+  hawkeye, zenit and zenit-cms carry FW11's unfinished work, whose jar refused to boot (a new hydration-wire check
+  failing on RouteTarget/FormEntryState inputs). Shots `docs/hohenheim-ux-mockups-2026-09-30/shots/d13e/` (workspace
+  repo): 01 the empty install's dashboard with all eight rows; 02 Databases empty, "No databases yet" with "Create
+  one" and "Create database"; 03 Settings with its tabs "App templates" and "Git connections" (the tab row beside the
+  section list is still there, see (a)); 04 Activity in day bands, filters open, the App filter offering only apps
+  with entries (shop 2, blog 1; the engine instance has none); 05 the log narrowed to shop; 06 Instance quotas, a
+  hidden entry, marking Apps, titled "Instance quotas - Apps"; 07 the seeded dashboard, its Recent card still reading
+  "Server" under local (see (f)). No Docker resource was created; the walk's scratch is deleted.
+- Proof: build runs 1031 (live tree, which upstream FW11 work made unbootable) and 14 (pushed workspace); test run 15
+  (pushed workspace, 21 classes, 50 tests: 49 passed) with one cause fixed after it: step 11 caught DNS records,
+  whose admin entry was hidden without a parent (`DnsRecordParts.admin` now stands under DNS zones; the shared entry
+  builder stays parentless because /manage shows it); run 17 (AdminNavigationJourneyTest,
+  DatabaseDnsGitSurfacesBrowserTest: 2 of 2). Journeys: AdminNavigationJourneyTest (new steps 11-13),
+  AdminActivityListTest (steps 1, 2, 7, 7b, 8, 10, 11 rewritten for the derived table and the sentence link; new
+  `theAppFilterNarrowsTheLogToWhatHappenedToOneApp` steps 1-3), AdminSettingsMountsTest (new steps 6-7),
+  SettingsTasksMountTest (new step 4), OwnerSubjectsTest (new step 1b). No panel-surface baseline changed.

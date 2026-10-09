@@ -95,6 +95,7 @@ public final class InstanceTemplateParts {
             .navOrder(60)
             // Reached through Put something online and the Apps list's toolbar (ManagePanel's sidebar note).
             .showInNav(false)
+            .standsUnder(AppParts.SLUG)
             .description(Microcopy.of("nav_hint").withFilter("scope", "instance_template"))
             .scope(TenantScopes.INSTANCE_TEMPLATES)
             // NAV-ONLY: the catalog exists to start a create, so it stays out of the nav for a tenant who may not

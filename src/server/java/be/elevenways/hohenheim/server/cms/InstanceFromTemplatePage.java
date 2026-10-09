@@ -71,6 +71,7 @@ public final class InstanceFromTemplatePage extends PanelPage {
     @Override public @NonNull String slug() { return SLUG; }
     @Override public @NonNull Icon icon() { return Icon.of("plus"); }
     @Override public boolean showInNav() { return false; }
+    @Override public @NonNull String standsUnder() { return HohenheimSlugs.INSTANCE_TEMPLATES; }
     @Override public @NonNull List<PanelAction<Row>> actions() { return List.of(CREATE); }
 
     @Override

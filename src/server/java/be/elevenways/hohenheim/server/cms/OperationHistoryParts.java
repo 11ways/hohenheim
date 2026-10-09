@@ -166,6 +166,7 @@ public final class OperationHistoryParts {
             .description(CmsSupport.navHint(scope))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .showInNav(false)
+            .standsUnder(AppParts.SLUG)
             .reads(ResourceReads.rows())
             .list(ResourceList.rows(table).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()
                 .search(search.toArray(Field<?, ?>[]::new)).build())

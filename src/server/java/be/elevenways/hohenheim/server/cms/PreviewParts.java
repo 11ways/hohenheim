@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
@@ -56,6 +57,7 @@ public final class PreviewParts {
 
     public static @NonNull PanelResource<Row> admin() {
         return entry("preview_deployment", false).navOrder(20).showInNav(false)
+            .standsUnder(HohenheimSlugs.SITES)
             .authority(ResourceAuthority.<Row>builder().create(HohenheimSources.ADMIN_ACCESS, null).build())
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions()).build();
     }
@@ -64,6 +66,7 @@ public final class PreviewParts {
         return entry("manage_preview_deployment", true).navOrder(25).scope(TenantScopes.PREVIEWS)
             // Reached from the Apps list's toolbar and an app's Deploys tab (ManagePanel's sidebar note).
             .showInNav(false)
+            .standsUnder(HohenheimSlugs.SITES)
             .hasInScopeRecords(ManagePanel::hasManageScope)
             .tabs(ResourceTabs.<Row>none().withContributions()).build();
     }

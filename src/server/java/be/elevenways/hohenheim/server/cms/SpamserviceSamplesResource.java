@@ -142,6 +142,7 @@ public final class SpamserviceSamplesResource {
             .navGroup(HohenheimPanel.SECURITY_GROUP)
             .navOrder(20)
             .showInNav(false)
+            .standsUnder(SpamserviceOverviewPage.SLUG)
             .icon(Icon.of("file-lines"))
             .reads(ResourceReads.<SampleSummary>typed(SampleSummary::id)
                 .load((key, access) -> load(clients, key))

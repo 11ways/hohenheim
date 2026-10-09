@@ -29,6 +29,7 @@ public final class InstanceTemplateImportPage extends PanelPage {
     @Override public @NonNull String slug() { return HohenheimSlugs.INSTANCE_TEMPLATES_IMPORT; }
     @Override public @NonNull Icon icon() { return Icon.of("file-import"); }
     @Override public boolean showInNav() { return false; }
+    @Override public @NonNull String standsUnder() { return HohenheimSlugs.INSTANCE_TEMPLATES; }
 
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {

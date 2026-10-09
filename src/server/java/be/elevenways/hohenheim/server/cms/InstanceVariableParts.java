@@ -69,6 +69,7 @@ public final class InstanceVariableParts {
             .icon(Icon.of("sliders"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .showInNav(false)
+            .standsUnder(HohenheimSlugs.INSTANCES)
             .scope(Objects.requireNonNull(scope, "scope cannot be null"))
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceVariableModel.INSTANCE_ID)
                 .tab(InstanceProvisioningPage.SLUG))

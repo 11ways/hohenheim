@@ -81,6 +81,12 @@ class OwnerSubjectsTest extends HohenheimTestBase {
         assertThat(HohenheimAccess.subjectLabel("user:" + named))
             .as("step 1: and labels as the subject").isEqualTo("Labelled Subject");
 
+        // 1b. A person without a name labels as zenit-auth names them everywhere: by their address.
+        int unnamed = user("owner-subjects-unnamed@hohenheim.local", "");
+        assertThat(HohenheimAccess.subjectLabel("user:" + unnamed))
+            .as("step 1b: the subject's label is zenit-auth's person name, their address when they have no name")
+            .isEqualTo("owner-subjects-unnamed@hohenheim.local");
+
         // 2. An unknown type or a malformed id parses to nothing and labels as its raw token.
         assertThat(GrantSubjects.parse("robot:1")).as("step 2: an unknown type").isNull();
         assertThat(GrantSubjects.parse("group:x")).as("step 2: a malformed id").isNull();

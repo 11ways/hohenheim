@@ -137,6 +137,7 @@ public final class InstanceAttachmentParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(19)
             .showInNav(false)
+            .standsUnder(HohenheimSlugs.INSTANCES)
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceDeviceModel.INSTANCE_ID).tab("devices"))
             .reads(ResourceReads.rows())
             .form(ResourceForm.<Row>of(form).createDefaults(request -> {
@@ -329,6 +330,7 @@ public final class InstanceAttachmentParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(21)
             .showInNav(false)
+            .standsUnder(HohenheimSlugs.INSTANCES)
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceDatabaseModel.INSTANCE_ID).tab("databases"))
             .reads(ResourceReads.rows().title(InstanceAttachmentParts::linkTitle))
             .form(ResourceForm.<Row>of(form)

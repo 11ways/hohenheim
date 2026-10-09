@@ -111,6 +111,7 @@ public final class SpamserviceClientsResource {
             .navGroup(HohenheimPanel.SECURITY_GROUP)
             .navOrder(30)
             .showInNav(false)
+            .standsUnder(SpamserviceOverviewPage.SLUG)
             .icon(Icon.of("users"))
             .reads(ResourceReads.<ManagedClient>typed(ManagedClient::id)
                 .load((key, access) -> {
