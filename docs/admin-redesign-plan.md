@@ -2106,3 +2106,72 @@ verdict leftovers (board App-Overview, the D13c dashboard shot).
   `aProblemLeadsWithItsWordsAndItsRootWhileTheTechnicalTextFollows` steps 1-7), InstanceConsoleCrashRestartTest (new
   `aCrashRestartTheGatesRefuseIsRecordedAsTheWorkloadsCause` steps 1-3), InstancePowerAuditTest step 3b and
   InstanceOverviewTest step 4 rewritten; baseline `landing-dashboards.txt`.
+
+## 41. DD: deduplicating Hohenheim (2026-10-09)
+
+Jelle: "I only want clean code. Not ambiguous classes being written slightly different from each other." Hohenheim
+first; the framework's own duplication (scoped-copy factory, conduit memo, hand-written DRY serializers, StoredEnum
+labels) is a later phase. Source: three read-only audits at b9b8f221 (zemble dupes production renamed+logic, parallel
+class review, framework comparison). Estimate: about 1,800 lines removed. Each wave records its decisions below its
+own heading in this section.
+
+Rules for every wave: one home per job; a helper that already exists is adopted, never a third one written; an app
+home made now (for example scoped copy) is the single place the later framework mechanism replaces. Stored values
+never change (no new migration; `DEPLOYED_THROUGH="010"`), only their declarations collapse.
+
+Waves (one agent at a time in this repo):
+
+- DD1 child lists: InstanceVolumesTab, InstanceDevicesPage, InstanceDatabasesPage, DnsZoneSecondariesPage,
+  TemplateContentsPage and the steps half of InstanceScheduleStepsPage (651 lines, hand-built `pl-table` from
+  `Map.get` rows) become zenit-cms `ChildList` tabs on the child resources that already declare the parent (e.g.
+  VolumeParts:58,83). Retire the `*_ID_PREFILL` params of `C/HohenheimParams:23-78` for `CmsRoutes.createUnder`,
+  and the `.hh-tab-tools` rule (`app.scss:528-538`) that reaches into `.cms-list-search`. Also: the known red
+  `InstanceSurfacesBrowserTest` `instances.txt` baseline (hand-edited facts).
+- DD2 copy: 63 private wrappers (`copy`, `words`, `listCopy`, `statusLabel`, `kindLabel`, `xxxText`, e.g.
+  AppHealth:724, DatabaseParts:976, ServerParts:262, CertificateModel:82,107,161) and 983 inline
+  `withFilter("scope", "...")` calls collapse onto one app home (scopes declared once, next to
+  `HohenheimMicrocopy.SCOPE`/`HohenheimFormCopy`/`AttentionItems.copy`/`UpstreamCopy`, which merge into it). Also
+  the server-default-locale bug: `ServerWords.hostCopy` (ServerParts:152, stored HostEnrolment LAST_ERROR) and
+  ServerParts:287, and the swallowed RuntimeException at ServerParts:286-288.
+- DD3 health: adopt `ResourceHealth.fixColumn()` (delete `C/app/AppFix`, `AppDirectory.fixOf:262-292`,
+  `cell/app-fix.hwk`, `CELL_APP_FIX`; AppsListJourneyTest step 12 reads `data-cms-health-fix`; /manage still
+  renders). Bug: `HostStanding:28-49` re-declares `ServerModel.ADMISSION:180` badges ("blocked" amber vs red).
+- DD4 cells and attention: state cells in one style (enum facts as HostVerdict:73/DatabaseVerdict:147 do; string
+  branches CertificateParts:229-288, DomainParts:324-351; `default` switches BanStateCell:43, SiteTlsCell:42;
+  DomainCertCell near-copies StateLineCell). "Raises attention and how loudly" answered once (AttentionSeverity) for
+  HostStanding, DatabaseVerdict.State, DelegationVerdict, ManageDashboard:110, StackAttention:41.
+- DD5 confirmations and delete impact: 52 `ConfirmationSpec.builder()` calls and 3 private helpers
+  (InstanceTemplateParts:222, StackParts:359, SiteActions:229) onto one; rollback drift (SiteActions:271 lacks the
+  confirm label and the site's name, InstanceActions:239 has both); ProjectParts:78 and DnsZoneParts:651 copy
+  `DeleteConfirmation.body`. Delete-impact: RuntimeImageParts:111, ServerParts:266, DatabaseParts:661,1146 bypass
+  `DeleteImpact` per row; `DatabaseParts.forceDelete:789` and `:1178` are twins.
+- DD6 instance kinds and twins: the 8 `InstanceKindHandler`s each declare memory_limit_mb, cpu_limit,
+  environment_variables, image (help text missing in 3; ResourceLimits reads the keys as raw strings);
+  getLabel/getDescription derived by hand in 8 kinds and `label()` in 21 tasks; `runtimeFor` identical in
+  DatabaseContainerKind:158, ReleaseKind:186, StackServiceKind:277. About 19 admin/manage resource pairs hand-roll
+  `"manage_"+id`, tenant scope, no history; `hasInScopeRecords` is missing in 6 (InstanceSchedule,
+  InstanceAttachment, AccessRule, ...): check whether that is a bug.
+- DD7 reads: 7 `effective*` helpers re-implement `Row.afterWrite`/`StoredRows.of` (SiteDomainModel:373,
+  SiteModel:322, InstanceVariableModel:141, InstanceTemplateModel:263, GitProviders:154, TenantWrites:917,
+  DnsZoneCascades:78); 6 request caches ignore `CmsSupport.memo:322` (ServerParts:224, InstanceScheduleStepParts:187,
+  DeleteImpact:483, HostnameAuthority:92, DomainParts:378, CapabilityScopes:238). DnsZoneParts: one path for
+  record_count/secondaries (pageBatch closure :87-105, `.computed` :108-109, `cellValue` :440-445, per-row COUNT
+  fallback :488-490), the stacked javadoc :305-312, `{@link #listRows}` :294, Resource-shape getters :213-251.
+- DD8 vocabularies and rules: 19 literal slugs where a constant exists (e.g. InstanceDevicesPage:87) and the two
+  slug homes (HohenheimSlugs vs per-class SLUG); "failed" declared 11 times and the operation lifecycle declared 3
+  times (Artifact, Build, Release; StackDeploymentModel "success" vs "succeeded", stored values stay); 8
+  `switch (column.name())` readers with `default -> null`; ProjectMembershipParts.cell:91 repeats its values map.
+  Bug: DatabaseParts:587 and :1086 refuse names `DatabaseModel.isValidName:311` accepts; ServerInventoryWrites:113
+  and StackParts:92 restate name rules; email regex twice (CertificateOperationHandlers:96, DnsZoneParts:708).
+  DatabaseParts (1234 lines) splits provisioning from panel declaration.
+- DD9 small helpers and tests: "trimmed or empty" ~21 times and two `Texts` copies (InstanceConsoles:705,
+  ApiProviderClient:189); hand int parsing in 7 places (`CmsSupport.parsedInt` exists); relative-time wording at 12
+  sites in 4 null styles; quick-create presets 3 copies (DnsRecordParts:222, DnsZonePeerParts:138, DomainParts:533 vs
+  EnvironmentParts.preset); keep-newest-N pruning 3 copies (ReleaseEngine:1114, BuildOperationModel:204,
+  StackDeploymentRecords:100); ApplicationDeploys:217,235 vs WorkspaceBuilds:230,462; pidsLimit
+  (ProcessConfinement:22, ContainerHardening:470); StackDeploymentsPage:91 hand English duration. Tests: retire the
+  B15 legacy-equivalence captures (B15BeforeSurfacesTest string patches :89-94, unreferenced
+  hohenheim-b15-before-errors.txt); the stale AIDEV-NOTE at InstanceParts:161-163.
+
+Framework phase (not now): HostVerdict/DatabaseVerdict onto RecordHealth needs a word-badge face in zenit-cms;
+`Conduit.memo`; protoblast scoped copy factory; `standsUnder` defaulting from `ResourceParent`.
