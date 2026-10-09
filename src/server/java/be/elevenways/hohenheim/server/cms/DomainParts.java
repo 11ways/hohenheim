@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -51,6 +52,12 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.common.operation.OperationFact;
+import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -58,6 +65,7 @@ import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -116,6 +124,31 @@ public final class DomainParts {
     /** The create verb in the Domains board's words: the list's button and the form's heading ("Add address"). */
     private static final Microcopy CREATE_TITLE = Microcopy.of("create_title").withFilter("scope", "site_domain");
 
+    /**
+     * Looks the address's name up again now, past the minute an answer is remembered: the row's way to see a DNS
+     * change it just made.
+     */
+    public static final Operation<Row, Void, Void> CHECK_REACH = Operation.declare(HohenheimIds.id("check_address_reach"))
+        .happened(OperationSentences.of("check_address_reach"))
+        .label(domainText("check_reach"))
+        .icon(Icon.of("rotate"))
+        .one(SUBJECT)
+        .gate(OperationGate.open())
+        .facts(OperationFact.REACHES_OUTSIDE)
+        .command(CmsCommands.EXTERNAL)
+        .register();
+
+    static {
+        OperationHandlers.attach(CHECK_REACH)
+            .applies(domain -> checkedName(domain) != null)
+            .handle(call -> {
+                String name = Objects.requireNonNull(checkedName(call.subject()), "applies() admits a named address");
+                HostnameReach.forget(name);
+                HostnameReach.recent(name);
+                return null;
+            });
+    }
+
     private DomainParts() {
     }
 
@@ -126,8 +159,16 @@ public final class DomainParts {
             .form(form(adminFormSpec()))
             // Requesting a certificate stays installation administration (an issued certificate is authority over a
             // name), so only the admin twin offers it.
-            .actions(List.of(CertificateOperations.requestForDomainAction()))
+            .actions(List.of(CertificateOperations.requestForDomainAction(), checkReachAction()))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
+            .build();
+    }
+
+    /** The row's "Check again": the list redraws with the fresh answer; rare beside the row's own actions. */
+    private static @NonNull PanelAction<Row> checkReachAction() {
+        return PanelAction.<Row, Void>places(CHECK_REACH, ActionPlacement.ROW,
+                (request, result) -> CmsActionResult.refreshWithToast(domainText("reach_checked")))
+            .inlineInRow(false)
             .build();
     }
 
@@ -180,7 +221,7 @@ public final class DomainParts {
      * whether the name points at this proxy, and what HTTPS gives it.
      *
      * AIDEV-NOTE: "Points here" reads {@link HostnameReach#recent}, so a list render resolves each name at most once a
-     * minute; a pattern has no single name and gets no answer. The HTTPS cell is {@link AppHealth#httpsOf}, the one
+     * minute; a wildcard pattern is answered by a sample name under it ({@link #reachCell(Row, long)}). The HTTPS cell is {@link AppHealth#httpsOf}, the one
      * per-name rule the app overview and the app's verdict read, so the list never calls a forced name without a
      * working certificate anything but broken.
      */
@@ -190,7 +231,7 @@ public final class DomainParts {
                 .label(Microcopy.of("address_column").withFilter("scope", "site_domains"))
                 .filterable().copyable().subtext("path").build())
             // How the name matches stays in the picker and the filter strip: the Domains board reads addresses by
-            // the name visitors type, and a pattern says so in its empty "Points here" cell.
+            // the name visitors type, and a pattern's "Points here" speaks for the names it catches.
             .column(ColumnSpec.fromField(SiteDomainModel.MATCH_TYPE).filterable().hidden().build())
             .column(ColumnSpec.fromField(SiteDomainModel.PATH).hidden().build())
             // The app this address serves, by name, linked to the app's front door (appCell).
@@ -261,41 +302,66 @@ public final class DomainParts {
     }
 
     /**
-     * Whether an exact name points at this proxy, in a word, and what it does instead; null for a pattern.
+     * Whether the address points at this proxy, in a word, and what it does instead.
      *
      * AIDEV-NOTE: the rows of one page share ONE wait ({@link #REACH_RENDER_BUDGET_MS}, from the first cell drawn):
      * cells are computed row after row, and a name the resolver does not answer in time reads "Checking" while its
      * lookup keeps running into the cache for the next view. Without the shared budget a page of unanswered names
      * waited one lookup timeout per row.
      */
-    static @Nullable StateLineCell reachCell(@NonNull Row domain, @NonNull PanelRequest request) {
+    static @NonNull StateLineCell reachCell(@NonNull Row domain, @NonNull PanelRequest request) {
         return reachCell(domain, reachWaitMs(request));
     }
 
-    /** Whether an exact name points at this proxy, waiting at most {@code waitMs} for its lookup; null for a pattern. */
-    static @Nullable StateLineCell reachCell(@NonNull Row domain, long waitMs) {
-        if (!AppHealth.exact(domain)) {
-            return null;
+    /**
+     * Whether the address points at this proxy, waiting at most {@code waitMs} for its lookup.
+     *
+     * AIDEV-NOTE: a wildcard pattern (a catch-all) is answered by one sample name under it
+     * ({@link HostnameReach#sampleOf}): a wildcard DNS record makes every name it catches point the same way, and
+     * without one each name needs its own record, which the cell says ("Per name"). A regex pattern has no name to
+     * ask and reads "Per name" outright.
+     */
+    static @NonNull StateLineCell reachCell(@NonNull Row domain, long waitMs) {
+        boolean exact = AppHealth.exact(domain);
+        String checked = checkedName(domain);
+        if (checked == null) {
+            return new StateLineCell("per_name", BadgeVariant.OUTLINE, domainText("points_here_per_name"),
+                domainText("points_per_name_detail"), null);
         }
-        String hostname = String.valueOf((Object) domain.get(SiteDomainModel.HOSTNAME));
-        HostnameReach.Reach reach = HostnameReach.recent(hostname, waitMs);
+        HostnameReach.Reach reach = HostnameReach.recent(checked, waitMs);
+        String addresses = String.join(", ", reach.addresses());
         return switch (reach.verdict()) {
-            case CHECKING -> new StateLineCell("checking", BadgeVariant.OUTLINE,
-                Microcopy.of("points_here_checking").withFilter("scope", "site_domains"),
-                Microcopy.of("points_checking_detail").withFilter("scope", "site_domains"), null);
-            case POINTS_HERE -> new StateLineCell("points_here", BadgeVariant.SUCCESS,
-                Microcopy.of("points_here_yes").withFilter("scope", "site_domains"), null, null);
+            case CHECKING -> new StateLineCell("checking", BadgeVariant.OUTLINE, domainText("points_here_checking"),
+                domainText("points_checking_detail"), null);
+            case NOT_CHECKED -> new StateLineCell("not_checked", BadgeVariant.OUTLINE,
+                domainText("points_here_not_checked"), domainText("points_not_checked_detail"), null);
+            case POINTS_HERE -> new StateLineCell("points_here", BadgeVariant.SUCCESS, domainText("points_here_yes"),
+                exact ? null : domainText("points_here_caught_detail").withArg("sample", checked), null);
             case POINTS_ELSEWHERE -> new StateLineCell("points_elsewhere", BadgeVariant.WARNING,
-                Microcopy.of("points_here_no").withFilter("scope", "site_domains"),
-                Microcopy.of("points_elsewhere_detail").withFilter("scope", "site_domains")
-                    .withArg("addresses", String.join(", ", reach.addresses())), null);
-            case UNRESOLVED -> new StateLineCell("unresolved", BadgeVariant.WARNING,
-                Microcopy.of("points_here_unresolved").withFilter("scope", "site_domains"),
-                Microcopy.of("points_unresolved_detail").withFilter("scope", "site_domains"), null);
-            case UNKNOWN -> new StateLineCell("unknown", BadgeVariant.OUTLINE,
-                Microcopy.of("points_here_unknown").withFilter("scope", "site_domains"),
-                Microcopy.of("points_unknown_detail").withFilter("scope", "site_domains"), null);
+                domainText("points_here_no"),
+                domainText(exact ? "points_elsewhere_detail" : "points_elsewhere_caught_detail")
+                    .withArg("addresses", addresses), null);
+            case UNRESOLVED -> exact
+                ? new StateLineCell("unresolved", BadgeVariant.WARNING, domainText("points_here_unresolved"),
+                    domainText("points_unresolved_detail"), null)
+                : new StateLineCell("per_name", BadgeVariant.OUTLINE, domainText("points_here_per_name"),
+                    domainText("points_unresolved_caught_detail"), null);
+            case UNKNOWN -> new StateLineCell("unknown", BadgeVariant.OUTLINE, domainText("points_here_unknown"),
+                domainText("points_unknown_detail").withArg("addresses", addresses), null);
         };
+    }
+
+    /**
+     * The name whose lookup answers for the address: the name itself, a wildcard pattern's sample, or null for a
+     * pattern no name stands for (a regex).
+     */
+    static @Nullable String checkedName(@NonNull Row domain) {
+        String hostname = String.valueOf((Object) domain.get(SiteDomainModel.HOSTNAME));
+        if (AppHealth.exact(domain)) {
+            return hostname;
+        }
+        return SiteDomainModel.MATCH_WILDCARD.equals(SiteDomainModel.effectiveMatchType(hostname,
+            domain.get(SiteDomainModel.MATCH_TYPE))) ? HostnameReach.sampleOf(hostname) : null;
     }
 
     /** How long the cells of one page may wait for name lookups together. */
@@ -432,11 +498,6 @@ public final class DomainParts {
         String app = site == null ? "" : appName(site, access);
         StateLineCell reach = reachCell(domain, HostnameReach.LOOKUP_WAIT_MS);
         CertCoverage https = AppHealth.httpsOf(domain, SiteParts.tlsPassthrough(site), AppHealth.workingNames());
-        if (reach == null || https == CertCoverage.PATTERN) {
-            return new RecordLead(Microcopy.of("address_lead_pattern").withFilter("scope", "site_domains")
-                .withArg("app", app)
-                .resolve(conduit.getLocales(), conduit.getMessageResolver()), null);
-        }
         return new RecordLead(Microcopy.of("address_lead").withFilter("scope", "site_domains")
             .withArg("app", app)
             .withArg("reach", reach.label().resolve(conduit.getLocales(), conduit.getMessageResolver()))

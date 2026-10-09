@@ -2116,10 +2116,6 @@
     "text": "Overrides the global Let's Encrypt account email for this certificate.",
     "scope": "certificate_request"
   },
-  "request": {
-    "text": "Request certificate",
-    "scope": "certificate_request"
-  },
   "any": {
     "text": "Any rule passes",
     "scope": "access_satisfy"
@@ -4501,6 +4497,11 @@
     {
       "text": ".match {$count :number}\none {{Tried 1 name this server does not serve}}\n* {{Tried {$count} names this server does not serve}}",
       "scope": "ban_cause"
+    },
+    {
+      "text": "Tried names this server does not serve",
+      "scope": "ban_cause",
+      "target": "uncounted"
     }
   ],
   "login_failed": [
@@ -4511,6 +4512,11 @@
     {
       "text": ".match {$count :number}\none {{Failed to sign in once}}\n* {{Failed to sign in {$count} times}}",
       "scope": "ban_cause"
+    },
+    {
+      "text": "Failed to sign in too often",
+      "scope": "ban_cause",
+      "target": "uncounted"
     }
   ],
   "lockout": [
@@ -4521,6 +4527,11 @@
     {
       "text": ".match {$count :number}\none {{Got locked out of signing in once}}\n* {{Got locked out of signing in {$count} times}}",
       "scope": "ban_cause"
+    },
+    {
+      "text": "Got locked out of signing in",
+      "scope": "ban_cause",
+      "target": "uncounted"
     }
   ],
   "rate_limited": [
@@ -4531,6 +4542,11 @@
     {
       "text": ".match {$count :number}\none {{Went over a rate limit once}}\n* {{Went over a rate limit {$count} times}}",
       "scope": "ban_cause"
+    },
+    {
+      "text": "Went over a rate limit",
+      "scope": "ban_cause",
+      "target": "uncounted"
     }
   ],
   "csrf_failure": [
@@ -4541,6 +4557,11 @@
     {
       "text": ".match {$count :number}\none {{Sent 1 form without a valid security token}}\n* {{Sent {$count} forms without a valid security token}}",
       "scope": "ban_cause"
+    },
+    {
+      "text": "Sent forms without a valid security token",
+      "scope": "ban_cause",
+      "target": "uncounted"
     }
   ],
   "permission_denied": [
@@ -4551,6 +4572,11 @@
     {
       "text": ".match {$count :number}\none {{Opened 1 page it may not see}}\n* {{Opened {$count} pages it may not see}}",
       "scope": "ban_cause"
+    },
+    {
+      "text": "Opened pages it may not see",
+      "scope": "ban_cause",
+      "target": "uncounted"
     }
   ],
   "ws_origin_refused": [
@@ -4561,6 +4587,11 @@
     {
       "text": ".match {$count :number}\none {{Opened 1 live connection from another site}}\n* {{Opened {$count} live connections from another site}}",
       "scope": "ban_cause"
+    },
+    {
+      "text": "Opened live connections from another site",
+      "scope": "ban_cause",
+      "target": "uncounted"
     }
   ],
   "ws_auth_refused": [
@@ -4571,6 +4602,11 @@
     {
       "text": ".match {$count :number}\none {{Opened 1 live connection without signing in}}\n* {{Opened {$count} live connections without signing in}}",
       "scope": "ban_cause"
+    },
+    {
+      "text": "Opened live connections without signing in",
+      "scope": "ban_cause",
+      "target": "uncounted"
     }
   ],
   "ssh_invalid_user": [
@@ -4581,6 +4617,11 @@
     {
       "text": ".match {$count :number}\none {{Tried SSH as 1 user that does not exist}}\n* {{Tried SSH as {$count} users that do not exist}}",
       "scope": "ban_cause"
+    },
+    {
+      "text": "Tried SSH as users that do not exist",
+      "scope": "ban_cause",
+      "target": "uncounted"
     }
   ],
   "ssh_password_failed": [
@@ -4591,6 +4632,11 @@
     {
       "text": ".match {$count :number}\none {{Gave 1 wrong SSH password}}\n* {{Gave {$count} wrong SSH passwords}}",
       "scope": "ban_cause"
+    },
+    {
+      "text": "Gave wrong SSH passwords",
+      "scope": "ban_cause",
+      "target": "uncounted"
     }
   ],
   "ssh_publickey_failed": [
@@ -4601,6 +4647,11 @@
     {
       "text": ".match {$count :number}\none {{Offered 1 SSH key that was refused}}\n* {{Offered {$count} SSH keys that were refused}}",
       "scope": "ban_cause"
+    },
+    {
+      "text": "Offered SSH keys that were refused",
+      "scope": "ban_cause",
+      "target": "uncounted"
     }
   ],
   "ssh_preauth_abort": [
@@ -4611,6 +4662,11 @@
     {
       "text": ".match {$count :number}\none {{Dropped 1 SSH connection before signing in}}\n* {{Dropped {$count} SSH connections before signing in}}",
       "scope": "ban_cause"
+    },
+    {
+      "text": "Dropped SSH connections before signing in",
+      "scope": "ban_cause",
+      "target": "uncounted"
     }
   ],
   "ssh_max_attempts": [
@@ -4621,6 +4677,11 @@
     {
       "text": ".match {$count :number}\none {{Ran out of SSH sign-in attempts once}}\n* {{Ran out of SSH sign-in attempts {$count} times}}",
       "scope": "ban_cause"
+    },
+    {
+      "text": "Ran out of SSH sign-in attempts",
+      "scope": "ban_cause",
+      "target": "uncounted"
     }
   ],
   "ssh_protocol_abuse": [
@@ -4631,6 +4692,11 @@
     {
       "text": ".match {$count :number}\none {{Sent 1 malformed SSH handshake}}\n* {{Sent {$count} malformed SSH handshakes}}",
       "scope": "ban_cause"
+    },
+    {
+      "text": "Sent malformed SSH handshakes",
+      "scope": "ban_cause",
+      "target": "uncounted"
     }
   ],
   "ban_scope": {
@@ -11855,6 +11921,10 @@
     {
       "text": "Add host",
       "scope": "server"
+    },
+    {
+      "text": "Upload a certificate",
+      "scope": "certificate"
     }
   ],
   "edit_title": {
@@ -12201,6 +12271,11 @@
     {
       "text": ".match {$count :number}\none {{Signed in once}}\n* {{Signed in {$count} times}}",
       "scope": "ban_cause"
+    },
+    {
+      "text": "Signed in",
+      "scope": "ban_cause",
+      "target": "uncounted"
     }
   ],
   "runtime_image_not_applicable": {
@@ -14821,7 +14896,7 @@
     "scope": "put_online"
   },
   "reach_unknown": {
-    "text": "Unknown: this host declares no public address, so where {$hostname} points cannot be checked.",
+    "text": "Cannot tell: {$hostname} points to {$addresses}, but this host has only private addresses and declares no public one to compare with.",
     "scope": "put_online"
   },
   "reach_checking": {
@@ -15260,7 +15335,7 @@
     "scope": "site_domains"
   },
   "points_here_unknown": {
-    "text": "Unknown",
+    "text": "Cannot tell",
     "scope": "site_domains"
   },
   "points_here_checking": {
@@ -15276,7 +15351,7 @@
     "scope": "site_domains"
   },
   "points_unknown_detail": {
-    "text": "This host declares no public address to compare with",
+    "text": "Points to {$addresses}, but this host has only private addresses and declares no public one to compare with",
     "scope": "site_domains"
   },
   "points_checking_detail": {
@@ -15297,10 +15372,6 @@
   },
   "address_lead": {
     "text": "Address of {$app} · points here: {$reach} · HTTPS: {$https}",
-    "scope": "site_domains"
-  },
-  "address_lead_pattern": {
-    "text": "Address of {$app} · a pattern, so no single name to check",
     "scope": "site_domains"
   },
   "state_column": [
@@ -15338,7 +15409,7 @@
     "scope": "certificate"
   },
   "state_issuing": {
-    "text": "Being issued",
+    "text": "Not issued yet",
     "scope": "certificate"
   },
   "state_expired": {
@@ -15471,14 +15542,17 @@
   ],
   "stop_forcing_https_toast": { "text": "HTTPS is no longer forced; visitors reach the site over plain HTTP", "scope": "site" },
   "stop_forcing_https_confirm": { "text": "Visitors will reach the names that have no working certificate over plain, unencrypted HTTP. Force HTTPS again once a certificate works.", "scope": "site" },
-  "other_event": {
-    "text": ".match {$count :number}\none {{Set off 1 security event: {$event}}}\n* {{Set off {$count} security events: {$event}}}",
-    "scope": "ban_cause"
-  },
-  "legacy": {
-    "text": "Went over the limit for: {$event}",
-    "scope": "ban_cause"
-  },
+  "other_event": [
+    {
+      "text": ".match {$count :number}\none {{Set off 1 security event: {$event}}}\n* {{Set off {$count} security events: {$event}}}",
+      "scope": "ban_cause"
+    },
+    {
+      "text": "Set off security events: {$event}",
+      "scope": "ban_cause",
+      "target": "uncounted"
+    }
+  ],
   "https_passthrough": {
     "text": "The app handles HTTPS itself",
     "scope": "site_domains"
@@ -16792,5 +16866,130 @@
   "could_not_start_held": {
     "text": ".match {$count :number}\none {{1 app could not start}}\n* {{{$count} apps could not start}}",
     "scope": "attention_detail"
+  },
+  "points_here_not_checked": {
+    "text": "Not checked yet",
+    "scope": "site_domains"
+  },
+  "points_not_checked_detail": {
+    "text": "Too many names are being looked up at once; use Check again in the row's actions",
+    "scope": "site_domains"
+  },
+  "points_here_per_name": {
+    "text": "Per name",
+    "scope": "site_domains"
+  },
+  "points_per_name_detail": {
+    "text": "A pattern answers many names; each points here when its own DNS record does",
+    "scope": "site_domains"
+  },
+  "points_here_caught_detail": {
+    "text": "Names it catches point here (checked with {$sample})",
+    "scope": "site_domains"
+  },
+  "points_elsewhere_caught_detail": {
+    "text": "Names it catches point to {$addresses}, not to this proxy",
+    "scope": "site_domains"
+  },
+  "points_unresolved_caught_detail": {
+    "text": "No DNS record catches its names; each one needs its own record pointing here",
+    "scope": "site_domains"
+  },
+  "check_reach": {
+    "text": "Check again",
+    "scope": "site_domains"
+  },
+  "reach_checked": {
+    "text": "Looked up again",
+    "scope": "site_domains"
+  },
+  "check_address_reach": {
+    "text": "{$actor} checked where {$subject} points",
+    "scope": "hohenheim",
+    "target": "happened"
+  },
+  "reach_not_checked": {
+    "text": "{$hostname} has not been checked yet; it is looked up when this step shows again.",
+    "scope": "put_online"
+  },
+  "state_issuing_detail": {
+    "text": "Let's Encrypt is issuing it; it works once issued",
+    "scope": "certificate"
+  },
+  "state_not_loaded": {
+    "text": "Failed to load",
+    "scope": "certificate"
+  },
+  "state_not_loaded_detail": {
+    "text": "Stored as working, but the proxy could not load it, so it serves no one; upload it again or get a new one",
+    "scope": "certificate"
+  },
+  "state_expiring": {
+    "text": "Expiring",
+    "scope": "certificate"
+  },
+  "state_expiring_renews_detail": {
+    "text": "Not renewed yet; {$expiry}",
+    "scope": "certificate"
+  },
+  "state_expiring_upload_detail": {
+    "text": "Does not renew itself; {$expiry}",
+    "scope": "certificate"
+  },
+  "missed_names": {
+    "text": "Asked for {$names}, {$ago}",
+    "scope": "ban"
+  },
+  "missed_names_more": {
+    "text": ".match {$more :number}\none {{Asked for {$names} and 1 more, {$ago}}}\n* {{Asked for {$names} and {$more} more, {$ago}}}",
+    "scope": "ban"
+  },
+  "no_misses": {
+    "text": "No address asked for a name this server does not serve in the past hour",
+    "scope": "ban"
+  },
+  "recent_misses_title": {
+    "text": "Recent misses",
+    "scope": "ban"
+  },
+  "recent_misses_lead": {
+    "text": "Requests for names this server does not serve, the past hour. An address making more than {$threshold} within {$minutes} minutes is blocked.",
+    "scope": "ban"
+  },
+  "never_block_title": {
+    "text": "Never block",
+    "scope": "ban"
+  },
+  "never_block_lead": {
+    "text": "These are never blocked, whatever they do.",
+    "scope": "ban"
+  },
+  "never_block_empty": {
+    "text": "Nothing else is listed.",
+    "scope": "ban"
+  },
+  "never_block_own": {
+    "text": "Its own addresses and local networks",
+    "scope": "ban"
+  },
+  "never_block_change": {
+    "text": "Change in settings",
+    "scope": "ban"
+  },
+  "never_block_server": {
+    "text": "This server",
+    "scope": "ban"
+  },
+  "never_block_address": {
+    "text": "This address",
+    "scope": "ban"
+  },
+  "never_block_network": {
+    "text": "Every address in this network",
+    "scope": "ban"
+  },
+  "never_block_name": {
+    "text": "Every address this name resolves to",
+    "scope": "ban"
   }
 }

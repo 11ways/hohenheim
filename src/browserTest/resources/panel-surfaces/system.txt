@@ -51,7 +51,7 @@ column created_at at=8 shown=false hidden=true sortable=false filterable=false c
 filter ip at=0 kind=TEXT facet=false param=filter.ip
 filter source at=1 kind=SELECT facet=true param=filter.source
 filter scope at=2 kind=SELECT facet=true param=filter.scope
-filter active at=3 kind=BOOLEAN facet=false param=filter.active
+filter blocked_now at=3 kind=leaf:variable%3Dblocked_now,key%3Dfilter.blocked_now,operators%3Dprotoblast:is_true%252Cprotoblast:is_false,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.blocked_now%2525252Cprotoblast:boolean%2525252CENUM%2525252C%2525252525-%252525252Ctrue%252525252Cfalse%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Djava.lang.String,default%3Dfilter.blocked_now%3Dtrue facet=false param=filter.blocked_now
 filter event_type at=4 kind=TEXT facet=false param=filter.event_type
 tab history at=0 landing=false view=false
 control CREATE%20ip at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
@@ -132,7 +132,7 @@ column created_at at=8 shown=false hidden=true sortable=false filterable=false c
 filter ip at=0 kind=TEXT facet=false param=filter.ip
 filter source at=1 kind=SELECT facet=true param=filter.source
 filter scope at=2 kind=SELECT facet=true param=filter.scope
-filter active at=3 kind=BOOLEAN facet=false param=filter.active
+filter blocked_now at=3 kind=leaf:variable%3Dblocked_now,key%3Dfilter.blocked_now,operators%3Dprotoblast:is_true%252Cprotoblast:is_false,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.blocked_now%2525252Cprotoblast:boolean%2525252CENUM%2525252C%2525252525-%252525252Ctrue%252525252Cfalse%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Djava.lang.String,default%3Dfilter.blocked_now%3Dtrue facet=false param=filter.blocked_now
 filter event_type at=4 kind=TEXT facet=false param=filter.event_type
 row hohenheim:lift_ban at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:lift_title%252Cscope%3Dban,body:lift_confirm%252Cscope%3Dban,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/lift_ban
 tab history at=0 landing=false view=false
@@ -163,7 +163,7 @@ column created_at at=8 shown=false hidden=true sortable=false filterable=false c
 filter ip at=0 kind=TEXT facet=false param=filter.ip
 filter source at=1 kind=SELECT facet=true param=filter.source
 filter scope at=2 kind=SELECT facet=true param=filter.scope
-filter active at=3 kind=BOOLEAN facet=false param=filter.active
+filter blocked_now at=3 kind=leaf:variable%3Dblocked_now,key%3Dfilter.blocked_now,operators%3Dprotoblast:is_true%252Cprotoblast:is_false,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.blocked_now%2525252Cprotoblast:boolean%2525252CENUM%2525252C%2525252525-%252525252Ctrue%252525252Cfalse%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Djava.lang.String,default%3Dfilter.blocked_now%3Dtrue facet=false param=filter.blocked_now
 filter event_type at=4 kind=TEXT facet=false param=filter.event_type
 tab history at=0 landing=false view=false
 control CREATE%20ip at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=

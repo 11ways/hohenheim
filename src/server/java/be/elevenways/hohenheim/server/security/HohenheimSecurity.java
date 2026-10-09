@@ -61,7 +61,9 @@ public final class HohenheimSecurity {
                 JobRunner.startVirtualThread(NeverBanHostnames.INSTANCE::refresh));
             describeEventTypes();
         }
-        ensureLocalAddresses();
+        // The own-public-IP ban guard reads these: populate them BEFORE enforcement starts, an empty list would leave
+        // the server's own address bannable at the first request.
+        UpdateSystemIpAddresses.ensureDiscovered();
         if (HohenheimRoles.enabled(HohenheimRoles.Role.FIREWALL)) {
             BanService.INSTANCE.boot();
             // The sshd tail is ENFORCEMENT-tier too: it exists to produce bans, and a
@@ -85,23 +87,6 @@ public final class HohenheimSecurity {
             return;   // scoring stays observability; the BAN is enforcement
         }
         BanService.INSTANCE.autoBan(ip, type, HohenheimViolations.textOf(causeOf(type, events)));
-    }
-
-    /**
-     * The own-public-IP ban guard reads {@code UpdateSystemIpAddresses}; its
-     * scheduled boot run is asynchronous, so populate the list synchronously
-     * BEFORE enforcement starts (an empty list would leave the server's own
-     * address bannable at the first request).
-     */
-    private static void ensureLocalAddresses() {
-        if (!UpdateSystemIpAddresses.getLocalAddresses().isEmpty()) {
-            return;
-        }
-        try {
-            UpdateSystemIpAddresses.discover();
-        } catch (RuntimeException e) {
-            Blast.log("SECURITY: local-address discovery failed at boot -", e.getMessage());
-        }
     }
 
     /**
@@ -175,17 +160,29 @@ public final class HohenheimSecurity {
     /**
      * The reason automatic bans stored before the reason named its cause, which only the scorer could read.
      *
-     * AIDEV-NOTE: such rows still exist (an auto ban's history outlives its expiry); {@link #legacyCause} reads
-     * them as their event type in words. Nothing writes this shape any more.
+     * AIDEV-NOTE: such rows still exist (an auto ban's history outlives its expiry; Starfleet held 305 at DEP10);
+     * {@link #legacyCause} reads them in the current style from their stored event type. Nothing writes this shape
+     * any more and nothing rewrites the stored rows.
      */
     private static final Pattern LEGACY_REASON = Pattern.compile("score \\d+ over threshold");
 
-    /** @return a stored automatic-ban reason in words when it is the legacy score line, null when it is not */
+    /** The filter of a cause told without a count: the old score line recorded how many events no longer. */
+    private static final String UNCOUNTED = "uncounted";
+
+    /**
+     * A stored automatic-ban reason in the current style when it is the legacy score line: its event type's cause
+     * without a count ("Tried names this server does not serve"), since the score is not how many events there were.
+     *
+     * @return the cause in words, null when the reason is not the legacy score line
+     */
     public static @Nullable Microcopy legacyCause(@Nullable String reason, @Nullable String type) {
         if (reason == null || !LEGACY_REASON.matcher(reason).matches()) {
             return null;
         }
-        return Microcopy.of("legacy").withFilter("scope", CAUSE_SCOPE).withArg("event", labelOf(type));
+        Microcopy cause = type == null ? null : EVENT_CAUSES.get(type);
+        return cause != null ? cause.withFilter("target", UNCOUNTED)
+            : Microcopy.of("other_event").withFilter("scope", CAUSE_SCOPE).withFilter("target", UNCOUNTED)
+                .withArg("event", labelOf(type));
     }
 
     /** Describe the event types the admin surfaces display (labels resolve via microcopy). */

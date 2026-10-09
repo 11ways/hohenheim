@@ -67,6 +67,21 @@ class SecurityEventTypeLabelsTest {
             }
         }
         assertThat(causeless).as("step 4: every ban cause resolves in en AND nl and names its count").isEmpty();
+
+        // 5. Every cause also reads without a count, in both locales, for the legacy rows that never recorded one.
+        List<String> uncounted = new ArrayList<>();
+        for (String type : HohenheimSecurity.EVENT_CAUSES.keySet()) {
+            for (String tag : List.of("en", "nl")) {
+                String resolved = HohenheimSecurity.legacyCause("score 26 over threshold", type)
+                    .resolve(LocaleChain.ofTags(tag), catalogs);
+                String counted = HohenheimSecurity.causeOf(type, 3).resolve(LocaleChain.ofTags(tag), catalogs);
+                if (resolved.isBlank() || resolved.contains("{") || resolved.matches(".*\\d.*")
+                        || resolved.equals(counted)) {
+                    uncounted.add(tag + " " + type + " -> '" + resolved + "'");
+                }
+            }
+        }
+        assertThat(uncounted).as("step 5: every ban cause reads without a count in en AND nl").isEmpty();
     }
 
     /**
@@ -92,11 +107,18 @@ class SecurityEventTypeLabelsTest {
         assertThat(HohenheimSecurity.causeOf("ws.something_new", 5).resolve(LocaleChain.ofTags("en"), catalogs))
             .as("step 2: an undescribed type").isEqualTo("Set off 5 security events: ws.something_new");
 
-        // 3. The legacy score line stored before this reads as its event in words; any other reason is left alone.
+        // 3. The legacy score line stored before this reads as its event in the current style, without the count it
+        //    never recorded (DEP10 still read "Went over the limit for: Unmatched domain request"); any other reason is
+        //    left alone, and nothing rewrites the stored row.
         Microcopy legacy = HohenheimSecurity.legacyCause("score 26 over threshold", SecurityEventTypes.DOMAIN_MISS);
         assertThat(legacy).as("step 3: the legacy line is recognised").isNotNull();
         assertThat(legacy.resolve(LocaleChain.ofTags("en"), catalogs))
-            .as("step 3: and read as its event").isEqualTo("Went over the limit for: Unmatched domain request");
+            .as("step 3: and read as its event").isEqualTo("Tried names this server does not serve");
+        assertThat(legacy.resolve(LocaleChain.ofTags("nl"), catalogs))
+            .as("step 3: and in Dutch").isEqualTo("Vroeg naar namen die deze server niet bedient");
+        assertThat(HohenheimSecurity.legacyCause("score 26 over threshold", "ws.something_new")
+                .resolve(LocaleChain.ofTags("en"), catalogs))
+            .as("step 3: an undescribed type names its own spelling").isEqualTo("Set off security events: ws.something_new");
         assertThat(HohenheimSecurity.legacyCause("Login attempts on /wp-admin", SecurityEventTypes.DOMAIN_MISS))
             .as("step 3: an operator's own reason is never rewritten").isNull();
     }

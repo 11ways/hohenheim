@@ -100,6 +100,17 @@ public final class CertificateCoverage {
         return store == null ? activeNames() : store.servedNames();
     }
 
+    /**
+     * Whether a certificate row is one the running proxy loaded and serves; true where no proxy runs in this process,
+     * where the stored rows are all there is to read ({@link #workingNames()}'s same rule).
+     */
+    public static boolean loaded(@NonNull Row cert) {
+        var proxy = ServerMain.getProxyServer();
+        CertificateStore store = proxy == null ? null : proxy.getCertificateStore();
+        Integer id = cert.get(CertificateModel.ID);
+        return store == null || id != null && store.holds(id);
+    }
+
     /** Every name an ACTIVE certificate row declares, read once. */
     private static @NonNull Set<String> activeNames() {
         Set<String> names = new HashSet<>();

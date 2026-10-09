@@ -99,4 +99,22 @@ public class UpdateSystemIpAddresses extends ScheduledTask {
     public static List<String> getLocalAddresses() {
         return localAddresses;
     }
+
+    /**
+     * The local addresses, discovered now when no run has filled the list yet.
+     *
+     * AIDEV-NOTE: the scheduled boot run is asynchronous, so a reader that must not see an empty list (the own-IP ban
+     * guard before enforcement starts, "Points here" on the first Addresses render) asks through this. A failed
+     * enumeration is logged and leaves the list as it was.
+     */
+    public static @NonNull List<String> ensureDiscovered() {
+        if (localAddresses.isEmpty()) {
+            try {
+                discover();
+            } catch (RuntimeException e) {
+                Blast.log("TASK: local-address discovery failed -", e.getMessage());
+            }
+        }
+        return localAddresses;
+    }
 }

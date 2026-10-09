@@ -383,7 +383,7 @@ public class SiteDispatcher implements HttpHandler {
         if (entry != null || resolution.hostnameKnown()) {
             threatScorer.recordHit(clientIp);
         } else {
-            int score = threatScorer.recordEvent(clientIp, SecurityEventTypes.DOMAIN_MISS, 1);
+            int score = threatScorer.recordMiss(clientIp, hostname);
             int threshold = Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Security.DOMAIN_MISS_THRESHOLD);
             if (score >= threshold) {

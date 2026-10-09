@@ -134,7 +134,7 @@ public final class HostAttention {
             items.add(item(apps > 0 ? AttentionSeverity.ERROR : AttentionSeverity.WARNING, "shield-halved",
                 copy("isolation_unenforced", "attention_title", "host", name),
                 copy("isolation_unenforced", "attention_detail"),
-                AttentionCollector.isolationSettingsTarget(), action("act_open_settings"))
+                AttentionCollector.securitySettingsTarget(), action("act_open_settings"))
                 .about(AttentionSubject.host(host),
                     apps == 0 ? null : copy("could_not_start_held", "attention_detail", "count", apps))
                 .withNote(copy("isolation_unenforced_note", "attention_detail", "host", name)));

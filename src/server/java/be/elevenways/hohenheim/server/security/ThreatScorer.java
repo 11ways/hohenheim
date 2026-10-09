@@ -7,6 +7,11 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,6 +43,22 @@ public final class ThreatScorer {
     private static final int MAX_ENTRIES = 50_000;
     private static final long EVICT_AGE_MS = 3_600_000;
     private static final long SETTINGS_TTL_MS = 10_000;
+
+    /** Distinct missed names remembered per actor: past the ban threshold's default, so a ban's evidence fits. */
+    private static final int MISSED_NAMES_KEPT = 64;
+
+    /** The longest a hostname is remembered as asked for: a Host header is the client's, its length is not. */
+    private static final int MISSED_NAME_MAX_LENGTH = 253;
+
+    /**
+     * One actor's requests for names this server does not serve.
+     *
+     * @param actor  the actor key (the address for v4, its /64 for v6)
+     * @param names  the distinct names it asked for, the most recent first, at most {@link #MISSED_NAMES_KEPT}
+     * @param lastMs when it last asked for one
+     */
+    public record Misses(@NonNull String actor, @NonNull List<String> names, long lastMs) {
+    }
 
     // AIDEV-NOTE: hardcoded per-type weights on purpose -- they become settings
     // when someone actually needs to tune them, not before. Unknown types use
@@ -144,6 +165,8 @@ public final class ThreatScorer {
         final String[] eventTypes;
         int eventHead;
         long lastTouchMs;
+        /** The names this actor asked for that nothing serves, with when it last did, least recent first. */
+        final LinkedHashMap<String, Long> missedNames = new LinkedHashMap<>(16, 0.75f, true);
 
         Entry(int capacity) {
             this.pointTimestamps = new long[capacity];
@@ -168,6 +191,26 @@ public final class ThreatScorer {
                 }
             }
             return count;
+        }
+
+        synchronized void addMiss(long now, String name) {
+            missedNames.put(name, now);
+            if (missedNames.size() > MISSED_NAMES_KEPT) {
+                missedNames.remove(missedNames.keySet().iterator().next());
+            }
+        }
+
+        /** The names missed since {@code since}, the most recent first; null when none was. */
+        synchronized @Nullable Misses missesSince(String actor, long since) {
+            List<String> names = new ArrayList<>();
+            long last = 0;
+            for (Map.Entry<String, Long> missed : missedNames.entrySet()) {
+                if (missed.getValue() >= since) {
+                    names.addFirst(missed.getKey());
+                    last = Math.max(last, missed.getValue());
+                }
+            }
+            return names.isEmpty() ? null : new Misses(actor, List.copyOf(names), last);
         }
 
         synchronized void addPoints(long now, int points) {
@@ -359,6 +402,53 @@ public final class ThreatScorer {
             trigger.onThresholdCrossed(key, type, score, entry.recentEventCount(windowStart, type));
         }
         return score;
+    }
+
+    /**
+     * Record a request for a hostname no route answers: a {@link SecurityEventTypes#DOMAIN_MISS} event, and the name
+     * kept for {@link #recentMisses}.
+     *
+     * @return the actor's in-window score, as {@link #recordEvent(String, String, int)}
+     */
+    public int recordMiss(String ip, @Nullable String hostname) {
+        int score = recordEvent(ip, SecurityEventTypes.DOMAIN_MISS, 1);
+        Entry entry = entries.get(keyFor(ip));
+        if (entry != null && hostname != null && !hostname.isBlank()) {
+            String name = hostname.trim().toLowerCase(Locale.ROOT);
+            entry.addMiss(clock.getAsLong(),
+                name.length() > MISSED_NAME_MAX_LENGTH ? name.substring(0, MISSED_NAME_MAX_LENGTH) : name);
+        }
+        return score;
+    }
+
+    /**
+     * The actors that asked for names this server does not serve since {@code sinceMs}, the most recent first.
+     *
+     * AIDEV-NOTE: the scorer's own state, nothing stored: a restart forgets it, as it forgets the scores that ban.
+     * An actor is remembered until {@link #EVICT_AGE_MS} past its last touch once the table is full.
+     */
+    public @NonNull List<Misses> recentMisses(long sinceMs, int limit) {
+        List<Misses> misses = new ArrayList<>();
+        for (Map.Entry<String, Entry> actor : entries.entrySet()) {
+            Misses missed = actor.getValue().missesSince(actor.getKey(), sinceMs);
+            if (missed != null) {
+                misses.add(missed);
+            }
+        }
+        misses.sort(Comparator.comparingLong(Misses::lastMs).reversed());
+        return misses.size() > limit ? List.copyOf(misses.subList(0, limit)) : List.copyOf(misses);
+    }
+
+    /** @return the window the scorer counts in, in seconds */
+    public int windowSeconds() {
+        refreshSettings();
+        return windowSeconds;
+    }
+
+    /** @return the score past which an actor is blocked */
+    public int banThreshold() {
+        refreshSettings();
+        return banThreshold;
     }
 
     /** Whether this source actor's in-window weighted score exceeds the ban threshold. */
