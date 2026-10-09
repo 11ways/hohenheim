@@ -1133,6 +1133,10 @@
     {
       "text": "Antwoordt, maar niet betrouwbaar",
       "scope": "app_health"
+    },
+    {
+      "text": "{$name} antwoordt, maar niet betrouwbaar",
+      "scope": "attention_title"
     }
   ],
   "deploy": [
@@ -5968,7 +5972,7 @@
   ],
   "created": [
     {
-      "text": "Aangemaakt",
+      "text": "Nog niet gestart",
       "scope": "instance_status"
     },
     {
@@ -6844,6 +6848,10 @@
     {
       "text": "Installatie mislukt",
       "scope": "app_health"
+    },
+    {
+      "text": "Installatie van {$name} mislukt",
+      "scope": "attention_title"
     }
   ],
   "reinstall_no_step": {
@@ -7463,6 +7471,10 @@
       "text": "draait niet",
       "scope": "database_status",
       "case": "sentence"
+    },
+    {
+      "text": "{$name} draait niet",
+      "scope": "attention_title"
     }
   ],
   "not_running_description": [
@@ -10130,7 +10142,7 @@
     "scope": "server_overview"
   },
   "last_error": {
-    "text": "Laatste fout",
+    "text": "De laatste controle is mislukt",
     "scope": "server_overview"
   },
   "trust_ssh": {
@@ -10482,11 +10494,11 @@
     }
   ],
   "endpoint": {
-    "text": "Publiek eindpunt",
+    "text": "Poorten",
     "scope": "instance_overview"
   },
   "endpoint_hint": {
-    "text": "De poorten die deze instantie publiceert, op het adres van de host waarop ze draait.",
+    "text": "Poorten waarop het rechtstreeks antwoordt, naast zijn adressen.",
     "scope": "instance_overview"
   },
   "address": [
@@ -10537,14 +10549,6 @@
   },
   "no_public_address": {
     "text": "Deze host heeft geen publiek adres, dus alleen zijn eigen netwerk bereikt deze poort.",
-    "scope": "instance_overview"
-  },
-  "no_endpoint": {
-    "text": "Geen gepubliceerde poort",
-    "scope": "instance_overview"
-  },
-  "no_endpoint_hint": {
-    "text": "Deze instantie houdt geen poortclaim, dus niets buiten haar netwerk bereikt haar rechtstreeks.",
     "scope": "instance_overview"
   },
   "unsupported": {
@@ -10873,6 +10877,10 @@
     {
       "text": "Elke naam waarop een site antwoordt, en of HTTPS ervoor werkt.",
       "scope": "site_domain"
+    },
+    {
+      "text": "Je apps, met hun adressen en of ze werken.",
+      "scope": "manage_app"
     }
   ],
   "slug": {
@@ -11886,11 +11894,11 @@
     "scope": "violations"
   },
   "status_confirmed": {
-    "text": "Status bevestigd",
+    "text": "Laatst gecontroleerd",
     "scope": "instance_overview"
   },
   "status_never_confirmed": {
-    "text": "Nog nooit bij de host gecontroleerd",
+    "text": "Nog niet",
     "scope": "instance_overview"
   },
   "volume_backend_none_title": {
@@ -14414,6 +14422,10 @@
     {
       "text": "Uitgeschakeld",
       "scope": "app_health"
+    },
+    {
+      "text": "{$name} is uitgeschakeld",
+      "scope": "attention_title"
     }
   ],
   "in_trash": {
@@ -14424,18 +14436,30 @@
     "text": "Bezoekers krijgen geen antwoord tot het weer ingeschakeld is.",
     "scope": "app_health"
   },
-  "no_address": {
-    "text": "Nog geen adres",
-    "scope": "app_health"
-  },
+  "no_address": [
+    {
+      "text": "Nog geen adres",
+      "scope": "app_health"
+    },
+    {
+      "text": "{$name} heeft nog geen adres",
+      "scope": "attention_title"
+    }
+  ],
   "no_address_detail": {
     "text": "Voeg een adres toe zodat bezoekers het kunnen bereiken.",
     "scope": "app_health"
   },
-  "error_page": {
-    "text": "Bezoekers krijgen een foutpagina",
-    "scope": "app_health"
-  },
+  "error_page": [
+    {
+      "text": "Bezoekers krijgen een foutpagina",
+      "scope": "app_health"
+    },
+    {
+      "text": "Bezoekers van {$name} krijgen een foutpagina",
+      "scope": "attention_title"
+    }
+  ],
   "upstream_down": {
     "text": "Wat het serveert, antwoordt niet.",
     "scope": "app_health"
@@ -14444,10 +14468,16 @@
     "text": "De workload {$name} draait niet.",
     "scope": "app_health"
   },
-  "path_open": {
-    "text": "{$path} is open voor iedereen",
-    "scope": "app_health"
-  },
+  "path_open": [
+    {
+      "text": "{$path} is open voor iedereen",
+      "scope": "app_health"
+    },
+    {
+      "text": "{$path} van {$name} is open voor iedereen",
+      "scope": "attention_title"
+    }
+  ],
   "path_open_detail": {
     "text": "De toegangslijst laat iedereen binnen, dus het pad is niet beveiligd.",
     "scope": "app_health"
@@ -14464,10 +14494,16 @@
     "text": "Installeer opnieuw zodra de oorzaak opgelost is.",
     "scope": "app_health"
   },
-  "cannot_start": {
-    "text": "{$name} kan nog niet starten",
-    "scope": "app_health"
-  },
+  "cannot_start": [
+    {
+      "text": "{$name} kan nog niet starten",
+      "scope": "app_health"
+    },
+    {
+      "text": "{$name} kan nog niet starten",
+      "scope": "attention_title"
+    }
+  ],
   "status_unknown": {
     "text": "Status onbekend",
     "scope": "app_health"
@@ -15737,10 +15773,16 @@
     "text": "een site van een tenant mag enkel doorsturen naar een publiek adres",
     "scope": "site_fault"
   },
-  "routed_in_part": {
-    "text": "Niet alles wordt gerouteerd zoals ingesteld",
-    "scope": "app_health"
-  },
+  "routed_in_part": [
+    {
+      "text": "Niet alles wordt gerouteerd zoals ingesteld",
+      "scope": "app_health"
+    },
+    {
+      "text": "Niet alles van {$name} wordt gerouteerd zoals ingesteld",
+      "scope": "attention_title"
+    }
+  ],
   "until_lifted": {
     "text": "Tot opgeheven",
     "scope": "ban"
@@ -16388,10 +16430,6 @@
     "text": "{$cause} (afsluitcode {$code})",
     "scope": "attention_detail"
   },
-  "error_cause_reason": {
-    "text": "{$cause}: {$reason}",
-    "scope": "attention_detail"
-  },
   "error_cause_unknown": {
     "text": "Voor deze fout is geen oorzaak vastgelegd; de console-uitvoer kan zeggen wat er gebeurde",
     "scope": "attention_detail"
@@ -16815,10 +16853,16 @@
     "text": "De laatste mislukte {$ago}",
     "scope": "instance_overview"
   },
-  "https_not_working": {
-    "text": "HTTPS werkt niet",
-    "scope": "app_health"
-  },
+  "https_not_working": [
+    {
+      "text": "HTTPS werkt niet",
+      "scope": "app_health"
+    },
+    {
+      "text": "HTTPS werkt niet voor {$name}",
+      "scope": "attention_title"
+    }
+  ],
   "workload_isolation_refused": [
     {
       "text": "Geweigerd zonder firewallregels",
@@ -16843,10 +16887,6 @@
   ],
   "start_refused_isolation": {
     "text": "Firewallregels per app staan uit op {$host}, dus het mag daar niet starten.",
-    "scope": "attention_detail"
-  },
-  "start_failed_reason": {
-    "text": "Wat het weigerde: {$reason}",
     "scope": "attention_detail"
   },
   "database_not_serving": {
@@ -16995,5 +17035,85 @@
   "never_block_name": {
     "text": "Elk adres waarnaar deze naam verwijst",
     "scope": "ban"
-  }
+  },
+  "operator_fixes": {
+    "text": "De beheerder van deze installatie kan dit oplossen.",
+    "scope": "app_health"
+  },
+  "console_instance_description": {
+    "text": "de console",
+    "scope": "capability"
+  },
+  "power_instance_description": {
+    "text": "herstarten en stoppen",
+    "scope": "capability"
+  },
+  "config_instance_description": {
+    "text": "de instellingen",
+    "scope": "capability"
+  },
+  "destroy_instance_description": {
+    "text": "verwijderen",
+    "scope": "capability"
+  },
+  "exec_instance_description": {
+    "text": "er commando's in uitvoeren",
+    "scope": "capability"
+  },
+  "snapshots_instance_description": {
+    "text": "snapshots",
+    "scope": "capability"
+  },
+  "backups_instance_description": {
+    "text": "back-ups",
+    "scope": "capability"
+  },
+  "image_any_instance_description": {
+    "text": "elke image draaien",
+    "scope": "capability"
+  },
+  "files_read_instance_description": {
+    "text": "de bestanden lezen",
+    "scope": "capability"
+  },
+  "files_write_instance_description": {
+    "text": "de bestanden wijzigen",
+    "scope": "capability"
+  },
+  "shell_instance_description": {
+    "text": "een shell erin",
+    "scope": "capability"
+  },
+  "no_limit": {
+    "text": "Geen limiet",
+    "scope": "tenant_usage"
+  },
+  "no_public_address_delegated": {
+    "text": "Voorlopig alleen bereikbaar vanuit het netwerk van deze installatie.",
+    "scope": "instance_overview"
+  },
+  "start_failed_worded": {
+    "text": "Het is nooit gaan draaien.",
+    "scope": "attention_detail"
+  },
+  "technically": {
+    "text": "Technisch: {$detail}",
+    "scope": "attention_detail"
+  },
+  "stat_backups_never": {
+    "text": "Nog geen kopie gemaakt",
+    "scope": "dashboard"
+  },
+  "workload_restart_refused": [
+    {
+      "text": "Herstart geweigerd",
+      "scope": "hohenheim",
+      "target": "activity_action"
+    },
+    {
+      "text": "{$subject} stopte en de automatische herstart werd geweigerd",
+      "scope": "hohenheim",
+      "target": "happened"
+    }
+  ]
 }

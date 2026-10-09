@@ -36,7 +36,10 @@ import java.util.Map;
  * asked only the placement gate, so it read "All clear" while the tenant's app page said "Visitors get an error page".
  *
  * AIDEV-NOTE: no Recent band, unlike the board: the activity log is the operator's audit trail, which /manage never
- * shows (ManageHistoryHiddenTest). A tenant-safe history needs its own read first.
+ * shows (ManageHistoryHiddenTest). A tenant-safe history is zenit-cms's to give (D13f, plan section 40): the one
+ * activity source is installation-wide and gated by one permission, so a feed of the rows about records the reader may
+ * view, its actor worded for that reader ("you", "automatic"), needs a viewer-scoped source there, never a second
+ * history read here.
  *
  * @author Jelle De Loecker
  * @since 0.2.0
@@ -84,7 +87,10 @@ public final class ManageDashboard extends PanelDashboard {
         return new WidgetTree(widgets);
     }
 
-    /** Each app whose verdict is not fine, worded as its record page leads with it, linked to that page. */
+    /**
+     * Each app whose verdict is not fine, worded as its record page leads with it and titled by its name (the band
+     * lists many apps; DEP10's "Visitors get an error page" named none), linked to that page.
+     */
     static @NonNull List<AttentionItem> attention(@NonNull List<AppDirectory.App> apps) {
         List<AttentionItem> items = new ArrayList<>();
         for (AppDirectory.App app : apps) {
@@ -94,7 +100,7 @@ public final class ManageDashboard extends PanelDashboard {
                 continue;
             }
             items.add(new AttentionItem(severity, severity == AttentionSeverity.ERROR ? "circle-xmark"
-                    : "triangle-exclamation", health.headline(), health.detail(), app.target(),
+                    : "triangle-exclamation", AppHealth.titleOf(health, app.name()), health.detail(), app.target(),
                 AttentionItems.action("act_open_app", "name", app.name())));
         }
         return items;

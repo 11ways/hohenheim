@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -117,6 +118,50 @@ class InstanceConsoleCrashRestartTest {
                 .as("step 5: the restart is the system's action, never the viewer's")
                 .isEqualTo(Map.of("actorKind", ZenitPrincipalKind.SYSTEM.id().toString(),
                     "origin", Accountability.ORIGIN_SYSTEM));
+        });
+    }
+
+    @Test
+    void aCrashRestartTheGatesRefuseIsRecordedAsTheWorkloadsCause() {
+        Db.run(datasource, () -> {
+            // 1. A running workload with the restart policy, its console watched.
+            int instanceId = instanceRecord("crash-refused");
+            Row row = Models.get(InstanceModel.class).findById(instanceId);
+            row.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_RESTART);
+            Models.get(InstanceModel.class).save(row);
+            new InstanceService().deploy(instanceId);
+            String handle = FakeNativeDaemons.handleOf(instanceId);
+            FakeNativeDaemons.FakeWorkload workload = FakeNativeDaemons.daemonOf(hostId).get(handle);
+            InstanceConsoles.subscribe(instanceId, chunk -> { });
+            FakeNativeDaemons.ScriptedStream stream = FakeNativeDaemons.CONSOLE_STREAMS.get(handle);
+            assertThat(stream).as("step 1: the console watch is open").isNotNull();
+
+            // 2. Its host stops taking workloads, then the workload dies: the restart is refused by the start gate.
+            ServerModel servers = Models.get(ServerModel.class);
+            String admission = servers.findById(hostId).get(ServerModel.ADMISSION);
+            servers.find().where(ServerModel.ID.eq(hostId)).assign(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED)
+                .bypassBehaviours().updateAll();
+            try {
+                workload.running = false;
+                stream.endFromDaemon();
+
+                // 3. The refusal is the record's ERROR cause, never only a log line: before, the app read "Not
+                //    running" (or still "Running") with no reason.
+                Poll.until("step 3: the refused restart leaves the record in error", WAIT,
+                    () -> InstanceModel.STATUS_ERROR.equals(
+                        Models.get(InstanceModel.class).findById(instanceId).get(InstanceModel.STATUS)));
+                List<Row> causes = Models.get(ActivityModel.class).find()
+                    .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
+                    .where(ActivityModel.RECORD_ID.eq(String.valueOf(instanceId)))
+                    .where(ActivityModel.ACTION.eq(HohenheimActivityAction.WORKLOAD_RESTART_REFUSED.id().toString()))
+                    .all();
+                assertThat(causes).as("step 3: the refused restart is recorded once as the cause").hasSize(1);
+                assertThat((String) causes.get(0).get(ActivityModel.DETAIL))
+                    .as("step 3: with the refusal's own words").isNotBlank();
+            } finally {
+                servers.find().where(ServerModel.ID.eq(hostId)).assign(ServerModel.ADMISSION, admission)
+                    .bypassBehaviours().updateAll();
+            }
         });
     }
 

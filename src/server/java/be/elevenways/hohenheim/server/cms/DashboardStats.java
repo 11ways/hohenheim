@@ -186,7 +186,8 @@ final class DashboardStats {
         if (total == 0) {
             return tile("backups", label, "0", words.say(copy("stat_backups_none")), "box-archive", panel, slug);
         }
-        String detail = newestAt == null ? null : words.say(copy("stat_backups_newest")
+        // "0 of 2" said what is not backed up and never why: with no copy at all the line says none was made yet.
+        String detail = newestAt == null ? words.say(copy("stat_backups_never")) : words.say(copy("stat_backups_newest")
             .withArg("ago", RelativeTime.ago(newestAt, wording(words)))
             .withArg("size", ByteText.human(newestSize)));
         return tile("backups", label,

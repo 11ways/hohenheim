@@ -200,7 +200,8 @@ final class AppDirectory {
             for (Row site : served) {
                 names.addAll(domains.getOrDefault(site.get(SiteModel.ID), List.of()));
             }
-            SiteHostnamesCell address = names.isEmpty() ? endpointAddress(id) : SiteParts.hostnamesCellOf(names);
+            SiteHostnamesCell address = names.isEmpty() ? endpointAddress(id, delegated)
+                : SiteParts.hostnamesCellOf(names);
             RecordHealth health = workloadHealth.apply(instance);
             apps.add(new App(Source.WORKLOAD.token() + "-" + id, Source.WORKLOAD, id,
                 String.valueOf((Object) instance.get(InstanceModel.NAME)),
@@ -258,8 +259,8 @@ final class AppDirectory {
      * @param ownSlug the entry of the record the app is read from
      * @param own     that record
      */
-    private static @Nullable AppFix fixOf(@NonNull Panel panel, @NonNull AccessContext access, @NonNull String ownSlug,
-                                          @NonNull Row own, @NonNull RecordHealth health) {
+    static @Nullable AppFix fixOf(@NonNull Panel panel, @NonNull AccessContext access, @NonNull String ownSlug,
+                                  @NonNull Row own, @NonNull RecordHealth health) {
         Conduit conduit = access.conduit();
         if (health.fixes().isEmpty() || conduit == null) {
             return null;
@@ -442,8 +443,8 @@ final class AppDirectory {
      * Where a workload no site serves is reached: its first claimed port on its host's public address (the overview's
      * own endpoint read), or no address at all.
      */
-    private static @NonNull SiteHostnamesCell endpointAddress(int instanceId) {
-        List<InstanceEndpointView> endpoints = InstanceOverview.endpointsOf(instanceId);
+    private static @NonNull SiteHostnamesCell endpointAddress(int instanceId, boolean delegated) {
+        List<InstanceEndpointView> endpoints = InstanceOverview.endpointsOf(instanceId, delegated);
         if (endpoints.isEmpty()) {
             return new SiteHostnamesCell(null, 0);
         }

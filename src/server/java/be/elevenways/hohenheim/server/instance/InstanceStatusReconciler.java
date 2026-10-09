@@ -22,6 +22,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Asks the RUNTIME what is actually running and corrects the stored status column, so a
@@ -271,7 +272,7 @@ public final class InstanceStatusReconciler {
         if (flapping) {
             InstanceConsoles.alertCrashLoop(instanceId, fresh.get(InstanceModel.NAME));
         } else if (restart) {
-            redeployCrashed(instanceId, fresh.get(InstanceModel.NAME));
+            redeployCrashed(instanceId, serverId, fresh.get(InstanceModel.NAME));
         }
         return new Outcome(instanceId, Verdict.CORRECTED, stored, state);
     }
@@ -283,7 +284,7 @@ public final class InstanceStatusReconciler {
      * also what brings restart-policy workloads back after a host reboot (their records
      * still claim {@code running}, the daemon says gone, the correction lands here).
      */
-    private void redeployCrashed(int instanceId, Object name) {
+    private void redeployCrashed(int instanceId, int serverId, Object name) {
         Blast.log("INSTANCE RECONCILE: instance", instanceId,
             "died without an observed stop; crash policy restart -> redeploying");
         // The datasource context does not cross threads on its own (the console watch
@@ -295,8 +296,18 @@ public final class InstanceStatusReconciler {
             try {
                 // AIDEV-NOTE: the correction still holds this record's claim when it queues the restart. The new
                 // thread must wait for that claim to leave, then deploy re-entrantly under its own queued claim.
-                this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.QUEUE,
-                    () -> this.instances.deploy(instanceId));
+                this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.QUEUE, () -> {
+                    try {
+                        this.instances.deploy(instanceId);
+                    } catch (RuntimeException refused) {
+                        Blast.log("INSTANCE RECONCILE: crash restart of instance", name,
+                            "refused:", refused.getMessage());
+                        // Under the claim still: the refusal becomes the record's ERROR cause, where the record
+                        // read "Not running" with no reason.
+                        InstanceOperationGuard.stampRestartRefused(this.instances.leases(), instanceId, serverId,
+                            name, Set.of(InstanceModel.STATUS_STOPPED), refused);
+                    }
+                });
             } catch (RuntimeException refused) {
                 Blast.log("INSTANCE RECONCILE: crash restart of instance", name,
                     "refused:", refused.getMessage());

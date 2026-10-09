@@ -1,5 +1,5 @@
-{#- The /manage landing's usage card (board Manage-Home): every budget the operator capped for this tenant, its bar and
-    how much of the cap is held. Uncapped budgets are left out, so an installation without caps draws no card. -#}
+{#- The /manage landing's usage card (board Manage-Home): each budget the board lists, how much of the operator's cap
+    this tenant holds with its bar, or "No limit" where the operator set none (TenantUsage). -#}
 {% declare widget: WidgetInstance %}
 {% declare data: List<UsageLine> = null %}
 {% if data != null and data %}
@@ -12,8 +12,12 @@
         {% each data as line %}
         <div class="hh-tenant-usage-line" data-hh-usage={% line.label %}>
             <span class="hh-tenant-usage-label">{{ line.label }}</span>
+            {% if line.capped %}
             <span class="hh-tenant-usage-amount">{% if line.bytes %}{{ t("of_size", scope: "tenant_usage", used: ByteText.human(line.used), limit: ByteText.human(line.limit)) }}{% else %}{{ t("of_count", scope: "tenant_usage", used: line.used, limit: line.limit) }}{% /if %}</span>
             <pl-usage-bar value={% line.percent %} max={% 100 %} size="sm" ariaLabel={% line.label %}></pl-usage-bar>
+            {% else %}
+            <span class="hh-tenant-usage-amount" data-hh-usage-uncapped>{{ t("no_limit", scope: "tenant_usage") }}</span>
+            {% /if %}
         </div>
         {% /each %}
         <p class="hh-tenant-usage-more">{{ t("need_more", scope: "tenant_usage") }}</p>

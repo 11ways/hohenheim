@@ -148,7 +148,10 @@ public final class AppParts {
                 SubjectType.of(HohenheimIds.id("app"), App.class, App::key))
             .label(copy("plural"))
             .recordLabel(copy("singular"))
-            .description(Microcopy.of("nav_hint").withFilter("scope", "app"))
+            // The operator reads the data model it lists; a tenant reads their apps, never "sites, instances and
+            // stacks" (DEP10).
+            .description(withHost ? Microcopy.of("nav_hint").withFilter("scope", "app")
+                : Microcopy.of("nav_hint").withFilter("scope", "manage_app"))
             .icon(Icon.of("cubes"))
             // The one count the sidebar carries (board Main): the apps with a problem, as the Apps tile says them.
             .navBadge(access -> {

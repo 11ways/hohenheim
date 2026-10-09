@@ -182,19 +182,23 @@ final class HohenheimGrantPolicy {
                     FILES_READ, SNAPSHOTS, BACKUPS, SHELL),
             KnownCapability.of(CONSOLE)
                 .label(Microcopy.of("console").withFilter("scope", "capability"))
+                .describe(Microcopy.of("console_instance_description").withFilter("scope", "capability"))
                 .asDelegable()
                 .impliedBy(MANAGE),
             KnownCapability.of(POWER)
                 .label(Microcopy.of("power").withFilter("scope", "capability"))
+                .describe(Microcopy.of("power_instance_description").withFilter("scope", "capability"))
                 .asDelegable()
                 .impliedBy(MANAGE),
             KnownCapability.of(CONFIG)
                 .label(Microcopy.of("config").withFilter("scope", "capability"))
+                .describe(Microcopy.of("config_instance_description").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable()
                 .impliedBy(MANAGE),
             KnownCapability.of(DESTROY)
                 .label(Microcopy.of("destroy").withFilter("scope", "capability"))
+                .describe(Microcopy.of("destroy_instance_description").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable()
                 .impliedBy(MANAGE),
@@ -204,6 +208,7 @@ final class HohenheimGrantPolicy {
             // into an API-key scope, or reach it by holding manage.
             KnownCapability.of(EXEC)
                 .label(Microcopy.of("exec").withFilter("scope", "capability"))
+                .describe(Microcopy.of("exec_instance_description").withFilter("scope", "capability"))
                 .admin(),
             // Phase 4: the snapshot/backup actions now exist (InstanceSnapshots /
             // InstanceBackups behind the admin resources), so their capabilities
@@ -211,10 +216,12 @@ final class HohenheimGrantPolicy {
             // restore destroys data and a backup export carries secret variables.
             KnownCapability.of(SNAPSHOTS)
                 .label(Microcopy.of("snapshots").withFilter("scope", "capability"))
+                .describe(Microcopy.of("snapshots_instance_description").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable(),
             KnownCapability.of(BACKUPS)
                 .label(Microcopy.of("backups").withFilter("scope", "capability"))
+                .describe(Microcopy.of("backups_instance_description").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable(),
             // Phase 5: the image gate exists (InstanceImagePolicy on the write funnel),
@@ -223,6 +230,7 @@ final class HohenheimGrantPolicy {
             // that manage/snapshots/backups already surface.
             KnownCapability.of(IMAGE_ANY)
                 .label(Microcopy.of("image_any").withFilter("scope", "capability"))
+                .describe(Microcopy.of("image_any_instance_description").withFilter("scope", "capability"))
                 .elevated(),
             // Phase 6: the file manager exists (InstanceFiles behind the Files tab and the
             // /api/v1 file lane), so its two capabilities register WITH their enforcement
@@ -238,9 +246,11 @@ final class HohenheimGrantPolicy {
             // call, so an operator can hand out a read-only file browser.
             KnownCapability.of(FILES_READ)
                 .label(Microcopy.of("files_read").withFilter("scope", "capability"))
+                .describe(Microcopy.of("files_read_instance_description").withFilter("scope", "capability"))
                 .asDelegable(),
             KnownCapability.of(FILES_WRITE)
                 .label(Microcopy.of("files_write").withFilter("scope", "capability"))
+                .describe(Microcopy.of("files_write_instance_description").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable(),
             // The interactive shell lands WITH its enforcing surface (InstanceShell behind
@@ -250,6 +260,7 @@ final class HohenheimGrantPolicy {
             // carrying the tab -- the defect files.read/snapshots/backups shipped with.
             KnownCapability.of(SHELL)
                 .label(Microcopy.of("shell").withFilter("scope", "capability"))
+                .describe(Microcopy.of("shell_instance_description").withFilter("scope", "capability"))
                 .elevated()
                 .asDelegable());
         RecordCapabilityRules.declare(InstanceModel.MODEL_ID,

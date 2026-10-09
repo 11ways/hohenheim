@@ -1,5 +1,6 @@
 {#- The dashboard's Apps band (boards Main and Manage-Home): every app with its health glyph, by name, what it is and
-    where, and what HTTPS gives its main address (the Addresses list's word), read from the one App directory the Apps list reads. The glyph is the same
+    where, and its badge: what HTTPS gives its main address (the Addresses list's word), or the verdict of an app with
+    a problem HTTPS does not explain (AppSummary.verdict), read from the one App directory the Apps list reads. The glyph is the same
     verdict (and the same HealthCellState) the Apps list's health cell draws; the heading is the placement's own
     (AppsBand). -#}
 {% declare widget: WidgetInstance %}
@@ -14,7 +15,9 @@
                             label={% app.health.label %} data-cms-health={% app.health.tone %}></pl-state-glyph>
             <pl-list-item-title><a href={% app.url %} data-row-link>{{ app.name }}</a></pl-list-item-title>
             {% if app.detail != "" %}<pl-list-item-meta>{{ app.detail }}</pl-list-item-meta>{% /if %}
-            {% if app.https != null %}
+            {% if app.verdict %}
+            <pl-list-item-trailing><pl-badge variant={% app.health.variant %} attr:data-hh-app-verdict={% app.health.tone %}>{{ app.health.label }}</pl-badge></pl-list-item-trailing>
+            {% elseif app.https != null %}
             <pl-list-item-trailing><pl-badge variant={% app.https.variant %} attr:data-cert-status={% app.https.status %}>{{ app.https.label }}</pl-badge></pl-list-item-trailing>
             {% /if %}
         </pl-list-item>

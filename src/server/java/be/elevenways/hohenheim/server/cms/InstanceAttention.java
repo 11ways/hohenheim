@@ -82,13 +82,15 @@ public final class InstanceAttention {
                 .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_ERROR))
                 .all()) {
             AttentionSubject subject = AttentionSubject.instance(instance.get(InstanceModel.ID));
+            WorkloadErrors.Reading reading = WorkloadErrors.readingOf(instance, true);
             items.add(item(AttentionSeverity.ERROR, "box",
                 WorkloadErrors.stoppageOf(instance).title(instance.get(InstanceModel.NAME)),
-                WorkloadErrors.detailOf(instance, true),
+                reading.worded(),
                 InstanceParts.recordRoute(ADMIN, instance, InstanceConsolePage.SLUG),
                 action("act_open_console"))
                 .about(subject, sitesHeldText(sitesHeld.get(subject)))
-                .causedBy(WorkloadErrors.rootOf(instance)));
+                .causedBy(WorkloadErrors.rootOf(instance))
+                .withNote(reading.technical()));
         }
     }
 

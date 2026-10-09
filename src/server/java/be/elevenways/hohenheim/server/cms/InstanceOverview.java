@@ -20,6 +20,7 @@ import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.RelativeTime;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.server.GrantAdministration;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
@@ -49,6 +50,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Overview tab on an instance, and the record's own front door: the app composition ({@link AppOverview}) over the
@@ -111,11 +113,16 @@ public final class InstanceOverview {
         if (protection != null) {
             main.add(protection);
         }
-        main.add(new WidgetInstance(CardWidget.ID, Map.of(
-                "title", Microcopy.of("endpoint").withFilter("scope", "instance_overview"),
-                "lead", Microcopy.of("endpoint_hint").withFilter("scope", "instance_overview")),
-            new WidgetTree(List.of(new WidgetInstance(HohenheimWidgets.INSTANCE_ENDPOINTS.id(), Map.of())
-                .withData(endpointsOf(instanceId))))));
+        // The ports it answers on directly, only where it holds one: board App-Overview draws no card for an app
+        // reached through its addresses alone, where "holds no port claim" was ledger words about nothing.
+        List<InstanceEndpointView> ports = endpointsOf(instanceId, delegated);
+        if (!ports.isEmpty()) {
+            main.add(new WidgetInstance(CardWidget.ID, Map.of(
+                    "title", Microcopy.of("endpoint").withFilter("scope", "instance_overview"),
+                    "lead", Microcopy.of("endpoint_hint").withFilter("scope", "instance_overview")),
+                new WidgetTree(List.of(new WidgetInstance(HohenheimWidgets.INSTANCE_ENDPOINTS.id(), Map.of())
+                    .withData(ports)))));
+        }
         // Board App-Overview: memory, disk, CPU. Memory and CPU are the live stats hub's held samples, read while
         // someone watches the Metrics tab; never a stream opened by this render.
         List<UsageData> live = liveUsage(instance, InstanceStats.history(instanceId), locales, resolver);
@@ -409,8 +416,13 @@ public final class InstanceOverview {
 
     // -- endpoints -------------------------------------------------------------------
 
-    /** Every port claim this instance holds, joined to its host's declared address. */
-    static @NonNull List<InstanceEndpointView> endpointsOf(int instanceId) {
+    /**
+     * Every port claim this instance holds, joined to its host's declared address.
+     *
+     * @param delegated whether the reader is a tenant, who reads why a port has no address without the host's
+     *                  internals
+     */
+    static @NonNull List<InstanceEndpointView> endpointsOf(int instanceId, boolean delegated) {
         List<InstanceEndpointView> endpoints = new ArrayList<>();
         for (Row claim : PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId)) {
             Integer port = claim.get(PortAllocationModel.PORT);
@@ -418,13 +430,17 @@ public final class InstanceOverview {
                 continue;
             }
             PortState state = PortState.of(claim);
+            String address = addressOf(claim);
             endpoints.add(new InstanceEndpointView(
-                addressOf(claim),
+                address,
                 port,
                 blankable(claim.get(PortAllocationModel.PROTOCOL)),
                 state.key(),
                 state.words(),
-                PortLedger.isPreallocated(claim)));
+                PortLedger.isPreallocated(claim),
+                !address.isBlank() ? null
+                    : delegated ? Microcopy.of("no_public_address_delegated").withFilter("scope", "instance_overview")
+                    : Microcopy.of("no_public_address").withFilter("scope", "instance_overview")));
         }
         return endpoints;
     }
@@ -471,9 +487,9 @@ public final class InstanceOverview {
     }
 
     /**
-     * What this delegate may do here (board Manage-App), in the instance vocabulary's own labels, and what stays the
-     * operator's. It reads the same capability walk every tab and action is gated by, so it cannot promise a door
-     * that refuses.
+     * What this delegate may do here (board Manage-App), in what the instance vocabulary says each held capability
+     * allows, and what stays the operator's. It reads the same capability walk every tab and action is gated by, so
+     * it cannot promise a door that refuses.
      *
      * AIDEV-NOTE: sharing is the Access tab's own gate ({@link GrantAdministration#mayAdministerRecordAccess}), never
      * MANAGE: every instance capability is delegable, so a VIEW holder may already hand VIEW on, and a card saying
@@ -483,14 +499,24 @@ public final class InstanceOverview {
      */
     private static @NonNull WidgetInstance yourPart(int instanceId, @NonNull AccessContext access,
                                                     @NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
-        List<String> held = new ArrayList<>();
+        List<KnownCapability> holds = new ArrayList<>();
         for (KnownCapability capability : KnownCapabilities.forModel(InstanceModel.MODEL_ID)) {
             if (capability.label() != null && !HohenheimAccess.VIEW.equals(capability.capability())
                 && HohenheimAccess.hasInstanceCapability(access, instanceId, capability.capability())) {
-                // The first as declared, the rest in their sentence spelling ("Console, power, configure").
-                held.add((held.isEmpty() ? capability.label() : capability.label().withFilter("case", "sentence"))
-                    .resolve(locales, resolver));
+                holds.add(capability);
             }
+        }
+        // Each held capability in what it allows (its description, else its sentence label), leaving out one a
+        // broader held capability implies: a tenant reads "start and stop it, its console, settings and removal",
+        // never the umbrella's verbs again as a raw list ("Console, power, configure, destroy", DEP10).
+        List<String> held = new ArrayList<>();
+        for (KnownCapability capability : holds) {
+            if (holds.stream().anyMatch(other -> capability.impliedBy().contains(other.capability()))) {
+                continue;
+            }
+            Microcopy words = capability.description() != null ? capability.description()
+                : Objects.requireNonNull(capability.label()).withFilter("case", "sentence");
+            held.add(words.resolve(locales, resolver));
         }
         boolean shares = GrantAdministration.mayAdministerRecordAccess(access, InstanceModel.MODEL_ID, instanceId);
         String can;
@@ -501,7 +527,8 @@ public final class InstanceOverview {
                 held.add(Microcopy.of("you_can_share").withFilter("scope", "instance_overview")
                     .withFilter("case", "sentence").resolve(locales, resolver));
             }
-            can = String.join(", ", held);
+            String sentence = String.join(", ", held);
+            can = BlastString.upper(sentence.substring(0, 1)) + sentence.substring(1);
         }
         boolean removes = HohenheimAccess.destroyUnavailableReason(access, instanceId) == null;
         List<WidgetFact> facts = new ArrayList<>();

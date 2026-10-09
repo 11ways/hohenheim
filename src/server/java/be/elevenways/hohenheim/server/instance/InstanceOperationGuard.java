@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.security.IsolationUnenforceable;
@@ -19,6 +20,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
+import java.util.Set;
 
 
 /**
@@ -184,6 +186,31 @@ final class InstanceOperationGuard {
         requireCause(InstanceModel.STATUS_ERROR, cause);
         write(leases, instanceId, serverId, InstanceModel.STATUS_ERROR, instanceName);
         recordCause(instanceId, cause, detail);
+    }
+
+    /**
+     * A crash restart the start gates refused leaves the record ERROR with that refusal as its cause, instead of a log
+     * line nobody reads: the workload stays down, and its app read "Not running" (or still "Running") with no reason.
+     * Only while the record still holds a status the restart was attempted from; a start that got further stamped its
+     * own outcome. The observed port claims go as on every crash settle: the daemon said the workload is gone.
+     *
+     * AIDEV-NOTE: called under the record's claim (the console watch's exit policy, the reconciler's queued restart).
+     *
+     * @param from the statuses the restart was attempted from
+     * @return whether the refusal was recorded
+     */
+    static boolean stampRestartRefused(@NonNull HostLeases leases, int instanceId, int serverId,
+                                       @NonNull Object instanceName, @NonNull Set<String> from,
+                                       @NonNull RuntimeException refused) {
+        Row row = Models.get(InstanceModel.class).findById(instanceId);
+        if (row == null || !from.contains(row.get(InstanceModel.STATUS))) {
+            return false;
+        }
+        leases.requireFence(serverId);
+        stampError(leases, instanceId, serverId, instanceName, HohenheimActivityAction.WORKLOAD_RESTART_REFUSED,
+            refused.getMessage());
+        PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, instanceId);
+        return true;
     }
 
     /**

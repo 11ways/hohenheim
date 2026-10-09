@@ -36,6 +36,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -168,7 +169,8 @@ class InstancePowerAuditTest {
 
             // 3b. The ERROR names what caused it (D12): the failed start is recorded as the cause, with the failure's
             //     own message, and the dashboard item words it, never "exited unexpectedly". Since D13c its title says
-            //     the start failed and its detail is what refused it, never that sentence twice.
+            //     the start failed, never that sentence twice; since D13f its detail is worded and the message is the
+            //     technical line under it.
             List<Row> causes = activityFor(id, HohenheimActivityAction.WORKLOAD_START_FAILED.id().toString());
             assertThat(causes).as("step 3b: the error's cause is recorded once").hasSize(1);
             assertThat((String) causes.get(0).get(ActivityModel.DETAIL))
@@ -179,11 +181,16 @@ class InstancePowerAuditTest {
                 .contains("/instances/" + id + "/")).findFirst().orElseThrow();
             assertThat(item.title().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
                 .as("step 3b: the item says the start failed").isEqualTo("audit-restart could not be started");
-            assertThat(item.detail().key()).as("step 3b: the item's detail is what refused it")
-                .isEqualTo("start_failed_reason");
+            assertThat(item.detail().key()).as("step 3b: the item's detail says in words what the failure meant")
+                .isEqualTo("start_failed_worded");
             assertThat(item.detail().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
                 .as("step 3b: in words that say what happened")
-                .startsWith("What refused it: ")
+                .isEqualTo("It never got to run.");
+            // The failure's own message is the technical line under those words (D13f), never the sentence itself.
+            assertThat(Objects.requireNonNull(item.note(), "step 3b: the item carries the technical line")
+                    .resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 3b: the technical line is the failure's own message")
+                .startsWith("Technically: ")
                 .doesNotContain("exited unexpectedly");
 
             FakeNativeDaemons.daemonOf(hostId).remove(handle);
