@@ -214,10 +214,6 @@ public final class InstanceOperationHandlers {
             + ": its socket admits through offered(), and no surface places it");
     }
 
-    /**
-     * Whether an operation applies to this instance at all: a generated instance (a product tier's lowered runtime) is
-     * managed only through its owning record's surface, on every surface (the API never lists it either).
-     */
     /** The operator verbs (placement, install lifecycle, capture, destroy with data) answer to an operator alone. */
     private static <I> @Nullable DomainRefusal operatorOnly(@NonNull Row instance, @Nullable I input,
                                                             @NonNull AccessContext access) {
@@ -226,10 +222,14 @@ public final class InstanceOperationHandlers {
     }
 
     private static boolean capturable(@NonNull Row instance) {
-        InstanceKindHandler handler = InstanceKinds.getHandler(instance.get(InstanceModel.KIND));
+        InstanceKindHandler handler = InstanceKinds.handlerOf(instance);
         return handler != null && handler.supportsTemplateCapture();
     }
 
+    /**
+     * Whether an operation applies to this instance at all: a generated instance (a product tier's lowered runtime) is
+     * managed only through its owning record's surface, on every surface (the API never lists it either).
+     */
     private static boolean authored(@NonNull Row instance) {
         return instance.get(InstanceModel.GENERATED_BY) == null;
     }

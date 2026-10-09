@@ -9,7 +9,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
-import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
@@ -17,7 +16,6 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -65,22 +63,16 @@ public final class InstanceFramebufferPage implements ConsoleModes.Mode {
 
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
-        Conduit conduit = request.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
         String status = instance.get(InstanceModel.STATUS);
 
-        Map<String, Object> vars = new HashMap<>();
-        vars.put("title", instance.get(InstanceModel.NAME));
-        vars.put("instanceName", instance.get(InstanceModel.NAME));
-        vars.put("instanceId", instanceId);
+        Map<String, Object> vars = this.modes.vars(request, instance, this);
         vars.put("running", InstanceModel.STATUS_RUNNING.equals(status)
             || InstanceModel.STATUS_STARTING.equals(status));
         // AIDEV-NOTE: WebSocketEndpoint is not a RouteTarget and has no with(...), and kvm-screen takes its endpoint
         // as a STRING anyway, so the socket route is RENDERED from its own declaration, never concatenated.
         vars.put("screenUrl", HohenheimEndpoints.VM_FRAMEBUFFER.toUrl(
             Map.of(HohenheimEndpoints.INSTANCE_ID, instanceId)));
-        vars.put("head", recordHead(conduit));
-        vars.put("consoleModes", this.modes.views(request, instance, SLUG));
         return new RenderTemplateResult(
             HohenheimTemplateIds.INSTANCE_FRAMEBUFFER, vars);
     }

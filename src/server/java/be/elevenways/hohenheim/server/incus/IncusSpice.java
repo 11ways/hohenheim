@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.incus;
 
 import be.elevenways.pepperglass.session.ChannelStream;
 import be.elevenways.pepperglass.session.SessionOptions;
+import be.elevenways.protoblast.server.io.BulkInputStream;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -101,16 +102,10 @@ public final class IncusSpice {
     private static final class WebSocketChannel implements ChannelStream {
 
         private final @NonNull IncusWebSocket socket;
-        private final @NonNull InputStream input = new InputStream() {
+        private final @NonNull InputStream input = new BulkInputStream() {
 
             private byte @Nullable [] message;
             private int offset;
-
-            @Override
-            public int read() throws IOException {
-                byte[] one = new byte[1];
-                return this.read(one, 0, 1) < 0 ? -1 : one[0] & 0xFF;
-            }
 
             @Override
             public int read(byte @NonNull [] into, int at, int length) throws IOException {

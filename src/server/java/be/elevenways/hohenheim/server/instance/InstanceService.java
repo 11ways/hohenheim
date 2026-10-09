@@ -960,7 +960,7 @@ public final class InstanceService {
     private static @NonNull List<String> removeNamedVolumes(@NonNull Row row,
                                                             @NonNull String serverName) {
         Map<String, String> logical = InstanceSnapshots.logicalVolumes(row);
-        InstanceKindHandler handler = InstanceKinds.getHandler(row.get(InstanceModel.KIND));
+        InstanceKindHandler handler = InstanceKinds.handlerOf(row);
         if (logical.isEmpty() || handler == null) {
             return List.of();
         }
@@ -1040,7 +1040,7 @@ public final class InstanceService {
             throw Violations.ofForm(HohenheimViolations.text("instance_not_found")
                 .withArg("id", instanceId));
         }
-        InstanceKindHandler handler = InstanceKinds.getHandler(row.get(InstanceModel.KIND));
+        InstanceKindHandler handler = InstanceKinds.handlerOf(row);
         if (handler == null) {
             throw Violations.ofField("kind", row.get(InstanceModel.KIND),
                 HohenheimViolations.text("instance_kind_unknown")

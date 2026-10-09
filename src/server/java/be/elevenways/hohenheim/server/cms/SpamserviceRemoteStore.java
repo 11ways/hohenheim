@@ -253,6 +253,12 @@ final class SpamserviceRemoteStore {
         return value != null ? value : "";
     }
 
+    /** @return a remote map as the {@code name}/{@code value} rows of a two-column table, each value as text */
+    static @NonNull List<Map<String, Object>> nameValueRows(@NonNull Map<String, Object> values) {
+        return values.entrySet().stream().map(entry -> Map.<String, Object>of(
+            "name", entry.getKey(), "value", String.valueOf(entry.getValue()))).toList();
+    }
+
     /** @return the id as a UUID value, or "" for a blank one */
     static @NonNull Object uuidOrBlank(@Nullable String value) {
         return value == null || value.isBlank() ? "" : UUID.fromString(value);

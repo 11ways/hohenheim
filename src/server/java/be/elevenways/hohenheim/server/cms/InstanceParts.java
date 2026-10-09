@@ -449,41 +449,37 @@ public final class InstanceParts {
      * rest sit in "More".
      */
     private static @NonNull List<RecordTab<Row>> adminTabs() {
-        List<RecordTab<Row>> tabs = new ArrayList<>();
-        tabs.add(InstanceOverview.tab());
-        tabs.add(new InstanceDeploymentsPage());
-        // The console's hub tab first, then its modes (shell, the one-off command, a VM's screen), each routed and
-        // gated as its own page and reached through the console's mode switch (ConsoleModes).
-        tabs.addAll(ConsoleModes.operator().tabs());
-        tabs.add(new InstanceFilesPage());
-        tabs.add(new InstanceStatsPage());
-        tabs.add(backupsTab());
-        tabs.add(new InstanceProvisioningPage());
-        tabs.add(new InstanceDevicesPage());
-        tabs.add(new InstanceVolumesTab());
-        tabs.add(new InstanceDatabasesPage());
-        // Operator-only: the page hides AND 404s itself for a delegate, and the /manage entry never lists it.
-        tabs.add(new InstanceMigratePage());
-        return List.copyOf(tabs);
+        return recordTabs(true);
     }
 
     /** The delegate's record tabs: the operator's set without the one-off command and the migration. */
     private static @NonNull List<RecordTab<Row>> manageTabs() {
+        return recordTabs(false);
+    }
+
+    /** @param operator whether the tabs are the operator's, which adds the one-off command and the migration */
+    private static @NonNull List<RecordTab<Row>> recordTabs(boolean operator) {
         List<RecordTab<Row>> tabs = new ArrayList<>();
         tabs.add(InstanceOverview.tab());
         tabs.add(new InstanceDeploymentsPage());
-        // The shell is a delegable tenant verb bounded to a workload that runs as its own non-root uid; the one-off
-        // command is ADMIN-sensitivity with deliberately no /manage surface (ConsoleModes.delegated()).
-        tabs.addAll(ConsoleModes.delegated().tabs());
+        // The console's hub tab first, then its modes (shell, the one-off command, a VM's screen), each routed and
+        // gated as its own page and reached through the console's mode switch. The shell is a delegable tenant verb
+        // bounded to a workload that runs as its own non-root uid; the one-off command is ADMIN-sensitivity with
+        // deliberately no /manage surface (ConsoleModes.delegated()).
+        tabs.addAll((operator ? ConsoleModes.operator() : ConsoleModes.delegated()).tabs());
         tabs.add(new InstanceFilesPage());
         tabs.add(new InstanceStatsPage());
-        // The sections read THIS panel's entries: the backup twin places no restore-to-new, which is how it stays
-        // operator-only here too.
+        // The sections read THIS panel's entries: the /manage backup twin places no restore-to-new, which is how it
+        // stays operator-only there too.
         tabs.add(backupsTab());
         tabs.add(new InstanceProvisioningPage());
         tabs.add(new InstanceDevicesPage());
         tabs.add(new InstanceVolumesTab());
         tabs.add(new InstanceDatabasesPage());
+        if (operator) {
+            // The page hides AND 404s itself for a delegate, and the /manage entry never lists it.
+            tabs.add(new InstanceMigratePage());
+        }
         return List.copyOf(tabs);
     }
 

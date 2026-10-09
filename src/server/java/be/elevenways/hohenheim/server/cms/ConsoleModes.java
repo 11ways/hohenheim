@@ -13,7 +13,9 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The one home of an instance's Console tab and its modes: the live console, the shell, a one-off command and a
@@ -100,6 +102,17 @@ public final class ConsoleModes {
             }
         }
         return null;
+    }
+
+    /** @return the vars every mode's page starts from: the instance it shows, its record head and the mode switch */
+    @NonNull Map<String, Object> vars(@NonNull PanelRequest request, @NonNull Row instance, @NonNull Mode mode) {
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("title", instance.get(InstanceModel.NAME));
+        vars.put("instanceName", instance.get(InstanceModel.NAME));
+        vars.put("instanceId", instance.get(InstanceModel.ID));
+        vars.put("head", mode.recordHead(request.conduit()));
+        vars.put("consoleModes", this.views(request, instance, mode.slug()));
+        return vars;
     }
 
     /**

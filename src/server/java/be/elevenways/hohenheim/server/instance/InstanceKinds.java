@@ -66,6 +66,11 @@ public final class InstanceKinds {
         return handlerFor(id);
     }
 
+    /** @return the handler of the instance row's kind, or null for an unknown kind */
+    public static @Nullable InstanceKindHandler handlerOf(@NonNull Row instance) {
+        return getHandler(instance.get(InstanceModel.KIND));
+    }
+
     private static @Nullable InstanceKindHandler handlerFor(@Nullable Identifier id) {
         return id != null && InstanceKindRegistry.REGISTRY.get(id) instanceof InstanceKindHandler handler
             ? handler : null;

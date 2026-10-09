@@ -27,6 +27,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.routing.Endpoint;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
@@ -117,27 +118,10 @@ public final class InstanceApi {
             return ApiConduits.json(Map.of("instances", instances));
         });
 
-        HohenheimEndpoints.API_INSTANCE.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row row = visibleInstance(conduit, ctx);
-            if (row == null) {
-                return null;
-            }
-            return ApiConduits.json(projection(row));
-        });
+        HohenheimEndpoints.API_INSTANCE.setHandler(onVisibleInstance((conduit, ctx, row) ->
+            ApiConduits.json(projection(row))));
 
-        HohenheimEndpoints.API_INSTANCE_POWER.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row row = visibleInstance(conduit, ctx);
-            if (row == null) {
-                return null;
-            }
+        HohenheimEndpoints.API_INSTANCE_POWER.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
             String action = ApiConduits.formValue(conduit, "action");
             Operation<Row, Void, PowerResult> operation = POWER_ACTIONS.get(action);
@@ -158,17 +142,9 @@ public final class InstanceApi {
             // stop and deploy halves it is, under ONE operation lock.
             return ApiConduits.json(Map.of("id", instanceId, "action", action,
                 "status", String.valueOf((Object) reload(instanceId).get(InstanceModel.STATUS))));
-        });
+        }));
 
-        HohenheimEndpoints.API_INSTANCE_COMMAND.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row row = visibleInstance(conduit, ctx);
-            if (row == null) {
-                return null;
-            }
+        HohenheimEndpoints.API_INSTANCE_COMMAND.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
             String command = ApiConduits.formValue(conduit, "command");
             if (command.isEmpty()) {
@@ -190,17 +166,9 @@ public final class InstanceApi {
             }
             // The operation records the line on the instance, from every surface.
             return ApiConduits.json(Map.of("id", instanceId, "status", "sent"));
-        });
+        }));
 
-        HohenheimEndpoints.API_INSTANCE_BACKUP.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row row = visibleInstance(conduit, ctx);
-            if (row == null) {
-                return null;
-            }
+        HohenheimEndpoints.API_INSTANCE_BACKUP.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
             try {
                 // The service records the backup on the instance; no surface writes an activity row.
@@ -214,17 +182,9 @@ public final class InstanceApi {
             } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused, row);
             }
-        });
+        }));
 
-        HohenheimEndpoints.API_INSTANCE_SNAPSHOT.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row row = visibleInstance(conduit, ctx);
-            if (row == null) {
-                return null;
-            }
+        HohenheimEndpoints.API_INSTANCE_SNAPSHOT.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
             try {
                 Integer snapshotId = OperationPipeline.invoke(
@@ -239,7 +199,7 @@ public final class InstanceApi {
             } catch (DomainRefusal refused) {
                 return ApiConduits.refusal(conduit, refused, row);
             }
-        });
+        }));
 
         HohenheimEndpoints.API_INSTANCE_CREATE.setHandler(conduit -> {
             AccessContext ctx = ApiConduits.requireKey(conduit);
@@ -278,15 +238,7 @@ public final class InstanceApi {
             }
         });
 
-        HohenheimEndpoints.API_INSTANCE_DELETE.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row row = visibleInstance(conduit, ctx);
-            if (row == null) {
-                return null;
-            }
+        HohenheimEndpoints.API_INSTANCE_DELETE.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             PanelResource<Row> instances = instances(conduit);
             if (instances == null) {
                 return null;
@@ -310,17 +262,9 @@ public final class InstanceApi {
             }
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, ZenitActivityAction.DELETE, name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "deleted"));
-        });
+        }));
 
-        HohenheimEndpoints.API_INSTANCE_LOGS.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row row = visibleInstance(conduit, ctx);
-            if (row == null) {
-                return null;
-            }
+        HohenheimEndpoints.API_INSTANCE_LOGS.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
             try {
                 return ApiConduits.json(Map.of("id", instanceId,
@@ -328,31 +272,15 @@ public final class InstanceApi {
             } catch (Violations refused) {
                 return ApiConduits.refusal(conduit, refused);
             }
-        });
+        }));
 
-        HohenheimEndpoints.API_INSTANCE_VARIABLES.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row row = visibleInstance(conduit, ctx);
-            if (row == null) {
-                return null;
-            }
+        HohenheimEndpoints.API_INSTANCE_VARIABLES.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
             return ApiConduits.json(Map.of("id", instanceId, "variables", variableProjection(
                 Models.get(InstanceVariableModel.class).findByInstanceId(instanceId))));
-        });
+        }));
 
-        HohenheimEndpoints.API_INSTANCE_VARIABLE_SET.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row row = visibleInstance(conduit, ctx);
-            if (row == null) {
-                return null;
-            }
+        HohenheimEndpoints.API_INSTANCE_VARIABLE_SET.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
             String key = ApiConduits.formValue(conduit, "key");
             try {
@@ -364,17 +292,9 @@ public final class InstanceApi {
             }
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.VARIABLE_SET, key);
             return ApiConduits.json(Map.of("id", instanceId, "status", "set", "key", key));
-        });
+        }));
 
-        HohenheimEndpoints.API_INSTANCE_VARIABLE_DELETE.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row row = visibleInstance(conduit, ctx);
-            if (row == null) {
-                return null;
-            }
+        HohenheimEndpoints.API_INSTANCE_VARIABLE_DELETE.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
             String key = ApiConduits.formValue(conduit, "key");
             boolean removed;
@@ -395,7 +315,7 @@ public final class InstanceApi {
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.VARIABLE_DELETED,
                 key);
             return ApiConduits.json(Map.of("id", instanceId, "status", "deleted", "key", key));
-        });
+        }));
 
         initDeviceLane();
     }
@@ -407,29 +327,13 @@ public final class InstanceApi {
      * file still makes no authorization decision of its own.
      */
     private static void initDeviceLane() {
-        HohenheimEndpoints.API_INSTANCE_DEVICES.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row row = visibleInstance(conduit, ctx);
-            if (row == null) {
-                return null;
-            }
+        HohenheimEndpoints.API_INSTANCE_DEVICES.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
             return ApiConduits.json(Map.of("id", instanceId,
                 "devices", deviceProjection(new InstanceDevices().rowsFor(instanceId))));
-        });
+        }));
 
-        HohenheimEndpoints.API_INSTANCE_DEVICE_ATTACH.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row row = visibleInstance(conduit, ctx);
-            if (row == null) {
-                return null;
-            }
+        HohenheimEndpoints.API_INSTANCE_DEVICE_ATTACH.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
             Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
             String name = HandlerSupport.submittedString(form, "name");
@@ -461,17 +365,9 @@ public final class InstanceApi {
                 type + " " + name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "attached",
                 "device", name, "type", type));
-        });
+        }));
 
-        HohenheimEndpoints.API_INSTANCE_DEVICE_RESIZE.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row row = visibleInstance(conduit, ctx);
-            if (row == null) {
-                return null;
-            }
+        HohenheimEndpoints.API_INSTANCE_DEVICE_RESIZE.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
             Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
             String name = HandlerSupport.submittedString(form, "name");
@@ -486,17 +382,9 @@ public final class InstanceApi {
                 name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "resized",
                 "device", name, "size_gb", sizeGb != null ? sizeGb : 0));
-        });
+        }));
 
-        HohenheimEndpoints.API_INSTANCE_DEVICE_DETACH.setHandler(conduit -> {
-            AccessContext ctx = ApiConduits.requireKey(conduit);
-            if (ctx == null) {
-                return null;
-            }
-            Row row = visibleInstance(conduit, ctx);
-            if (row == null) {
-                return null;
-            }
+        HohenheimEndpoints.API_INSTANCE_DEVICE_DETACH.setHandler(onVisibleInstance((conduit, ctx, row) -> {
             int instanceId = row.get(InstanceModel.ID);
             String name = ApiConduits.formValue(conduit, "name");
             try {
@@ -508,7 +396,7 @@ public final class InstanceApi {
                 name);
             return ApiConduits.json(Map.of("id", instanceId, "status", "detached",
                 "device", name));
-        });
+        }));
     }
 
     /** Whitelist projection, rule 3: the quota bucket and the timestamps stay out. */
@@ -565,6 +453,27 @@ public final class InstanceApi {
     }
 
     // -- visibility -----------------------------------------------------------
+
+    /** A handler of a route naming one instance, reached once the key and the record's visibility passed. */
+    private interface VisibleInstanceHandler {
+        @Nullable ActionResult<Object> handle(@NonNull Conduit conduit, @NonNull AccessContext ctx, @NonNull Row row);
+    }
+
+    /** @return the route handler that asks the key, then {@link #visibleInstance}, before {@code handler} runs */
+    private static Endpoint.@NonNull Handler<Object> onVisibleInstance(@NonNull VisibleInstanceHandler handler) {
+        return conduit -> {
+            AccessContext ctx = ApiConduits.requireKey(conduit);
+            if (ctx == null) {
+                return null;
+            }
+            Row row = visibleInstance(conduit, ctx);
+            if (row == null) {
+                return null;
+            }
+            return handler.handle(conduit, ctx, row);
+        };
+    }
+
 
     /**
      * The instances this context may see: admins everything live, everyone else exactly

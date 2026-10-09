@@ -269,7 +269,7 @@ final class InstanceActions {
 
     /** Whether a site's instance upstream could serve this row's kind. */
     private static boolean supportsSiteUpstream(@NonNull Row row) {
-        InstanceKindHandler handler = InstanceKinds.getHandler(row.get(InstanceModel.KIND));
+        InstanceKindHandler handler = InstanceKinds.handlerOf(row);
         return handler != null && handler.supportsSiteUpstream();
     }
 
@@ -388,11 +388,6 @@ final class InstanceActions {
                 Microcopy.of("capture_template").withFilter("scope", "instance"))
             .description(Microcopy.of("capture_template_hint").withFilter("scope", "instance"))
             .build();
-    }
-
-    private static boolean supportsCapture(@NonNull Row row) {
-        InstanceKindHandler handler = InstanceKinds.getHandler(row.get(InstanceModel.KIND));
-        return handler != null && handler.supportsTemplateCapture();
     }
 
     /**

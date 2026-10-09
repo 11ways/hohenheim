@@ -86,7 +86,7 @@ public final class OwnedInstances {
      */
     private static void requireHostRuntime(@NonNull Row row) {
         Object declaredHost = row.get(InstanceModel.SERVER_ID.getName());
-        InstanceKindHandler handler = InstanceKinds.getHandler(row.get(InstanceModel.KIND));
+        InstanceKindHandler handler = InstanceKinds.handlerOf(row);
         if (declaredHost == null || handler == null) {
             return;
         }
@@ -235,7 +235,7 @@ public final class OwnedInstances {
      */
     public static @Nullable Microcopy placementRefusal(@NonNull Row instance) {
         try {
-            InstanceKindHandler handler = InstanceKinds.getHandler(instance.get(InstanceModel.KIND));
+            InstanceKindHandler handler = InstanceKinds.handlerOf(instance);
             // An unknown kind is its own story, and resolving it would throw here.
             if (handler == null || !isPlacementGated(handler, instance)) {
                 return null;

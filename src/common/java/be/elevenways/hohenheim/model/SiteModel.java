@@ -329,10 +329,7 @@ public class SiteModel extends Model {
 
 
     public List<Row> findEnabled() {
-        return find()
-            .where(ENABLED.eq(true))
-            .orderBy(NAME, SortOrder.ASC)
-            .all();
+        return EnabledRows.byName(this, ENABLED, NAME);
     }
 
     public List<Row> findActive() {
