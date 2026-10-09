@@ -104,12 +104,12 @@ public final class BanService {
 
     /** The production shape: the real clock, operator alerts and the background ban writer. */
     BanService(@NonNull NftService nft) {
-        this(nft, Now::millis, Alerts::send, backgroundWriter());
+        this(nft, Now::millis, SecurityNotifier.ALERTS, backgroundWriter());
     }
 
     /** Test constructor: inject the clock the auto-ban budget window uses; writes run inline. */
     BanService(@NonNull NftService nft, @NonNull LongSupplier clock) {
-        this(nft, clock, Alerts::send);
+        this(nft, clock, SecurityNotifier.ALERTS);
     }
 
     /** Test constructor: additionally inject the operator-notification sink; writes run inline. */
@@ -350,11 +350,8 @@ public final class BanService {
     private void notifyBudgetExhausted(int budget) {
         try {
             this.notifier.send(NotificationEvents.AUTO_BAN_BUDGET_EXHAUSTED,
-                "Auto-ban budget exhausted",
-                "The global auto-ban budget of " + budget + " per sliding hour is"
-                    + " exhausted; further AUTOMATIC bans are suppressed until a completed"
-                    + " ban ages out (possible trigger runaway or event poisoning)."
-                    + " Manual bans still work.");
+                Alerts.copy("auto_ban_budget_subject"),
+                Alerts.copy("auto_ban_budget_body").withArg("budget", budget));
         } catch (RuntimeException e) {
             Blast.log("BANS: could not send budget-exhaustion notification -",
                 e.getMessage());

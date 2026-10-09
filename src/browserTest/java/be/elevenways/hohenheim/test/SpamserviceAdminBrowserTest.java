@@ -24,7 +24,10 @@ class SpamserviceAdminBrowserTest extends HohenheimTestBase {
 
         // The front door is named for what it DOES, not for the daemon behind it: the
         // product-neutral label is what a newcomer scanning the sidebar reads.
-        assertThat(page.locator("h1").innerText()).contains("Abuse protection");
+        // As the Access cluster's member, the page has one heading, the cluster's; the page is its active tab.
+        assertThat(page.locator("h1").count()).as("one heading on a cluster member's page").isEqualTo(1);
+        assertThat(page.locator("[data-cms-cluster-title]").innerText()).isEqualTo("Access");
+        assertThat(page.locator("[data-cms-cluster-tabs]").innerText()).contains("Abuse protection");
         assertThat(page.locator("pl-alert").innerText()).contains("not connected");
         assertThat(page.locator("pl-card").count()).isGreaterThanOrEqualTo(2);
         // It is also the ONLY nav entry for this subsystem now, so it must link the five

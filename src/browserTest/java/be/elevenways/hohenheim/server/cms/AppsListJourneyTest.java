@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -255,6 +256,29 @@ class AppsListJourneyTest extends HohenheimTestBase {
             assertThat(adminGet("/admin/sites/" + catchAll.get(SiteModel.ID) + "/page/overview").body())
                 .as("step 10: its page never says it is live at the pattern").doesNotContain("Live at *.")
                 .contains("Answers every address matching *.catch.apps-journey.test");
+            // Its HTTPS state is said too, never an empty cell (DEP10's catch-all row on the dashboard): a pattern
+            // answers many names, so HTTPS works per name a certificate covers.
+            assertThat(catchApp.https()).as("step 10: the catch-all's HTTPS cell exists").isNotNull();
+            assertThat(catchApp.https().status()).as("step 10: as the pattern state")
+                .isEqualTo(CertCoverage.PATTERN.key());
+            assertThat(say(catchApp.https().label())).as("step 10: in words").isEqualTo("Per name");
+            assertThat(say(catchApp.https().detail())).as("step 10: saying what that means")
+                .isEqualTo("A pattern answers many names; HTTPS works for each one a certificate covers.");
+
+            // 11. One app, one name: a site serving a workload is that workload's app, so every surface that names the
+            //     app from the site says the workload's name, as the Apps list does (DEP10: "alchemy-skeleton" in the
+            //     lists, "Alchemy skeleton" in "Fix on ..." and the Addresses list).
+            assertThat(AppDirectory.nameOf(served)).as("step 11: the served site names its workload's app")
+                .isEqualTo(PREFIX + "docker").isNotEqualTo(PREFIX + "docker-site");
+            assertThat(AppDirectory.nameOf(served, false)).as("step 11: a reader without the workload reads the site")
+                .isEqualTo(PREFIX + "docker-site");
+            assertThat(AppDirectory.nameOf(files)).as("step 11: a website is its own app").isEqualTo(PREFIX + "static");
+            domain(served, "forced.docker.apps-journey.test", true);
+            List<AttentionItem> forced = new ArrayList<>();
+            ProxyAttention.forcedWithoutCertificate(forced);
+            assertThat(forced).as("step 11: the forced address's item offers its fix on the app by the app's name")
+                .anySatisfy(item -> assertThat(say(item.action())).isEqualTo("Fix on " + PREFIX + "docker"))
+                .noneSatisfy(item -> assertThat(say(item.action())).isEqualTo("Fix on " + PREFIX + "docker-site"));
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();

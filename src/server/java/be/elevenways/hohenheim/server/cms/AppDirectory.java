@@ -14,9 +14,11 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
+import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -91,13 +93,60 @@ final class AppDirectory {
      */
     record App(@NonNull String key, @NonNull Source source, int id, @NonNull String name, @NonNull String kind,
                @NonNull SiteHostnamesCell address, @Nullable String addressText, @Nullable String host,
-               @Nullable DomainCertCell https, @NonNull RecordHealth health, @NonNull RouteTarget target) {}
+               @Nullable DomainCertCell https, @NonNull RecordHealth health, @NonNull RouteTarget target) {
+
+        /** @return how the dashboard and the sidebar count this app, by the verdict its record page leads with */
+        @NonNull Count count() {
+            return Count.of(this.health.tone());
+        }
+    }
+
+    /** How an app is counted: live, with a problem, or neither (starting, deploying or not read yet). */
+    enum Count {
+        LIVE,
+        PROBLEM,
+        NEITHER;
+
+        static @NonNull Count of(@NonNull HealthTone tone) {
+            return switch (tone) {
+                case OK -> LIVE;
+                case ATTENTION, BROKEN -> PROBLEM;
+                case UNKNOWN -> NEITHER;
+            };
+        }
+    }
 
     private AppDirectory() {
     }
 
-    /** @return the apps this panel lists for this viewer, by name */
+    /**
+     * @return how many of these apps have a problem: the Apps tile's "with a problem" and the Apps entry's sidebar
+     *         badge, one count
+     */
+    static int withProblem(@NonNull List<App> apps) {
+        int problems = 0;
+        for (App app : apps) {
+            if (app.count() == Count.PROBLEM) {
+                problems++;
+            }
+        }
+        return problems;
+    }
+
+    /**
+     * @return the apps this panel lists for this viewer, by name; read once per request, because the sidebar's badge,
+     *         the dashboard and the Apps list of one page all ask
+     */
     static @NonNull List<App> read(@NonNull Panel panel, @NonNull AccessContext access) {
+        Conduit conduit = access.conduit();
+        if (conduit == null) {
+            return readUncached(panel, access);
+        }
+        return CmsSupport.memo(conduit, IdentifierKey.of("hohenheim", "app_directory_" + panel.slug()),
+            () -> readUncached(panel, access));
+    }
+
+    private static @NonNull List<App> readUncached(@NonNull Panel panel, @NonNull AccessContext access) {
         boolean delegated = ManagePanel.SLUG.equals(panel.slug());
         Wording words = Wording.of(access);
         List<Row> sites = listed(panel, HohenheimSlugs.SITES, access);
@@ -181,6 +230,38 @@ final class AppDirectory {
     }
 
     /**
+     * The name of the app a site belongs to, as the Apps list names it: the workload's when the site serves one that is
+     * an app (not a generated database or engine container, not removed), else the site's own.
+     *
+     * AIDEV-NOTE: the one answer every operator surface that names an app from a site reads (the attention items' "Fix
+     * on", the Addresses list's App column), so one app never reads "alchemy-skeleton" in the lists and "Alchemy
+     * skeleton" in the band (DEP10). A surface a viewer reads without the workload in their scope (the /manage
+     * Addresses twin) names the site, as their Apps list does: {@link #nameOf(Row, boolean)}.
+     */
+    static @NonNull String nameOf(@NonNull Row site) {
+        return nameOf(site, true);
+    }
+
+    /** @param workloadVisible whether the reader's Apps list holds the site's workload as the app */
+    static @NonNull String nameOf(@NonNull Row site, boolean workloadVisible) {
+        Integer instanceId = site.get(SiteModel.INSTANCE_ID);
+        if (workloadVisible && instanceId != null) {
+            Row instance = Models.get(InstanceModel.class).findById(instanceId);
+            if (instance != null && !InstanceParts.isGenerated(instance)
+                    && instance.get(InstanceModel.DELETED_AT) == null) {
+                return String.valueOf((Object) instance.get(InstanceModel.NAME));
+            }
+        }
+        return String.valueOf((Object) site.get(SiteModel.NAME));
+    }
+
+    /** @return the app name of the site with this id ({@link #nameOf(Row)}), or the given fallback when it is gone */
+    static @NonNull String nameOfSite(int siteId, @NonNull String fallback) {
+        Row site = Models.get(SiteModel.class).findById(siteId);
+        return site == null ? fallback : nameOf(site);
+    }
+
+    /**
      * The rows one entry of this panel lists for this viewer, through that entry's own source: nothing for an entry
      * the panel does not register (a node without that role) or does not admit this viewer to.
      */
@@ -208,7 +289,7 @@ final class AppDirectory {
      * overall verdict.
      *
      * @param sites the sites the names belong to, which decide whether the name is a TLS passthrough
-     * @return the cell, null without a name or for a pattern (which no one certificate answers for)
+     * @return the cell, null without a name; a pattern's says HTTPS works per name a certificate covers
      */
     private static @Nullable DomainCertCell mainHttps(@NonNull List<Row> names, @NonNull List<Row> sites,
                                                       @NonNull Set<String> working, @NonNull AccessContext access,

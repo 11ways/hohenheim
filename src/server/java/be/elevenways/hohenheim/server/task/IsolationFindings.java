@@ -221,7 +221,9 @@ public final class IsolationFindings {
 
     /** An alerting failure must never swallow the isolation failure it was reporting. */
     private void alert(@NonNull Microcopy subject, @NonNull String detail) {
-        Alerts.trySend(NotificationEvents.WORKLOAD_ISOLATION, subject, Microcopy.literal(detail));
+        // The sweep's sentences are the words; the raw lines (their UNCONFIRMED token) stay the detail after them.
+        Alerts.trySend(NotificationEvents.WORKLOAD_ISOLATION, "isolation#" + this.sweep, subject,
+            Alerts.copy("isolation_body").withArg("said", List.copyOf(this.said)).withArg("detail", detail));
     }
 
     /**

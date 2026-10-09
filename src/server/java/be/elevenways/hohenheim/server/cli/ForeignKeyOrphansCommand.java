@@ -96,7 +96,7 @@ public final class ForeignKeyOrphansCommand implements OfflineCommand {
             context.print("deleted " + table + " rowid " + rowId);
         }
         context.print(dryRun
-            ? rowIds.size() + " orphaned row(s) of " + table + " would be deleted; nothing was changed."
-            : deleted + " orphaned row(s) of " + table + " deleted.");
+            ? HohenheimDatabase.orphanedRows(rowIds.size()) + " of " + table + " would be deleted; nothing was changed."
+            : HohenheimDatabase.orphanedRows(deleted) + " of " + table + " deleted.");
     }
 }

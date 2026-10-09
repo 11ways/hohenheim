@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.server.PermissionHolders;
 import be.elevenways.zenit.comms.AdHocRecipient;
 import be.elevenways.zenit.comms.CommsChannel;
@@ -12,6 +13,7 @@ import be.elevenways.zenit.comms.CommsTexts;
 import be.elevenways.zenit.comms.server.Comms;
 import be.elevenways.zenit.comms.server.CommsInboxOwners;
 import be.elevenways.zenit.comms.server.NotifyOutcome;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -39,6 +41,17 @@ public final class Alerts {
     private Alerts() {
     }
 
+    /** What an alert about the installation as a whole is about (a control-plane backup, a listener, a budget). */
+    public static final String INSTALLATION = "installation";
+
+    /**
+     * @return what an alert about one record is about, the scope of its repeat key: the same record is the same
+     *         subject whatever the alert says this time
+     */
+    public static @NonNull String about(@NonNull Identifier model, @NonNull Object id) {
+        return model + "#" + id;
+    }
+
     /**
      * Queue an alert for every administrator's panel inbox and every channel
      * subscribed to the event.
@@ -49,17 +62,16 @@ public final class Alerts {
      * until an operator configures an external endpoint is an alerting system nobody
      * knows is off. The inbox is a LOCAL channel: no transport, no DSN, no credential.
      *
+     * @param about   what the alert is about, never its wording ({@link #about}, {@link #INSTALLATION}): a repeat of
+     *                the same event about the same subject folds into the inbox item the reader still holds
+     * @param subject the headline, worded for a person
+     * @param message what it means, with any technical detail (an error a daemon printed) after the words
      * @return the number of deliveries the alert was queued for, inbox included
      */
-    public static int send(@NonNull NotificationEvents event, @NonNull Microcopy subject,
+    public static int send(@NonNull NotificationEvents event, @NonNull String about, @NonNull Microcopy subject,
                            @Nullable Microcopy message) {
-        AlertNotification notification = new AlertNotification(event.token(), subject, message);
-        int queued = 0;
-
-        for (CommsRecipient administrator : administrators()) {
-            Comms.notify(notification, administrator);
-            queued++;
-        }
+        AlertNotification notification = new AlertNotification(event.token(), about, subject, message);
+        List<CommsRecipient> recipients = new ArrayList<>(administrators());
 
         for (Row row : Models.get(NotificationChannelModel.class).find().all()) {
             if (!subscribes(row, event.token())) {
@@ -71,9 +83,17 @@ public final class Alerts {
             if (recipient == null) {
                 continue;
             }
-            Comms.notify(notification, recipient);
-            queued++;
+            recipients.add(recipient);
         }
+        // AIDEV-NOTE: an alert's delivery rows and inbox items are the system's own bookkeeping, recorded in the
+        // delivery log, never activity: inside a person's command (Probe now) they were headed by that command's
+        // sentence ("Jelle checked whether Comms delivery #3 answers", D13a walk).
+        ActivityLog.suppressed(() -> {
+            for (CommsRecipient recipient : recipients) {
+                Comms.notify(notification, recipient);
+            }
+        });
+        int queued = recipients.size();
 
         if (queued == 0) {
             // An alert that reached nobody must not vanish silently: an operator
@@ -87,20 +107,7 @@ public final class Alerts {
     }
 
     /**
-     * {@link #send(NotificationEvents, Microcopy, Microcopy)} for text that is already
-     * final: wrapped as never-resolving literals.
-     *
-     * AIDEV-NOTE: the bridge for call sites still composing English sentences; a new call
-     * site passes catalog Microcopy instead, so the inbox re-resolves it per viewer.
-     */
-    public static int send(@NonNull NotificationEvents event, @NonNull String subject,
-                           @Nullable String message) {
-        return send(event, Microcopy.literal(subject),
-            message == null ? null : Microcopy.literal(message));
-    }
-
-    /**
-     * {@link #send(NotificationEvents, Microcopy, Microcopy)} that never throws.
+     * {@link #send} that never throws.
      *
      * AIDEV-NOTE: THE shape for alerting from inside a failure path. Every such caller
      * used to wrap send in its own try/catch so a comms failure could not swallow the
@@ -108,10 +115,10 @@ public final class Alerts {
      *
      * @return the number of deliveries queued, or -1 when queueing itself failed (logged)
      */
-    public static int trySend(@NonNull NotificationEvents event, @NonNull Microcopy subject,
+    public static int trySend(@NonNull NotificationEvents event, @NonNull String about, @NonNull Microcopy subject,
                               @Nullable Microcopy message) {
         try {
-            return send(event, subject, message);
+            return send(event, about, subject, message);
         } catch (RuntimeException failed) {
             Blast.log("ALERT: could not queue the", event.token(), "notification -",
                 failed.getMessage());
@@ -119,11 +126,9 @@ public final class Alerts {
         }
     }
 
-    /** {@link #send(NotificationEvents, String, String)} that never throws; see the Microcopy form. */
-    public static int trySend(@NonNull NotificationEvents event, @NonNull String subject,
-                              @Nullable String message) {
-        return trySend(event, Microcopy.literal(subject),
-            message == null ? null : Microcopy.literal(message));
+    /** @return alert copy of scope {@code alert} */
+    public static @NonNull Microcopy copy(@NonNull String key) {
+        return Microcopy.of(key).withFilter("scope", "alert");
     }
 
     /**
@@ -171,7 +176,8 @@ public final class Alerts {
         if (recipient == null) {
             return NotifyOutcome.failed("Channel row has no usable url or format");
         }
-        return Comms.notifyNowWithReason(new AlertNotification("test", Microcopy.literal(subject),
+        return Comms.notifyNowWithReason(new AlertNotification("test", about(NotificationChannelModel.MODEL_ID,
+                row.get(NotificationChannelModel.ID)), Microcopy.literal(subject),
             message == null ? null : Microcopy.literal(message)), recipient);
     }
 

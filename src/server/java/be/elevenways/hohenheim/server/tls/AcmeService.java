@@ -730,9 +730,10 @@ public class AcmeService {
             }
             String niceName = cert.get(CertificateModel.NICE_NAME);
             Alerts.trySend(NotificationEvents.CERT_EXPIRING,
-                "Certificate expiring soon",
-                "Certificate '" + niceName + "' expires on " + expiresOn
-                    + ". Renew or replace it before then.");
+                Alerts.about(CertificateModel.MODEL_ID, cert.get(CertificateModel.ID)),
+                Alerts.copy("cert_expiring_subject").withArg("name", String.valueOf(niceName))
+                    .withArg("days", Math.max(0, ChronoUnit.DAYS.between(now, expiresOn))),
+                Alerts.copy("cert_expiring_body").withArg("date", expiresOn.toString().substring(0, 10)));
             cert.set(CertificateModel.EXPIRY_NOTIFIED_AT, now);
             certModel.save(cert);
         }
@@ -827,9 +828,9 @@ public class AcmeService {
         Integer errorCount = certRow.get(CertificateModel.ERROR_COUNT);
         if (errorCount == null || errorCount != 1) return;
         Alerts.trySend(NotificationEvents.CERT_RENEWAL_FAILED,
-            "Certificate renewal failing",
-            "Renewal of " + niceName + " failed: " + message
-                + "\nRetries continue with escalating backoff; see the certificates page.");
+            Alerts.about(CertificateModel.MODEL_ID, certRow.get(CertificateModel.ID)),
+            Alerts.copy("cert_renewal_failed_subject").withArg("name", String.valueOf(niceName)),
+            Alerts.copy("cert_renewal_failed_body").withArg("reason", message == null ? "-" : message));
     }
 
     /** Reset error/backoff state after a successful issuance or renewal. */

@@ -22,6 +22,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -133,8 +134,8 @@ public final class ProxyAttention {
             return null;
         }
         SiteDispatcher.ForcedSites forced = proxy.getDispatcher().forcedSites();
-        String own = String.join(", ", forced.own());
-        String bySetting = String.join(", ", forced.bySetting());
+        String own = appNames(forced.own());
+        String bySetting = appNames(forced.bySetting());
         if (forced.isEmpty()) {
             return null;
         }
@@ -177,7 +178,7 @@ public final class ProxyAttention {
                 copy("forced_without_certificate", "attention_title", "hostname", hostname),
                 copy("forced_without_certificate", "attention_detail"),
                 SiteParts.recordRoute(ADMIN, site.get(SiteModel.ID)),
-                action("act_fix_on", "name", site.get(SiteModel.NAME)))
+                action("act_fix_on", "name", AppDirectory.nameOf(site)))
                 .about(AttentionSubject.address(domain.get(SiteDomainModel.ID)), null));
         }
     }
@@ -195,7 +196,7 @@ public final class ProxyAttention {
             }
             items.add(item(AttentionSeverity.ERROR, "lock-open",
                 copy("open_protected_path", "attention_title", "path", path.get(ProtectedPathModel.PATH),
-                    "site", site.get(SiteModel.NAME)),
+                    "site", AppDirectory.nameOf(site)),
                 copy("open_protected_path", "attention_detail"),
                 CmsRoutes.detail(ADMIN, ProtectedPathParts.SLUG, path.get(ProtectedPathModel.ID)),
                 action("act_protect_path", "path", path.get(ProtectedPathModel.PATH))));
@@ -253,10 +254,10 @@ public final class ProxyAttention {
                 AppHealth.Verdict verdict = down ? AppHealth.siteReading(site) : null;
                 Microcopy reason = verdict != null ? verdict.health().detail() : null;
                 items.add(item(down ? AttentionSeverity.ERROR : AttentionSeverity.WARNING, "globe",
-                    copy(key, "attention_title", "name", site.get(SiteModel.NAME)),
+                    copy(key, "attention_title", "name", AppDirectory.nameOf(site)),
                     reason != null ? reason : copy(key, "attention_detail"),
                     SiteParts.recordRoute(ADMIN, siteId),
-                    action("act_open_app", "name", site.get(SiteModel.NAME)))
+                    action("act_open_app", "name", AppDirectory.nameOf(site)))
                     .causedBy(verdict != null ? verdict.cause() : null));
             }
         }
@@ -288,13 +289,23 @@ public final class ProxyAttention {
                                        @NonNull List<RoutingProblem> problems) {
         for (RoutingProblem problem : problems) {
             boolean unrouted = problem.reason().unrouted();
+            String name = AppDirectory.nameOfSite(problem.siteId(), problem.siteName());
             items.add(item(unrouted ? AttentionSeverity.ERROR : AttentionSeverity.WARNING, "route",
                 copy(unrouted ? "site_unrouted" : "site_refusing", "attention_title",
-                    "name", problem.siteName()),
+                    "name", name),
                 reasonOf(problem),
                 SiteParts.recordRoute(ADMIN, problem.siteId()),
-                action("act_fix_on", "name", problem.siteName())));
+                action("act_fix_on", "name", name)));
         }
+    }
+
+    /** @return these sites by the names of the apps they belong to ({@link AppDirectory#nameOf}), joined */
+    private static @NonNull String appNames(@NonNull List<Integer> siteIds) {
+        List<String> names = new ArrayList<>(siteIds.size());
+        for (int siteId : siteIds) {
+            names.add(AppDirectory.nameOfSite(siteId, "#" + siteId));
+        }
+        return String.join(", ", names);
     }
 
     /** The localized sentence for a problem's reason, carrying its specific cause (in words when it has them). */

@@ -1,18 +1,19 @@
 {#- The operator's own notification inbox. The list, the unread styling, the
     importance badges and both read forms are the shipped zenit-comms surface;
-    this page owns only the route, the heading and the page window. -#}
+    this page owns only the route, the heading (zenitcms:page-header, so a cluster landing has one h1) and
+    the page window. -#}
 {% declare title: String %}
 {% declare items: List<CommsInboxItemView> %}
 {% declare markAllTarget: RouteTarget %}
 {% declare pager: Pager %}
+{% declare lead: Microcopy %}
+{#- True on the Activity cluster's landing, headed by its cluster (CmsClusterDecorator): the page header draws no h1. -#}
+{% declare headedByCluster: Boolean = false %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-form-page" data-admin-inbox>
-    <header class="cms-resource-list-header">
-        <h1>{{ title }}</h1>
-        <p>{{ t("nav_hint", scope: "admin_inbox") }}</p>
-    </header>
+    {% render "zenitcms:page-header" var:title=title var:lead=lead %}
 
     <zc-inbox items={% items %} markAllTarget={% markAllTarget %}></zc-inbox>
 

@@ -2,6 +2,10 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSubject;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.WorkloadTier;
+import be.elevenways.hohenheim.app.DashboardStat;
+import be.elevenways.hohenheim.host.WorkloadView;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
@@ -14,12 +18,16 @@ import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.test.database.EngineHandles;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -35,6 +43,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -195,6 +204,68 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
      * card, an app's Databases tab and Back up now all say what its engine does.
      */
     @Test
+    void aDatabaseDumpIsABackupTheDashboardCounts() throws Exception {
+        List<Runnable> cleanup = new ArrayList<>();
+        try {
+            // 1. Whatever the shared database already holds is the baseline; a persistent database without a dump
+            //    is one more thing that should be backed up and is not (the Databases list's "Never").
+            int[] before = backupsTile();
+            Row kept = database(cleanup, "d13-kept", false);
+            int[] missing = backupsTile();
+            assertThat(missing).as("step 1: the database counts, not yet backed up")
+                .containsExactly(before[0], before[1] + 1);
+            assertThat(DatabaseParts.backupOf(kept).state()).as("step 1: the list's own verdict says never")
+                .isEqualTo(DatabaseParts.BackupState.NEVER);
+
+            // 2. Its nightly dump lands: the tile counts it backed up, by the same verdict the Last backup cell reads,
+            //    and names it as the newest copy (DEP10: "0, No app has a backup target" beside a 16-hour-old dump).
+            Path directory = DatabaseBackups.directoryOf(PREFIX + "d13-kept");
+            cleanup.add(() -> deleteTree(directory));
+            Files.createDirectories(directory);
+            dump(directory, "20261008-030000.sql", 18 * 1024 * 1024, Now.instant().minus(16, ChronoUnit.HOURS));
+            assertThat(DatabaseParts.backupOf(kept).state()).as("step 2: a dump from last night is done")
+                .isEqualTo(DatabaseParts.BackupState.DONE);
+            assertThat(backupsTile()).as("step 2: the tile counts it backed up")
+                .containsExactly(before[0] + 1, before[1] + 1);
+            DashboardStat tile = backupsStat();
+            assertThat(tile.detail()).as("step 2: and names the newest copy with its size")
+                .startsWith("Newest ").endsWith(", 18.0 MB");
+
+            // 3. A dump older than the nightly allows is not a good backup: counted, not backed up.
+            dump(directory, "20261008-030000.sql", 18 * 1024 * 1024, Now.instant().minus(3, ChronoUnit.DAYS));
+            assertThat(backupsTile()).as("step 3: an overdue dump does not count as backed up")
+                .containsExactly(before[0], before[1] + 1);
+
+            // 4. A temporary database is never backed up, so it is not counted at all.
+            database(cleanup, "d13-scratch", true);
+            assertThat(backupsTile()).as("step 4: a temporary database leaves the count alone")
+                .containsExactly(before[0], before[1] + 1);
+        } finally {
+            for (int i = cleanup.size() - 1; i >= 0; i--) {
+                cleanup.get(i).run();
+            }
+        }
+    }
+
+    /** @return the dashboard's Backups tile for the operator */
+    private static DashboardStat backupsStat() {
+        Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
+        AccessContext operator = TenantConduits.operator();
+        return DashboardStats.read(admin, AppDirectory.read(admin, operator), operator).stream()
+            .filter(stat -> stat.key().equals("backups")).findFirst().orElseThrow();
+    }
+
+    /** @return the Backups tile as {backed up, should be backed up}; "0" reads as nothing to back up */
+    private static int[] backupsTile() {
+        String value = backupsStat().value();
+        if (!value.contains(" of ")) {
+            return new int[] {0, Integer.parseInt(value.trim())};
+        }
+        String[] parts = value.split(" of ");
+        return new int[] {Integer.parseInt(parts[0].trim()), Integer.parseInt(parts[1].trim())};
+    }
+
+    @Test
     void aDatabaseThatDoesNotRunIsOneProblemEverySurfaceReads() throws Exception {
         List<Runnable> cleanup = new ArrayList<>();
         try {
@@ -225,6 +296,22 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
                 .isEqualTo(DatabaseVerdict.State.RUNNING);
             assertThat(rootOf(AttentionCollector.databases(), sharedId)).as("step 1: a running database raises nothing")
                 .isNull();
+            // The host's Workloads card names the engine once, booked at the memory its owned instance holds in the
+            // ledger; the instance it runs as is not listed beside it (DEP10: dbengine-mongo-local and mongo-local).
+            List<WorkloadView> workloads = ServerOverviewState.workloadsOf(HohenheimSlugs.ADMIN,
+                ServerModel.localServerId());
+            assertThat(workloads).as("step 1: the engine is listed once, as the engine")
+                .filteredOn(view -> view.name().equals(PREFIX + "d12-engine")).singleElement()
+                .satisfies(view -> {
+                    assertThat(view.tier()).isEqualTo(WorkloadTier.DATABASE_ENGINE);
+                    assertThat(view.bookedMb()).as("step 1: booked at its instance's ledger memory")
+                        .isEqualTo(engineInstance.get(InstanceModel.CAPACITY_MB));
+                });
+            assertThat(workloads).as("step 1: its instance is not a second row")
+                .noneSatisfy(view -> assertThat(view.name()).isEqualTo(engineInstance.get(InstanceModel.NAME)));
+            assertThat(workloads).as("step 1: the shared database books nothing of its own")
+                .filteredOn(view -> view.name().equals(PREFIX + "d12-shop")).singleElement()
+                .satisfies(view -> assertThat(view.bookedMb()).isNull());
 
             // 2. The engine stops. The database is the root: one item titled by the database, with its action, saying
             //    how many apps it holds back, in English and in Dutch.

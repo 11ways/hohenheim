@@ -75,7 +75,7 @@ class DomainsListJourneyTest extends HohenheimTestBase {
                 .as("step 1: a pattern has no answer").isNull();
 
             // 2. HTTPS: a name forced to HTTPS without a working certificate is the error page visitors get, a covered
-            //    name works, an unforced name without one has none, and a pattern has no verdict.
+            //    name works, an unforced name without one has none, and a pattern works per name a certificate covers.
             var working = AppHealth.workingNames();
             assertThat(AppHealth.httpsOf(awayRow, false, working)).as("step 2: forced without a certificate")
                 .isEqualTo(CertCoverage.ERROR);
@@ -83,7 +83,8 @@ class DomainsListJourneyTest extends HohenheimTestBase {
                 .isEqualTo(CertCoverage.ACTIVE);
             assertThat(AppHealth.httpsOf(hereRow, false, working)).as("step 2: unforced, no certificate")
                 .isEqualTo(CertCoverage.NONE);
-            assertThat(AppHealth.httpsOf(pattern, false, working)).as("step 2: a pattern has no verdict").isNull();
+            assertThat(AppHealth.httpsOf(pattern, false, working)).as("step 2: a pattern is judged per name")
+                .isEqualTo(CertCoverage.PATTERN);
             assertThat(AppHealth.httpsOf(hereRow, true, working)).as("step 2: passthrough terminates nothing here")
                 .isEqualTo(CertCoverage.NOT_USED);
 
@@ -123,9 +124,11 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             assertThat(html).as("step 4: and its certificate links on its own line")
                 .contains("data-cert-link").contains("Covered " + suffix);
 
-            // 5. The Domains area heads its tabs with its own name, and its fourth tab reads in the board's words.
+            // 5. The Domains area heads its tabs with its own name, the page's one heading (the cluster landing draws
+            //    no member h1 since D13-FW), and its fourth tab reads in the board's words.
             assertThat(html).as("step 5: the area's name above the tabs").contains("data-cms-cluster-title")
-                .containsPattern("data-cms-cluster-title>(<!--[^>]*-->)?<pb-microcopy[^>]*>Domains</pb-microcopy>");
+                .containsPattern("data-cms-cluster-title[^>]*>(<!--[^>]*-->)?<pb-microcopy[^>]*>Domains</pb-microcopy>");
+            assertThat(html.split("<h1", -1).length - 1).as("step 5: and it is the page's one heading").isEqualTo(1);
             assertThat(html).as("step 5: released names are addresses").contains("Released addresses");
             String strip = html.substring(html.indexOf("data-cms-cluster-tabs"));
             List<Integer> tabs = List.of(DomainParts.SLUG, HohenheimSlugs.CERTIFICATES, HohenheimSlugs.DNS_ZONES,

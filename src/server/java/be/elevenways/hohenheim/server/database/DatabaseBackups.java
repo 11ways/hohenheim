@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
@@ -84,7 +85,7 @@ public final class DatabaseBackups {
             return null;
         } catch (Exception e) {
             Blast.log("BACKUP: database", name, "failed:", e.getMessage());
-            Alerts.trySend(NotificationEvents.BACKUP_FAILED,
+            Alerts.trySend(NotificationEvents.BACKUP_FAILED, Alerts.about(DatabaseModel.MODEL_ID, name),
                 Microcopy.of("database_backup_failed_subject").withFilter("scope", "alert").withArg("name", name),
                 Microcopy.of("database_backup_failed_body").withFilter("scope", "alert")
                     .withArg("name", name).withArg("reason", String.valueOf(e.getMessage())));

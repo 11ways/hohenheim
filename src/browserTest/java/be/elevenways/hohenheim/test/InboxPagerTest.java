@@ -38,6 +38,10 @@ class InboxPagerTest extends HohenheimTestBase {
             assertThat(single.statusCode()).as("step 1: the inbox renders").isEqualTo(200);
             assertThat(single.body()).as("step 1: one page needs no pager")
                 .doesNotContain("page=2");
+            assertThat(single.body().split("<h1", -1).length - 1)
+                .as("step 1: the Activity cluster's member page has one heading, the cluster's").isEqualTo(1);
+            assertThat(single.body()).as("step 1: and that heading is the cluster's")
+                .contains("data-cms-cluster-title");
 
             // 2. One item more: page 1 links a numbered rung to page 2, and the old
             //    prev/next-only buttons are gone.

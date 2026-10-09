@@ -675,11 +675,9 @@ public final class InstanceConsoles {
     }
 
     static void alertCrashLoop(int instanceId, @NonNull Object name) {
-        Alerts.trySend(NotificationEvents.INSTANCE_CRASH_LOOP,
-            "Crash loop: instance " + name,
-            "Instance '" + name + "' (#" + instanceId + ") keeps exiting without an"
-                + " observed stop; automatic restarts are suspended until the next"
-                + " deploy. Check its console output.");
+        Alerts.trySend(NotificationEvents.INSTANCE_CRASH_LOOP, Alerts.about(InstanceModel.MODEL_ID, instanceId),
+            Alerts.copy("crash_loop_subject").withArg("name", name),
+            Alerts.copy("crash_loop_body").withArg("name", name));
     }
 
     private static void withScope(@Nullable Datasource datasource, @NonNull Runnable body) {

@@ -66,7 +66,7 @@ public class BackupControlPlane extends ScheduledTask {
             ControlPlaneBackups.backupNow();
         } catch (Exception error) {
             Blast.log("TASK: BackupControlPlane failed:", error.getMessage());
-            Alerts.trySend(NotificationEvents.BACKUP_FAILED,
+            Alerts.trySend(NotificationEvents.BACKUP_FAILED, Alerts.INSTALLATION,
                 Microcopy.of("control_plane_backup_failed_subject").withFilter("scope", "alert"),
                 Microcopy.of("control_plane_backup_failed_body").withFilter("scope", "alert")
                     .withArg("reason", String.valueOf(error.getMessage())));

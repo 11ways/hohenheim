@@ -1,6 +1,6 @@
 {#- An address's HTTPS cell: the coverage badge in words, why HTTPS does not work when it does not, and the covering
-    certificate (linked for a reader who may open it) with its expiry. Blank for a hostname no certificate applies to
-    (a non-exact match). -#}
+    certificate (linked for a reader who may open it) with its expiry. A pattern reads "Per name" (CertCoverage.PATTERN):
+    no one certificate answers for it. -#}
 {% declare value: DomainCertCell %}
 {% if value != null %}
 <span class="hh-cert-coverage" attr:data-cert-status={% value.status %}>

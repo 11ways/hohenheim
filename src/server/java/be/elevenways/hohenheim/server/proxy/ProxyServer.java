@@ -511,16 +511,22 @@ public class ProxyServer {
     private void maybeAlertListenerDown() {
         if (!httpDownAlertSent && httpState == State.FAILED && httpRestartAttempts >= 2) {
             httpDownAlertSent = true;
-            Alerts.trySend(NotificationEvents.PROXY_LISTENER_DOWN,
-                "Proxy HTTP listener is down", httpFailureReason);
+            Alerts.trySend(NotificationEvents.PROXY_LISTENER_DOWN, "listener#http",
+                Alerts.copy("listener_down_subject").withArg("protocol", "HTTP"),
+                Alerts.copy("listener_down_body").withArg("reason", reasonOrDash(httpFailureReason)));
         }
         boolean httpsDown = httpsState == State.FAILED
             || (httpsState == State.RUNNING && httpsFailureReason != null);
         if (!httpsDownAlertSent && httpsDown && httpsRestartAttempts >= 2) {
             httpsDownAlertSent = true;
-            Alerts.trySend(NotificationEvents.PROXY_LISTENER_DOWN,
-                "Proxy HTTPS listener is down", httpsFailureReason);
+            Alerts.trySend(NotificationEvents.PROXY_LISTENER_DOWN, "listener#https",
+                Alerts.copy("listener_down_subject").withArg("protocol", "HTTPS"),
+                Alerts.copy("listener_down_body").withArg("reason", reasonOrDash(httpsFailureReason)));
         }
+    }
+
+    private static String reasonOrDash(String reason) {
+        return reason == null || reason.isBlank() ? "-" : reason;
     }
 
     private void noteHttpListenerHealthy() {

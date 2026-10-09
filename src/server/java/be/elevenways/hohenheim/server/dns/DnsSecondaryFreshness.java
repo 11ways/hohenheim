@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -110,9 +111,9 @@ public final class DnsSecondaryFreshness {
                 link.set(DnsZonePeerModel.STALE_ALERTED_AT, now);
                 String peerName = String.valueOf(peer.get(DnsPeerModel.NAME));
                 Alerts.trySend(NotificationEvents.DNS_SECONDARY_STALE,
-                    "Secondary '" + peerName + "' of zone " + originString + " is stale",
-                    error != null ? error
-                        : "serves serial " + served + " while the primary serves " + ourSerial);
+                    Alerts.about(DnsZonePeerModel.MODEL_ID, link.get(DnsZonePeerModel.ID)),
+                    staleTitle(List.of(peerName), originString),
+                    Alerts.copy("dns_secondary_stale_body").withArg("lag", lagOf(peer, link, ourSerial)));
                 Blast.slog("dns.secondary_stale", java.util.Map.of(
                     "zone", originString, "peer", peerName,
                     "served", served != null ? served : -1, "primary", ourSerial));
@@ -121,6 +122,43 @@ public final class DnsSecondaryFreshness {
         // A freshness probe is bookkeeping; a stale secondary reaches operators as an alert above.
         ActivityLog.suppressed(() -> Models.get(DnsZonePeerModel.class).save(link));
         return new Outcome(link, peer, served, error, current);
+    }
+
+    /**
+     * @param peers  the names of the stale secondaries of one zone
+     * @param origin the zone
+     * @return "kuifje has an old copy of starfleet.life", the headline the attention item and the alert share
+     */
+    public static @NonNull Microcopy staleTitle(@NonNull List<String> peers, @NonNull String origin) {
+        return Microcopy.of("dns_secondaries_stale").withFilter("scope", "attention_title")
+            .withArg("count", peers.size()).withArg("peers", peers).withArg("origin", origin);
+    }
+
+    /**
+     * Why one secondary is behind, in words, with what the probe saw as its detail: no transfer address to ask, no
+     * answer (the probe's own error after the words), or the serial it serves against this primary's.
+     *
+     * @param primarySerial the serial this primary serves for the zone
+     */
+    public static @NonNull Microcopy lagOf(@NonNull Row peer, @NonNull Row link, long primarySerial) {
+        String name = String.valueOf((Object) peer.get(DnsPeerModel.NAME));
+        String host = peer.get(DnsPeerModel.TRANSFER_HOST);
+        if (host == null || host.isBlank()) {
+            return lagCopy("dns_secondary_no_host").withArg("peer", name);
+        }
+        String error = link.get(DnsZonePeerModel.PROBE_ERROR);
+        if (error != null && !error.isBlank()) {
+            return lagCopy("dns_secondary_silent").withArg("peer", name).withArg("error", error);
+        }
+        Integer served = link.get(DnsZonePeerModel.SERVED_SERIAL);
+        // A serial is an identifier, never a quantity: as text, so no locale groups its digits.
+        return lagCopy("dns_secondary_behind").withArg("peer", name)
+            .withArg("served", String.valueOf(served != null ? served : 0))
+            .withArg("serial", String.valueOf(primarySerial));
+    }
+
+    private static @NonNull Microcopy lagCopy(@NonNull String key) {
+        return Microcopy.of(key).withFilter("scope", "attention_detail");
     }
 
     /** @return true when a link has been behind or silent for longer than {@link #STALE_AFTER} */

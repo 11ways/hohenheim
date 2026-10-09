@@ -99,13 +99,14 @@ class SiteRefusalVerdictJourneyTest extends HohenheimTestBase {
                 .filter(item -> say(item.title()).contains(PREFIX)).toList();
             assertThat(mine).as("step 5: one item, for the site that does not answer").hasSize(1);
             AttentionItem item = mine.get(0);
-            assertThat(say(item.title())).as("step 5: titled by what its visitors get")
-                .isEqualTo("Visitors of " + PREFIX + "down get an error page");
+            assertThat(say(item.title())).as("step 5: titled by what its visitors get, naming the app as the Apps list"
+                    + " does (its workload's name)")
+                .isEqualTo("Visitors of " + PREFIX + "app get an error page");
             Row downRow = Models.get(SiteModel.class).findById(down.get(SiteModel.ID));
             assertThat(say(item.detail())).as("step 5: with the app verdict's own reason")
                 .isEqualTo(say(AppHealth.siteHealth(downRow).detail()))
                 .as("step 5: never the bare word").isNotEqualTo("Down");
-            assertThat(say(item.action())).as("step 5: and the way there").isEqualTo("Open " + PREFIX + "down");
+            assertThat(say(item.action())).as("step 5: and the way there").isEqualTo("Open " + PREFIX + "app");
         } finally {
             ServerMain.adoptProxyServer(previous);
             if (proxy != null) {

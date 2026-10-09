@@ -413,14 +413,14 @@ final class AppHealth {
      *
      * @param passthrough whether the name belongs to a TLS passthrough site, which terminates nothing here
      * @param working     the names a working certificate covers ({@link #workingNames()})
-     * @return the coverage, null for a pattern (no single name to judge)
+     * @return the coverage; {@link CertCoverage#PATTERN} for a pattern (no single name to judge)
      */
-    static @Nullable CertCoverage httpsOf(@NonNull Row domain, boolean passthrough, @NonNull Set<String> working) {
+    static @NonNull CertCoverage httpsOf(@NonNull Row domain, boolean passthrough, @NonNull Set<String> working) {
         if (passthrough) {
             return CertCoverage.NOT_USED;
         }
         if (!exact(domain)) {
-            return null;
+            return CertCoverage.PATTERN;
         }
         String hostname = domain.get(SiteDomainModel.HOSTNAME);
         if (CertificateCoverage.covers(working, hostname)) {

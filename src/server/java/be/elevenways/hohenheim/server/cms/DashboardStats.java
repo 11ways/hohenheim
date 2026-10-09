@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.host.HostStanding;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.RelativeTime;
@@ -34,7 +35,7 @@ import java.util.Map;
  *
  * AIDEV-NOTE: a tile exists only where the list it counts and links to is registered and admits the viewer, so the
  * node's roles decide which tiles exist without a switch of their own. Every line is a fact the counted list already
- * shows (the app verdict, the host verdict, the certificate's state cell, the newest instance backup); a tile with no
+ * shows (the app verdict, the host verdict, the certificate's state cell, the newest backup or dump); a tile with no
  * fact behind a line draws none, never an invented one. The board's "succeeded last night" is not said: a backup
  * records when it ran, not which night's schedule it belonged to.
  *
@@ -63,7 +64,8 @@ final class DashboardStats {
         if (AppDirectory.offers(panel, HohenheimSlugs.CERTIFICATES, access)) {
             tiles.add(certificates(panel, access, words));
         }
-        if (AppDirectory.offers(panel, InstanceBackupParts.SLUG, access)) {
+        if (AppDirectory.offers(panel, InstanceBackupParts.SLUG, access)
+                || AppDirectory.offers(panel, DatabaseParts.SLUG, access)) {
             tiles.add(backups(panel, access, words));
         }
         return tiles;
@@ -73,16 +75,12 @@ final class DashboardStats {
     private static @NonNull DashboardStat apps(@NonNull Panel panel, @NonNull List<AppDirectory.App> apps,
                                                AppDirectory.@NonNull Wording words) {
         int live = 0;
-        int problems = 0;
         for (AppDirectory.App app : apps) {
-            switch (app.health().tone()) {
-                case OK -> live++;
-                case ATTENTION, BROKEN -> problems++;
-                case UNKNOWN -> {
-                    // Starting, deploying or not read yet: neither live nor a problem.
-                }
+            if (app.count() == AppDirectory.Count.LIVE) {
+                live++;
             }
         }
+        int problems = AppDirectory.withProblem(apps);
         List<Microcopy> parts = new ArrayList<>(2);
         if (live > 0) {
             parts.add(copy("stat_apps_live").withArg("count", live));
@@ -139,15 +137,21 @@ final class DashboardStats {
     }
 
     /**
-     * The apps that are backed up: of the workloads with a backup target, how many have a newest backup that
-     * completed, and when the newest completed copy ran and how big it is.
+     * What is backed up: of the workloads with a backup target and the persistent managed databases, how many have a
+     * good newest copy, and when the newest copy of either was made and how big it is.
+     *
+     * AIDEV-NOTE: a database counts by the Databases list's own Last backup verdict ({@link DatabaseParts#backupOf}:
+     * a dump newer than the nightly allows), a workload by its newest instance backup having completed. DEP10's
+     * Starfleet read "0, No app has a backup target" while skeleton-mongo's nightly dump was 16 hours old: the tile
+     * counted instance backups only.
      */
     private static @NonNull DashboardStat backups(@NonNull Panel panel, @NonNull AccessContext access,
                                                   AppDirectory.@NonNull Wording words) {
         InstanceBackupModel backups = Models.get(InstanceBackupModel.class);
         int total = 0;
         int complete = 0;
-        Row newest = null;
+        Instant newestAt = null;
+        Long newestSize = null;
         for (Row instance : AppDirectory.listed(panel, InstanceParts.SLUG, access)) {
             if (InstanceParts.isGenerated(instance) || instance.get(InstanceModel.BACKUP_TARGET_ID) == null) {
                 continue;
@@ -159,26 +163,38 @@ final class DashboardStats {
             }
             complete++;
             Instant at = latest.get(InstanceBackupModel.CREATED_AT);
-            Instant newestAt = newest == null ? null : newest.get(InstanceBackupModel.CREATED_AT);
             if (at != null && (newestAt == null || at.isAfter(newestAt))) {
-                newest = latest;
+                newestAt = at;
+                newestSize = latest.get(InstanceBackupModel.SIZE_BYTES);
             }
         }
+        for (Row database : AppDirectory.listed(panel, DatabaseParts.SLUG, access)) {
+            DatabaseParts.BackupReading reading = DatabaseParts.backupOf(database);
+            if (!reading.state().expectsBackups()) {
+                continue;
+            }
+            total++;
+            if (reading.state() == DatabaseParts.BackupState.DONE) {
+                complete++;
+            }
+            DatabaseBackups.Stored dump = reading.newest();
+            if (dump != null && (newestAt == null || dump.at().isAfter(newestAt))) {
+                newestAt = dump.at();
+                newestSize = dump.bytes();
+            }
+        }
+        String slug = AppDirectory.offers(panel, InstanceBackupParts.SLUG, access) ? InstanceBackupParts.SLUG
+            : DatabaseParts.SLUG;
         String label = words.say(copy("stat_backups"));
         if (total == 0) {
-            return tile("backups", label, "0", words.say(copy("stat_backups_none")), "box-archive", panel,
-                InstanceBackupParts.SLUG);
+            return tile("backups", label, "0", words.say(copy("stat_backups_none")), "box-archive", panel, slug);
         }
-        String detail = null;
-        if (newest != null) {
-            Long size = newest.get(InstanceBackupModel.SIZE_BYTES);
-            detail = words.say(copy("stat_backups_newest")
-                .withArg("ago", RelativeTime.ago(newest.get(InstanceBackupModel.CREATED_AT), wording(words)))
-                .withArg("size", ByteText.human(size)));
-        }
+        String detail = newestAt == null ? null : words.say(copy("stat_backups_newest")
+            .withArg("ago", RelativeTime.ago(newestAt, wording(words)))
+            .withArg("size", ByteText.human(newestSize)));
         return tile("backups", label,
             words.say(copy("stat_backups_value").withArg("ok", complete).withArg("total", total)), detail,
-            "box-archive", panel, InstanceBackupParts.SLUG);
+            "box-archive", panel, slug);
     }
 
     private static @NonNull DashboardStat tile(@NonNull String key, @NonNull String label, @NonNull String value,

@@ -15,7 +15,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * {@code data-cert-status} key, the badge variant and the wording a reader who may not open the
  * certificate sees -- is a fact on the member, so the domains tab compares no literal. An unknown
  * certificate status fails CLOSED onto {@link #ERROR}: a coverage badge never claims coverage it
- * cannot vouch for. NOT_USED is the second state without a certificate, for a name this proxy terminates no TLS for. DashboardVocabularyDriftTest binds the members to the model's status values.
+ * cannot vouch for. NOT_USED is the second state without a certificate, for a name this proxy terminates no TLS for;
+ * PATTERN the third, for an address that is a pattern. DashboardVocabularyDriftTest binds the members to the model's
+ * status values.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -25,6 +27,11 @@ public enum CertCoverage {
     NONE("none", BadgeVariant.OUTLINE, Microcopy.of("none").withFilter("scope", "site_domains")),
     /** HTTPS is not this proxy's to give: a TLS passthrough site terminates nothing here. */
     NOT_USED("not_used", BadgeVariant.OUTLINE, Microcopy.of("not_used").withFilter("scope", "site_domains")),
+    /**
+     * A pattern answers many names, so no one certificate answers for it: HTTPS works for each name a certificate
+     * covers. The fourth state without a certificate, so a catch-all's HTTPS cell says so instead of staying empty.
+     */
+    PATTERN("pattern", BadgeVariant.OUTLINE, Microcopy.of("per_name").withFilter("scope", "site_domains")),
     ACTIVE(CertificateModel.STATUS_ACTIVE, BadgeVariant.SUCCESS,
         Microcopy.of("covered").withFilter("scope", "site_domains")),
     PENDING(CertificateModel.STATUS_PENDING, BadgeVariant.WARNING,
@@ -60,7 +67,7 @@ public enum CertCoverage {
     /** @return whether a certificate record stands behind this state */
     public boolean hasCertificate() {
         return switch (this) {
-            case NONE, NOT_USED -> false;
+            case NONE, NOT_USED, PATTERN -> false;
             case ACTIVE, PENDING, ERROR -> true;
         };
     }

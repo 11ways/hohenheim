@@ -3,6 +3,9 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.server.task.CheckForeignKeys;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelCluster;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -53,15 +56,21 @@ class SettingsTasksMountTest extends HohenheimTestBase {
                 .as("step 2: the reconcile stored the declared schedule").isEqualTo(1);
             navigateToApp("/admin/" + TaskAdmin.SCHEDULES_SLUG);
             waitForHydration();
-            Locator row = page.locator("pl-table-body pl-table-row", new Page.LocatorOptions().setHasText(TYPE));
-            assertThat(row.count()).as("step 2: the schedule is listed").isEqualTo(1);
+            // The list names a task by its declared label and says its schedule in words (zenit-cms, 2026-10-08).
+            String label = new CheckForeignKeys().label().resolve(LocaleChain.ofTags("en"),
+                MessageResolvers.getDefault());
+            Locator row = page.locator("pl-table-body pl-table-row", new Page.LocatorOptions().setHasText(label));
+            assertThat(row.count()).as("step 2: the schedule is listed by its label").isEqualTo(1);
+            assertThat(row.innerText()).as("step 2: its cron reads in words, never the raw expression")
+                .contains("Every day at 04:41").doesNotContain("41 4 * * *");
             assertThat(row.locator("pl-button, button").filter(new Locator.FilterOptions().setHasText("Run now"))
                 .count()).as("step 2: its row offers Run now").isPositive();
 
-            // 3. The runs tab opens beside it.
+            // 3. The runs tab opens beside it, under the cluster's one heading.
             navigateToApp("/admin/" + TaskAdmin.RUNS_SLUG);
             waitForHydration();
-            assertThat(page.locator("h1").first().innerText().trim()).as("step 3: the runs list renders")
+            assertThat(page.locator("h1").count()).as("step 3: the runs list has one heading").isEqualTo(1);
+            assertThat(page.locator("h1").innerText().trim()).as("step 3: the runs list renders")
                 .isNotEmpty();
         } finally {
             service.shutdown();

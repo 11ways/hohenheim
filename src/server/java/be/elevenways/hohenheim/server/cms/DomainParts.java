@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -235,8 +236,18 @@ public final class DomainParts {
         }
         boolean opens = AppDirectory.offers(request.panel(), HohenheimSlugs.SITES, request.access())
             && HohenheimAccess.reachesRecord(request.access(), SiteModel.MODEL_ID, siteId, HohenheimAccess.VIEW);
-        return RecordLinksCell.of(new RecordLink(String.valueOf((Object) site.get(SiteModel.NAME)),
+        return RecordLinksCell.of(new RecordLink(appName(site, request.access()),
             opens ? CmsRoutes.open(request.panelSlug(), HohenheimSlugs.SITES, siteId).toUrl() : null));
+    }
+
+    /**
+     * The app's name as this reader's Apps list says it ({@link AppDirectory#nameOf(Row, boolean)}): the workload's
+     * where the reader reaches it, else the site's.
+     */
+    private static @NonNull String appName(@NonNull Row site, @NonNull AccessContext access) {
+        Integer instanceId = site.get(SiteModel.INSTANCE_ID);
+        return AppDirectory.nameOf(site, instanceId != null
+            && HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID, instanceId, HohenheimAccess.VIEW));
     }
 
     /** @return every site by id, read once for a rendered page */
@@ -337,9 +348,6 @@ public final class DomainParts {
                                                     @NonNull Set<String> working, @NonNull AccessContext access,
                                                     @NonNull String panelSlug) {
         CertCoverage coverage = AppHealth.httpsOf(domain, passthrough, working);
-        if (coverage == null) {
-            return null;
-        }
         Row cert = coverage.hasCertificate()
             ? CertificateCoverage.coveringCertificate(domain.get(SiteDomainModel.HOSTNAME)) : null;
         Microcopy detail = httpsDetail(domain, coverage, cert);
@@ -372,6 +380,7 @@ public final class DomainParts {
         return switch (coverage) {
             case ACTIVE -> null;
             case NOT_USED -> domainText("https_passthrough");
+            case PATTERN -> domainText("https_pattern");
             case PENDING -> domainText("https_being_issued");
             case NONE -> domainText(excluded ? "https_uncovered_excluded" : "https_uncovered");
             case ERROR -> cert != null && CertificateModel.STATUS_ERROR.equals(cert.get(CertificateModel.STATUS))
@@ -419,10 +428,10 @@ public final class DomainParts {
             return null;
         }
         Row site = Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID));
-        String app = site == null ? "" : String.valueOf((Object) site.get(SiteModel.NAME));
+        String app = site == null ? "" : appName(site, access);
         StateLineCell reach = reachCell(domain, HostnameReach.LOOKUP_WAIT_MS);
         CertCoverage https = AppHealth.httpsOf(domain, SiteParts.tlsPassthrough(site), AppHealth.workingNames());
-        if (reach == null || https == null) {
+        if (reach == null || https == CertCoverage.PATTERN) {
             return new RecordLead(Microcopy.of("address_lead_pattern").withFilter("scope", "site_domains")
                 .withArg("app", app)
                 .resolve(conduit.getLocales(), conduit.getMessageResolver()), null);

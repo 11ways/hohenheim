@@ -46,8 +46,8 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
     /** Each cluster's members, in the order its tabs show them. */
     private static final Map<String, List<String>> EXPECTED_CLUSTERS = Map.of(
         HohenheimPanel.DOMAINS_CLUSTER, List.of("domains", "certificates", "dns-zones", "released-claims"),
-        HohenheimPanel.ACCESS_CLUSTER, List.of("access-lists", "bans", "users", "roles", "auth-providers",
-            "spamservice"),
+        // Roles stay a member (their pages stand under Access) but no tab: zenit-auth's People list reaches them.
+        HohenheimPanel.ACCESS_CLUSTER, List.of("access-lists", "bans", "users", "auth-providers", "spamservice"),
         HohenheimPanel.ACTIVITY_CLUSTER, List.of("activity", "inbox", "deliveries"),
         HohenheimPanel.SETTINGS_CLUSTER, List.of("settings", "instance-templates", "runtime-images", "git-providers",
             "database-engines", "notifications", "backup-targets", "task-schedules", "task-runs", "build-info"));
@@ -66,6 +66,8 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         "auth-providers", "previews", "builds", "releases",
         // The Projects, Environments, Hosts and DNS zones list headers.
         "environments", "environment-variables", "reconcile-findings", "dns-peers",
+        // Access: the People list's Roles card and Role column.
+        "roles",
         // Access: the abuse-protection overview page.
         "spamservice-installation", "spamservice-clients", "spamservice-samples",
         "spamservice-security-events", "spamservice-words", "spamservice-reputation");

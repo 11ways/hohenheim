@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -77,13 +78,19 @@ public final class VolumeBackends {
         return detection;
     }
 
-    /** Store a finding on the host record, so placement never has to re-probe. */
+    /**
+     * Store a finding on the host record, so placement never has to re-probe.
+     *
+     * AIDEV-NOTE: a probe's finding is bookkeeping, never activity: inside Check again it was the first of two saves
+     * of one host, so the host page's Recent card said "Jelle checked local" twice per press (D13a; Starfleet's ten
+     * identical rows were these plus the then-unsuppressed heartbeat). The preflight's report save records the act.
+     */
     public static void store(@NonNull Row server, @NonNull Detection detection) {
         server.set(ServerModel.VOLUME_BACKEND, detection.backend().token());
         server.set(ServerModel.VOLUME_ROOT, detection.root());
         server.set(ServerModel.VOLUME_BACKEND_DETAIL, detection.detail());
         server.set(ServerModel.VOLUME_PROBED_AT, Now.instant());
-        Models.get(ServerModel.class).save(server);
+        ActivityLog.suppressed(() -> Models.get(ServerModel.class).save(server));
     }
 
     /**
