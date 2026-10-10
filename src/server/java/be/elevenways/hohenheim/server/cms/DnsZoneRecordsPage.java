@@ -243,9 +243,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
 
         // A read-only zone (trashed, or under a trashed record) offers no add: its records' writes are refused by
         // zenit-cms through the record resource's parent, and this is the same answer on screen.
-        RouteTarget addRecordTarget = this.hostReadOnly(conduit) ? null : CmsEndpoints.CREATE_FORM
-            .with(CmsEndpoints.PANEL_PARAM, PANEL)
-            .with(CmsEndpoints.RESOURCE_PARAM, resource.slug())
+        RouteTarget addRecordTarget = this.hostReadOnly(conduit) ? null : CmsRoutes.create(PANEL, resource.slug())
             .with(HohenheimParams.ZONE_ID_PREFILL, zoneId);
 
         Map<String, Object> vars = new HashMap<>();
@@ -464,20 +462,10 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         return CmsActionResult.refreshWithToast(HohenheimMicrocopy.DNS_REMOTE.of("edit_saved"));
     }
 
-    /**
-     * The secondary zone's Records tab, opened on ONE remote record (or {@code new}).
-     *
-     * AIDEV-NOTE: composed off CmsEndpoints rather than CmsRoutes.subpage because the
-     * link is a CMS route PLUS a query parameter, and CmsRoutes returns the RouteTarget
-     * interface, which has no with(...).
-     */
+    /** The secondary zone's Records tab, opened on ONE remote record (or {@code new}). */
     private static @NonNull RouteTarget remoteRecordTarget(@NonNull Integer zoneId,
                                                            @NonNull String recordId) {
-        return CmsEndpoints.RECORD_SUBPAGE
-            .with(CmsEndpoints.PANEL_PARAM, PANEL)
-            .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.DNS_ZONES)
-            .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(zoneId))
-            .with(CmsEndpoints.SUBPAGE_PARAM, HohenheimSlugs.Tab.RECORDS)
+        return CmsRoutes.subpage(PANEL, HohenheimSlugs.DNS_ZONES, zoneId, HohenheimSlugs.Tab.RECORDS)
             .with(HohenheimParams.REMOTE_RECORD, recordId);
     }
 

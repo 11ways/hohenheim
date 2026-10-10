@@ -18,8 +18,6 @@
         {% /if %}
     </div>
 
-    <p class="hh-tab-hint">{{ t("tab_hint", scope: "instance_database") }}</p>
-
     {% if attachments %}
     <pl-table>
         <pl-table-header><pl-table-row>

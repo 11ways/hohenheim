@@ -15,7 +15,6 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
@@ -49,6 +48,7 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
     @Override public boolean secondaryTab() { return true; }
     @Override public @NonNull String slug() { return HohenheimSlugs.Tab.DEVICES; }
     @Override public @NonNull Icon icon() { return Icon.of("hard-drive"); }
+    @Override public @NonNull Microcopy lead() { return HohenheimMicrocopy.INSTANCE_DEVICE.of("lead"); }
 
     /**
      * Kinds whose driver can attach devices only; the tab hides AND 404s for the rest.
@@ -102,8 +102,6 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
             || HohenheimAccess.hasInstanceCapability(
                 accessContext, instanceId, HohenheimCapabilities.CONFIG);
         vars.put("canEdit", canEdit);
-        // Create form + two prefill query parameters: composed off CmsEndpoints because
-        // CmsRoutes.create returns the RouteTarget interface, which has no with(...).
         // AIDEV-NOTE: gated on the SAME boolean the template's {% if %} uses. A declared
         // template variable is serialized into the hydration payload whether or not any
         // element renders it, so an ungated target would publish an editor route to a
@@ -128,9 +126,7 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
     private static @NonNull RouteTarget newDeviceTarget(@NonNull String panel,
                                                         @NonNull DeviceType type,
                                                         @NonNull Integer instanceId) {
-        return CmsEndpoints.CREATE_FORM
-            .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.INSTANCE_DEVICES)
+        return CmsRoutes.create(panel, HohenheimSlugs.INSTANCE_DEVICES)
             .with(HohenheimParams.DEVICE_TYPE_PREFILL, type.token())
             .with(HohenheimParams.INSTANCE_ID_PREFILL, instanceId);
     }

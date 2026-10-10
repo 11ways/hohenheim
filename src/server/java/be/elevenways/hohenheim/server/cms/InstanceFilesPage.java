@@ -25,7 +25,6 @@ import be.elevenways.zenit.sftp.server.SftpHostKeys;
 import be.elevenways.zenit.sftp.server.SftpServer;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
@@ -261,13 +260,7 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
         return volumes;
     }
 
-    /**
-     * This tab, browsing one directory.
-     *
-     * AIDEV-NOTE: composed off CmsEndpoints rather than CmsRoutes.subpage because a CMS
-     * route PLUS a query parameter cannot be built from CmsRoutes -- its builders return
-     * the RouteTarget interface, which has no with(...).
-     */
+    /** This tab, browsing one directory. */
     private static @NonNull RouteTarget browseTarget(@NonNull String panel,
                                                      @NonNull Integer instanceId,
                                                      @NonNull String path) {
@@ -284,13 +277,8 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
             .with(HohenheimParams.FILES_EDIT, file);
     }
 
-    private static @NonNull BoundEndpoint<Map<String, Object>> subpageTarget(@NonNull String panel,
-                                                                            @NonNull Integer instanceId) {
-        return CmsEndpoints.RECORD_SUBPAGE
-            .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.INSTANCES)
-            .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(instanceId))
-            .with(CmsEndpoints.SUBPAGE_PARAM, HohenheimSlugs.Tab.FILES);
+    private static @NonNull BoundEndpoint<?> subpageTarget(@NonNull String panel, @NonNull Integer instanceId) {
+        return CmsRoutes.subpage(panel, HohenheimSlugs.INSTANCES, instanceId, HohenheimSlugs.Tab.FILES);
     }
 
     /** The parent path, clamped at the volume root (never "" and never outside it). */

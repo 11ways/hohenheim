@@ -14,7 +14,6 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -49,6 +48,7 @@ public final class InstanceVolumesTab implements RecordTab.Rendered<Row> {
     @Override public boolean secondaryTab() { return true; }
     @Override public @NonNull String slug() { return HohenheimSlugs.Tab.VOLUMES; }
     @Override public @NonNull Icon icon() { return Icon.of("database"); }
+    @Override public @NonNull Microcopy lead() { return HohenheimMicrocopy.INSTANCE_VOLUME.of("lead"); }
 
     /**
      * Only kinds that MOUNT declared volumes get the tab; for the rest a declared row
@@ -115,9 +115,7 @@ public final class InstanceVolumesTab implements RecordTab.Rendered<Row> {
     /** The volume create form, opened with its owning instance prefilled. */
     private static @NonNull RouteTarget newVolumeTarget(@NonNull String panel,
                                                         @NonNull Integer instanceId) {
-        return CmsEndpoints.CREATE_FORM
-            .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.INSTANCE_VOLUMES)
+        return CmsRoutes.create(panel, HohenheimSlugs.INSTANCE_VOLUMES)
             .with(HohenheimParams.INSTANCE_ID_PREFILL, instanceId);
     }
 }

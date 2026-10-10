@@ -10,7 +10,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
@@ -104,11 +103,7 @@ public final class InstanceProvisioningPage implements RecordTab.Rendered<Row> {
                 InstanceVariableParts.PROVISIONING));
         vars.put("panelSlug", panel);
         vars.put("files", files);
-        // Create form + prefill query parameter: composed off CmsEndpoints, since
-        // CmsRoutes.create returns the RouteTarget interface (no with(...)).
-        RouteTarget addFileTarget = editable ? CmsEndpoints.CREATE_FORM
-            .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, FILE_RESOURCE_SLUG)
+        RouteTarget addFileTarget = editable ? CmsRoutes.create(panel, FILE_RESOURCE_SLUG)
             .with(HohenheimParams.INSTANCE_ID_PREFILL, instanceId) : null;
         vars.put("addFileTarget", addFileTarget);
         vars.put("canAddFile", addFileTarget != null);

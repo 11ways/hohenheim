@@ -175,7 +175,12 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         assertThat(tab.statusCode()).as("step 4: the Databases tab renders").isEqualTo(200);
         assertThat(tab.body())
             .as("step 4: the tab lists the attached database")
-            .contains(PREFIX + "db");
+            .contains(PREFIX + "db")
+            .as("step 4: its attach opens the attachment create form preset to this instance")
+            .contains("/admin/instance-databases/new?instance_id=" + instanceId)
+            .as("step 4: and its lead sentence stands in the shared record heading")
+            .contains("data-cms-tab-lead")
+            .contains("Each attached database injects its connection variables");
         var detail = adminGet(CmsRoutes.detail("admin", "databases", databaseId).toUrl());
         assertThat(detail.statusCode()).isEqualTo(200);
         assertThat(detail.body())

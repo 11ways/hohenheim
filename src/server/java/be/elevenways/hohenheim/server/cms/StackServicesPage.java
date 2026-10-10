@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
@@ -86,11 +85,7 @@ public final class StackServicesPage implements RecordTab.Rendered<Row> {
                 files.add(fileEntry);
             }
             entry.put("files", files);
-            // Create form + prefill query parameter: composed off CmsEndpoints, since
-            // CmsRoutes.create returns the RouteTarget interface (no with(...)).
-            entry.put("addFileTarget", CmsEndpoints.CREATE_FORM
-                .with(CmsEndpoints.PANEL_PARAM, panel)
-                .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.STACK_FILES)
+            entry.put("addFileTarget", CmsRoutes.create(panel, HohenheimSlugs.STACK_FILES)
                 .with(HohenheimParams.STACK_SERVICE_ID_PREFILL, serviceId));
 
             services.add(entry);
@@ -101,9 +96,7 @@ public final class StackServicesPage implements RecordTab.Rendered<Row> {
         vars.put("stackId", stackId);
         vars.put("stackName", stack.get(StackModel.NAME));
         vars.put("services", services);
-        vars.put("addServiceTarget", CmsEndpoints.CREATE_FORM
-            .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.STACK_SERVICES)
+        vars.put("addServiceTarget", CmsRoutes.create(panel, HohenheimSlugs.STACK_SERVICES)
             .with(HohenheimParams.STACK_ID_PREFILL, stackId));
         // The front door of a FAILED stack states the reason and links the row that
         // carries it: a status badge alone sent the operator hunting through tabs.

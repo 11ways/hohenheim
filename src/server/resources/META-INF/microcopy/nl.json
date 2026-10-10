@@ -11751,16 +11751,6 @@
     "text": "Maak een site die deze instantie op een hostnaam beschikbaar maakt",
     "scope": "instance"
   },
-  "tab_hint": [
-    {
-      "text": "Elk volume is een map op de host, gemonteerd in de container op het pad dat je kiest. Wijzigingen gelden vanaf de volgende deploy.",
-      "scope": "instance_volume"
-    },
-    {
-      "text": "Elke gekoppelde databank injecteert haar verbindingsvariabelen in de workload bij de deploy. Loskoppelen trekt de bereikbaarheid meteen in; de variabelen verdwijnen bij de volgende deploy.",
-      "scope": "instance_database"
-    }
-  ],
   "record_title": {
     "text": "{$database} op {$instance}",
     "scope": "instance_database"
@@ -14591,6 +14581,18 @@
     {
       "text": "Limieten ingesteld door de beheerder van deze installatie.",
       "scope": "tenant_usage"
+    },
+    {
+      "text": "Elk volume is een map op de host, gemonteerd in de container op het pad dat je kiest. Wijzigingen gelden vanaf de volgende deploy.",
+      "scope": "instance_volume"
+    },
+    {
+      "text": "Elke gekoppelde databank injecteert haar verbindingsvariabelen in de workload bij de deploy. Loskoppelen trekt de bereikbaarheid meteen in; de variabelen verdwijnen bij de volgende deploy.",
+      "scope": "instance_database"
+    },
+    {
+      "text": "Gegevensschijven en extra netwerkinterfaces die aan deze instantie gekoppeld zijn, bovenop de rootschijf en het netwerk die ze altijd heeft.",
+      "scope": "instance_device"
     }
   ],
   "what_question": {

@@ -25,7 +25,6 @@ import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.page.CmsActionResultTranslator;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -209,9 +208,7 @@ final class InstanceActions {
             .shownWhen((row, ctx) -> !InstanceParts.isGenerated(row) && supportsSiteUpstream(row)
                 && HohenheimAccess.isAdmin(ctx))
             // The operator panel: this action is admin-only, a site create being an operator act.
-            .route((row, request) -> CmsEndpoints.CREATE_FORM
-                .with(CmsEndpoints.PANEL_PARAM, HohenheimSlugs.ADMIN)
-                .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.SITES)
+            .route((row, request) -> CmsRoutes.create(HohenheimSlugs.ADMIN, HohenheimSlugs.SITES)
                 .with(HohenheimParams.UPSTREAM_KIND_PREFILL, InstanceUpstreamKind.ID.toString())
                 .with(HohenheimParams.INSTANCE_ID_PREFILL, row.get(InstanceModel.ID)))
             .build();

@@ -11751,16 +11751,6 @@
     "text": "Create a site that serves this instance on a hostname",
     "scope": "instance"
   },
-  "tab_hint": [
-    {
-      "text": "Each volume is a directory on the host, mounted into the container at the path you choose. Changes apply at the next deploy.",
-      "scope": "instance_volume"
-    },
-    {
-      "text": "Each attached database injects its connection variables into the workload at deploy. Detaching revokes reachability at once; the variables disappear at the next deploy.",
-      "scope": "instance_database"
-    }
-  ],
   "record_title": {
     "text": "{$database} on {$instance}",
     "scope": "instance_database"
@@ -14591,6 +14581,18 @@
     {
       "text": "Limits set by the operator of this installation.",
       "scope": "tenant_usage"
+    },
+    {
+      "text": "Each volume is a directory on the host, mounted into the container at the path you choose. Changes apply at the next deploy.",
+      "scope": "instance_volume"
+    },
+    {
+      "text": "Each attached database injects its connection variables into the workload at deploy. Detaching revokes reachability at once; the variables disappear at the next deploy.",
+      "scope": "instance_database"
+    },
+    {
+      "text": "Data disks and extra network interfaces attached to this instance, on top of the root disk and network it always has.",
+      "scope": "instance_device"
     }
   ],
   "what_question": {

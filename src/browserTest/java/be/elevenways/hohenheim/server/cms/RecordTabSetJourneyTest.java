@@ -49,6 +49,9 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
                 .contains("Metrics");
             assertThat(overview.substring(more)).as("step 1: provisioning sits in the More menu")
                 .contains(record + "/page/provisioning");
+            assertThat(adminGet(record + "/page/provisioning").body())
+                .as("step 1: whose add-file opens the file create form preset to this instance")
+                .contains("/admin/instance-files/new?instance_id=" + id);
 
             // 2. The console's other modes are not tabs: neither the strip nor its More menu offers them.
             assertThat(overview).as("step 2: the shell is a mode of the console, not a tab")
@@ -74,6 +77,8 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
                 .contains("<pl-relative-time datetime=\"2026-10-05T08:26:17.808879Z\"");
             assertThat(console).as("step 3b: the raw instant is never the visible text")
                 .doesNotContain(">2026-10-05T08:26:17.808879Z<");
+            assertThat(console).as("step 3b: the stored run links this tab with that run selected")
+                .contains(record + "/page/console?log=" + log.get(InstanceLogModel.ID));
             String opened = adminGet(record + "/page/console?log=" + log.get(InstanceLogModel.ID)).body();
             assertThat(opened).as("step 3b: the opened run shows its output")
                 .contains("hello from an earlier run");

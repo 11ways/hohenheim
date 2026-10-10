@@ -265,7 +265,12 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
 
         // The Volumes tab renders the declaration and offers the add affordance.
         String tab = adminGet("/admin/instances/" + workspaceId + "/page/volumes").body();
-        assertThat(tab).contains("/data").contains("add-volume-link");
+        assertThat(tab).contains("/data").contains("add-volume-link")
+            .as("the add opens the volume create form preset to this instance")
+            .contains("/admin/instance-volumes/new?instance_id=" + workspaceId)
+            .as("the tab's lead sentence stands in the shared record heading")
+            .contains("data-cms-tab-lead")
+            .contains("Each volume is a directory on the host");
 
         // FALSIFICATION 1: the workspace home volume refuses its own destruction.
         InstanceVolumes.declare(workspaceId, "home", "/home/site", null, false);

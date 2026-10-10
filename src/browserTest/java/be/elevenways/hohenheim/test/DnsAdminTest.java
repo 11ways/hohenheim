@@ -145,6 +145,8 @@ class DnsAdminTest extends HohenheimTestBase {
         assertThat(page.locator("cms-inline-cell").count())
             .as("and its editable cells are offered in place").isGreaterThan(0);
         assertThat(page.locator("#add-record-link").count()).isEqualTo(1);
+        assertThat(page.content()).as("the add opens the record create form preset to this zone")
+            .contains("/admin/dns-records/new?zone_id=" + zoneId);
 
         navigateToApp("/admin/dns-zones/" + zoneId + "/page/zonefile");
         waitForHydration();

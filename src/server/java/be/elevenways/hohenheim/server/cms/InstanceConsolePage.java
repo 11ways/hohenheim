@@ -178,21 +178,11 @@ public final class InstanceConsolePage implements ConsoleModes.Mode {
         vars.put("selectedLogAtIso", atIso);
     }
 
-    /**
-     * This tab, with one stored episode selected.
-     *
-     * AIDEV-NOTE: composed off CmsEndpoints rather than CmsRoutes.subpage because a CMS
-     * route PLUS a query parameter cannot be built from CmsRoutes -- its builders return
-     * the RouteTarget interface, which has no with(...).
-     */
+    /** This tab, with one stored episode selected. */
     private static @NonNull RouteTarget logTarget(@NonNull String panel,
                                                   @NonNull Integer instanceId,
                                                   @NonNull Integer logId) {
-        return CmsEndpoints.RECORD_SUBPAGE
-            .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.INSTANCES)
-            .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(instanceId))
-            .with(CmsEndpoints.SUBPAGE_PARAM, HohenheimSlugs.Tab.CONSOLE)
+        return CmsRoutes.subpage(panel, HohenheimSlugs.INSTANCES, instanceId, HohenheimSlugs.Tab.CONSOLE)
             .with(HohenheimParams.SELECTED_LOG, logId);
     }
 

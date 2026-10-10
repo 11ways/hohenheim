@@ -2,7 +2,9 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -55,17 +57,22 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
     private static Integer dockerHostId;
     private static Integer workspaceId;
     private static Integer applicationId;
+    private static Integer systemContainerId;
+    private static Integer stackId;
 
     @BeforeAll
     static void seedFleet() throws Exception {
         Files.createDirectories(OUT);
 
         dockerHostId = host("orion", ServerModel.RUNTIME_DOCKER, "btrfs");
-        host("vega", ServerModel.RUNTIME_INCUS, "none");
+        Integer incusHostId = host("vega", ServerModel.RUNTIME_INCUS, "none");
 
         workspaceId = instance("blog-workspace", "hohenheim:workspace", dockerHostId);
         applicationId = instance("shop-api", "hohenheim:application", dockerHostId);
         instance("adhoc-redis", "hohenheim:docker_container", dockerHostId);
+        // An Incus system container, the kind whose driver attaches devices (its Devices tab).
+        systemContainerId = instance("build-box", "hohenheim:system_container", incusHostId,
+            Map.of("image", "images:debian/12"));
 
         // A generated database engine, so the list shows a "Managed by" row.
         var databases = Models.get(DatabaseModel.class);
@@ -92,6 +99,28 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
                 Models.get(InstanceModel.class).save(row);
             });
         }
+
+        // The application holds the database, so its Databases tab lists an attachment.
+        var links = Models.get(InstanceDatabaseModel.class);
+        if (links.findByInstanceId(applicationId).isEmpty()) {
+            Row link = links.createEmptyRow();
+            link.set(InstanceDatabaseModel.INSTANCE_ID, applicationId);
+            link.set(InstanceDatabaseModel.DATABASE_ID, databaseId);
+            link.set(InstanceDatabaseModel.ENV_PREFIX, InstanceDatabaseModel.DEFAULT_PREFIX);
+            links.save(link);
+        }
+
+        // A stack, so the service create form (its environment map among it) can open under it.
+        var stacks = Models.get(StackModel.class);
+        Row stack = stacks.find().where(StackModel.NAME.eq("shop-stack")).first();
+        if (stack == null) {
+            stack = stacks.createEmptyRow();
+            stack.set(StackModel.NAME, "shop-stack");
+            stack.set(StackModel.ENABLED, true);
+            stack.set(StackModel.SERVER_ID, dockerHostId);
+            stacks.save(stack);
+        }
+        stackId = stack.get(StackModel.ID);
 
         // Volumes with observed usage, so the tab shows real columns.
         InstanceVolumes.declare(workspaceId, "home", "/home/site", 2048L * 1024 * 1024, false);
@@ -142,6 +171,10 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
     }
 
     private static Integer instance(String name, String kind, Integer serverId) {
+        return instance(name, kind, serverId, Map.of());
+    }
+
+    private static Integer instance(String name, String kind, Integer serverId, Map<String, Object> settings) {
         var instances = Models.get(InstanceModel.class);
         Row existing = instances.find().where(InstanceModel.NAME.eq(name)).first();
         if (existing != null) {
@@ -152,7 +185,7 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
         row.set(InstanceModel.KIND, kind);
         row.set(InstanceModel.SERVER_ID, serverId);
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
-        row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of()));
+        row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(settings));
         // A kind that cannot run without a runtime image may not be written without one
         // (InstanceDeclarations); the seeded builtin is what the create form would pick.
         InstanceKindHandler handler = InstanceKinds.getHandler(kind);
@@ -272,6 +305,9 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
         });
         capture("/admin/instances/" + workspaceId + "/page/overview", "instance-overview");
         capture("/admin/instances/" + workspaceId + "/page/volumes", "instance-volumes");
+        capture("/admin/instances/" + applicationId + "/page/databases", "instance-databases");
+        capture("/admin/instances/" + systemContainerId + "/page/devices", "instance-devices");
+        capture("/admin/stack-services/new?stack_id=" + stackId, "stack-service-create");
         capture("/admin/instances/" + workspaceId, "instance-settings-form");
         capture("/admin/instances/" + applicationId + "/page/overview",
             "application-overview");

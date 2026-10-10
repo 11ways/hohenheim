@@ -205,7 +205,10 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         assertThat(tab.body())
             .as("step 1: and it offers attach-disk and attach-NIC, preset to this instance")
             .contains("/admin/instance-devices/new?type=disk&instance_id=" + instanceId)
-            .contains("/admin/instance-devices/new?type=nic&instance_id=" + instanceId);
+            .contains("/admin/instance-devices/new?type=nic&instance_id=" + instanceId)
+            .as("step 1: under the lead sentence the shared record heading draws")
+            .contains("data-cms-tab-lead")
+            .contains("Data disks and extra network interfaces attached to this instance");
 
         // 2. Attaching a disk through the form creates the VOLUME at the daemon.
         HttpResponse<String> attached = adminPostForm("/admin/instance-devices/new",

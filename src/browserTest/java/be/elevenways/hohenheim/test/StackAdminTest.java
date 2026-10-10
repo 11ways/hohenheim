@@ -101,7 +101,9 @@ class StackAdminTest extends HohenheimTestBase {
         assertThat(landing.statusCode()).as("step 1: the services tab renders").isEqualTo(200);
         assertThat(landing.body()).as("step 1: and its empty state says what to do")
             .contains("A stack is composed of services")
-            .contains("add-first-service-link");
+            .contains("add-first-service-link")
+            .as("step 1: whose add opens the service create form preset to this stack")
+            .contains("/admin/stack-services/new?stack_id=" + stackId);
 
         // 2. The service form's RelationPick needs a registered record source for the stack
         //    model; the service it creates renders its image back.
@@ -131,6 +133,8 @@ class StackAdminTest extends HohenheimTestBase {
         assertThat(body).as("step 3: the service is listed").contains("web");
         assertThat(body).as("step 3: its state is the localized label").contains("Missing");
         assertThat(body).as("step 3: the tab title is not doubled").doesNotContain("- Services");
+        assertThat(page.content()).as("step 3: the service offers its add-file, preset to that service")
+            .contains("/admin/stack-files/new?stack_service_id=" + serviceId);
 
         // 4. The deployments tab renders.
         navigateToApp("/admin/stacks/" + stackId + "/page/deployments");

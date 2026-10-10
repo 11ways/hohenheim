@@ -16,7 +16,6 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
@@ -53,6 +52,7 @@ public final class InstanceDatabasesPage implements RecordTab.Rendered<Row> {
     @Override public boolean secondaryTab() { return true; }
     @Override public @NonNull String slug() { return HohenheimSlugs.Tab.DATABASES; }
     @Override public @NonNull Icon icon() { return Icon.of("database"); }
+    @Override public @NonNull Microcopy lead() { return HohenheimMicrocopy.INSTANCE_DATABASE.of("lead"); }
 
     /**
      * Only kinds that run on a Docker daemon get the tab: injection rides the link
@@ -114,9 +114,7 @@ public final class InstanceDatabasesPage implements RecordTab.Rendered<Row> {
     /** The attachment create form, opened with its owning instance prefilled. */
     private static @NonNull RouteTarget attachTarget(@NonNull String panel,
                                                      @NonNull Integer instanceId) {
-        return CmsEndpoints.CREATE_FORM
-            .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.INSTANCE_DATABASES)
+        return CmsRoutes.create(panel, HohenheimSlugs.INSTANCE_DATABASES)
             .with(HohenheimParams.INSTANCE_ID_PREFILL, instanceId);
     }
 }
