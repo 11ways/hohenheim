@@ -23,7 +23,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * name legitimately publish two TXT rows with identical attribution, and a unique key would
  * make the second order fail for the first order's benefit.
  *
- * AIDEV-NOTE: since the game-domains wave the scope itself lives in {@link GeneratedRows},
+ * AIDEV-NOTE: since game domains the scope itself lives in {@link GeneratedRows},
  * SHARED with GeneratedInstanceFiles -- one {@code as(...)} block covers a materialization
  * that writes config files AND DNS rows, and TenantWrites' system-scope bypass keeps
  * answering for both. This class remains the DNS face: its source tokens and the guard

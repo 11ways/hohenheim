@@ -87,7 +87,7 @@ public final class AuthProviderParts {
                 .subtext("required_permission").build())
             .column(ColumnSpec.fromField(SiteAuthProviderModel.REQUIRED_PERMISSION).hidden().build())
             .column(ColumnSpec.fromField(SiteAuthProviderModel.PROVIDER_TYPE).filterable().build())
-            // Where it is used, the Access board's "used by" line: access-list rules naming it plus sites it gates.
+            // Where it is used, the "used by" line: access-list rules naming it plus sites it gates.
             .column(ColumnSpec.virtual(USED_BY_COLUMN, HohenheimMicrocopy.AUTH_PROVIDER.of("used_by_column")).build())
             .column(ColumnSpec.fromField(SiteAuthProviderModel.CREATED_AT).hidden().build())
             .filter(FilterSpec.leaf(SiteAuthProviderModel.NAME, CoreTypes.CONTAINS)

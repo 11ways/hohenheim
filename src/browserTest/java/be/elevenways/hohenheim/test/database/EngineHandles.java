@@ -21,7 +21,7 @@ import java.util.Map;
  * the owned instance, never from the record name.
  *
  * AIDEV-NOTE: this exists so no test can go back to spelling the handle itself. Before
- * the Phase 7 lowering every test built {@code ControllerScope.handle(KIND_DB, name)} by
+ * stack services became owned instances every test built {@code ControllerScope.handle(KIND_DB, name)} by
  * hand, which is precisely the name-keyed coupling the lowering removed -- a test that
  * kept guessing the name would pass against a container the product no longer manages.
  */

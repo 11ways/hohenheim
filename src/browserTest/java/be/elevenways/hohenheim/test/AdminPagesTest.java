@@ -725,8 +725,8 @@ class AdminPagesTest extends HohenheimTestBase {
         assertThat(site).as("the tab fixture site is stored").isNotNull();
         Integer siteId = site.get(SiteModel.ID);
 
-        // The processes tab is GONE: it was deleted with the host-user process lane
-        // (phase-0 design section 3), so no site has one and the route 404s for every one.
+        // The processes tab is GONE: it was deleted with the host-user process lane,
+        // so no site has one and the route 404s for every one.
         assertThat(adminGet("/admin/sites/" + siteId).body())
             .doesNotContain("/admin/sites/" + siteId + "/page/processes");
         assertThat(adminGet("/admin/sites/" + siteId + "/page/processes").statusCode()).isEqualTo(404);
@@ -836,7 +836,7 @@ class AdminPagesTest extends HohenheimTestBase {
             assertThat(page.locator(".hh-attention-clear").count())
                 .as("step 1: the dashboard never says 'All clear' while a host is blocked")
                 .isZero();
-            // Drawn ONCE (D8): by the open admission step that presents the item, or by the band when no step is
+            // Drawn ONCE: by the open admission step that presents the item, or by the band when no step is
             // open, never by both.
             // The host's front door (its Overview, where Check and admit reads), never its Configuration form.
             String host = "[href='/admin/servers/" + local.get(ServerModel.ID) + "/open']";
@@ -872,7 +872,7 @@ class AdminPagesTest extends HohenheimTestBase {
             assertThat(grid.locator(".widget-stat-link a.stat-link[href='/admin/apps']").count())
                 .as("step 3: the apps tile is in it").isEqualTo(1);
             assertThat(grid.locator(".widget-stat-link a.stat-link[href='/admin/instance-backups']").count())
-                .as("step 3: and so is the backups tile, the board's fourth").isEqualTo(1);
+                .as("step 3: and so is the backups tile, the fourth").isEqualTo(1);
 
             // 4. Admitting a host the gate can place on retracts the item; the collector answers negatively too.
             HostFixtures.makeLocalPlaceable(16L * 1024);

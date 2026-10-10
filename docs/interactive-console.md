@@ -1,6 +1,6 @@
 # Interactive console (`console_kind = tty`)
 
-The "Janeway console" the phase-0 design reserved as phase 3, shipped 2026-08-29.
+Also called the "Janeway console".
 
 ## What it is
 

@@ -41,8 +41,8 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * The schema and stored-data changes of the 2026-09-24 review fixes: trusted upstreams, install-media fetches,
- * the observed workload kill, hashed Basic auth passwords and canonical access-rule networks; and module-fit's
+ * The schema and stored-data changes for trusted upstreams, install-media fetches,
+ * the observed workload kill, hashed Basic auth passwords and canonical access-rule networks; and the
  * instance operations: stored power, backup, snapshot, console command and app update schedule steps name the
  * operations that replaced them;
  * and a certificate's requester stored as its principal reference ({@code requested_by_kind} beside the id);
@@ -54,9 +54,9 @@ import java.util.TreeSet;
  * and every workload restarting after a crash, the stored ones and the column default;
  * and every stored git source keeping auto-deploy off once a new source starts with it on.
  *
- * AIDEV-NOTE: this is ONE migration on purpose (2026-09-30). It replaced M011, M012, M015, M016 and M017,
+ * AIDEV-NOTE: this is ONE migration on purpose. It replaced M011, M012, M015, M016 and M017,
  * which no production install (kuifje at 009, robbedoes at 010) had applied; the two test installs that
- * had were re-recorded by hand (docs/deploy-starfleet.md, 2026-09-30). The next change a production
+ * had were re-recorded by hand on 2026-09-30. The next change a production
  * install has not applied yet edits this class instead of appending a new one.
  *
  * AIDEV-NOTE: irreversible: a hash cannot give a plaintext password back, and the original network
@@ -71,7 +71,7 @@ import java.util.TreeSet;
  * AIDEV-NOTE: zenit's IpRanges.parseLiteral used to accept a zone id (dropped), IPv4 octets with leading
  * zeros (read as DECIMAL), non-ASCII digits in IPv6 groups and a dotted quad in any IPv6 group. A rule
  * stored in such a spelling now parses to nothing, which AccessRuleTree refuses. {@link LegacyIpSpellings}
- * is the reading of production build 91191333; a value it also refused matched nothing before and is
+ * is the reading the shipped production build applied; a value it also refused matched nothing before and is
  * left untouched.
  *
  * AIDEV-NOTE: Hohenheim's glob grammar read a leading {@code *.} as one or more labels and any other star run as
@@ -244,13 +244,12 @@ public class M011_ReviewHardening extends HohenheimMigration {
         schema.data("renumber every access-rule sibling run dense from 0 in its stored order", "1",
             M011_ReviewHardening::densifyRulePositions);
         // A workload restarts after a crash by default now, the stored ones included: 'none' was the old default,
-        // never an operator's choice on the installs this reaches (Jelle, 2026-10-07).
+        // never an operator's choice on the installs this reaches.
         schema.alterTable("instances", table -> table.changeColumn("crash_policy", ColumnType.STRING,
             column -> column.nullable(true).maxLength(50).defaultValue(CRASH_RESTART)));
         schema.data("restart every stored workload after a crash, the new default", "1",
             M011_ReviewHardening::restartStoredWorkloadsOnCrash);
-        // A new git source deploys on push by default now; every stored one keeps the off an absent flag used to read
-        // (Jelle, 2026-10-10).
+        // A new git source deploys on push by default now; every stored one keeps the off an absent flag used to read.
         schema.data("keep every stored git source's auto-deploy off", "1",
             M011_ReviewHardening::keepStoredSourcesManual);
         // The settings page asked the system tier itself; each setting now asks its own leaf, so whoever held the tier
@@ -542,7 +541,7 @@ public class M011_ReviewHardening extends HohenheimMigration {
      * AIDEV-NOTE: nothing is written until every row is known to translate exactly, and one that cannot fails the
      * migration naming every such row: a pattern the grammar refuses (the dispatcher would drop it and take the site
      * offline), and both rows of an equally specific, overlapping pair of routes whose old tie order the translation
-     * would flip (a collapsed star run changes the tie key, review 5 D02/D03), since live routing consults the first
+     * would flip (a collapsed star run changes the tie key), since live routing consults the first
      * match. Silently dropping, widening or reordering a route is never an outcome. The operator corrects or deletes
      * the rows and migrates again; the runtime log in RouteTableBuilder stays the second line of defence.
      *
@@ -678,7 +677,7 @@ public class M011_ReviewHardening extends HohenheimMigration {
      *
      * AIDEV-NOTE: a data step, never a renameType in the stored-id holder: the target of a power step depends on its
      * payload, and the holder's chains are global, so {@code hohenheim:backup -> hohenheim:backup_instance} would also
-     * carry the activity value {@code backup} on to an operation id (stage 2 contract 6.10).
+     * carry the activity value {@code backup} on to an operation id.
      *
      * @throws IllegalStateException naming the step when a power step stores an operation no power operation replaces
      */

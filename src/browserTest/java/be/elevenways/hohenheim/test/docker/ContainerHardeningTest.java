@@ -242,8 +242,8 @@ class ContainerHardeningTest {
             }
         }
 
-        // 4. STACKS -- operator-authored, declares SERVICE at the tier. Since the
-        //    Phase 7 lowering a service IS an owned instance, so this deploys from
+        // 4. STACKS -- operator-authored, declares SERVICE at the tier. A
+        //    service IS an owned instance, so this deploys from
         //    RECORDS through StackRuntime, exactly like the product surface does.
         StackRuntime stacks = new StackRuntime(docker, Datasources.getDefault());
         int[] stackIds = stackRecords("hhhard" + Long.toHexString(System.nanoTime()),
@@ -712,7 +712,7 @@ class ContainerHardeningTest {
             stacks.destroy(ids[0], true);
         }
 
-        // 4. THE REFUSAL. Every capability the brief names as a container escape is
+        // 4. THE REFUSAL. Every capability known as a container escape is
         //    refused BY NAME, and so is an unknown string -- an allow-list, not a
         //    deny-list, so a capability nobody thought about is refused too.
         for (String escape : List.of("SYS_ADMIN", "SYS_PTRACE", "DAC_READ_SEARCH",

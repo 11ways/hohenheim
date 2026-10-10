@@ -43,8 +43,8 @@ import java.util.Map;
  * it already serves, and never learns that a zone row exists.
  *
  * AIDEV-NOTE: the form takes an ABSOLUTE name and this resource resolves the owning zone
- * from it, because a zone picker is exactly the thing the Phase 2 decision refuses to give a
- * tenant (docs/instance-tier-plan.md: zones are a permanent admin-only non-goal). The
+ * from it, because a zone picker is exactly the thing a tenant is never given
+ * (zones are permanently admin-only, see HohenheimGrantPolicy). The
  * resolution is a UX affordance, NOT the gate -- TenantWrites decides authority over the
  * resulting FQDN on the model write pipeline, which a direct POST, the peer API and a
  * revision restore all pass and this method does not.

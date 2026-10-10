@@ -38,7 +38,7 @@ import java.util.Map;
 /**
  * The VM kind: a KVM virtual machine on an inventoried Incus host, THROUGH the same
  * driver as the system-container kind ({@code IncusInstanceRuntime} with the
- * VIRTUAL_MACHINE flavour) -- never a parallel VM path. A VM is the plan's boundary-1
+ * VIRTUAL_MACHINE flavour) -- never a parallel VM path. A VM is kernel-boundary
  * isolation: the one workload flavour rated against a hostile root tenant on shared
  * iron.
  *

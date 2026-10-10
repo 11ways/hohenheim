@@ -22,19 +22,19 @@ import java.util.regex.Pattern;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The Phase 6 gate clause "every page and error is localized", enforced instead of
+ * The rule "every page and error is localized", enforced instead of
  * swept: no page may build its title by concatenating an English literal.
  *
  * AIDEV-NOTE: this exists because the sweep alone provably does not hold. Three pages
- * were fixed in the 2026-08-04 wave, nine were listed as remaining -- and by the time
+ * were fixed in one sweep, nine were listed as remaining -- and by the time
  * the inventory was written the count was ELEVEN call sites, because
  * InstanceDevicesPage was authored after the list and inherited the defect from its
  * neighbours. A guard is worth more than the eleven edits it protects. The walk is the
  * shared protoblast-source-guard scanner in judge mode; the accepted spellings are
  * deliberately only three, and the third one is the DECISION about bare record names:
  * a title that is nothing but the record's own name carries no translatable copy (an
- * instance/site/zone name is user data and is never translated -- see the plan's
- * localization rules), so it stays legal, while ANY literal mixed into a title is not.
+ * instance/site/zone name is user data and is never translated),
+ * so it stays legal, while ANY literal mixed into a title is not.
  */
 class PageTitleLocalizationTest {
 

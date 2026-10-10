@@ -28,7 +28,7 @@ import java.util.function.IntPredicate;
  * either way -- naming, the stale-network sweep, and the published-port correction a
  * membership change forces.
  *
- * AIDEV-NOTE: this exists because the instance lane arrived second (2026-08-08). Copying
+ * AIDEV-NOTE: this exists because the instance lane arrived second. Copying
  * the port correction would have been the worse bug: it is subtle (connecting a RUNNING
  * container re-allocates its ephemeral published host port, observed live) and it must
  * rewrite the SAME ledger row the deploy wrote, so two copies drifting apart would leave

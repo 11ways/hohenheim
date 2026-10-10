@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * them anchors the named block that soft navigation repopulates.
  *
  * AIDEV-NOTE: this suite used to assert the opposite -- that the account pages ride the
- * admin shell. zenit-auth reverted that deliberately (bff5174, U-07): the host frame
+ * admin shell. zenit-auth reverted that deliberately (bff5174): the host frame
  * zenit-cms answers with is "the shell of the first panel this viewer may open", so a
  * read-only viewer changing their password met an admin sidebar listing someone else's
  * resources, and a newly created account met it on the forced-rotation form. The frame

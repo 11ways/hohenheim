@@ -30,8 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * THE golden harness of the {@code /api/v1} live wire: every route test records its exchanges here and compares the
- * transcript, byte for byte, to the committed capture of the same requests answered by Hohenheim java-rewrite
- * 1446a91a.
+ * transcript, byte for byte, to the committed capture of the same requests.
  *
  * AIDEV-NOTE: a difference is a changed wire, never a file to refresh; the current transcript is written under
  * {@code build/api-v1-wire/} for review. Status, the Content-Type header literal and the body bytes are compared raw,

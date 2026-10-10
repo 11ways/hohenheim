@@ -61,7 +61,7 @@ class AuthProviderAdminTest extends HohenheimTestBase {
             .innerText()).isEqualTo("Access the admin panel");
 
         // Each provider type reads as its words with its description line, and in Dutch as Dutch words: the type's
-        // English display name printed in every language was the DD10b bug.
+        // English display name printed in every language was an earlier bug.
         var basic = page.locator("div[role='option'][data-value='hohenheim:basic']");
         assertThat(basic.innerText()).as("the Basic type's name").contains("HTTP Basic Auth");
         assertThat(basic.locator(".pl-select-subtitle").innerText()).as("the Basic type's description")

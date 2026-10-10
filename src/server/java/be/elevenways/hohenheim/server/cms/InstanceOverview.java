@@ -116,7 +116,7 @@ public final class InstanceOverview {
         if (protection != null) {
             main.add(protection);
         }
-        // The ports it answers on directly, only where it holds one: board App-Overview draws no card for an app
+        // The ports it answers on directly, only where it holds one: no card is drawn for an app
         // reached through its addresses alone, where "holds no port claim" was ledger words about nothing.
         List<InstanceEndpointView> ports = endpointsOf(instanceId, delegated);
         if (!ports.isEmpty()) {
@@ -126,7 +126,7 @@ public final class InstanceOverview {
                 new WidgetTree(List.of(new WidgetInstance(HohenheimWidgets.INSTANCE_ENDPOINTS.id(), Map.of())
                     .withData(ports)))));
         }
-        // Board App-Overview: memory, disk, CPU. Memory and CPU are the live stats hub's held samples, read while
+        // Memory, disk, CPU. Memory and CPU are the live stats hub's held samples, read while
         // someone watches the Metrics tab; never a stream opened by this render.
         List<UsageData> live = liveUsage(instance, InstanceStats.history(instanceId), locales, resolver);
         main.add(AppOverview.resources(List.of(
@@ -160,7 +160,7 @@ public final class InstanceOverview {
      * The Details card: the app's verdict as its Status with how old the stored status is, the kind, and (for the
      * operator) the host.
      *
-     * AIDEV-NOTE: the Status is the band's verdict (AppHealth), never the stored status token: D13f's shop read "Cannot
+     * AIDEV-NOTE: the Status is the band's verdict (AppHealth), never the stored status token: a shop once read "Cannot
      * start yet" in the band beside a red "Error" here, an older failed start the host's refusal had since overtaken.
      *
      * AIDEV-NOTE: the host is operator inventory, and BOTH halves leak it -- the name is the machine's identity and
@@ -194,7 +194,7 @@ public final class InstanceOverview {
         // deliberately: reading it costs nothing, while dialling the daemon per render is
         // the thing the disk gauge already refuses to do.
         facts.add(statusConfirmation(instance, locales, resolver));
-        // How long it has run (board App-Overview's "Running for 2 hours"): since its last start.
+        // How long it has run ("Running for 2 hours"): since its last start.
         Instant started = InstanceModel.STATUS_RUNNING.equals(instance.get(InstanceModel.STATUS))
             ? lastStartOf(instance.get(InstanceModel.ID)) : null;
         if (started != null) {
@@ -221,7 +221,7 @@ public final class InstanceOverview {
      * the last start Hohenheim made; no stored column or daemon call says more, and this page dials no daemon. A newer
      * failed start (a cause whose {@link HohenheimActivityAction#errorPhase()} is START) means the start this row
      * records is not what runs now, so the card names no start rather than an old one beside "could not be started"
-     * (D13b's shop read "Started 2 hours ago" under a minute-old failed start).
+     * (a shop once read "Started 2 hours ago" under a minute-old failed start).
      */
     static @Nullable Instant lastStartOf(int instanceId) {
         if (Models.get(ActivityModel.MODEL_ID) == null) {
@@ -245,7 +245,7 @@ public final class InstanceOverview {
     }
 
     /**
-     * One Database line per managed database the workload uses (board App-Overview: "shop (MySQL)"), with the
+     * One Database line per managed database the workload uses ("shop (MySQL)"), with the
      * database's own state when it does not serve ({@link DatabaseVerdict}), linked to its page for the operator.
      */
     private static @NonNull List<WidgetFact> databaseFacts(int instanceId, @NonNull String panelSlug,
@@ -278,7 +278,7 @@ public final class InstanceOverview {
     }
 
     /**
-     * The Backups line (board App-Overview: "last one 03:00, 212 MB"): its newest backup, failed or made, or that
+     * The Backups line ("last one 03:00, 212 MB"): its newest backup, failed or made, or that
      * none is made because it has no backup target.
      */
     private static @NonNull WidgetFact backupFact(@NonNull Row instance, @NonNull LocaleChain locales,
@@ -390,8 +390,8 @@ public final class InstanceOverview {
      * by contract and a percentage computed from zeros would be a fabricated reading.
      *
      * AIDEV-NOTE: "by contract" is a recorded DECISION, not an omission awaiting a fix --
-     * the reasoning lives on {@code ResourceLimits} and in docs/instance-tier-plan.md
-     * beside the runtime-limits gate clause. Read it before changing this branch.
+     * the reasoning lives on {@code ResourceLimits}.
+     * Read it before changing this branch.
      */
     private static @NonNull UsageData diskUsage(@NonNull Row instance, int serverId,
                                                 @NonNull LocaleChain locales,
@@ -504,7 +504,7 @@ public final class InstanceOverview {
     }
 
     /**
-     * What this delegate may do here (board Manage-App), in what the instance vocabulary says each held capability
+     * What this delegate may do here, in what the instance vocabulary says each held capability
      * allows, and what stays the operator's. It reads the same capability walk every tab and action is gated by, so
      * it cannot promise a door that refuses.
      *
@@ -525,7 +525,7 @@ public final class InstanceOverview {
         }
         // Each held capability in what it allows (its description, else its sentence label), leaving out one a
         // broader held capability implies: a tenant reads "start and stop it, its console, settings and removal",
-        // never the umbrella's verbs again as a raw list ("Console, power, configure, destroy", DEP10).
+        // never the umbrella's verbs again as a raw list ("Console, power, configure, destroy").
         List<String> held = new ArrayList<>();
         for (KnownCapability capability : holds) {
             if (holds.stream().anyMatch(other -> capability.impliedBy().contains(other.capability()))) {

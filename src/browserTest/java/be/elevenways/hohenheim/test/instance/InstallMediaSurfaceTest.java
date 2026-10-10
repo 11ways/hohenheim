@@ -71,7 +71,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * The interactive-install wave: an {@code install_media} VM is created EMPTY, an
+ * Interactive installs: an {@code install_media} VM is created EMPTY, an
  * operator-published ISO attaches as a cdrom device with the learned boot-order
  * policy, the attach is OPERATOR-ONLY and charges no quota, the tenant form neither
  * offers nor accepts the type, and a stopped instance captures into an UNAPPROVED

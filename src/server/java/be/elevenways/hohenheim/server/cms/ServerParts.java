@@ -156,13 +156,13 @@ public final class ServerParts {
     }
 
     /**
-     * Board Hosts: what each machine takes, what it holds and what it runs, with the fix for one that cannot run
+     * What each machine takes, what it holds and what it runs, with the fix for one that cannot run
      * apps yet in the band above. The public address, runtime, ssh target and the raw admission token stay searchable
      * or filterable behind the picker.
      */
     static TableSpec<Row> tableSpec() {
         return TableSpec.<Row>builder()
-            // The daemon and when it was last seen sit under the name, as the board's card line does.
+            // The daemon and when it was last seen sit under the name, as a card line does.
             .column(ColumnSpec.fromField(ServerModel.NAME).filterable().subtext("host_status").build())
             .column(ColumnSpec.fromField(ServerModel.PUBLIC_IPV4).hidden().build())
             .column(ColumnSpec.virtual(STATE_COLUMN, HohenheimMicrocopy.HOST_LIST.of("state_column"))
@@ -171,7 +171,7 @@ public final class ServerParts {
                 .renderer(HohenheimTemplateIds.CELL_HOST_STATUS).hidden().build())
             .column(ColumnSpec.virtual(MEMORY_COLUMN, HohenheimMicrocopy.HOST_LIST.of("memory_column"))
                 .renderer(HohenheimTemplateIds.CELL_HOST_MEMORY).build())
-            // What it runs sits under who may run here, as the board's card ends; a sixth column pushed the table
+            // What it runs sits under who may run here, as a card ends; a sixth column pushed the table
             // under the pinned row actions at 1440px.
             .column(ColumnSpec.fromField(ServerModel.POSTURE).filterable().subtext(RUNS_COLUMN).build())
             .column(ColumnSpec.virtual(RUNS_COLUMN, HohenheimMicrocopy.HOST_LIST.of("runs_column")).hidden().build())

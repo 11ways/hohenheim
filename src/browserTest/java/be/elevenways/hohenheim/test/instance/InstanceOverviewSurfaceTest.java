@@ -16,8 +16,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The record overview's front door in a REAL browser: a widget surface whose gauges read the stored evidence afresh on
  * every load, with no Refresh of its own.
  *
- * AIDEV-NOTE: 3ad0315d removed the overview's Refresh (a no-op operation; "loading the overview reads the same stored
- * evidence afresh", the board has no such button), so the round trip under test is a LOAD, not a surface action; the
+ * AIDEV-NOTE: the overview has no Refresh (a no-op operation; "loading the overview reads the same stored
+ * evidence afresh"), so the round trip under test is a LOAD, not a surface action; the
  * surface-action tree swap itself is zenit-cms's SurfaceActionBrowserTest. The proof is still a value that CHANGED
  * between two renders: the disk observation is stamped between the first load and the reload.
  */
@@ -48,7 +48,7 @@ class InstanceOverviewSurfaceTest extends HohenheimTestBase {
 
         try {
             // 1. The front door renders as a widget surface, and offers no Refresh: loading it is what reads the
-            //    stored evidence (3ad0315d).
+            //    stored evidence.
             navigateToApp("/admin/instances/" + id + "/page/overview");
             waitForHydration();
 

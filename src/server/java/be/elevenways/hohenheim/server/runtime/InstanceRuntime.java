@@ -6,7 +6,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 /**
  * THE driver seam of the instance tier: five single-shot operations, typed outcomes,
  * NO streaming. Streaming (stats, follow-logs, attach, TTY exec) is a SECOND transport
- * contract (Phase 6) -- it cannot be patched into the single-shot Docker transport and
+ * contract -- it cannot be patched into the single-shot Docker transport and
  * must never be bolted onto this interface method by method.
  *
  * AIDEV-NOTE: this seam exists so the next driver (Incus: HTTPS + client certs, a

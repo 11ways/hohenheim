@@ -12,7 +12,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  *
  * AIDEV-NOTE: a record stores a SUBSET of these through its {@link OperationLifecycle}, which also maps the one stored
  * spelling that differs (stack deployments store "success" for {@link #SUCCEEDED}). Never compare a stored status with
- * a token here directly: ask the record's lifecycle (DD8).
+ * a token here directly: ask the record's lifecycle.
  *
  * @author Jelle De Loecker
  * @since  0.10.0

@@ -28,7 +28,7 @@ import java.util.Set;
  * {@link InstanceRootDiskQuota} into the same owner bucket, and extra NICs alongside
  * it. Still genuinely out of scope, per owner: cpu and ports.
  *
- * THE MEMORY DECISION (2026-08-08), and it is the one this dimension was deferred on
+ * THE MEMORY DECISION, and it is the one this dimension was deferred on
  * once: an owner is charged for EVERY live workload, including one that declares no
  * {@code memory_limit_mb}, at its kind's declared footprint
  * ({@code InstanceKindHandler.defaultFootprintMb}). The alternative -- charge only

@@ -33,7 +33,7 @@ import java.util.regex.Pattern;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The Addresses list reads each address the way the Domains board does: the app it serves, whether the name points
+ * The Addresses list reads each address by what an operator asks of it: the app it serves, whether the name points
  * at this proxy, and what HTTPS gives it, from the same per-name rule the app overview and the app's verdict read.
  *
  * @author Jelle De Loecker
@@ -77,7 +77,7 @@ class DomainsListJourneyTest extends HohenheimTestBase {
 
             // 1. Points here: a name resolving to this host's declared address says yes; one resolving elsewhere says
             //    no and names where it points; a wildcard pattern (a catch-all) answers through one name it catches,
-            //    and a regex, which no name stands for, says it is per name (DEP10: the catch-all's cell was empty).
+            //    and a regex, which no name stands for, says it is per name (a catch-all's cell used to be empty).
             StateLineCell yes = DomainParts.reachCell(hereRow, HostnameReach.LOOKUP_WAIT_MS);
             assertThat(yes).as("step 1: an exact name gets an answer").isNotNull();
             assertThat(yes.state()).as("step 1: the name points here").isEqualTo("points_here");
@@ -147,7 +147,7 @@ class DomainsListJourneyTest extends HohenheimTestBase {
                 .contains("data-state-link").contains("Covered " + suffix);
 
             // 5. The Domains area heads its tabs with its own name, the page's one heading (the cluster landing draws
-            //    no member h1 since D13-FW), and its fourth tab reads in the board's words.
+            //    no member h1), and its fourth tab reads Released addresses.
             assertThat(html).as("step 5: the area's name above the tabs").contains("data-cms-cluster-title")
                 .containsPattern("data-cms-cluster-title[^>]*>(<!--[^>]*-->)?<pb-microcopy[^>]*>Domains</pb-microcopy>");
             assertThat(html.split("<h1", -1).length - 1).as("step 5: and it is the page's one heading").isEqualTo(1);
@@ -157,9 +157,9 @@ class DomainsListJourneyTest extends HohenheimTestBase {
                 HohenheimSlugs.RELEASED_CLAIMS).stream().map(slug -> strip.indexOf("href=\"/admin/" + slug + "\""))
                     .toList();
             assertThat(tabs).as("step 5: every member is a tab").doesNotContain(-1);
-            assertThat(tabs).as("step 5: in the board's order: Addresses, Certificates, DNS zones, Released addresses")
+            assertThat(tabs).as("step 5: in order: Addresses, Certificates, DNS zones, Released addresses")
                 .isSorted();
-            assertThat(html).as("step 5: the header button reads as the board's")
+            assertThat(html).as("step 5: the header button reads Add address")
                 .containsPattern(Pattern.compile("data-cms-create[^>]*>.{0,1000}?Add address", Pattern.DOTALL));
 
             // 6. A certificate's names read as a list, a space after each comma, though stored comma-joined.
@@ -238,7 +238,7 @@ class DomainsListJourneyTest extends HohenheimTestBase {
                 .contains("check_address_reach");
 
             // 11. With no public address declared, a name resolving to an address this machine holds points here
-            //     (DEP10: Starfleet declares none, holds its public address on eth0, and every name read Unknown).
+            //     (Starfleet declares none, holds its public address on eth0, and every name read Unknown).
             String held = UpdateSystemIpAddresses.ensureDiscovered().stream()
                 .map(address -> address.contains("%") ? address.substring(0, address.indexOf('%')) : address)
                 .filter(address -> !address.startsWith("127.") && !address.equals("::1")

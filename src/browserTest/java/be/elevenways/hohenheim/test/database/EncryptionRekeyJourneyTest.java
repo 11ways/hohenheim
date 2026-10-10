@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The Phase 2 parallel-gate clause "rotate and re-encrypt", wired to hohenheim's REAL encrypted
+ * The "rotate and re-encrypt" guarantee, wired to hohenheim's REAL encrypted
  * columns: a webhook URL, a TSIG secret and a git access token written under one key must all
  * end up under the next one, and the old key may only be retired once a real walk of this
  * database proves nothing still needs it.

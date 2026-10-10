@@ -476,7 +476,7 @@ public final class StackInstances {
     }
 
     /**
-     * The documented migration of pre-lowering stacks (instance-tier-plan Phase 7, binding
+     * The documented migration of pre-lowering stacks (binding
      * property "no data migration may lose a running workload"): every ENABLED stack whose
      * services own no instances yet is re-deployed under the contract, onto the SAME
      * stack-scoped volumes, and its pre-lowering containers are retired one by one -- each

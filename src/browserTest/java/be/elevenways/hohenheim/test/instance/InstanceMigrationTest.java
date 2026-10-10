@@ -290,7 +290,7 @@ class InstanceMigrationTest {
             assertThat(daemonOf(alphaId).containsKey(handle))
                 .as("step 1: source copy present").isTrue();
             assertThat(daemonOf(betaId).containsKey(handle))
-                .as("step 1: destination copy present -- the split this wave must kill")
+                .as("step 1: destination copy present -- the split migration must never leave")
                 .isTrue();
 
             // 2. Boot recovery settles it: the record's host still holds the data,

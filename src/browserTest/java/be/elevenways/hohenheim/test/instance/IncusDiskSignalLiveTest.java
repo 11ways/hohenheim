@@ -132,8 +132,8 @@ class IncusDiskSignalLiveTest {
                     .as("step 4: the observed usage grew by roughly the 1800 MB written")
                     .isGreaterThan(first.usedBytes() + 1_500L * 1024 * 1024);
 
-                // 5. And the growth trips the attention item -- the plan's "actual disk
-                //    growth trips quota/attention" clause, end to end. At ~90% of the
+                // 5. And the growth trips the attention item -- "actual disk
+                //    growth trips quota/attention", end to end. At ~90% of the
                 //    ceiling it is a WARNING: worth watching, not yet broken.
                 assertThat(diskItems())
                     .as("step 5: the near-full instance is now the ONE item raised, as a"

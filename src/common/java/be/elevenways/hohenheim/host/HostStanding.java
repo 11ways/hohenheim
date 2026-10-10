@@ -14,14 +14,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * attention band word, never the stored admission token alone.
  *
  * AIDEV-NOTE: an ADMITTED host the gate still refuses (a stale memory reading, a posture, a check that no longer
- * passes) is {@link #REFUSING}, never {@link #TAKING}: DEP9 found Starfleet's local host reading "Takes new apps"
+ * passes) is {@link #REFUSING}, never {@link #TAKING}: Starfleet's local host once read "Takes new apps"
  * while placement refused it. This enum is the ONE declaration of the host's state badge: each stored
  * {@link ServerModel#ADMISSION} value is derived from the standing that carries its token, so a stored "blocked" and
- * a waiting host can never wear two colours (DD3).
+ * a waiting host can never wear two colours.
  *
  * AIDEV-NOTE: the host attention item's title is a fact on the member, so a never-admitted host and an admitted one
  * the gate refuses are told apart in one place: "local cannot run apps yet" reads oddly for a host already running
- * apps (D9), which is why an admitted standing says "takes no new apps".
+ * apps, which is why an admitted standing says "takes no new apps".
  *
  * @author Jelle De Loecker
  * @since  0.9.0

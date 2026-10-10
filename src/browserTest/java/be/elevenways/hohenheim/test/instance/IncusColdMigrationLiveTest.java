@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * The Phase 8 cross-host gate clauses, live on TWO real Incus hosts (daystrom +
+ * The cross-host migration guarantees, live on TWO real Incus hosts (daystrom +
  * nightstrom): a VM running on the source with data written into it ends up running
  * on the destination with that data intact, the source holds nothing, the record
  * names the new host, isolation is enforced in the DESTINATION KERNEL (nft, not the
@@ -253,7 +253,7 @@ class IncusColdMigrationLiveTest {
                     throw new RuntimeException(e);
                 }
                 // Printed on purpose: the destination-side KERNEL ruleset is the
-                // artifact the gate clause asks to see, not only to assert on.
+                // artifact an operator wants to see, not only to assert on.
                 System.out.println("DESTINATION KERNEL (nft list table bridge incus on "
                     + HOST_B + "), live tap " + tap + ":\n" + nft);
                 assertThat(nft)
@@ -317,7 +317,7 @@ class IncusColdMigrationLiveTest {
 
                 // 11. KILLED CONTROLLER, live: the crash lands after the destination
                 //     import, leaving copies on BOTH real daemons and the record
-                //     mid-migration -- exactly the split this wave must kill. The kill
+                //     mid-migration -- exactly the split migration must never leave. The kill
                 //     is KilledController's Error: an unchecked exception is a failure
                 //     the migration's own net settles in-process, never a dead process.
                 int rid = restoredId;

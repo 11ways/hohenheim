@@ -240,7 +240,7 @@ public final class InstanceParts {
     private static ResourceForm.@NonNull Builder<Row> form(@NonNull FormSpec spec) {
         return ResourceForm.<Row>of(spec)
             .landingTab(RecordOverview.SLUG)
-            // The board's word for the form tab: what the app is set to, beside what it is doing (the overview).
+            // The form tab's label says what the app is set to, beside what it is doing (the overview).
             .tabLabel(HohenheimMicrocopy.APP_OVERVIEW.of("configuration"))
             .lead((instance, access) -> instance.get(InstanceModel.ID) == null ? null
                 : new RecordLead(AppOverview.instanceLead(instance, access.conduit()), null))
@@ -272,7 +272,7 @@ public final class InstanceParts {
     /**
      * Both twins' row writes: the update with its resize, the verified destroy as the delete, the operator's create.
      *
-     * AIDEV-NOTE: no delete authority on purpose (D7f). The destroy operation offers its Delete DEAD, with the gate's
+     * AIDEV-NOTE: no delete authority on purpose. The destroy operation offers its Delete DEAD, with the gate's
      * own "instance_not_permitted", to a reader without {@code destroy}, so the button, a panel POST and the API's
      * delete (which runs through the admin entry) answer with one decision and one text; a hiding authority answered
      * the API with a bare 403 instead (InstanceApiTest).

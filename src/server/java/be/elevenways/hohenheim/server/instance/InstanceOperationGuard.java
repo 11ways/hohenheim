@@ -175,7 +175,7 @@ final class InstanceOperationGuard {
      *
      * AIDEV-NOTE: the ONE way a workload reaches ERROR with a cause, and {@link #stamp} refuses ERROR without one:
      * the status alone told a failed start, a failed restore and a crash apart for nobody, so the dashboard claimed a
-     * crash for every one of them (D10b).
+     * crash for every one of them.
      *
      * @param cause  what happened, a verb whose {@link HohenheimActivityAction#errorCause()} is a cause
      * @param detail the row's detail as the cause's fact declares it (an exit code, a failure's message), or null

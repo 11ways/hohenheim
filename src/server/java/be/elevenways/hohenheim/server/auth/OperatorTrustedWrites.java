@@ -35,7 +35,7 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * AIDEV-NOTE: an operator-owned site (TenantUpstreams), git provider (SourceOwnership.providerGuard) and instance
  * source (SourceOwnership.localSourcesAllowed) reach any address or a controller path, so their target is a trusted
  * fetch. A delegated admin.access holder passes TenantWrites as the operator, so the gate refuses them that target on
- * an operator-owned record (decided 2026-10-02); every other column stays theirs. Declared system work passes; work
+ * an operator-owned record; every other column stays theirs. Declared system work passes; work
  * with no identity is refused, like TenantWrites. A record nobody holds manage on is operator-owned; a create reads
  * the declared creation owner before its grant exists, and an unreadable grant set counts as operator-owned.
  *

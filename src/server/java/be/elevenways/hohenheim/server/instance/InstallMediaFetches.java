@@ -43,7 +43,7 @@ import java.util.List;
  * its creation a row can only be a corpse. A job that somehow outlived either still writes its real
  * ending afterwards, which wins.
  *
- * AIDEV-NOTE: re-assessed 2026-09-24 (wave 3): a fetch row stamped with {@code ControllerIdentity} and a
+ * AIDEV-NOTE: a fetch row stamped with {@code ControllerIdentity} and a
  * boot sweep of "this controller's own stale fetches" was considered and REJECTED. The identity is one
  * token per CONTROL-PLANE DATABASE, shared by every process over it (several processes over one
  * database is a supported deployment, HohenheimRoles splitting the roles), so it cannot tell this

@@ -85,7 +85,7 @@ class SecurityEventTypeLabelsTest {
     }
 
     /**
-     * A ban's reason is what tipped it in words: the board's "Tried 40 names this server does not serve", never the
+     * A ban's reason is what tipped it in words: "Tried 40 names this server does not serve", never the
      * score only the scorer can read; a reason stored before that reads as its event instead.
      */
     @Test
@@ -95,7 +95,7 @@ class SecurityEventTypeLabelsTest {
         // 1. A domain-miss sweep's cause counts the names, singular and plural, in both locales.
         assertThat(HohenheimSecurity.causeOf(SecurityEventTypes.DOMAIN_MISS, 40)
             .resolve(LocaleChain.ofTags("en"), catalogs))
-            .as("step 1: the board's sentence").isEqualTo("Tried 40 names this server does not serve");
+            .as("step 1: the reason as a sentence").isEqualTo("Tried 40 names this server does not serve");
         assertThat(HohenheimSecurity.causeOf(SecurityEventTypes.DOMAIN_MISS, 1)
             .resolve(LocaleChain.ofTags("en"), catalogs))
             .as("step 1: one name reads singular").isEqualTo("Tried 1 name this server does not serve");
@@ -108,7 +108,7 @@ class SecurityEventTypeLabelsTest {
             .as("step 2: an undescribed type").isEqualTo("Set off 5 security events: ws.something_new");
 
         // 3. The legacy score line stored before this reads as its event in the current style, without the count it
-        //    never recorded (DEP10 still read "Went over the limit for: Unmatched domain request"); any other reason is
+        //    never recorded (it still read "Went over the limit for: Unmatched domain request"); any other reason is
         //    left alone, and nothing rewrites the stored row.
         Microcopy legacy = HohenheimSecurity.legacyCause("score 26 over threshold", SecurityEventTypes.DOMAIN_MISS);
         assertThat(legacy).as("step 3: the legacy line is recognised").isNotNull();

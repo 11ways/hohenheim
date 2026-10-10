@@ -34,8 +34,8 @@ import java.util.function.UnaryOperator;
  * and migration windows, the application's checkout + converge, rollback and drain, and the
  * status reconciler (which only ever takes an IDLE record and skips a busy one).
  *
- * AIDEV-NOTE: the claim is core's {@link ClaimedRows#hold} on {@code instances.claim_fence}, decided 2026-10-02
- * (module-fit item 35), replacing the 2026-09-23 pair of an in-process ReentrantLock and the HOST lease's fence on the
+ * AIDEV-NOTE: the claim is core's {@link ClaimedRows#hold} on {@code instances.claim_fence},
+ * replacing the earlier pair of an in-process ReentrantLock and the HOST lease's fence on the
  * row. A client-keyed operation now declares Commands' outside-transaction mode and holds this SAME key; ClaimedRows
  * borrows that command's lease instead of acquiring another one. The hold is taken OUTSIDE any transaction and
  * heartbeats for as long as the operation runs, so it excludes this controller's other threads AND every rival

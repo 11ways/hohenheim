@@ -73,8 +73,8 @@ public record BackupManifest(int version,
     /** The first format whose settings read a git source's absent auto_deploy as on; older ones meant off. */
     public static final int VERSION_AUTO_DEPLOY_ON = 4;
 
-    // AIDEV-NOTE: the bump to 4 carries no new field, only a new MEANING of silence (DD11h made a git source
-    // without a stored auto_deploy deploy on push; before, it read off). A restore of an older manifest therefore
+    // AIDEV-NOTE: the bump to 4 carries no new field, only a new MEANING of silence (a git source
+    // without a stored auto_deploy now deploys on push; before, it read off). A restore of an older manifest therefore
     // stores the off it meant (restoredSettings), the archive-side twin of M011's keepStoredSourcesManual; the
     // version, never the capture date, says which reading applies.
 

@@ -34,7 +34,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Screenshot generator for the admin-UI wave: walks every page the wave touched, in
+ * Screenshot generator for the admin UI: walks every admin page, in
  * light AND dark, over a realistic fixture fleet, and writes the captures where a
  * human can review them.
  *

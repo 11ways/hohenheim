@@ -50,7 +50,7 @@ import java.util.Map;
  * exactly as the create-from-template lane does. An address that needs no workload (a redirect, an existing service,
  * static files, TLS passthrough) has no subject; {@link #PUT_ADDRESS_ONLINE} asks the site form's upstream kind and
  * settings. Both end in the same Website and Certificate steps (PutOnlineHandlers), so the going-live half is one
- * implementation. Both run in the background: their run page is the board's "Going live" step.
+ * implementation. Both run in the background: their run page is the "Going live" step.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -211,7 +211,7 @@ public final class PutOnline {
         return info != null && info.offeredAsApp();
     }
 
-    /** What a template's HTTPS step shows of Where and Options (board Online-3's summary). */
+    /** What a template's HTTPS step shows of Where and Options in its summary. */
     private static @NonNull List<SummaryLine> templateSummary(@NonNull StepAnswers answers) {
         List<SummaryLine> lines = new ArrayList<>();
         String name = answers.text(InstanceTemplateOperations.NAME.getName());

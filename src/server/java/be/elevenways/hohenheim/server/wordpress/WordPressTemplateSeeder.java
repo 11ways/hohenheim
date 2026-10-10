@@ -82,8 +82,8 @@ public final class WordPressTemplateSeeder implements Seeder {
     }
 
     /**
-     * The ledger key one member's template is seeded under: the original wave's shared key,
-     * or a key of its own for a member added after that wave had already run somewhere.
+     * The ledger key one member's template is seeded under: the original run's shared key,
+     * or a key of its own for a member added after that run had already happened somewhere.
      */
     public static @NonNull String ledgerKeyOf(@NonNull WordPressPhp php) {
         return php.original() ? LEDGER_KEY : LEDGER_KEY + ".php" + php.version();

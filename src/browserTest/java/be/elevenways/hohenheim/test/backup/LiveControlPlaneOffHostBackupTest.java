@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Tag;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The Phase 2 parallel-gate clause a local directory could never meet: the control-plane
+ * The guarantee a local directory could never meet: the control-plane
  * recovery archive -- this controller's own database AND the field-encryption keyring -- lands
  * on a GENUINELY DIFFERENT machine, and a controller that has lost both halves gets them back
  * from there with the encrypted values still decrypting.

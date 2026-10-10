@@ -22,7 +22,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The Configuration tab of an app without a workload (board App-Config-Address): where requests go first, then how
+ * The Configuration tab of an app without a workload: where requests go first, then how
  * the connection behaves, then the rarely changed knobs folded; the static and redirect kinds in the same shape.
  */
 class AppConfigAddressJourneyTest extends HohenheimTestBase {
@@ -109,7 +109,7 @@ class AppConfigAddressJourneyTest extends HohenheimTestBase {
             sparse.put("forward_scheme", "http");
             sparse.put("forward_host", "10.0.0.13");
             sparse.put("forward_port", 3001);
-            Row older = row(cleanup, sparse, "w7b-config-sparse");
+            Row older = row(cleanup, sparse, "appcfg-sparse");
             navigateToApp("/admin/sites/" + older.get(SiteModel.ID));
             waitForHydration();
             String toggle = "pl-switch[name='settings.websocket_upgrade'] button[role='switch']";
@@ -157,7 +157,7 @@ class AppConfigAddressJourneyTest extends HohenheimTestBase {
     }
 
     private static Row row(List<Runnable> cleanup, Map<String, Object> settings) {
-        return row(cleanup, settings, "w7b-config-proxy");
+        return row(cleanup, settings, "appcfg-proxy");
     }
 
     private static Row row(List<Runnable> cleanup, Map<String, Object> settings, String slug) {

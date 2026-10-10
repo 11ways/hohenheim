@@ -40,7 +40,7 @@ import java.util.Map;
  * against v7.3.0 and main, 2026-08-05), and no released version fixes the race, so this
  * is a permanent mechanism and not a version-gated bridge.
  *
- * AIDEV-NOTE: decided 2026-08-05 -- a workload whose isolation cannot be restored is
+ * AIDEV-NOTE: a workload whose isolation cannot be restored is
  * STOPPED, and that is deliberate even though stopping a tenant's VM is a real
  * availability decision. The repair runs FIRST, so a transient daemon race costs no
  * availability at all; only a workload the daemon REFUSES to re-isolate is stopped. What

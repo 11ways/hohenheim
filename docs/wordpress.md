@@ -25,10 +25,10 @@ vocabulary; the seeder derives the templates from it and nothing else spells an 
 | WordPress (PHP 7.4) | `wordpress:php7.4-apache` | FROZEN at WordPress 6.1.1 (2022-11-16); import-only |
 
 The upstream matrix (docker-library/wordpress `versions.json`) read PHP 8.2, 8.3, 8.4 and
-8.5 on 2026-09-23. The 8.1 and 7.4 templates were the ORIGINAL seed wave, ledgered under
+8.5 on 2026-09-23. The 8.1 and 7.4 templates were the ORIGINAL seed batch, ledgered under
 `hohenheim.wordpress-templates`; every later member seeds under a ledger key of its own
 (`hohenheim.wordpress-templates.php<version>`), so an installation that already ran the
-first wave still gains the new templates at its next boot. A template an operator already
+first batch still gains the new templates at its next boot. A template an operator already
 created under the same name is left alone, and an existing template or instance keeps the
 tag it was stored with: nothing re-tags a running site.
 
@@ -63,7 +63,7 @@ reads, so there is no mapping layer. The database is named
 `<instance-slug>-<prefix-slug>` (`anymedia-wordpress-db`), inside the funnel's 32-character
 label ceiling.
 
-Since 2026-09-02 the allocated database lands on the host's SHARED MySQL engine by
+The allocated database lands on the host's SHARED MySQL engine by
 default: one engine process per host holds every template-declared MySQL database as a
 logical database of its own, with its own user and a grant on that database only. The
 engine is created on demand by the same funnel, so nothing about the recipe changes. The

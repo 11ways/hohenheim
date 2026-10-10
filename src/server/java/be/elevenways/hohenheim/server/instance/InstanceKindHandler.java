@@ -46,7 +46,7 @@ public interface InstanceKindHandler extends InstanceKindInfo {
 
     /**
      * The boundary this kind's workloads put between the guest and the host kernel -- the
-     * SECOND axis of the plan's workload declaration, paired against the host's posture by
+     * SECOND axis of a workload's declaration, paired against the host's posture by
      * {@code HostAdmission.requirePostureSatisfies}.
      *
      * AIDEV-NOTE: it lives HERE, beside {@link #tenantAuthored()}, and not on the common
@@ -100,7 +100,7 @@ public interface InstanceKindHandler extends InstanceKindInfo {
      * Placement only offers matching hosts, and a mismatched deploy refuses at client
      * construction -- a Docker-only kind can never land on an Incus daemon or vice versa.
      *
-     * AIDEV-NOTE: a SET since the workspace kind landed (phase-0 design section 4.1), which
+     * AIDEV-NOTE: a SET since the workspace kind landed, which
      * runs on both runtimes at the operator's choice. The dependent host picker derives its
      * rules from this same declaration, so adding a runtime to a kind stays ONE edit -- the
      * reason it is a declaration here and not a table in the picker.

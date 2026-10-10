@@ -101,7 +101,7 @@ class CertificateDateColumnTest extends HohenheimTestBase {
             .as("step 3: the expiry column header offers its own sort link")
             .contains("sort=expires_on");
 
-        // 4. The default order is "what expires next" (c43fb56e): expiry ascending, so the
+        // 4. The default order is "what expires next": expiry ascending, so the
         //    soonest-expiring certificate leads although it was created first.
         assertThat(list.body().indexOf(EARLY_NAME))
             .as("step 4: the default sort leads with the soonest-expiring certificate")

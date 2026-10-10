@@ -55,21 +55,21 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The two landing dashboards answer every audience over HTTP exactly as they did as legacy dashboard peers.
  *
  * AIDEV-NOTE: {@code /panel-surfaces/landing-dashboards.txt} was captured once with AdminDashboard and ManageDashboard
- * extending the legacy DashboardPanelPeer (41691aa9^), the commit's only server change reverted locally; a failing
+ * extending the legacy DashboardPanelPeer; a failing
  * comparison is a changed landing surface, never a file to refresh. A missing resource writes the live set to
  * {@code build/panel-surfaces/} and fails, so recording is a deliberate copy. Per case it holds the status, the
  * redirect, the title, the dashboard nav links and the widget surface, with markup ids, digits, UUIDs and CSRF values
  * masked and every tag's attributes in name order (HTML attribute order means nothing): the data under the widgets
  * is not this conversion's subject. The declared differences are the surface address (a legacy peer answered to its
- * slug address, a PanelDashboard only to its id token: P07, no slug alias) and the /manage landing's surface, which
- * W9b redrew on purpose ({@link #redrawn}).
+ * slug address, a PanelDashboard only to its id token, no slug alias) and the /manage landing's surface, which
+ * was redrawn on purpose ({@link #redrawn}).
  *
  * AIDEV-NOTE: the fixture decides the operator's checklist and tiles. Its only site has no address and so serves
  * nobody: "Put your first app online" stays TODO with its Open link and the Apps tile reads "1 with a problem". Its
  * never-checked host makes the Hosts tile "1 waiting". The open admission and backups steps present the attention
  * items stating their stage, so the attention band, holding nothing else, is not drawn under the open checklist.
  *
- * AIDEV-NOTE: the attention widget reads JVM-global inputs other classes of a lane change (decided 2026-10-03: pin
+ * AIDEV-NOTE: the attention widget reads JVM-global inputs other classes of a lane change (so: pin
  * every input the test does not own, never compare host state). {@link #pinAttentionInputs} sets the settings and
  * servers and restores them after (the DNS zones follow this class's datasource by themselves); Docker health and
  * the Spamservice manager change only in a real ServerMain boot, which runs solo, so they are asserted untouched.
@@ -230,15 +230,15 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
     }
 
     /**
-     * The declared difference: the /manage landing's widget surface was redrawn on purpose (plan section 23, W9b:
-     * the tenant's apps band, their verdicts in the attention band, the usage card), so its surface line is not
+     * The declared difference: the /manage landing's widget surface was redrawn on purpose
+     * (the tenant's apps band, their verdicts in the attention band, the usage card), so its surface line is not
      * compared; its status, title and nav still are. ManagePanelJourneyTest proves what the new surface shows.
      */
     private static @NonNull List<String> redrawn(@NonNull List<String> cases) {
         List<String> declared = new ArrayList<>(cases.size());
         for (String text : cases) {
             boolean manageLanding = MANAGE_LANDING.matcher(text).lookingAt();
-            declared.add(manageLanding ? SURFACE_LINE.matcher(text).replaceAll("  surface redrawn by W9b") : text);
+            declared.add(manageLanding ? SURFACE_LINE.matcher(text).replaceAll("  surface redrawn on purpose") : text);
         }
         return declared;
     }

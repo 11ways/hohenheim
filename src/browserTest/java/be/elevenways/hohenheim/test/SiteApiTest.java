@@ -319,8 +319,8 @@ class SiteApiTest extends HohenheimTestBase {
 
     /**
      * The site serving the address a delete arrives at refuses it, on this wire exactly as before the delete became
-     * an operation: the 422 envelope of a form-level violation carrying the lockout sentence (stage 4 contract 10,
-     * orchestrator decision 2026-10-02 ~23:55: the operation's availability, mapped by SiteApi).
+     * an operation: the 422 envelope of a form-level violation carrying the lockout sentence (the
+     * operation's availability, mapped by SiteApi).
      */
     @Test
     void aSiteServingTheArrivalAddressRefusesItsDeleteAsBefore() throws Exception {
@@ -363,7 +363,7 @@ class SiteApiTest extends HohenheimTestBase {
         assertThat(tenant.statusCode()).as("step 1: refused as a typed violation").isEqualTo(422);
         assertThat(codeOf(tenant.body())).as("step 1: the neutral sentence")
             .isEqualTo("hostname_unavailable");
-        assertThat(tenant.body()).as("step 1: byte-identical to before-module-fit 1446a91a's live API response")
+        assertThat(tenant.body()).as("step 1: byte-identical to the recorded live API response")
             .isEqualTo("{\"status\":422,\"code\":\"hostname_unavailable\","
                 + "\"message\":\"This hostname is not available on this installation\",\"field\":\"hostname\","
                 + "\"violations\":[{\"code\":\"hostname_unavailable\","

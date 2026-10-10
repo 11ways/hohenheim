@@ -15,7 +15,7 @@ import java.util.Locale;
  *
  * AIDEV-NOTE: the line is the original's, so parsers written for the Node Hohenheim keep working:
  * {@code host: ip - - [dd/MMM/yyyy:HH:mm:ss Z] "METHOD path PROTO" status size "referer" "ua"}. The rewrite had
- * moved the vhost into the referer slot and dropped the Referer (node-original-parity-inventory clause 20).
+ * moved the vhost into the referer slot and dropped the Referer.
  *
  * @author  Jelle De Loecker
  * @since   0.1.0

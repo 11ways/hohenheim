@@ -173,7 +173,7 @@ public final class CertificateOperations {
         CertificateOperationHandlers.init();
     }
 
-    /** @return the certificate list's header action, "Get a certificate" beside the upload (board Certificates) */
+    /** @return the certificate list's header action, "Get a certificate" beside the upload */
     static @NonNull PanelAction<Row> requestAction() {
         init();
         return PanelAction.<Row, Integer>places(REQUEST, ActionPlacement.HEADER, CertificateOperations::opened)

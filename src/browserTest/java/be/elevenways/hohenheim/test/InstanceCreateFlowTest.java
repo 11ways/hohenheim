@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * The instance CREATE journey the admin-UI wave promises: choice cards decide the kind,
+ * The instance CREATE journey of the admin UI: choice cards decide the kind,
  * the host and runtime-image picks NARROW from it client-side, the submit persists the
  * matching record -- and the server re-narrows a hand-posted host that the picker would
  * never have offered (the falsification of the dependent-pick guard).
@@ -311,7 +311,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         // 3. Folded is not absent: pl-collapsible keeps its content MOUNTED, so a folded
         //    input is in the DOM under its own name -- the whole difference between a
         //    disclosure and hiding a field, which would make it unwritable.
-        // (A workspace offers no preview fields since D2: previews only accept applications.)
+        // (A workspace offers no preview fields: previews only accept applications.)
         for (String folded : List.of("memory_limit_mb", "home_quota_mb", "build_timeout")) {
             assertThat(page.locator(SETTINGS + " pl-card[data-section] [name='settings."
                 + folded + "']").count())
@@ -361,8 +361,8 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
     /** A source stored before new sources deployed on push keeps auto-deploy off through an unrelated edit-save. */
     @Test
     void aStoredSourceKeepsAutoDeployOffThroughAnEditSave() {
-        // 1. A git source as M011 leaves one stored before DD11h: auto_deploy an explicit false (proven on the
-        //    legacy shape by GitSourceAutoDeployMigrationTest).
+        // 1. A git source as M011 left one stored before auto-deploy defaulted on: auto_deploy an explicit
+        //    false (proven on the legacy shape by GitSourceAutoDeployMigrationTest).
         Map<String, Object> stored = new LinkedHashMap<>();
         stored.put(GitSourceSchema.REPOSITORY_URL, "https://git.example.test/acme/cf-stored-source.git");
         stored.put(GitSourceSchema.BRANCH, "main");

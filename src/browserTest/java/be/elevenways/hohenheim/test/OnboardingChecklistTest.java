@@ -107,9 +107,9 @@ class OnboardingChecklistTest {
                 assertThat(putOnlineStep().state())
                     .as("step 3: a serving website completes the put-online step").isEqualTo(OnboardingState.DONE);
                 assertThat(OnboardingCollector.retired())
-                    .as("step 3: and retires the whole checklist, other steps open or not (board Main)").isTrue();
+                    .as("step 3: and retires the whole checklist, other steps open or not").isTrue();
 
-                // 4. Switched off, it serves nobody again, and the checklist says so (D7f: the step reflects an app
+                // 4. Switched off, it serves nobody again, and the checklist says so (the step reflects an app
                 //    that serves or runs, never one that once existed).
                 site.set(SiteModel.ENABLED, false);
                 sites.save(site);

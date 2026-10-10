@@ -25,7 +25,7 @@ import java.util.Objects;
  * The second phase of enrolling a host: minting its client identities, pinning its Incus certificate
  * and spending a one-use trust token, run AFTER the host row is committed and outside any transaction.
  *
- * AIDEV-NOTE: this used to run inside the CMS save transaction (review finding, 2026-09). A late
+ * AIDEV-NOTE: this used to run inside the CMS save transaction. A late
  * failure then rolled back the row and the freshly minted client key while the remote daemon kept
  * trusting that certificate and the one-use token was already spent -- an orphaned trust entry and a
  * lost token, reported as a plain form error -- and the SQLite write lock was held across a TLS scan

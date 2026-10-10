@@ -16,8 +16,8 @@ import static org.assertj.core.api.Assertions.*;
  * upstream in the selector swaps the sub-form client-side (the variants are pre-translated
  * server-side, no round trip).
  *
- * AIDEV-NOTE: renamed from SiteTypeTest with the upstream vocabulary (phase-0 design
- * section 3). The workload half of the old site_type set (docker, node, java, command,
+ * AIDEV-NOTE: renamed from SiteTypeTest with the upstream vocabulary.
+ * The workload half of the old site_type set (docker, node, java, command,
  * alchemy) is gone: those questions are answered by the INSTANCE kind now, so this test
  * walks the six upstreams a hostname can resolve to and nothing else.
  */

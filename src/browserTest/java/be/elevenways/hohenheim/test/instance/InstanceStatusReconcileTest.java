@@ -138,7 +138,7 @@ class InstanceStatusReconcileTest {
                 .anySatisfy(item -> assertThat(item.target().toUrl())
                     .contains("/instances/" + id + "/"));
 
-            // 4c. And it says what happened (D12): the crash is recorded as the error's cause, and the item's detail is
+            // 4c. And it says what happened: the crash is recorded as the error's cause, and the item's detail is
             //     that cause's sentence, never a guess from the status.
             assertThat(activity(id, HohenheimActivityAction.WORKLOAD_EXITED.id().toString()))
                 .as("step 4c: the unwatched death is recorded as the error's cause").hasSize(1);

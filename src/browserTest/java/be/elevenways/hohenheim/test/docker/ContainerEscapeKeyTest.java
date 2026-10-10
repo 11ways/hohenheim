@@ -116,7 +116,7 @@ class ContainerEscapeKeyTest {
             .contains("\"NanoCpus\":1500000000")
             .contains("8081");
 
-        // 4. READ-ONLY ROOTFS, the recorded decision. The Phase 3 clause offers it "where
+        // 4. READ-ONLY ROOTFS, the recorded decision. The hardening rule offers it "where
         //    the template allows"; no template in this tier allows it (published images
         //    chown, write pid files and unpack into their own root), so the policy does
         //    not ship it -- and it is refused rather than forwarded, which is the honest

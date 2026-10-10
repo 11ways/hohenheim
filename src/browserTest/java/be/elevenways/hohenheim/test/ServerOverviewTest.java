@@ -211,9 +211,9 @@ class ServerOverviewTest extends HohenheimTestBase {
 
         // 5. And the host's own history: what a PERSON did to this host. The band is filtered on (model, record id),
         //    so an entry about ANOTHER host never lands here (the decoy makes this a filter assertion rather than a
-        //    "band exists" one), and the system's own bookkeeping on it stays in the log and off the card (DEP9:
-        //    hourly "System changed local Server" heartbeat rows filled it). The fixture verb is a listed one: a
-        //    reconcile's correction is internal (D13c) and no feed lists it whoever made it.
+        //    "band exists" one), and the system's own bookkeeping on it stays in the log and off the card (hourly
+        //    "System changed local Server" heartbeat rows once filled it). The fixture verb is a listed one: a
+        //    reconcile's correction is internal and no feed lists it whoever made it.
         var servers = Models.get(ServerModel.class);
         ActivityLog.record(servers, hostId, HohenheimActivityAction.TESTED, "system bookkeeping fixture");
         Object bookkeeping = latestActivityId(String.valueOf(hostId));

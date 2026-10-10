@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * An app's record keeps the board's handful of tabs in view (overview, console, files, metrics, backups) and folds
+ * An app's record keeps its daily handful of tabs in view (overview, console, files, metrics, backups) and folds
  * the rest into "More"; its console is one tab whose modes switch inside it, and its backups, snapshots and schedules
  * are sections of one Backups tab.
  *
@@ -30,14 +30,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 class RecordTabSetJourneyTest extends HohenheimTestBase {
 
     @Test
-    void anInstanceKeepsTheBoardsTabsInViewAndItsConsoleSwitchesModesInOneTab() throws Exception {
+    void anInstanceKeepsItsDailyTabsInViewAndItsConsoleSwitchesModesInOneTab() throws Exception {
         Row instance = instance("tab-set-workload");
         int id = instance.get(InstanceModel.ID);
         String record = "/admin/instances/" + id;
         Row snapshot = snapshot(id, "before the tab-set move");
         Row log = storedLog(id, "hello from an earlier run");
         try {
-            // 1. The strip keeps the board's daily tabs in view, in order, and folds the housekeeping into More.
+            // 1. The strip keeps the daily tabs in view, in order, and folds the housekeeping into More.
             String overview = adminGet(record + "/page/overview").body();
             int more = overview.indexOf("cms-record-tabs-more");
             assertThat(more).as("step 1: the strip renders its More menu").isGreaterThan(-1);
@@ -116,7 +116,7 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
     }
 
     @Test
-    void everyTabOfAnAppHeadsWithItsRecordAndASiteKeepsTheBoardsTabs() throws Exception {
+    void everyTabOfAnAppHeadsWithItsRecordAndASiteKeepsItsDailyTabs() throws Exception {
         Row instance = instance("tab-set-heading");
         int id = instance.get(InstanceModel.ID);
         String record = "/admin/instances/" + id;
@@ -137,7 +137,7 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
                     .doesNotContain("cms-resource-list-header");
             }
 
-            // 2. A site keeps the board's tabs: its overview, its addresses and protection in the overview's own
+            // 2. A site keeps its daily tabs: its overview, its addresses and protection in the overview's own
             //    words, and the contributed Access tab once.
             String overview = adminGet(siteRecord + "/page/overview").body();
             // Bounded to the strip itself: the command palette later in the page names the Domains cluster.

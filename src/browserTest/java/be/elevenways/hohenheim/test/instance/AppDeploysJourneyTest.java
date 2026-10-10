@@ -30,7 +30,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * An application's Deploys tab as the App-Deploys board draws it: the live release and the one kept for rollback
+ * An application's Deploys tab: the live release and the one kept for rollback
  * first, the history marked by where each release stands now, the previews with their own actions, and what the last
  * pushes did in words.
  *

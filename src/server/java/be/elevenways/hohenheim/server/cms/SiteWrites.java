@@ -37,14 +37,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.Map;
 
 /**
- * The site resource's write verbs as domain operations (stage 4 contract 10): the admin create with its first
+ * The site resource's write verbs as domain operations: the admin create with its first
  * hostname, the admin edit, the delegated /manage edit and the delete, each typed by the form its placement posts.
  *
  * AIDEV-NOTE: declared SERVER-side, unlike {@link SiteOperations}: an operation's input form is what the pipeline
  * coerces and validates with, and the site form's instance pick narrows by the server's instance-kind registry, so
  * the real form has to be the input; a name-only stand-in would drop that narrowing. Every gate is
  * {@link OperationGate#open()}: who may act is the server-attached authorizer (SiteOperationHandlers): installation
- * administration for create and delete, reach of the site for both edits (DECIDED 2026-10-02 ~19:25).
+ * administration for create and delete, reach of the site for both edits.
  *
  * @author Jelle De Loecker
  * @since  0.9.0

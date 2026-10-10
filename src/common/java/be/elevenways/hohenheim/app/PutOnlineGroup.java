@@ -5,7 +5,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
- * The groups "Put something online" sorts its choices into (board Online-1); a kind names its own group.
+ * The groups "Put something online" sorts its choices into; a kind names its own group.
  *
  * @author Jelle De Loecker
  * @since  0.9.0

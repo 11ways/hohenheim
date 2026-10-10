@@ -19,7 +19,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A git app's Configuration as the App-Git-Config board draws it: where the code comes from and how it builds and
+ * A git app's Configuration: where the code comes from and how it builds and
  * deploys, then the variables per lane, both open; the details with working defaults folded; a stored secret never
  * echoed back into the form.
  *

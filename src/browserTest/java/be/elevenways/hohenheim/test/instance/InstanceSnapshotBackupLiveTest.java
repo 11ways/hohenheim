@@ -57,7 +57,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * Phase 4's snapshot/backup gate against the REAL local daemon, asserting HOST and
+ * Snapshots and backups against the REAL local daemon, asserting HOST and
  * FILESYSTEM state beside every API answer: a snapshot-restore round trip with real
  * marker data (restore REPLACES, never merges), an encrypted backup of a
  * TEMPLATE-CREATED instance exported to a filesystem target and restored to a
@@ -77,7 +77,7 @@ class InstanceSnapshotBackupLiveTest {
 
     private static final Path SOCKET = Path.of(DockerClient.DEFAULT_SOCKET);
 
-    /** The declared SECRET variable's value: a forwarding secret, the plan's own shape. */
+    /** The declared SECRET variable's value: a forwarding secret. */
     private static final String FORWARDING_SECRET = "f0rwarding-s3cret";
 
     /**
@@ -298,7 +298,7 @@ class InstanceSnapshotBackupLiveTest {
     }
 
     /**
-     * The backup gate, on the plan's DEFAULT instance shape: an instance created FROM AN
+     * The backup gate, on the DEFAULT instance shape: an instance created FROM AN
      * APPROVED TEMPLATE, carrying a declared SECRET variable in its own
      * {@code instance_variables} row and a managed config file that substitutes it.
      * Export to a configured target through the REAL resolution chain, then restore to a

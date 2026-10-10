@@ -15,10 +15,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * (2025-12-31; the matrix read 8.2..8.5 on 2026-09-23). A fresh site starts on
  * {@link #recommended()}.
  *
- * AIDEV-NOTE: {@link #original()} marks the members the first seed wave planted. That wave
+ * AIDEV-NOTE: {@link #original()} marks the members the first seed run planted. That run
  * is LEDGERED under one key on every running installation, so a member added later seeds
  * under its own key (WordPressTemplateSeeder.ledgerKeyOf) -- appending it to the original
- * wave would never reach an installation that already ran it. Existing templates and the
+ * run would never reach an installation that already ran it. Existing templates and the
  * instances created from them keep their stored tag.
  */
 public enum WordPressPhp {
@@ -68,7 +68,7 @@ public enum WordPressPhp {
         return this.frozen;
     }
 
-    /** @return whether the first, ledgered seed wave planted this member's template */
+    /** @return whether the first, ledgered seed run planted this member's template */
     public boolean original() {
         return this.original;
     }

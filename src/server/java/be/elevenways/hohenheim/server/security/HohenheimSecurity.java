@@ -158,7 +158,7 @@ public final class HohenheimSecurity {
     /**
      * The reason automatic bans stored before the reason named its cause, which only the scorer could read.
      *
-     * AIDEV-NOTE: such rows still exist (an auto ban's history outlives its expiry; Starfleet held 305 at DEP10);
+     * AIDEV-NOTE: such rows still exist (an auto ban's history outlives its expiry; Starfleet once held 305);
      * {@link #legacyCause} reads them in the current style from their stored event type. Nothing writes this shape
      * any more and nothing rewrites the stored rows.
      */

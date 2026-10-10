@@ -35,7 +35,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 /**
  * WHO an OWNED instance is charged to. An owned instance is written inside its product
  * tier's system scope, so the ambient write scope always looks like the system -- and
- * before this wave that is exactly what the charge followed. It made the per-owner cap
+ * that is exactly what the charge used to follow. It made the per-owner cap
  * unable to bind a tenant-held record: every engine or container a tenant's record owned
  * was really booked on a host and charged to the OPERATOR.
  *

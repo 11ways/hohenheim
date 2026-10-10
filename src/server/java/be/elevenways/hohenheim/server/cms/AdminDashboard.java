@@ -46,7 +46,7 @@ import java.util.Map;
 import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 
 /**
- * The /admin landing dashboard (board Main): the readiness checklist until the first app is online, what needs
+ * The /admin landing dashboard: the readiness checklist until the first app is online, what needs
  * attention, the count tiles, the apps and the most recent activity-log entries.
  */
 public final class AdminDashboard extends PanelDashboard {
@@ -61,7 +61,7 @@ public final class AdminDashboard extends PanelDashboard {
     public @Nullable Microcopy description() {
         return HohenheimMicrocopy.ADMIN.of("nav_hint");
     }
-    /** The board's primary way onward, offered where the instance tier can put something online. */
+    /** The dashboard's primary way onward, offered where the instance tier can put something online. */
     @Override
     public @NonNull List<LinkActionState> headerLinks(@NonNull PanelRequest request) {
         return putOnlineLinks(request, HohenheimAccess.isAdmin(request.access()));
@@ -102,9 +102,9 @@ public final class AdminDashboard extends PanelDashboard {
             : null;
 
         if (apps.isEmpty()) {
-            // A fresh install (board Empty-Dashboard): the way onward beside the steps still to take, and nothing that
+            // A fresh install: the way onward beside the steps still to take, and nothing that
             // counts or lists what does not exist yet.
-            // AIDEV-NOTE: the attention band still shows whenever it holds items, unlike the board: a failing
+            // AIDEV-NOTE: the attention band still shows whenever it holds items, even on a fresh install: a failing
             // certificate or a stopped backup must never hide just because no app exists yet.
             List<WidgetInstance> lead = new ArrayList<>(2);
             lead.add(new WidgetInstance(HohenheimWidgets.ONBOARDING.id(), Map.of()).withData(Map.of(
@@ -132,8 +132,8 @@ public final class AdminDashboard extends PanelDashboard {
                 .withData(attention)));
         }
         // AIDEV-NOTE: ONE stat grid, whatever the role mix: roles decide WHICH tiles exist (DashboardStats offers a
-        // tile only where its list does), never how many grids there are. The board's four are Apps, Hosts,
-        // Certificates and Backups; the Sites, Access lists and Active bans tiles were replaced by them (D10a), so the
+        // tile only where its list does), never how many grids there are. The four are Apps, Hosts,
+        // Certificates and Backups; the Sites, Access lists and Active bans tiles were replaced by them, so the
         // count of blocked addresses lives on the Blocked addresses list, as its trend always did.
         List<WidgetInstance> tiles = new ArrayList<>(4);
         if (admin != null) {
@@ -144,7 +144,7 @@ public final class AdminDashboard extends PanelDashboard {
         if (!tiles.isEmpty()) {
             widgets.add(section(columns(tiles)));
         }
-        // The board's lower half: the apps, read from the one App directory, beside what happened lately.
+        // The lower half: the apps, read from the one App directory, beside what happened lately.
         widgets.add(section(columns(List.of(
             new WidgetInstance(HohenheimWidgets.APPS.id(), Map.of()).withData(
                 appsBand(HohenheimMicrocopy.DASHBOARD.of("apps"), apps, accessContext)),
@@ -157,8 +157,8 @@ public final class AdminDashboard extends PanelDashboard {
      * The dashboard's Apps band under the placement's heading, its rows: health, name, what and where, and its badge:
      * whether HTTPS works, or, for an app with a problem HTTPS does not explain, its verdict.
      *
-     * AIDEV-NOTE: the badge is the app's root, as the board's rows read ("No certificate" on the app HTTPS breaks,
-     * "Deploying" on one deploying): D13c's shop could not start and its badge read "No certificate", a fact true of
+     * AIDEV-NOTE: the badge is the app's root, as its row reads ("No certificate" on the app HTTPS breaks,
+     * "Deploying" on one deploying): a shop that could not start had its badge read "No certificate", a fact true of
      * its address and not why it was down. The HTTPS badge stays where it is the cause (it reads broken itself).
      */
     static @NonNull AppsBand appsBand(@NonNull Microcopy heading, @NonNull List<AppDirectory.App> apps,
@@ -179,7 +179,7 @@ public final class AdminDashboard extends PanelDashboard {
         return columns(children, ColumnSplit.EVEN);
     }
 
-    /** @param split how the columns share the width; the boards' lower bands lead with the apps (3 to 2) */
+    /** @param split how the columns share the width; the lower bands lead with the apps (3 to 2) */
     static @NonNull WidgetInstance columns(@NonNull List<WidgetInstance> children, @NonNull ColumnSplit split) {
         return new WidgetInstance(ColumnsWidget.ID, Map.of("column_count", Math.min(children.size(), 4),
             "split", split.token()), new WidgetTree(children));

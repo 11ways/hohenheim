@@ -179,7 +179,7 @@ class WordPressTemplateSeedTest extends HohenheimTestBase {
         Seeds.run(Datasources.getDefault(), new WordPressTemplateSeeder());
         assertThat(templates.find().count()).as("step 6: once means once").isEqualTo(before);
 
-        // 7. PRODUCTION SHAPE: an installation that already ran the original wave has its
+        // 7. PRODUCTION SHAPE: an installation that already ran the original seed has its
         //    ledger key spent, so every member added later must seed under a key of its own
         //    or it would never reach that installation.
         List<String> laterKeys = new ArrayList<>();

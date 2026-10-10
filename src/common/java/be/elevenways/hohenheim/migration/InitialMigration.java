@@ -795,7 +795,7 @@ public class InitialMigration extends HohenheimMigration {
             // AIDEV-NOTE: the name is the operator-facing identity of a backup target and
             // the string every backup row and schedule refers to it by; the old chain never
             // constrained it, so two targets could share one name and no reference could say
-            // which one it meant. Folded in with the consolidation (review finding, M058).
+            // which one it meant. Folded in with the consolidation (formerly M058).
             table.unique("backup_targets_name_unique", List.of("name"));
         });
 
@@ -835,7 +835,7 @@ public class InitialMigration extends HohenheimMigration {
             table.addColumn("update_script", ColumnType.TEXT,
                 column -> column.nullable(true));
             // The yolk/egg split: a template may name the runtime image it layers hooks
-            // over instead of re-declaring the image (phase-0 design section 4.6).
+            // over instead of re-declaring the image.
             table.addColumn("runtime_image_id", ColumnType.INTEGER,
                 column -> column.nullable(true));
             table.addColumn("start_command", ColumnType.STRING,
@@ -1259,7 +1259,7 @@ public class InitialMigration extends HohenheimMigration {
         schema.createTable("webhook_deliveries", table -> {
             table.id();
             // The APPLICATION the webhook deploys, not the site it used to hang off: a
-            // replay claim must be unique per thing-that-deploys (phase-0 design 4.2).
+            // replay claim must be unique per thing-that-deploys.
             table.addColumn("instance_id", ColumnType.INTEGER,
                 column -> column.nullable(false).references("instances", "id"));
             table.addColumn("delivery_key", ColumnType.STRING,
@@ -1376,7 +1376,7 @@ public class InitialMigration extends HohenheimMigration {
             table.timestamps();
             // AIDEV-NOTE: one dyndns credential per DNS record is the invariant every
             // reader assumes (the resolver takes the first row it finds); the old chain
-            // only indexed it. Folded in with the consolidation (review finding, M091).
+            // only indexed it. Folded in with the consolidation (formerly M091).
             table.unique("dns_dyndns_credentials_record_id_unique", List.of("record_id"));
             table.addIndex("dns_dyndns_credentials_token_digest_index", List.of("token_digest"));
         });

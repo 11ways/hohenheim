@@ -178,7 +178,7 @@ class AppsListJourneyTest extends HohenheimTestBase {
             for (App app : apps.values()) {
                 int link = list.indexOf("href=\"" + app.target().toUrl());
                 assertThat(link).as("step 6: the list links " + app.name() + " to its record page").isNotNegative();
-                // The leading health glyph is no title: the record link is the app's NAME (the board's Apps list).
+                // The leading health glyph is no title: the record link is the app's NAME.
                 assertThat(list.substring(list.lastIndexOf("<a", link), list.indexOf("</a>", link)))
                     .as("step 6: the link of " + app.name() + " is its name, not the health glyph")
                     .contains("cms-row-link")
@@ -222,9 +222,9 @@ class AppsListJourneyTest extends HohenheimTestBase {
                 assertThat(page).as("step 8: the form tab says Configuration").contains("Configuration");
             }
 
-            // 9. A website runs where the instance serving it runs (board Apps-List): one served by an instance that
+            // 9. A website runs where the instance serving it runs: one served by an instance that
             //    is no app of its own (the stack's service) names that instance's host; one no instance serves names
-            //    none, and its cell reads the board's dash, never the framework's "None".
+            //    none, and its cell reads a dash, never the framework's "None".
             Row stackSite = site(cleanup, "stack-site", "hohenheim:instance", Map.of(), stackWeb.get(InstanceModel.ID));
             domain(stackSite, "stack-site.apps-journey.test", false);
             App stackSiteApp = journeyApps().get(PREFIX + "stack-site");
@@ -235,7 +235,7 @@ class AppsListJourneyTest extends HohenheimTestBase {
             assertThat(journeyApps().get(PREFIX + "redirect").host()).as("step 9: a redirect runs on no host")
                 .isNull();
             String redirectRow = adminGet("/admin/apps?_search=" + PREFIX + "redirect").body();
-            assertThat(redirectRow).as("step 9: the list draws its host cell as the board's dash")
+            assertThat(redirectRow).as("step 9: the list draws its host cell as a dash")
                 .contains("class=\"cms-cell-absent\" aria-label=\"-\"").contains(">-</pb-microcopy></span>")
                 .as("step 9: never as None").doesNotContain(">None<");
             assertThat(adminGet("/admin/apps?_search=" + PREFIX + "stack-site").body())
@@ -261,7 +261,7 @@ class AppsListJourneyTest extends HohenheimTestBase {
             assertThat(adminGet("/admin/sites/" + catchAll.get(SiteModel.ID) + "/page/overview").body())
                 .as("step 10: its page never says it is live at the pattern").doesNotContain("Live at *.")
                 .contains("Answers every address matching *.catch.apps-journey.test");
-            // Its HTTPS state is said too, never an empty cell (DEP10's catch-all row on the dashboard): a pattern
+            // Its HTTPS state is said too, never an empty cell (a catch-all's dashboard row once was): a pattern
             // answers many names, so HTTPS works per name a certificate covers.
             assertThat(catchApp.https()).as("step 10: the catch-all's HTTPS cell exists").isNotNull();
             assertThat(catchApp.https().state()).as("step 10: as the pattern state")
@@ -271,7 +271,7 @@ class AppsListJourneyTest extends HohenheimTestBase {
                 .isEqualTo("A pattern answers many names; HTTPS works for each one a certificate covers.");
 
             // 11. One app, one name: a site serving a workload is that workload's app, so every surface that names the
-            //     app from the site says the workload's name, as the Apps list does (DEP10: "alchemy-skeleton" in the
+            //     app from the site says the workload's name, as the Apps list does (once "alchemy-skeleton" in the
             //     lists, "Alchemy skeleton" in "Fix on ..." and the Addresses list).
             assertThat(AppDirectory.nameOf(served)).as("step 11: the served site names its workload's app")
                 .isEqualTo(PREFIX + "docker").isNotEqualTo(PREFIX + "docker-site");
@@ -285,7 +285,7 @@ class AppsListJourneyTest extends HohenheimTestBase {
                 .anySatisfy(item -> assertThat(say(item.action())).isEqualTo("Fix on " + PREFIX + "docker"))
                 .noneSatisfy(item -> assertThat(say(item.action())).isEqualTo("Fix on " + PREFIX + "docker-site"));
 
-            // 12. A broken row offers its fix (board Apps-List), not only the words of it: the forced static site's
+            // 12. A broken row offers its fix, not only the words of it: the forced static site's
             //     first fix is Get a certificate, leading to its addresses, drawn in its row by the framework's fix
             //     cell as its band offers it. A working app offers none.
             String domainsTab = "/admin/sites/" + files.get(SiteModel.ID) + "/page/" + SiteParts.DOMAINS_TAB;
@@ -314,14 +314,14 @@ class AppsListJourneyTest extends HohenheimTestBase {
                 .as("step 13: offering its site's fix")
                 .contains("Get a certificate")
                 .contains("/admin/sites/" + heldSite.get(SiteModel.ID) + "/page/" + SiteParts.DOMAINS_TAB);
-            String board = adminGet("/admin/dashboard").body();
-            int heldRow = board.indexOf("data-hh-dashboard-app=\"" + PREFIX + "forced-workload\"");
+            String dashboardNow = adminGet("/admin/dashboard").body();
+            int heldRow = dashboardNow.indexOf("data-hh-dashboard-app=\"" + PREFIX + "forced-workload\"");
             assertThat(heldRow).as("step 13: the dashboard lists it").isNotNegative();
-            assertThat(board.substring(heldRow, board.indexOf("</pl-list-item>", heldRow)))
+            assertThat(dashboardNow.substring(heldRow, dashboardNow.indexOf("</pl-list-item>", heldRow)))
                 .as("step 13: with the broken glyph beside its Not working badge")
                 .contains("data-cms-health=\"broken\"").contains("Not working");
 
-            // 14. A certificate's expiry reads the same everywhere, in whole days (the dashboard's and the boards'
+            // 14. A certificate's expiry reads the same everywhere, in whole days (the dashboard's and the lists'
             //     "in 35 days", never "a month and 5 days from now"): the app's HTTPS cell, the Certificates list.
             Row certified = site(cleanup, "certified", "hohenheim:static", Map.of("root_path", "/tmp"), null);
             domain(certified, "certified.apps-journey.test", false);

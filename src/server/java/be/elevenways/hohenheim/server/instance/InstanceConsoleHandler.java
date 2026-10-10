@@ -79,8 +79,8 @@ public final class InstanceConsoleHandler implements WebSocketHandler {
      * applicability and authorization, so the socket admits exactly whom the console form does.
      *
      * AIDEV-NOTE: the socket is a console SURFACE, and its own capability check let an admin (or a hand-granted
-     * delegate) type raw input into a product-generated instance's TTY that every placed surface refuses (review 8
-     * D01). Never check the capability here again beside the operation: ask the operation.
+     * delegate) type raw input into a product-generated instance's TTY that every placed surface refuses.
+     * Never check the capability here again beside the operation: ask the operation.
      */
     private boolean admitted() {
         return InstanceOperationHandlers.offered(InstanceOperations.CONSOLE_COMMAND, this.session.getPrincipal(),

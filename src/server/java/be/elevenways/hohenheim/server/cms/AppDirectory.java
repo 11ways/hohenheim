@@ -104,7 +104,7 @@ final class AppDirectory {
 
         // AIDEV-NOTE: an app is a reading, so its verdict's fixes are ROW actions of the record behind it (or of the
         // site a workload's verdict already speaks for), never of the Apps entry: ResourceHealth.fixColumn() offers
-        // them on that record exactly as its band does (board Apps-List's "Get a certificate").
+        // them on that record exactly as its band does ("Get a certificate").
         App {
             if (health.fixesOn() == null) {
                 health = health.on(source.entrySlug, id);
@@ -252,7 +252,7 @@ final class AppDirectory {
      *
      * AIDEV-NOTE: the one answer every operator surface that names an app from a site reads (the attention items' "Fix
      * on", the Addresses list's App column), so one app never reads "alchemy-skeleton" in the lists and "Alchemy
-     * skeleton" in the band (DEP10). A surface a viewer reads without the workload in their scope (the /manage
+     * skeleton" in the band. A surface a viewer reads without the workload in their scope (the /manage
      * Addresses twin) names the site, as their Apps list does: {@link #nameOf(Row, boolean)}.
      */
     static @NonNull String nameOf(@NonNull Row site) {

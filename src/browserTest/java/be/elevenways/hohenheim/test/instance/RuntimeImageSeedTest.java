@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * The built-in runtime images exist, are code-owned, and every one of them names a build
  * context that is actually in this repository.
  *
- * AIDEV-NOTE: the Dockerfile check is the point. Jelle's decision on phase-0 open question 5
+ * AIDEV-NOTE: the Dockerfile check is the point. Jelle's decision
  * is that there is NO registry -- each host builds these locally from {@code build_context}
  * at first use -- so a row naming a directory nobody committed is an image that cannot be
  * built anywhere, and nothing else in the system would notice until a create failed on a

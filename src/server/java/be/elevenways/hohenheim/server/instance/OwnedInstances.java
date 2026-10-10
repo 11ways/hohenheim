@@ -25,7 +25,7 @@ import java.util.Set;
  * {@link InstanceKindHandler#generatedOnly() generated-only} kind unwritable outside its
  * owning tier's system scope, the scope entry itself, and the owned-row lookups.
  *
- * The canonical relation this implements (instance-tier-plan, Phase 7): the INSTANCE
+ * The canonical relation this implements: the INSTANCE
  * TIER IS the runtime-resource contract, and a product record (a Site, a managed
  * Database) stays a product record that OWNS its runtime through
  * {@code instances.generated_for_model/_for_id}. Ownership itself stays grant-derived --
@@ -33,7 +33,7 @@ import java.util.Set;
  *
  * AIDEV-NOTE: this class exists because the second tier to lower (managed databases)
  * would otherwise have copied SiteInstances' install/scope/lookup trio verbatim, which
- * is the four-copies-of-the-discipline outcome the plan rejected a narrower abstraction
+ * is the four-copies-of-the-discipline outcome a narrower abstraction was rejected
  * to avoid. The tier-SPECIFIC parts (what a release is, what converge means) stay in
  * SiteInstances and DatabaseInstances; only the attribution mechanics live here.
  */

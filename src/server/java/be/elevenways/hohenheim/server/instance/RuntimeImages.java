@@ -40,7 +40,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * THE runtime image ("yolk") lane: resolve the row a record runs from, and make that image
  * actually present on the host that has to start it.
  *
- * AIDEV-NOTE: there is no registry (Jelle's decision on phase-0 open question 5), so
+ * AIDEV-NOTE: there is no registry (by design), so
  * "present" means BUILT HERE. The Docker variant is built through the same sandboxed build
  * lane a tenant Dockerfile rides ({@code SandboxedBuilds}) rather than through the daemon's
  * {@code /build} endpoint -- {@code DockerClient}'s docblock forbids reintroducing that

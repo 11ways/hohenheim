@@ -223,7 +223,7 @@ public final class DockerReconciler {
         }
 
         // {scope}db-{name} containers (PRE-LOWERING leftovers only -- a database's engine
-        // is an instance since Phase 7 and carries owner labels from birth) and
+        // is an instance since the lowering and carries owner labels from birth) and
         // {scope}db-{name}-data volumes, which are STILL the live naming: the data volume
         // stays keyed to the database record's name so it outlives any runtime row.
         if (name.startsWith(scheme + "db-")) {

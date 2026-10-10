@@ -46,15 +46,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * not pinned and is edited, never followed by a new one: the test installs (starfleet,
  * daystrom) that applied it have their ledger re-recorded instead (2026-09-30, when M011-M017
  * became one M011). Raising the mark plus pasting the pin lines the failure prints is the
- * ONE edit a production deploy that applied migrations owes (docs/deploy-starfleet.md step
- * 8); a pin is never regenerated to make a red build green. Comments and formatting are outside the digest. The lines to paste are
+ * ONE edit a production deploy that applied migrations owes;
+ * a pin is never regenerated to make a red build green. Comments and formatting are outside the digest. The lines to paste are
  * printed by the offline command {@code --migration-checksums} of the deployed jar, so
  * raising the mark never needs a red run of this test to learn a digest.
  */
 class MigrationIntegrityTest {
 
     /**
-     * The highest migration version a production install has applied (robbedoes, build bc67eda4); see
+     * The highest migration version a production install has applied (robbedoes); see
      * the class note.
      */
     private static final String DEPLOYED_THROUGH = "010";

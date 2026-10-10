@@ -23,7 +23,7 @@ import java.util.stream.Stream;
  *
  * AIDEV-NOTE: the reclaim/lifecycle tests used to call {@code DockerClient.buildImage},
  * which no longer exists -- executing a Dockerfile inside the daemon is the
- * control-plane-trust-domain problem the sandboxed builders wave removed. Producing the
+ * control-plane-trust-domain problem the sandboxed builders removed. Producing the
  * image tar directly is also strictly better for those tests: it is deterministic,
  * takes milliseconds, needs no network, and costs a few hundred BYTES of disk instead of
  * a base image per case. Tests that need a REAL build go through the sandbox on purpose.
@@ -38,7 +38,7 @@ public final class TestImages {
      * classes, which let the image under every live test change between two runs with no
      * commit. The compose-style {@code repo:tag@digest} spelling is what
      * {@code DockerClient.ensureImage} pulls by digest and what LiveLane.requireImage checks
-     * for; bump both halves together, never the tag alone. Since wave 3 the pin itself
+     * for; bump both halves together, never the tag alone. The pin itself
      * lives in production ({@link PinnedImages#ALPINE}, the Docker preflight's probe image),
      * so the tests and the preflight can never run two different alpines.
      */

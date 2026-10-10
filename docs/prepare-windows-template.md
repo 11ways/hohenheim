@@ -6,8 +6,7 @@ VM from an image that already exists in the target Incus daemon's own image stor
 image is what this document describes, end to end, with the commands that were
 actually run.
 
-UPDATE 2026-08-14: the product now carries an in-panel counterpart for most of
-this. The server record's Install media tab fetches ISOs onto a host, an
+The product carries an in-panel counterpart for most of this. The server record's Install media tab fetches ISOs onto a host, an
 `image_origin=install_media` VM is created EMPTY, the ISO attaches as a cdrom
 device (boot order encoded from step 5's finding), the VM's live screen console drives
 the interactive install, and the instance's "Capture as template" action replaces

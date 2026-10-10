@@ -33,7 +33,7 @@ import java.util.function.BooleanSupplier;
  * {@link NftService}'s: every method throws, and a site whose policy cannot be applied
  * does not spawn.
  *
- * AIDEV-NOTE: DECIDED 2026-08-06 -- the DNS carve-out, the one decision the container
+ * AIDEV-NOTE: the DNS carve-out, the one decision the container
  * tiers never had to make. A container resolves through Docker's embedded resolver at
  * 127.0.0.11 INSIDE its own namespace, so denying RFC1918 costs it no DNS. A host process
  * resolves through /etc/resolv.conf, which on a real host commonly names a PRIVATE-range

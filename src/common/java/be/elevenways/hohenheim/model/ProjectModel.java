@@ -23,8 +23,8 @@ import be.elevenways.zenit.common.orm.model.relation.HasMany;
  *
  * AIDEV-NOTE: there is deliberately NO project_id column on any owned record and
  * NO owner column here -- a foreign key would be a second ownership authority
- * beside the grants, the exact "projects bolted onto URLs" failure the plan
- * forbids. "Which records are in project P" is a grant query (Projects.projectOf).
+ * beside the grants, the exact "projects bolted onto URLs" failure.
+ * "Which records are in project P" is a grant query (Projects.projectOf).
  */
 public class ProjectModel extends Model {
 

@@ -25,7 +25,7 @@ class InstancePreStartHooksTest {
 
     private static final Identifier GAME = Identifier.of("hohenheim", "game_domain_links");
     /**
-     * AIDEV-NOTE: was {@code site_database_links}. Phase-0 brief 7 deleted the site-keyed
+     * AIDEV-NOTE: was {@code site_database_links}. The re-key deleted the site-keyed
      * database lane, so the instance one is the only database hook there is -- and it now
      * covers an application's releases too, resolving the link OWNER off the deploying row.
      */

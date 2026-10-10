@@ -6950,7 +6950,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Console command for a graceful stop; consumed by the console-matcher wave, stored and exported now",
+      "text": "Console command for a graceful stop",
       "scope": "help"
     }
   ],

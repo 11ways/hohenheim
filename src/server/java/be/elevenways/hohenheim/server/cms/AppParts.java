@@ -159,11 +159,11 @@ public final class AppParts {
             .label(HohenheimMicrocopy.APP_LIST.of("plural"))
             .recordLabel(HohenheimMicrocopy.APP_LIST.of("singular"))
             // The operator reads the data model it lists; a tenant reads their apps, never "sites, instances and
-            // stacks" (DEP10).
+            // stacks".
             .description(withHost ? HohenheimMicrocopy.APP.of("nav_hint")
                 : HohenheimMicrocopy.MANAGE_APP.of("nav_hint"))
             .icon(Icon.of("cubes"))
-            // The one count the sidebar carries (board Main): the apps with a problem, as the Apps tile says them.
+            // The one count the sidebar carries: the apps with a problem, as the Apps tile says them.
             .navBadge(access -> {
                 int problems = AppDirectory.withProblem(apps(panelSlug, access));
                 return problems == 0 ? null : (long) problems;
@@ -188,12 +188,12 @@ public final class AppParts {
             .column(ColumnSpec.fromField(ADDRESS_TEXT).hidden().build())
             .column(ColumnSpec.fromField(KIND).sortable().build());
         if (withHost) {
-            // A website no instance serves runs on no host: the board's dash, never the framework's "None".
+            // A website no instance serves runs on no host: a dash, never the framework's "None".
             table.column(ColumnSpec.fromField(HOST).sortable().absent(HohenheimMicrocopy.APP_LIST.of("host_none"))
                 .build());
         }
         // The main address's HTTPS in the Addresses list's words and cell, never the app's overall verdict; then the
-        // framework's fix cell (board Apps-List's "Get a certificate"), offered as the app's record's band offers it.
+        // framework's fix cell ("Get a certificate"), offered as the app's record's band offers it.
         table.column(ColumnSpec.virtual(HTTPS_COLUMN, HohenheimMicrocopy.APP_LIST.of("https"))
             .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
             .column(ResourceHealth.fixColumn())

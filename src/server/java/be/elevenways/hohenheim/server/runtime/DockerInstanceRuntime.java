@@ -48,9 +48,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * AIDEV-NOTE: every PRIVATE-posture workload REFUSES to deploy on a host that cannot
  * enforce the network policy (see {@link WorkloadNetworkPolicy}). That refusal is the
  * whole point: a workload that starts unprotected can reach the host, the cloud
- * metadata service and every other container on the daemon. Since the isolation wave
- * that covers instances, Docker sites, managed databases and stacks alike -- stack
- * services ARE instances since the Phase 7 lowering, so they come through THIS runtime
+ * metadata service and every other container on the daemon. That
+ * covers instances, Docker sites, managed databases and stacks alike -- stack
+ * services ARE instances since the stack lowering, so they come through THIS runtime
  * with {@code StackServiceKind} declaring PRIVATE, not through a deployer of their own;
  * the only remaining SHARED_BRIDGE authors are record-less test/preview callers.
  */

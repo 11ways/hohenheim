@@ -11,8 +11,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  *
  * WHY it is not redundant with the instance quota, which a database already spends: the
  * engine container IS an instance and IS charged as one ({@code TenantDatabases.allocate}
- * -> {@code DatabaseInstances.reserveEngineRow}, attributed to the database's owner since
- * ce8ccb5). So a database costs one instance slot -- but an instance slot is a WORKLOAD
+ * -> {@code DatabaseInstances.reserveEngineRow}, attributed to the database's owner).
+ * So a database costs one instance slot -- but an instance slot is a WORKLOAD
  * slot, and an owner spends those on game servers and stacks too, so "five databases per
  * tenant" is not expressible through it and never will be. A managed database is also a
  * different KIND of cost: credentials, a data volume, backups and a restore surface, none

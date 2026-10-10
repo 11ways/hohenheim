@@ -22,7 +22,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The Metrics tab of a running app (board App-Metrics): chart-sized live series, and every
+ * The Metrics tab of a running app: chart-sized live series, and every
  * reading in words -- CPU against the app's CPU limit, memory against its cap, received and
  * sent as a rate per second -- kept current by the live channel.
  */

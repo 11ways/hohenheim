@@ -60,7 +60,7 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
         PathField.builder().name("fallback_file").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("fallback_file"))
             .help(HohenheimMicrocopy.HELP.of("fallback_file")).build());
 
-    // The folder and the fallback file are the decision (board App-Config-Address); what a
+    // The folder and the fallback file are the decision; what a
     // folder shows is the next thing changed, and the delay is right almost always so its
     // Connection section folds. AIDEV-NOTE: never the framework's generic "Advanced" here (the site
     // form has its own); after the fields -- membership is validated eagerly.

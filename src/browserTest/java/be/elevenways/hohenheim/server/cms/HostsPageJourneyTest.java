@@ -36,7 +36,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The Hosts list reads as board Hosts: what each machine takes in the admission's own words, why a waiting one waits
+ * The Hosts list says what each machine takes in the admission's own words, why a waiting one waits
  * (its failed required checks, also named by the list's attention band and the dashboard), the memory it has booked
  * and how many apps and databases it runs.
  *
@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class HostsPageJourneyTest extends HohenheimTestBase {
 
-    private static final String PREFIX = "w9a-hosts-";
+    private static final String PREFIX = "hostspage-";
     private static final LocaleChain EN = LocaleChain.ofTags("en");
 
     @Test
@@ -120,8 +120,8 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             assertThat(list.body()).as("step 5: the admission in words")
                 .contains("Takes new apps", "Takes no new apps", "Waiting for its checks")
                 .as("step 5: why the waiting host waits").contains("1 required check failed: Firewall control")
-                .as("step 5: the board's verb").contains("Add host").doesNotContain("New host")
-                .as("step 5: the board's lead").contains("The machines your apps run on.")
+                .as("step 5: the verb is Add").contains("Add host").doesNotContain("New host")
+                .as("step 5: the lead says what hosts are").contains("The machines your apps run on.")
                 .as("step 5: never a check's code").doesNotContain("failed: nftables")
                 .as("step 5: what each host runs").contains("1 app, 0 databases").contains("Nothing yet")
                 .as("step 5: the attention band above the list").contains(PREFIX + "waiting cannot run apps yet")
@@ -228,7 +228,7 @@ class HostsPageJourneyTest extends HohenheimTestBase {
                 .as("step 2: and lists no empty facts after it").doesNotContain("Nothing to show")
                 .as("step 2: and names no button in prose").doesNotContain("Check again measures");
 
-            // 3. The cause on Starfleet (DEP10): only a full preflight wrote the memory reading, so a host the hourly
+            // 3. The cause on Starfleet: only a full preflight wrote the memory reading, so a host the hourly
             //    sweep reached every hour still went stale. The heartbeat now records the daemon's memory total: the
             //    reading is fresh again, while the checks, their time and the preflight verdict stay as stored.
             Instant preflightAt = server(stale).get(ServerModel.PROBED_AT);
@@ -297,7 +297,7 @@ class HostsPageJourneyTest extends HohenheimTestBase {
                 new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon")),
                 Map.of(), true, Now.instant(), null));
             String page = adminGet("/admin/" + HohenheimSlugs.SERVERS + "/" + stale + "/page/overview").body();
-            assertThat(page).as("step 6: the posture in the board's words").contains("Shared containers")
+            assertThat(page).as("step 6: the posture in plain words").contains("Shared containers")
                 .doesNotContain("operator risk");
             assertThat(page).as("step 6: the accepted risk names who accepted it").contains("Accepted by ")
                 .doesNotContain("(warning v");

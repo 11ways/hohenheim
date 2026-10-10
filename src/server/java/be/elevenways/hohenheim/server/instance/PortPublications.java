@@ -33,7 +33,7 @@ import java.util.Set;
  * by name).
  *
  * AIDEV-NOTE: pre-allocation does not remove the TOCTOU, it adds a second window seconds
- * wide with an image pull inside it (the plan's fork 2, verbatim). Its honesty conditions
+ * wide with an image pull inside it. Its honesty conditions
  * are exactly two and both live here: the claim is written BEFORE the container is
  * created (so a crash inside the window leaves a row the reconciler can judge, never an
  * unclaimed bound port), and the daemon's OWN binding is read back after start and
@@ -138,7 +138,7 @@ final class PortPublications {
             }
             // AIDEV-NOTE: the OS probe runs AFTER the ledger check and only for the LOCAL
             // daemon -- isPortFree binds a LOCAL socket, so probing for a REMOTE host
-            // answers a question about the controller (the plan's fork 2, verbatim). On a
+            // answers a question about the controller. On a
             // remote host the ledger is the only pre-create evidence; a lie is caught by
             // the daemon's own EADDRINUSE at start, which surfaces as a loud deploy
             // refusal, never a silent success.
@@ -181,7 +181,7 @@ final class PortPublications {
                                   @NonNull PortPublication publication) throws IOException {
         // A single-publication spec reads the FIRST binding, exactly as before: a status
         // synthesized without container-port identity (fakes, reused releases) has none to
-        // match on, and demanding one would refuse deploys that were fine for two waves.
+        // match on, and demanding one would refuse deploys that used to work.
         InstanceStatus.PublishedPort observed = spec.publications().size() == 1
             ? (status.publishedPorts().isEmpty() ? null : status.publishedPorts().get(0))
             : status.publishedFor(publication.containerPort(), publication.protocol());

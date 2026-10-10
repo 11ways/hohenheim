@@ -586,7 +586,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
     }
 
     /**
-     * The Phase 6 tabs really RENDER under /manage, and the write controls follow the
+     * The tenant tabs really RENDER under /manage, and the write controls follow the
      * capability rather than the tab: a tab whose form is drawn for a read-only holder is
      * a UI that promises authority the service will refuse.
      */
@@ -610,7 +610,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         //    that the tenant surface answers the same way.
         //
         // AIDEV-NOTE: this step asserted the pre-gate 200 + refusal banner until the gate
-        // landed in 7be522b1, which shipped its new test but left this one stale.
+        // landed, whose own test left this one stale.
         HttpResponse<String> unread = tenantGet(filesUrl);
         assertThat(unread.statusCode())
             .as("step 2: without files.read the files tab is absent, not merely refusing")
@@ -685,7 +685,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         return flash == null ? "" : flash.message().key();
     }
     /**
-     * The Phase 5b introduction gate: a template SCRIPT enters the system only through
+     * The template introduction gate: a template SCRIPT enters the system only through
      * the admin-gated import endpoint. The property is LAYERED and both layers are
      * probed: zenit-auth's {@code /admin} baseline ({@code auth.admin.access}) stops a
      * plain tenant, and the endpoint's OWN {@code hohenheim.admin.access} stops a
@@ -815,7 +815,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
     /**
      * The delegated PROJECTION, asserted field by field on what is RENDERED.
      *
-     * The gate clause is "no server id, no socket/daemon addresses, no host filesystem
+     * The rule is "no server id, no socket/daemon addresses, no host filesystem
      * paths, no raw runtime errors -- field-level, not just the wire path", and everything
      * else in this class checks capability refusals and form-field absence, which the
      * shared subpages are not covered by at all: {@code InstanceParts.manage()} declares

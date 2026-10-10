@@ -57,14 +57,14 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * The shared-container risk acknowledgement, end to end: declaring the posture grants
  * nothing, an operator's named act does, and three independent things take it away again.
  *
- * WHY IT EXISTS: the instance-tier plan makes this a Phase 3 ENTRY blocker -- "the
+ * WHY IT EXISTS: the rule is "the
  * acknowledgement records actor, timestamp and warning version; a boolean hidden in
- * settings is not sufficient" -- and Phases 3 through 8 shipped past it. Until this
+ * settings is not sufficient", and the instance tier shipped past it. Until this
  * landed, setting {@code shared_container} was one ordinary dropdown on an admin form,
  * after which two mutually hostile tenants shared one kernel with no record of who
  * decided that.
  *
- * DELIBERATE DIVERGENCE from the plan's gate wording, stated out loud: the gate step says
+ * DELIBERATE DIVERGENCE from the original gate wording, stated out loud: the gate step says
  * "two hostile tenant fixtures are refused co-location on an unacknowledged container
  * host", but the refusal here fires on the FIRST hostile workload, not the second.
  * Refusing only the second would assert that the first one is safe, which contradicts the

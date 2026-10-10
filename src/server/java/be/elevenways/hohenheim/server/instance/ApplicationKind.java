@@ -36,15 +36,15 @@ import java.util.Map;
  * declared port and retention. It is never itself a container -- each deploy generates a
  * {@code hohenheim:release} instance, and this record's status reflects its serving one.
  *
- * AIDEV-NOTE: two records, not one (phase-0 design section 4.2). The thing an operator
+ * AIDEV-NOTE: two records, not one. The thing an operator
  * EDITS must stay editable while an immutable per-deploy container keeps serving and one
  * retired container stays available for rollback; folding them into one record is what
  * would make "edit the app" and "the release that is running" the same row, and there is
  * no shape in which that is true during a gated swap.
  *
  * AIDEV-NOTE: {@link #runtimeFor}/{@link #specFor} refuse by name PERMANENTLY -- the
- * release engine ({@code ApplicationReleases}/{@code ReleaseEngine}, re-keyed here in
- * phase 0 brief 7) builds specs for the generated release instances; this record never
+ * release engine ({@code ApplicationReleases}/{@code ReleaseEngine}, re-keyed here)
+ * builds specs for the generated release instances; this record never
  * has a driver of its own.
  */
 public final class ApplicationKind implements InstanceKindHandler {
@@ -150,9 +150,9 @@ public final class ApplicationKind implements InstanceKindHandler {
     // that say what is inside. AIDEV-NOTE: declared after the fields -- Schema.addSection
     // validates membership against the fields declared so far.
     static {
-        // The record's Configuration reads as the board's two decisions first: where the code comes from with how it
-        // builds, deploys and previews, then the variables per lane. AIDEV-NOTE: source before variables (the board
-        // draws variables first) because this one schema also renders the CREATE form, where the repository is the
+        // The record's Configuration reads as its two decisions first: where the code comes from with how it
+        // builds, deploys and previews, then the variables per lane. AIDEV-NOTE: source before variables
+        // because this one schema also renders the CREATE form, where the repository is the
         // first decision and no variable can be meaningful yet.
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.open(HohenheimFormSections.SOURCE, List.of(
             GitSourceSchema.REPOSITORY_URL, GitSourceSchema.PROVIDER_ID, GitSourceSchema.REPOSITORY,

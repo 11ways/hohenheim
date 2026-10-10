@@ -55,7 +55,7 @@ class NavigationTest extends HohenheimTestBase {
         assertThat(page.url()).endsWith("/admin/certificates");
         assertThat(page.locator("h1").first().textContent()).contains("Certificates");
         assertThat(page.locator(".cms-brand").textContent()).contains("Hohenheim");
-        // The boards' eight sidebar entries, each a link.
+        // The eight sidebar entries, each a link.
         assertThat(page.locator("pl-app-sidebar a").count()).isGreaterThanOrEqualTo(8);
 
         // Regression: after a soft nav the client renders the list footer itself;

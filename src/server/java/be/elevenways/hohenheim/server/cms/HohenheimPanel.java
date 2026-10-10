@@ -37,8 +37,8 @@ public final class HohenheimPanel extends Panel {
      */
     public static final Permission ACCESS = HohenheimSources.ADMIN_ACCESS;
 
-    // AIDEV-NOTE: the sidebar is EIGHT entries in one unlabelled block, in the order of the 2026-09-30 boards:
-    // Dashboard, Apps, Databases, Hosts, Domains, Access, Activity, Settings (redesign plan, W4). It names what an
+    // AIDEV-NOTE: the sidebar is EIGHT entries in one unlabelled block, in this order:
+    // Dashboard, Apps, Databases, Hosts, Domains, Access, Activity, Settings. It names what an
     // operator comes to DO, never a table: Apps reads sites, instances and stacks as one list (AppDirectory), and
     // Domains, Access, Activity and Settings are clusters (zenit-cms PanelCluster): one sidebar row each, their
     // members drawn as the tabs of every member's page. A member keeps its own route, gates and breadcrumbs, and the
@@ -57,7 +57,7 @@ public final class HohenheimPanel extends Panel {
     // member slug naming no entry.
     //
     // AIDEV-NOTE: the three groups below shape neither panel's sidebar any more: everything visible here sits in the
-    // unlabelled default block, and so does /manage (ManagePanel, board Manage-Home, W9b). They remain the declared
+    // unlabelled default block, and so does /manage (ManagePanel). They remain the declared
     // group of the entries both twins share; a sidebar row of either panel sets NavGroup.DEFAULT or is clustered.
 
     /** Deploy group: everything an operator creates to make something RUN -- projects,
@@ -150,7 +150,7 @@ public final class HohenheimPanel extends Panel {
         // through the proxy role, container instances through the instances role).
         addIf(peers, OperationHistoryParts.builds(), Role.PROXY, Role.INSTANCES);
         // Release history: applications (the instance tier) release through the
-        // health gate since the phase-0 re-keying; the proxy role merely exposes them.
+        // health gate since the re-keying; the proxy role merely exposes them.
         addIf(peers, OperationHistoryParts.releases(), Role.PROXY, Role.INSTANCES);
         addIf(peers, GitProviderParts.admin(), Role.PROXY);
         addIf(peers, PreviewParts.admin(), Role.PROXY);
@@ -214,11 +214,11 @@ public final class HohenheimPanel extends Panel {
         peers.add(AppParts.admin(present(peers, HohenheimSlugs.SITES, HohenheimSlugs.INSTANCES, HohenheimSlugs.STACKS,
                 HohenheimSlugs.PROJECTS),
             present(peers, HohenheimSlugs.PUT_ONLINE).isEmpty() ? null : HohenheimSlugs.PUT_ONLINE));
-        // In the Domains board's tab order: addresses, certificates, DNS zones, released addresses.
+        // In tab order: addresses, certificates, DNS zones, released addresses.
         addCluster(peers, cluster("domain_names", HohenheimSlugs.Cluster.DOMAIN_NAMES, "globe", 50),
             HohenheimSlugs.DOMAINS,
             HohenheimSlugs.CERTIFICATES, HohenheimSlugs.DNS_ZONES, HohenheimSlugs.RELEASED_CLAIMS);
-        // In the Access board's tab order: lists, blocked addresses, people (users and roles), sign-in providers.
+        // In tab order: lists, blocked addresses, people (users and roles), sign-in providers.
         addCluster(peers, cluster("access", HohenheimSlugs.Cluster.ACCESS, "shield-halved", 60),
             HohenheimSlugs.ACCESS_LISTS,
             HohenheimSlugs.BANS, AuthAdminParts.USERS_SLUG, AuthAdminParts.ROLES_SLUG, HohenheimSlugs.AUTH_PROVIDERS,
@@ -278,7 +278,7 @@ public final class HohenheimPanel extends Panel {
     }
 
     /**
-     * The settings editor: Hohenheim's operator sections first (HohenheimSettingsSections, in the boards' order), then
+     * The settings editor: Hohenheim's operator sections first (HohenheimSettingsSections, in its order), then
      * zenit's own settings behind "Framework (advanced)". A mount whose settings file this boot never loaded is left
      * out.
      */

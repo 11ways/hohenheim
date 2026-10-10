@@ -53,8 +53,8 @@ import java.util.Set;
  * to load before boot verifies every operation has its handler. Who may act is an authorizer per operation: reach of
  * the site (manage) for the switches, which is /manage's own row scope and every site for an operator, and
  * installation administration for clone and rollback, which only the admin panel ever offered. A refusal conceals
- * the site as missing, the answer a caller gets for a site it cannot see. The write verbs follow the decided gates
- * (2026-10-02 ~19:25): create and delete are installation administration, both edits reach of the site; the
+ * the site as missing, the answer a caller gets for a site it cannot see. The write verbs follow these gates:
+ * create and delete are installation administration, both edits reach of the site; the
  * delegated edit never runs the admin normalizers, while the model's write hooks (enable invariant, TenantWrites
  * column freeze, route claims, proxy reload) judge every writer alike.
  *

@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * satisfying a shape rule must still be deletable: the rule judges what a write moves, and
  * a pure trash moves nothing but deleted_at.
  *
- * AIDEV-NOTE: observed in the final --all run of the soft-delete wave: PaasApiTest's cleanup
+ * AIDEV-NOTE: observed in a full test run: PaasApiTest's cleanup
  * could not delete an instance whose environment grouping had drifted (its owner grants
  * moved after it was placed), because SoftDeleteBehaviour stamps deleted_at through save()
  * and the grouping guard judged the unchanged environment_id. In production that is an

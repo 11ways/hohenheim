@@ -28,7 +28,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * The instance operations every surface places: start, stop, restart, backup, snapshot, a console command and the
  * in-place app update of one instance; and the two sessions its tabs open, a shell and a framebuffer.
  *
- * AIDEV-NOTE: no applies and no availability (stage 2 contract 6.10, S1). A stopped instance's stop is idempotent
+ * AIDEV-NOTE: no applies and no availability. A stopped instance's stop is idempotent
  * and answers success, and a database that is not ready is the start handler's retriable refusal, so the API and a
  * schedule step answer as they did before. What the admin hides or deadens is the admin placement's presentation.
  *

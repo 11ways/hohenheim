@@ -244,8 +244,8 @@ final class RouteTableBuilder {
         // Isolate per-site handler creation so one misconfigured site is skipped and recorded
         // instead of aborting the whole load.
         //
-        // AIDEV-NOTE: the git-provisioned branch is GONE with sites.source (phase-0 design
-        // section 3): a checkout no longer lives beside the site, it lives in the workspace
+        // AIDEV-NOTE: the git-provisioned branch is GONE with sites.source:
+        // a checkout no longer lives beside the site, it lives in the workspace
         // volume or the build context of the instance the site exposes. GitProvisioner's
         // site-directory layout dies with the host-user lane.
         SiteRequestHandler requestHandler;

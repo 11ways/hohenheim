@@ -32,7 +32,7 @@ import java.util.concurrent.TimeoutException;
  *
  * AIDEV-NOTE: a pre-check, never authority. Let's Encrypt's HTTP-01 validation is what decides; this only turns "the
  * order failed" into "this name points somewhere else" before an order is placed. A name resolving to an address this
- * machine holds points here whatever is declared (DEP10: Starfleet declared nothing, holds its public IPv4 on eth0, and
+ * machine holds points here whatever is declared (Starfleet declared nothing, holds its public IPv4 on eth0, and
  * every name read Unknown). Only when nothing is declared and the machine holds no public address (it sits behind
  * NAT) is a name that resolves elsewhere UNKNOWN: its public address may be the one the name resolves to. Resolution
  * goes through core's installed outbound network (the system resolver; an OutboundFixture in a test), the one every

@@ -32,7 +32,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * INSIDE an already-running engine container -- readiness probe, backup, restore.
  *
  * AIDEV-NOTE: this class no longer owns a lifecycle. Provisioning, status and teardown
- * lowered onto the canonical runtime-resource contract in the Phase 7 database wave: a
+ * lowered onto the canonical runtime-resource contract: a
  * database's engine IS an owned {@code hohenheim:database_container} instance driven by
  * {@link DatabaseInstances} through {@code InstanceService}. What used to be
  * {@code provision}/{@code status}/{@code destroy} here was a SECOND, weaker copy of the

@@ -82,8 +82,8 @@ class ManagePanelTest extends HohenheimTestBase {
             "command", "unsafe-host-command"));
         siteA.set(SiteModel.STATUS, "active");
         siteA.set(SiteModel.ENABLED, true);
-        // The source lives on the application instance the site exposes now (phase-0
-        // design section 3); the Deploys tab lives on that instance too.
+        // The source lives on the application instance the site exposes now;
+        // the Deploys tab lives on that instance too.
         appAId = TestSources.attachGitSource(siteA, Map.of(
             "repository_url", "ssh://private/manage-a.git",
             "build_command", "private-build-command",
@@ -642,7 +642,7 @@ class ManagePanelTest extends HohenheimTestBase {
             // probes. Each is still enumerated ONCE; the number this test exists to
             // catch is the un-memoized one, which is per CALLER (a dozen-plus
             // enumerations for the same set) and stays far outside this range.
-            // AIDEV-NOTE: the cap moved 12 -> 14 in phase-0 brief 7. Previews are keyed to
+            // AIDEV-NOTE: the cap moved 12 -> 14. Previews are keyed to
             // the APPLICATION now, so the preview peer's nav probe asks about
             // instance#manage where it used to ask about site#manage -- the same number of
             // distinct sets, but on a render that had not yet enumerated the instance one

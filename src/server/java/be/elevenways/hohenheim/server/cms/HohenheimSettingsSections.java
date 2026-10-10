@@ -20,8 +20,8 @@ import java.util.function.Function;
  * AIDEV-NOTE: every group of {@link HohenheimSettings#HOHENHEIM} belongs to exactly ONE section here
  * ({@code HohenheimSettingsSectionsTest} pins it): the page's framework mount leaves the whole Hohenheim group out once
  * any section offers part of it, so a group no section names would vanish from the page. A section keeps every
- * setting's stored path (the section key only prefixes the page's input names and anchors). The resource sections of
- * the boards (templates, images, git, engines, channels, backup targets, tasks) are the Settings cluster's tabs, never
+ * setting's stored path (the section key only prefixes the page's input names and anchors). The resource sections
+ * (templates, images, git, engines, channels, backup targets, tasks) are the Settings cluster's tabs, never
  * settings here.
  *
  * @author Jelle De Loecker

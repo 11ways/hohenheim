@@ -221,7 +221,7 @@ class ApplicationRuntimeContractTest {
         // 3. While the release is still resolving its spec, two OTHER writers touch that
         //    same record: one rewrites the stored mount, the deploy stamps a fenced status.
         //
-        // AIDEV-NOTE: the first writer used to be {@code SiteVolumes.heal}, which brief 7
+        // AIDEV-NOTE: the first writer used to be {@code SiteVolumes.heal}, which was
         // deleted along with named site volumes (a release binds HOST PATHS now). The
         // journey's subject was never the heal -- it is that ANY write landing between the
         // engine's row load and its role flip must survive the flip -- so the writer is

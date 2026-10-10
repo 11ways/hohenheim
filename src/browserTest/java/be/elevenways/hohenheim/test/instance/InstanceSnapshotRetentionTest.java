@@ -39,8 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * else wrote while it ran.
  *
  * AIDEV-NOTE: this is also the first daemon-free coverage of {@code InstanceSnapshots}
- * at all -- every other snapshot test needs a live Incus or Docker daemon, which the
- * Proxmox-use inventory named as a gap under item 7.
+ * at all -- every other snapshot test needs a live Incus or Docker daemon.
  */
 @Tag("slow") // live lane: needs a real daemon/host/image; runs via `zenit-dev test --all`
 class InstanceSnapshotRetentionTest {

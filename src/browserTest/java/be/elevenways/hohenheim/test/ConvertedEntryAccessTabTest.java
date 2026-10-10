@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * A converted parts entry whose tabs take no contributions still offers zenit-auth's Access tab, and sharing through
- * it grants the record: the access page rides every parts entry over a grantable model (decided 2026-10-03).
+ * it grants the record: the access page rides every parts entry over a grantable model.
  *
  * @author Jelle De Loecker
  * @since  0.9.0

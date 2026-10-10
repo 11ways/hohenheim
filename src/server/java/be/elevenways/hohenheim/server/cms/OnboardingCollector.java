@@ -36,7 +36,7 @@ import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
  * is the gate's own sentence rather than prose written beside it.
  *
  * The whole thing is state-derived, with no dismissed flag: it retires once the first app is online
- * ({@link AppHealth#anyOnline}, board Main draws no checklist beside a running app), which is the only honest reason
+ * ({@link AppHealth#anyOnline}: no checklist is drawn beside a running app), which is the only honest reason
  * for onboarding to stop being shown. From then on a condition a step stood for that still holds (backups that stay
  * on this machine, a host that takes no new apps) is the attention band's item, which the step only presented.
  *
@@ -117,7 +117,7 @@ public final class OnboardingCollector {
 
     /**
      * Whether the checklist has retired: the first app is online ({@link AppHealth#anyOnline}, the put-online step's
-     * own fact). Board Main draws no checklist beside a running app; what a step still stood for is the band's then.
+     * own fact). No checklist is drawn beside a running app; what a step still stood for is the band's then.
      */
     public static boolean retired() {
         return AppHealth.anyOnline();
@@ -136,8 +136,8 @@ public final class OnboardingCollector {
     /**
      * Done once a host is ENROLLED, naming it ("local, Docker"): admission is the next stage's step.
      *
-     * AIDEV-NOTE: D8 reversed the "done only once admitted" rule. It made this step say "enrolled but not admitted yet"
-     * right above the admission step saying the same, one problem twice; the boards tick enrolment and leave admission
+     * AIDEV-NOTE: the "done only once admitted" rule is gone. It made this step say "enrolled but not admitted yet"
+     * right above the admission step saying the same, one problem twice; the checklist ticks enrolment and leaves admission
      * to its own step, which is BLOCKED (warning tone) while no host accepts work, so nothing reads as false progress.
      */
     private static OnboardingStep hostEnrolled(List<Row> servers) {
@@ -201,7 +201,7 @@ public final class OnboardingCollector {
      * proxy put online needs no workload). "Put something online" creates and starts it in one flow, so the former
      * "create an instance" and "deploy it" steps are this one step.
      *
-     * AIDEV-NOTE: D7f replaced "any website at all": a site whose workload cannot start ticked this step while nothing
+     * AIDEV-NOTE: this replaced "any website at all": a site whose workload cannot start ticked this step while nothing
      * ran. The answer is the app verdict's own serving half ({@link AppHealth#anyOnline}), so the checklist and every
      * app's health band agree on what online means.
      */

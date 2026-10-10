@@ -28,16 +28,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The /manage landing (board Manage-Home): what of THIS principal's needs attention, their apps with the one verdict
+ * The /manage landing: what of THIS principal's needs attention, their apps with the one verdict
  * each, and how much of the capped budgets they hold.
  *
  * AIDEV-NOTE: the attention items are the tenant's own apps' verdicts ({@link AppHealth} through
  * {@link AppDirectory}, the delegated words, which name no host), never {@code AttentionCollector.collect()}: that
- * collector is operator inventory by content (host names, "removed host #N", admin-route links). Before W9b this band
+ * collector is operator inventory by content (host names, "removed host #N", admin-route links). This band once
  * asked only the placement gate, so it read "All clear" while the tenant's app page said "Visitors get an error page".
  *
- * AIDEV-NOTE: no Recent band, unlike the board: the activity log is the operator's audit trail, which /manage never
- * shows (ManageHistoryHiddenTest). A tenant-safe history is zenit-cms's to give (D13f, plan section 40): the one
+ * AIDEV-NOTE: no Recent band, unlike /admin: the activity log is the operator's audit trail, which /manage never
+ * shows (ManageHistoryHiddenTest). A tenant-safe history is zenit-cms's to give: the one
  * activity source is installation-wide and gated by one permission, so a feed of the rows about records the reader may
  * view, its actor worded for that reader ("you", "automatic"), needs a viewer-scoped source there, never a second
  * history read here.
@@ -58,7 +58,7 @@ public final class ManageDashboard extends PanelDashboard {
         return CmsSupport.navHint(HohenheimMicrocopy.MANAGE_DASHBOARD);
     }
 
-    /** The sidebar row reads "Overview"; the page is headed by the panel's own title, as board Manage-Home heads it. */
+    /** The sidebar row reads "Overview"; the page is headed by the panel's own title. */
     @Override
     public @NonNull Microcopy heading() {
         return ManagePanel.TITLE;
@@ -90,7 +90,7 @@ public final class ManageDashboard extends PanelDashboard {
 
     /**
      * Each app whose verdict is not fine, worded as its record page leads with it and titled by its name (the band
-     * lists many apps; DEP10's "Visitors get an error page" named none), linked to that page.
+     * lists many apps; a bare "Visitors get an error page" named none), linked to that page.
      */
     static @NonNull List<AttentionItem> attention(@NonNull List<AppDirectory.App> apps) {
         List<AttentionItem> items = new ArrayList<>();

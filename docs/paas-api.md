@@ -27,12 +27,13 @@ Scopes narrow a key below its owner's authority:
 - permission scopes, wildcards allowed: `hohenheim.instances.create`,
   `hohenheim.databases.create`, `hohenheim.admin.access`.
 
-Sites and instances are visible exactly where the key's owner holds the
-`manage` record capability AND the key's scopes cover that vocabulary. Project
+Sites are visible exactly where the key's owner holds the `manage` record
+capability AND the key's scopes cover that vocabulary; instances resolve
+visibility at `view` (below). Project
 listings additionally require the key to cover site or instance `manage`
 (membership is grant-derived, so the listing enforces the scope itself).
 
-**CORRECTED 2026-08-12: instance VISIBILITY resolves at `view`, not `manage`.**
+**Instance VISIBILITY resolves at `view`, not `manage`.**
 `InstanceApi.visibleInstances`/`visibleInstance` ask
 `HohenheimCapabilities.VIEW` and nothing else, by design -- visibility answers "may
 you see this record", never "may you do this to it", and every mutating handler
@@ -72,8 +73,7 @@ returned). Say so when delegating; the grant UI does not.
   `message` is resolved in the caller's locale chain. Framework refusals carry
   zenit's SHORT keys (`unknown_field`, `max`, `required`, `invalid_integer`, ...);
   the `zenit.coercion.*` / `zenit.validation.*` spellings were retired upstream
-  (zenit 383bcc89, 2026-09-04) and no deployed build has answered them since
-  hohenheim 91191333. `field` is the path of the
+  (zenit 383bcc89) and Hohenheim no longer answers them. `field` is the path of the
   refused value -- dotted for nested settings, indexed for rows -- and is ABSENT
   when the refusal is about the submission rather than one value. `code`,
   `message` and `field` restate the FIRST entry of `violations`, which lists every
@@ -139,16 +139,14 @@ returned). Say so when delegating; the grant UI does not.
 | GET | `/api/v1/hosts/{id}` | One host plus every workload booked on it (instances AND database engines) |
 
 Also present (older lanes, admin-permission-gated): `/api/sites`,
-`/api/sites/{id}/deploy`, `/api/dns/...`, and the instance file API under
-`/api/v1/instances/{id}/files`.
+`/api/sites/{id}/deploy` and `/api/dns/...`.
 
-**CORRECTED 2026-08-12: the instance file API belongs in neither half of that
-sentence.** It is not older -- it is a v1 route (`API_INSTANCE_FILES` and
-`API_INSTANCE_FILE_CONTENT`, `HohenheimEndpoints.java:481-500`) -- and it is not
-admin-permission-gated: the read lane asks `InstanceFiles` for `files.read` and
-the write lane for `files.write`, both INSIDE the service, which is exactly what
-stops this surface and the Files tab holding different policies. Two details
-worth keeping when this line is rewritten: the path always travels as the `path`
+The instance file API under `/api/v1/instances/{id}/files` is a v1 route
+(`API_INSTANCE_FILES` and `API_INSTANCE_FILE_CONTENT`,
+`HohenheimEndpoints.java:481-500`) and is not admin-permission-gated: the read
+lane asks `InstanceFiles` for `files.read` and the write lane for `files.write`,
+both INSIDE the service, which is exactly what stops this surface and the Files
+tab holding different policies. The path always travels as the `path`
 QUERY PARAMETER, never as a route segment (a segment would be split and
 reassembled, and a second decode is how a normalized traversal slips in), and
 the lane carries its own read rate limit.
@@ -462,9 +460,8 @@ hoh instance create microcopy docker_container \
 
 A row scope that is not an integer (`settings.volumes.app=/home/site`), a row that is
 not a key/value pair, or a stranger sub-key inside one is refused
-`unknown_field` naming the offending key, and nothing is written. Until
-2026-08-30 the dotted spelling answered **200 with the record created and the map
-EMPTY**, which is why the wire shape is documented here now. A submitted empty string
+`unknown_field` naming the offending key, and nothing is written, so a wrong
+spelling can never create a record with an EMPTY map. A submitted empty string
 CLEARS the map; omitting the key entirely leaves the stored map alone.
 
 Answer: the instance projection (as `GET /api/v1/instances/{id}`):
@@ -492,9 +489,8 @@ also a 422 (`instance_destroy_failed`) and leaves the record alive.
 
 ## Managed databases
 
-Added 2026-09-02. Until then this tier had **no API verbs at all** -- a teardown
-and a move onto a shared engine were browser-only, so an operator scripting a
-migration had to drive the panel by hand. The verbs are the panel's own lanes
+An operator scripting a migration (a teardown, a move onto a shared engine) needs
+these without driving the panel by hand. The verbs are the panel's own lanes
 reached without a browser (`DatabaseApi`), and their doors are the panels':
 
 - `GET /api/v1/databases` -- the `view` scope `DatabaseParts.manage()` renders.
@@ -583,9 +579,9 @@ the dialog does.
 
 ## Hosts and capacity
 
-Added 2026-09-02, for the same reason the database verbs were: the memory picture
-existed only on the admin overview page, so an operator deciding where a database
-could go was reading `docker stats` -- which answers a DIFFERENT question. `docker
+These exist for the same reason the database verbs do: without them the memory
+picture lives only on the admin overview page, and an operator deciding where a
+database could go reads `docker stats` -- which answers a DIFFERENT question. `docker
 stats` measures live RSS; placement decides on the BOOKED ceiling, and a stopped
 workload still holds its booking (a guest that can be started again without asking
 anyone must be counted, or the refusal lands on START).
@@ -703,17 +699,16 @@ the message). An unknown zone is 404.
 
 ## Environment variables are admin-only
 
-**CORRECTED 2026-08-13: this lane used to require "project membership plus
-instance-manage scope", and both the sentence and the code were wrong.**
+Project membership plus instance-manage scope would NOT be enough here.
 Membership is grant-derived and a capability scope token only NARROWS a key --
 neither one is authority over a record. An environment value is not scoped to
 the environment: `InstanceVariables.valuesFor` folds it in as the deploy
 baseline of every instance grouped under it, and it OVERRIDES that instance's
-own `environment_variables` entry. So the old gate let a project member author
-what a workload runs with on instances it held no capability over, which is the
+own `environment_variables` entry. So a membership gate would let a project member
+author what a workload runs with on instances it held no capability over, which is the
 one thing this document's opening promise forbids.
 
-It is now gated on `HohenheimAccess.isAdmin` -- the very permission
+It is gated on `HohenheimAccess.isAdmin` -- the very permission
 (`hohenheim.admin.access`) that guards `HohenheimPanel`, where the only
 environment-variable UI, `EnvironmentParts.variables()`, is registered. That is
 the promise read literally: `ManagePanel` offers no environment peer at all (its

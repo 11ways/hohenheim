@@ -22,7 +22,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 /**
  * The site operations the panels place: switching a site on and off, cloning it and rolling its release back.
  *
- * AIDEV-NOTE: enable and disable are two operations, one verb each (A-F13), where the admin used to place one
+ * AIDEV-NOTE: enable and disable are two operations, one verb each, where the admin used to place one
  * state-dependent toggle; each applies to one state only, so a row shows exactly one of them. Every gate here is
  * {@link OperationGate#open()}: who may act is the server-attached authorizer (SiteOperationHandlers), reach of the
  * site for the switches and installation administration for clone and rollback, so a surface outside the panels gets

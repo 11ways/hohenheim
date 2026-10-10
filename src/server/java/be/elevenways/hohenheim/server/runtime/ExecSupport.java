@@ -14,7 +14,7 @@ import java.util.Map;
  * not implement this, and exec refuses with a named violation.
  *
  * AIDEV-NOTE: deliberately SINGLE-SHOT, like every other method on {@link InstanceRuntime}.
- * The interactive TTY exec the plan sketches is a STREAMING contract and is not this: it
+ * An interactive TTY exec is a STREAMING contract and is not this: it
  * would need the second transport, and bolting a stream onto this method is exactly what
  * InstanceRuntime's docblock forbids. This is not a console either -- the console reaches
  * the workload's OWN primary process over stdin, this starts a new program, which is why

@@ -479,7 +479,7 @@ public final class PortLedger {
      * THE record-after primitive: write the claims for EVERY port the KERNEL has already
      * handed this owner, superseding whatever observed claims it held before.
      *
-     * AIDEV-NOTE: record-after is the decided default (instance-tier-plan, fork 2) --
+     * AIDEV-NOTE: record-after is the decided default --
      * pre-allocating does not remove the TOCTOU, it adds a second one seconds wide (an
      * image pull sits inside it) and, on a REMOTE host, is an unevidenced guess, because
      * isPortFree binds a LOCAL socket. Two consequences are deliberate. (1) A conflict is

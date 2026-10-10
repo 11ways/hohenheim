@@ -6,24 +6,14 @@ compose-shaped authoring surface over named volumes, config files and
 dependency-ordered services with health gating. The reference consumer is the
 unified NetBird deployment (netbird-server + dashboard + netbird-proxy).
 
-> **REWRITTEN 2026-08-11.** Everything below describes the tier AFTER the Phase 7
-> lowering (`b7749a36`, 2026-08-07): a stack service IS an owned instance, and the
-> stack's own Docker executor is gone. The previous revision of this document
-> described `StackDeployer`, one shared bridge network per stack and an
-> `adopt_resources` opt-in -- all three deleted (`StackInstances.java:66-74`
-> calls `StackDeployer` "deleted", `M083_DropStackAdoptResources.java:30` drops
-> the column). It also stated that at-rest encryption was a stacks-only claim
-> and that environment variables were unencrypted; that was already false when
-> written and is corrected below. A reader arriving from an old link should
-> treat the pre-lowering description as history, not as an alternative.
->
-> **AMENDED 2026-08-12:** the encryption half of that last sentence was itself
-> too strong. "Environment variables were unencrypted" is FALSE for INSTANCE
-> variables (a real table, `.secret().encrypted()`) and TRUE for SITE
-> `environment_variables` (a key inside a JSON `SchemaField`, which zenit
-> structurally refuses to encrypt). The encryption bullet below is scoped
-> accordingly, and its "what at-rest encryption does NOT cover" sub-bullet is
-> the binding statement.
+A stack service IS an owned instance; the stack tier has no Docker executor of
+its own. There is no `StackDeployer`, no shared bridge network per stack and no
+`adopt_resources` opt-in (`StackInstances.java:66-74`,
+`M083_DropStackAdoptResources.java:30`). Environment variables are encrypted at
+rest for INSTANCE variables (a real table, `.secret().encrypted()`) and NOT for
+SITE `environment_variables` (a key inside a JSON `SchemaField`, which zenit
+structurally refuses to encrypt); the encryption bullet below and its "what
+at-rest encryption does NOT cover" sub-bullet are the binding statement.
 
 ## Design decisions
 
@@ -71,9 +61,8 @@ unified NetBird deployment (netbird-server + dashboard + netbird-proxy).
   still expressible per mount via `external_name`, and such volumes are never
   removed.
 - **Secrets are encrypted at rest wherever the storage shape allows -- broader
-  than stacks, but NOT platform-wide** (narrowed back 2026-08-12; the
-  unqualified "platform-wide" wording this bullet carried from 2026-08-11 is
-  corrected by the sub-bullet below, which names what is excluded).
+  than stacks, but NOT platform-wide** (the sub-bullet below names what is
+  excluded).
   Nineteen column declarations across the model layer carry zenit's
   `.encrypted()` field modifier (AES-256-GCM envelopes, keyring at
   `database.encryption.key_file`), including instance environment variables
@@ -93,8 +82,7 @@ unified NetBird deployment (netbird-server + dashboard + netbird-proxy).
     at-rest representation. Config-file `content`
     (`StackFileModel.java:34-38`) and deployment `spec`
     (`StackDeploymentModel.java:39-41`) are encrypted WITHOUT `.secret()`.
-  - **What at-rest encryption does NOT cover (restored 2026-08-12; do not drop
-    this sentence again).** Encryption reaches DECLARED main-table and
+  - **What at-rest encryption does NOT cover.** Encryption reaches DECLARED main-table and
     table-stored sub-schema columns only. Zenit STRUCTURALLY REFUSES
     `.encrypted()` anywhere under a JSON-serialized sub-schema
     (`Schema.refuseEncryptedJsonSubFields`, zenit
@@ -114,10 +102,8 @@ unified NetBird deployment (netbird-server + dashboard + netbird-proxy).
     Settings-file secrets (comms DSNs, the database password, the Proteus
     access key) are equally out of reach, and the keyring's DEFAULT path is the
     SAME directory as those plaintext settings files, so one directory read
-    yields the key and the settings plaintext together. Three documents forbid
-    an unqualified platform-wide claim and they stand:
-    `phase0-red-team-manifest.md:885-886`,
-    `recoverable-secret-inventory.md:146` and `:327`.
+    yields the key and the settings plaintext together. An unqualified
+    platform-wide claim is therefore not made.
 - **Config files travel over the archive API**, staged into the created
   container before start with their declared octal mode
   (`DockerInstanceRuntime.java:395-418`). No host bind mounts, so remote (SSH)

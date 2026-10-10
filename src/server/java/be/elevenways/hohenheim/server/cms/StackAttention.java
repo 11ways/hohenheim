@@ -22,7 +22,7 @@ import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
  * only in part, worded by the stack's own verdict ({@link AppHealth#stackHealth}).
  *
  * AIDEV-NOTE: the STACK_HEALTH alert used to be the only word of it, and since the inbox no longer badges the sidebar
- * (D13a) a lasting condition reaches Needs attention at its root, the stack, for as long as it lasts.
+ * a lasting condition reaches Needs attention at its root, the stack, for as long as it lasts.
  *
  * @author Jelle De Loecker
  * @since  0.10.0

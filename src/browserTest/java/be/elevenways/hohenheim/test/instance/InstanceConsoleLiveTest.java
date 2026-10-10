@@ -37,7 +37,7 @@ import org.junit.jupiter.api.Tag;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Phase 5's console matchers against a REAL daemon, driven end to end through the hub:
+ * The console matchers against a REAL daemon, driven end to end through the hub:
  * alpine's {@code /bin/sh} on an OpenStdin container is the scriptable game-server
  * stand-in -- console commands ARE shell lines, so readiness output, graceful stop and
  * crashes are all produced on demand. Every status assertion reads the DATABASE row

@@ -16,7 +16,7 @@ import java.util.Map;
  * ({@code PanelResource.Builder.withholds}): a tenant never filters, sorts, searches or reads by host.
  *
  * AIDEV-NOTE: the tenant pages censor the host everywhere they draw it (InstanceOverview, AppDirectory's delegated
- * rows), but until D7f the /manage instance list's rule filter still spoke the schema's {@code server_id}, so a tenant
+ * rows), but the /manage instance list's rule filter once spoke the schema's {@code server_id}, so a tenant
  * could select their instances by host id. {@link ManagePanel#declareEntries} refuses to boot a twin that does not
  * withhold its model's fields, so a new twin cannot forget them; a new host field is one edit here, and
  * ManagePanelJourneyTest fails while a /manage model's relation to a host is not named here.

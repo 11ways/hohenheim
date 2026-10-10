@@ -129,7 +129,7 @@ public final class ServerOverviewState {
         }
 
         // The last failure in words (its kind's label, "Docker not found"), the transport's own text after it as the
-        // technical line: DEP10's host read "Last error" over raw ssh English.
+        // technical line: a host once read "Last error" over raw ssh English.
         String lastError = Objects.toString(server.get(ServerModel.LAST_ERROR), "");
         if (!lastError.isBlank()) {
             String kind = Objects.toString(server.get(ServerModel.LAST_ERROR_KIND), "");
@@ -477,7 +477,7 @@ public final class ServerOverviewState {
      *
      * AIDEV-NOTE: a database engine, and a dedicated database, runs as an instance it owns (generated_for); the ledger
      * books that instance once. The owner row is the one an operator recognises and the one that blocks removal, so it
-     * stands for the booking and its owned instance is not listed again (DEP10: dbengine-mongo-local and mongo-local,
+     * stands for the booking and its owned instance is not listed again (once: dbengine-mongo-local and mongo-local,
      * 512 MB each, one engine). An owned instance whose owner is not on this host (a move in flight) stays listed, so
      * nothing booked here goes missing.
      */

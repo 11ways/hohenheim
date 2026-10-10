@@ -19,7 +19,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The admin settings page reads as an operator's: Hohenheim's own sections first, in the boards' order, each gathering
+ * The admin settings page reads as an operator's: Hohenheim's own sections first, in a fixed order, each gathering
  * the groups that answer one question, and zenit's own settings behind one "Framework (advanced)" disclosure.
  *
  * @author Jelle De Loecker
@@ -50,7 +50,7 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
         assertThat(peer.navGroup()).as("step 2: the settings entry sits in the System group")
             .isSameAs(NavGroup.SYSTEM);
         List<SettingsPage.Mount> mounts = ((SettingsPage) peer).mounts();
-        assertThat(mounts).extracting(SettingsPage.Mount::key).as("step 2: the sections in the boards' order")
+        assertThat(mounts).extracting(SettingsPage.Mount::key).as("step 2: the sections in their order")
             .containsExactly("general", "https", "backups", "comms", "apps", "hosts", "dns", "blocking",
                 "spamservice", "proxy", SettingsPage.FRAMEWORK_MOUNT_KEY);
         assertThat(mounts).filteredOn(SettingsPage.Mount::advanced).extracting(SettingsPage.Mount::key)
@@ -96,7 +96,7 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
         assertThat(page.locator("[data-path='framework.network.request_body_size_limit']").count())
             .as("step 5: the framework keeps its shared key").isEqualTo(1);
 
-        // 6. Every group Hohenheim's sections offer is listed with its icon (board Settings), a one-group section's
+        // 6. Every group Hohenheim's sections offer is listed with its icon, a one-group section's
         //    own row included.
         List<String> bare = new ArrayList<>();
         for (HohenheimSettingsSections section : HohenheimSettingsSections.values()) {
@@ -109,7 +109,7 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
         }
         assertThat(bare).as("step 6: no Hohenheim settings row is listed without its icon").isEmpty();
 
-        // 7. The Settings cluster names its record sections as the board does: App templates and Git connections.
+        // 7. The Settings cluster names its record sections in plain words: App templates and Git connections.
         for (String[] expected : List.of(
                 new String[]{HohenheimSlugs.INSTANCE_TEMPLATES, "en", "App templates"},
                 new String[]{HohenheimSlugs.INSTANCE_TEMPLATES, "nl", "App-sjablonen"},
@@ -117,7 +117,7 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
                 new String[]{HohenheimSlugs.GIT_PROVIDERS, "nl", "Git-koppelingen"})) {
             assertThat(admin.entryBySlug(expected[0]).label()
                     .tryResolve(LocaleChain.ofTags(expected[1]), MessageResolvers.getDefault()))
-                .as("step 7: the '" + expected[0] + "' tab reads as the board names it (" + expected[1] + ")")
+                .as("step 7: the '" + expected[0] + "' tab reads as named (" + expected[1] + ")")
                 .isEqualTo(expected[2]);
         }
     }

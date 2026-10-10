@@ -42,7 +42,7 @@ import java.util.Map;
  * requesting principal, so this page shows the reader their OWN items and the
  * panel permission is the only gate it needs.
  *
- * AIDEV-NOTE: no sidebar badge (board Main, D13a): the one count the sidebar carries is the Apps entry's apps with a
+ * AIDEV-NOTE: no sidebar badge: the one count the sidebar carries is the Apps entry's apps with a
  * problem. A lasting condition an alert reports reaches the dashboard's Needs attention at its root; the inbox is the
  * history of what was sent, its repeats folded by the alert's repeat key (AlertNotification).
  */

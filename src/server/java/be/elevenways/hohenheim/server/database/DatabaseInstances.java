@@ -379,8 +379,8 @@ public final class DatabaseInstances {
     }
 
     /**
-     * The documented migration of pre-lowering databases (instance-tier-plan Phase 7,
-     * binding property "no data migration may lose a running workload"): every DEDICATED
+     * The documented migration of pre-lowering databases (binding
+     * property "no data migration may lose a running workload"): every DEDICATED
      * database record that owns no instance yet gets one, and any record whose engine
      * container still exists at the daemon is re-deployed under the contract -- onto the
      * SAME data volume, so the engine comes back on the same bytes.

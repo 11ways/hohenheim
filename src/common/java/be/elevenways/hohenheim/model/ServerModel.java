@@ -158,7 +158,7 @@ public class ServerModel extends Model {
      * The host's declared isolation posture. Data the allocator reads, never operator
      * memory.
      *
-     * AIDEV-NOTE: the shared_container acknowledgement record the plan requires (actor,
+     * AIDEV-NOTE: the shared_container acknowledgement record (actor,
      * timestamp, warning version) IS built now -- see {@link #ACKNOWLEDGED_POSTURE} and
      * its four siblings, {@link #postureAcknowledged}, and
      * {@code HostPostureAcknowledgement}. Superseding the earlier note here: setting
@@ -224,7 +224,7 @@ public class ServerModel extends Model {
      * What the filesystem under this host's {@link #VOLUME_ROOT} can do, DETECTED by the
      * preflight probe.
      *
-     * AIDEV-NOTE: per DATA ROOT, not per host (phase-0 design section 1): both live twins
+     * AIDEV-NOTE: per DATA ROOT, not per host: both live twins
      * run ext4 roots with a separate btrfs device, so "this host has btrfs somewhere" is
      * not an answer to "can this volume have a quota". An unrecognised filesystem stores
      * {@code none} and the placement gate then refuses workspaces and applications by
@@ -285,7 +285,7 @@ public class ServerModel extends Model {
     /**
      * The posture TOKEN an operator acknowledged the risk of, null when none. Never a
      * boolean: a flag would keep saying yes after the posture moved underneath it, and
-     * the plan's clause refuses "a boolean hidden in settings" for exactly that shape.
+     * the posture rule refuses "a boolean hidden in settings" for exactly that shape.
      *
      * AIDEV-NOTE: COLUMNS are the authority and the activity row is HISTORY, the same
      * split {@code HostPins} uses. The activity log cannot be the authority here:
@@ -333,7 +333,7 @@ public class ServerModel extends Model {
      * The operator-facing digest of {@link #HOST_KEY} ({@code SHA256:...}, exactly what
      * {@code ssh-keygen -lf} prints), derived at pin time and never entered by hand.
      *
-     * AIDEV-NOTE: populated since the pinning wave (M057). An operator who cannot SEE a
+     * AIDEV-NOTE: populated since host-key pinning (M057). An operator who cannot SEE a
      * fingerprint can never notice it changed, so this is displayed on the host form and
      * is the phrase the confirm/re-pin ceremonies make the operator type.
      *
@@ -759,8 +759,8 @@ public class ServerModel extends Model {
      * across a hypervisor, and a shared-kernel workload breaks that promise for every
      * workload already there, not just for itself.
      *
-     * AIDEV-NOTE: this is the pairing the plan's "placement refuses a hostile workload
-     * when the host posture cannot satisfy it" asked for, and it lives HERE rather than in
+     * AIDEV-NOTE: this is the pairing "placement refuses a hostile workload
+     * when the host posture cannot satisfy it" needs, and it lives HERE rather than in
      * the gate for the same reason {@link #acceptsTenantWorkloads} does: the posture
      * vocabulary is this model's, so what a posture permits is answered once. The other
      * three postures permit both isolations -- {@code trusted_only} refuses tenant

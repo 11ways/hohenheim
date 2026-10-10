@@ -29,7 +29,7 @@ public enum NotificationEvents {
     INSTANCE_CRASH_LOOP("instance_crash_loop"),
     /**
      * StackRuntime raises this on active to degraded|failed; without it here a channel
-     * with a subscription list could never route it (plan Phase 3 "fix in passing").
+     * with a subscription list could never route it.
      */
     STACK_HEALTH("stack_health"),
     /** HostProbe raises this the first time a host stops answering, never on every retry. */

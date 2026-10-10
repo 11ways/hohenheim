@@ -5,8 +5,8 @@ container per managed database.
 
 ## Why
 
-Before 2026-09-02 every managed database record owned exactly one
-`hohenheim:database_container` instance. On robbedoes that meant six Mongo containers
+A dedicated managed database record owns exactly one
+`hohenheim:database_container` instance. On robbedoes, with every record dedicated, that meant six Mongo containers
 booking 512 to 1280 MB each (3,840 MB of the host budget) for roughly 650 MB of real
 use: a Mongo process idles at ~120 MB and WiredTiger floors its cache at 256 MiB below
 a 1.5 GiB cap whatever the cap says, so five small engines cost five floors. One engine
@@ -23,8 +23,7 @@ holding six logical databases costs one.
   operator may create more by hand (a second Mongo on a host for a different major
   version, say) and pick one explicitly.
 - **Placement** (`DatabaseModel.PLACEMENT`, tokens `dedicated`/`shared`): whether a
-  managed database is its own engine container (the pre-2026-09-02 shape, still fully
-  supported) or a LOGICAL database on a shared engine. `DatabaseModel.ENGINE_ID` is the
+  managed database is its own engine container (still fully supported) or a LOGICAL database on a shared engine. `DatabaseModel.ENGINE_ID` is the
   resolved binding of a shared record; the two are one fact
   (`DatabaseModel.isShared(row)` reads placement, and a before-validate hook refuses a
   shared row without an engine or a dedicated row with one). Rows that predate the
@@ -47,9 +46,9 @@ The default placement of a new record is `shared` for an engine that supports it
 a property of its own container.
 
 MySQL and PostgreSQL ride the same mechanism because it is generic (a create-database
-plus create-user script per engine, an exhaustive switch). The production migration of
-2026-09-02 moved only the Mongo records; the two WordPress MySQL records stay dedicated
-until an operator moves them (one row action each, see below).
+plus create-user script per engine, an exhaustive switch). In production only the Mongo
+records were moved; the two WordPress MySQL records stay dedicated until an operator
+moves them (one row action each, see below).
 
 ## Credentials
 
@@ -143,14 +142,14 @@ instance slot.
 - Database engines list (Deploy group, beside Databases): name, engine, host, status,
   the databases it hosts, memory; create (engine, host, image, ceilings), resize (same
   recreate lane as a dedicated database), delete (refused while used).
-- REST verbs (added 2026-09-02, `DatabaseApi`): `GET /api/v1/databases`,
+- REST verbs (`DatabaseApi`): `GET /api/v1/databases`,
   `POST /api/v1/databases/{id}/move-shared` (admin), `POST /api/v1/databases/{id}/delete`
   and `GET /api/v1/engines` (admin), plus `hoh database list|move|delete` and
   `hoh engine list`. Same gates as the panel -- the move's eligibility IS
   `DatabaseService.moveRefusal`, which the row action's visibility reads too. See
   `docs/paas-api.md`.
 
-## Decisions taken without Jelle (2026-09-02)
+## Design choices
 
 - Engine survives its last database (see table above).
 - Shared engine default footprint 1024 MB for every sharing engine: UNMEASURED for a
@@ -161,11 +160,10 @@ instance slot.
 - A shared record may not declare an image that differs from its engine's
   (`database_image_engine_mismatch`); blank means the engine's.
 
-## Rollout record and what the first production moves taught (2026-09-02)
+## What the production moves taught
 
-Deployed as hohenheim `4551de29` (M009) to starfleet, kuifje and robbedoes; the
-runbooks carry the per-box entries. Five of robbedoes' six Mongo records and
-starfleet's `skeleton-mongo` moved through the panel action.
+Five of robbedoes' six Mongo records and starfleet's `skeleton-mongo` moved
+through the panel action.
 
 - The restore half streams: `ManagedDatabase.restoreFromFile` pipes the dump
   into the engine's own client over an exec's stdin
@@ -180,25 +178,19 @@ starfleet's `skeleton-mongo` moved through the panel action.
 - `database.max_dump_mb` bounds the ARCHIVE, which for Mongo is uncompressed
   BSON (roughly four times the WiredTiger footprint). Size it accordingly
   before moving a large record.
-- On a host with no headroom the engine cannot be booked beside the dedicated
-  containers it will absorb. The lever is `capacity.memory_overcommit_ratio`
-  for the move window, or an explicit engine row with a smaller ceiling
-  (starfleet: mongo:4.4 at 512 MB, because a 2 GB box cannot carry 1024 beside
-  its dedicated 512). Put the ratio back afterwards.
 - A row written before M009 reads as `dedicated` at load (afterFind); the
   stored column stays null.
 
-## Two operator detours removed (2026-09-02, second pass)
+## Moving on a full host, and over-cap dumps
 
-- **A full host no longer refuses the move that frees it.** The engine's
+- **A full host does not refuse the move that frees it.** The engine's
   reservation runs inside `InstanceCapacity.withPendingRelease(host, booked)`,
   a per-thread CREDIT on the host limit worth exactly what the dedicated
   container about to be destroyed holds. The bucket is still charged for both
   until that container's row is soft-deleted (the migration window's "booked on
   both" rule); a move that fails after the reservation leaves the host over
-  budget by at most the credit, the survivable direction. The overcommit-ratio
-  dance the first rollout needed is gone; a host that fits its dedicated
-  containers fits the engine that absorbs them. Pinned by
+  budget by at most the credit, the survivable direction. A host that fits its
+  dedicated containers fits the engine that absorbs them. Pinned by
   `CapacityPendingReleaseTest` (the primitive) and the live move journey's
   step 2c (a host one megabyte short).
 - **An over-cap binary dump is refused before any byte moves**, naming the

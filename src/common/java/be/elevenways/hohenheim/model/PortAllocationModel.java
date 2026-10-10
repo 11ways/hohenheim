@@ -12,8 +12,8 @@ import be.elevenways.zenit.common.orm.model.Schema;
  * (M051_PortLedgerAndHostFks). All claim/release traffic goes through
  * {@code be.elevenways.hohenheim.ports.PortLedger}, never through raw saves.
  *
- * AIDEV-NOTE: a LEDGER TABLE, not a RouteClaims-style claim-key column, by decided fork
- * (instance-tier-plan, Phase 3): a managed-process port is owned by a PROCESS INSTANCE,
+ * AIDEV-NOTE: a LEDGER TABLE, not a RouteClaims-style claim-key column, by decision:
+ * a managed-process port is owned by a PROCESS INSTANCE,
  * so there is no record to hang a column on, and the table also carries cross-authority
  * capacity queries. OWNER_MODEL/OWNER_ID are therefore NULLABLE: a null owner is a port
  * held by something that is not a record (C5 managed processes), described by NOTE.
@@ -82,8 +82,8 @@ public class PortAllocationModel extends Model {
     public static final String MODE_PREALLOCATED = "preallocated";
 
     /**
-     * The claim's declared acquisition strategy (the instance-tier plan's fork 2
-     * discriminator): null = record-after / observed (the default), or
+     * The claim's declared acquisition strategy:
+     * null = record-after / observed (the default), or
      * {@link #MODE_PREALLOCATED}. One ledger, one claim primitive, two strategies.
      */
     public static final StringField ALLOCATION_MODE = SCHEMA.addField(

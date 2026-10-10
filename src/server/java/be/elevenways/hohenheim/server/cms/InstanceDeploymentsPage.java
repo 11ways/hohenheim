@@ -63,7 +63,7 @@ import java.util.regex.Pattern;
  * deploy-now (and rollback, where releases exist) and the push webhook.
  *
  * AIDEV-NOTE: this REPLACED the site's Deployments tab when the release engine was
- * re-keyed to the application (phase-0 brief 7): the deploy history belongs to the
+ * re-keyed to the application: the deploy history belongs to the
  * record that OWNS the releases, and an application that no site exposes yet still
  * deploys. The site keeps only what a site is -- a hostname.
  *

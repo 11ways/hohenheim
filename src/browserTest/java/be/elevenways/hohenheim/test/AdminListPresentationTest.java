@@ -44,7 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AdminListPresentationTest extends HohenheimTestBase {
 
     /**
-     * The admin peers that MUST offer a search box. A pin, not a snapshot: this wave exists
+     * The admin peers that MUST offer a search box. A pin, not a snapshot: this list exists
      * because the framework grew the feature and exactly one resource ever declared it, and
      * the way that happens again is a resource quietly losing its declaration.
      */
@@ -63,7 +63,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
      * Step 1-4: every resource of both panels registers, and every declaration it makes about
      * its own list is one the framework can honour.
      */
-    /** The peers this wave gave an explicit spec where the derived one used to serve. */
+    /** The peers given an explicit spec where the derived one used to serve. */
     private static final List<String> NEW_TABLE_SPEC_SLUGS =
         List.of("access-lists", "auth-providers", "notifications", "bans");
 
@@ -146,7 +146,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
             }
         }
 
-        // 4. And the inventory itself: every peer this wave gave a search box still has one.
+        // 4. And the inventory itself: every pinned peer still has a search box.
         assertThat(offering)
             .as("step 4: the admin peers that offer a search box")
             .containsAll(SEARCHABLE_ADMIN_SLUGS);
@@ -191,7 +191,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
             .doesNotContain("wavea-alpha-site")
             .doesNotContain("wavea-beta-site");
 
-        // 4. The search this wave exists for: "which access list holds 10.77.0.5" was
+        // 4. The search this list exists for: "which access list holds 10.77.0.5" was
         //    previously only answerable by opening every record. The rules are their own
         //    records now, so the question is asked of them -- and each answer names the
         //    list it belongs to.
@@ -201,7 +201,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
         assertThat(byRule).as("step 4: and not the list that does not hold it")
             .doesNotContain("wavea-other-list");
 
-        // 5. A host is found by an address that was stored and, before this wave, rendered
+        // 5. A host is found by an address that was stored and, before the search box, rendered
         //    nowhere at all.
         String byIp = adminGet("/admin/servers?text=198.51.100.44").body();
         assertThat(byIp).as("step 5: the host is found by its public address")
@@ -259,7 +259,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
     void listChromeIsDeclaredPerResourceAndHostPicksRefuseInlineCreate() throws Exception {
         seed();
 
-        // 1. Hosts: the ruling that started this wave. A handful of servers never needs a
+        // 1. Hosts: a handful of servers never needs a
         //    rule builder, saved views or a column gear. The advanced disclosure lives in
         //    the FOLDED filter bar (zenit-cms 155b9bc), which a pristine server render
         //    leaves out entirely; an active ?q= narrowing forces the bar open, so both this
@@ -273,7 +273,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
         assertThat(hosts).as("step 1: hosts offer no column picker")
             .doesNotContain("data-cms-columns-toggle");
 
-        // 2. But the search box a previous wave deliberately gave them STAYS: finding a host
+        // 2. But their deliberately declared search box STAYS: finding a host
         //    by the public address under its name is what that declaration exists for.
         assertThat(hosts).as("step 2: hosts keep their search box")
             .contains("cms-list-search");

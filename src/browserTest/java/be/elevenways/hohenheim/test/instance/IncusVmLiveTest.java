@@ -46,7 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * Phase 8 slice 1 against the REAL remote Incus daemon: a Linux VM provisioned from
+ * VMs against the REAL remote Incus daemon: a Linux VM provisioned from
  * CLOUD-INIT through the template mechanism (typed variables, secret lane), deployed
  * through the SAME driver seam as containers, network policy enforced and proven in the
  * DAEMON'S KERNEL as well as its config -- with the boundary deliberately broken and

@@ -79,18 +79,18 @@ public final class HohenheimWidgets {
         HohenheimTemplateIds.WIDGET_APP_PROTECTION,
         HohenheimMicrocopy.APP_OVERVIEW.of("protection"), "lock");
 
-    /** The dashboard's Apps band (board Main): each app with what it is, where, and whether HTTPS works. */
+    /** The dashboard's Apps band: each app with what it is, where, and whether HTTPS works. */
     public static final DisplayWidget APPS = register("apps", HohenheimTemplateIds.WIDGET_APPS,
         HohenheimMicrocopy.DASHBOARD.of("apps"), "cubes");
 
     /**
-     * The admin dashboard's count tile (board Main): a count with the line saying what it holds, which the framework's
+     * The admin dashboard's count tile: a count with the line saying what it holds, which the framework's
      * record-count tile cannot say (an app is a reading, not a record; "2 of 3" is no count of one source).
      */
     public static final DisplayWidget STAT = register("stat", HohenheimTemplateIds.WIDGET_STAT,
         HohenheimMicrocopy.DASHBOARD.of("stat_tile"), "gauge");
 
-    /** The /manage landing's usage card (board Manage-Home): each capped budget of the tenant against its cap. */
+    /** The /manage landing's usage card: each capped budget of the tenant against its cap. */
     public static final DisplayWidget TENANT_USAGE = register("tenant_usage", HohenheimTemplateIds.WIDGET_TENANT_USAGE,
         HohenheimMicrocopy.TENANT_USAGE.of("title"), "gauge");
 

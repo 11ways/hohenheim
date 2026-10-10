@@ -7,7 +7,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
- * One app as the dashboard's Apps band draws it (board Main): its health, its name, what it is and where, and its
+ * One app as the dashboard's Apps band draws it: its health, its name, what it is and where, and its
  * badge: whether HTTPS works, or its verdict.
  *
  * @param detail what the app is and its address ("WordPress · shop.example.com")

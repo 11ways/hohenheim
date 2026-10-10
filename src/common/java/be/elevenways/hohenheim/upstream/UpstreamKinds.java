@@ -8,7 +8,7 @@ import be.elevenways.protoblast.common.registry.Registry;
  * SiteModel's RegistryMemberField, its {@code schemaFrom} settings, the admin selector and
  * the proxy's handler dispatch.
  *
- * AIDEV-NOTE: renamed from SiteTypeRegistry on 2026-08-22 (phase-0 design section 3) because
+ * AIDEV-NOTE: renamed from SiteTypeRegistry on 2026-08-22 because
  * the old vocabulary conflated two questions -- "where do requests go" (static, redirect,
  * address, instance, tls passthrough, dev namespace) and "what workload runs" (docker, node,
  * java, command, alchemy). The second question moved to the INSTANCE kind, so a site now has

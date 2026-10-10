@@ -31,8 +31,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * DATABASE_URL pinned to the FIRST link, unavailable databases contributing nothing, and
  * URL-encoded credentials. Live ports are stubbed -- no Docker needed.
  *
- * AIDEV-NOTE: there is exactly ONE lane left. Phase 0 brief 7 deleted {@code envForSite}
- * and with it the only public entry point that asked for {@code Style.PUBLISHED_LOOPBACK},
+ * AIDEV-NOTE: there is exactly ONE lane left. Deleting {@code envForSite} removed
+ * the only public entry point that asked for {@code Style.PUBLISHED_LOOPBACK},
  * so every journey here now runs the INSTANCE lane, which is always CONTAINER_NETWORK: a
  * workload's own 127.0.0.1 is itself, and the loopback style would hand it an address that
  * reaches nothing. The subjects are unchanged -- families, primary-URL pinning, degradation

@@ -91,8 +91,8 @@ final class HohenheimGrantPolicy {
                 .typeLevel(SITES_MANAGE_ALL));
 
         // AIDEV-NOTE: DnsZoneModel, DnsPeerModel and DnsZonePeerModel declare NO vocabulary
-        // and are NOT grantable, PERMANENTLY and by decision (docs/instance-tier-plan.md,
-        // "Phase 2 parallel gate", DECIDED 2026-08-02). A zone row is the DNSSEC/TSIG trust
+        // and are NOT grantable, PERMANENTLY and by decision.
+        // A zone row is the DNSSEC/TSIG trust
         // root (dnssec_private_key, tsig_secret, api_key) and every remaining field is SOA
         // policy whose blast radius is the whole zone going dark, so there is no per-field
         // split leaving a tenant a safe subset; creating a zone also ASSERTS a delegation
@@ -138,7 +138,7 @@ final class HohenheimGrantPolicy {
         // load-bearing -- without one, sameOwner on instances compares two EMPTY subject
         // sets and answers "same owner" for every pair: a tenancy check that cannot fail.
         //
-        // AIDEV-NOTE: the UMBRELLA DECISION (2026-08-08, Phase 3/5/6 gate work). "manage"
+        // AIDEV-NOTE: the UMBRELLA DECISION. "manage"
         // is KEPT and stays THE ownership marker (manageSubjectsOf/sameOwner, the quota
         // bucket, the released-claim ledger, project adoption all read it), and the narrow
         // verbs are declared as capabilities manage IMPLIES -- the framework's new
@@ -211,9 +211,9 @@ final class HohenheimGrantPolicy {
                 .label(HohenheimMicrocopy.CAPABILITY.of("exec"))
                 .describe(HohenheimMicrocopy.CAPABILITY.of("exec_instance_description"))
                 .admin(),
-            // Phase 4: the snapshot/backup actions now exist (InstanceSnapshots /
+            // The snapshot/backup actions now exist (InstanceSnapshots /
             // InstanceBackups behind the admin resources), so their capabilities
-            // register per the plan's no-unwired rule. Elevated -- a snapshot
+            // register now that an action wires them. Elevated -- a snapshot
             // restore destroys data and a backup export carries secret variables.
             KnownCapability.of(SNAPSHOTS)
                 .label(HohenheimMicrocopy.CAPABILITY.of("snapshots"))
@@ -225,7 +225,7 @@ final class HohenheimGrantPolicy {
                 .describe(HohenheimMicrocopy.CAPABILITY.of("backups_instance_description"))
                 .elevated()
                 .asDelegable(),
-            // Phase 5: the image gate exists (InstanceImagePolicy on the write funnel),
+            // The image gate exists (InstanceImagePolicy on the write funnel),
             // so the capability registers WITH its enforcement per the no-unwired rule.
             // The grant matrix this declaration attaches is the instances access page
             // that manage/snapshots/backups already surface.
@@ -233,7 +233,7 @@ final class HohenheimGrantPolicy {
                 .label(HohenheimMicrocopy.CAPABILITY.of("image_any"))
                 .describe(HohenheimMicrocopy.CAPABILITY.of("image_any_instance_description"))
                 .elevated(),
-            // Phase 6: the file manager exists (InstanceFiles behind the Files tab and the
+            // The file manager exists (InstanceFiles behind the Files tab and the
             // /api/v1 file lane), so its two capabilities register WITH their enforcement
             // per the no-unwired rule. They ride the SAME grant matrix manage/snapshots/
             // backups already surface, so declaring them adds two columns to a page that is
@@ -278,7 +278,7 @@ final class HohenheimGrantPolicy {
                 .admin(HohenheimPanel.ACCESS)
                 .derivedFrom(InstanceModel.MODEL_ID, PreviewDeploymentModel.APPLICATION_ID));
 
-        // Managed databases: the tenant-allocation tier (Phase 5). MANAGE stays THE
+        // Managed databases: the tenant-allocation tier. MANAGE stays THE
         // ownership identity for exactly the reason it does on instances -- there is no
         // owner column on managed_databases, and manageSubjectsOf/sameOwner, the instance
         // quota bucket the engine is charged to (InstanceQuota.creationOwnerPackOf reads the

@@ -27,8 +27,8 @@ import java.util.function.Supplier;
  * active, then the stored state of the engine instance serving it. The Databases list's state cell, the Engines card,
  * an app's Databases tab, the connection card, the host page and the attention items all read it.
  *
- * AIDEV-NOTE: the record's "active" only says provisioning finished, never that anything serves. D10b's walk had the
- * list read "Active" for shop while its attention items said its engine was not running; whether it serves is the
+ * AIDEV-NOTE: the record's "active" only says provisioning finished, never that anything serves. The
+ * list once read "Active" for shop while its attention items said its engine was not running; whether it serves is the
  * engine instance's status column, which InstanceStatusReconciler stores from what the daemon answered, so this reads
  * STORED state only and dials nothing per render. A host whose last probe failed makes that status unverified.
  *

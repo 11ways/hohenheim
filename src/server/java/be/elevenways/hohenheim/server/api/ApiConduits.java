@@ -125,7 +125,7 @@ public final class ApiConduits {
      * THE wire adapter of {@code /api/v1} for a refusal of the operation pipeline: every reason it can receive answers
      * the status and body this API answered before the pipeline existed.
      *
-     * AIDEV-NOTE: a frozen external wire keeps its shape (stage 2 contract 6.10, S3), so this maps reasons where every
+     * AIDEV-NOTE: a frozen external wire keeps its shape, so this maps reasons where every
      * new API lets core's edge render them. Hohenheim's instance-tier reasons answer the 422 envelope a form-level
      * {@code Violations} of the same key writes, byte-identical to the service gates' refusal; a core NOT_FOUND is the
      * route's own 404, a core FORBIDDEN or PERMISSION_DENIED the key gate's 403, and a core OPERATION_UNAVAILABLE the

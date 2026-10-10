@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * probe outcome and the sticky quarantine token, so a host quarantined because its TLS
  * fingerprint or ssh host key CONTRADICTED its pin -- a security verdict -- had that
  * verdict erased by the next unrelated probe that happened to reach the daemon. The
- * earlier wave removed one automatic trigger (the hourly Docker sweep restamping every
+ * earlier fix removed one automatic trigger (the hourly Docker sweep restamping every
  * Incus host UNREACHABLE) and left the shape open; this closes it.
  */
 class HostQuarantineStickinessTest {

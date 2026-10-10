@@ -32,7 +32,7 @@ import java.util.Map;
  * The template catalog's operations: creating an instance from one template (the wizard every panel places on its
  * from-template page), and the operator's approval and its withdrawal.
  *
- * AIDEV-NOTE: the subject IS the template (DECIDED D2-B11), loaded through the template catalog's scope, so a template
+ * AIDEV-NOTE: the subject IS the template, loaded through the template catalog's scope, so a template
  * the caller may not select is concealed before any input is read; no template id travels as input. The variables
  * entry is declared empty and resolved per admitted template on the server (O04): its schema, and the secret defaults
  * that fill a blank secret before validation, never reach a rendered form.
@@ -123,7 +123,7 @@ public final class InstanceTemplateOperations {
     /**
      * One coerced create: the template's variables as their typed values, a secret one as the pipeline sealed it.
      *
-     * @param variables by variable key; attribution (project, environment) is never a variable (D5-B06)
+     * @param variables by variable key; attribution (project, environment) is never a variable
      */
     public record CreateFromTemplate(@Nullable String name, @Nullable Integer serverId, @Nullable Integer projectId,
                                      @Nullable Integer environmentId, @NonNull Map<String, Object> variables) {

@@ -60,7 +60,7 @@ public final class AdminActivityResource {
      * The framework's own columns and filters, plus every filter an operator needs to reach one record: the app it is
      * about, the record id and the origin that flips the default scope.
      *
-     * AIDEV-NOTE: an app is its workload's record (redesign plan J1), so the app filter offers instances through the
+     * AIDEV-NOTE: an app is its workload's record, so the app filter offers instances through the
      * instance record source, whose row scope decides which a reader is offered; a site-only app has no workload and is
      * not offered. Its rows stay reachable through the record filter.
      */
@@ -112,9 +112,9 @@ public final class AdminActivityResource {
      * What a person did to one record: the host page's recent activity.
      *
      * AIDEV-NOTE: a host's bookkeeping writes (the hourly heartbeat HostProbe stamps) run under
-     * ActivityLog.suppressed since W5b, but the rows they wrote before stay in the log, and a host nobody touches kept
-     * them as its ten newest rows forever (DEP9: Starfleet's local host, hourly "System changed local Server" rows
-     * up to the W5b deploy). Reading what a person did leaves those rows in the log and off the card.
+     * ActivityLog.suppressed now, but the rows they wrote before stay in the log, and a host nobody touches kept
+     * them as its ten newest rows forever (Starfleet's local host, hourly "System changed local Server" rows
+     * up to the deploy that suppressed them). Reading what a person did leaves those rows in the log and off the card.
      *
      * @return the rule tree selecting what a person did to this record
      */

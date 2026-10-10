@@ -58,7 +58,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * acts an operator performs -- install the product-minted public key in authorized_keys,
  * compare the scanned fingerprint against what the host reports for itself -- and every
  * kernel read below travels {@code HostKeys.sshArgv} -> {@code NftRunner.forServer}.
- * The earlier wave could only prove the MECHANISM through {@code overrideRunnerForTest};
+ * A hermetic test can only prove the MECHANISM through {@code overrideRunnerForTest};
  * this proves the DEPLOYMENT. The fixture's own ssh helpers stay the INJECTION lane (they
  * break the kernel), never the verification lane.
  */
@@ -94,7 +94,7 @@ class IncusKernelIsolationLiveTest {
      * Give the host back exactly what it lent us: the enrolled client certificate and the
      * authorized_keys line. Both are working CREDENTIALS on a real machine, so the
      * outcome is PRINTED rather than swallowed -- a cleanup that silently fails leaves
-     * root access behind and reports success, which is the shape this whole wave hunts.
+     * root access behind and reports success, which is the shape this whole test hunts.
      */
     @AfterAll
     static void tearDown() {

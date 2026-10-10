@@ -42,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * Phase 5b's gate against the REAL Incus host: two UNMODIFIED community-scripts apps
+ * Community-script installs against the REAL Incus host: two UNMODIFIED community-scripts apps
  * (Gotify, AdGuard Home) install from their PINNED install scripts through the
  * {@code $FUNCTIONS_FILE_PATH} shim into Debian system containers, come up reachable
  * and functional (asserted from inside the container AND from the host), the deferred

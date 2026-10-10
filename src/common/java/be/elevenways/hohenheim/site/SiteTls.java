@@ -12,7 +12,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * AIDEV-NOTE: "forced" used to be the green badge, so a site forcing HTTPS on a name without a certificate (every
  * visitor on an error page) read healthy. The state is derived from the names' certificate coverage (CertCoverage);
  * {@link #BROKEN} is the one that names the error page. {@link #MISSING} says "No certificate" in the outline variant
- * CertCoverage's NONE wears for the same words (DD4; it was secondary).
+ * CertCoverage's NONE wears for the same words (it was secondary).
  *
  * @author Jelle De Loecker
  * @since  0.10.0

@@ -146,8 +146,8 @@ public record InstanceSpec(@NonNull String handle,
      * The one way a kind declares a workload: the five components nothing may omit as
      * arguments, everything else named at the call site.
      *
-     * AIDEV-NOTE: this REPLACED a ladder of five positional convenience constructors
-     * (2026-08-13). They differed only in arity, so adding a component to the record
+     * AIDEV-NOTE: this REPLACED a ladder of five positional convenience constructors.
+     * They differed only in arity, so adding a component to the record
      * silently re-pointed any call site one argument short at a SHORTER overload: the
      * 17-arg "widest single publication" shape and the 18-arg canonical one differed
      * only in {@code PortPublication} vs {@code List<PortPublication>}, and

@@ -18,12 +18,12 @@ import java.util.Set;
  *
  * AIDEV-NOTE: two declared relations decide what folds, never a comparison of words. An open checklist step presents
  * the item stating its stage ({@link OnboardingCollector#presentedBy}, the same question the step was built with), so
- * that item leaves the band: the boards draw a fresh install's open steps in the checklist and nothing in the band.
+ * that item leaves the band: a fresh install's open steps are drawn in the checklist and nothing in the band.
  * An item caused by a record ({@link AttentionItem#causedBy}, from the app verdict's cause half) leaves the band while
  * that record's own item is shown, in the band or presented by a step; its root says what it holds back. An item
  * whose root is not shown stays, so a fold can never hide a problem nobody else names.
  *
- * AIDEV-NOTE: the checklist retires once the first app is online (board Main), and the fold applies only while it
+ * AIDEV-NOTE: the checklist retires once the first app is online, and the fold applies only while it
  * shows: a retired checklist presents nothing, so the conditions its open steps stood for (backups that stay on this
  * machine, a host that takes no new apps) are the band's items from then on.
  *

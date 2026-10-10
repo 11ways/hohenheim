@@ -121,7 +121,7 @@ public final class LiveIncusHost {
     }
 
     /**
-     * The SECOND, deliberately twinned host of a cross-host wave ({@code url_b} /
+     * The SECOND, deliberately twinned host for cross-host tests ({@code url_b} /
      * {@code fingerprint_b} / {@code trust_target_b} in the same file), or null when
      * the operator enrolled only one -- single-host live tests keep running unchanged
      * and cross-host ones skip.
@@ -296,10 +296,10 @@ public final class LiveIncusHost {
      * fixture shortcut writing any verdict. Call inside a {@code Db.run} scope.
      *
      * AIDEV-NOTE: the ssh lane is part of this ceremony since kernel-truth verification
-     * became an admission REQUIREMENT (2026-08-07). It is not fixture convenience: an
+     * became an admission REQUIREMENT. It is not fixture convenience: an
      * https Incus host with a tenant-accepting posture and no lane now FAILS preflight by
      * design, so a fixture that skipped the lane would turn every Incus live test into a
-     * silent skip -- the exact reports-success shape this wave exists to kill.
+     * silent skip -- the exact reports-success shape this ceremony exists to kill.
      *
      * @return the enrolled client certificate's fingerprint (for trust cleanup)
      */

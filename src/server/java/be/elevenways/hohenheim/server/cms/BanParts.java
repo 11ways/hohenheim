@@ -145,7 +145,7 @@ public final class BanParts {
         // AIDEV-NOTE: the classification columns are filters too: "which active auto-bans came from the login probe"
         // was a question only answerable by paging.
         TableSpec<Row> table = TableSpec.<Row>builder()
-            // The Access-Blocked board reads a ban as the address and why, who blocked it, and until when; which
+            // The list reads a ban as the address and why, who blocked it, and until when; which
             // traffic it refuses, the event that tripped it and when it began stay in the picker and the filters.
             .column(ColumnSpec.fromField(BanModel.IP).label(HohenheimMicrocopy.BAN.of("address_column"))
                 .filterable().subtext("reason").copyable().build())
@@ -210,10 +210,10 @@ public final class BanParts {
                     filter -> BanModel.BLOCKED_NOW.equals(filter) ? HohenheimMicrocopy.BAN.of("blocked_now") : null)
                 .computed(Objects.requireNonNull(table.column(STATE_COLUMN)), (ban, request) ->
                     StateLineCell.of(BanState.of(ban, Now.instant()), null))
-                // Under the list (board Access-Blocked): who is close to being blocked, and who never is.
+                // Under the list: who is close to being blocked, and who never is.
                 .widgetsBelow(BanParts::belowList)
                 .build())
-            // Blocking an address is the header's one action and its form (board Access-Blocked); the list carries no
+            // Blocking an address is the header's one action and its form; the list carries no
             // quick-add bar beside it.
             .form(ResourceForm.<Row>of(form)
                 .bindings(bindings())

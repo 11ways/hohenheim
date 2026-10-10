@@ -100,7 +100,7 @@ class TenantInstanceApiTest extends HohenheimTestBase {
             HohenheimCapabilities.SNAPSHOTS, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantBId, InstanceModel.MODEL_ID, instanceBId,
             HohenheimCapabilities.MANAGE, true);
-        // The Phase 3 gate's own worked example: a delegate handed console (and, through
+        // The capability split's worked example: a delegate handed console (and, through
         // the umbrella, view) and NOTHING else on instance C. And a second delegate with
         // bare view, for the read lanes.
         RecordGrants.grant(GrantSubjectType.USER, tenantConsoleId, InstanceModel.MODEL_ID, instanceCId,
@@ -495,7 +495,7 @@ class TenantInstanceApiTest extends HohenheimTestBase {
      * COUNTERFACTUAL: the variable and log lanes answer to the capability their ACT needs,
      * not to the {@code view} the shared visibility resolver checks.
      *
-     * The Phase 3 gate's worked example run end to end: a delegate with console (and the
+     * The capability split's worked example run end to end: a delegate with console (and the
      * view it implies) and nothing else must not be able to change what the workload runs.
      * A variable substitutes into {@code command} at deploy, so a variable write IS a
      * config write; before this was enforced, this delegate wrote one and the instance's

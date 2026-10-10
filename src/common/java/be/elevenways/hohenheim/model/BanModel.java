@@ -104,7 +104,7 @@ public class BanModel extends Model {
      *
      * AIDEV-NOTE: THE definition the list's filter ({@link #blockedNow(Instant)}), the state cell and Lift's
      * availability read. The stored {@code active} flag alone is not it: the expiry sweep clears it only on its next
-     * run, so an expired ban still reads active until then (DEP9: "Blocked now" listed a ban whose state read
+     * run, so an expired ban still reads active until then ("Blocked now" once listed a ban whose state read
      * Expired, with Lift offered).
      *
      * @param now the instant asked about, read through {@code Now} by every caller

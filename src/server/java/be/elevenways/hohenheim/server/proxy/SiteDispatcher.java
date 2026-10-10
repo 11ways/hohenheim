@@ -692,9 +692,9 @@ public class SiteDispatcher implements HttpHandler {
      * The sites {@link #forcesHttps} sends to HTTPS, split by what sends them: an address's own Force HTTPS, or the
      * global Force HTTPS setting (a pattern, or a name a working certificate covers). A site with both is its own.
      *
-     * AIDEV-NOTE: D10a's dashboard said "sites that force SSL" of a catch-all and a certified name that forced nothing
+     * AIDEV-NOTE: the dashboard said "sites that force SSL" of a catch-all and a certified name that forced nothing
      * themselves: the setting (on by default) sent them. The reader names each by its cause, and names it by site id so
-     * the panel can say the app's name (D13a: one app, one name), never the route's copy of the site's title.
+     * the panel can say the app's name (one app, one name), never the route's copy of the site's title.
      */
     public ForcedSites forcedSites() {
         Set<Integer> own = new TreeSet<>();

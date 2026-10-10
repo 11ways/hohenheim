@@ -1,7 +1,5 @@
 # Dev tunnel: remote dev sites on wildcard subdomains
 
-Status: SHIPPED (2026-07-17).
-
 ## What it does
 
 A "Dev namespace" site in Hohenheim owns a wildcard domain (for example

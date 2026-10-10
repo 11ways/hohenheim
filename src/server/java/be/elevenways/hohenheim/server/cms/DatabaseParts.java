@@ -133,7 +133,7 @@ public final class DatabaseParts {
     private static final IdentifierKey<Map<Integer, Long>> DATABASE_COUNTS =
         IdentifierKey.of("hohenheim", "database_engine_database_counts");
 
-    /** The create verb in the Databases board's words: the list's button and the form's heading. */
+    /** The create verb in the Databases page's words: the list's button and the form's heading. */
     private static final Microcopy CREATE_TITLE = HohenheimMicrocopy.DATABASE.of("create_title");
 
     /** The operator's create and resize form. */
@@ -325,7 +325,7 @@ public final class DatabaseParts {
      */
     public static @NonNull PanelResource<Row> admin() {
         TableSpec<Row> table = TableSpec.<Row>builder()
-            // Board Databases: the name with where it runs under it, the engine, what uses it and its last backup.
+            // The name with where it runs under it, the engine, what uses it and its last backup.
             // The name inside the engine, the host, the placement and its engine move behind the picker and the
             // filters; the overview and the Restore tab carry them.
             .column(ColumnSpec.fromField(DatabaseModel.NAME).filterable().subtext(RUNS_ON_COLUMN).build())
@@ -377,7 +377,7 @@ public final class DatabaseParts {
                 .computed(Objects.requireNonNull(table.column(STATE_COLUMN)),
                     (database, request) -> DatabaseVerdict.ofDatabase(database).cell())
                 .rowLinkToTab(RecordOverview.SLUG)
-                // Board Databases: the shared engines the listed records live on, under the list.
+                // The shared engines the listed records live on, under the list.
                 .widgetsBelow(DatabaseParts::enginesCard)
                 .build())
             .form(ResourceForm.<Row>of(ADMIN_FORM)
@@ -425,8 +425,8 @@ public final class DatabaseParts {
             .column(stateColumn())
             .column(ColumnSpec.fromField(DatabaseModel.STATUS).filterable().hidden().build())
             .build();
-        // A row of the tenant's sidebar, in the board's place (ManagePanel's sidebar note), shown while the tenant
-        // holds a database or may create one (board Manage-Home, the doors drawn only where they open). reachesAny,
+        // A row of the tenant's sidebar, in its place (ManagePanel's sidebar note), shown while the tenant
+        // holds a database or may create one (the doors drawn only where they open). reachesAny,
         // because an id set cannot express every-record authority.
         return ManageTwin.listed(entry(ManageTwin.id("database")), TenantScopes.DATABASES,
                 ResourceTabs.<Row>of(List.of(new ManageDatabaseCredentialsPage())),
@@ -573,7 +573,7 @@ public final class DatabaseParts {
      *
      * AIDEV-NOTE: not DESTRUCTIVE: the move keeps the dump AND the old data volume as two rollbacks, and painting it
      * red beside a real delete devalues the red. Not PRIMARY either, and in the heading's More menu: a placement change
-     * done once in a database's life never leads its page (board Databases); Back up now leads by position.
+     * done once in a database's life never leads its page; Back up now leads by position.
      */
     private static @NonNull PanelAction<Row> moveToShared() {
         return PanelAction.<Row, Void>places(MOVE_TO_SHARED, ActionPlacement.ROW,
@@ -691,7 +691,7 @@ public final class DatabaseParts {
     }
 
     /**
-     * The Engines card under the list (board Databases): every shared engine as "MySQL on daystrom", how many databases
+     * The Engines card under the list: every shared engine as "MySQL on daystrom", how many databases
      * it holds and its state, each opening its engine. Nothing while no engine exists.
      */
     private static @NonNull WidgetTree enginesCard(@NonNull ListScope scope) {

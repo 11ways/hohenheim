@@ -14,8 +14,8 @@ import java.util.Map;
  * instance the site exposes, never on the site.
  *
  * AIDEV-NOTE: this exists because {@code sites.source}/{@code source_settings} were dropped
- * in phase 0 brief 5 while the webhook and preview lanes that read them are re-keyed in
- * briefs 7 and 8. Fixtures route through here so those lanes keep being exercised through
+ * while the webhook and preview lanes that read them were still being re-keyed. Fixtures
+ * route through here so those lanes keep being exercised through
  * their NEW keying (site -> instance_id -> settings, which is what {@code SiteSources}
  * reads) instead of being deleted and rewritten from nothing later.
  */

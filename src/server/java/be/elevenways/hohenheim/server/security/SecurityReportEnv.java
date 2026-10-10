@@ -31,7 +31,7 @@ import java.util.function.Supplier;
  * keep the child configured while a
  * single retry chain per site repairs the remote registration.
  *
- * AIDEV-NOTE: this whole lane is INERT since c6bfab02 deleted the host-user process lane.
+ * AIDEV-NOTE: this whole lane is INERT since the host-user process lane was deleted.
  * Nothing calls {@link #forSite} any more (only its own test does), and its private
  * key-minting is the ONLY writer of {@code sites.security_report_token}, so the still-wired
  * boot hook {@link #reconcilePersistedReporters} (SpamserviceManager) can only ever iterate

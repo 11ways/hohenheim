@@ -160,7 +160,7 @@ public final class WorkspaceKind implements InstanceKindHandler {
 
     @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 
-    /** The operator picks the runtime; the kind runs on both (phase-0 design section 4.3). */
+    /** The operator picks the runtime; the kind runs on both. */
     @Override public @NonNull Set<String> supportedRuntimes() {
         return Set.of(ServerModel.RUNTIME_DOCKER, ServerModel.RUNTIME_INCUS);
     }

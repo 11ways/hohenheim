@@ -363,7 +363,7 @@ class VerifyWorkloadIsolationTest {
                     .as("step 4: the refused repair is on the record")
                     .anySatisfy(error -> assertThat(error)
                         .contains("injected write failure"));
-                // Since the Phase 7 lowering there is no bespoke stack containment: the
+                // There is no bespoke stack containment: the
                 // service's OWN workload network is contained by the INSTANCE lane (which
                 // stops the workload) and the shared stack network is a link, contained
                 // by severing it. Both are named, and the workload really stops.

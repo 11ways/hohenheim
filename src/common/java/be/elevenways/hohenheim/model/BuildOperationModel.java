@@ -38,7 +38,7 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * AIDEV-NOTE: the owner is the ATTRIBUTION pair the rest of the product already uses
  * ({@code for_model}/{@code for_id}, the OwnerLabels/GeneratedRows spelling), not a
  * site_id column -- a build belongs to whichever product record asked for it, and the
- * builders wave deliberately does not decide that the answer is forever "a site".
+ * build lane deliberately does not decide that the answer is forever "a site".
  */
 public class BuildOperationModel extends Model {
 

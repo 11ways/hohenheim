@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 /**
  * The host lifecycle operations and their one placement: acknowledgement, probes, admission and fleet decisions.
  *
- * AIDEV-NOTE: originally split out of ServerResource beside ServerTrustActions (review, 2026-09). ServerParts now
+ * AIDEV-NOTE: originally split out of ServerResource beside ServerTrustActions. ServerParts now
  * owns form/list wiring; the former row action handlers were replaced and deleted, not retained as a second lane.
  * A typed confirmation is a mis-click guard, never evidence of acknowledgement: HostPostureAcknowledgement records
  * the real actor. Changing posture clears acceptance through the model hook; there is no parallel revoke control.
@@ -79,7 +79,7 @@ final class ServerLifecycleActions {
                         ? HostProbe.FailureKind.labelOf(summary.errorKind()) : HostProbe.FailureKind.UNREACHABLE.label()));
                 return HohenheimMicrocopy.SERVER.of("host_probe_ok").withArg("name", name)
                     .withArg("summary", formatSummary(summary, label));
-            // Check again is the host page's one verb (board Host-Admit): it measures everything a probe does and the
+            // Check again is the host page's one verb: it measures everything a probe does and the
             // hourly sweep keeps the contact and the memory reading fresh, so the bare probe waits in the More menu.
             }, row -> true).description(HohenheimMicrocopy.SERVER.of("probe_now_hint")).icon(Icon.of("heart-pulse"))
                 .inlineInRow(false)

@@ -64,7 +64,7 @@ final class InstanceActions {
     }
 
     /**
-     * The operator panel's actions, Open site then Deploy first (the board's heading): the record band keeps
+     * The operator panel's actions, Open site then Deploy first (the heading): the record band keeps
      * declaration order inside the inline band, so the first declared verb leads.
      */
     static @NonNull List<PanelAction<Row>> placedOperator() {
@@ -77,7 +77,7 @@ final class InstanceActions {
     }
 
     /**
-     * The delegated panel's placed subset: power (deploy, restart, stop; board Manage-App), the two artifact actions,
+     * The delegated panel's placed subset: power (deploy, restart, stop), the two artifact actions,
      * the app update and the console line.
      */
     static @NonNull List<PanelAction<Row>> placedDelegated() {

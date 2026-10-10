@@ -24,7 +24,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Pins the live DNS read wires across the EDIT-implies-VIEW declaration in a0217c80.
+ * Pins the live DNS read wires across the EDIT-implies-VIEW declaration.
  *
  * @author Jelle De Loecker
  * @since 0.10.0
@@ -52,7 +52,7 @@ class DnsEditGrantReadWireTest extends HohenheimTestBase {
             assertThat(currentView.impliedBy()).as("step 1: current VIEW is implied by EDIT")
                 .containsExactly(HohenheimCapabilities.EDIT);
 
-            // 2. Replay the parent declaration of a0217c80 through the canonical test replacement seam. Its only
+            // 2. Replay the declaration without EDIT-implies-VIEW through the canonical test replacement seam. Its only
             // change was adding VIEW.impliedBy(EDIT); keep every other vocabulary fact and the HTTP transport fixed.
             KnownCapability parentView = new KnownCapability(currentView.capability(), currentView.label(),
                 currentView.description(), currentView.sensitivity(), currentView.delegable(),
@@ -65,7 +65,8 @@ class DnsEditGrantReadWireTest extends HohenheimTestBase {
                 .isEqualTo(403);
             assertThat(beforeQuery.statusCode()).as("step 2: the parent query is reachable").isEqualTo(200);
             DataPage parentPage = Zenit.DRY.fromJson(beforeQuery.body(), DataPage.class);
-            assertThat(parentPage.items()).as("step 2: EDIT alone disclosed no records before a0217c80").isEmpty();
+            assertThat(parentPage.items()).as("step 2: EDIT alone disclosed no records without the implication")
+                .isEmpty();
             assertThat(parentPage.total()).as("step 2: the parent total disclosed no records").isZero();
             assertThat(beforeItem.statusCode()).as("step 2: the parent item read concealed the editable record")
                 .isEqualTo(404);

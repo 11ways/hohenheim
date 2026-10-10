@@ -68,7 +68,7 @@ record HostVerdict(@NonNull HostStanding standing, @Nullable Microcopy reason,
     /**
      * @return the Hosts list's state cell: the standing in words, with why only where no attention item says it; a
      *         standing that raises one ({@link HostStanding#severity}) has its reason in the list's band above,
-     *         so the row does not repeat that sentence word for word (board Hosts: the card shows the badge)
+     *         so the row does not repeat that sentence word for word (the card shows the badge)
      */
     @NonNull StateLineCell cell() {
         return StateLineCell.of(this.standing, this.standing.severity() != null ? null : this.reason);

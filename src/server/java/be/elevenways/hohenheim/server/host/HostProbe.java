@@ -146,7 +146,7 @@ public final class HostProbe {
      * ({@link HostPreflight#recordMemoryReading}), so every heartbeat keeps the reading placement rations against
      * fresh.
      *
-     * AIDEV-NOTE: before D13a only a full preflight (Check again) wrote the reading, so a host whose hourly sweep
+     * AIDEV-NOTE: formerly only a full preflight (Check again) wrote the reading, so a host whose hourly sweep
      * answered for weeks still refused every new app once its last preflight passed the freshness bound: Starfleet's
      * local host, seen 50 minutes ago, last measured 2026-08-29. The heartbeat records the same docker-info
      * MemTotal the preflight records, nothing else of the report: no check, no probed_at, no verdict.

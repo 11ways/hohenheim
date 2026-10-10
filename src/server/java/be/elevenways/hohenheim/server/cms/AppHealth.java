@@ -85,8 +85,8 @@ final class AppHealth {
 
     /**
      * A delegated verdict naming fixes of which the reader may use none says who can: /manage offers a fix only where
-     * the reader's grants open it, so a tenant read a problem with no way forward and nobody named (DEP10's
-     * alchemy-skeleton, whose site the tenant holds no grant on).
+     * the reader's grants open it, so a tenant read a problem with no way forward and nobody named (an app
+     * whose site the tenant holds no grant on).
      *
      * @param ownSlug the entry of the record the verdict is read for
      */
@@ -599,7 +599,7 @@ final class AppHealth {
      * terminates HTTPS, nothing while it cannot, and the names an ACTIVE certificate row declares where no proxy runs
      * in this process (a node without the proxy role, a test), because the stored rows are then all there is to read.
      *
-     * AIDEV-NOTE: an ACTIVE row is not a working certificate. D11's Shop had an active row without loadable material,
+     * AIDEV-NOTE: an ACTIVE row is not a working certificate. A shop once had an active row without loadable material,
      * and every HTTPS cell said "Works" while the proxy could serve nothing; reading the store is what makes the cells,
      * the verdicts and the attention items agree with the handshake a visitor gets. The names are
      * {@link CertificateCoverage#workingNames()}, the rule routing and the force-HTTPS latch read too; only the
@@ -668,7 +668,7 @@ final class AppHealth {
      * for a site answering only patterns (a catch-all), what it catches.
      *
      * AIDEV-NOTE: a pattern is never presented as an address to visit: "Live at **.starfleet.life" read like a link
-     * nobody can open (D10a).
+     * nobody can open.
      */
     static @NonNull Microcopy liveWords(@NonNull List<Row> domains, @NonNull Set<String> working, boolean passthrough) {
         String url = exactUrl(domains, working, passthrough);

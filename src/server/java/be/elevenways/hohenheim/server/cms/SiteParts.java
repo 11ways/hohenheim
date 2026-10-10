@@ -71,8 +71,8 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * The proxied sites' shared parts, and the admin site resource and its /manage twin built from them (stage 4 contract
- * 10): type-discriminated settings, relation picks to auth providers and access lists, the Domains child list, the
+ * The proxied sites' shared parts, and the admin site resource and its /manage twin built from them:
+ * type-discriminated settings, relation picks to auth providers and access lists, the Domains child list, the
  * placed site operations, and the write verbs as domain operations ({@link SiteWrites}).
  *
  * AIDEV-NOTE: the /manage twin is a NARROWING, never a gate of its own: its rows are the sites the caller manages

@@ -153,7 +153,7 @@ class StatusPresentationDriftTest {
                 ServerModel.ADMISSION_CORDONED);
 
         // 2. The Hosts list's badge and the admission field's are one: a host waiting for its checks is amber in
-        //    both, never red in one of them (DD3).
+        //    both, never red in one of them.
         for (HostStanding standing : HostStanding.values()) {
             if (standing.admission() == null) {
                 continue;

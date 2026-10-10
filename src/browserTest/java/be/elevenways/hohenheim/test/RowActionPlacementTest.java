@@ -57,7 +57,7 @@ class RowActionPlacementTest extends HohenheimTestBase {
 
         // 3. FALSIFICATION: an action that IS a per-row affordance keeps the row, so this
         //    is a per-action declaration and not a blanket demotion. Probing a zone's
-        //    delegation is that affordance; the Records link is not (since 1cbc83a1) because
+        //    delegation is that affordance; the Records link is not, because
         //    the zone's own title link already opens the records workspace.
         Map<String, PanelAction<Row>> zones = partsByPath(DnsZoneParts.admin().actions());
         assertThat(zones.get("check_dns_health")).as("step 3: the health probe exists").isNotNull();

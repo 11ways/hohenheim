@@ -65,7 +65,7 @@ public final class CmsSupport {
     // lists, auth providers, backup targets) are plain ListChrome.MINIMAL, NOT a fourth
     // constant that also drops search. Search on those lists is a DELIBERATE declaration --
     // AdminListPresentationTest pins each of them by slug, and finding a host by the address
-    // that renders under its name is the question that wave existed to answer. MINIMAL
+    // that renders under its name is the question those lists exist to answer. MINIMAL
     // already removes the three knobs a handful of rows cannot justify.
 
     /**

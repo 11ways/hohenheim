@@ -221,7 +221,7 @@ public final class DeleteImpact {
     /**
      * The names of the live workloads attached to a database, joined for a sentence; empty when nothing holds it.
      *
-     * AIDEV-NOTE: names only, never a path in prose (DD10b). The list's Used by cell links each app for a reader who
+     * AIDEV-NOTE: names only, never a path in prose. The list's Used by cell links each app for a reader who
      * may open it; a reason or refusal is a sentence.
      */
     public static @NonNull String workloadsHolding(@Nullable Integer databaseId) {

@@ -83,7 +83,7 @@ public class SiteModel extends Model {
      * the one fact that lets an operator-owned site dial any address; never written by a form, only by
      * OperatorTrustedWrites' write hook.
      *
-     * AIDEV-NOTE: reach is decided by WHO SET the target, not only by ownership at fetch time (decided 2026-10-02):
+     * AIDEV-NOTE: reach is decided by WHO SET the target, not only by ownership at fetch time:
      * ownership changes where no write hook sees it (a revoked grant, a deleted tenant, a cascade), so a target a
      * tenant or delegate set stays unmarked and is never dialled with any-address reach after the record becomes
      * operator-owned. M011 marked every row stored before the rule.
@@ -95,8 +95,8 @@ public class SiteModel extends Model {
     /**
      * The instance this site serves, when {@link #UPSTREAM_KIND} says so.
      *
-     * AIDEV-NOTE: a REAL column and not a settings key, deliberately (phase-0 design
-     * section 3): the instance detail page needs the reverse "exposed by" lookup, the
+     * AIDEV-NOTE: a REAL column and not a settings key, deliberately:
+     * the instance detail page needs the reverse "exposed by" lookup, the
      * delete cascades need it, and the tenant scope ({@code HohenheimAccess.reachesRecord})
      * joins on it. A key inside the polymorphic SETTINGS map is invisible to all three.
      */

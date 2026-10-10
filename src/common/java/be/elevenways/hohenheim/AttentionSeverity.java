@@ -14,7 +14,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * member to its stylesheet rule. The keys are the strings the pre-enum collectors wrote, so a test or
  * selector reading {@code data-severity='error'} keeps working.
  *
- * AIDEV-NOTE: "raises attention, and how loudly" is answered here once (DD4): a state vocabulary carries a nullable
+ * AIDEV-NOTE: "raises attention, and how loudly" is answered here once: a state vocabulary carries a nullable
  * member of this enum (null raises nothing, as DelegationVerdict, HostStanding and DatabaseVerdict.State do), and a
  * framework verdict is read through {@link #ofTone}, never a private tone switch.
  *

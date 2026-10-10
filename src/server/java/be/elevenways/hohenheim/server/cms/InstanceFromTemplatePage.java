@@ -43,7 +43,7 @@ import java.util.Map;
 /**
  * "Create instance from template": the PAGE wizard over one selected template, on both panels.
  *
- * AIDEV-NOTE: the template is chosen FIRST (DECIDED D4-B06): without {@code ?template=} the page shows the chooser,
+ * AIDEV-NOTE: the template is chosen FIRST: without {@code ?template=} the page shows the chooser,
  * and a key the caller may not select answers as missing. The document then asks the details (name, the host for an
  * operator, the project) and the template's own variables as one form, submitted once through the hosting panel's
  * invoke route; the result opens the new instance in the same panel. A host or project control that would offer

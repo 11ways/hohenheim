@@ -30,7 +30,7 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * verified (or forced) teardown, each refusing by name.
  *
  * AIDEV-NOTE: the name rule is {@link DatabaseModel#requireValidName}, the one rule the model hooks also enforce; a
- * create checks it before anything is provisioned, so a refused name never reaches a daemon (DD8: the admin forms
+ * create checks it before anything is provisioned, so a refused name never reaches a daemon (the admin forms
  * used to refuse uppercase, underscore and dot names the rule accepts).
  *
  * @author Jelle De Loecker

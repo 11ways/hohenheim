@@ -177,14 +177,12 @@ kuifje and every server after it follow this list:
 9. Record the deploy target in `~/.config/zenit-dev/config.json` so
    `zenit-dev deployed <name>` can read its build stamp.
 
-The first host installed this way is kuifje, the DNS primary; its facts,
-transcript and rollback note live in `docs/deploy-kuifje.md`.
+The first host installed this way is kuifje, the DNS primary.
 
 ### Naming
 
 Servers are named after Franco-Belgian comic heroes, in Dutch: `kuifje` (the
-DNS primary, `docs/deploy-kuifje.md`) and `robbedoes` (the sites host,
-`docs/deploy-robbedoes.md`). `starfleet` predates the convention and keeps its
+DNS primary) and `robbedoes` (the sites host). `starfleet` predates the convention and keeps its
 name. RESERVED, do not reuse for anything else: `bobbie` for the next DNS
 secondary and `kwabbernoot` for the second sites host. The name a box announces
 to the DNS federation (`dns.federation_name`) is the same name, and so is its
@@ -368,7 +366,7 @@ verify that line before anything else.
    `incus_url` = `unix://` (blank also means the default socket), posture
    `vm_isolated`. No trust ceremony applies -- a unix socket has no wire
    identity to pin, and kernel truth is read through the local sudo runner with
-   NO ssh lane. Since 2026-08-07 that lane is a placement REQUIREMENT for any
+   NO ssh lane. That lane is a placement REQUIREMENT for any
    posture other than `trusted_only`, and the preflight check
    `kernel_isolation_lane` PROVES it by running a real nft
    add/list/delete on this machine -- so the sudoers line above is what makes
@@ -415,20 +413,18 @@ obtained, every kernel check fails as UNKNOWN with a detail naming that image an
 
 Fresh DB boot with 104 migrations; both preflights green over the local
 sockets; container + VM deploys; `VerifyIncusIsolation` and
-`VerifyDockerIsolation` (renamed `VerifyWorkloadIsolation` 2026-08-06 when the
-host-process tier joined it) both VERIFIABLE (no ssh lane anywhere) and both
+`VerifyDockerIsolation` (now `VerifyWorkloadIsolation`) both VERIFIABLE (no ssh lane anywhere) and both
 observed repairing a deliberately broken kernel (chains deleted while
 workloads ran) within one 5-minute sweep; tenant-range egress blocked and
 `http://1.1.1.1/` reachable from both tiers; product destroy paths left the
 daemons empty.
 
-## Two controllers on one daemon: NAMESPACED, no longer a procedural rule
+## Two controllers on one daemon: NAMESPACED
 
-Superseded 2026-08-06 (controller-namespace wave). The temporal-separation rule
-that used to live here is LIFTED: a hohenheim ON this host and a workstation
-suite driving the same daemons remotely may now run CONCURRENTLY.
+A hohenheim ON this host and a workstation suite driving the same daemons
+remotely may run CONCURRENTLY.
 
-What changed: every name hohenheim writes onto a shared resource pool carries
+Every name hohenheim writes onto a shared resource pool carries
 this controller's identity token, minted once into its own control-plane
 database (`controller_identity`, M077) -- the same database that allocates the
 record ids. Handles are `hohenheim-<token>-instance-<id>`; the Docker/Incus
@@ -453,8 +449,8 @@ What is still shared, by design, and what it means:
   fails. Loud, at the daemon, not a silent overwrite.
 - Docker's default address pool (~30 user-defined networks per host) is spent
   by both controllers together.
-- A pre-namespace resource (a bare `hohenheim-instance-N` from before this
-  wave) is attributable to NO controller. It is never adopted and never
+- A pre-namespace resource (a bare `hohenheim-instance-N` from before
+  controller namespacing) is attributable to NO controller. It is never adopted and never
   removed automatically: the reconciler reports it as FOREIGN_COLLIDING with a
   "pre-namespace" detail, and clearing it is an explicit operator removal.
   Both daystrom and nightstrom were verified to hold zero such resources when

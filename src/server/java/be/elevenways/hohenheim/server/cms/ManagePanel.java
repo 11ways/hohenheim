@@ -54,7 +54,7 @@ public final class ManagePanel extends Panel {
 
     private static volatile boolean sourceRegistered = false;
 
-    /** The panel's title, "Your services": the shell names it and the landing is headed by it (board Manage-Home). */
+    /** The panel's title, "Your services": the shell names it and the landing is headed by it. */
     static final Microcopy TITLE = HohenheimMicrocopy.MANAGE.of("title");
 
     public ManagePanel() {
@@ -70,7 +70,7 @@ public final class ManagePanel extends Panel {
      * (request, detached, websocket) alike. Installed by {@code HohenheimHostWiring} at the MODULES stage.
      *
      * AIDEV-NOTE: this replaced a private PermissionChecker wrapper that widened only the request face, so a
-     * detached context (a hop, a channel) answered false for a tenant the request lane admitted (review 4, D14). The
+     * detached context (a hop, a channel) answered false for a tenant the request lane admitted. The
      * computation never runs inside decide(), so an operator's explicit global DENY stays visible to the capability
      * walk's gate row (CapabilityWalkTest step 3).
      */
@@ -98,7 +98,7 @@ public final class ManagePanel extends Panel {
     }
 
     /**
-     * AIDEV-NOTE: the sidebar is the admin's shape cut to what a tenant holds (board Manage-Home, W9b): Overview, Apps,
+     * AIDEV-NOTE: the sidebar is the admin's shape cut to what a tenant holds: Overview, Apps,
      * Databases, Domains and Team in one unlabelled block. Domains and Team are clusters like the admin's; every other
      * entry is showInNav(false) and keeps a declared way in (Sites, Instances, Templates, Previews and Git connections
      * from the Apps list's toolbar; the rest from the record that owns them). Each twin says which through
@@ -108,7 +108,7 @@ public final class ManagePanel extends Panel {
      * gated on ({@link HohenheimPanel#addIf}, one home). Until 2026-08-29 this list carried
      * no role predicate at all, so a proxy-only node answered /manage/instances and
      * /manage/databases with empty lists and the overview offered "Your instances" -- pages
-     * the admin panel had (correctly) dropped since 767be086. A peer this method omits has
+     * the admin panel had (correctly) dropped. A peer this method omits has
      * no ROUTE either (peersBySlug), exactly like the admin panel.
      */
     @Override
@@ -250,8 +250,8 @@ public final class ManagePanel extends Panel {
         // one: it decides whether the token is admin-gated-unscoped or manage-gated-scoped
         // at boot. This explicit registration makes the answer boot-order-independent.
         // AIDEV-NOTE: scoped by the domain's PARENT SITE, never by a grant on the domain
-        // row -- SiteDomainModel deliberately has NO grant surface of its own (see
-        // docs/instance-tier-plan.md, Phase 2 parallel gate): a second authority over a
+        // row -- SiteDomainModel deliberately has NO grant surface of its own:
+        // a second authority over a
         // child row is a second authority that can disagree with the first.
         // AIDEV-NOTE: the base now carries the live-site filter the /manage list always
         // applied: a domain of a soft-deleted site is no longer offered by a picker either.

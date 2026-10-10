@@ -25,7 +25,7 @@ import java.util.function.UnaryOperator;
 /**
  * The host trust ceremony's one lane table and its scan/confirm/repin/rotate operation placements.
  *
- * AIDEV-NOTE: split out of ServerResource (review, 2026-09). HostEnrolment mints through THIS table too, so no second
+ * AIDEV-NOTE: split out of ServerResource. HostEnrolment mints through THIS table too, so no second
  * "which lane applies and how is its credential minted" vocabulary exists. An Incus host may carry both TLS and SSH
  * relationships; neither shares the other's pin or key. The former row action handlers are replaced and deleted.
  *

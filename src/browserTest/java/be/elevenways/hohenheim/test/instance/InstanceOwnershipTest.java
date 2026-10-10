@@ -71,7 +71,7 @@ class InstanceOwnershipTest extends HohenheimTestBase {
         //    pair flips to different owners. THIS assertion is the counterfactual anchor:
         //    without the KnownCapabilities/declareGrantable registration for
         //    InstanceModel, the grant cannot exist, both sets stay empty, and this check
-        //    CANNOT fail -- exactly the security theater the plan names.
+        //    CANNOT fail -- exactly security theater.
         int tenantA = ApiSupport.user("instance-tenant-a@test");
         RecordGrants.grant(GrantSubjectType.USER, tenantA, InstanceModel.MODEL_ID, firstId,
             HohenheimCapabilities.MANAGE, true);

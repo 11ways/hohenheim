@@ -177,7 +177,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.USER, tenantB, SiteModel.MODEL_ID, siteB,
             HohenheimCapabilities.MANAGE, true);
 
-        // A database attaches to the WORKLOAD that consumes it, which since brief 7 is an
+        // A database attaches to the WORKLOAD that consumes it, which is an
         // application instance rather than a site.
         int applicationA = application(PREFIX + n + "-app-a");
         int applicationB = application(PREFIX + n + "-app-b");

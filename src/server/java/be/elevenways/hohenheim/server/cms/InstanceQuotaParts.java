@@ -39,8 +39,8 @@ public final class InstanceQuotaParts {
     /** @return the operator's quota overrides */
     public static @NonNull PanelResource<Row> admin() {
         // AIDEV-NOTE: every override column the reserve hooks read must be ON this form. M073 added max_disk_gb and
-        // max_nics and OwnerBudget.DISK_GB/NICS.limitFor consult them, but they were absent here for a
-        // wave: the columns existed, were enforced, carried form copy, and could not be set by anyone. Adding a cap
+        // max_nics and OwnerBudget.DISK_GB/NICS.limitFor consult them, but they were once absent here:
+        // the columns existed, were enforced, carried form copy, and could not be set by anyone. Adding a cap
         // column without adding it here is the silent-success shape.
         FormSpec form = FormSpec.builder()
             .add(InstanceQuotaModel.SUBJECTS)

@@ -47,7 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * The Phase 4 gate clause no single machine could meet: an instance backup exported to
+ * The guarantee no single machine could meet: an instance backup exported to
  * a target on a GENUINELY DIFFERENT machine, verified there, and restored FROM there.
  *
  * The source instance runs on this workstation's daemon; the artifact's only home is

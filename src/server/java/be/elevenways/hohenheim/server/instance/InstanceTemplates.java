@@ -321,7 +321,7 @@ public final class InstanceTemplates {
         }
         instance.set(InstanceModel.INSTALL_STATE, hasInstallStep(template)
             ? InstanceModel.INSTALL_PENDING : InstanceModel.INSTALL_NONE);
-        // The plan's default for game templates: clean-exit-as-crash. Template-created
+        // The default for game templates: clean-exit-as-crash. Template-created
         // instances restart on any unobserved exit; the operator can flip it per record.
         instance.set(InstanceModel.CRASH_POLICY, InstanceModel.CRASH_RESTART);
         instances.save(instance);
@@ -457,7 +457,7 @@ public final class InstanceTemplates {
     /**
      * Copy the template's volume declarations onto the instance.
      *
-     * AIDEV-NOTE: the DECLARATIONS, which is the whole contract (phase-0 design 4.6). The
+     * AIDEV-NOTE: the DECLARATIONS, which is the whole contract. The
      * host directories behind them are minted by the first deploy through
      * {@link InstanceVolumes#mountsFor}, on the backend that host actually has -- a create
      * never touches a filesystem, and there is no template-side content to carry over

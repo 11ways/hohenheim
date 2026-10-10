@@ -1,6 +1,6 @@
 {% declare widget: WidgetInstance %}
 {% declare data: Map = null %}
-{#- The fresh install's lead (board Empty-Dashboard): nothing is online yet, so the ways onward are "Put something
+{#- The fresh install's lead: nothing is online yet, so the ways onward are "Put something
     online" and, straight to its address choices, "Point an address somewhere else". Both targets are bound by the
     dashboard (AdminDashboard) through the typed CMS route, never a path literal. -#}
 <pl-empty-state data-hh-onboarding>

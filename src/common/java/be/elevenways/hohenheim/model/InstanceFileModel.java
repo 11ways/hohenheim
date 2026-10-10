@@ -17,7 +17,7 @@ import java.util.List;
  * the instance's template at create-from-template and stay per-instance editable;
  * {@code {{KEY}}} placeholders resolve against the instance's variables at deploy-time
  * upload, so secrets exist inside the container only, never re-persisted plaintext.
- * This is THE instance config-file mechanism later waves (Velocity forced-hosts
+ * This is THE instance config-file mechanism other features (Velocity forced-hosts
  * materialization) write through.
  */
 public class InstanceFileModel extends Model {

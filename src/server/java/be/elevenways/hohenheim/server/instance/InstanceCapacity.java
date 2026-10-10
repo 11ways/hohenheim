@@ -33,8 +33,7 @@ import java.util.function.Supplier;
  * PER-HOST memory capacity: the InstanceQuota shape, but the bucket is a HOST rather than
  * an owner, so the thing being rationed is physics instead of policy.
  *
- * THE PRODUCT DECISION (2026-08-07), which the previous wave deferred on an input problem
- * and which is recorded in full in docs/proxmox-use-inventory.md item 12:
+ * THE PRODUCT DECISION:
  *
  * A workload is admitted as its DECLARED {@code memory_limit_mb}, and when it declares
  * none, as its KIND's declared footprint ({@link InstanceKindHandler#defaultFootprintMb}).
@@ -120,7 +119,7 @@ public final class InstanceCapacity {
      * compared against different numbers, so placement could CHOOSE a host whose write then
      * refused {@code host_capacity_reached}. Both sides call THIS; never re-spell it at a
      * call site. The subtraction it used to carry was the managed-process tier's separate
-     * bucket, deleted with the host-user lane (phase-0 design section 7); the instance tier
+     * bucket, deleted with the host-user lane; the instance tier
      * is now the only bucket on a host.
      */
     public static long bookableMbOn(int serverId, long budgetMb) {
@@ -500,7 +499,7 @@ public final class InstanceCapacity {
     };
 
     /**
-     * THE mid-window freeze (fix decision 2026-08-10, paired with the MIGRATE_RESERVED_MB
+     * THE mid-window freeze (paired with the MIGRATE_RESERVED_MB
      * stamp).
      *
      * AIDEV-NOTE: the charge hook runs on ANY save of a live row -- a plain CMS form edit

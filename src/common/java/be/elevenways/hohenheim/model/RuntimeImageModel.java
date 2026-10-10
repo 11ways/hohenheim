@@ -15,13 +15,13 @@ import java.util.List;
  * The "yolk": WHAT a workspace or application runs inside, split out of the template
  * ("egg") so a Node 22 image is declared once instead of once per template kind.
  *
- * AIDEV-NOTE: image references are HOHENHEIM-BUILT and, by Jelle's 2026-08-22 decision on
- * open question 5, built LOCALLY on each host from {@link #BUILD_CONTEXT} at first use --
+ * AIDEV-NOTE: image references are HOHENHEIM-BUILT and, by design,
+ * built LOCALLY on each host from {@link #BUILD_CONTEXT} at first use --
  * there is no registry to push to. That is why {@link #BUILD_CONTEXT} is a real column
  * rather than a path derived from {@link #NAME}: an operator-authored image points its own
  * context somewhere else, and a derived path would silently build the wrong tree.
  *
- * AIDEV-NOTE: {@link #INCUS_IMAGE} is nullable ON PURPOSE. Phase 0 ships the Docker
+ * AIDEV-NOTE: {@link #INCUS_IMAGE} is nullable ON PURPOSE. The seed ships the Docker
  * variants; the Incus variants are published (distrobuilder, same package list) when the
  * Incus workspace lane is exercised. A null here is what makes the runtime-image picker
  * able to say "this image cannot run on an Incus host" instead of failing at deploy.

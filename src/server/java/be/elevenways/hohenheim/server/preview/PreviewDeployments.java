@@ -73,7 +73,7 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * DNS rows -- when the bounded lifetime ends, the PR closes, an operator acts, or the
  * owning application dies.
  *
- * AIDEV-NOTE: previews are keyed to the APPLICATION (phase-0 brief 7), not to a site. The
+ * AIDEV-NOTE: previews are keyed to the APPLICATION, not to a site. The
  * application is what has a source to build and a spec to run; a site only lends the
  * preview a hostname, because a hostname routes only from some site's domain table. An
  * application no site exposes is refused BY NAME rather than built and left unreachable.
@@ -122,7 +122,7 @@ public final class PreviewDeployments {
      * quota by name, unsupported type, missing base domain -- reaches the submitting
      * form synchronously), then build in the background exactly like a webhook deploy.
      *
-     * AIDEV-NOTE: QUOTA DECISION (2026-08-10, applies to ALL creation lanes). The
+     * AIDEV-NOTE: QUOTA DECISION (applies to ALL creation lanes). The
      * charge is the APPLICATION's manage-grant owner pack, always -- the PreviewQuota
      * before-write hook fires on this row save no matter which surface asked, so
      * charge == cap holds structurally and a manual or branch preview can never ride

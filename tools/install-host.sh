@@ -6,8 +6,8 @@
 # so re-running the script on a live host is a no-op that prints what it found.
 # Nothing here prompts: apt runs with DEBIAN_FRONTEND=noninteractive.
 #
-# The procedure it automates is the one docs/deploy-native.md and
-# docs/deploy-starfleet.md describe; this script IS that procedure now.
+# The procedure it automates is the one docs/deploy-native.md describes;
+# this script IS that procedure now.
 
 set -euo pipefail
 

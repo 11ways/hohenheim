@@ -83,7 +83,7 @@ class RawValuesTest {
             .as("step 3: an absent key reads the stated answer").isTrue();
 
         // 4. auto_deploy has ONE default: what the form seeds a missing key with is what every reader answers for it,
-        //    so a source that never stored the flag shows and gets auto-deploy alike (on since DD11h), and a stored
+        //    so a source that never stored the flag shows and gets auto-deploy alike (on by default), and a stored
         //    false (what M011 wrote on every source stored before) still stays off.
         Object declared = GitSourceSchema.addTo(new Schema()).getField(GitSourceSchema.AUTO_DEPLOY).getDefaultValue();
         assertThat(declared).as("step 4: the form's declared default").isEqualTo(true);

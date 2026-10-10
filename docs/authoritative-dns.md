@@ -3,100 +3,79 @@
 Moving an existing zone onto these nameservers is its own procedure with its own
 gate: see `dns-migration.md` and `tools/hoh-dns-diff`.
 
-STATUS (2026-08-12): **phase 4 is implemented EXCEPT its secondary-health half,
-and the 2026-07-17 line below overstates it.** What shipped and is real: AXFR +
-TSIG + NOTIFY in both directions, the secondary-zone subsystem with SOA
-refresh/retry/expire, per-zone roles, the peer registry and the ACME propagation
-wait. What did NOT ship is the other clause of the same delivery item -- the
-secondary-health UI, i.e. "the UI should show secondary freshness and warn
-loudly when a production zone has no healthy secondary" (see Redundancy and
-transfers below). There is no freshness column on `DnsZonePeerModel` (its whole
-schema is id / zone_id / peer_id / created_at / updated_at) and `AxfrResponder`
-writes nothing back, so a PRIMARY records nothing about whether its secondaries
-ever pulled; `DnsZoneSecondariesPage` lists peer name, transfer host and an edit
-link and no health at all. `DnsZoneModel.LAST_TRANSFER_AT` is the mirror-image
-fact -- it tracks a zone THIS instance pulls as a secondary -- and is not a
-substitute. No `NotificationEvents` constant exists for a missing or stale
-secondary, so the "warn loudly" half has no collector and no event. Phase 4 is
-therefore the production-ready threshold MINUS its own monitoring clause.
+## What is implemented
 
-STATUS (2026-07-17): delivery phases 1-4 below are implemented. Phase 4 is
-the standards-based replication described in `dns-federation.md`: TSIG-
-authenticated AXFR (both directions), NOTIFY, a secondary-zone subsystem with
-SOA refresh/retry/expire discipline, per-zone primary/secondary roles, a peer
-registry, and an ACME propagation wait so DNS-01 issuance blocks until the
-secondaries serve the challenge. This lets Hohenheim run as a hidden primary
-behind a closed port 53, with a public secondary (another Hohenheim, or an
-off-the-shelf NSD/Knot) meeting the two-nameserver production threshold.
-Central editing is also implemented: a secondary zone's Records tab reads the
-owning peer's records live over its authenticated HTTPS API and forwards
-edits to it (see `dns-federation.md`), so one instance can be the single pane
-for every federated zone.
+- Zone and record models with validation, CMS resources, zone-file import and
+  export, and immutable serving snapshots. One malformed record does not take
+  its whole zone out of the serving snapshot.
+- Authoritative UDP and TCP serving.
+- The `internal` ACME TXT publisher and DNS-01 renewal.
+- The standards-based replication described in `dns-federation.md`:
+  TSIG-authenticated AXFR in both directions, NOTIFY, a secondary-zone
+  subsystem with SOA refresh/retry/expire discipline, per-zone primary and
+  secondary roles, a peer registry, and an ACME propagation wait so DNS-01
+  issuance blocks until the secondaries serve the challenge. This lets
+  Hohenheim run as a hidden primary behind a closed port 53, with a public
+  secondary (another Hohenheim, or an off-the-shelf NSD/Knot) meeting the
+  two-nameserver production threshold.
+- Central editing: a secondary zone's Records tab reads the owning peer's
+  records live over its authenticated HTTPS API and forwards edits to it (see
+  `dns-federation.md`), so one instance can be the single pane for every
+  federated zone.
+- DNSSEC: per-zone online signing with an ECDSA P-256 CSK (algorithm 13).
+  Enabling `dnssec` on a zone mints a key on first use, signs every
+  authoritative RRset, publishes an apex DNSKEY, and builds an NSEC chain for
+  authenticated denial; RRSIG/NSEC/DNSKEY are served only to DO-bit queries,
+  and the DS record for the registrar is shown on the zone's Zone-file tab. A
+  daily task re-signs before the 14-day RRSIG window closes and bumps each
+  zone's serial while doing so: secondaries replicate signed records verbatim
+  and only pull when the serial advances, so a silent re-sign would leave
+  replicas serving RRSIGs until they expire. NXDOMAIN responses carry both the
+  qname-covering NSEC and the NSEC denying the wildcard at the closest
+  encloser; wildcard answers are served with the RRSIG rewritten to the
+  synthesized owner plus the NSEC proving the exact name does not exist; DS
+  queries at a delegation are answered authoritatively by the parent.
+- Response-rate-limiting on the UDP listener (`dns.rate_limit_per_second`).
+  Verdicts key on the computed response, with NXDOMAIN bucketed per zone and
+  referrals per delegation point, so random-subdomain floods cannot dodge the
+  limit.
+- Released hostnames have a DNS consequence, the counterpart of the
+  certificate tier's orphan sweeper. `DnsClaimReleases` disables a released
+  name's non-generated records, clears their dyndns credentials and revokes
+  their record grants in the same transaction as the release (site soft
+  delete, domain row delete or rename); a name still covered by another live
+  domain row, or belonging to a merely DISABLED site, is untouched. Without
+  it, a departed tenant's records kept being served and a dyndns token minted
+  under a claim kept rewriting the record after the claim was released.
+- The dyndns credential (its own `dns_dyndns_credentials` table; a credential
+  row IS the dynamic flag, only the sha256 digest at rest) is grant-gated on
+  the model write pipeline, so hostname authority alone cannot arm a token.
+- A CNAME at the zone apex is refused: the synthesized SOA is not a row, so
+  the sibling scan would never see the conflict.
+- Secondary freshness. `ProbeDnsSecondaries` (every 5 minutes, DNS role) asks
+  each linked secondary of every primary zone for the zone SOA over its
+  transfer channel and records on the `dns_zone_peers` link what it serves
+  (`served_serial`, `probed_at`, `probe_error`, `behind_since`,
+  `stale_alerted_at`); a link behind or silent for longer than
+  `DnsSecondaryFreshness.STALE_AFTER` (15 minutes, a constant) is a WARNING
+  attention item and one `dns_secondary_stale` alert per lag.
+- Delegation health. `CheckDnsDelegations` (hourly, DNS role) runs
+  `DelegationCheck` for every primary zone: the parent's NS RRset and glue
+  read with recursion off, compared with the apex NS rows, then every
+  delegated server asked for the zone SOA. The closed verdict vocabulary is
+  `DelegationVerdict` (matches, parent unreachable, not delegated,
+  listed-not-delegated, delegated-not-listed, stale serial, missing glue,
+  lame); the worst verdict plus one line per finding lands on
+  `dns_zones.delegation_status/detail/checked_at`, a verdict with a severity
+  is an attention item, and the `dns_delegation_broken` alert fires only when
+  the verdict CHANGES. The zone row action "Check health" runs both on demand.
+- `AttentionCollector`'s `dnsIssues` raises an ERROR item for a DNS listener
+  that failed to bind, linking to settings and naming the startup error, plus
+  a WARNING for an enabled zone whose apex carries no NS RRset (this checks
+  OUR zone data, not the parent's delegation).
 
-DNSSEC (phase 5) is implemented too: per-zone online signing with an ECDSA
-P-256 CSK (algorithm 13). Enabling `dnssec` on a zone mints a key on first
-use, signs every authoritative RRset, publishes an apex DNSKEY, and builds an
-NSEC chain for authenticated denial; RRSIG/NSEC/DNSKEY are served only to
-DO-bit queries, and the DS record for the registrar is shown on the zone's
-Zone-file tab. A daily task re-signs before the 14-day RRSIG window closes
-and bumps each zone's serial while doing so: secondaries replicate signed
-records verbatim and only pull when the serial advances, so a silent re-sign
-would leave replicas serving RRSIGs until they expire. NXDOMAIN responses
-carry both the qname-covering NSEC and the NSEC denying the wildcard at the
-closest encloser; wildcard answers are served with the RRSIG rewritten to the
-synthesized owner plus the NSEC proving the exact name does not exist; DS
-queries at a delegation are answered authoritatively by the parent.
-Response-rate-limiting on the UDP listener (`dns.rate_limit_per_second`)
-rounds out the abuse mitigations; verdicts key on the computed response, with
-NXDOMAIN bucketed per zone and referrals per delegation point so
-random-subdomain floods cannot dodge the limit. The DNS story is feature-complete.
-
-STATUS (2026-08-10): the 2026-07-17 "feature-complete" claim above was wrong on
-one axis, now fixed: released hostnames had no DNS consequence. A departed
-tenant's authoritative records kept being served indefinitely, and a dyndns
-token minted under a claim kept rewriting the record after the claim was
-released -- the DNS tier lacked the counterpart of the certificate tier's
-orphan sweeper. `DnsClaimReleases` now disables a released name's non-generated
-records, clears their dyndns credentials and revokes their record grants in the
-same transaction as the release (site soft delete, domain row delete or
-rename); a name still covered by another live domain row, or belonging to a
-merely DISABLED site, is untouched. Additionally: the dyndns credential (its
-own `dns_dyndns_credentials` table since M091; a credential row IS the dynamic
-flag, only the sha256 digest at rest) is grant-gated on the model write
-pipeline (hostname authority alone can no longer arm a token), a CNAME at the
-zone apex is refused (the synthesized SOA is not a
-row, so the sibling scan never saw the conflict), and one malformed record no
-longer takes its whole zone out of the serving snapshot. Note also that the
-"attention items" list under Hohenheim integration below is a DESIGN wishlist:
-no attention-item surface for lame delegation / stale secondaries / failed ACME
-publishes exists yet.
-
-CORRECTED 2026-08-12: that "DESIGN wishlist" verdict is too broad -- the bullet
-it downgrades names FIVE items and one of them SHIPPED. `AttentionCollector`'s
-`dnsIssues` raises an ERROR item for a DNS listener that failed to bind (the
-"unreachable TCP/UDP listeners" sub-item), linking to settings and naming the
-startup error, plus a WARNING for an enabled zone whose apex carries no NS
-RRset, which is adjacent to -- but not the same as -- the lame-delegation and
-missing-glue sub-items (it checks OUR zone data, not the parent's delegation).
-Genuinely absent, as stated: stale secondaries and failed ACME publishes.
-
-CORRECTED 2026-08-30: stale secondaries and lame delegations SHIPPED (M004).
-`ProbeDnsSecondaries` (every 5 minutes, DNS role) asks each linked secondary
-of every primary zone for the zone SOA over its transfer channel and records
-on the `dns_zone_peers` link what it serves (`served_serial`, `probed_at`,
-`probe_error`, `behind_since`, `stale_alerted_at`); a link behind or silent
-for longer than `DnsSecondaryFreshness.STALE_AFTER` (15 minutes, a constant)
-is a WARNING attention item and one `dns_secondary_stale` alert per lag.
-`CheckDnsDelegations` (hourly, DNS role) runs `DelegationCheck` for every
-primary zone: the parent's NS RRset and glue read with recursion off, compared
-with the apex NS rows, then every delegated server asked for the zone SOA;
-the closed verdict vocabulary is `DelegationVerdict` (matches, parent
-unreachable, not delegated, listed-not-delegated, delegated-not-listed,
-stale serial, missing glue, lame), the worst verdict plus one line per
-finding lands on `dns_zones.delegation_status/detail/checked_at`, a verdict
-with a severity is an attention item, and the `dns_delegation_broken` alert
-fires only when the verdict CHANGES. The zone row action "Check health" runs
-both on demand. Still absent: failed ACME publishes.
+Not implemented: an attention item or alert for ACME records that failed to
+publish, and DNSSEC key rollover.
 
 Hohenheim can become the authoritative DNS service for zones it manages. This
 removes the runtime dependency on a hosted DNS control panel and gives ACME
@@ -163,16 +142,16 @@ product and would turn Hohenheim into an amplification target.
 ## Redundancy and transfers
 
 The useful production shape is Hohenheim as primary plus at least one secondary
-name server. Implement authenticated AXFR first, followed by NOTIFY; IXFR can
-come later. AXFR is TCP-only and NOTIFY is the standard prompt-refresh
+name server. Transfers use authenticated AXFR plus NOTIFY; IXFR is not
+implemented. AXFR is TCP-only and NOTIFY is the standard prompt-refresh
 mechanism; see [RFC 5936](https://www.rfc-editor.org/info/rfc5936) and
 [RFC 1996](https://www.rfc-editor.org/info/rfc1996). Transfers must be limited
-by address and TSIG. The UI should show secondary freshness and warn loudly
-when a production zone has no healthy secondary.
+by address and TSIG. Secondary freshness is probed and a stale secondary is an
+attention item and an alert (see What is implemented).
 
-Running two Hohenheim instances is a later topology. V1 can interoperate with
-an existing secondary implementation, which gives redundancy without making
-distributed Hohenheim state a prerequisite.
+The secondary can be another Hohenheim instance or an existing secondary
+implementation; the latter gives redundancy without making distributed
+Hohenheim state a prerequisite.
 
 ## Hohenheim integration
 
@@ -211,17 +190,19 @@ The product flow should also weave existing features together:
 - Keep manual records editable; generated records declare ownership so site
   changes update only records Hohenheim owns.
 
-## Delivery order
+## Layering
+
+Each layer builds on the one before it:
 
 1. Zone/record models, validation, CMS resources, import/export of standard
    zone-file text, and immutable snapshots.
-2. Authoritative UDP+TCP serving with protocol conformance tests; explicitly
-   experimental until an external probe verifies delegation and both transports.
+2. Authoritative UDP+TCP serving with protocol conformance tests. A delegation
+   is only trustworthy once an external probe verifies it over both transports.
 3. Internal ACME TXT publisher and DNS-01 renewal integration.
-4. AXFR + TSIG + NOTIFY and secondary-health UI; this is the production-ready
+4. AXFR + TSIG + NOTIFY and secondary health; this is the production-ready
    threshold.
-5. DNSSEC signing and key rollover only as a separate security project. An
-   unsigned but correct zone is safer than an incomplete DNSSEC implementation.
+5. DNSSEC signing. An unsigned but correct zone is safer than an incomplete
+   DNSSEC implementation, so signing is opt-in per zone.
 
 ## Declared nameservers
 

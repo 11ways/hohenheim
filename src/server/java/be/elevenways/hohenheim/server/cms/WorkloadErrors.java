@@ -54,8 +54,8 @@ final class WorkloadErrors {
      * What stopped this workload with an error, worded, and the failure's own message as a separate technical line.
      *
      * AIDEV-NOTE: a recorded message is stored text in the daemon's or a gate's English ("Conflict. The container name
-     * ... is already in use"), never localized copy, so it is never the sentence a reader is given first: DEP10's
-     * failed starts read "What refused it: " and then that text. It follows the worded cause as "Technically: ...".
+     * ... is already in use"), never localized copy, so it is never the sentence a reader is given first: failed
+     * starts once read "What refused it: " and then that text. It follows the worded cause as "Technically: ...".
      *
      * @param withDetail whether the cause's stored detail may be shown, as {@link #detailOf}
      */

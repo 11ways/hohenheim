@@ -90,8 +90,8 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
 
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(UpstreamSettings.delay());
 
-    // The decision is WHERE to forward: scheme, host, port, or a unix socket instead (board
-    // App-Config-Address). How the connection behaves is the next thing an operator comes to
+    // The decision is WHERE to forward: scheme, host, port, or a unix socket instead.
+    // How the connection behaves is the next thing an operator comes to
     // change, so it stays open, the protocol pin last. AIDEV-NOTE: never the framework's generic
     // "Advanced" section here: the site form around this sub-form has its own, and two folded
     // "Advanced" cards on one page cannot be told apart. Membership is validated eagerly, so the

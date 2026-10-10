@@ -33,7 +33,7 @@ class UnixSocketBridgeTest {
      * A bridge to a path with no listener must FAIL construction rather than bind a loopback
      * listener + accept thread that {@code AddressUpstreamKind.bridgeFor} then caches forever.
      *
-     * AIDEV-NOTE: this is the counterfactual for the leak the proxy wave named. Pre-fix the
+     * AIDEV-NOTE: this is the counterfactual for a listener leak. Pre-fix the
      * constructor never dialed the AF_UNIX path, so this returned a live (dead) bridge that was
      * cached permanently -- one leaked listener + accept thread per distinct, Host-derived path.
      */

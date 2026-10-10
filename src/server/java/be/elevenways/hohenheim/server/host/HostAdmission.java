@@ -171,7 +171,7 @@ public final class HostAdmission {
      * A {@code dedicated} host belongs to ONE owner: a live workload charged to any other
      * bucket (the operator's empty-set bucket included) closes it to everybody else.
      *
-     * AIDEV-NOTE: this MOVED here from InstancePlacement (2026-08-12), superseding the
+     * AIDEV-NOTE: this MOVED here from InstancePlacement, superseding the
      * recorded decision that exclusivity was "placement's own, because it is not a deploy
      * refusal". That premise was broken by placement's own admin lane:
      * {@code InstancePlacement.forActor} honours a caller-supplied {@code server_id} for an
@@ -250,8 +250,8 @@ public final class HostAdmission {
      * A host that accepts tenant workloads must be able to PROVE its workload isolation in
      * the kernel it runs them on.
      *
-     * AIDEV-NOTE: the decision (2026-08-07) that closes the last open Phase 8 item.
-     * Kernel-truth verification was optional, so an Incus host could accept hostile
+     * AIDEV-NOTE: kernel-truth verification is mandatory for Incus hosts.
+     * It used to be optional, so an Incus host could accept hostile
      * tenants while nothing ever read the daemon host's nftables -- and upstream's
      * failed-detach race means a workload's declared isolation and its actual isolation
      * genuinely disagree at a measured 2-in-34. Optional verification of a boundary that

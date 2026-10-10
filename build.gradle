@@ -73,7 +73,7 @@ dependencies {
     // A VM's screen: the SPICE client its zenit-kvm screen source reads.
     serverImplementation libs.pepperglass
 
-    // SFTP to app files: zenit-sftp's server over this host's InstanceSftpRealm (docs/sftp-design.md).
+    // SFTP to app files: zenit-sftp's server over this host's InstanceSftpRealm.
     serverImplementation libs.zenit.sftp.server
 
     // The live-lane report is a TestExecutionListener, so the launcher API has to be on
@@ -92,7 +92,7 @@ dependencies {
     // SftpJourneyTest signs in with MINA's own SFTP client, the client zenit-sftp's journeys use.
     browserTestImplementation libs.sshd.core
     browserTestImplementation libs.sshd.sftp
-    // PanelSurfaces: the stored before/after and twin captures of the /manage entries (stage 4 contract 4.9).
+    // PanelSurfaces: the stored before/after and twin captures of the /manage entries.
     browserTestImplementation libs.zenit.cms.test.support
     // The permission editor's capture projection, read by the surface captures through its service file.
     browserTestImplementation libs.zenit.auth.test.support

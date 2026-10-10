@@ -62,7 +62,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  *
  * AIDEV-NOTE: this class was written as a CHARACTERIZATION of a count-based score and
  * said in as many words that it was the thing that must change when a declared footprint
- * landed. It has. The two properties it now pins are the ones the Proxmox-use inventory
+ * landed. It has. The two properties it now pins are the ones an audit
  * named as blocking: placement must never choose a host whose deploy then refuses BY NAME
  * (the kernel-truth gate is the live instance of that), and the score must know how big a
  * host is. Steps 4 and 6 of the first journey are the ones that fail under the old

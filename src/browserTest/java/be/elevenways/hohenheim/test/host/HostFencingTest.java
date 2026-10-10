@@ -83,8 +83,8 @@ class HostFencingTest {
      * lease over after expiry and deploys the same instance; A resumes and finishes.
      * A's write must affect ZERO rows and A must RAISE -- and the HOST is asserted
      * directly: exactly one container for the instance, exactly one port claim, both
-     * B's. Asserting only "A's call failed" is the pre-installed defect the plan warns
-     * about.
+     * B's. Asserting only "A's call failed" is the pre-installed defect to
+     * avoid.
      */
     @Test
     void aStalledControllersDeployCannotStick() throws Exception {

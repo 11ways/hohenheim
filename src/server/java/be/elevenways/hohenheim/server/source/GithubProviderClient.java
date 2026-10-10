@@ -27,8 +27,8 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * When App credentials are configured, {@link #cloneCredential} MINTS an installation
  * token (RS256 App JWT exchanged at {@code /app/installations/{id}/access_tokens},
- * upstream validity about one hour) -- the genuinely short-lived upstream credential the
- * builder wave deferred to this one; the stored access token is only the fallback.
+ * upstream validity about one hour) -- the genuinely short-lived upstream credential
+ * builds use; the stored access token is only the fallback.
  */
 public class GithubProviderClient extends ApiProviderClient {
 

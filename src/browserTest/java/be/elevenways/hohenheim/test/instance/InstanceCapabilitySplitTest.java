@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * verbs with separate enforcement, {@code manage} is the umbrella that implies the first
  * four (never exec), and the delegation boundary refuses what a holder does not hold.
  *
- * This is the Phase 3 / Phase 5 gate journey, driven as tests: "delegate console+power
+ * This is the capability-split journey, driven as tests: "delegate console+power
  * (NOT exec, NOT config) and PROVE the delegate cannot change config, run exec or
  * delegate exec". Every refusal asserts the resulting STATE (the row did not move, no
  * grant was written) as well as the refusal identity -- a status-only check passes for a
@@ -172,7 +172,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
             .as("step 2: exec must never be owner-implied").isFalse();
 
         // Step 3 (LOAD-BEARING): exec is implied by NOTHING. This is the clause the
-        // Phase 3 gate rests on, and KnownCapability enforces it structurally -- an
+        // capability split rests on, and KnownCapability enforces it structurally -- an
         // ADMIN capability cannot even carry an impliedBy set.
         assertThat(KnownCapabilities.impliersOf(InstanceModel.MODEL_ID, HohenheimCapabilities.EXEC))
             .as("step 3: no capability may imply exec").isEmpty();
@@ -278,7 +278,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
     }
 
     /**
-     * The refusal half of the Phase 3 gate: the console delegate cannot change config,
+     * The refusal half of the capability split: the console delegate cannot change config,
      * destroy or exec -- asserted on the resulting STATE, not on a status code.
      */
     @Test
@@ -385,7 +385,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
             .contains("record_delegate");
 
         // Step 5: the same refusal for the widest non-admin authority there is. This is
-        // the Phase 5 gate clause: no per-record grant administrator, however broad, can
+        // the delegation rule: no per-record grant administrator, however broad, can
         // mint exec. (There is deliberately no separate "access.manage" capability --
         // the per-record boundary IS holding a delegable capability, and it is strictly
         // narrower than a dedicated one would be.)
@@ -507,8 +507,8 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
             Models.get(InstanceModel.class).save(renamed);
         }
 
-        // Step 3: an admin may plant exec deliberately (the operator choice the plan
-        // describes) -- and the recipient STILL cannot pass it on.
+        // Step 3: an admin may plant exec deliberately (a deliberate operator
+        // choice) -- and the recipient STILL cannot pass it on.
         RecordGrants.grant(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID, instanceId,
             HohenheimCapabilities.EXEC, true);
         try {

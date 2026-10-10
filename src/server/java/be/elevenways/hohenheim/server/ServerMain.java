@@ -83,7 +83,7 @@ public class ServerMain {
 
         // Upstream kinds and auth-provider types self-register through compile-time
         // discovery (BlastAutoLoadInit); nothing needs an explicit boot here since the
-        // host-user process lane was deleted (phase-0 design section 7).
+        // host-user process lane was deleted.
 
         HohenheimEndpoints.init();
         HohenheimChannels.init();
@@ -125,7 +125,7 @@ public class ServerMain {
             // security engine off the wire for it. A monitor tick racing the sweep
             // is safe: both serialize on the per-stack worker.
             JobRunner.startVirtualThread(() -> StackRuntime.get().resetInterruptedDeploys());
-            // The documented migration of the Phase 7 stack lowering: a stack whose
+            // The documented migration of the stack lowering onto instances: a stack whose
             // services own no instances is re-deployed under the contract onto its
             // EXISTING volumes, and its pre-lowering containers are retired one by one
             // (only where the daemon still attributes them to that stack). Idempotent.
@@ -135,7 +135,7 @@ public class ServerMain {
                 "stack runtime not started, interrupted-deploy sweep skipped");
         }
         if (HohenheimRoles.enabled(HohenheimRoles.Role.DATABASES)) {
-            // The documented migration of the Phase 7 database lowering: a database
+            // The documented migration of the database lowering onto instances: a database
             // record predating it owns no instance, so it gets one and is re-deployed
             // onto its EXISTING data volume rather than being abandoned with a running
             // container nothing tracks. Idempotent, so it is a fast no-op once adopted.

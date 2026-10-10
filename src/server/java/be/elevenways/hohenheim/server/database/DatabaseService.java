@@ -50,8 +50,8 @@ import java.util.concurrent.Executors;
 
 /**
  * Lifecycle entry point for managed databases: ties the persisted {@link DatabaseModel}
- * record (desired config) to the RUNTIME. Since the Phase 7 database wave that runtime is
- * an owned instance driven by {@link DatabaseInstances}; since 2026-09-02 it is EITHER
+ * record (desired config) to the RUNTIME. That runtime is
+ * an owned instance driven by {@link DatabaseInstances}: EITHER
  * the record's own engine instance (a dedicated placement) OR a logical database on a
  * host-shared {@link DatabaseEngineModel} (a shared placement), and every operation
  * resolves which through {@link EngineHost#serving(Row)}. Backup and restore resolve the

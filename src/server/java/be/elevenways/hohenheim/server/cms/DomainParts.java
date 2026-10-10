@@ -118,7 +118,7 @@ public final class DomainParts {
 
     private static final SubjectType<Row> SUBJECT = SubjectType.record(SiteDomainModel.MODEL_ID);
 
-    /** The create verb in the Domains board's words: the list's button and the form's heading ("Add address"). */
+    /** The create verb in the Domains page's words: the list's button and the form's heading ("Add address"). */
     private static final Microcopy CREATE_TITLE = HohenheimMicrocopy.SITE_DOMAIN.of("create_title");
 
     /**
@@ -209,7 +209,7 @@ public final class DomainParts {
             .column(ColumnSpec.fromField(SiteDomainModel.HOSTNAME)
                 .label(HohenheimMicrocopy.SITE_DOMAINS.of("address_column"))
                 .filterable().copyable().subtext("path").build())
-            // How the name matches stays in the picker and the filter strip: the Domains board reads addresses by
+            // How the name matches stays in the picker and the filter strip: the Domains list reads addresses by
             // the name visitors type, and a pattern's "Points here" speaks for the names it catches.
             .column(ColumnSpec.fromField(SiteDomainModel.MATCH_TYPE).filterable().hidden().build())
             .column(ColumnSpec.fromField(SiteDomainModel.PATH).hidden().build())
@@ -475,8 +475,7 @@ public final class DomainParts {
      * child create preset.
      *
      * AIDEV-NOTE: the site is read through the panel's own site entry, the caller's scope: a site the caller cannot
-     * reach opens the create exactly as no site does, so the form is no probe of another tenant's configuration
-     * (GPT review 25 D03).
+     * reach opens the create exactly as no site does, so the form is no probe of another tenant's configuration.
      */
     private static @NonNull Map<String, Object> createDefaults(@NonNull FormSpec spec, @NonNull PanelRequest request) {
         Map<String, Object> values = new LinkedHashMap<>(spec.defaultValues());

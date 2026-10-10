@@ -48,7 +48,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * This is the journey the re-keying exists for. {@code ApplicationReleaseContractTest}
  * proves the engine's STATE MACHINE (probe outcomes, drain, retention, boot recovery);
- * this proves the SHAPE the phase-0 design asked for -- that the thing an operator edits
+ * this proves the intended SHAPE -- that the thing an operator edits
  * and the thing that runs are two records, and that a site is a hostname pointing at the
  * first of them.
  *

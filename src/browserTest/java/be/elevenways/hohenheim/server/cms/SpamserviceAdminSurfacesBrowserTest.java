@@ -28,7 +28,7 @@ import java.util.Objects;
 
 /**
  * The remote Spamservice entries' admin surfaces, stored before they moved onto store parts and compared exactly
- * after it (stage 4 contract 4.9 and 4.10); the q-to-search and date-pair-to-leaf filter moves are declared
+ * after it; the q-to-search and date-pair-to-leaf filter moves are declared
  * correspondences, as is the keys create showing its judged client read-only.
  *
  * AIDEV-NOTE: the stored set ({@code /panel-surfaces/spamservice-remote.txt}) is today's behaviour, captured from the

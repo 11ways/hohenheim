@@ -52,7 +52,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * behaviour the hermetic {@code WorkspaceKindTest} structurally cannot reach.
  *
  * AIDEV-NOTE: it runs on the SECONDARY live host (nightstrom) so the Docker half of this
- * pair can hold daystrom without the two waves fighting over one machine's 3.9 GiB.
+ * pair can hold daystrom without the two runs fighting over one machine's 3.9 GiB.
  *
  * AIDEV-NOTE: everything is carved under one uuid-named directory in the Incus pool and
  * removed in tearDown -- the pool's own {@code images/}, {@code containers/} and

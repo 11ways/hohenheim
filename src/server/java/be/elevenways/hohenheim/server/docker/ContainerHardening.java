@@ -51,8 +51,8 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * The tenant-vs-operator boundary lives in the parts of this class that no profile can
  * move -- drop-ALL as the base, no-new-privileges, the pids cap and the structural
  * refusals -- plus the per-workload network policy
- * ({@code be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy}), which as of the
- * 2026-08-06 waves covers every Docker tier: instances, stacks, Docker site releases and
+ * ({@code be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy}), which
+ * covers every Docker tier: instances, stacks, Docker site releases and
  * managed databases each get their own network with the tenant-range denies applied and
  * read-back-verified. Host-process sites live in the host's own netns and cannot be given a
  * per-workload NETWORK, which is why they carry a uid-keyed nft policy instead
@@ -205,12 +205,12 @@ public final class ContainerHardening {
      * not exist in the Docker API (it is daemon-level {@code userns-remap} in daemon.json,
      * which hohenheim does not own), and the only thing the field can do here is "host",
      * i.e. opt a container OUT of remapping on a daemon that has it configured.
-     * {@code ReadonlyRootfs} is refused because the Phase 3 threat-model clause offers it
+     * {@code ReadonlyRootfs} is refused because the threat model offers it
      * "where the template allows" and no template in this tier allows it -- published
      * images chown their data directory, write pid files and unpack assets into the
      * rootfs, so a read-only root would refuse to start the ordinary workload instead of
-     * confining a hostile one (docs/instance-tier-plan.md carries the clause's own copy of
-     * the verdict). {@code Binds} needs no entry of its own any more: a host path
+     * confining a hostile one.
+     * {@code Binds} needs no entry of its own any more: a host path
      * reaches a workload as a bind-type entry in the permitted {@code Mounts}, and
      * {@link #requireVolumeRootSource} confines its source to the volume root this
      * deployment owns -- a bind of /var/run/docker.sock is still root on the host, and
@@ -473,7 +473,7 @@ public final class ContainerHardening {
      * {@code max-size} x {@code max-file} as a hard ceiling on what it can occupy.
      *
      * AIDEV-NOTE: DOCKER-TIER ONLY, and the original claim ("every managed container's log
-     * at the create funnel", commit c78f295e) was wider than this class can reach. This is
+     * at the create funnel") was wider than this class can reach. This is
      * the Docker create funnel; INCUS instances (containers and VMs) never pass through it
      * and get no LogConfig equivalent, because they do not have the exposure it closes: an
      * Incus guest's own logs are written inside the INSTANCE's filesystem, which the Incus

@@ -166,7 +166,7 @@ class ServerAdminTest extends HohenheimTestBase {
                 + " dropped (the placement gate reads this column)")
             .isEqualTo(ServerModel.POSTURE_SHARED_CONTAINER);
         // 2b. And storing it GRANTS nothing. This bare form post is exactly the "boolean
-        //     hidden in settings" shape the plan's clause refuses to accept as a risk
+        //     hidden in settings" shape the posture rule refuses to accept as a risk
         //     acknowledgement: it declares the intent and nothing else, so the host is
         //     unacknowledged and takes no tenant container until an operator says so by
         //     name. See HostPostureAcknowledgementTest for the whole journey.

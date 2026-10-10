@@ -75,7 +75,7 @@ public class GitProviderModel extends Model {
      * work), the one fact that lets an operator-owned provider's API calls reach any address; never written by a form,
      * only by OperatorTrustedWrites' write hook.
      *
-     * AIDEV-NOTE: reach is decided by WHO SET the target, not only by ownership at fetch time (decided 2026-10-02):
+     * AIDEV-NOTE: reach is decided by WHO SET the target, not only by ownership at fetch time:
      * ownership changes where no write hook sees it (a revoked grant, a deleted tenant, a cascade), so a target a
      * tenant or delegate set stays unmarked and is never dialled with any-address reach after the record becomes
      * operator-owned. M011 marked every row stored before the rule.

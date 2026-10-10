@@ -407,8 +407,8 @@ public final class InstanceVolumes {
      * Destroy every declared volume of an instance and forget the declarations.
      *
      * AIDEV-NOTE: the ONE irreversible verb of this tier, and it exists only because a
-     * consumer asked for it by name (the workspace's "delete data" destroy, phase-0 brief
-     * 8). It is never reached by an ordinary destroy: {@code InstanceService.destroy}
+     * consumer asked for it by name (the workspace's "delete data" destroy).
+     * It is never reached by an ordinary destroy: {@code InstanceService.destroy}
      * keeps volumes, because a soft-deleted record's data must survive the record.
      *
      * @return the host paths that were removed
@@ -450,7 +450,7 @@ public final class InstanceVolumes {
      * a volume is unrecoverable, so removing one is a human act with the data still there.
      * A volume of a soft-deleted owner surfaces through the reconciler as an orphan.
      * {@link #destroyOne} is that human act's mechanism (the Volumes tab's typed-confirm
-     * delete, phase-0 brief 9).
+     * delete).
      */
 
     /**

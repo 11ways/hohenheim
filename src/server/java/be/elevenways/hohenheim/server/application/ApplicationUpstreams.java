@@ -27,8 +27,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * which tier owns the record.
  *
  * AIDEV-NOTE: a resolution is a database read (the serving row plus its port claim), which
- * is far too much per request, and a value cached forever is the stale-address bug the
- * brief names. So the cache is GENERATION-keyed: every flip, deploy, stop and destroy bumps
+ * is far too much per request, and a value cached forever is the stale-address bug.
+ * So the cache is GENERATION-keyed: every flip, deploy, stop and destroy bumps
  * the application's generation, and a handler holding an older generation re-resolves on its
  * next request. No listener, no invalidation broadcast, and no window in which a request is
  * forwarded to a container the engine already retired.

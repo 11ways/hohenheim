@@ -133,7 +133,7 @@ class SecretFieldsTest extends HohenheimTestBase {
 
         // Git webhook secret: a secret inside the settings map of the APPLICATION that
         // carries the source. AIDEV-NOTE: it used to live on the site; the source moved to
-        // the instance with the upstream rename (phase-0 design section 3), and the
+        // the instance with the upstream rename, and the
         // masking contract this asserts is a property of the settings map, not of a table.
         InstanceModel instances = Models.get(InstanceModel.class);
         Row application = instances.createEmptyRow();

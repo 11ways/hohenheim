@@ -37,8 +37,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * OOM-killed CHILD stays {@code running} to Docker, and the instance tier must stop
  * calling that healthy.
  *
- * AIDEV-NOTE: this is the reporting half of the defect {@code d6a9bf6} only right-sized
- * around. A database engine killed by the cgroup OOM killer dies as a child of the
+ * AIDEV-NOTE: this is the reporting half of a defect that was once only
+ * right-sized around. A database engine killed by the cgroup OOM killer dies as a child of the
  * container entrypoint, so the container never exits, {@code ContainerState} stays
  * RUNNING, and hohenheim reported an engine that refuses every connection as healthy.
  * The step-3 PRESSURE anchor is as load-bearing as the step-5 kill: reading

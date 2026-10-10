@@ -38,8 +38,8 @@ import java.util.Map;
  * the {@code deployments} table). That lane cloned into a numbered slot beside the site,
  * built on the HOST as a claimed unix uid, and swapped a symlink -- a second, weaker
  * blue/green implementation of what the release engine already does with health gating,
- * digest pinning and rollback. It had been unreachable since brief 5 dropped
- * {@code sites.source}; nothing here is a port of it.
+ * digest pinning and rollback. It had been unreachable since {@code sites.source}
+ * was dropped; nothing here is a port of it.
  *
  * AIDEV-NOTE: an image-sourced application deploys too. It simply has no checkout, so the
  * verb collapses to the converge -- which is what re-resolves a moved tag to a fresh digest

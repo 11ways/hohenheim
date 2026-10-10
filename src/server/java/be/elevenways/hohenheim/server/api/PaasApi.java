@@ -53,7 +53,7 @@ import java.util.function.Function;
 /**
  * The PaaS automation API (v1): projects/environments, sites, deploy/rollback, the
  * three operation-record lanes (git deployments, releases, sandbox builds) and the
- * variable mechanism -- the operator seam Phase 7 names, over machinery that all
+ * variable mechanism -- the operator seam, over machinery that all
  * exists already. The instance lane's three rules apply verbatim (no authorization
  * decisions of its own, no existence oracle, no field that was not enumerated); see
  * {@link be.elevenways.hohenheim.server.instance.InstanceApi}.

@@ -164,7 +164,7 @@ final class AppOverview {
         Row certificate = coverage == CertCoverage.ACTIVE ? CertificateCoverage.coveringCertificate(hostname) : null;
         Instant expires = certificate == null ? null : certificate.get(CertificateModel.EXPIRES_ON);
         if (expires != null) {
-            // The board's "certificate valid until ...", in the one expiry wording the HTTPS cells and the tile use.
+            // "Certificate valid until ...", in the one expiry wording the HTTPS cells and the tile use.
             notes.add(HohenheimMicrocopy.APP_OVERVIEW.of("certificate_note")
                 .withArg("expiry", CertificateExpiry.inSentence(expires))
                 .resolve(locales, resolver));

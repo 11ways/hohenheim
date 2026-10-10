@@ -59,7 +59,7 @@ import java.util.regex.Pattern;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A tenant walks /manage the way the Manage-Home and Manage-App boards draw it: the flat sidebar, the attention band
+ * A tenant walks /manage: the flat sidebar, the attention band
  * that carries their own broken app, the Apps band, the usage card, and an app page that offers exactly what the grant
  * allows.
  *
@@ -80,10 +80,10 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
     @BeforeEach
     void seedTenantAndApp() throws Exception {
         freshSeededDatabase();
-        this.tenantId = ApiSupport.user("w9b-tenant@hohenheim.local", "W9b Tenant");
+        this.tenantId = ApiSupport.user("survival-tenant@hohenheim.local", "Survival Tenant");
         Model instances = Models.get(InstanceModel.class);
         Row row = instances.createEmptyRow();
-        row.set(InstanceModel.NAME, "w9b-survival");
+        row.set(InstanceModel.NAME, "tenant-survival");
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
             Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
@@ -94,8 +94,8 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         // domain is granted to the tenant.
         Model sites = Models.get(SiteModel.class);
         Row site = sites.createEmptyRow();
-        site.set(SiteModel.NAME, "w9b-survival-web");
-        site.set(SiteModel.SLUG, "w9b-survival-web");
+        site.set(SiteModel.NAME, "tenant-survival-web");
+        site.set(SiteModel.SLUG, "tenant-survival-web");
         site.set(SiteModel.UPSTREAM_KIND, "hohenheim:instance");
         site.set(SiteModel.INSTANCE_ID, this.appId);
         site.set(SiteModel.ENABLED, true);
@@ -104,7 +104,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         Model domains = Models.get(SiteDomainModel.class);
         Row domain = domains.createEmptyRow();
         domain.set(SiteDomainModel.SITE_ID, this.siteId);
-        domain.set(SiteDomainModel.HOSTNAME, "w9b-survival.example.test");
+        domain.set(SiteDomainModel.HOSTNAME, "tenant-survival.example.test");
         domains.save(domain);
         this.domainId = domain.get(SiteDomainModel.ID);
         RecordGrants.grant(GrantSubjectType.USER, this.tenantId, InstanceModel.MODEL_ID, this.appId,
@@ -124,27 +124,27 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         //    cluster (certificates are readable to any signed-in tenant); no Instances or Sites row, no groups.
         String home = page("/manage/dashboard");
         assertThat(navLinks(home))
-            .as("step 1: the tenant's sidebar rows, in the board's order")
+            .as("step 1: the tenant's sidebar rows, in order")
             .containsExactly("/manage/dashboard", "/manage/apps", "/manage/domain-names");
 
         // 2. The attention band carries the app's own verdict, never "All clear" while the app cannot serve: with no
         //    admitted host the placement gate speaks first, in the host-free words the app's page leads with.
         assertThat(home)
             .as("step 2: the app's verdict leads the band")
-            .contains("w9b-survival cannot start yet")
-            .contains("Open w9b-survival")
+            .contains("tenant-survival cannot start yet")
+            .contains("Open tenant-survival")
             .doesNotContain("All clear");
         assertThat(page("/manage/instances/" + this.appId + "/page/overview"))
             .as("step 2: the app's page leads with the same verdict, its heading naming the app")
             .contains("Cannot start yet");
 
-        // 3. The Apps band, headed "Your apps" as the board heads it, lists the app by name, linked to its page.
+        // 3. The Apps band, headed "Your apps", lists the app by name, linked to its page.
         assertThat(home)
-            .as("step 3: the Apps band names the tenant's app under the board's heading")
-            .contains("data-hh-dashboard-app=\"w9b-survival\"")
+            .as("step 3: the Apps band names the tenant's app under its heading")
+            .contains("data-hh-dashboard-app=\"tenant-survival\"")
             .contains(">Your apps</pb-microcopy>");
 
-        // 4. An uncapped budget of the board's reads "No limit" (the instance count has no cap yet; previews carry a
+        // 4. An uncapped budget reads "No limit" (the instance count has no cap yet; previews carry a
         //    default one), stating no amount; a tenant who may not create is not offered Put something online.
         String apps = usageLine(home, "Apps");
         assertThat(apps)
@@ -185,7 +185,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         //     refused: no Add address, no Protect a path, no link to the domain.
         assertThat(viewer)
             .as("step 6b: the app's address is read")
-            .contains("w9b-survival.example.test");
+            .contains("tenant-survival.example.test");
         assertThat(viewer)
             .as("step 6b: no door into the site or the domain the tenant holds no grant on")
             .doesNotContain("/manage/sites/" + this.siteId + "/page/domains")
@@ -207,11 +207,11 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             .contains("/manage/instances/" + this.appId + "/page/console")
             .contains("/manage/instances/" + this.appId + "/page/files");
         assertThat(granted)
-            .as("step 7: the card says what each capability allows and the sharing, as one sentence (D13f)")
+            .as("step 7: the card says what each capability allows and the sharing, as one sentence")
             .doesNotContain("Look at it and share access; ask the operator for more")
             .contains("Its console, reading its files, share access");
 
-        // 7b. Granted power, the app page offers Restart beside Deploy (board Manage-App).
+        // 7b. Granted power, the app page offers Restart beside Deploy.
         RecordGrants.grant(GrantSubjectType.USER, this.tenantId, InstanceModel.MODEL_ID, this.appId,
             HohenheimCapabilities.POWER, true);
         assertThat(page("/manage/instances/" + this.appId + "/page/overview"))
@@ -225,7 +225,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             .contains("/manage/put-online");
 
         // 9. The Domains cluster offers Access lists only where a list can guard something: a tenant of an app alone
-        //    reads Certificates there, never an empty Access lists tab; managing a site, it gets the tab (DD6).
+        //    reads Certificates there, never an empty Access lists tab; managing a site, it gets the tab.
         assertThat(domainsTabs())
             .as("step 9: no Access lists tab for a tenant holding no site and no list")
             .contains(HohenheimSlugs.CERTIFICATES)
@@ -234,7 +234,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             PanelRegistry.getBySlug(HohenheimSlugs.MANAGE)).entryBySlug(HohenheimSlugs.Cluster.DOMAIN_NAMES));
         assertThat(Objects.requireNonNull(domains.description()).resolve(LocaleChain.ofTags("en"),
                 Zenit.getMessageResolver()))
-            .as("step 9: the cluster's lead names no tab a tenant may lack, as DNS records and Access lists (DD10b)")
+            .as("step 9: the cluster's lead names no tab a tenant may lack, as DNS records and Access lists")
             .isEqualTo("Your addresses and everything that goes with them.");
         RecordGrants.grant(GrantSubjectType.USER, this.tenantId, SiteModel.MODEL_ID, this.siteId,
             HohenheimCapabilities.MANAGE, true);
@@ -249,7 +249,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         PanelCluster domains = (PanelCluster) Objects.requireNonNull(
             manage.entryBySlug(HohenheimSlugs.Cluster.DOMAIN_NAMES));
         AccessContext tenantAccess = AccessContext.of(TenantConduits.stubFor(
-            new UserPrincipal(this.tenantId, "W9b Tenant")));
+            new UserPrincipal(this.tenantId, "Survival Tenant")));
         return PanelNav.clusterMembers(manage, domains, tenantAccess).stream().map(PanelEntry::slug).toList();
     }
 
@@ -258,16 +258,16 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         // A second app of the tenant's, on a host of its own, so a host filter has something to select.
         Model servers = Models.get(ServerModel.class);
         Row secretHost = servers.createEmptyRow();
-        secretHost.set(ServerModel.NAME, "d7f-secret-host");
+        secretHost.set(ServerModel.NAME, "secret-host");
         secretHost.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
         secretHost.set(ServerModel.MODE, ServerModel.MODE_SSH);
-        secretHost.set(ServerModel.SSH_TARGET, "operator@d7f-secret-host.invalid");
+        secretHost.set(ServerModel.SSH_TARGET, "operator@secret-host.invalid");
         secretHost.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
         servers.save(secretHost);
         int secretHostId = secretHost.get(ServerModel.ID);
         Model instances = Models.get(InstanceModel.class);
         Row hidden = instances.createEmptyRow();
-        hidden.set(InstanceModel.NAME, "d7f-hidden");
+        hidden.set(InstanceModel.NAME, "tenant-hidden");
         hidden.set(InstanceModel.KIND, "hohenheim:docker_container");
         hidden.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine", "command", "sleep 60")));
         hidden.set(InstanceModel.SERVER_ID, secretHostId);
@@ -277,9 +277,9 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             HohenheimCapabilities.VIEW, true);
         Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
         AccessContext tenantAccess = AccessContext.of(TenantConduits.stubFor(
-            new UserPrincipal(this.tenantId, "W9b Tenant")));
+            new UserPrincipal(this.tenantId, "Survival Tenant")));
 
-        // 1. The landing is headed "Your services" as board Manage-Home heads it; its sidebar row still reads Overview.
+        // 1. The landing is headed "Your services"; its sidebar row still reads Overview.
         String home = page("/manage/dashboard");
         assertThat(home)
             .as("step 1: the tenant's landing is headed by the panel's title")
@@ -330,19 +330,19 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         //    list names no host; the operator's same filter does select by host (the probe is a real filter).
         String hostRule = "q=" + URLEncoder.encode("server_id = " + secretHostId, StandardCharsets.UTF_8);
         HttpResponse<String> filtered = httpGet("/manage/instances?" + hostRule, this.tenant);
-        assertThat(filtered.statusCode() >= 400 || filtered.body().contains("w9b-survival"))
+        assertThat(filtered.statusCode() >= 400 || filtered.body().contains("tenant-survival"))
             .as("step 3: the tenant's host rule is refused or ignored (status %s)", filtered.statusCode())
             .isTrue();
-        assertThat(filtered.body()).as("step 3: and names no host").doesNotContain("d7f-secret-host");
+        assertThat(filtered.body()).as("step 3: and names no host").doesNotContain("secret-host");
         String sorted = page("/manage/instances?sort=server_id");
         assertThat(sorted)
             .as("step 3: a host sort is ignored: both apps listed, no host named")
-            .contains("w9b-survival").contains("d7f-hidden").doesNotContain("d7f-secret-host");
+            .contains("tenant-survival").contains("tenant-hidden").doesNotContain("secret-host");
         assertThat(adminGet("/admin/instances?" + hostRule).body())
             .as("step 3: the operator's host rule selects the app on that host")
-            .contains("d7f-hidden").doesNotContain("w9b-survival");
+            .contains("tenant-hidden").doesNotContain("tenant-survival");
         assertThat(page("/manage/instances/" + hiddenId + "/page/overview"))
-            .as("step 3: the app's own page names no host either").doesNotContain("d7f-secret-host");
+            .as("step 3: the app's own page names no host either").doesNotContain("secret-host");
 
         // 4. The app cannot start: no Open site, for the tenant and the operator alike, though its site has an address.
         String tenantApp = page("/manage/instances/" + this.appId + "/page/overview");
@@ -381,7 +381,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.USER, this.tenantId, InstanceModel.MODEL_ID, this.appId,
             HohenheimCapabilities.DESTROY, true);
         AccessContext destroyer = AccessContext.of(TenantConduits.stubFor(
-            new UserPrincipal(this.tenantId, "W9b Tenant")));
+            new UserPrincipal(this.tenantId, "Survival Tenant")));
         assertThat(ResourceVerbs.unavailable(manage, manageInstances, ResourceVerb.DELETE, app, destroyer))
             .as("step 7: live for the holder of destroy").isNull();
         assertThat(ResourceVerbs.removableBy(manage, manageInstances, app, destroyer))
@@ -410,11 +410,11 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
     }
 
     @Test
-    void theLandingAndTheAppPageSpeakToTheTenantAsTheBoardsDo() throws Exception {
+    void theLandingAndTheAppPageSpeakToTheTenantInPlainWords() throws Exception {
         var local = HostFixtures.captureLocal();
         try {
             // The app runs on a host that takes it, behind the operator's site whose address forces HTTPS without a
-            // certificate (DEP10's alchemy-skeleton): visitors get an error page, and the tenant holds no grant on
+            // certificate: visitors get an error page, and the tenant holds no grant on
             // the site, so no fix of that verdict is theirs to use.
             HostFixtures.makeLocalPlaceable(16L * 1024);
             Model instances = Models.get(InstanceModel.class);
@@ -423,12 +423,12 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             Models.get(SiteDomainModel.class).find().where(SiteDomainModel.ID.eq(this.domainId))
                 .assign(SiteDomainModel.FORCE_SSL, true).bypassBehaviours().updateAll();
 
-            // 1. The landing's attention item names the app (board Manage-Home lists many), and says who can fix it.
+            // 1. The landing's attention item names the app, and says who can fix it.
             String home = page("/manage/dashboard");
             assertThat(home)
                 .as("step 1: the attention title names the app")
-                .contains("Visitors of w9b-survival get an error page")
-                .contains("HTTPS is forced, but w9b-survival.example.test has no working certificate")
+                .contains("Visitors of tenant-survival get an error page")
+                .contains("HTTPS is forced, but tenant-survival.example.test has no working certificate")
                 .contains("The operator of this installation can fix this.");
 
             // 2. The app page's problem band offers no fix the tenant cannot use and says who can clear it.
@@ -449,7 +449,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
                 .doesNotContain("The operator of this installation can fix this.");
 
             // 4. "What you can do here" says what the grant allows in words: the tenant level as its description, the
-            //    verbs it implies never listed again (DEP10: "Console, Power, Configure, Run commands, ...").
+            //    verbs it implies never listed again (it once read "Console, Power, Configure, Run commands, ...").
             RecordGrants.grant(GrantSubjectType.USER, this.tenantId, InstanceModel.MODEL_ID, this.appId,
                 HohenheimCapabilities.MANAGE, true);
             String managed = page(overview);
@@ -481,7 +481,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             String title = managed.substring(managed.indexOf("<title>") + "<title>".length(),
                 managed.indexOf("</title>"));
             assertThat(title).as("step 6: the page title reads the app under Apps")
-                .contains("w9b-survival").doesNotContain("Instances");
+                .contains("tenant-survival").doesNotContain("Instances");
 
             // 7. The Apps list speaks to the tenant ("Your apps"), not in the operator's data model.
             assertThat(page("/manage/apps"))
@@ -489,7 +489,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
                 .contains("Your apps, with their addresses and whether they work.")
                 .doesNotContain("sites, instances and stacks");
 
-            // 8. Databases is a row where the tenant may create one, as the board draws it; never a door that refuses.
+            // 8. Databases is a row where the tenant may create one; never a door that refuses.
             assertThat(navLinks(page("/manage/dashboard")))
                 .as("step 8: no Databases row for a tenant who holds none and may create none")
                 .doesNotContain("/manage/databases");

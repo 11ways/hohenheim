@@ -12,7 +12,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * travels in HTTP Basic auth ONLY (password, or username as a fallback); the service
  * refuses anything the token does not unlock.
  *
- * AIDEV-NOTE: a ?token= query fallback was DROPPED (2026-08-10). A DNS-write
+ * AIDEV-NOTE: a ?token= query fallback was DROPPED. A DNS-write
  * credential in the query string lands in access logs, proxy logs and the
  * Referer of anything the response links to -- and dyndns2 clients (ddclient,
  * routers) present the token as the Basic password anyway, which is exactly what

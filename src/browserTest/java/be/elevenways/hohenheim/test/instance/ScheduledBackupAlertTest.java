@@ -43,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * A scheduled backup still alerts the operator when it fails (stage 2 contract 5.6 and 6.10): the backup operation's
+ * A scheduled backup still alerts the operator when it fails: the backup operation's
  * schedule placement carries the failure hook, so a failed step alerts, a step reaped with an unknown outcome alerts
  * in its own words, and a successful backup alerts nothing.
  */

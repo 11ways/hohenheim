@@ -17,19 +17,19 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The Phase 0 "Secrets" gate for a {@code .secret()} leaf inside a site's polymorphic
+ * The "Secrets" guarantee for a {@code .secret()} leaf inside a site's polymorphic
  * settings map: a REAL credential typed through the REAL admin form must be absent from
  * every new revision snapshot and activity delta, while ordinary settings changes stay
  * visible; a doctored legacy snapshot holding the plaintext must not reactivate it on
  * restore; and the form stays EDITABLE (keep-on-blank).
  *
  * AIDEV-NOTE: the subject was a node site's {@code environment_variables} StringMapField
- * until the upstream rename (phase-0 design section 3) deleted every site type that ran a
+ * until the upstream rename deleted every site type that ran a
  * workload -- an env map is a property of the INSTANCE now, and instances are not
  * revisionable. The dev-namespace {@code registration_token} is the surviving secret leaf
  * in {@code sites.settings}, and it exercises the same FieldRedaction walk over revisions,
  * activity deltas and the history feed. What is NOT covered here any more is the per-KEY
- * keep-on-blank of a secret MAP; that moves with the env surface in a later phase-0 step.
+ * keep-on-blank of a secret MAP; that moves with the env surface.
  */
 class EnvironmentSecretsTest extends HohenheimTestBase {
 

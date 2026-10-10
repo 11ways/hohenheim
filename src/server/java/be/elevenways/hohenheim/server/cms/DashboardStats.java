@@ -28,13 +28,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The admin dashboard's count tiles (board Main): Apps, Hosts, Certificates and Backups, each with the line saying what
+ * The admin dashboard's count tiles: Apps, Hosts, Certificates and Backups, each with the line saying what
  * its count holds, read through the panel's own lists for the viewer.
  *
  * AIDEV-NOTE: a tile exists only where the list it counts and links to is registered and admits the viewer, so the
  * node's roles decide which tiles exist without a switch of their own. Every line is a fact the counted list already
  * shows (the app verdict, the host verdict, the certificate's state cell, the newest backup or dump); a tile with no
- * fact behind a line draws none, never an invented one. The board's "succeeded last night" is not said: a backup
+ * fact behind a line draws none, never an invented one. "Succeeded last night" is not said: a backup
  * records when it ran, not which night's schedule it belonged to.
  *
  * @author Jelle De Loecker
@@ -47,7 +47,7 @@ final class DashboardStats {
 
     /**
      * @param apps the apps this panel lists for this viewer, read once for the dashboard
-     * @return the tiles this viewer is offered, in the board's order
+     * @return the tiles this viewer is offered, in display order
      */
     static @NonNull List<DashboardStat> read(@NonNull Panel panel, @NonNull List<AppDirectory.App> apps,
                                              @NonNull AccessContext access) {
@@ -139,7 +139,7 @@ final class DashboardStats {
      * good newest copy, and when the newest copy of either was made and how big it is.
      *
      * AIDEV-NOTE: a database counts by the Databases list's own Last backup verdict ({@link DatabaseParts#backupOf}:
-     * a dump newer than the nightly allows), a workload by its newest instance backup having completed. DEP10's
+     * a dump newer than the nightly allows), a workload by its newest instance backup having completed.
      * Starfleet read "0, No app has a backup target" while skeleton-mongo's nightly dump was 16 hours old: the tile
      * counted instance backups only.
      */

@@ -91,7 +91,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The module-fit upgrade: a control-plane database the code of tag before-module-fit wrote at Hohenheim's
+ * The upgrade path: a control-plane database the code of tag before-module-fit wrote at Hohenheim's
  * production migration level (010; kuifje runs 009, robbedoes 010) goes through the deploy lane's
  * {@code --run-migrations} (the migrations above it, then the stored-id reconciler), boots under today's code and
  * reads as before.

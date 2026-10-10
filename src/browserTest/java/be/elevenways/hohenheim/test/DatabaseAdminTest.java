@@ -214,7 +214,7 @@ class DatabaseAdminTest extends HohenheimTestBase {
     /**
      * The admin create used to spell its own name rule ({@code [a-z0-9][a-z0-9-]*}, key {@code name_format}) and so
      * refused names the model's rule ({@link DatabaseModel#isValidName}, Docker's object-name shape) accepts. The
-     * create now asks that one rule (DD8): the record name is a Docker container, volume and backup directory name,
+     * create now asks that one rule: the record name is a Docker container, volume and backup directory name,
      * never a hostname and never the SQL identifier (that is {@code db_name}).
      */
     @Test

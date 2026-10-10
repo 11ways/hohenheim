@@ -43,8 +43,8 @@ final class SiteControlHandlers {
     /**
      * Deploy control (forms on the instance's Deploys tab).
      *
-     * AIDEV-NOTE: keyed by the APPLICATION instance since brief 9 moved the tab off the
-     * site -- the verbs act on the record that owns the releases. The CANCEL verb is
+     * AIDEV-NOTE: keyed by the APPLICATION instance, not the site, since the tab lives on the
+     * application -- the verbs act on the record that owns the releases. The CANCEL verb is
      * gone with the queue it cancelled: the release engine deploys synchronously behind
      * a health gate, and what a failed candidate does is get destroyed while the prior
      * release keeps serving -- there is no queued job to take back.

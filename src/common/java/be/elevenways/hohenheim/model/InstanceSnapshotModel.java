@@ -13,7 +13,7 @@ import be.elevenways.zenit.common.ui.ColorHue;
  * the CONTROLLER host, restorable in place. A snapshot is NOT a backup -- it shares
  * the instance's failure domain and dies with the host; the distinct
  * {@link InstanceBackupModel} rows are what leave the host. Distinct records with
- * distinct capabilities, by the instance-tier plan's explicit call.
+ * distinct capabilities, by explicit decision.
  */
 public class InstanceSnapshotModel extends Model {
 

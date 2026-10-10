@@ -85,7 +85,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * Slice one of module-fit stage 2 (contract 6.10): Hohenheim's start, stop, restart, backup and snapshot are
+ * Hohenheim's start, stop, restart, backup and snapshot are
  * operations, run from a schedule step and from the API route through one pipeline. Stored power steps keep running,
  * a restart holds one lock, the trigger names the surface that asked, and the services write the activity rows.
  *
@@ -461,7 +461,7 @@ class InstancePowerOperationsTest {
         steps.save(step);
     }
 
-    /** The step table's columns as the code before module-fit wrote them. */
+    /** The step table's columns as the code of tag before-module-fit wrote them. */
     private static final IntegerField STEP_ID = IntegerField.builder().name("id").build();
     private static final IntegerField STEP_SCHEDULE = IntegerField.builder().name("schedule_id").build();
     private static final IntegerField STEP_ORDER = IntegerField.builder().name("step_order").build();
@@ -471,7 +471,7 @@ class InstancePowerOperationsTest {
     private static final FrozenModel LEGACY_STEPS = new FrozenModel("zenit_record_schedule_steps", STEP_ID,
         STEP_SCHEDULE, STEP_ORDER, STEP_ACTION, STEP_PAYLOAD, STEP_POLICY);
 
-    /** A step as the code before module-fit stored it: a legacy action id and its payload, written raw. */
+    /** A step as the code of tag before-module-fit stored it: a legacy action id and its payload, written raw. */
     private static int legacyStep(int scheduleId, int position, String action, Map<String, Object> payload) {
         Row step = LEGACY_STEPS.createEmptyRow();
         step.set(STEP_SCHEDULE, scheduleId);

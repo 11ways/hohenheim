@@ -35,7 +35,7 @@ import java.util.Map;
  * nftables {@code ct count} beside the daemon's own table -- the precise arrangement
  * {@link be.elevenways.hohenheim.server.incus.IncusNetworkPolicy} refuses to build,
  * because incusd rewrites that ruleset on every network reload and would flush it out
- * from under us. See docs/instance-tier-plan.md for the recorded verdict.
+ * from under us.
  */
 public final class NetworkBandwidth {
 

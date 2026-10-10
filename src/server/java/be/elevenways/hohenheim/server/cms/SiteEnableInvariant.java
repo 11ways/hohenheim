@@ -15,7 +15,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * THE site enable invariant, installed on the SiteModel write pipeline: no disabled site goes live on a
  * route an enabled site already owns, on any writer.
  *
- * AIDEV-NOTE: moved out of SiteResource (review finding, 2026-09): a write-pipeline hook is a MODEL
+ * AIDEV-NOTE: moved out of SiteResource: a write-pipeline hook is a MODEL
  * concern, and living inside a CMS resource made it look like one resource's check. It stays in this
  * package only because the refusal wording it shares with the domain route invariant
  * ({@code ClaimRefusals}, {@code SiteDomainRouteInvariant.refuseEnableRouteConflicts}) is package-private

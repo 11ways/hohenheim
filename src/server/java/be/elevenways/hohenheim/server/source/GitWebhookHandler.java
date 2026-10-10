@@ -359,7 +359,7 @@ public class GitWebhookHandler {
 
         // Per-BRANCH previews: an opt-in pattern set beside previews_enabled. The
         // PRODUCTION branch never gets one (its environment IS production), so a
-        // pattern covering it changes nothing -- decided with the lane, 2026-08-10.
+        // pattern covering it changes nothing.
         if (!production && !branch.isEmpty()
                 && RawValues.isOn(sourceSettings, GitSourceSchema.PREVIEWS_ENABLED, false)
                 && PreviewBranches.matches(

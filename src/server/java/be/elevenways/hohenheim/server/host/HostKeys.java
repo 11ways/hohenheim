@@ -144,8 +144,8 @@ public final class HostKeys {
      *
      * AIDEV-NOTE: the pin is a REQUIRED parameter and there is no unpinned overload, on
      * purpose. The backup lane once hand-rolled its own argv and fell back to the OS
-     * user's ambient {@code known_hosts} -- silent trust-on-first-use in a lane a whole
-     * wave had declared closed. Keeping the pin in the signature is what makes that
+     * user's ambient {@code known_hosts} -- silent trust-on-first-use in a lane that was
+     * supposed to be closed. Keeping the pin in the signature is what makes that
      * shape unexpressible rather than merely discouraged.
      *
      * @param alias the {@code HostKeyAlias} both lookup and verification key on

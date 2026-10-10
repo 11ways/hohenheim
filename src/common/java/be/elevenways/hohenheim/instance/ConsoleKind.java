@@ -14,7 +14,7 @@ import java.util.Map;
  * that vocabulary, carried in the kind SETTINGS under {@link #SETTING} (and therefore in
  * every template's settings baseline).
  *
- * AIDEV-NOTE: {@link #TTY} is the "Janeway" console phase 3 reserved: the container is
+ * AIDEV-NOTE: {@link #TTY} is the reserved "Janeway" console: the container is
  * created with a pseudo-terminal, the console socket carries keystrokes and resize frames,
  * and a TUI in the workload (Alchemy's Janeway, htop, a REPL) renders the way it would in
  * a real terminal. The token is {@code tty} and not {@code janeway} because the mechanism

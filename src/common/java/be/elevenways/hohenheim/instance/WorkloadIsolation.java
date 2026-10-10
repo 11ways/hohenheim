@@ -2,8 +2,8 @@ package be.elevenways.hohenheim.instance;
 
 /**
  * The boundary a workload's runtime puts between the guest and the host kernel -- the
- * ISOLATION axis of the plan's "every workload declares trusted/operator-owned vs
- * hostile-tenant" clause, which is a SECOND axis and not a re-spelling of the first.
+ * ISOLATION axis of the "every workload declares trusted/operator-owned vs
+ * hostile-tenant" rule, which is a SECOND axis and not a re-spelling of the first.
  *
  * AIDEV-NOTE: the trust axis already exists as {@code InstanceKindHandler.tenantAuthored()}
  * (who wrote this workload); this one answers what CONTAINS it. They are independent: an

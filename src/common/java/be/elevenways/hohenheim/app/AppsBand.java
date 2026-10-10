@@ -7,8 +7,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import java.util.List;
 
 /**
- * The dashboard's Apps band as one placement draws it: its heading ("Apps" for the operator, "Your apps" on /manage,
- * boards Main and Manage-Home) over the apps.
+ * The dashboard's Apps band as one placement draws it: its heading ("Apps" for the operator, "Your apps" on /manage)
+ * over the apps.
  *
  * @param heading the band's heading in the placement's own words
  * @author Jelle De Loecker

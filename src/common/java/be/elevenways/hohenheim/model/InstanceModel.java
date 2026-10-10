@@ -35,7 +35,7 @@ import java.util.Map;
  * column would be a second authority that drifts the first time a grant changes. The
  * "no fence columns" stance this note originally recorded was superseded when HostLeases
  * landed: CLAIM_FENCE below IS enforced (every outcome write is guarded on it), so it is
- * not the reads-like-enforcement-but-enforces-nothing shape the plan bans.
+ * not the reads-like-enforcement-but-enforces-nothing shape.
  */
 public class InstanceModel extends Model {
 
@@ -47,8 +47,8 @@ public class InstanceModel extends Model {
 
     /**
      * {@link #STATUS}: deployed and started, awaiting the template's {@code
-     * readiness_line} on the console before it counts as Running (Phase 5's
-     * console-matcher clause). Only instances with a readiness line pass through here.
+     * readiness_line} on the console before it counts as Running (the console
+     * readiness matcher). Only instances with a readiness line pass through here.
      */
     public static final String STATUS_STARTING = "starting";
 
@@ -134,7 +134,7 @@ public class InstanceModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
-    // User data, NOT localized (the plan's explicit call: names are the user's own words).
+    // User data, NOT localized (names are the user's own words).
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
         .build());
@@ -287,7 +287,7 @@ public class InstanceModel extends Model {
     /**
      * {@link #CRASH_POLICY}: ANY exit not preceded by an observed stop (command or
      * operator stop) is a crash -- clean exit code included, the game-template default
-     * per the plan -- and the console watcher redeploys it, flap-protected.
+     * -- and the console watcher redeploys it, flap-protected.
      */
     public static final String CRASH_RESTART = "restart";
 
@@ -476,7 +476,7 @@ public class InstanceModel extends Model {
     public static final String ROLE_RETIRED = "retired";
 
     /**
-     * Which release of its owner this instance is (the health-gated release wave). A
+     * Which release of its owner this instance is (health-gated releases). A
      * standalone instance is trivially its own serving release, which the default states;
      * only site-attributed rows ever carry the other two values, written exclusively by
      * SiteReleases inside the GeneratedRows system scope.
@@ -538,7 +538,7 @@ public class InstanceModel extends Model {
      * system work), the one fact that lets an operator-owned instance clone a local source path; never written by a
      * form, only by OperatorTrustedWrites' write hook.
      *
-     * AIDEV-NOTE: reach is decided by WHO SET the target, not only by ownership at fetch time (decided 2026-10-02):
+     * AIDEV-NOTE: reach is decided by WHO SET the target, not only by ownership at fetch time:
      * ownership changes where no write hook sees it (a revoked grant, a deleted tenant, a cascade), so a target a
      * tenant or delegate set stays unmarked and is never dialled with any-address reach after the record becomes
      * operator-owned. M011 marked every row stored before the rule.
@@ -553,8 +553,8 @@ public class InstanceModel extends Model {
      *
      * AIDEV-NOTE: a loaded row carries these as they were at load time, and a whole-row save writes every present
      * column predicated on the primary key alone, so a config writer used to put back a status an operation had moved
-     * on from and the claim fence it had replaced, which let the old holder's late writes match again (review 14
-     * D01). A column a new fenced stamp writes belongs here.
+     * on from and the claim fence it had replaced, which let the old holder's late writes match again.
+     * A column a new fenced stamp writes belongs here.
      */
     public static final List<Field<?, ?>> OPERATION_OWNED = List.of(CLAIM_FENCE, STATUS, STATUS_OBSERVED_AT,
         WORKLOAD_KILLED_AT, INSTALL_STATE, INSTALL_ERROR, RUNTIME_ROLE, IMAGE_FINGERPRINT, MIGRATE_TARGET_ID,

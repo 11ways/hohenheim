@@ -6,7 +6,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * The lowercase name shape hosts and stacks share: letters a-z, digits and dashes, a letter or digit first.
  *
  * AIDEV-NOTE: each record keeps its own rule on its model ({@link ServerModel#isValidName},
- * {@link StackModel#isValidName}) because the ceilings differ; only the shape lives here (DD8). A database name is a
+ * {@link StackModel#isValidName}) because the ceilings differ; only the shape lives here. A database name is a
  * different rule, Docker's object-name shape ({@link DatabaseModel#isValidName}).
  *
  * @author Jelle De Loecker

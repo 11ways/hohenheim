@@ -17,8 +17,8 @@ import java.util.Map;
  * THE git-source vocabulary, contributed INTO a host schema rather than owning one.
  *
  * AIDEV-NOTE: it stopped being a standalone {@code SCHEMA} on 2026-08-22, when the source
- * moved off the site and onto the workspace and application instance kinds (phase-0 design
- * section 4). A Field instance belongs to exactly one Schema, so two kinds cannot share one
+ * moved off the site and onto the workspace and application instance kinds.
+ * A Field instance belongs to exactly one Schema, so two kinds cannot share one
  * declared set of Field constants -- and a copy-pasted second set is precisely the
  * vocabulary duplication this codebase refuses. {@link #addTo} builds the fields fresh per
  * host schema; the NAMES stay constants here, which is what every reader actually uses.
@@ -64,7 +64,7 @@ public final class GitSourceSchema {
      *
      * AIDEV-NOTE: ONE value on purpose. The edit form seeds a stored map's missing keys from the declared default, so
      * a declared true beside an absent-reads-off read showed sources that never stored the flag as auto-deploying and
-     * turned it on with the next unrelated save (DD11f). It is true since DD11h (Jelle: new sources deploy on push);
+     * turned it on with the next unrelated save. It is true by decision (new sources deploy on push);
      * M011's "keep every stored git source's auto-deploy off" stored an explicit false on every source written while
      * absent still read off, so flipping this changed no existing source.
      */
@@ -148,7 +148,7 @@ public final class GitSourceSchema {
 
         // AIDEV-NOTE: RETIRED. Nothing ever polled a repository: a new revision arrives by
         // the webhook (auto_deploy + webhook_secret), and inventing a poller was decided
-        // against (2026-09-24). The field stays DECLARED so a stored value still reads and an
+        // against. The field stays DECLARED so a stored value still reads and an
         // API request that still sends settings.poll_interval is still accepted (the schema
         // is closed-world: an undeclared key would become an unknown_field refusal). It is
         // visible in NO edit view, so no form offers a setting that does nothing.

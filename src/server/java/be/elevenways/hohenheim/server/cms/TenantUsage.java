@@ -21,10 +21,10 @@ import java.util.List;
  * (OwnerQuota.creationOwnerPack). A record an operator made and then granted to the tenant is charged to the
  * operator, so it does not count here; the card answers "how much may I still create", which is what a cap limits.
  *
- * AIDEV-NOTE: the board's budgets (apps, memory, disk, databases, previews) are drawn whether capped or not: an
+ * AIDEV-NOTE: the listed budgets (apps, memory, disk, databases, previews) are drawn whether capped or not: an
  * uncapped one reads "No limit" and states no amount, since an amount beside "no limit" would read as what the tenant
- * holds while a granted app is charged to the operator. DEP10's card showed only the one default-capped budget
- * (previews) and so said nothing about apps. Websites, which the board leaves out, show only when capped.
+ * holds while a granted app is charged to the operator. The card once showed only the one default-capped budget
+ * (previews) and so said nothing about apps. Websites, which the list leaves out, show only when capped.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -73,7 +73,7 @@ final class TenantUsage {
             case DISK_GB -> new Shown("disk", GB, Role.INSTANCES, true);
             // An extra network interface is a placement detail a tenant never asks for by name.
             case NICS -> null;
-            // Not one of the board's lines: shown only where the operator capped it.
+            // Not one of the listed budgets: shown only where the operator capped it.
             case SITES -> new Shown("sites", 1, Role.PROXY, false);
             case DATABASES -> new Shown("databases", 1, Role.DATABASES, true);
             case PREVIEWS -> new Shown("previews", 1, Role.PROXY, true);

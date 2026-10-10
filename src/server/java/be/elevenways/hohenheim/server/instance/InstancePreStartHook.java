@@ -15,7 +15,7 @@ import java.io.IOException;
  *
  * AIDEV-NOTE: this is a DECLARATION by the owning tier, not an if-chain in
  * {@code InstanceService.deploy}. That method used to call three tiers' static
- * {@code attachLinksBeforeStart} methods by name, and three separate waves had each
+ * {@code attachLinksBeforeStart} methods by name, and three separate changes had each
  * added exactly one line to it -- the same anti-pattern {@code generatedOnly()} removed
  * from the instance write hook, where {@code release} was hard-coded. A new
  * owning tier now ships one class and is dispatched from the moment it registers.

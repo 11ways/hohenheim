@@ -48,8 +48,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * repository, or on another branch must be refused IDENTICALLY and must queue nothing.
  *
  * AIDEV-NOTE: this class lost its deploy-driven half on 2026-08-22 when the site-keyed git
- * checkout lane was deleted with {@code sites.source} (phase-0 design section 3). Brief 7
- * re-keyed the webhook onto the APPLICATION INSTANCE -- the URL's last segment is that
+ * checkout lane was deleted with {@code sites.source}, and a later
+ * change re-keyed the webhook onto the APPLICATION INSTANCE -- the URL's last segment is that
  * instance's id, never a site slug -- and the refusal half below moved with it. Still owed
  * back, and still unobservable here because nothing in this class ever completes a deploy:
  * replay-once, the GitLab/Gitea shared-token lanes, the no-ref lane and the webhook-driven
@@ -104,7 +104,7 @@ class GitWebhookSecurityTest extends HohenheimTestBase {
         proxyPort = ((InetSocketAddress) proxy.getHttpListenerInfo().getAddress()).getPort();
 
         // AIDEV-NOTE: no initial deploy is awaited any more. The site-keyed git checkout
-        // lane was deleted with sites.source (phase-0 design section 3) -- a checkout lives
+        // lane was deleted with sites.source -- a checkout lives
         // in the workspace volume or the build context of the instance a site exposes -- so
         // nothing here builds. What survives in this class is the half that asserts a
         // delivery deploys NOTHING and leaks nothing, which needs no pipeline at all.

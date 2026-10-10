@@ -111,7 +111,7 @@ class InstanceSettingsSectionTest {
             .containsExactly("auto_deploy", "poll_interval", "webhook_secret",
                 "previews_enabled", "preview_branches", "preview_environment_variables");
 
-        // 3. An application's Configuration reads as the App-Git-Config board: an open source-and-build section
+        // 3. An application's Configuration reads: an open source-and-build section
         //    (where the code comes from, what it builds into, deploy-on-push and previews), the variables per lane
         //    open beside it, and only what has a working default folded.
         assertThat(visibleRun(ApplicationKind.SETTINGS_SCHEMA))

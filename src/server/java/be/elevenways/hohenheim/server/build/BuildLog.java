@@ -7,7 +7,7 @@ import java.util.List;
 
 /**
  * THE capture of one build's output: bounded, redacting, and the same object for every
- * builder kind (the plan's "one log stream", concretely).
+ * builder kind (one log stream, concretely).
  *
  * AIDEV-NOTE: the cap is enforced on APPEND and the stream keeps being DRAINED past it.
  * Stopping the drain instead would block the daemon's writer and hang the build -- a

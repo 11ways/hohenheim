@@ -87,7 +87,7 @@ public final class Alerts {
         }
         // AIDEV-NOTE: an alert's delivery rows and inbox items are the system's own bookkeeping, recorded in the
         // delivery log, never activity: inside a person's command (Probe now) they were headed by that command's
-        // sentence ("Jelle checked whether Comms delivery #3 answers", D13a walk).
+        // sentence ("Jelle checked whether Comms delivery #3 answers").
         ActivityLog.suppressed(() -> {
             for (CommsRecipient recipient : recipients) {
                 Comms.notify(notification, recipient);

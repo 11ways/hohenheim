@@ -1,7 +1,5 @@
 # DNS federation: hidden primary, secondaries, and zone transfer
 
-Status: SHIPPED (2026-07-17) for the standards-based replication core.
-
 ## What it enables
 
 Each DNS zone has one owning instance (its PRIMARY); other instances can hold
@@ -101,7 +99,7 @@ secondary replication is pulled and then answered from this instance's own
 listener with the zone row marked transferred, and an unreachable primary
 marks the secondary errored.
 
-## Health: secondary freshness and delegation (shipped 2026-08-30)
+## Health: secondary freshness and delegation
 
 The transfer bookkeeping above is what a SECONDARY believes about itself. A
 secondary that silently stopped pulling (dead peer row, firewall change, a

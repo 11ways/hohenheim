@@ -20,7 +20,7 @@ class CmsAdminSmokeTest extends HohenheimTestBase {
         assertThat(content).contains("Hohenheim");
         assertThat(page.locator("pl-app-sidebar").count()).isEqualTo(1);
 
-        // The boards' eight entries; AdminNavigationJourneyTest owns the full inventory, the clusters' members and
+        // The eight sidebar entries; AdminNavigationJourneyTest owns the full inventory, the clusters' members and
         // the reachability of everything demoted.
         String sidebar = page.locator("pl-app-sidebar").textContent();
         for (String entry : java.util.List.of("Dashboard", "Apps", "Databases", "Hosts", "Domains", "Access",

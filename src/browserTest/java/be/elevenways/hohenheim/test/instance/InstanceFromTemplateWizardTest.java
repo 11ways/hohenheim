@@ -22,7 +22,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Creating an instance from a template through the PAGE wizard (stage 4 contract 9): the template is chosen first,
+ * Creating an instance from a template through the PAGE wizard: the template is chosen first,
  * the document asks the details and the template's own variables as one form submitted once through the hosting
  * panel's invoke route, a blank secret falls back to its declared default without ever being rendered, and the
  * result opens the new instance in the same panel.

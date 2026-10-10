@@ -32,8 +32,8 @@ import java.util.Set;
  *
  * AIDEV-NOTE: "a list that actually protects" is {@link AccessRuleTree#admitsEveryone}, the gate's own reading of the
  * rows. It holds from BOTH sides: a path may not be pointed at an open list, and a rule or list write may not open a
- * list that protects a path. A list that was already open before the write stays writable (decision J2 of the admin
- * redesign plan: existing open paths keep serving and are flagged, {@link #isOpen}, never broken by an upgrade).
+ * list that protects a path. A list that was already open before the write stays writable (by decision:
+ * existing open paths keep serving and are flagged, {@link #isOpen}, never broken by an upgrade).
  *
  * @author Jelle De Loecker
  * @since  0.9.0

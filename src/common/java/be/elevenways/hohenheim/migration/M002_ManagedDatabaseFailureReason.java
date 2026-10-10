@@ -13,7 +13,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * deployed installation whose {@code zenit_migrations} row for version 001 stores that
  * migration's structural checksum, so an in-place edit makes the next boot refuse under
  * the shipped {@code database.migration_integrity=fail} -- which is precisely what
- * happened when this column first landed inside InitialMigration (b3e9e840, reverted).
+ * happened when this column first landed inside InitialMigration (since reverted).
  */
 public class M002_ManagedDatabaseFailureReason extends HohenheimMigration {
 

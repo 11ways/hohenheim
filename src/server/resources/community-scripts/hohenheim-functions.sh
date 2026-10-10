@@ -10,7 +10,7 @@
 # upstream host side does (storage, whiptail, resources, networking) is owned
 # by the hohenheim platform instead.
 #
-# AIDEV-NOTE: vocabulary versioning decision (Phase 5b). The upstream helper set
+# AIDEV-NOTE: vocabulary versioning. The upstream helper set
 # is an undocumented internal contract that changes freely. This library DECLARES
 # the helpers it implements on the single HOHENHEIM_FUNCS_VOCABULARY line below;
 # the Java side (CommunityScripts) parses that line and statically refuses -- BY

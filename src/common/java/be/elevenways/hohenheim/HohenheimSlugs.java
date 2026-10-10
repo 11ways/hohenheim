@@ -7,7 +7,7 @@ package be.elevenways.hohenheim;
  * AIDEV-NOTE: a constant is named after its value (upper case, dashes as underscores), so a slug has exactly one
  * spelling and a name says what the URL reads. Entries and clusters share one namespace per panel; a record tab is
  * local to the record it sits on, so tabs live in {@link Tab} and may repeat across records ("deployments"). Every
- * route, tab and entry declaration reads a constant here, never a literal and never a per-class alias (DD8). It lives
+ * route, tab and entry declaration reads a constant here, never a literal and never a per-class alias. It lives
  * in common so endpoint paths, sources and the server panels read the same declaration. Framework slugs (the record
  * overview, settings, task admin) stay their owners'.
  *

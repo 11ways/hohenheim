@@ -23,7 +23,7 @@ import java.util.Collection;
  * forces every armed row it covers: the proxy's store loading it ({@link #fire(CertificateStore)}, after every store
  * load the proxy makes) or, without a proxy, the row saved ACTIVE. A domain row written while a working certificate
  * already covers it forces itself in the same write. An ACTIVE row whose material the store cannot load forces
- * nothing (D10b: it used to, sending visitors to a handshake no certificate answers). The latch only ever switches
+ * nothing (it used to, sending visitors to a handshake no certificate answers). The latch only ever switches
  * force_ssl ON, once: a certificate lost later leaves force_ssl on, so the dispatcher keeps failing closed, and an
  * operator's explicit "off" disarmed the latch before it could fire (SiteDomainModel).
  *

@@ -12,7 +12,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * AIDEV-NOTE: the only ConfirmationSpec.builder() in Hohenheim. A delete dialog is zenit-cms's
  * DeleteConfirmation.body and an "Are you sure?" ask is ConfirmationSpec.generic; everything else is a verb dialog
  * built here. zenit-cms offers no verb factory and no way to add a typed phrase to a finished spec, so this class is
- * the single place a framework factory later replaces (plan section 41, DD5).
+ * the single place a framework factory later replaces.
  *
  * @author Jelle De Loecker
  * @since  0.10.0

@@ -72,7 +72,7 @@ class ApplicationReleaseLiveTest {
     private static Integer savedDrain;
 
     // AIDEV-NOTE: the netns fixture is what lets the release engine deploy at all on a
-    // developer machine. Since the isolation wave every release container is
+    // developer machine. Every release container is
     // NetworkPosture.PRIVATE and its deploy/destroy REFUSES where the network policy
     // cannot be enforced; that refusal is correct product behaviour and stays -- the
     // fixture points the PRODUCTION applier at a real nftables in a private namespace

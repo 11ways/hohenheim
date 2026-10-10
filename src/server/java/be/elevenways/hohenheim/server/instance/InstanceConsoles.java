@@ -39,7 +39,7 @@ import java.util.function.Consumer;
 
 /**
  * THE console hub of the instance tier: at most one live console session per instance,
- * shared by every consumer -- the readiness matcher (Phase 5's {@code readiness_line}:
+ * shared by every consumer -- the readiness matcher (the template's {@code readiness_line}:
  * starting -> Running on an observed console line), the graceful-stop path
  * ({@code stop_command} over attach stdin), crash detection (an exit with NO observed
  * stop) with per-instance policy and supervisor-style flap protection, and the admin
@@ -67,7 +67,7 @@ public final class InstanceConsoles {
     // AIDEV-NOTE: a session's late callbacks (the readiness timer and match, the exit policy) act only while its
     // generation is current, checked under the record's claim: closeSession bumps it for every replacement or end,
     // including a session the pump already dropped from SESSIONS, so a replaced console can never stamp, release
-    // ports for or restart the deployment that replaced it (review 14 D02/D03).
+    // ports for or restart the deployment that replaced it.
     private static final Map<Integer, Long> GENERATIONS = new ConcurrentHashMap<>();
 
     private static final Map<Integer, Deque<Long>> CRASH_LOG = new ConcurrentHashMap<>();

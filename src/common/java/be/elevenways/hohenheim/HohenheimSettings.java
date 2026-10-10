@@ -1532,8 +1532,8 @@ public class HohenheimSettings {
             .buildSetting("max_archive_mb", Integer.class)
             .defaultValue(1024)
             .description("Upper bound in MiB for one captured volume archive. Captures are "
-                + "buffered through controller memory (streaming transports are a later "
-                + "wave), so this cap is what protects the heap -- a volume larger than "
+                + "buffered through controller memory (there is no streaming "
+                + "transport), so this cap is what protects the heap -- a volume larger than "
                 + "this refuses to snapshot instead of taking the controller down")
             .build();
     }

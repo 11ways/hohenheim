@@ -55,7 +55,7 @@ public final class PreviewQuota {
     /**
      * The owner pack of the preview's APPLICATION; fails closed on unreadable grants.
      *
-     * AIDEV-NOTE: the charge followed the source when the source moved (phase-0 brief 7).
+     * AIDEV-NOTE: the charge followed the source when the source moved.
      * It is the same rule as before -- the owner of the thing being deployed pays -- and it
      * has to be re-derivable from the stored row on release, which is why it reads the
      * application id off the row rather than an actor identity.

@@ -1,4 +1,4 @@
-{#- The dashboard's Apps band (boards Main and Manage-Home): every app with its health glyph, by name, what it is and
+{#- The dashboard's Apps band: every app with its health glyph, by name, what it is and
     where, and its badge: what HTTPS gives its main address (the Addresses list's word), or the verdict of an app with
     a problem HTTPS does not explain (AppSummary.verdict), read from the one App directory the Apps list reads. The glyph is the same
     verdict (and the same HealthCellState) the Apps list's health cell draws; the heading is the placement's own

@@ -133,7 +133,7 @@ public final class CertificateParts {
     private static final DateTimeFormatter WALL_CLOCK = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private static final FormSpec ADMIN_FORM = FormSpec.builder()
-        // The create is the upload (board Certificates: "Get a certificate" orders one, "Upload a certificate" saves
+        // The create is the upload ("Get a certificate" orders one, "Upload a certificate" saves
         // your own); the header's request action stands beside it.
         .createTitle(HohenheimMicrocopy.CERTIFICATE.of("create_title"))
         .add(CertificateModel.NICE_NAME)
@@ -251,7 +251,7 @@ public final class CertificateParts {
      * ({@link AcmeService#EXPIRY_ALERT_DAYS}) read it, so the list never says "Works" beside a dashboard that counts
      * the certificate as needing a look. A renewal that failed is "failing" even while the old certificate still serves
      * (status active with an error count): that is the one an operator must act on before it expires; its last error
-     * rides along as the cell's note. A stored active row the proxy did not load serves nobody (D11's Shop), whatever
+     * rides along as the cell's note. A stored active row the proxy did not load serves nobody, whatever
      * its expiry says.
      */
     static @NonNull StateLineCell stateCell(@NonNull Row cert) {
@@ -521,7 +521,7 @@ public final class CertificateParts {
      * What an uploaded certificate says about itself, stored beside it: the names it covers and when it was issued and
      * expires, which the list's state, the expiry alert and the HTTPS cells read.
      *
-     * AIDEV-NOTE: an upload stored none of these before D13d, so it read "Works" with no expiry, never "Expiring",
+     * AIDEV-NOTE: an upload once stored none of these, so it read "Works" with no expiry, never "Expiring",
      * and covered no name in the stored rows.
      */
     private static void describe(@NonNull Map<String, Object> values, @Nullable X509Certificate leaf) {

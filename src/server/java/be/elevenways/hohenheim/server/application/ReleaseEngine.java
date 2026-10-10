@@ -496,7 +496,7 @@ public final class ReleaseEngine {
      * AIDEV-NOTE: the refusal is deliberately LOUD and not swallowed. An application with
      * no volumes snapshots nothing and deploys as before; an application WITH volumes on a
      * host that cannot snapshot is refused by name, because "we took a backup" is the one
-     * claim that must never be a guess (phase-0 design section 5: no tar fallback).
+     * claim that must never be a guess (no tar fallback).
      */
     private static void snapshotVolumes(@NonNull Row op, int applicationId, int serverId) {
         List<String> snapshots = InstanceVolumes.snapshotAll(applicationId,

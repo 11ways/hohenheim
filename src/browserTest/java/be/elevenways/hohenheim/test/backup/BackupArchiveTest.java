@@ -152,7 +152,7 @@ class BackupArchiveTest {
             .hasMessageContaining("reads versions 1 to " + BackupManifest.FORMAT_VERSION);
     }
 
-    /** A git source restored from a manifest older than DD11h keeps the off its missing auto_deploy meant then. */
+    /** A git source restored from a manifest older than version 4 keeps the off its missing auto_deploy meant then. */
     @Test
     void anOlderManifestsGitSourceWithoutAutoDeployRestoresOff() throws IOException {
         // 1. A version 3 application manifest whose source never stored the flag: it meant off, so it restores off.

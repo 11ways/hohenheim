@@ -19,15 +19,15 @@ import java.util.List;
 
 /**
  * Run an ARBITRARY command inside an instance's workload -- the surface that ENFORCES the
- * {@code exec} capability, and the reason the Phase 3 gate's "cannot run exec" clause is
+ * {@code exec} capability, and the reason the gate's "cannot run exec" rule is
  * a real refusal rather than a statement about a feature that does not exist.
  *
  * AIDEV-NOTE: exec is NOT console, and the split is the whole point of this class. The
  * console reaches the workload's OWN primary process over stdin (a game server's chat
  * console); exec starts a NEW program as an arbitrary user, which is root-in-container and
  * therefore a host-escape amplifier. They are separate handlers asking separate
- * capabilities, exactly as docs/instance-tier-plan.md requires. Conflating them was the
- * defect this wave closed.
+ * capabilities. Conflating them was an earlier
+ * defect.
  *
  * AIDEV-NOTE: there is deliberately NO automation-API lane and NO /manage surface. exec is
  * ADMIN-sensitivity, so a tenant can never delegate it or mint it into an API-key scope;

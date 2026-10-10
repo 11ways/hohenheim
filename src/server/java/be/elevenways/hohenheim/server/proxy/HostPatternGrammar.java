@@ -39,7 +39,7 @@ public final class HostPatternGrammar implements Hostnames.PatternGrammar {
     /**
      * AIDEV-NOTE: the translation is held to {@link #refusal}, not only to core's grammar: core's HostPattern carries a
      * port, a route hostname never does, and a stored row with one must fail M011 by name rather than be respelled
-     * into a pattern no request host can match (review 8 D02).
+     * into a pattern no request host can match.
      */
     @Override
     public @NonNull String fromLegacyGlob(@NonNull String glob) {

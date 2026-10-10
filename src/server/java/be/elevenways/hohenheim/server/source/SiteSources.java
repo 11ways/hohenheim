@@ -19,8 +19,8 @@ import java.util.Map;
  * site exposes carries it, in that instance kind's settings.
  *
  * AIDEV-NOTE: this class exists because {@code sites.source} / {@code sites.source_settings}
- * were dropped in phase 0 brief 5 (design section 3) while the git and preview lanes that
- * read them are re-keyed in briefs 7 and 8. Rather than leave those six readers reading
+ * were dropped before the git and preview lanes that
+ * read them were re-keyed. Rather than leave those six readers reading
  * nothing -- the silent-success shape this codebase hunts by name -- they read THROUGH the
  * site's {@code instance_id} at the record that actually owns the source. Every method here
  * disappears when the callers themselves become instance-keyed; nothing new should call it.

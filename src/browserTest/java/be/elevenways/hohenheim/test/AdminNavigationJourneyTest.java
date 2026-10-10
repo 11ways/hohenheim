@@ -39,7 +39,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The admin sidebar of the 2026-09-30 boards, end to end: eight entries in one block, four of them clusters whose
+ * The admin sidebar, end to end: eight entries in one block, four of them clusters whose
  * members are tabs, every entry explaining itself, and every entry demoted OUT of the sidebar still reachable at its
  * URL and linked from the surface that adopted it.
  *
@@ -90,12 +90,12 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         "spamservice-security-events", "spamservice-words", "spamservice-reputation");
 
     @Test
-    void adminSidebarIsTheBoardsEightAndEveryDemotedPeerStaysReachable() throws Exception {
+    void adminSidebarIsEightEntriesAndEveryDemotedPeerStaysReachable() throws Exception {
         Panel admin = PanelRegistry.getBySlug("admin");
         assertThat(admin).as("the admin panel is registered").isNotNull();
         AccessContext operator = adminContext();
 
-        // 1. The sidebar is exactly the boards' eight entries, in one block, in that order.
+        // 1. The sidebar is exactly eight entries, in one block, in that order.
         List<PanelNav.Section> sections = PanelNav.sections(admin, operator);
         assertThat(sections).as("step 1: one block, no groups").hasSize(1);
         assertThat(sections.get(0).entries().stream().map(PanelEntry::slug).toList())
@@ -269,7 +269,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         assertThat(unworded).as("step 10: every capability has its holder and sentence spelling").isEmpty();
         assertThat(HohenheimMicrocopy.CAPABILITY.of("manage").withFilter("context", "holder")
             .tryResolve(LocaleChain.ofTags("en"), MessageResolvers.getDefault()))
-            .as("step 10: who manages a record is its tenant (board Access-People)").isEqualTo("Tenant");
+            .as("step 10: who manages a record is its tenant").isEqualTo("Tenant");
         KnownCapability siteManage = KnownCapabilities.forModel(SiteModel.MODEL_ID).get(0);
         assertThat(siteManage.description()).as("step 10: a level held alone says what it allows").isNotNull();
         assertThat(siteManage.description().tryResolve(LocaleChain.ofTags("nl"), MessageResolvers.getDefault()))
@@ -307,7 +307,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         }
 
         // 13. Databases and Hosts are rows of every admin while their roles run, empty or not, and each list offers
-        //     its create action (D13e: a scratch with roles.databases/instances/stacks off had neither row).
+        //     its create action (a scratch with roles.databases/instances/stacks off had neither row).
         assertThat(adminGet("/admin/databases").body())
             .as("step 13: the Databases list offers its create action").contains("/admin/databases/new");
         assertThat(adminGet("/admin/servers").body())

@@ -142,7 +142,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
     }
 
     /**
-     * The Root disk gauge of a rendered overview: from its label to the CPU gauge's (board App-Overview's order is
+     * The Root disk gauge of a rendered overview: from its label to the CPU gauge's (the order is
      * memory, disk, CPU), so the memory and CPU gauges beside it never answer for the disk.
      */
     private static String diskGauge(String page) {
@@ -273,8 +273,8 @@ class InstanceOverviewTest extends HohenheimTestBase {
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, id);
         }
 
-        // 4. With the claim gone the page draws no Ports card at all (board App-Overview: an app reached through its
-        //    addresses alone has none), never ledger words about a claim it does not hold (D13f).
+        // 4. With the claim gone the page draws no Ports card at all (an app reached through its
+        //    addresses alone has none), never ledger words about a claim it does not hold.
         assertThat(adminGet(overviewUrl()).body())
             .as("step 4: no claim draws no Ports card")
             .doesNotContain("data-endpoint-port")

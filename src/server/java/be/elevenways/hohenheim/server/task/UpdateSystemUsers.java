@@ -57,7 +57,7 @@ public class UpdateSystemUsers extends ScheduledTask {
     @Override
     public @NonNull List<ScheduleDeclaration> schedules() {
         // AIDEV-NOTE: re-roled from PROCESSES to FIREWALL when the host-user process lane
-        // was deleted (phase-0 brief 6). The only surviving consumer of system_users is the
+        // was deleted. The only surviving consumer of system_users is the
         // spamservice's dedicated run-as user, and FIREWALL is the role that runs it.
         return HohenheimRoles.schedulesWhen(
             List.of(ScheduleDeclaration.bootAndCron("11 * * * *")),

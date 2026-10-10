@@ -43,7 +43,7 @@ class BuildCredentialsTest {
             .contains(java.util.Base64.getEncoder().encodeToString(
                 ("bob:" + secret).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
 
-        // 3. Revocation is the end: THE property the wave claims. After the build, the
+        // 3. Revocation is the end: THE property that matters. After the build, the
         //    same token buys nothing -- and the auth file cannot be re-derived either.
         lease.revoke();
         assertThat(BuildCredentials.resolve(build, lease.token()))

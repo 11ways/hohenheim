@@ -261,7 +261,7 @@ class PartialWriteContractTest extends HohenheimTestBase {
 
         // 1. The fixture really carries upstream settings, or the claim below is vacuous.
         //    AIDEV-NOTE: this used to assert on the git SOURCE columns, which moved off the
-        //    site with the upstream rename (phase-0 design section 3). The defect class is
+        //    site with the upstream rename. The defect class is
         //    unchanged -- a one-entry cell write must not blank a polymorphic map it never
         //    mentioned -- so the subject moved to the settings map that is still here.
         Map<String, Object> settingsBefore =

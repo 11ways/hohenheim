@@ -129,7 +129,7 @@ public final class HostnamePatterns {
      * AIDEV-NOTE: live routing consults the first matching wildcard, so a tie key is a
      * routing decision. The old matcher broke ties on its compiled regex source; ordering by
      * HostPattern's text instead flipped which of two equal-specificity wildcards served a host
-     * both match (a-*.x vs a?b.x for a-b.x, review 5 D02). This reproduces that source from the
+     * both match (a-*.x vs a?b.x for a-b.x). This reproduces that source from the
      * HostPattern spelling: identical for every pattern M011 translated, because M011 refuses
      * the one translation (a collapsed star run) whose source would differ wherever that
      * difference could flip an order ({@link #legacyTieKey}).

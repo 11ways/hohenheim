@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The managed-database tier's answer when the ENGINE is OOM-killed inside a container
- * that keeps running -- the exact shape of the flake {@code d6a9bf6} right-sized around,
+ * that keeps running -- the exact shape of a flake once only right-sized around, now
  * reported rather than merely made rarer.
  *
  * AIDEV-NOTE: the assertion that matters is that {@code running()} is STILL true here.

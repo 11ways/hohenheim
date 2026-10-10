@@ -52,7 +52,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
         assertThat(page.content()).contains("127.0.0.1");
 
         // AIDEV-NOTE: the node half of this journey is gone with the host-user process
-        // lane (phase-0 design section 3 deleted every site type that ran a workload). Its
+        // lane (the upstream rename deleted every site type that ran a workload). Its
         // secret-map and api-key coverage belonged to that lane; the settings-map contract
         // it also touched is pinned by PartialWriteContractTest and EnvironmentSecretsTest.
     }
@@ -68,7 +68,7 @@ class SiteLifecycleTest extends HohenheimTestBase {
         assertThat(settingsOf("Old Domain").get("target_url")).isEqualTo("https://example.com");
 
         // AIDEV-NOTE: the git-source half of this journey moved off the site with the
-        // upstream rename (phase-0 design section 3): a repository is a property of the
+        // upstream rename: a repository is a property of the
         // application instance a site exposes, not of the site. The create form no longer
         // accepts source keys at all, which is what this asserts instead.
         response = adminPostForm("/admin/sites/new",
@@ -133,8 +133,8 @@ class SiteLifecycleTest extends HohenheimTestBase {
             .isEqualTo(false);
 
         // AIDEV-NOTE: the api-key clone and mint steps that stood here belonged to the
-        // managed-process control API, which dies with the host-user lane (phase-0 design
-        // section 7) -- no upstream kind carries api_keys any more.
+        // managed-process control API, which dies with the host-user lane
+        // -- no upstream kind carries api_keys any more.
 
         Integer gitId = gitRow.get(SiteModel.ID);
         response = adminPostForm("/admin/sites/" + gitId + "/delete", confirmed(""));

@@ -477,7 +477,7 @@ public class HohenheimEndpoints {
 
     // --- Deploy control (forms on the instance Deploys tab) ---
     // AIDEV-NOTE: keyed by INSTANCE since the release engine was re-keyed to the
-    // application (phase-0 brief 7) and the Deployments tab moved with it (brief 9):
+    // application and the Deployments tab moved with it:
     // the verbs act on the record that owns the releases, and an application no site
     // exposes yet can still deploy.
     public static final Endpoint<Object> INSTANCES_DEPLOY = Endpoint.<Object>builder()

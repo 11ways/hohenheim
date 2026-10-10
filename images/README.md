@@ -1,7 +1,7 @@
 # Runtime images ("yolks")
 
 Each directory here is the build context of one built-in `runtime_images` row
-(`RuntimeImageSeeder`). Jelle's 2026-08-22 decision on phase-0 open question 5:
+(`RuntimeImageSeeder`). Jelle's 2026-08-22 decision:
 **there is no registry**. Every host builds these locally from this tree at first
 use, so the first create on a fresh host is slower and nothing has to be pushed,
 pulled or authenticated anywhere.

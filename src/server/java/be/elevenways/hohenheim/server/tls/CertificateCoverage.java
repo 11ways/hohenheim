@@ -84,7 +84,7 @@ public final class CertificateCoverage {
      *
      * AIDEV-NOTE: THE rule routing (RouteTableBuilder's global force), the force-HTTPS latch, "Get a certificate" and
      * every HTTPS display (AppHealth.workingNames, which also asks whether the listener terminates) read. An ACTIVE row
-     * is not a working certificate: D10b found a row without loadable material sent to HTTPS by the global setting,
+     * is not a working certificate: a row without loadable material was once sent to HTTPS by the global setting,
      * auto-forced and hiding "Get a certificate", while the proxy could serve it nothing.
      */
     public static @NonNull Set<String> workingNames() {

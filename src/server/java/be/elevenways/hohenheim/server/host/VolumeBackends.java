@@ -83,7 +83,7 @@ public final class VolumeBackends {
      * Store a finding on the host record, so placement never has to re-probe.
      *
      * AIDEV-NOTE: a probe's finding is bookkeeping, never activity: inside Check again it was the first of two saves
-     * of one host, so the host page's Recent card said "Jelle checked local" twice per press (D13a; Starfleet's ten
+     * of one host, so the host page's Recent card said "Jelle checked local" twice per press (Starfleet's ten
      * identical rows were these plus the then-unsuppressed heartbeat). The preflight's report save records the act.
      */
     public static void store(@NonNull Row server, @NonNull Detection detection) {

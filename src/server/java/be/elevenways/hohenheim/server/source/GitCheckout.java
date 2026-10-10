@@ -22,7 +22,7 @@ import java.util.Map;
  * THE control-plane checkout: clone or fetch one ref of a git source into a directory this
  * controller owns, and hand back the commit it landed on.
  *
- * AIDEV-NOTE: extracted from {@code PreviewDeployments} in phase-0 brief 7 because the
+ * AIDEV-NOTE: extracted from {@code PreviewDeployments} because the
  * application deploy lane needs exactly the same three steps (bind the provider credential,
  * clone-or-fetch, read the commit identity back) and a second copy of them is how the two
  * lanes drift on the one thing that matters -- whether the token ever touches

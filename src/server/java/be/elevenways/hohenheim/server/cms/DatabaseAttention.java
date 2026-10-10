@@ -44,7 +44,7 @@ public final class DatabaseAttention {
      * naming the apps it holds back ("2 apps use it"); then active records a failed operation rolled back, and failed
      * engines.
      *
-     * AIDEV-NOTE: the database is the root. D10b's dashboard showed one stopped shared database as an item per app
+     * AIDEV-NOTE: the database is the root. The dashboard once showed one stopped shared database as an item per app
      * using it ("Instance Shop: Attached database shop is not running"); those per-app items now name the database as
      * their cause ({@link #unavailableAttachedDatabases}) and fold under this one wherever it is shown.
      */

@@ -85,18 +85,18 @@ class SettingsTasksMountTest extends HohenheimTestBase {
             service.shutdown();
         }
 
-        // 4. The tasks of board Settings-Tasks are named as the board names them; their descriptions and the board's
-        //    "Nightly 03:00" wording are the framework task list's to show (D13e, plan section 39).
-        Map<ScheduledTask, String> board = new LinkedHashMap<>();
-        board.put(new BackupDatabases(), "Back up databases");
-        board.put(new BackupControlPlane(), "Back up the control panel");
-        board.put(new SecuritySweep(), "Security sweep");
-        board.put(new CleanOldInstanceLogs(), "Clean old console output");
-        board.put(new CleanOrphanCertificates(), "Clean unused certificates");
-        board.put(new ReconcileDockerResources(), "Tidy Docker");
-        for (Map.Entry<ScheduledTask, String> task : board.entrySet()) {
+        // 4. The scheduled tasks are named in plain words; their descriptions and the
+        //    "Nightly 03:00" wording are the framework task list's to show.
+        Map<ScheduledTask, String> expectedNames = new LinkedHashMap<>();
+        expectedNames.put(new BackupDatabases(), "Back up databases");
+        expectedNames.put(new BackupControlPlane(), "Back up the control panel");
+        expectedNames.put(new SecuritySweep(), "Security sweep");
+        expectedNames.put(new CleanOldInstanceLogs(), "Clean old console output");
+        expectedNames.put(new CleanOrphanCertificates(), "Clean unused certificates");
+        expectedNames.put(new ReconcileDockerResources(), "Tidy Docker");
+        for (Map.Entry<ScheduledTask, String> task : expectedNames.entrySet()) {
             assertThat(task.getKey().label().resolve(LocaleChain.ofTags("en"), MessageResolvers.getDefault()))
-                .as("step 4: " + task.getKey().id() + " reads as the board names it")
+                .as("step 4: " + task.getKey().id() + " reads as named")
                 .isEqualTo(task.getValue());
         }
     }

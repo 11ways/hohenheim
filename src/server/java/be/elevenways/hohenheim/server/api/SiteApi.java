@@ -47,7 +47,7 @@ import java.util.Objects;
  * manage, so those ride the same {@code manage} walk the read lane uses and let
  * {@code TenantWrites} refuse the columns a tenant may not set.
  *
- * AIDEV-NOTE: the /api/v1 answers are a frozen wire (stage 4 contract 10): a site verb's
+ * AIDEV-NOTE: the /api/v1 answers are a frozen wire: a site verb's
  * pipeline refusal answers exactly what the row lane answered, see {@link #refused}.
  */
 public final class SiteApi {

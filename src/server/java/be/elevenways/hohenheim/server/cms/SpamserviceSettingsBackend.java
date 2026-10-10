@@ -192,7 +192,7 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
                 // a future remote group keeps an absent description instead of rendering an unclaimed key.
                 GroupLook look = KNOWN_GROUPS.get(key);
                 if (look != null) known.describe(look.help());
-                // Every row of the settings list carries an icon (board Settings); a future remote group reads as a
+                // Every row of the settings list carries an icon; a future remote group reads as a
                 // folder until this host words it.
                 known.icon(look != null ? look.icon() : "folder");
                 groups.put(key, known);

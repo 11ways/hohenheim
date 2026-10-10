@@ -44,7 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The Phase 7 stack lowering, proven AT THE DAEMON: every stack service IS an owned
+ * Stacks lowered onto instances, proven AT THE DAEMON: every stack service IS an owned
  * instance, the shared per-stack network is a policied LINK network carrying the compose
  * DNS aliases, dependency ordering still gates starts, and the instance-tier mechanisms
  * the tier never had before (port ledger claim-before-create, charge==cap capacity,
@@ -322,7 +322,7 @@ class StackInstancesTest {
     /**
      * The lowering's counterfactual: mechanisms the stack tier DID NOT HAVE now apply,
      * asserted at the daemon and in the ledger rather than through our own bookkeeping.
-     * Before this wave a stack service's host port was claimed at SAVE time under the
+     * A stack service's host port used to be claimed at SAVE time under the
      * SERVICE, with no daemon evidence, and its memory was booked NOWHERE at all.
      */
     @Test

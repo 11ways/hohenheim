@@ -39,7 +39,7 @@ public final class RawValues {
     /**
      * The value as an Integer: a whole number of any Number type or text, never a truncated fraction.
      *
-     * AIDEV-NOTE: THE whole-number rule (DD11b): 512.0 reads as 512, while 512.5 and out-of-range values read as
+     * AIDEV-NOTE: THE whole-number rule: 512.0 reads as 512, while 512.5 and out-of-range values read as
      * absent so the caller falls back to its default instead of silently using a number nobody typed.
      *
      * @return the integer, or null for an absent, blank, fractional, out-of-range or malformed value

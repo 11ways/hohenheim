@@ -556,7 +556,7 @@ public final class GameDomains {
      *
      * AIDEV-NOTE: DNS materializes ONLY off a PUBLIC publication. A loopback-published
      * proxy is unreachable from outside by design, so an SRV/A pair pointing at it would
-     * be exactly the dangling-pointer shape this wave exists to kill -- the rows come
+     * be exactly the dangling-pointer shape this class exists to kill -- the rows come
      * down (or never appear) instead. A rows additionally need the server-address
      * authority (servers.public_ipv4/6); a public port on a host with no declared
      * address generates the SRV only, for operators whose A records live elsewhere.

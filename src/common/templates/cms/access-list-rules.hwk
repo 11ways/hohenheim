@@ -58,7 +58,7 @@
         </pl-card-content>
     </pl-card>
 
-    {#- Where the list is used: the Access-List board's "Protects" card. -#}
+    {#- Where the list is used: the "Protects" card. -#}
     <pl-card data-access-list-protects>
         <pl-card-header>
             <pl-card-title>{{ t("protects_column", scope: "access_list") }}</pl-card-title>

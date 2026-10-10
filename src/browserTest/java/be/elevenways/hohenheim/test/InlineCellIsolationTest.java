@@ -134,7 +134,7 @@ class InlineCellIsolationTest extends HohenheimTestBase {
     void everyInlineCellWritesExactlyItsOwnColumnAndNoOther() throws Exception {
         List<Target> targets = declaredTargets();
 
-        // 1. The wave shipped inline editing on a meaningful number of surfaces; a walk
+        // 1. Inline editing ships on a meaningful number of surfaces; a walk
         //    that silently found nothing would pass every later assertion vacuously.
         assertThat(targets).as("step 1: both panels expose their inline-editable resources")
             .hasSizeGreaterThan(10);
@@ -231,7 +231,7 @@ class InlineCellIsolationTest extends HohenheimTestBase {
      *
      * AIDEV-NOTE: table-stored and localized fields are skipped rather than read -- the
      * first throws on a plain {@code row.get}, the second needs a locale chain. No
-     * resource in this wave declares either as inline-editable (the framework refuses a
+     * resource here declares either as inline-editable (the framework refuses a
      * localized one at registration), so the skip cannot hide a leak they would carry.
      */
     static Map<String, Object> storedValues(Model model, int id) {

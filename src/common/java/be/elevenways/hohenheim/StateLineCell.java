@@ -10,8 +10,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * THE state cell: a badge that answers in a word, and the lines that explain it underneath.
  *
  * AIDEV-NOTE: build it through {@link #of(WordedState, Microcopy)} (or {@link #of(StateBadge, Microcopy, Microcopy)}
- * for a badge reading a measured value), so the token, variant and word come from the state's enum member; DD4
- * collapsed five hand-rolled cell styles (string branches, {@code default} switches, a near-copy for an address's
+ * for a badge reading a measured value), so the token, variant and word come from the state's enum member; it
+ * replaced five hand-rolled cell styles (string branches, {@code default} switches, a near-copy for an address's
  * HTTPS) onto this one record and {@code cell/state-line.hwk}.
  *
  * @param state   the state's token, rendered as {@code data-state}

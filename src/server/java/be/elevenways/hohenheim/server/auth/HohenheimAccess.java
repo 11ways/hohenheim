@@ -33,7 +33,7 @@ import java.util.function.Function;
 /**
  * THE per-record access policy funnel. Sites still use a SINGLE capability string
  * ({@link HohenheimCapabilities#MANAGE}) covering view, edit and operate together; INSTANCES carry the
- * split vocabulary the Phase 3/5/6 gates need (view/console/power/config/destroy,
+ * split vocabulary the instance gates need (view/console/power/config/destroy,
  * plus the file, snapshot, backup, image and exec verbs), with {@link HohenheimCapabilities#MANAGE} kept as the
  * ownership marker and as the umbrella that IMPLIES the first five. Adding a verb
  * needs no schema change: grants are plain (subject, model, record, capability) tuples.

@@ -43,7 +43,7 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * One DECLARED difference from {@code DockerContainerKind}, a workload-shape
  * declaration not reachable from any settings form: {@link #tenantAuthored()} is false
  * (operator tier, predates host admission). The network posture is
- * {@link NetworkPosture#PRIVATE} like every other tier since the isolation wave: a
+ * {@link NetworkPosture#PRIVATE} like every other tier: a
  * site release container gets its own policied network, which is also what makes
  * database env injection possible for applications (the container joins each attached
  * database's network as a second network, see {@code ApplicationReleases}). A site container
@@ -66,7 +66,7 @@ public final class ReleaseKind implements InstanceKindHandler {
      * The content-addressed ID of the build ApplicationReleases last ran (git-sourced
      * applications only). It exists so a NEW build is a visible settings change the convergence check
      * releases on, while an unchanged rebuild converges to the cached ID and rolls
-     * nothing; since the digest-pinning wave {@code image} carries the same digest.
+     * nothing; with digest pinning {@code image} carries the same digest.
      */
     public static final StringField BUILT_IMAGE_ID = SETTINGS_SCHEMA.addField(
         StringField.builder().name("built_image_id").filterable(false).build());
@@ -81,7 +81,7 @@ public final class ReleaseKind implements InstanceKindHandler {
 
     /**
      * Identity of the SOURCE inputs this spec was resolved from (application settings with
-     * build_context replaced by commit_sha) -- the release wave's convergence
+     * build_context replaced by commit_sha) -- the release engine's convergence
      * discriminator. Matching it is what lets a converge of an unchanged
      * git-sourced application skip the sandbox build entirely.
      */

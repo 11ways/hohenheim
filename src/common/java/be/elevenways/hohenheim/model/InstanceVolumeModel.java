@@ -22,8 +22,8 @@ import java.util.List;
  * changed data_path setting must be visible as a MISMATCH rather than silently re-pointing
  * every mount. Nothing reads it as the authority -- the deploy path re-derives.
  *
- * AIDEV-NOTE: names and container paths are OPERATOR IDENTIFIERS and are never localized
- * (phase-0 design section 5); only the field labels and refusals are microcopy.
+ * AIDEV-NOTE: names and container paths are OPERATOR IDENTIFIERS and are never localized;
+ * only the field labels and refusals are microcopy.
  *
  * @author Jelle De Loecker
  * @since  0.1.0

@@ -168,8 +168,8 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
         HostFixtures.LocalHostState localBefore = HostFixtures.captureLocal();
         try {
             // 1. A running workload on a host that takes new apps leads its heading with Open site, to the address of
-            //    the site serving it. Open site shows only while the app serves (D7f: never for a stopped one), and
-            //    since D9 an admitted host without a fresh memory reading takes nothing, so its workload cannot start.
+            //    the site serving it. Open site shows only while the app serves (never for a stopped one), and
+            //    an admitted host without a fresh memory reading takes nothing, so its workload cannot start.
             HostFixtures.makeLocalPlaceable(16L * 1024);
             instance.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
             Models.get(InstanceModel.class).save(instance);
@@ -214,7 +214,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             assertThat(adminGet("/admin/instances?q=app-journey-served").body())
                 .as("step 4: and its list row carries the broken glyph").contains("data-cms-health=\"broken\"");
 
-            // 5. The workload's band carries the site's two fixes (the App-Problem board): getting a certificate on the
+            // 5. The workload's band carries the site's two fixes: getting a certificate on the
             //    site's addresses, and stopping forcing HTTPS, which runs on the site, not on the workload. The page's
             //    old Refresh button is gone: loading the page reads the evidence afresh.
             Object siteId = site.get(SiteModel.ID);
@@ -328,7 +328,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             assertThat(live.get(1).max()).as("step 2: of its two cores").isEqualTo(200L);
             assertThat(live.get(1).maxLabel()).as("step 2: said as cores").isEqualTo("2 cores");
 
-            // 3. The overview draws Memory, Root disk and CPU (board App-Overview), and Details say when it started
+            // 3. The overview draws Memory, Root disk and CPU, and Details say when it started
             //    (its last start's activity row), the database it uses with that database's state, and its backups.
             ActivityLog.record(Models.get(InstanceModel.class), instance.get(InstanceModel.ID),
                 HohenheimActivityAction.DEPLOYED, "app-journey-details");
@@ -414,7 +414,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .doesNotContain("What refused it")
                 .doesNotContain("Stopped after an error");
             assertThat(InstanceOverview.lastStartOf(id)).as("step 2: no start is named after a failed one").isNull();
-            // A record left claiming running beside that failed start (D13b's seeded shop) still names no start.
+            // A record left claiming running beside that failed start still names no start.
             status(id, InstanceModel.STATUS_RUNNING);
             assertThat(InstanceOverview.lastStartOf(id)).as("step 2: nor for a stale running claim").isNull();
 
@@ -477,7 +477,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
         int id = instance.get(InstanceModel.ID);
         try {
             // 1. Never started and never checked: the Details card says so in words, not "Created" beside "Never
-            //    checked against the host"; its Status is the band's verdict (DD10c), never the stored token's label.
+            //    checked against the host"; its Status is the band's verdict, never the stored token's label.
             Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(id))
                 .assign(InstanceModel.STATUS, InstanceModel.STATUS_CREATED)
                 .assign(InstanceModel.STATUS_OBSERVED_AT, null).bypassBehaviours().updateAll();
@@ -494,7 +494,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .doesNotContain("Status confirmed")
                 .doesNotContain("Never checked against the host");
 
-            // 2. It holds no port: no Ports card at all (board App-Overview), never "holds no port claim".
+            // 2. It holds no port: no Ports card at all, never "holds no port claim".
             assertThat(created).as("step 2: no port, no Ports card")
                 .doesNotContain("data-endpoint-port")
                 .doesNotContain("holds no port claim")

@@ -20,7 +20,7 @@ import java.util.function.Predicate;
  * {@code hasInScopeRecords} probe that hides it from a tenant holding nothing there) or {@link #reached} (opened from
  * the record or toolbar that owns it, out of the sidebar, where zenit-cms never asks that probe). Setting the nav
  * presence and the probe in one call is what keeps a sidebar twin from shipping without its probe, as the access lists
- * did until DD6. The probe never gates the route: the scope does.
+ * once did. The probe never gates the route: the scope does.
  *
  * @author Jelle De Loecker
  * @since 0.10.0

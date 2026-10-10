@@ -62,7 +62,7 @@ public final class AccessListParts {
     public static @NonNull PanelResource<Row> admin() {
         // AIDEV-NOTE: an explicit spec. The rules themselves live in their own table, so "which list holds
         // 10.0.0.5" is answered by the rule search, not by a column here.
-        // The Access-List board reads a list by what it lets in and where it is used; how its root group combines
+        // The list reads an access list by what it lets in and where it is used; how its root group combines
         // rules and when it was made stay in the picker.
         TableSpec<Row> table = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(AccessListModel.NAME).filterable().build())
@@ -110,7 +110,7 @@ public final class AccessListParts {
         // (the generic access matrix, so an owner can delegate its list from /manage).
         //
         // AIDEV-NOTE: shown while the tenant holds a list or manages a site, the only place a list it makes can guard
-        // (a site's list, a protected path). Without the probe until DD6, a tenant of instances alone read an empty
+        // (a site's list, a protected path). Before the probe, a tenant of instances alone read an empty
         // "Access lists" tab in the Domains cluster, and a list it made there could guard nothing.
         return ManageTwin.listed(entry(ManageTwin.id("access_list"), table, form, list -> list),
                 TenantScopes.MANAGED_ACCESS_LISTS,
@@ -145,7 +145,7 @@ public final class AccessListParts {
             .reads(ResourceReads.rows())
             .list(cells.apply(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
                 .search(AccessListModel.NAME)).build())
-            // AIDEV-NOTE: no quick-add bar (board Access-List): a list is made through "New access list", which opens
+            // AIDEV-NOTE: no quick-add bar: a list is made through "New access list", which opens
             // its form, and lists for one path are made by Protect a path. The name is the one inline cell: SATISFY
             // is the AND/OR of the request-time gate, so a cell edit would change on the next request whether the
             // root group's rules must ALL pass.

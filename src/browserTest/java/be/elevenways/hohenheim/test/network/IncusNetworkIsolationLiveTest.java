@@ -120,7 +120,7 @@ class IncusNetworkIsolationLiveTest {
                 String v6b = addressOf(handleB, true);
 
                 // 3. THE NEGATIVE: A cannot reach B over v4 OR v6. On the shared bridge
-                //    (before this wave) both succeeded.
+                //    (before per-workload networks) both succeeded.
                 assertThat(canReach(handleA, v4b))
                     .as("step 3: tenant A cannot reach tenant B over IPv4 (" + v4b + ")")
                     .isFalse();

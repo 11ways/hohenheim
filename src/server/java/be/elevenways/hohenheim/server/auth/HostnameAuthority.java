@@ -197,7 +197,7 @@ public final class HostnameAuthority {
      * became the only covering row for that name while tenant B held {@code victim.com}, and
      * the same held for {@code mail.example.com} under a zone the operator hosts: the claim
      * was then read as authority to write TXT/A records in someone else's zone and to order
-     * certificates for it. Recorded decision (2026-09-23): a tenant may not claim at or under
+     * certificates for it. The rule: a tenant may not claim at or under
      * a name another owner holds -- a live EXACT domain row on a site with other manage-grant
      * subjects ({@link HohenheimAccess#manageSubjectsOf}), or a hosted DNS zone origin (zones
      * are operator-owned by decision, see HohenheimAccess.declareGrantableModels) -- unless

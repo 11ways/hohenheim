@@ -115,7 +115,7 @@ public class InstanceTemplateModel extends Model {
             .help(HohenheimMicrocopy.HELP.of("update_script"))
             .build());
 
-    /** The EXPLICIT reinstall data policy (the plan's requirement: never an implicit wipe). */
+    /** The EXPLICIT reinstall data policy (never an implicit wipe). */
     public static final EnumField REINSTALL_POLICY = SCHEMA.addField(EnumField.builder("reinstall_policy")
         .value(REINSTALL_PRESERVE, v -> v.displayName("Preserve data").icon("shield")
             .label(HohenheimMicrocopy.REINSTALL_POLICY.of("preserve")).color(ColorHue.GREEN))
@@ -126,14 +126,14 @@ public class InstanceTemplateModel extends Model {
         .help(HohenheimMicrocopy.HELP.of("reinstall_policy"))
         .build());
 
-    /** Console line marking readiness (Phase 6 matcher data; carried, not yet wired). */
+    /** Console line marking readiness. */
     public static final StringField READINESS_LINE = SCHEMA.addField(
         StringField.builder().name("readiness_line")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("readiness_line"))
             .help(HohenheimMicrocopy.HELP.of("readiness_line"))
             .build());
 
-    /** Console command for a graceful stop (Phase 6 matcher data; carried, not yet wired). */
+    /** Console command for a graceful stop. */
     public static final StringField STOP_COMMAND = SCHEMA.addField(
         StringField.builder().name("stop_command")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("stop_command"))
@@ -145,8 +145,8 @@ public class InstanceTemplateModel extends Model {
      * template's own {@code settings} name the image.
      *
      * AIDEV-NOTE: this is what stops every Node 22 image appearing twice (once per
-     * template kind) -- the vocabulary-duplication objection in section 3 of the phase-0
-     * design. A template says "node-22 plus these hooks"; it does not re-declare node-22.
+     * template kind) -- a vocabulary duplication.
+     * A template says "node-22 plus these hooks"; it does not re-declare node-22.
      */
     public static final IntegerField RUNTIME_IMAGE_ID = SCHEMA.addField(
         IntegerField.builder().name("runtime_image_id")

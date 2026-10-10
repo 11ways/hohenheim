@@ -47,7 +47,7 @@ import static be.elevenways.hohenheim.server.runtime.IncusDefinitions.ROOT_DEVIC
  * (peers included), applied and read-back-VERIFIED before the container runs. A host
  * whose ACL support does not really enforce refuses at deploy. The internet and DNS stay
  * reachable; a closed-egress kind loses even those. What remains a declared limit is
- * boundary 1 of the plan's threat model: a system container is NOT a security boundary
+ * the container boundary itself: a system container is NOT a security boundary
  * against a determined root user, and privileged mode widens that further -- the network
  * ACL isolates the WIRE, not the kernel, and privileged still carries its escape warning.
  *
@@ -167,7 +167,7 @@ public final class IncusInstanceRuntime
         // imported instance). An existing OWNED instance keeps its rootfs and gets the
         // driver-managed config keys rewritten; a same-named FOREIGN instance stays a
         // loud refusal; a changed settings image only applies at absent-then-create
-        // (reinstall is the explicit wipe path, Phase 5's template policy).
+        // (reinstall is the explicit wipe path, per the template policy).
         Map<String, Object> existing = ownedExisting(spec.handle(), owner);
         if (existing != null) {
             // A same-named OWNED workload of the WRONG flavour is never converged over:

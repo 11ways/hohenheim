@@ -263,8 +263,8 @@ class PortLedgerTest {
         });
     }
 
-    // AIDEV-NOTE: the stacks consumer's MODEL-tier journey lived here until the Phase 7
-    // stack lowering (2026-08-07) deleted its subject. A stack service no longer claims
+    // AIDEV-NOTE: the stacks consumer's MODEL-tier journey lived here until stack
+    // services became owned instances, which deleted its subject. A stack service no longer claims
     // its declared host ports when the ROW is saved -- since the tier lowered onto the
     // instance runtime contract the claim belongs to the service's owned INSTANCE and is
     // made claim-before-create by the DEPLOY, then verified against the daemon's own

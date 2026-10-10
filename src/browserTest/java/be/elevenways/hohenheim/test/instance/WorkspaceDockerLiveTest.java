@@ -52,7 +52,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * lane really produces the image the deploy then starts.
  *
  * AIDEV-NOTE: it runs on the PRIMARY live host (daystrom); the Incus half holds the
- * secondary, so neither wave contends for one machine's 3.9 GiB.
+ * secondary, so neither run contends for one machine's 3.9 GiB.
  *
  * AIDEV-NOTE: the host is enrolled through {@link LiveIncusHost}'s real ssh ceremony (key
  * minted by the product, installed out of band, scanned fingerprint compared against what

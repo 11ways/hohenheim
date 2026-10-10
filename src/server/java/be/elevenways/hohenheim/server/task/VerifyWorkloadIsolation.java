@@ -63,7 +63,7 @@ import java.util.Map;
  * {@link VerifyIncusIsolation} shape: the window becomes bounded and self-closing
  * instead of lasting until the next deploy.
  *
- * AIDEV-NOTE: decided 2026-08-06 -- what happens when repair fails, per condition:
+ * AIDEV-NOTE: what happens when repair fails, per condition:
  * a host with enforcement OFF is reported unverifiable and nothing is stopped (the
  * pre-enforcement decision: deploy refuses, running workloads keep working); a kernel
  * that cannot be READ is reported unverifiable and nothing is stopped (refusing to

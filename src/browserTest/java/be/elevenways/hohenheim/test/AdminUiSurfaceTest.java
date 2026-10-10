@@ -36,7 +36,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The admin-UI wave's surface contract, over HTTP: the fleet list shows every kind but
+ * The admin UI's surface contract, over HTTP: the fleet list shows every kind but
  * release with a "Managed by" column, tab sets follow the kind, generated rows are
  * read-only, the runtime-image catalog refuses edits to code-owned rows, volumes
  * declare through their funnel, and the Expose action prefills the site create form.
@@ -52,17 +52,17 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seedFleet() {
-        workspaceId = instance("ui-wave-workspace", "hohenheim:workspace");
-        applicationId = instance("ui-wave-app", "hohenheim:application");
-        dockerId = instance("ui-wave-docker", "hohenheim:docker_container");
+        workspaceId = instance("ui-surface-workspace", "hohenheim:workspace");
+        applicationId = instance("ui-surface-app", "hohenheim:application");
+        dockerId = instance("ui-surface-docker", "hohenheim:docker_container");
 
         // A generated database engine container, written the way its owning tier
         // writes it (inside the GeneratedRows attribution scope).
         var databases = Models.get(DatabaseModel.class);
-        Row database = databases.find().where(DatabaseModel.NAME.eq("ui-wave-db")).first();
+        Row database = databases.find().where(DatabaseModel.NAME.eq("ui-surface-db")).first();
         if (database == null) {
             database = databases.createEmptyRow();
-            database.set(DatabaseModel.NAME, "ui-wave-db");
+            database.set(DatabaseModel.NAME, "ui-surface-db");
             database.set(DatabaseModel.ENGINE, "postgres");
             database.set(DatabaseModel.DB_USER, "appuser");
             database.set(DatabaseModel.DB_PASSWORD, "s3cret");
@@ -70,9 +70,9 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             databases.save(database);
         }
         databaseId = database.get(DatabaseModel.ID);
-        generatedDbInstanceId = generated("ui-wave-db-engine",
+        generatedDbInstanceId = generated("ui-surface-db-engine",
             "hohenheim:database_container", "database", databaseId);
-        releaseId = generated("ui-wave-release-1",
+        releaseId = generated("ui-surface-release-1",
             "hohenheim:release", "application", applicationId);
     }
 
@@ -129,14 +129,14 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
     void fleetListShowsEveryKindButReleaseWithManagedBy() throws Exception {
         // Filtered to this class's fixtures: the suite shares one database, so the
         // unfiltered page 1 is other classes' rows.
-        String list = adminGet("/admin/instances?filter.name=ui-wave").body();
+        String list = adminGet("/admin/instances?filter.name=ui-surface").body();
 
         assertThat(list).as("authored rows are listed")
-            .contains("ui-wave-workspace", "ui-wave-app", "ui-wave-docker");
+            .contains("ui-surface-workspace", "ui-surface-app", "ui-surface-docker");
         assertThat(list).as("the generated database engine is listed too")
-            .contains("ui-wave-db-engine");
+            .contains("ui-surface-db-engine");
         assertThat(list).as("release rows are deploy artifacts, not fleet entries")
-            .doesNotContain("ui-wave-release-1");
+            .doesNotContain("ui-surface-release-1");
         assertThat(list).as("the managed-by cell links the owning database record")
             .contains("/admin/databases/" + databaseId);
         assertThat(list).as("the relational host filter is offered")
@@ -188,7 +188,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             "name=hijacked-engine", sessionToken, csrfToken);
         assertThat(update.statusCode()).as("the update endpoint refuses").isEqualTo(403);
         assertThat(Models.get(InstanceModel.class).findById(generatedDbInstanceId)
-            .get(InstanceModel.NAME)).isEqualTo("ui-wave-db-engine");
+            .get(InstanceModel.NAME)).isEqualTo("ui-surface-db-engine");
 
         // The power verb is not offered AND its invoke answers missing.
         HttpResponse<String> deploy = httpPostForm(
@@ -222,10 +222,10 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         // An operator-authored variant stays editable: the refusal above is ownership,
         // not a frozen resource.
         var images = Models.get(RuntimeImageModel.class);
-        Row custom = images.find().where(RuntimeImageModel.NAME.eq("ui-wave-custom")).first();
+        Row custom = images.find().where(RuntimeImageModel.NAME.eq("ui-surface-custom")).first();
         if (custom == null) {
             custom = images.createEmptyRow();
-            custom.set(RuntimeImageModel.NAME, "ui-wave-custom");
+            custom.set(RuntimeImageModel.NAME, "ui-surface-custom");
             custom.set(RuntimeImageModel.DOCKER_IMAGE, "example/custom:1");
             custom.set(RuntimeImageModel.BUILTIN, false);
             custom.set(RuntimeImageModel.ENABLED, true);
@@ -233,7 +233,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         }
         HttpResponse<String> customUpdate = httpPostForm(
             "/admin/runtime-images/" + custom.get(RuntimeImageModel.ID),
-            "name=ui-wave-custom&docker_image=example/custom:2&enabled=true",
+            "name=ui-surface-custom&docker_image=example/custom:2&enabled=true",
             sessionToken, csrfToken);
         assertThat(customUpdate.statusCode()).isIn(302, 303);
         assertThat(images.findById(custom.get(RuntimeImageModel.ID))
@@ -305,24 +305,24 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
     @Test
     void siteUpstreamPickIsNarrowedServerSide() throws Exception {
         HttpResponse<String> refused = httpPostForm("/admin/sites/new",
-            "name=ui-wave-refused-site&upstream_kind=hohenheim%3Ainstance&instance_id="
+            "name=ui-surface-refused-site&upstream_kind=hohenheim%3Ainstance&instance_id="
                 + generatedDbInstanceId + "&" + PanelResourceCalls.createEnvelope(),
             sessionToken, csrfToken);
         assertThat(refused.statusCode())
             .as("a database engine as an upstream must not create-redirect")
             .isNotIn(302, 303);
         assertThat(Models.get(SiteModel.class).find()
-            .where(SiteModel.NAME.eq("ui-wave-refused-site"))
+            .where(SiteModel.NAME.eq("ui-surface-refused-site"))
             .count()).isZero();
 
         HttpResponse<String> accepted = httpPostForm("/admin/sites/new",
-            "name=ui-wave-exposed-site&upstream_kind=hohenheim%3Ainstance&instance_id="
+            "name=ui-surface-exposed-site&upstream_kind=hohenheim%3Ainstance&instance_id="
                 + applicationId + "&" + PanelResourceCalls.createEnvelope(),
             sessionToken, csrfToken);
         assertThat(accepted.statusCode())
             .as("the control: the application is exposable").isIn(302, 303);
         Row site = Models.get(SiteModel.class).find()
-            .where(SiteModel.NAME.eq("ui-wave-exposed-site"))
+            .where(SiteModel.NAME.eq("ui-surface-exposed-site"))
             .first();
         assertThat(site).isNotNull();
         assertThat((Object) site.get(SiteModel.INSTANCE_ID))
@@ -384,7 +384,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             .isEqualTo(InstanceModel.INSTALL_NONE);
 
         // 2. So neither the fleet list nor the record's state band spends a badge on it.
-        assertThat(adminGet("/admin/instances?filter.name=ui-wave").body())
+        assertThat(adminGet("/admin/instances?filter.name=ui-surface").body())
             .as("step 2: no per-row 'no install step' badge")
             .doesNotContain("No install step");
         String quietOverview = adminGet("/admin/instances/" + workspaceId
@@ -400,7 +400,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             //    reads on both surfaces.
             workspace.set(InstanceModel.INSTALL_STATE, InstanceModel.INSTALL_PENDING);
             instances.save(workspace);
-            assertThat(adminGet("/admin/instances?filter.name=ui-wave-workspace").body())
+            assertThat(adminGet("/admin/instances?filter.name=ui-surface-workspace").body())
                 .as("step 3: a pending install still reads under the status pill")
                 .contains("Install pending");
             assertThat(adminGet("/admin/instances/" + workspaceId + "/page/overview").body())
@@ -419,7 +419,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         }
 
         // 5. Back to the majority case, and the list is quiet again.
-        assertThat(adminGet("/admin/instances?filter.name=ui-wave").body())
+        assertThat(adminGet("/admin/instances?filter.name=ui-surface").body())
             .as("step 5: the badge leaves with the lifecycle")
             .doesNotContain("No install step");
     }
@@ -467,12 +467,12 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
 
         // 4. On the surface itself, narrowed to one row each: the authored workspace
         //    offers Deploy, the generated database engine does not.
-        assertThat(adminGet("/admin/instances?filter.name=ui-wave-workspace").body())
+        assertThat(adminGet("/admin/instances?filter.name=ui-surface-workspace").body())
             .as("step 4: the control -- an authored workspace offers Deploy")
             .contains("start_instance");
-        String engine = adminGet("/admin/instances?filter.name=ui-wave-db-engine").body();
+        String engine = adminGet("/admin/instances?filter.name=ui-surface-db-engine").body();
         assertThat(engine).as("step 4: the engine row is the one listed")
-            .contains("ui-wave-db-engine");
+            .contains("ui-surface-db-engine");
         assertThat(engine)
             .as("step 4: an owner-managed kind is never offered Deploy")
             .doesNotContain("start_instance");
@@ -562,7 +562,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
         String strip = page.substring(page.indexOf("cms-record-tabs"), more);
         String menu = page.substring(more);
 
-        // 2. What an operator opens daily stays on the strip: the board's app tabs.
+        // 2. What an operator opens daily stays on the strip: the daily app tabs.
         assertThat(strip).as("step 2: the front door, the console, the files, the metrics and the backups"
                 + " stay visible")
             .contains("/page/overview", "/page/console", "/page/files", "/page/stats", "/page/backups");

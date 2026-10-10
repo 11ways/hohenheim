@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * The phase-0 contract of 4.6: a template's declared volumes are COPIED onto the instance
+ * The template volume contract: a template's declared volumes are COPIED onto the instance
  * at create time, the {@code instance_template_variables} to {@code instance_variables}
  * precedent.
  *

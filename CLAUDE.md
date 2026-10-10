@@ -186,8 +186,7 @@ test one end-to-end: inline `CommsDispatcher` + `webhook://default` + a local
 The INSTALL schema is one migration,
 `src/common/java/be/elevenways/hohenheim/migration/InitialMigration.java`
 (version `001`), which creates the final schema directly. The M003..M092 chain
-was folded into it on 2026-08-13 (`docs/migration-consolidation-2026-08-13.md`
-carries the schema-diff proof); older docs in `docs/` still cite `M0xx` class
+was folded into it on 2026-08-13; older comments and docs still cite `M0xx` class
 names as provenance for when something landed, and those citations are history,
 not files you will find.
 
@@ -205,7 +204,7 @@ not files you will find.
   install has applied it, so editing it is still free; the test installs
   (starfleet, daystrom) that applied it get their ledger re-recorded. A production
   deploy that applied migrations raises the mark and adds the pins
-  (`docs/deploy-starfleet.md` step 8); a pin is never regenerated to make a red
+  (`tools/deploy-host.sh` reminds it); a pin is never regenerated to make a red
   build green. Comments and formatting are outside the digest.
 - A schema change EDITS the newest migration while it sits above the mark, and
   APPENDS one (same package and stream, the next number) only when every

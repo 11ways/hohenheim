@@ -44,7 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SiteRefusalVerdictJourneyTest extends HohenheimTestBase {
 
-    private static final String PREFIX = "d7d-refusal-";
+    private static final String PREFIX = "site-refusal-";
     private static final LocaleChain EN = LocaleChain.ofTags("en");
 
     @Test

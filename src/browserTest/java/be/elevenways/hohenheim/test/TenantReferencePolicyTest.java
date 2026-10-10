@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Access lists and git providers carry a core REFERENCE policy beside their owned /manage scope: a tenant's pickers
  * offer the rows it may USE (shared ones plus its own), its /manage list only the rows it OWNS, and neither ever names
- * another tenant's private row (stage 4 contract 4.8, drift D2-B01).
+ * another tenant's private row.
  */
 class TenantReferencePolicyTest extends HohenheimTestBase {
 

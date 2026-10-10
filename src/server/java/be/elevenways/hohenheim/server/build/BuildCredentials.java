@@ -36,8 +36,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * shortens the life of ITS LEASE, not of an upstream provider's credential: a Docker Hub
  * password leased for 15 minutes is still a Docker Hub password afterwards. Genuinely
  * short-lived UPSTREAM credentials need a provider that mints them (GitHub App
- * installation tokens, registry-scoped JWTs), which arrives with the git-provider
- * installation wave -- and plugs into {@link #issue} unchanged, because the sandbox only
+ * installation tokens, registry-scoped JWTs), which arrives with git-provider
+ * installations -- and plugs into {@link #issue} unchanged, because the sandbox only
  * ever sees a token. Until then the honest claim is "scoped, leased and redacted", and
  * that is the claim the tests make.
  *

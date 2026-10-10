@@ -98,8 +98,8 @@ public final class TenantWrites {
      * timestamps are behaviour-stamped, and live_route_key is written by the route invariant
      * on a later tier of this very pass.
      */
-    // AIDEV-NOTE: the four *_DERIVED sets stay HAND-WRITTEN, and that is a recorded
-    // verdict (2026-08-17) rather than an omission. Deriving them from a
+    // AIDEV-NOTE: the four *_DERIVED sets stay HAND-WRITTEN, and that is a deliberate
+    // choice rather than an omission. Deriving them from a
     // `pipelineWritten()`-style schema flag would be a new zenit Field API with exactly
     // one consumer, and it would cover only the generic three members (pk plus the two
     // behaviour-stamped timestamps): live_route_key here and settings on the instance set
@@ -958,7 +958,7 @@ public final class TenantWrites {
      *
      * AIDEV-NOTE: this lives on the write pipeline for the reason the class docblock
      * states -- a form that omits a field is a UX affordance, never a gate, and a direct
-     * POST carries whatever it likes. It is the enforcing half of the Phase 3 gate clause
+     * POST carries whatever it likes. It is the enforcing half of the gate rule
      * "a console+power delegate PROVABLY cannot change config".
      *
      * AIDEV-NOTE: CREATES are deliberately out of scope here: no record exists to hold a

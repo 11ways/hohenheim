@@ -31,7 +31,7 @@ import java.util.Set;
 public final class ProxyReloadHooks {
 
     // AIDEV-NOTE: InstanceModel is DELIBERATELY absent, and the absence was re-decided when
-    // the non-release-managed stale-address defect was fixed (2026-08-23). Instance rows are
+    // the non-release-managed stale-address defect was fixed. Instance rows are
     // written constantly -- a status stamp every couple of minutes per record, deploy
     // progress, install lifecycle -- and every entry here regenerates the WHOLE routing
     // table on write, so adding it would rebuild every site's handler chain on a heartbeat.
@@ -43,7 +43,7 @@ public final class ProxyReloadHooks {
     // hook here would be a broadcast standing in for facts we already have precisely.
     //
     // AIDEV-NOTE: DatabaseModel is here for the ROUTE, not for convergence. Routing no
-    // longer converges anything (phase-0 brief 7: the instance upstream handler resolves an
+    // longer converges anything (the instance upstream handler resolves an
     // address and nothing else), so a database status flip reaches a workload through the
     // application's next deploy, not through a reload. What stays true is that these models
     // decide which hostnames exist and where they point.

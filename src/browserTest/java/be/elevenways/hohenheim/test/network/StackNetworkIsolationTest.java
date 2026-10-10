@@ -40,7 +40,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * daemon, the kernel of the enforcing "host" (a private netns) is read back, and then a
  * namespace impersonating a stack service -- an address inside the SHARED stack network's
  * REAL subnet, routed through those very chains -- throws packets at the denied and
- * allowed destinations. Since the Phase 7 lowering that shared network is a policied LINK
+ * allowed destinations. That shared network is a policied LINK
  * network owned by the stack record, and each service ALSO has its own workload network;
  * this test pins the shared one, which is the lane siblings actually talk over.
  *

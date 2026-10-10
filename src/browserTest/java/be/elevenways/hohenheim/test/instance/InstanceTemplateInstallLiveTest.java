@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 /**
  * The install/reinstall lifecycle against a REAL daemon, as one journey: create from a
  * template (generated secret variable, config file with placeholders), interrupt the
- * install and PROVE the variables/credentials survive (the failure class this wave
+ * install and PROVE the variables/credentials survive (the failure class this test
  * exists to kill), resume it, deploy with env injection + staged files asserted from
  * INSIDE the container, then reinstall under preserve and under clear policies and
  * assert what happened to the data volume.
@@ -125,7 +125,7 @@ class InstanceTemplateInstallLiveTest {
 
                 // 3. INTERRUPT the install (the injected crash fires after the durable
                 //    'installing' stamp): the record shows the interruption, and --
-                //    the counterfactual this wave exists for -- the STORED variables,
+                //    the counterfactual this test exists for -- the STORED variables,
                 //    the secret's value included, are UNTOUCHED.
                 InstanceInstalls interrupted = new InstanceInstalls(service, () -> {
                     throw new RuntimeException("simulated controller crash mid-install");

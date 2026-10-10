@@ -48,9 +48,9 @@ class SettingsGroupCoverageTest {
         // "builds" (sandboxed builders) had drifted out of this pin the same way;
         // caught 2026-08-04 when "releases" (health-gated releases) was added.
         "builds", "releases",
-        // Preview deployments (git-provider wave).
+        // Preview deployments.
         "previews",
-        // Per-host memory capacity (resource-aware placement wave).
+        // Per-host memory capacity.
         "capacity",
         // Incus daemon/controller knobs. Drifted out of this pin the same way as
         // "stacks", "files", "builds" and "releases" before it; caught 2026-08-07.
@@ -64,7 +64,7 @@ class SettingsGroupCoverageTest {
         // bound subsumes the other, and would have set the precedent that every host knob
         // lands wherever its first consumer happened to read it.
         "hosts",
-        // SFTP to app files (SFTP-W3, 2026-10-08): its own group beside "files", because every value is host-only
+        // SFTP to app files: its own group beside "files", because every value is host-only
         // and read once when the server starts, while the file manager's bounds are ordinary admin settings.
         "sftp");
 

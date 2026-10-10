@@ -1,4 +1,4 @@
-{#- The /manage landing's usage card (board Manage-Home): each budget the board lists, how much of the operator's cap
+{#- The /manage landing's usage card: each listed budget, how much of the operator's cap
     this tenant holds with its bar, or "No limit" where the operator set none (TenantUsage). -#}
 {% declare widget: WidgetInstance %}
 {% declare data: List<UsageLine> = null %}

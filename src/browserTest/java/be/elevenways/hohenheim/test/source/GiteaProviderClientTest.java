@@ -266,7 +266,7 @@ class GiteaProviderClientTest {
     }
 
     /**
-     * The anti-drift guard for the defect this wave closed: Gitea was DECLARED on the
+     * The anti-drift guard for a closed defect: Gitea was DECLARED on the
      * inbound webhook path while {@code clientFor} refused the kind by name, so a
      * repository could be webhooked but never picked or cloned. Every value the KIND enum
      * offers an operator must therefore construct a client -- a kind that only exists in

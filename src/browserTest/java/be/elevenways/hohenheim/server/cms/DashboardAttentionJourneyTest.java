@@ -87,14 +87,14 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * The admin dashboard shows each problem once, at its root, with its one action: an open checklist step presents the
  * attention item stating its stage instead of the band repeating it, and an app its host holds back folds under that
  * host, which says how many apps wait for it, while the app's own verdict stays its own. Once the first app is online
- * the checklist retires and what its open steps stood for is the band's (board Main), beside the count tiles.
+ * the checklist retires and what its open steps stood for is the band's, beside the count tiles.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
  */
 class DashboardAttentionJourneyTest extends HohenheimTestBase {
 
-    private static final String PREFIX = "d8-fold-";
+    private static final String PREFIX = "attn-fold-";
     private static final LocaleChain EN = LocaleChain.ofTags("en");
 
     /** Its own database: whether anything is online retires the checklist, and other classes leave live sites. */
@@ -215,7 +215,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                     + "stopped workload, which raises no item of its own, so nothing folds it").hasSize(2)
                 .allMatch(item -> item.causedBy() != null && InstanceModel.MODEL_ID.equals(item.causedBy().model()));
 
-            // 6. Its memory reading goes stale (measured 40 days ago, DEP9's Starfleet host): the chooser refuses it,
+            // 6. Its memory reading goes stale (measured 40 days ago): the chooser refuses it,
             //    so admission is open again and its step presents the host's item, with the fresh check that clears it
             //    and the way to the host's Overview; the band does not repeat it.
             HostPreflight.store(ServerModel.MODE_LOCAL, new HostPreflight.Report(List.of(),
@@ -237,7 +237,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 .isEqualTo("/admin/servers/" + local + "/open");
             assertThat(rootOf(stale.attention(), localHost)).as("step 6: the band does not repeat it").isNull();
 
-            // 7. The first app goes online (a website serving its visitors, board Main): the checklist retires, and
+            // 7. The first app goes online (a website serving its visitors): the checklist retires, and
             //    what its open steps stood for is the band's from then on, each once: the host that takes no new apps
             //    and, while no off-host destination is chosen, the backups that stay on this machine.
             Row online = setupSite("hohenheim:static", PREFIX + "live", PREFIX + "live", Map.of("root_path", "/tmp"));
@@ -261,7 +261,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 .doesNotContain("data-onboarding-steps")
                 .as("step 7: and the host in the band").contains(ServerModel.nameOf(local) + " takes no new apps");
 
-            // 8. The count tiles (board Main): Apps, Hosts, Certificates and Backups, each with the line saying what
+            // 8. The count tiles: Apps, Hosts, Certificates and Backups, each with the line saying what
             //    its count holds, only where a fact backs it.
             assertThat(tile(dashboard, "apps")).as("step 8: the apps, live and with a problem, by their verdicts")
                 .contains("href=\"/admin/apps\"").contains(">3<").contains("1 live, 2 with a problem");
@@ -271,7 +271,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 .contains("href=\"/admin/certificates\"").contains(">0<").doesNotContain("class=\"description\"");
             assertThat(tile(dashboard, "backups")).as("step 8: nothing backed up says so")
                 .contains("href=\"/admin/instance-backups\"").contains("No app or database is backed up yet");
-            // The one count the sidebar carries (board Main): the apps with a problem, as the Apps tile says them;
+            // The one count the sidebar carries: the apps with a problem, as the Apps tile says them;
             // the inbox's unread alerts no longer badge Activity.
             Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
             AccessContext operator = TenantConduits.operator();
@@ -279,10 +279,10 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 .as("step 8: the sidebar badges Apps with its 2 problems, the tile's own count").isEqualTo(2L);
             assertThat(admin.entryBySlug("inbox").navBadge(operator))
                 .as("step 8: the inbox's unread alerts no longer badge Activity").isNull();
-            assertThat(dashboard).as("step 8: the tiles the board replaced are gone")
+            assertThat(dashboard).as("step 8: the access-list and bans tiles are gone")
                 .doesNotContain("href=\"/admin/access-lists\"").doesNotContain("Active bans");
 
-            // 9. A root the band draws (a second host waiting while one is admitted, board Main) folds what it holds
+            // 9. A root the band draws (a second host waiting while one is admitted) folds what it holds
             //    back too; a consequence whose root nobody shows stays, so a fold never hides a problem.
             AttentionSubject other = AttentionSubject.host(local + 1000);
             AttentionItem root = new AttentionItem(AttentionSeverity.WARNING, "server", Microcopy.literal("root"),
@@ -341,7 +341,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             ServerMain.adoptProxyServer(proxy);
             AttentionSubject workload = AttentionSubject.instance(crashed.get(InstanceModel.ID));
 
-            // 1. A crashed workload behind a website (D10a's Shop): the site's verdict names the workload as its
+            // 1. A crashed workload behind a website: the site's verdict names the workload as its
             //    cause, so unfolded there are two items, the workload's (the root, saying what it keeps from its
             //    site's visitors) and the site's (caused by it)...
             assertThat(AppHealth.siteReading(fresh(shop)).cause())
@@ -358,7 +358,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 .isEqualTo("Visitors of its site get an error page");
             assertThat(causedBy(unfolded, workload)).as("step 1: unfolded, the site's item is caused by it")
                 .singleElement().satisfies(item -> assertThat(say(item.title()))
-                    .as("step 1: naming the app as the Apps list does, its workload's name (D13a)")
+                    .as("step 1: naming the app as the Apps list does, its workload's name")
                     .isEqualTo("Visitors of " + PREFIX + "crashed get an error page"));
 
             // 2. ...and folded, the band draws the cause once: the workload's item with its action, never the site's.
@@ -408,7 +408,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
 
             // 6. HTTPS cannot be served at all (no certificate is stored): one item says why in words, and names
             //    each site sent to HTTPS by what sends it there, never claiming a site forces what the setting
-            //    forces (D10a: a catch-all and a certified name listed as sites "that force SSL").
+            //    forces (a catch-all and a certified name were once listed as sites "that force SSL").
             Row catchAll = setupSite("hohenheim:static", PREFIX + "catch-all", PREFIX + "catch-all",
                 Map.of("root_path", "/tmp"));
             sites.add(catchAll);
@@ -429,7 +429,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(say(ownOnly.get(0).heldBack())).as("step 6: without the setting only the forcing site is named")
                 .isEqualTo("Visitors of " + PREFIX + "docs get an error page: their addresses force HTTPS.");
 
-            // 6b. That one cause is shown once, at its root (D13a's dashboard said it twice): the item is about the
+            // 6b. That one cause is shown once, at its root (the dashboard once said it twice): the item is about the
             //     installation's HTTPS, the site's verdict names it as the cause instead of its address, the address
             //     raises no item of its own, and folded, the site's error page leaves the band.
             AttentionSubject httpsRoot = AttentionSubject.httpsTermination();
@@ -619,7 +619,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                     + " could not be removed and still holds its port, memory and a copy of the data.");
             assertThat(say(left.action())).as("step 4: with the way to the database").isEqualTo("Open the database");
 
-            // 4b. The leftover's own refused start is the database's too (D13c): removing it is the fix, so its item
+            // 4b. The leftover's own refused start is the database's too: removing it is the fix, so its item
             //     names the database as its root and Needs attention draws the database alone.
             int leftoverId = leftover.get(InstanceModel.ID);
             OwnedInstances.inScopeUnchecked(DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID, movedId, () ->
@@ -813,16 +813,16 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             ServerMain.adoptProxyServer(proxy);
             cleanup.add(() -> ServerMain.adoptProxyServer(previous));
 
-            // 1. A workload whose start the daemon refused, behind an address without a certificate (D13c's shop):
+            // 1. A workload whose start the daemon refused, behind an address without a certificate:
             //    its dashboard row's badge is its root, "Could not start", never the address's "No certificate".
             Row refused = instance(PREFIX + "refused", local);
             cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), refused));
             int refusedId = refused.get(InstanceModel.ID);
             Row refusedSite = setupInstanceSite(PREFIX + "refused-site", PREFIX + "refused-site", refusedId);
             cleanup.add(() -> HardDeletes.row(Models.get(SiteModel.class), fresh(refusedSite)));
-            addDomain(refusedSite, "refused.d13f.test", "exact", null, false);
+            addDomain(refusedSite, "refused.conflict.test", "exact", null, false);
             ActivityLog.record(Models.get(InstanceModel.class), refusedId,
-                HohenheimActivityAction.WORKLOAD_START_FAILED, "Conflict. The container name /d13f is already in use");
+                HohenheimActivityAction.WORKLOAD_START_FAILED, "Conflict. The container name /conflict is already in use");
             errored(refusedId);
             String dashboard = adminGet("/admin/dashboard").body();
             assertThat(appRow(dashboard, PREFIX + "refused"))
@@ -831,7 +831,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 .doesNotContain("data-cert-status");
 
             // 2. Its item and its page say in words what that meant, the daemon's own English as the technical line
-            //    after them, never the sentence the reader is given first (DEP10: "What refused it: ...").
+            //    after them, never the sentence the reader is given first (it once read "What refused it: ...").
             AttentionItem refusedItem = rootOf(AttentionCollector.collect(), AttentionSubject.instance(refusedId));
             assertThat(refusedItem).as("step 2: the failed start is a root").isNotNull();
             assertThat(say(refusedItem.title())).as("step 2: titled by what happened")
@@ -839,15 +839,15 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(say(refusedItem.detail())).as("step 2: its detail is the worded meaning")
                 .isEqualTo("It never got to run.");
             assertThat(say(refusedItem.note())).as("step 2: the daemon's text is the technical line")
-                .isEqualTo("Technically: Conflict. The container name /d13f is already in use");
+                .isEqualTo("Technically: Conflict. The container name /conflict is already in use");
             assertThat(refusedItem.note().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
                 .as("step 2: in Dutch, the stored text kept as it is")
-                .isEqualTo("Technisch: Conflict. The container name /d13f is already in use");
+                .isEqualTo("Technisch: Conflict. The container name /conflict is already in use");
             assertThat(adminGet("/admin/instances/" + refusedId + "/page/overview").body())
                 .as("step 2: the page's band reads the words, then the technical text")
                 .contains("Could not start")
                 .containsSubsequence("It never got to run.",
-                    "Technically: Conflict. The container name /d13f is already in use")
+                    "Technically: Conflict. The container name /conflict is already in use")
                 .doesNotContain("What refused it");
 
             // 3. A crash whose automatic restart the start gates refused is recorded as that, so the app does not
@@ -874,7 +874,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             Row forcedSite = setupInstanceSite(PREFIX + "forced-site", PREFIX + "forced-site",
                 forcedApp.get(InstanceModel.ID));
             cleanup.add(() -> HardDeletes.row(Models.get(SiteModel.class), fresh(forcedSite)));
-            forcedDomain(forcedSite, "forced.d13f.test");
+            forcedDomain(forcedSite, "forced.conflict.test");
             assertThat(appRow(adminGet("/admin/dashboard").body(), PREFIX + "forced"))
                 .as("step 4: an app HTTPS breaks keeps the HTTPS badge, which names its cause")
                 .contains("data-cert-status=\"" + CertCoverage.ERROR.token() + "\"")
@@ -929,7 +929,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
         HostFixtures.LocalHostState captured = HostFixtures.captureLocal();
         List<Runnable> cleanup = new ArrayList<>();
         try {
-            // 1. D13f's shop: a host that is not admitted, an app on it whose earlier start failed (a container name
+            // 1. A host that is not admitted, an app on it whose earlier start failed (a container name
             //    conflict, recorded with the ERROR status it stamped) and a second app on the same host.
             HostFixtures.blockLocal();
             int local = ServerModel.localServerId();
@@ -1098,7 +1098,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
         row.set(ReleaseOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
         row.set(ReleaseOperationModel.FOR_ID, applicationId);
         row.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED));
-        row.set(ReleaseOperationModel.IMAGE_ID, "d11-failed");
+        row.set(ReleaseOperationModel.IMAGE_ID, "release-failed");
         row.set(ReleaseOperationModel.FAILURE_REASON, reason);
         row.set(ReleaseOperationModel.STARTED_AT, Now.instant().minusSeconds(60));
         row.set(ReleaseOperationModel.FINISHED_AT, Now.instant());

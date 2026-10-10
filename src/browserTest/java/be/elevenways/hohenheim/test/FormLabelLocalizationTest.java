@@ -29,12 +29,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * AIDEV-NOTE: a field without a declared label is looked up by its bare name, unscoped, while Hohenheim ships its
  * field words under {@code hohenheim_field}; the lookup misses and the form prints the humanized name, which is
- * English in every locale (DD4: the Dutch host form read "Name" and "SSH target" beside "SSH-doel" in nl.json). The
+ * English in every locale (the Dutch host form once read "Name" and "SSH target" beside "SSH-doel" in nl.json). The
  * walk reads the label the form renders ({@link FormEntryLabels#labelOf}) off the panels' own resources, so a field
  * added tomorrow is judged without a list here.
  *
  * AIDEV-NOTE: a field a framework model declares (zenit's RecordSchedule*Model on the schedule forms) is judged by
- * that framework, not here: those declare no label and ship no words, the gap DD4 recorded in the plan (section 41).
+ * that framework, not here: those declare no label and ship no words, a gap that is zenit's to close.
  */
 class FormLabelLocalizationTest extends HohenheimTestBase {
 

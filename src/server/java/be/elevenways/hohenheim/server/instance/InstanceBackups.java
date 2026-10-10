@@ -83,7 +83,7 @@ import java.util.Set;
  * leaves a FAILED row, and restore refuses everything but COMPLETE. Restore-to-new
  * runs the FULL create story -- quota reservation via the ordinary save pipeline,
  * host admission, network policy, hardening, fenced deploy -- because a restore that
- * bypasses any of it is the hole the plan names.
+ * bypasses any of it is a hole.
  */
 public final class InstanceBackups {
 

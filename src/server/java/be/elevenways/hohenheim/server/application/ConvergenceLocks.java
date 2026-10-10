@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * synchronized on the CLASS and only guards installation; {@code HostLeases} is an
  * inter-CONTROLLER fence acquired once and then held for the process lifetime, so
  * "we hold host X" never means "we are idle on X". The RELEASE lane's application key moved
- * to {@code InstanceOperationLock} (2026-09-23), the one per-record operation lock every
+ * to {@code InstanceOperationLock}, the one per-record operation lock every
  * instance verb now takes -- the application IS an instance record, so its checkout,
  * converge, rollback, drain and backup serialize there with a stop or destroy of the same
  * record. A preview has no record to key on until its first build mints one, which is why

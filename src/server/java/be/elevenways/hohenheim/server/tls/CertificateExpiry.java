@@ -9,10 +9,10 @@ import java.time.Duration;
 import java.time.Instant;
 
 /**
- * When a certificate expires, in the one wording every surface says it with: whole days ("Expires in 35 days", the
- * boards' "in 12 days"), today, or how long ago it expired.
+ * When a certificate expires, in the one wording every surface says it with: whole days ("Expires in 35 days",
+ * "in 12 days"), today, or how long ago it expired.
  *
- * AIDEV-NOTE: DEP10's Apps list said "a month and 5 days from now" (the browser's relative time) beside the dashboard's
+ * AIDEV-NOTE: the Apps list said "a month and 5 days from now" (the browser's relative time) beside the dashboard's
  * "in 35 days"; the Addresses and Apps HTTPS cells, the app overview, the Certificates list, the dashboard tile, its
  * expiring item and the expiry alert all read this class now. The sentence-case spelling ({@link #inSentence}) is the
  * catalog's {@code case=sentence} variant, for a sentence that carries it ("The certificate shop expires in 3 days").

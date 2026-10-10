@@ -77,7 +77,7 @@ public final class StackServiceKind implements InstanceKindHandler {
     /**
      * The DECLARED egress posture of every stack service and of the shared stack network.
      *
-     * AIDEV-NOTE: OPEN, decided 2026-08-06 and unchanged by the lowering. A stack is
+     * AIDEV-NOTE: OPEN, deliberately, and unchanged by the lowering. A stack is
      * operator-authored compose-shaped content whose services legitimately open outbound
      * connections (package installs at entrypoint, upstream APIs, webhooks); blanket NONE
      * would break those, and the managed-database precedent for NONE (an engine has no

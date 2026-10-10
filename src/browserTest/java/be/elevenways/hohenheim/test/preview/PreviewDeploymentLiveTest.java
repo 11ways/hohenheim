@@ -199,7 +199,7 @@ class PreviewDeploymentLiveTest {
         DockerClient docker = new DockerClient();
 
         // AIDEV-NOTE: routing no longer deploys anything (the upstream handler only
-        // RESOLVES since brief 7), so the production release is this test's own explicit
+        // RESOLVES), so the production release is this test's own explicit
         // step rather than an async side effect of proxy start. It runs FIRST and
         // SYNCHRONOUSLY: both deploys take the same host lease, and the ordering is what
         // the old awaitInitialDeployFinished() bought by waiting on a race.

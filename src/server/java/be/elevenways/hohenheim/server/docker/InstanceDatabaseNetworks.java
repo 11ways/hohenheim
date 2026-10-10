@@ -31,7 +31,7 @@ import java.util.Set;
  * {@code instance_databases} row keeps no network, and a link network never carries a
  * third member, so two instances sharing one database still cannot reach each other.
  *
- * AIDEV-NOTE: OWNER and CONSUMER are not always the same record, and phase-0 brief 7 folded
+ * AIDEV-NOTE: OWNER and CONSUMER are not always the same record, and the re-key folded
  * the deleted site lane's asymmetry in here rather than keeping a second copy of this class.
  * An ordinary instance owns its links and consumes them itself; an APPLICATION owns them
  * while whichever release is currently serving consumes them. The link network is therefore

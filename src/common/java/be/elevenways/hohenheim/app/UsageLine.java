@@ -5,7 +5,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
- * One budget of a tenant as the /manage usage card draws it (board Manage-Home): held against its cap, or uncapped.
+ * One budget of a tenant as the /manage usage card draws it: held against its cap, or uncapped.
  *
  * @param label   what is counted ("Memory")
  * @param used    how much of it the tenant holds, in bytes when {@code bytes}

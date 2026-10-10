@@ -106,7 +106,7 @@ public final class AccessListRulesPage implements RecordTab.Rendered<Row> {
             ? HohenheimEndpoints.ACCESS_RULES_ADD
             : HohenheimEndpoints.MANAGE_ACCESS_RULES_ADD)
             .with(HohenheimEndpoints.ACCESS_LIST_ID, listId));
-        // Where the list is used, the Access-List board's "Protects" card: a whole app, or one path on an app.
+        // Where the list is used, the "Protects" card: a whole app, or one path on an app.
         List<Microcopy> protects = new ArrayList<>();
         for (DeleteImpact.AccessListUse use : DeleteImpact.usesOfAccessList(listId)) {
             protects.add(use.path() == null

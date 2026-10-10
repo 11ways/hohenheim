@@ -16,9 +16,9 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * {@code images/}, so a row that disagreed with the Dockerfile beside it would describe an
  * image nobody can build. An operator who wants a variant copies the row.
  *
- * AIDEV-NOTE: the image references are LOCAL tags, never registry paths (Jelle's decision
- * on phase-0 open question 5): each host builds them from {@code build_context} at first
- * use. {@code incus_image} is a LOCAL alias for the same reason -- phase-0 brief 8 imports
+ * AIDEV-NOTE: the image references are LOCAL tags, never registry paths (by
+ * design): each host builds them from {@code build_context} at first
+ * use. {@code incus_image} is a LOCAL alias for the same reason -- the deploy imports
  * the built Docker image into the host's Incus store rather than publishing a second image
  * ({@code RuntimeImages}), so both runtimes carry the same package list. The column stays
  * nullable because an operator-authored row may legitimately have no Incus variant, and the

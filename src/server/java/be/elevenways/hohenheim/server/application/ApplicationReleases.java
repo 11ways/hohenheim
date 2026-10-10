@@ -58,8 +58,8 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * created/stopped/destroyed through {@link InstanceService}. The application record keeps
  * the source, the build, the variables and the volumes and never owns a container itself.
  *
- * AIDEV-NOTE: this class was {@code SiteInstances} and was keyed to the SITE (phase-0 brief
- * 7). The re-key is what makes an application a first-class record: a site is now merely a
+ * AIDEV-NOTE: this class was {@code SiteInstances} and was keyed to the SITE.
+ * The re-key is what makes an application a first-class record: a site is now merely a
  * hostname pointing AT an application ({@code sites.instance_id} + the {@code instance}
  * upstream kind), several sites may point at the same one, and an application with no site
  * at all still deploys, rolls back and keeps its volumes.

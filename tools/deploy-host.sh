@@ -2,12 +2,12 @@
 #
 # deploy-host.sh -- ONE invocation performs the whole Hohenheim deploy lane for one box.
 #
-# The lane used to be hand-typed shell, three near-identical transcriptions per
-# wave, and every transcription was a chance to lose a step: a `stat` under
-# `set -e` once aborted a wave between the `mv` and the `systemctl start`, and
+# The lane used to be hand-typed shell, one near-identical transcription per
+# host, and every transcription was a chance to lose a step: a `stat` under
+# `set -e` once aborted a deploy between the `mv` and the `systemctl start`, and
 # the health probes carried hardcoded try counts that outlived their boxes.
-# This script IS that procedure now (docs/deploy-starfleet.md, "Deploy
-# procedure"); tools/install-host.sh is its install-time sibling.
+# This script IS that procedure now; tools/install-host.sh is its install-time
+# sibling.
 #
 # Its main gates are:
 #   1. a local jar whose build stamp is DIRTY, unstamped or inconsistent,
@@ -542,7 +542,7 @@ if [ "$DRY_RUN" = "no" ]; then
     if [ -n "$APPLIED" ]; then
         printf '%s\n' "$APPLIED" | sed 's/^/   applied: /'
         info "a PRODUCTION install that applied hohenheim migrations pins them (java -jar <new jar>"
-        info "--migration-checksums); a test install never does (docs/deploy-starfleet.md, procedure step 8)"
+        info "--migration-checksums); a test install never does"
     else
         info "no migrations applied by this deploy"
     fi
@@ -576,7 +576,7 @@ fi
 step "11. Clean up the staged copies"
 remote "$SUDO rm -rf '$REHEARSE_DIR'; rm -f '$STAGED_JAR'" || warn "could not clean the staged jar / rehearsal dir"
 
-step "Runbook entry (paste into docs/deploy-$TARGET.md)"
+step "Runbook entry (paste into the host's deploy log)"
 cat <<ENTRY
 ## Deploy $(date -u +%Y-%m-%d) ($TARGET): <commit>, <what shipped>
 

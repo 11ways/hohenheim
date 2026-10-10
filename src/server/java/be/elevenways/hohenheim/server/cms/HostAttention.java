@@ -80,8 +80,8 @@ public final class HostAttention {
      * waiting host says why it waits ("Never checked yet", its failed required checks) with Check and admit; an
      * ADMITTED host the gate refuses (a stale memory reading, a posture, a check that no longer passes) says the gate's
      * own words with the remedy that clears them (Check again re-measures; a posture or a trust decision opens the
-     * host). DEP9 found Starfleet's local host refused by placement over a memory reading from 2026-08-29 while
-     * nothing raised it. A cordoned host is a deliberate state and raises nothing until an app waits on it (D8), and
+     * host). Starfleet's local host was once refused by placement over a memory reading from 2026-08-29 while
+     * nothing raised it. A cordoned host is a deliberate state and raises nothing until an app waits on it, and
      * an item is the ROOT of what its host holds back: it names how many apps wait for it and the dashboard folds
      * their own items under it. It states the checklist's admission stage, so while that step is open the step
      * presents it. Gated on the same roles that put the Hosts list in the panel, so the link always exists.
@@ -115,7 +115,7 @@ public final class HostAttention {
      * Every host where per-workload firewall rules are switched off while something there needs them: ONE item per
      * host, the root of the starts it refused and of the isolation sweep that cannot check it.
      *
-     * AIDEV-NOTE: D13b's dashboard showed this one cause three times in the deploy lane's and the sweep's raw English
+     * AIDEV-NOTE: the dashboard once showed this one cause three times in the deploy lane's and the sweep's raw English
      * ("Check app isolation failed: per-app firewall rules are switched off there", "db-archive stopped after an
      * error: REFUSED to deploy '...-net': ... security.nftables_enabled is off ..."). A refused start records
      * {@code WORKLOAD_ISOLATION_REFUSED} (its cause's fact is HOST_ISOLATION), so the workload's item names this host

@@ -15,7 +15,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * An address's page reads as the Address-Edit board: which requests it answers, what it does about HTTPS and the
+ * An address's page reads as three questions: which requests it answers, what it does about HTTPS and the
  * headers it changes, each a section of its own, under a line saying what it serves and whether the name points here.
  *
  * @author Jelle De Loecker
@@ -33,7 +33,7 @@ class AddressEditJourneyTest extends HohenheimTestBase {
         assertThat(page.statusCode()).as("step 0: the address page renders").isEqualTo(200);
         String html = page.body();
 
-        // 1. Three sections, in the board's order: which requests, HTTPS, headers.
+        // 1. Three sections, in this order: which requests, HTTPS, headers.
         int requests = html.indexOf("data-section=\"" + HohenheimFormSections.ADDRESS_REQUESTS + "\"");
         int https = html.indexOf("data-section=\"" + HohenheimFormSections.ADDRESS_HTTPS + "\"");
         int headers = html.indexOf("data-section=\"" + HohenheimFormSections.ADDRESS_HEADERS + "\"");

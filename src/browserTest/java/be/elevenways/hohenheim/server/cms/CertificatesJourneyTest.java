@@ -111,7 +111,7 @@ class CertificatesJourneyTest extends HohenheimTestBase {
         assertThat(CertificateParts.stateCell(upload).detail().key()).as("step 1: an upload never renews itself")
             .isEqualTo("state_expiring_upload_detail");
         assertThat(adminGet("/admin/certificates?q=upload-" + suffix).body())
-            .as("step 1: its provider reads as an upload in words (DD10a)").containsPattern(">\\s*Uploaded\\s*<");
+            .as("step 1: its provider reads as an upload in words").containsPattern(">\\s*Uploaded\\s*<");
 
         // 2. An order not issued yet and an expired certificate say so.
         Row issuing = certificate("issuing-" + suffix, CertificateModel.STATUS_PENDING, 0, null,
@@ -119,16 +119,16 @@ class CertificatesJourneyTest extends HohenheimTestBase {
         StateLineCell issuingCell = CertificateParts.stateCell(issuing);
         assertThat(issuingCell.state()).as("step 2: not issued yet").isEqualTo("issuing");
         assertThat(issuingCell.label().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
-            .as("step 2: in the board's words").isEqualTo("Not issued yet");
+            .as("step 2: in plain words").isEqualTo("Not issued yet");
         Row expired = certificate("expired-" + suffix, CertificateModel.STATUS_ACTIVE, 0, -3,
             CertificateModel.CHALLENGE_HTTP, null);
         assertThat(CertificateParts.stateCell(expired).state()).as("step 2: expired").isEqualTo("expired");
         assertThat(adminGet("/admin/certificates?q=issuing-" + suffix).body())
-            .as("step 2: an order not issued yet has no expiry, and its cell says why (DD10a)")
+            .as("step 2: an order not issued yet has no expiry, and its cell says why")
             .contains("None - not issued yet");
 
         // 2b. The name's second line holds the names it covers besides its own, so a certificate named after its one
-        //     domain does not repeat it (DD10a).
+        //     domain does not repeat it.
         Row self = certificate("self-" + suffix, CertificateModel.STATUS_ACTIVE, 0, 80,
             CertificateModel.CHALLENGE_HTTP, null);
         self.set(CertificateModel.DOMAIN_NAMES_TEXT, "self-" + suffix);
@@ -161,7 +161,7 @@ class CertificatesJourneyTest extends HohenheimTestBase {
             proxy.stop();
         }
 
-        // 4. The list shows every certificate with its state, and the header offers the board's two ways to get
+        // 4. The list shows every certificate with its state, and the header offers the two ways to get
         //    one: "Get a certificate" (Let's Encrypt) beside "Upload a certificate", no generic "New certificate".
         String page = adminGet("/admin/certificates?q=" + suffix).body();
         assertThat(page).as("step 4: expiring").contains("data-state=\"expiring\"")

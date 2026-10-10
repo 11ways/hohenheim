@@ -32,7 +32,7 @@ import java.util.stream.Stream;
  * Minimal Docker Engine API client speaking HTTP/1.1 over a pluggable {@link DockerTransport}
  * -- a local unix socket by default, or a remote daemon over SSH, whose argv comes from
  * {@code HostKeys.sshArgv} so the pin is always enforced. The
- * foundation for Hohenext's container/app/database layer.
+ * foundation for the container, app and database layer.
  *
  * Each call opens a fresh connection with {@code Connection: close} (no keep-alive) and reads to
  * EOF, then decodes a chunked body if present. A per-request watchdog (in the transport) aborts
@@ -236,7 +236,7 @@ public class DockerClient {
      * own {@code /build} endpoint executes the tenant's Dockerfile INSIDE the daemon, as
      * root on the host, with the daemon's network and no quota of any kind -- it is the
      * control-plane trust domain by definition, which is precisely what the sandboxed
-     * builders wave exists to leave. Builds run in a hardened, quota-bound, daemonless
+     * builders exist to leave. Builds run in a hardened, quota-bound, daemonless
      * container ({@code server.build.BuildSandbox}) and their artifact arrives here as a
      * tar. Do not reintroduce /build: it has no sandbox to add.
      *

@@ -24,7 +24,7 @@ import java.util.List;
  * and additionally emits {@code DATABASE_URL}.
  *
  * AIDEV-NOTE: this is THE database-attachment table, and it used to have a site-keyed twin
- * ({@code site_databases}). Phase-0 brief 7 deleted that twin along with the record it hung
+ * ({@code site_databases}). The re-key deleted that twin along with the record it hung
  * off: a site runs nothing, so nothing can be injected into it. The owner may still differ
  * from the CONSUMER -- an application owns its links while its serving release consumes
  * them -- which {@code InstanceDatabaseNetworks} resolves, and which is why the link

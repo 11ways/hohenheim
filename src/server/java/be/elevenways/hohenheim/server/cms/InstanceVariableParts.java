@@ -31,7 +31,7 @@ import java.util.Objects;
  * AIDEV-NOTE: PLAIN_VALUE is not statically secret, so it is never a field column: the value cell is computed and
  * answers only for a kind {@link VariableKind#of} reads as plain (an unknown kind reads as secret), and SECRET_VALUE
  * is no column at all. Search and sort are on the key alone. No form, inline, write or reveal part: the list is the
- * unchanged read-only view, never an editor (stage 4 contract 10, A-G8, O07).
+ * unchanged read-only view, never an editor.
  *
  * @author Jelle De Loecker
  * @since  0.1.0

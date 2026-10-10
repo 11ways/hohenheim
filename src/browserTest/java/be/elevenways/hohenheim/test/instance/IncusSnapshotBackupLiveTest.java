@@ -55,7 +55,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * The Phase 4 gate's snapshot/backup half ON THE INCUS DRIVER, against the real remote
+ * Snapshots and backups ON THE INCUS DRIVER, against the real remote
  * daemon: a DEBIAN system container with a nightly snapshot schedule executed through
  * the real chain runner, a native snapshot-restore round trip (replace, not merge,
  * proven with in-container data over the host's own CLI), an off-host backup exported
@@ -65,7 +65,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  *
  * OFF-HOST is genuine here without a third machine: the instance runs on the REMOTE
  * Incus host and the filesystem target lives on this controller -- a directory on a
- * separate control-plane host, the plan's stated floor for a different failure domain
+ * separate control-plane host, the stated floor for a different failure domain
  * (unlike the Docker suite, whose instances share this machine and whose off-host
  * clause needs LiveOffHostBackupTest).
  */

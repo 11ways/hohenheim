@@ -43,8 +43,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * The sandbox against a REAL daemon: every isolation and quota claim of the builders
- * wave, asserted from INSIDE the running build and at the daemon, never from the spec
+ * The sandbox against a REAL daemon: every isolation and quota claim of the build
+ * sandbox, asserted from INSIDE the running build and at the daemon, never from the spec
  * that was sent.
  *
  * AIDEV-NOTE: these builds fetch a base image from the internet, because that is what a

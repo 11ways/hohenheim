@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Phase 0 / 0.9 route-ownership gate: the framework's generic revision-restore
+ * Route-ownership guard: the framework's generic revision-restore
  * endpoint bypasses the resource-layer enable checks, so a delegated tenant could
  * restore a formerly-enabled snapshot after another site took the hostname and
  * seize the route. The enable invariant now lives in the SiteModel write pipeline,

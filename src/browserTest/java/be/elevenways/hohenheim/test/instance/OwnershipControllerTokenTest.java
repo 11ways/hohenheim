@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * AIDEV-NOTE: record ids are allocated per DATABASE, so two controllers on one daemon both
  * own a "record #1". A guard that compares model+id alone attributes the other controller's
- * workload to this record -- the Incus claim did exactly that until this wave. Step 4 is
+ * workload to this record -- the Incus claim once did exactly that. Step 4 is
  * that collision staged against the real driver.
  */
 class OwnershipControllerTokenTest {

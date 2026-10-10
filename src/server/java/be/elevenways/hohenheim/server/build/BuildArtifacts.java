@@ -54,7 +54,7 @@ public final class BuildArtifacts {
     /**
      * Remove the artifacts of an owner's SUPERSEDED builds.
      *
-     * AIDEV-NOTE: this wave PRODUCES IMAGES, which makes it the most disk-hungry thing in
+     * AIDEV-NOTE: the build lane PRODUCES IMAGES, which makes it the most disk-hungry thing in
      * the product, and without this every build would leave its predecessor behind
      * forever. It is deliberately NOT a second reclaim mechanism: {@link DockerReclaim} is
      * scoped to stack-declared references and knows nothing about build artifacts, so

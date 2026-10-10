@@ -24,7 +24,7 @@ import java.util.Set;
 /**
  * WHERE a new instance lands, and who gets to decide.
  *
- * THE DECISION (2026-08-04, closing the plan's open "placement authority" item): a
+ * THE DECISION on "placement authority": a
  * tenant NEVER names a host. An operator names hosts by ADMITTING them and declaring a
  * posture; the control plane picks one from that declared set. A request-supplied
  * {@code server_id} is honoured for an ADMIN (who is the operator) and IGNORED
@@ -33,7 +33,7 @@ import java.util.Set;
  * take that would matter.
  *
  * THE ELIGIBLE SET IS DECIDED BEFORE THE SCORE, and it is decided by asking the DEPLOY
- * PATH'S OWN AUTHORITY (2026-08-07). This class used to re-state a subset of
+ * PATH'S OWN AUTHORITY. This class used to re-state a subset of
  * {@link HostAdmission#requireInstancePlacement} inline -- admission, posture, verified
  * identity -- which meant every gate added to the deploy path since was missing here, and
  * placement could CHOOSE a host whose deploy then refused by name (the kernel-truth gate
@@ -54,7 +54,7 @@ import java.util.Set;
  * caller-supplied {@code server_id} for an admin and returns it without ever walking
  * {@link #chooseForOwner}, so the check at the bottom of this file never ran for the one
  * actor who can name a host -- an admin could place a second tenant's workload onto a
- * dedicated machine and the deploy would accept it. The plan's clause says dedication is
+ * dedicated machine and the deploy would accept it. Dedication is
  * "enforced by the allocator, not operator memory"; a rule only the tenant path runs is
  * operator memory. In the gate it binds every lane, and this class keeps consulting the
  * gate rather than re-stating it.
@@ -69,8 +69,8 @@ import java.util.Set;
  * different question from the one the example asks in two independent ways. It is
  * BUDGET-BLIND: a 4 GB host holding nothing scores 0 and outranks a 128 GB host holding
  * 1 GB, so the example's own 128 GB machine loses to any idle small one. (It was also
- * blind to the host-user process tier's separate bucket, deleted with that lane in
- * phase-0 brief 6.) Nothing ever overspent -- the eligibility CEILING has always been
+ * blind to the host-user process tier's separate bucket, deleted with that
+ * lane.) Nothing ever overspent -- the eligibility CEILING has always been
  * {@link InstanceCapacity#bookableMbOn} and is unchanged -- but the fleet was packed onto
  * whichever machine happened to hold the fewest instance megabytes. The score is now the
  * same subtraction the ceiling and the {@code no_placement_capacity} refusal already
@@ -304,7 +304,7 @@ public final class InstancePlacement {
      * only when all refuse, so a VM-isolated Incus host that takes VMs reads as taking apps), with the owner of a
      * workload already there (a dedicated host takes its owner's apps), then the memory budget the chooser rations
      * against. An admitted host the chooser never picks (a stale memory reading) therefore never reads "Takes new
-     * apps" (DEP9: Starfleet's local host, measured 2026-08-29).
+     * apps" (as Starfleet's local host once did, measured 2026-08-29).
      *
      * @return the first refusal in the gate's own words, null when an ordinary new app could land here
      */

@@ -48,7 +48,7 @@ import java.util.function.Predicate;
 
 /**
  * The template catalog's two entries from shared parts: the operator's catalog on /admin and the tenant's approved
- * catalog on /manage (stage 4 contract 4.9: the tenant twin shares the reads and owns its form, list, scope and its
+ * catalog on /manage (the tenant twin shares the reads and owns its form, list, scope and its
  * create link).
  *
  * AIDEV-NOTE: approval is an EXPLICIT accountable operation, never a form field: it is the one act that makes a

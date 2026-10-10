@@ -1,4 +1,4 @@
-{#- Put something online: without a choice, what to put online (board Online-1: a stepper over grouped cards and
+{#- Put something online: without a choice, what to put online (a stepper over grouped cards and
     Continue); with one, the stepped wizard the framework draws for that PAGE action, submitted once to its run page.
     Its sections stand in plumage's page frame (pl-page), which spaces them; the shell does not frame a module page. -#}
 {% declare title: String %}

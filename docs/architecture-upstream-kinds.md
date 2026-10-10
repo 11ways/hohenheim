@@ -1,18 +1,15 @@
 # Upstream Kind Architecture
 
-## STATUS 2026-08-22 -- renamed and narrowed
+## Scope
 
-This document was `architecture-site-types.md` until the phase-0 upstream rename
-(`docs/phase0-design.md` section 3). The old `site_type` vocabulary answered TWO questions
-at once -- "where do requests go" and "what workload runs" -- and the second one moved to
-the INSTANCE kind. What survives here describes the first question only: a site has exactly
-one typed UPSTREAM and no opinion about how the thing upstream is run.
+An upstream kind answers one question: where do a site's requests go. What workload runs
+is the INSTANCE kind's question. A site has exactly one typed UPSTREAM and no opinion about
+how the thing upstream is run.
 
-Deleted with the rename, and no longer described below: the `docker`, `node`, `java`,
-`command`, `alchemy` and `dead` site types, `sites.source` / `sites.source_settings` (a git
-source is a property of the application or workspace instance a site exposes), and the
-site-databases and site-processes record subpages. Git history holds the old text
-(`git log --follow -- docs/architecture-upstream-kinds.md`).
+There are no workload site types (`docker`, `node`, `java`, `command`, `alchemy`, `dead`),
+no `sites.source` / `sites.source_settings` (a git source is a property of the application
+or workspace instance a site exposes), and no site-databases or site-processes record
+subpages.
 
 ## What an upstream kind is
 
@@ -31,7 +28,7 @@ extends the common-side `UpstreamKindInfo`
   is enforced once, in `SiteModel`'s before-validate hook.
 
 `managedProcessEnvironment()` still exists on `UpstreamKindHandler` and no shipped kind
-answers true: it survives only until the deletion wave removes its last two readers.
+answers true: it survives only until its last two readers are removed.
 
 ## Discovery: nothing is registered by hand
 
@@ -171,7 +168,7 @@ dev-namespace handlers set to opt into upstream `Location` rewriting.
 ## Admin UI -- the real story
 
 There is no hand-built site edit template. No `.hwk` file in the repo branches on the upstream kind; the
-`{% if siteType{:} == ... %}` design was never how this shipped. The site editor is a generated zenit-cms `PanelResource`
+site editor is a generated zenit-cms `PanelResource`
 whose `ResourceForm` is `SiteWrites.ADMIN_FORM` (`src/server/java/be/elevenways/hohenheim/server/cms/SiteParts.java`):
 
 ```java
@@ -192,24 +189,17 @@ derived dynamic `SchemaField` entry, which re-renders from the selected type's s
 That is why a new kind needs no UI work at all: declare labels/help via
 `HohenheimMicrocopy.HOHENHEIM_FIELD.of(...)`/`HohenheimMicrocopy.HELP.of(...)` on the schema fields and
 the form is done.
-The "future `<pl-schema-form>`" and "future `{% render templateId %}`" items from the old
-text are moot -- the framework's schema-driven form entry is what ships.
 
-**AMENDED 2026-08-12: the old text deferred THREE framework items, not two, and
-the third was dropped without a verdict.** The missing one is **"Zenit: JSON
-path query helper"** -- a portable API for querying inside a JSON `settings`
-column, wanted for operational questions like "find every site forwarding to
-host X", deferred in the original because manual per-dialect queries sufficed
-for v1. It is neither moot nor built: zenit's ORM exposes no JSON-path query
-helper today, so such a question still needs a hand-written per-backend
-predicate, which the no-raw-SQL rule makes awkward. Recording it OPEN rather
-than silently dropping it: it is a framework capability, so its home is zenit
-core (`common/orm/query`), not this app.
+**Open framework gap: a JSON path query helper.** Operational questions like
+"find every site forwarding to host X" need a portable API for querying inside
+a JSON `settings` column. Zenit's ORM exposes no JSON-path query helper, so such
+a question still needs a hand-written per-backend predicate, which the
+no-raw-SQL rule makes awkward. It is a framework capability, so its home is
+zenit core (`common/orm/query`), not this app.
 
 The list view filters and sorts on upstream kind, enabled and created-at. Everything that is not per-type lives on record subpages:
 domains, deployments, dev sessions, plus the framework-contributed subpages including the
-generic record-access tab. The databases and processes subpages were deleted with the
-rename.
+generic record-access tab.
 
 ## Cross-cutting concerns (identical for every type)
 
@@ -293,5 +283,4 @@ DECLARATIONS moved to `server/upstream/`. That split is deliberate for now -- th
 
 Multi-container deployments are the STACK tier, deliberately NOT an upstream kind -- a stack
 is infrastructure a proxy site points at, not a request handler. See
-`architecture-stacks.md`. Game/VM workloads are the INSTANCE tier; see
-`instance-tier-plan.md`.
+`architecture-stacks.md`. Game/VM workloads are the INSTANCE tier.

@@ -28,7 +28,7 @@ import java.util.Set;
  * AIDEV-NOTE: there is deliberately NO spec snapshot column. The pinned spec of every
  * release lives on its (retained) instance row's digest-pinned settings, which is what a
  * rollback deploys; copying it here would duplicate that authority AND leak the secret
- * environment map onto a derived surface (the phase 0.6 discipline).
+ * environment map onto a derived surface: secrets live only on the record that owns them.
  *
  * AIDEV-NOTE: {@link #OWNER_FINGERPRINT} vs {@link #SPEC_FINGERPRINT} is what makes a
  * rollback SURVIVE convergence: a succeeded rollback whose site_fingerprint still equals

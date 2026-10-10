@@ -44,10 +44,10 @@ import java.util.function.Consumer;
 /**
  * COLD migration of one instance between hosts, and the host DRAIN built on it.
  *
- * AIDEV-NOTE: THE migration-policy decision (2026-08-06, Phase 8 gate). Cold --
+ * AIDEV-NOTE: THE migration-policy decision. Cold --
  * stop, whole-instance export, import on the destination, start -- is the chosen
- * policy; live migration is REJECTED for now (recorded in the plan's Proxmox-use
- * inventory): incus stateful transfer needs migration.stateful set before start,
+ * policy; live migration is REJECTED for now:
+ * incus stateful transfer needs migration.stateful set before start,
  * CRIU for containers and matched CPU flags for VMs, plus a daemon-to-daemon trust
  * relationship this product deliberately does not hold. The TRANSPORT is
  * controller-mediated either way (daemon A -> controller staging -> daemon B) and
@@ -273,7 +273,7 @@ public final class InstanceMigrations {
         if (transport == null) {
             throw HohenheimViolations.instanceRefusal("migrate_unsupported", resolved.row(), null);
         }
-        // Device rows are UNMOVABLE this wave, refused by name: neither transport
+        // Device rows are UNMOVABLE for now, refused by name: neither transport
         // carries custom volumes (the native export skips them, the volume capture
         // reads only the DECLARED logical volumes), and the destination deploy's device
         // reconcile would attach FRESH EMPTY volumes -- a migration that "succeeds"
@@ -823,7 +823,7 @@ public final class InstanceMigrations {
         }
     }
 
-    /** Attached device rows of one instance; unmovable this wave, refused by name. */
+    /** Attached device rows of one instance; unmovable for now, refused by name. */
     private static long deviceCountOf(int instanceId) {
         return Models.get(InstanceDeviceModel.class).find()
             .where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))

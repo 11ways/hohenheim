@@ -324,7 +324,7 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
         //    coerce-then-validate pipeline, not this form's declaration; step 4 proves
         //    the name requirement is enforced too.
         //    The field's own tag is matched, not a fixed attribute run: zenit-forms marks a
-        //    required entry `required` between data-path and invalid (abcc211).
+        //    required entry `required` between data-path and invalid (zenit-forms abcc211).
         assertThat(empty.body())
             .as("the kind field is marked invalid")
             .containsPattern("<pl-field data-path=\"kind\"[^>]*\\sinvalid[\\s>=]");

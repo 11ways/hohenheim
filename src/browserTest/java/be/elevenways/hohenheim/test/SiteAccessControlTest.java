@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * refuse non-admins outright.
  *
  * AIDEV-NOTE: the site-keyed terminal WebSocket half (handshake 401, policy close 1008)
- * died with the host-user process lane in phase-0 brief 6. The surviving socket of that
+ * died with the host-user process lane. The surviving socket of that
  * shape is the INSTANCE console, which carries its own tests.
  */
 class SiteAccessControlTest extends HohenheimTestBase {
@@ -137,8 +137,8 @@ class SiteAccessControlTest extends HohenheimTestBase {
         assertAuthorizationRefusal(limitedPost(ApiSupport.requestCertificateTarget()),
             "step 2: so is requesting a certificate");
 
-        // AIDEV-NOTE: the managed-database dump is deliberately NOT admin-only any more
-        // (ccd1bd5): it is requiresLogin and answers to the per-database capability, and
+        // AIDEV-NOTE: the managed-database dump is deliberately NOT admin-only: it is
+        // requiresLogin and answers to the per-database capability, and
         // its URL is keyed by NAME, so absence and refusal are ONE answer -- a 403 here
         // would confirm which database names exist to any logged-in caller. What this
         // journey pins is that identity plus the state: refused, and no dump on the wire.

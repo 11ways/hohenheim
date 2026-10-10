@@ -79,7 +79,7 @@ class WorkspaceDeploysTabTest extends HohenheimTestBase {
     }
 
     /**
-     * The Deploys tab of a workspace reads as the App-Deploys board does (Starfleet's alchemy-skeleton, DEP8): a row
+     * The Deploys tab of a workspace reads in plain words: a row
      * that never reached a commit names its branch instead of the branch's first eight letters, a failure reads as a
      * sentence instead of a violation dump, states are words, and the live band says what serves now and why there
      * is no way back.

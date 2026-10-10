@@ -79,11 +79,11 @@ final class SiteActions {
     }
 
     /**
-     * The app's own address in a new tab, the record heading's first action (the board's Open site), offered only
+     * The app's own address in a new tab, the record heading's first action (Open site), offered only
      * while visitors reach it: the instance's twin passes {@link AppHealth#openUrlOfInstance}.
      *
-     * AIDEV-NOTE: hidden while the app is not serving (decided by Jelle, 2026-10-06 for BROKEN, widened by D7f to an
-     * app that cannot start or is stopped): a link to the error page visitors get offers nothing, and the health band
+     * AIDEV-NOTE: hidden while the app is not serving (broken, unable to start or
+     * stopped): a link to the error page visitors get offers nothing, and the health band
      * beside it carries the fix. It reads the verdict's own serving half (AppHealth), never a second check of what
      * "serving" means, for the operator and the tenant alike.
      *

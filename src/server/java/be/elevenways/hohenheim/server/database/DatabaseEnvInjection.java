@@ -21,7 +21,7 @@ import java.util.Map;
  * credentials are always current (nothing is ever baked into stored settings).
  *
  * AIDEV-NOTE: there used to be a second owner here, the SITE, over a second link table.
- * Phase-0 brief 7 deleted both: a site no longer runs anything, and the record that does --
+ * The re-key deleted both: a site no longer runs anything, and the record that does --
  * the application instance -- already had {@code instance_databases}. One owner means the
  * two lanes can no longer disagree about what a prefix normalizes to or when a database
  * counts as unresolved. A database that is not active-and-running

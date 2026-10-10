@@ -61,7 +61,7 @@ import java.util.function.Supplier;
  * {@link SecretResult}.
  *
  * AIDEV-NOTE: the management API lists keys per client only, so the child lists under its client through
- * {@code ChildStorePages} and creates through {@code createUnder} (C-3); outside a client the list asks nothing.
+ * {@code ChildStorePages} and creates through {@code createUnder}; outside a client the list asks nothing.
  * Enable and revoke are operations over the same remote calls the legacy row actions made.
  *
  * @author Jelle De Loecker

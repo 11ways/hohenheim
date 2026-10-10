@@ -166,9 +166,9 @@ class InstancePowerAuditTest {
                     + " operations are answerable")
                 .hasSize(2);
 
-            // 3b. The ERROR names what caused it (D12): the failed start is recorded as the cause, with the failure's
-            //     own message, and the dashboard item words it, never "exited unexpectedly". Since D13c its title says
-            //     the start failed, never that sentence twice; since D13f its detail is worded and the message is the
+            // 3b. The ERROR names what caused it: the failed start is recorded as the cause, with the failure's
+            //     own message, and the dashboard item words it, never "exited unexpectedly". Its title says
+            //     the start failed, never that sentence twice; its detail is worded and the message is the
             //     technical line under it.
             List<Row> causes = activityFor(id, HohenheimActivityAction.WORKLOAD_START_FAILED.id().toString());
             assertThat(causes).as("step 3b: the error's cause is recorded once").hasSize(1);
@@ -185,7 +185,7 @@ class InstancePowerAuditTest {
             assertThat(item.detail().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
                 .as("step 3b: in words that say what happened")
                 .isEqualTo("It never got to run.");
-            // The failure's own message is the technical line under those words (D13f), never the sentence itself.
+            // The failure's own message is the technical line under those words, never the sentence itself.
             assertThat(Objects.requireNonNull(item.note(), "step 3b: the item carries the technical line")
                     .resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
                 .as("step 3b: the technical line is the failure's own message")

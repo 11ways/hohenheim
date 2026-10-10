@@ -187,7 +187,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
     }
 
     /**
-     * The whole point of the wave: an operator opens an instance, sees a Devices tab,
+     * The whole point of the Devices tab: an operator opens an instance, sees a Devices tab,
      * attaches a disk, grows it, and detaches it -- and every one of those acts lands at
      * the DAEMON, not merely in a row.
      */
@@ -197,7 +197,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         String handle = handleOf(instanceId);
         String device = NAME_PREFIX + "data";
 
-        // 1. The tab EXISTS and offers both attach affordances. Before this wave there
+        // 1. The tab EXISTS and offers both attach affordances. Before this tab there
         //    was no page, no link and no route that could write a device row at all.
         HttpResponse<String> tab = adminGet("/admin/instances/" + instanceId + "/page/devices");
         assertThat(tab.statusCode())
@@ -430,7 +430,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
      * at the daemon.
      *
      * AIDEV-NOTE: written 2026-08-13 because there was none, while
-     * docs/proxmox-use-inventory.md claimed the surface test asserted "every refusal lane
+     * an earlier audit claimed the surface test asserted "every refusal lane
      * (capability, quota, daemon)". Step 1 of
      * {@link #everyRefusalIsNamedAndLeavesNoPartialDeviceRow} is {@code devices_unsupported},
      * which is a DRIVER capability on a docker kind -- not an authorization decision -- so

@@ -1,4 +1,4 @@
-{#- One count tile of the admin dashboard (board Main): the count under what it counts, the line saying what the count
+{#- One count tile of the admin dashboard: the count under what it counts, the line saying what the count
     holds ("3 live, 1 with a problem") and the whole tile a link to the list it counts. The words arrive resolved
     (DashboardStat); a tile with no fact behind a line draws none. -#}
 {% declare widget: WidgetInstance %}

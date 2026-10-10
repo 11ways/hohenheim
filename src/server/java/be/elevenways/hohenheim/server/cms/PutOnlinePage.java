@@ -42,9 +42,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * "Put something online" (boards Online-1 to Online-4): first what, then the wizard for it, then its run page.
+ * "Put something online": first what, then the wizard for it, then its run page.
  *
- * AIDEV-NOTE: the chooser is the board's step "What". A template opens {@link PutOnline#PUT_ONLINE} over that template
+ * AIDEV-NOTE: the chooser is the step "What". A template opens {@link PutOnline#PUT_ONLINE} over that template
  * ({@code ?template=}); an address kind opens {@link PutOnline#PUT_ADDRESS_ONLINE} with the kind preset
  * ({@code ?kind=}). Both forms are the framework's stepped PAGE document, and both operations run in the background,
  * so a submit lands on the run page ("Going live"). Workloads without a template (a Git app, a container image, a Linux

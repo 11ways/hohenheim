@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * then serves a value back.
  *
  * AIDEV-NOTE: the assertion here is HEADROOM ({@code memory.peak} against the cap), and
- * two earlier waves disagreed about what to assert instead. Read this before changing it.
+ * earlier versions disagreed about what to assert instead. Read this before changing it.
  *
  * The flake it defends against is real and was observed twice: at a cap below its peak an
  * engine spends its whole init pinned against the ceiling, and under the parallel

@@ -29,7 +29,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The Access pages read the way the Access boards do: a list by what it lets in and where it is used, the blocked
+ * The Access pages read by what an operator asks of them: a list by what it lets in and where it is used, the blocked
  * addresses that are blocked now, and the sign-in providers beside people in one Access area.
  *
  * @author Jelle De Loecker
@@ -69,8 +69,8 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
             .as("step 3: an unused list says nothing uses it").contains("Nothing uses this list yet");
 
         // 4. The lists page says what a list is for, and makes a list through its one header action: no quick-add bar
-        //    beside the search (board Access-List).
-        assertThat(lists).as("step 4: the lead reads as the board").contains("Who may reach a protected path");
+        //    beside the search.
+        assertThat(lists).as("step 4: the lead says what a list is for").contains("Who may reach a protected path");
         assertThat(lists).as("step 4: no quick-add bar").doesNotContain("data-cms-quick-add-open");
     }
 
@@ -96,7 +96,7 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
             .containsPattern("\\bAddress\\b").containsPattern("\\bBy\\b").containsPattern("\\bUntil\\b");
 
         // 2. An automatic block stored with the old score line reads as what tipped it in the current style, from its
-        //    stored event type: never as a score, never as "Went over the limit for" (DEP10, 08b).
+        //    stored event type: never as a score, never as "Went over the limit for".
         String legacyRow = now.substring(now.indexOf("203.0.113.43"));
         assertThat(legacyRow.substring(0, Math.min(legacyRow.length(), 1500)))
             .as("step 2: the old score line reads as its event, without a count it never recorded")
@@ -111,19 +111,19 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
             .contains("Automatic").doesNotContain(">auto<");
 
         // 3. The page is the blocked addresses, blocked through its one header action and its form; no quick-add
-        //    bar (board Access-Blocked).
-        assertThat(now).as("step 3: named as the board names it").contains("Blocked addresses");
+        //    bar.
+        assertThat(now).as("step 3: named Blocked addresses").contains("Blocked addresses");
         assertThat(now).as("step 3: the header action").contains("Block an address");
         assertThat(now).as("step 3: no quick-add bar").doesNotContain("data-cms-quick-add-open");
         assertThat(now).as("step 3: the old words are gone").doesNotContain("IP bans");
 
-        // 4. A block without an expiry holds until it is lifted, and says so; the row action is the board's "Lift".
+        // 4. A block without an expiry holds until it is lifted, and says so; the row action reads "Lift".
         assertThat(now).as("step 4: no expiry reads as until lifted").contains("Until lifted");
         assertThat(now).as("step 4: the row action reads Lift").contains("Lift").doesNotContain("Lift ban");
         assertThat(now).as("step 4: a block that holds offers its Lift").contains("lift_ban");
 
         // 5. A block past its expiry that the sweep has not cleared yet (stored active) is not blocked now: one
-        //    definition answers the filter, the state cell and Lift (DEP9: listed under "Blocked now" as Expired,
+        //    definition answers the filter, the state cell and Lift (once listed under "Blocked now" as Expired,
         //    with Lift offered).
         Row expired = ban("203.0.113.45", "Held until a minute ago", true);
         expired.set(BanModel.EXPIRES_AT, Now.instant().minus(Duration.ofMinutes(1)));
@@ -140,7 +140,7 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
             .doesNotContain("203.0.113.41");
         assertThat(notBlocked).as("step 5: and no block there offers Lift, the expired one included")
             .doesNotContain("lift_ban");
-        // 5b. A lifted block's "Until" is when it was lifted, never the expiry it no longer has (DD10a).
+        // 5b. A lifted block's "Until" is when it was lifted, never the expiry it no longer has.
         Row lifted = Models.get(BanModel.class).find().where(BanModel.IP.eq("203.0.113.42")).first();
         Instant liftedAt = lifted.get(BanModel.LIFTED_AT);
         Instant formerExpiry = lifted.get(BanModel.EXPIRES_AT);
@@ -150,7 +150,7 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
             .doesNotContain("datetime=\"" + formerExpiry + "\"");
 
         // 5c. With no miss in the past hour the Recent misses card says so in one sentence, with no stray "Unknown"
-        //     beside it (DD10a: the empty state was a fact without a value).
+        //     beside it (the empty state used to be a fact without a value).
         Duration offset = Now.offset();
         Now.setOffset(offset.plus(BanParts.RECENT_MISSES).plusMinutes(1));
         String quiet;
@@ -165,7 +165,7 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
             .contains("No address asked for a name this server does not serve in the past hour")
             .doesNotContain("widget-fact-empty").doesNotContain("Unknown");
 
-        // 6. Recent misses (board Access-Blocked): the threat scorer's requests for names this server does not serve,
+        // 6. Recent misses: the threat scorer's requests for names this server does not serve,
         //    one line per address, the most recent names first and the rest counted.
         String scanner = "198.51.100." + (100 + (int) (Math.random() * 100));
         HohenheimSecurity.scorer().recordMiss(scanner, "admin.example.net");
@@ -215,7 +215,7 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
         assertThat(providers).as("step 2: one list's rule uses the provider").contains("1 place");
         assertThat(providers).as("step 2: an unused provider says so").contains("Not used yet");
 
-        // 3. The providers are named as the board names them.
+        // 3. The providers tab reads Sign-in providers.
         assertThat(access).as("step 3: the tab reads sign-in providers").contains("Sign-in providers")
             .doesNotContain("Auth providers");
     }

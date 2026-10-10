@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Hermetic on purpose, unlike {@code ContainerHardeningTest} (which is the live lane's
  * proof that the baseline reaches a real kernel). This rule is a pure decision about a
  * HostConfig map, and it is the only rule that says yes to a shape the policy refused
- * outright until phase-0 brief 7 -- so it needs a test that runs on every machine, every
+ * outright before the instance re-key -- so it needs a test that runs on every machine, every
  * time, not one that skips wherever no Docker socket exists.
  *
  * AIDEV-NOTE: every case drives the PUBLIC {@code applyTo}, never the package-private rule
