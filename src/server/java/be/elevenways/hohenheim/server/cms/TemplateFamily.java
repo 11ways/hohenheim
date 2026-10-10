@@ -76,7 +76,7 @@ record TemplateFamily(@NonNull String name, @NonNull List<Row> members) {
      */
     @NonNull Microcopy cardLine() {
         if (InstanceTemplateModel.SOURCE_STARTER.equals(this.current().get(InstanceTemplateModel.SOURCE))) {
-            return HohenheimMicrocopy.PUT_ONLINE.of(cardKey(this.name)).withFilter("target", "card")
+            return HohenheimMicrocopy.PUT_ONLINE.of(cardKey(this.name), "card")
                 .withFallback(this.description());
         }
         return Microcopy.literal(this.description());

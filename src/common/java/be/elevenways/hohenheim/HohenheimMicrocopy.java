@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.MicrocopyScope;
 import be.elevenways.protoblast.common.util.BlastString;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * The single home of every catalog scope Hohenheim's microcopy ships under, one constant per scope.
@@ -15,7 +17,9 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * as a key factory. Labels ship under Hohenheim's own scopes, never plumage's {@code field} or {@code nav}: two
  * modules declaring one (key, filters) identity keep only one text. Activity copy ships under {@link #HOHENHEIM},
  * never core's {@code activity} scope; violations keep their own scope rather than core's ValidationMicrocopy one, so
- * a Hohenheim entry never shadows a core validation message. The framework's later scoped-copy factory replaces this.
+ * a Hohenheim entry never shadows a core validation message. Each constant holds protoblast's {@link MicrocopyScope}
+ * for its scope, so the filter names are the framework's and a framework API taking a scope (a task's
+ * {@code labelIn}) receives {@link #copy()}.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -56,19 +60,32 @@ public enum HohenheimMicrocopy {
     VARIABLE_TYPE_DESCRIPTION, VIOLATIONS,
     VOLUME_BACKEND, WEBHOOK_OUTCOME;
 
-    private final String scope;
+    private final MicrocopyScope copy;
 
     HohenheimMicrocopy() {
-        this.scope = BlastString.lower(this.name());
+        this.copy = MicrocopyScope.named(BlastString.lower(this.name()));
     }
 
     /** @return the scope filter value this constant's catalog entries carry */
     public @NonNull String scope() {
-        return this.scope;
+        return this.copy.scope();
+    }
+
+    /** @return the framework factory of this scope, for an API that takes a {@link MicrocopyScope} */
+    public @NonNull MicrocopyScope copy() {
+        return this.copy;
     }
 
     /** @return the key under this scope, ready for its args */
     public @NonNull Microcopy of(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", this.scope);
+        return this.copy.of(key);
+    }
+
+    /**
+     * @param target what the copy is for inside this scope, or null for the scope's untargeted entry
+     * @return the key under this scope narrowed to the target
+     */
+    public @NonNull Microcopy of(@NonNull String key, @Nullable String target) {
+        return this.copy.of(key, target);
     }
 }

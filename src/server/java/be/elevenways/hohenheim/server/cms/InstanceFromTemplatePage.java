@@ -77,7 +77,7 @@ public final class InstanceFromTemplatePage extends PanelPage {
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", HohenheimMicrocopy.INSTANCE_TEMPLATE.of("create_instance")
-            .resolve(request.conduit().getLocales(), request.conduit().getMessageResolver()));
+            .asString(request.conduit()));
         PageActions.Opened opened = PageActions.open(request, this, CREATE.id());
         if (opened instanceof PageActions.Form form) {
             Row template = (Row) form.subject();

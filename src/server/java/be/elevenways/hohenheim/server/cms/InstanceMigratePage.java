@@ -124,7 +124,7 @@ public final class InstanceMigratePage implements RecordTab.Rendered<Row> {
                 destination.name(),
                 destination.eligible(),
                 destination.refusal() == null ? ""
-                    : destination.refusal().resolve(conduit.getLocales(), conduit.getMessageResolver()),
+                    : destination.refusal().asString(conduit),
                 destination.bookableMb() > 0,
                 destination.bookedMb(),
                 destination.bookableMb(),

@@ -138,7 +138,7 @@ public final class CmsSupport {
      */
     public static @Nullable String resolvedText(@NonNull Microcopy copy) {
         Conduit conduit = RouteScope.currentConduit();
-        return conduit == null ? null : copy.resolve(conduit.getLocales(), conduit.getMessageResolver());
+        return conduit == null ? null : copy.asString(conduit);
     }
 
     /**
@@ -228,7 +228,7 @@ public final class CmsSupport {
     public static @NonNull String pageTitle(@NonNull Conduit conduit, @NonNull HohenheimMicrocopy scope,
                                             @Nullable Object name) {
         return scope.of("page_title").withArg("name", String.valueOf(name))
-            .resolve(conduit.getLocales(), conduit.getMessageResolver());
+            .asString(conduit);
     }
 
     /**
@@ -351,5 +351,18 @@ public final class CmsSupport {
             return (PanelResource<Row>) entry;
         }
         throw new IllegalStateException("panel '" + panel.slug() + "' declares no row entry '" + slug + "'");
+    }
+
+    /**
+     * {@link #declaredRowEntry} when the panel also admits this viewer to it ({@link Panel#admits}, the judgement the
+     * entry's own routes and a child list's sections make), so a page that links into it never draws a link that
+     * would answer "page not found": the /manage panel declares no twin of several admin-only entries.
+     *
+     * @return null when the panel declares no such entry or refuses this viewer
+     */
+    public static @Nullable PanelResource<Row> admittedRowEntry(@NonNull Panel panel, @NonNull String slug,
+                                                                @NonNull AccessContext access) {
+        PanelResource<Row> entry = declaredRowEntry(panel, slug);
+        return entry != null && panel.admits(entry, access) ? entry : null;
     }
 }

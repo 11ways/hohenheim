@@ -1,6 +1,6 @@
 {#- Volumes tab on a volume-mounting instance: each declared host directory with its
     container path, quota, observed usage and exclusivity, linking into the
-    (nav-hidden) volume resource forms. -#}
+    (nav-hidden) volume resource forms where this panel declares them. -#}
 {% declare title: String %}
 {% declare instanceId: Integer %}
 {% declare instanceName: String %}
@@ -31,7 +31,7 @@
             {% each volumes as index, volume %}
             <pl-table-row>
                 <pl-table-cell>
-                    {% if addVolumeTarget %}<a use:Zenit.route={% volume.get("editTarget") %}>{{ volume.get("name") }}</a>{% else %}{{ volume.get("name") }}{% /if %}
+                    {% if volume.get("editTarget") %}<a use:Zenit.route={% volume.get("editTarget") %}>{{ volume.get("name") }}</a>{% else %}{{ volume.get("name") }}{% /if %}
                 </pl-table-cell>
                 <pl-table-cell><code>{{ volume.get("containerPath") }}</code></pl-table-cell>
                 <pl-table-cell>

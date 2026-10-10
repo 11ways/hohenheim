@@ -667,7 +667,7 @@ public final class DatabaseParts {
     /** The muted line under a database's name: its shared engine and host, or its own container's host. */
     private static @NonNull String runsOnCell(@NonNull Row database, @NonNull PanelRequest request) {
         Conduit conduit = request.conduit();
-        return DatabaseOverview.runsOn(database).resolve(conduit.getLocales(), conduit.getMessageResolver());
+        return DatabaseOverview.runsOn(database).asString(conduit);
     }
 
     /**
@@ -714,8 +714,8 @@ public final class DatabaseParts {
                 HohenheimMicrocopy.DATABASE_LIST.of("engine_on_host")
                     .withArg("engine", CmsSupport.enumValueLabel(DatabaseEngineModel.ENGINE,
                         String.valueOf((Object) engine.get(DatabaseEngineModel.ENGINE)))).withArg("host", host)
-                    .resolve(conduit.getLocales(), conduit.getMessageResolver()),
-                holds.resolve(conduit.getLocales(), conduit.getMessageResolver()),
+                    .asString(conduit),
+                holds.asString(conduit),
                 CmsRoutes.open(panelSlug, HohenheimSlugs.DATABASE_ENGINES, id).toUrl()));
         }
         WidgetInstance card = new WidgetInstance(CardWidget.ID,

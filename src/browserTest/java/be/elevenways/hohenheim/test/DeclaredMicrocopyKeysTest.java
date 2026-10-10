@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.source.GitProviderKindRegistry;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
+import be.elevenways.protoblast.common.i18n.MicrocopyFilter;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
@@ -58,7 +59,9 @@ class DeclaredMicrocopyKeysTest {
             // The helpers' own files only FORWARD their parameters; they declare no key.
             .excluding("HohenheimMicrocopy.java", "HohenheimViolations.java", "HohenheimCounts.java");
         for (HohenheimMicrocopy scope : HohenheimMicrocopy.values()) {
-            scan.factory("HohenheimMicrocopy." + scope.name() + ".of", List.of("scope=" + scope.scope()), List.of());
+            // The literal after the key, when given, is the copy's target (HohenheimMicrocopy.of(key, target)).
+            scan.factory("HohenheimMicrocopy." + scope.name() + ".of", List.of("scope=" + scope.scope()),
+                List.of(MicrocopyFilter.TARGET.filterName()));
         }
         return scan
             // An operation on an instance refused, the instance named.
@@ -70,6 +73,8 @@ class DeclaredMicrocopyKeysTest {
             .factory("HohenheimCounts.of", List.of("scope=" + HohenheimMicrocopy.COUNT.scope()), List.of())
             // zenit-cms's own words (a "Delete" label) Hohenheim reads under that module's scope.
             .factory("CmsMicrocopy.of", List.of("scope=" + CmsMicrocopy.SCOPE), List.of())
+            .factory("CmsMicrocopy.COPY.of", List.of("scope=" + CmsMicrocopy.SCOPE),
+                List.of(MicrocopyFilter.TARGET.filterName()))
             .factory(JavaMicrocopyKeys.MICROCOPY_OF);
     }
 
@@ -117,7 +122,7 @@ class DeclaredMicrocopyKeysTest {
     @Test
     void everyTaskAndKindReadsAsWordsInBothLanguages() {
         // 1. Every task's label ships in en and nl: the framework's own coverage, since the key is the task's id path
-        //    (HohenheimTasks.label), which no literal-key scan sees.
+        //    (ScheduledTask.labelIn), which no literal-key scan sees.
         TaskLabelCoverage.requireShipped(21, Path.of("src/server/java"), Path.of("src/common/java"));
 
         // 2. Every production kind's name and description ship in en and nl, for the instance, upstream, git provider,

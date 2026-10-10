@@ -15,8 +15,12 @@ import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
+import be.elevenways.zenit.cms.common.resource.ResourceVerb;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.server.panel.PanelRowLinks;
+import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -36,6 +40,11 @@ import java.util.Map;
  * Volumes tab on a volume-mounting instance: each declared host directory with its
  * container path, quota, observed usage and exclusivity, linking into the (nav-hidden)
  * volume resource forms -- the InstanceDevicesPage shape over {@link InstanceVolumes}.
+ *
+ * AIDEV-NOTE: the tab is shared by /admin and /manage, but only /admin declares the volume
+ * resource (a read-only /manage twin is planned with the ChildList conversion). Every link
+ * therefore asks the CURRENT panel for the entry and its admission first, and a panel
+ * without one draws the volumes as plain rows.
  */
 public final class InstanceVolumesTab implements RecordTab.Rendered<Row> {
 
@@ -67,12 +76,11 @@ public final class InstanceVolumesTab implements RecordTab.Rendered<Row> {
 
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
-        return body(request.conduit(), request.access(), instance, request.panelSlug());
-    }
-
-    @NonNull ActionResult<?> body(@NonNull Conduit conduit, @NonNull AccessContext accessContext,
-                                  @NonNull Row instance, @NonNull String panel) {
+        Conduit conduit = request.conduit();
+        AccessContext accessContext = request.access();
         Integer instanceId = instance.get(InstanceModel.ID);
+        PanelResource<Row> volumeEntry = CmsSupport.admittedRowEntry(request.panel(), HohenheimSlugs.INSTANCE_VOLUMES,
+            accessContext);
 
         List<Map<String, Object>> volumes = new ArrayList<>();
         for (Row volume : InstanceVolumes.declaredFor(instanceId)) {
@@ -90,8 +98,8 @@ public final class InstanceVolumesTab implements RecordTab.Rendered<Row> {
                 Boolean.TRUE.equals(volume.get(InstanceVolumeModel.EXCLUSIVE)));
             Object observedAt = volume.get(InstanceVolumeModel.OBSERVED_AT);
             entry.put("observedAtIso", observedAt != null ? observedAt.toString() : "");
-            entry.put("editTarget", CmsRoutes.detail(panel, HohenheimSlugs.INSTANCE_VOLUMES,
-                volume.get(InstanceVolumeModel.ID)));
+            // The volume list's own row front door, so a volume links exactly where its list row would.
+            entry.put("editTarget", volumeEntry != null ? PanelRowLinks.target(request, volumeEntry, volume) : null);
             volumes.add(entry);
         }
 
@@ -101,13 +109,17 @@ public final class InstanceVolumesTab implements RecordTab.Rendered<Row> {
         vars.put("instanceId", instanceId);
         vars.put("instanceName", instance.get(InstanceModel.NAME));
         vars.put("volumes", volumes);
-        boolean canEdit = HohenheimAccess.isAdmin(accessContext)
-            || HohenheimAccess.hasInstanceCapability(
-                accessContext, instanceId, HohenheimCapabilities.CONFIG);
+        // The resource's create verb (offered and permitted, as its own list asks) AND the instance's config
+        // capability, which the volume resource's authority does not ask for a create.
+        boolean canEdit = volumeEntry != null
+            && ResourceVerbs.offers(volumeEntry, ResourceVerb.CREATE)
+            && ResourceVerbs.mayCreate(request, volumeEntry, accessContext)
+            && (HohenheimAccess.isAdmin(accessContext)
+                || HohenheimAccess.hasInstanceCapability(accessContext, instanceId, HohenheimCapabilities.CONFIG));
         // Gated on the SAME boolean the template's {% if %} uses: a declared template
         // variable is serialized into the hydration payload whether or not any element
         // renders it (the InstanceDevicesPage lesson).
-        vars.put("addVolumeTarget", canEdit ? newVolumeTarget(panel, instanceId) : null);
+        vars.put("addVolumeTarget", canEdit ? newVolumeTarget(request.panelSlug(), instanceId) : null);
         vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_VOLUMES, vars);
     }

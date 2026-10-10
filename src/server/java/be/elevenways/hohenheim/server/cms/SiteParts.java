@@ -259,7 +259,7 @@ public final class SiteParts {
             .filter(FilterSpec.leaf(SiteModel.CREATED_AT, CoreTypes.BETWEEN, CoreTypes.GTE, CoreTypes.LTE)
                 .label(FieldLabels.labelFor(SiteModel.CREATED_AT)).build())
             .filter(FilterSpec.globalLeaf(ResourceList.ARCHIVED_FILTER,
-                CmsMicrocopy.of("trashed").withFilter("target", "filter"),
+                CmsMicrocopy.COPY.of("trashed", "filter"),
                 ResourceList.ARCHIVED_FILTER, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE).build())
             .defaultSort(SortSpec.desc(SiteModel.CREATED_AT.getName()))
             .rowClasses(row -> Boolean.TRUE.equals(row.get(SiteModel.ENABLED)) ? "" : "hh-site-disabled")

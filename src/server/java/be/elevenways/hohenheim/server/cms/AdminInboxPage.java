@@ -74,7 +74,7 @@ public final class AdminInboxPage extends PanelPage {
             CommsInbox.itemsFor(conduit, window.pageSize(), window.offset());
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", label().resolve(conduit.getLocales(), conduit.getMessageResolver()));
+        vars.put("title", label().asString(conduit));
         vars.put("lead", description());
         vars.put("items", items);
         vars.put("markAllTarget", CommsInbox.markAllTarget(conduit));

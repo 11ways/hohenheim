@@ -47,7 +47,7 @@ public class CheckForeignKeys extends ScheduledTask {
 
     @Override
     public @NonNull Microcopy label() {
-        return HohenheimTasks.label(this);
+        return this.labelIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

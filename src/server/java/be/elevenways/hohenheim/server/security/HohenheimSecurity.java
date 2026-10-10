@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
+import be.elevenways.protoblast.common.i18n.MicrocopyFilter;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
@@ -178,8 +179,8 @@ public final class HohenheimSecurity {
             return null;
         }
         Microcopy cause = type == null ? null : EVENT_CAUSES.get(type);
-        return cause != null ? cause.withFilter("target", UNCOUNTED)
-            : HohenheimMicrocopy.BAN_CAUSE.of("other_event").withFilter("target", UNCOUNTED)
+        return cause != null ? cause.withFilter(MicrocopyFilter.TARGET.filterName(), UNCOUNTED)
+            : HohenheimMicrocopy.BAN_CAUSE.of("other_event", UNCOUNTED)
                 .withArg("event", labelOf(type));
     }
 

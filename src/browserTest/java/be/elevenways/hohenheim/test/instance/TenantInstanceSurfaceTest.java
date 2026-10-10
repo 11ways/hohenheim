@@ -6,11 +6,14 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.InstanceVolumeModel;
+import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -142,6 +145,20 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         row.set(InstanceModel.KIND, "hohenheim:docker_container");
         row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
             Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
+        row.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+        instances.save(row);
+        return row.get(InstanceModel.ID);
+    }
+
+    /** A workspace, a kind that mounts declared volumes, on the seeded runtime image its kind requires. */
+    private static int workspace(String name) {
+        Model instances = Models.get(InstanceModel.class);
+        Row row = instances.createEmptyRow();
+        row.set(InstanceModel.NAME, name);
+        row.set(InstanceModel.KIND, "hohenheim:workspace");
+        row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of()));
+        Row image = Models.get(RuntimeImageModel.class).find().where(RuntimeImageModel.NAME.eq("node-22")).first();
+        row.set(InstanceModel.RUNTIME_IMAGE_ID, image == null ? null : image.get(RuntimeImageModel.ID));
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
         instances.save(row);
         return row.get(InstanceModel.ID);
@@ -809,6 +826,52 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
                 .contains(marker);
         } finally {
             logs.find().where(InstanceLogModel.INSTANCE_ID.eq(consoleInstanceId)).delete();
+        }
+    }
+
+    /**
+     * The Volumes tab is shared by both panels, but only /admin declares the volume resource: a tenant holding the
+     * instance's config capability read every volume as a link into /manage/instance-volumes, plus an Add button
+     * into the same missing resource, and both answered "page not found".
+     */
+    @Test
+    void theVolumesTabDrawsNoLinkIntoAResourceThePanelLacks() throws Exception {
+        int workspaceId = workspace(PREFIX + "volumes");
+        Integer volumeId = InstanceVolumes.declare(workspaceId, "data", "/srv/" + PREFIX + "data", null, false)
+            .get(InstanceVolumeModel.ID);
+        String tab = "/instances/" + workspaceId + "/page/" + HohenheimSlugs.Tab.VOLUMES;
+        String volumes = "/" + HohenheimSlugs.INSTANCE_VOLUMES;
+
+        try {
+            RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, workspaceId,
+                HohenheimCapabilities.MANAGE, true);
+            RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, workspaceId,
+                HohenheimCapabilities.CONFIG, true);
+
+            // 1. POSITIVE ANCHOR: the operator's tab links the volume into its resource and offers the add, so the
+            //    absences below are about the panel, not a tab that renders no links at all.
+            assertThat(adminGet("/admin" + tab).body())
+                .as("step 1: the operator's volume links into /admin's volume resource, with an add")
+                .contains("/admin" + volumes + "/" + volumeId)
+                .contains("add-volume-link");
+
+            // 2. The tenant's tab renders and lists the same volume.
+            HttpResponse<String> tenant = tenantGet("/manage" + tab);
+            assertThat(tenant.statusCode()).as("step 2: the config delegate opens the Volumes tab").isEqualTo(200);
+            assertThat(tenant.body()).as("step 2: and reads the declared volume").contains("/srv/" + PREFIX + "data");
+
+            // 3. The /manage panel declares no volume resource, so the route the old link named is dead...
+            assertThat(tenantGet("/manage" + volumes + "/" + volumeId).statusCode())
+                .as("step 3: /manage has no volume resource to open").isEqualTo(404);
+
+            // 4. ...and the tab draws neither a link into it nor an Add button leading there.
+            assertThat(tenant.body())
+                .as("step 4: no link into the missing /manage volume resource")
+                .doesNotContain("/manage" + volumes)
+                .doesNotContain("add-volume-link");
+        } finally {
+            Models.get(InstanceVolumeModel.class).find().where(InstanceVolumeModel.INSTANCE_ID.eq(workspaceId))
+                .delete();
         }
     }
 

@@ -181,6 +181,13 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
             .as("step 4: and its lead sentence stands in the shared record heading")
             .contains("data-cms-tab-lead")
             .contains("Each attached database injects its connection variables");
+        // The first column is headed by the field's label like its siblings, never the record noun "database" a
+        // sentence embeds in lower case.
+        String fromHead = tab.body().substring(tab.body().indexOf("<pl-table-head"));
+        assertThat(fromHead.substring(fromHead.indexOf('>') + 1, fromHead.indexOf("</pl-table-head>"))
+            .replaceAll("<[^>]*>", "").trim())
+            .as("step 4: the first column header is the capitalised field label")
+            .isEqualTo("Database");
         var detail = adminGet(CmsRoutes.detail("admin", "databases", databaseId).toUrl());
         assertThat(detail.statusCode()).isEqualTo(200);
         assertThat(detail.body())

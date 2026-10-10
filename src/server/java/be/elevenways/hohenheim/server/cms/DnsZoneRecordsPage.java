@@ -360,12 +360,12 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
             catch (RuntimeException e) {
                 notice = HohenheimMicrocopy.DNS_REMOTE.of("peer_unreachable")
                     .withArg("message", String.valueOf(e.getMessage()))
-                    .resolve(conduit.getLocales(), conduit.getMessageResolver());
+                    .asString(conduit);
             }
         }
         else {
             notice = HohenheimMicrocopy.DNS_REMOTE.of("peer_not_configured")
-                .resolve(conduit.getLocales(), conduit.getMessageResolver());
+                .asString(conduit);
         }
 
         if (!reachable) {

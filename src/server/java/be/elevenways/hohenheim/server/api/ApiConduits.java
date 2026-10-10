@@ -182,7 +182,7 @@ public final class ApiConduits {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("code", violation.message().key());
         row.put("message", violation.message()
-            .resolve(conduit.getLocales(), conduit.getMessageResolver()));
+            .asString(conduit));
         // The PATH, never the field name: it carries nesting, indices and locale prefixes
         // (settings.forward_port), which is what a caller needs to find its own input. A
         // form-level violation has none, and then there is no field key at all.

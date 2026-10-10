@@ -35,7 +35,7 @@ final class DatabaseConnectionCard {
         facts.put("engine", Objects.toString(database.get(DatabaseModel.ENGINE), ""));
         // What the database does (DatabaseVerdict, its sentence form), never the stored lifecycle token.
         facts.put("status", Labels.inSentence(DatabaseVerdict.ofDatabase(database).state().label())
-            .resolve(conduit.getLocales(), conduit.getMessageResolver()));
+            .asString(conduit));
         facts.put("dbName", Objects.toString(database.get(DatabaseModel.DB_NAME), ""));
         facts.put("dbUser", Objects.toString(database.get(DatabaseModel.DB_USER), ""));
         facts.put("dbPassword", Objects.toString(database.get(DatabaseModel.DB_PASSWORD), ""));

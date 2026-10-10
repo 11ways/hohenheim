@@ -65,7 +65,7 @@ public final class WithheldFailure {
         boolean delegated = CmsSupport.isDelegatedPanel(conduit);
         String withheld = delegated
             ? HohenheimMicrocopy.DELEGATED.of("failure_withheld")
-                .resolve(conduit.getLocales(), conduit.getMessageResolver())
+                .asString(conduit)
             : "";
         return new WithheldFailure(delegated, withheld);
     }

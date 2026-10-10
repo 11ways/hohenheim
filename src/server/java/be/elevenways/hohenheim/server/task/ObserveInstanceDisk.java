@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.task;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
@@ -56,7 +57,7 @@ public class ObserveInstanceDisk extends ScheduledTask {
 
     @Override
     public @NonNull Microcopy label() {
-        return HohenheimTasks.label(this);
+        return this.labelIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

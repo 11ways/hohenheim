@@ -21,7 +21,7 @@
     {% if attachments %}
     <pl-table>
         <pl-table-header><pl-table-row>
-            <pl-table-head>{{ t("singular", scope: "database") }}</pl-table-head>
+            <pl-table-head>{{ t("database", scope: "hohenheim_field") }}</pl-table-head>
             <pl-table-head>{{ t("engine", scope: "hohenheim_field") }}</pl-table-head>
             <pl-table-head>{{ t("env_prefix", scope: "hohenheim_field") }}</pl-table-head>
             <pl-table-head>{{ t("status", scope: "instance_database") }}</pl-table-head>

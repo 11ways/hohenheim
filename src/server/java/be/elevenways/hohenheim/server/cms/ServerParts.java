@@ -228,7 +228,7 @@ public final class ServerParts {
             : HohenheimMicrocopy.HOST_LIST.of("runs_count")
                 .withArg("apps", HohenheimMicrocopy.HOST_LIST.of("apps_count").withArg("count", runs[0]))
                 .withArg("databases", HohenheimMicrocopy.HOST_LIST.of("databases_count").withArg("count", runs[1]));
-        return text.resolve(conduit.getLocales(), conduit.getMessageResolver());
+        return text.asString(conduit);
     }
 
     /**

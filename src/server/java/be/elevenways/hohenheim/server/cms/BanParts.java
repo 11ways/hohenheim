@@ -270,12 +270,12 @@ public final class BanParts {
                 .withArg("names", String.join(", ", names.subList(0, shown)))
                 .withArg("more", names.size() - shown)
                 .withArg("ago", RelativeTime.ago(Instant.ofEpochMilli(missed.lastMs()), wording))
-                .resolve(conduit.getLocales(), conduit.getMessageResolver())));
+                .asString(conduit)));
         }
         // The empty state is a sentence, never a fact without a value: that renders the widgets' "Unknown" beside it.
         WidgetTree body = facts.isEmpty()
             ? new WidgetTree(List.of(new WidgetInstance(TextBlockWidget.ID, Map.of("body",
-                HohenheimMicrocopy.BAN.of("no_misses").resolve(conduit.getLocales(), conduit.getMessageResolver())))))
+                HohenheimMicrocopy.BAN.of("no_misses").asString(conduit)))))
             : new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts)));
         return new WidgetInstance(CardWidget.ID, Map.of("title", HohenheimMicrocopy.BAN.of("recent_misses_title"),
             "lead", HohenheimMicrocopy.BAN.of("recent_misses_lead").withArg("threshold", scorer.banThreshold())
@@ -296,13 +296,11 @@ public final class BanParts {
                 String key = IpLiterals.isLiteral(trimmed) ? "never_block_address"
                     : slash > 0 && IpLiterals.isLiteral(trimmed.substring(0, slash)) ? "never_block_network"
                     : "never_block_name";
-                facts.add(WidgetFact.of(entry.trim(), HohenheimMicrocopy.BAN.of(key).resolve(conduit.getLocales(),
-                    conduit.getMessageResolver())));
+                facts.add(WidgetFact.of(entry.trim(), HohenheimMicrocopy.BAN.of(key).asString(conduit)));
             }
         }
-        facts.add(WidgetFact.of(HohenheimMicrocopy.BAN.of("never_block_server").resolve(conduit.getLocales(),
-            conduit.getMessageResolver()), HohenheimMicrocopy.BAN.of("never_block_own").resolve(conduit.getLocales(),
-            conduit.getMessageResolver())));
+        facts.add(WidgetFact.of(HohenheimMicrocopy.BAN.of("never_block_server").asString(conduit),
+            HohenheimMicrocopy.BAN.of("never_block_own").asString(conduit)));
         WidgetInstance card = new WidgetInstance(CardWidget.ID,
             Map.of("title", HohenheimMicrocopy.BAN.of("never_block_title"),
             "lead", HohenheimMicrocopy.BAN.of(facts.size() > 1 ? "never_block_lead" : "never_block_empty")),

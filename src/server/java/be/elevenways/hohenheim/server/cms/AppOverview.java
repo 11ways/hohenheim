@@ -270,7 +270,7 @@ final class AppOverview {
 
     /** The lead line under a site's heading: what it serves. */
     static @NonNull String siteLead(@NonNull Row site, @NonNull Conduit conduit) {
-        String kind = SiteParts.upstreamLabel(site).resolve(conduit.getLocales(), conduit.getMessageResolver());
+        String kind = SiteParts.upstreamLabel(site).asString(conduit);
         Integer instanceId = site.get(SiteModel.INSTANCE_ID);
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
         if (instance == null) {
@@ -289,7 +289,7 @@ final class AppOverview {
         }
         String where = HohenheimMicrocopy.APP_OVERVIEW.of("on_host").withArg("host",
                 ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID)))
-            .resolve(conduit.getLocales(), conduit.getMessageResolver());
+            .asString(conduit);
         return what.isEmpty() ? where : what + " · " + where;
     }
 

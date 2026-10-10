@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
@@ -16,6 +17,9 @@ import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.auth.model.GrantSubjectType;
+import be.elevenways.zenit.auth.model.UserModel;
+import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import com.microsoft.playwright.Page;
@@ -59,6 +63,8 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
     private static Integer applicationId;
     private static Integer systemContainerId;
     private static Integer stackId;
+    /** A tenant holding the workspace's manage and config capabilities, for the /manage captures. */
+    private static String tenantSession;
 
     @BeforeAll
     static void seedFleet() throws Exception {
@@ -135,6 +141,15 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
             volume.set(InstanceVolumeModel.OBSERVED_AT, Now.instant());
             volumes.save(volume);
         }
+
+        // A tenant delegated the workspace, so the /manage twin of its Volumes tab can be captured beside /admin's.
+        String tenantEmail = "screenshot-tenant@hohenheim.test";
+        Row tenant = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq(tenantEmail)).first();
+        int tenantId = tenant != null ? tenant.get(UserModel.ID) : ApiSupport.user(tenantEmail, "Tenant");
+        for (String capability : List.of(HohenheimCapabilities.MANAGE, HohenheimCapabilities.CONFIG)) {
+            RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, workspaceId, capability, true);
+        }
+        tenantSession = sessionFor(tenantId).token();
 
         // A deploy history for the application's Deploys tab.
         releaseOperation(applicationId, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED),
@@ -250,21 +265,25 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
         capture(path, slug, null);
     }
 
-    /** Render {@code path} in both themes and write the two captures. */
     private void capture(String path, String slug, Runnable interaction) {
+        capture(path, slug, interaction, sessionToken);
+    }
+
+    /** Render {@code path} in both themes under {@code session} and write the two captures. */
+    private void capture(String path, String slug, Runnable interaction, String session) {
         for (String theme : List.of("light", "dark")) {
             page.context().addCookies(List.of(new Cookie("pl-theme", theme)
                 .setDomain("localhost").setPath("/")));
             page.setViewportSize(1440, 900);
             // navigateToApp itself fails on any status >= 400.
-            navigateToApp(path);
+            navigateToAppAs(path, session);
             waitForHydration();
             String requested = path.contains("?") ? path.substring(0, path.indexOf('?')) : path;
             assertThat(URI.create(page.url()).getPath())
                 .as("%s (%s) is served where it was asked for, not redirected to a login", path, theme)
                 .isEqualTo(requested);
             assertThat(page.locator(".cms-brand").count())
-                .as("%s (%s) renders inside the admin shell", path, theme)
+                .as("%s (%s) renders inside the panel shell", path, theme)
                 .isPositive();
             if (interaction != null) {
                 interaction.run();
@@ -305,6 +324,8 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
         });
         capture("/admin/instances/" + workspaceId + "/page/overview", "instance-overview");
         capture("/admin/instances/" + workspaceId + "/page/volumes", "instance-volumes");
+        // The same tab as the delegated tenant: /manage declares no volume resource, so plain rows and no Add.
+        capture("/manage/instances/" + workspaceId + "/page/volumes", "manage-instance-volumes", null, tenantSession);
         capture("/admin/instances/" + applicationId + "/page/databases", "instance-databases");
         capture("/admin/instances/" + systemContainerId + "/page/devices", "instance-devices");
         capture("/admin/stack-services/new?stack_id=" + stackId, "stack-service-create");

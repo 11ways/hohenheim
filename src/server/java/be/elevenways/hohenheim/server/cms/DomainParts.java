@@ -464,9 +464,9 @@ public final class DomainParts {
         CertCoverage https = AppHealth.httpsOf(domain, SiteParts.tlsPassthrough(site), AppHealth.workingNames());
         return new RecordLead(HohenheimMicrocopy.SITE_DOMAINS.of("address_lead")
             .withArg("app", app)
-            .withArg("reach", reach.label().resolve(conduit.getLocales(), conduit.getMessageResolver()))
-            .withArg("https", https.label().resolve(conduit.getLocales(), conduit.getMessageResolver()))
-            .resolve(conduit.getLocales(), conduit.getMessageResolver()), null);
+            .withArg("reach", reach.label().asString(conduit))
+            .withArg("https", https.label().asString(conduit))
+            .asString(conduit), null);
     }
 
     /**

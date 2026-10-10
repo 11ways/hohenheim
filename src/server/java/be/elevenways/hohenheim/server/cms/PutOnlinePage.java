@@ -244,6 +244,6 @@ public final class PutOnlinePage extends PanelPage {
     }
 
     private static @NonNull String resolve(@NonNull Microcopy copy, @NonNull PanelRequest request) {
-        return copy.resolve(request.conduit().getLocales(), request.conduit().getMessageResolver());
+        return copy.asString(request.conduit());
     }
 }

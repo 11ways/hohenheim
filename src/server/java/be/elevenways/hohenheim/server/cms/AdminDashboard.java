@@ -206,7 +206,7 @@ public final class AdminDashboard extends PanelDashboard {
             band.add(new WidgetInstance(AlertWidget.ID,
                     Map.of("variant", AlertVariant.WARNING.token()))
                 .withData(NoticeData.of(
-                    notice.resolve(conduit.getLocales(), conduit.getMessageResolver()), null)));
+                    notice.asString(conduit), null)));
         }
 
         band.add(new WidgetInstance(RecordsWidget.ID, Map.of(

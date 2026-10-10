@@ -60,7 +60,7 @@ public final class SpamserviceReputationPage extends PanelPage {
         String ip = Texts.trimmedOrNull(conduit.getQueryParam("ip"));
         Map<String, Object> vars = new LinkedHashMap<>();
         vars.put("title", HohenheimMicrocopy.SPAMSERVICE.of("reputation")
-            .resolve(conduit.getLocales(), conduit.getMessageResolver()));
+            .asString(conduit));
         vars.put("pageTarget", CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.SPAMSERVICE_REPUTATION));
         vars.put("ip", ip != null ? ip : "");
         vars.put("error", "");
@@ -78,7 +78,7 @@ public final class SpamserviceReputationPage extends PanelPage {
             SpamserviceClient client = this.clientSupplier.get();
             if (client == null) {
                 vars.put("error", HohenheimMicrocopy.SPAMSERVICE.of("disconnected")
-                    .resolve(conduit.getLocales(), conduit.getMessageResolver()));
+                    .asString(conduit));
             } else {
                 try {
                     ReputationDiagnostic diagnostic = client.diagnoseReputation(ip);

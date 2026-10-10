@@ -157,7 +157,7 @@ public final class HandlerSupport {
 
     /** {@link #violationMessage} resolved in the request's own locale chain. */
     public static @NonNull String messageOf(@NonNull Conduit conduit, @NonNull Violations violations) {
-        return violationMessage(violations).resolve(conduit.getLocales(), conduit.getMessageResolver());
+        return violationMessage(violations).asString(conduit);
     }
 
     /**

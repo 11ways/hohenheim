@@ -423,7 +423,7 @@ public final class DnsZoneParts {
                 continue;
             }
             String label = finding.verdict().label()
-                .resolve(conduit.getLocales(), conduit.getMessageResolver());
+                .asString(conduit);
             text.append(label);
             if (!finding.subject().isEmpty()) {
                 text.append(": ").append(finding.subject());

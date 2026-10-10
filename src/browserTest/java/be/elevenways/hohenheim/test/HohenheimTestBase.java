@@ -385,8 +385,13 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
     @Override
     protected void navigateToApp(String path) {
         // Inject the zenit-auth session cookie before navigation so gated admin pages are reachable.
+        this.navigateToAppAs(path, sessionToken);
+    }
+
+    /** {@link #navigateToApp} under another account's session, for a page as a delegate sees it. */
+    protected void navigateToAppAs(String path, String session) {
         page.context().addCookies(List.of(
-            new Cookie(SessionCookies.name(), sessionToken)
+            new Cookie(SessionCookies.name(), session)
                 .setDomain("localhost")
                 .setPath("/")
         ));

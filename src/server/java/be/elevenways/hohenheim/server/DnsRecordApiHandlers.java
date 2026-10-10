@@ -284,6 +284,6 @@ final class DnsRecordApiHandlers {
             "validation",
             first.fieldName(),
             first.message().key(),
-            first.message().resolve(conduit.getLocales(), conduit.getMessageResolver())));
+            first.message().asString(conduit)));
     }
 }

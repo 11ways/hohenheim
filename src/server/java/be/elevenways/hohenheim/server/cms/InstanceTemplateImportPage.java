@@ -37,7 +37,7 @@ public final class InstanceTemplateImportPage extends PanelPage {
         Conduit conduit = request.conduit();
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", HohenheimMicrocopy.INSTANCE_TEMPLATE.of("import")
-            .resolve(conduit.getLocales(), conduit.getMessageResolver()));
+            .asString(conduit));
         vars.put("catalogApps", CommunityScripts.catalogApps());
         vars.put("catalogRevision", CommunityScripts.catalogRevision());
         vars.put("templatesTarget", CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_TEMPLATES));

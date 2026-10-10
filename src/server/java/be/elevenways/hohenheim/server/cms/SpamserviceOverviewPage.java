@@ -87,7 +87,7 @@ public final class SpamserviceOverviewPage extends PanelPage {
         SpamserviceManager.Snapshot snapshot = manager.snapshot();
         Map<String, Object> vars = new LinkedHashMap<>();
         vars.put("title", HohenheimMicrocopy.SPAMSERVICE.of("overview")
-            .resolve(conduit.getLocales(), conduit.getMessageResolver()));
+            .asString(conduit));
         vars.put("runtime", Map.ofEntries(
             Map.entry("configured", snapshot.configured()), Map.entry("enabled", snapshot.enabled()),
             Map.entry("state", snapshot.state()), Map.entry("pid", snapshot.pid() != null ? snapshot.pid() : ""),
@@ -131,8 +131,8 @@ public final class SpamserviceOverviewPage extends PanelPage {
         List<Map<String, Object>> resolved = new ArrayList<>();
         for (Section section : SECTIONS) {
             resolved.add(Map.of(
-                "label", section.label().resolve(conduit.getLocales(), conduit.getMessageResolver()),
-                "hint", section.hint().resolve(conduit.getLocales(), conduit.getMessageResolver()),
+                "label", section.label().asString(conduit),
+                "hint", section.hint().asString(conduit),
                 "icon", section.icon().name(),
                 "url", CmsRoutes.list(request.panelSlug(), section.slug()).toUrl()));
         }

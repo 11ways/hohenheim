@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.task;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.docker.DockerReclaim;
@@ -36,7 +37,7 @@ public class ReclaimDockerImages extends ScheduledTask {
 
     @Override
     public @NonNull Microcopy label() {
-        return HohenheimTasks.label(this);
+        return this.labelIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override
