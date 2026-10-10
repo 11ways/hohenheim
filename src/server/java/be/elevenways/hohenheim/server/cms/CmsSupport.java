@@ -267,8 +267,7 @@ public final class CmsSupport {
 
     /** @return the relative-time wording in the request's locale, the English defaults outside a request */
     public static @NonNull RelativeTimeWording timeWording(@Nullable Conduit conduit) {
-        return conduit == null ? RelativeTimeWording.agoDefaults()
-            : RelativeTimeWording.resolve(conduit.getLocales(), conduit.getMessageResolver());
+        return conduit == null ? RelativeTimeWording.agoDefaults() : RelativeTimeWording.resolve(conduit);
     }
 
     /**
