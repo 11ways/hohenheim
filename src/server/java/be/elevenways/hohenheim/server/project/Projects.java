@@ -88,8 +88,7 @@ public final class Projects {
         if (subject == null || subject.type() != GrantSubjectType.GROUP) {
             return null;
         }
-        return Models.get(ProjectModel.class).find()
-            .where(ProjectModel.GROUP_ID.eq(subject.id())).first();
+        return projectForGroup(subject.id());
     }
 
     /** The project owning a record, derived from its manage-grant subject set. */
@@ -102,7 +101,7 @@ public final class Projects {
     /** The membership permission of a project's group ({@code group.<slug>}). */
     public static @NonNull String membershipPermissionOf(@NonNull Row project) {
         Integer groupId = project.get(ProjectModel.GROUP_ID);
-        Row group = groupId == null ? null : Models.get(PermissionGroupModel.class).findById(groupId);
+        Row group = Models.get(PermissionGroupModel.class).findById(groupId);
         String slug = group == null ? null : group.get(PermissionGroupModel.SLUG);
         if (slug == null) {
             throw new IllegalStateException("Project " + project.get(ProjectModel.ID)
@@ -368,8 +367,7 @@ public final class Projects {
 
     /** The project whose backing auth group this is, if any. */
     static @Nullable Row projectForGroup(int groupId) {
-        return Models.get(ProjectModel.class).find()
-            .where(ProjectModel.GROUP_ID.eq(groupId)).first();
+        return Models.get(ProjectModel.class).findFirst(ProjectModel.GROUP_ID, groupId);
     }
 
     /**

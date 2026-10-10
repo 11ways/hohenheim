@@ -256,7 +256,7 @@ public final class InstanceOverview {
         for (Row link : Models.get(InstanceDatabaseModel.class).find()
                 .where(InstanceDatabaseModel.INSTANCE_ID.eq(instanceId)).all()) {
             Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
-            Row database = databaseId == null ? null : Models.get(DatabaseModel.class).findById(databaseId);
+            Row database = Models.get(DatabaseModel.class).findById(databaseId);
             if (database == null) {
                 continue;
             }
@@ -546,7 +546,7 @@ public final class InstanceOverview {
                     .withFilter("case", "sentence").resolve(locales, resolver));
             }
             String sentence = String.join(", ", held);
-            can = BlastString.upper(sentence.substring(0, 1)) + sentence.substring(1);
+            can = BlastString.upperFirst(sentence);
         }
         boolean removes = HohenheimAccess.destroyUnavailableReason(access, instanceId) == null;
         List<WidgetFact> facts = new ArrayList<>();

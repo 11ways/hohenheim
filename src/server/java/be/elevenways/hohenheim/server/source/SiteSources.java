@@ -74,7 +74,7 @@ public final class SiteSources {
         }
 
         Integer instanceId = site.get(SiteModel.INSTANCE_ID);
-        return instanceId == null ? null : Models.get(InstanceModel.class).findById(instanceId);
+        return Models.get(InstanceModel.class).findById(instanceId);
     }
 
     /** @return whether these source settings name a repository at all */

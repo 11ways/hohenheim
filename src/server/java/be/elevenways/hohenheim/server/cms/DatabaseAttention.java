@@ -142,7 +142,7 @@ public final class DatabaseAttention {
             return null;
         }
         Integer databaseId = instance.get(InstanceModel.GENERATED_FOR_ID);
-        Row database = databaseId == null ? null : Models.get(DatabaseModel.class).findById(databaseId);
+        Row database = Models.get(DatabaseModel.class).findById(databaseId);
         return database != null && DatabaseModel.PLACEMENT_SHARED.equals(database.get(DatabaseModel.PLACEMENT))
             ? database : null;
     }
@@ -165,7 +165,7 @@ public final class DatabaseAttention {
         }
         for (Row link : links.findByInstanceId(instanceId)) {
             Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
-            Row database = databaseId == null ? null : Models.get(DatabaseModel.class).findById(databaseId);
+            Row database = Models.get(DatabaseModel.class).findById(databaseId);
             if (database != null && !DatabaseVerdict.ofDatabase(database).serves()) {
                 return database;
             }

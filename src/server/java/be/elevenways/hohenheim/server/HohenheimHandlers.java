@@ -128,7 +128,7 @@ public final class HohenheimHandlers {
                 return null;
             }
             Integer siteId = conduit.getParameter(HohenheimEndpoints.SITE_ID);
-            Row site = siteId == null ? null : Models.get(SiteModel.class).findById(siteId);
+            Row site = Models.get(SiteModel.class).findById(siteId);
             Integer applicationId = site == null ? null : site.get(SiteModel.INSTANCE_ID);
             if (applicationId == null) {
                 conduit.notFound();

@@ -131,16 +131,6 @@ public class StackModel extends Model {
     }
 
 
-    /** The stack with this unique name, or null if none. */
-    public Row findByName(String name) {
-        return find().where(NAME.eq(name)).first();
-    }
-
-    /** The stack with this id, or null if none. */
-    public Row findById(int id) {
-        return find().where(ID.eq(id)).first();
-    }
-
     @Override
     public Identifier getModelId() { return MODEL_ID; }
 

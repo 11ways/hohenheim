@@ -81,14 +81,6 @@ public class DnsPeerModel extends Model {
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
-    public List<Row> findEnabled() {
-        return find().where(ENABLED.eq(true)).all();
-    }
-
-    public @Nullable Row findByName(@NonNull String name) {
-        return find().where(NAME.eq(name)).first();
-    }
-
     /** @return the peer authenticating with this TSIG key name, comparing them canonically */
     public @Nullable Row findByTsigKeyName(@NonNull String keyName) {
         String canonical = canonicalKeyName(keyName);

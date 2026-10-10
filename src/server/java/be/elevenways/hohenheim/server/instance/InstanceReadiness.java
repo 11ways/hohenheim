@@ -53,9 +53,6 @@ public final class InstanceReadiness {
      */
     public static @Nullable ReadinessKind declaredKind(@NonNull Row instance) {
         Integer templateId = instance.get(InstanceModel.TEMPLATE_ID);
-        if (templateId == null) {
-            return null;
-        }
         Row template = Models.get(InstanceTemplateModel.class).findById(templateId);
         return template == null
             ? null : ReadinessKind.forToken(template.get(InstanceTemplateModel.READINESS_KIND));

@@ -61,8 +61,7 @@ public final class DatabaseEngines {
 
     /** Every managed database record living on one engine, by id. */
     public static @NonNull List<Row> databasesOn(int engineId) {
-        return Models.get(DatabaseModel.class).find()
-            .where(DatabaseModel.ENGINE_ID.eq(engineId)).all();
+        return Models.get(DatabaseModel.class).findAll(DatabaseModel.ENGINE_ID, engineId);
     }
 
     /**
@@ -365,7 +364,7 @@ public final class DatabaseEngines {
     static @NonNull String nameFor(int serverId, ManagedDatabase.@NonNull Engine engine) {
         String base = engine.token() + "-" + ServerModel.nameOf(serverId);
         String candidate = base;
-        for (int n = 2; model().findByName(candidate) != null; n++) {
+        for (int n = 2; model().findFirst(DatabaseEngineModel.NAME, candidate) != null; n++) {
             candidate = base + "-" + n;
         }
         return candidate;

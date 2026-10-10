@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.protoblast.common.binary.BinaryReader;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.BufferedInputStream;
@@ -14,6 +15,7 @@ import java.net.InetSocketAddress;
 import java.net.ProtocolException;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
@@ -159,14 +161,15 @@ public final class ProxyProtocolV2 {
     }
 
     private static Header readAfterFixedHeader(InputStream input, byte[] fixedHeader) throws IOException {
-        int versionAndCommand = fixedHeader[12] & 0xff;
+        BinaryReader header = new BinaryReader(fixedHeader, SIGNATURE.length, 4, ByteOrder.BIG_ENDIAN);
+        int versionAndCommand = header.u8();
         if ((versionAndCommand & 0xf0) != VERSION) {
             throw new ProtocolException("unsupported PROXY protocol version");
         }
 
         int command = versionAndCommand & 0x0f;
-        int family = fixedHeader[13] & 0xff;
-        int payloadLength = unsignedShort(fixedHeader, 14);
+        int family = header.u8();
+        int payloadLength = header.u16();
 
         if (command == COMMAND_LOCAL) {
             readExactly(input, payloadLength);
@@ -191,15 +194,16 @@ public final class ProxyProtocolV2 {
             throw new ProtocolException("invalid PROXY v2 address length");
         }
 
-        byte[] addresses = readExactly(input, payloadLength);
-        byte[] sourceBytes = Arrays.copyOfRange(addresses, 0, addressSize);
-        byte[] destinationBytes = Arrays.copyOfRange(addresses, addressSize, addressSize * 2);
-        int sourcePort = unsignedShort(addresses, addressSize * 2);
-        int destinationPort = unsignedShort(addresses, addressSize * 2 + 2);
+        // The length check above guarantees both addresses and ports, so these reads never refuse.
+        BinaryReader payload = new BinaryReader(readExactly(input, payloadLength), ByteOrder.BIG_ENDIAN);
+        byte[] sourceBytes = payload.bytes(addressSize);
+        byte[] destinationBytes = payload.bytes(addressSize);
+        int sourcePort = payload.u16();
+        int destinationPort = payload.u16();
 
         InetAddress sourceIp = InetAddress.getByAddress(sourceBytes);
         InetAddress destinationIp = InetAddress.getByAddress(destinationBytes);
-        validateTlvs(addresses, expectedLength);
+        validateTlvs(payload);
         return new Header(
             Command.PROXY,
             new InetSocketAddress(sourceIp, sourcePort),
@@ -208,17 +212,17 @@ public final class ProxyProtocolV2 {
     }
 
     /** Validates the standard type/length/value framing while leaving TLV interpretation to consumers. */
-    private static void validateTlvs(byte[] payload, int offset) throws ProtocolException {
-        while (offset < payload.length) {
-            if (payload.length - offset < 3) {
+    private static void validateTlvs(BinaryReader tlvs) throws ProtocolException {
+        while (tlvs.remaining() > 0) {
+            if (tlvs.remaining() < 3) {
                 throw new ProtocolException("truncated PROXY v2 TLV header");
             }
-            int length = unsignedShort(payload, offset + 1);
-            offset += 3;
-            if (length > payload.length - offset) {
+            tlvs.skip(1);
+            int length = tlvs.u16();
+            if (length > tlvs.remaining()) {
                 throw new ProtocolException("truncated PROXY v2 TLV value");
             }
-            offset += length;
+            tlvs.skip(length);
         }
     }
 
@@ -235,10 +239,6 @@ public final class ProxyProtocolV2 {
                 throw new ProtocolException("invalid PROXY v2 signature");
             }
         }
-    }
-
-    private static int unsignedShort(byte[] bytes, int offset) {
-        return ((bytes[offset] & 0xff) << 8) | (bytes[offset + 1] & 0xff);
     }
 
     private static byte[] readExactly(InputStream input, int length) throws IOException {

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.util;
 
 import be.elevenways.protoblast.server.io.BulkInputStream;
+import be.elevenways.protoblast.common.util.BlastString;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -279,12 +280,8 @@ public final class Tar {
         for (byte b : block) {
             checksum += b & 0xFF;
         }
-        String digits = Long.toOctalString(checksum);
-        while (digits.length() < 6) {
-            digits = "0" + digits;
-        }
-        putString(block, 148, 6, digits);
-        block[154] = 0;
+        // The checksum field is six octal digits, a NUL, then a space.
+        putOctal(block, 148, 7, checksum);
         block[155] = ' ';
         return block;
     }
@@ -295,13 +292,7 @@ public final class Tar {
     }
 
     private static void putOctal(byte[] block, int offset, int length, long value) {
-        String digits = Long.toOctalString(value);
-        StringBuilder padded = new StringBuilder();
-        for (int i = digits.length(); i < length - 1; i++) {
-            padded.append('0');
-        }
-        padded.append(digits);
-        putString(block, offset, length - 1, padded.toString());
+        putString(block, offset, length - 1, BlastString.zeroPad(Long.toOctalString(value), length - 1));
         block[offset + length - 1] = 0;
     }
 

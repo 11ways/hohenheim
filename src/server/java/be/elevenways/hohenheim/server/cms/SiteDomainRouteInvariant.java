@@ -81,7 +81,7 @@ public final class SiteDomainRouteInvariant {
             }
             Row stored = StoredRows.of(Models.get(SiteDomainModel.class), row);
             Integer siteId = row.afterWrite(SiteDomainModel.SITE_ID, stored);
-            Row site = siteId != null ? Models.get(SiteModel.class).findById(siteId) : null;
+            Row site = Models.get(SiteModel.class).findById(siteId);
             String key = RouteClaims.isLive(site) ? RouteClaims.keyOfPendingWrite(row, stored) : null;
             // RELEASE PATH 2 of 3: editing the hostname, path or listener set of a LIVE row
             // frees the departing key with nothing else observing it -- the site write hook

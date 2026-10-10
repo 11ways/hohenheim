@@ -72,7 +72,7 @@ class DnsAdminTest extends HohenheimTestBase {
             "zone_id=" + zoneId + "&name=WWW&type=A&value=192.0.2.10&enabled=on");
         assertThat(good.statusCode()).isIn(200, 302, 303);
 
-        List<Row> records = Models.get(DnsRecordModel.class).findByZoneId(zoneId);
+        List<Row> records = Models.get(DnsRecordModel.class).findAll(DnsRecordModel.ZONE_ID, zoneId);
         assertThat(records).hasSize(1);
         Row record = records.get(0);
         assertThat((String) record.get(DnsRecordModel.NAME)).isEqualTo("www");
@@ -104,7 +104,7 @@ class DnsAdminTest extends HohenheimTestBase {
             "zone_id=" + zoneId + "&name=www&type=CNAME&value=other.admin-zone.example");
         assertThat(cname.statusCode()).isEqualTo(200);
         assertThat(cname.body()).contains("CNAME");
-        assertThat(Models.get(DnsRecordModel.class).findByZoneId(zoneId)).hasSize(1);
+        assertThat(Models.get(DnsRecordModel.class).findAll(DnsRecordModel.ZONE_ID, zoneId)).hasSize(1);
 
         // A CNAME at the zone apex is refused: the SOA (and NS/DNSKEY) live there and are
         // SYNTHESIZED in the serving snapshot, not stored rows, so the sibling scan never
@@ -169,14 +169,14 @@ class DnsAdminTest extends HohenheimTestBase {
         var refused = adminPostForm("/admin/dns-zones/" + zoneId + "/zonefile",
             "zone_text=" + URLEncoder.encode(zoneText, StandardCharsets.UTF_8));
         assertThat(refused.statusCode()).isIn(302, 303);
-        assertThat(Models.get(DnsRecordModel.class).findByZoneId(zoneId))
+        assertThat(Models.get(DnsRecordModel.class).findAll(DnsRecordModel.ZONE_ID, zoneId))
             .as("an undeclared controller refuses a foreign apex NS set and leaves the rows alone")
             .hasSize(1);
         var imported = adminPostForm("/admin/dns-zones/" + zoneId + "/zonefile",
             "zone_text=" + URLEncoder.encode(zoneText, StandardCharsets.UTF_8) + "&keep_ns=on");
         assertThat(imported.statusCode()).isIn(302, 303);
 
-        List<Row> importedRecords = Models.get(DnsRecordModel.class).findByZoneId(zoneId);
+        List<Row> importedRecords = Models.get(DnsRecordModel.class).findAll(DnsRecordModel.ZONE_ID, zoneId);
         assertThat(importedRecords).hasSize(4);
         assertThat(importedRecords.stream().map(r -> (String) r.get(DnsRecordModel.TYPE)))
             .containsExactlyInAnyOrder("NS", "A", "MX", "SRV");
@@ -262,7 +262,7 @@ class DnsAdminTest extends HohenheimTestBase {
             + "&tsig_key_name=&tsig_algorithm=&tsig_secret=&base_url=&api_key=&enabled=on");
         assertThat(noCredentials.statusCode()).isEqualTo(200);
         assertThat(noCredentials.body()).contains("admin base URL");
-        assertThat(peers.findByName("peer-incomplete")).isNull();
+        assertThat(peers.findFirst(DnsPeerModel.NAME, "peer-incomplete")).isNull();
 
         // 2. A plain nameserver peer with no transfer host is refused too: nothing here
         //    could ever reach it.
@@ -271,7 +271,7 @@ class DnsAdminTest extends HohenheimTestBase {
             + "&tsig_key_name=&tsig_algorithm=&tsig_secret=&base_url=&api_key=&enabled=on");
         assertThat(noHost.statusCode()).isEqualTo(200);
         assertThat(noHost.body()).contains("transfer host");
-        assertThat(peers.findByName("peer-hostless")).isNull();
+        assertThat(peers.findFirst(DnsPeerModel.NAME, "peer-hostless")).isNull();
 
         // 3. Both complete shapes are accepted.
         assertThat(adminPostForm("/admin/dns-peers/new",
@@ -285,8 +285,8 @@ class DnsAdminTest extends HohenheimTestBase {
             + "&base_url=&api_key=&enabled=on")
             .statusCode()).isIn(200, 302, 303);
 
-        Row hohenheimPeer = peers.findByName("peer-hohenheim");
-        Row nameserverPeer = peers.findByName("peer-nameserver");
+        Row hohenheimPeer = peers.findFirst(DnsPeerModel.NAME, "peer-hohenheim");
+        Row nameserverPeer = peers.findFirst(DnsPeerModel.NAME, "peer-nameserver");
         assertThat(hohenheimPeer).isNotNull();
         assertThat(nameserverPeer).isNotNull();
         assertThat(DnsPeerModel.isHohenheim(hohenheimPeer)).isTrue();
@@ -314,7 +314,7 @@ class DnsAdminTest extends HohenheimTestBase {
         assertThat(DnsPeerApi.forPeer(nameserverPeer)).isNull();
         hohenheimPeer.set(DnsPeerModel.PEER_TYPE, DnsPeerModel.TYPE_NAMESERVER);
         peers.save(hohenheimPeer);
-        assertThat(DnsPeerApi.forPeer(peers.findByName("peer-hohenheim")))
+        assertThat(DnsPeerApi.forPeer(peers.findFirst(DnsPeerModel.NAME, "peer-hohenheim")))
             .describedAs("demoting a peer closes the channel even with credentials stored")
             .isNull();
     }

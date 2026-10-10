@@ -843,7 +843,7 @@ public final class GameDomains {
 
     private static @Nullable Row mappingDomain(@NonNull Row mapping) {
         Integer domainId = mapping.get(GameDomainModel.SITE_DOMAIN_ID);
-        return domainId != null ? Models.get(SiteDomainModel.class).findById(domainId) : null;
+        return Models.get(SiteDomainModel.class).findById(domainId);
     }
 
     /**

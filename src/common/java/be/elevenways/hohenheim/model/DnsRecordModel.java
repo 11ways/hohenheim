@@ -290,10 +290,6 @@ public class DnsRecordModel extends Model {
         return null;
     }
 
-    public List<Row> findByZoneId(int zoneId) {
-        return find().where(ZONE_ID.eq(zoneId)).all();
-    }
-
     public List<Row> findEnabledByZoneId(int zoneId) {
         return find().where(ZONE_ID.eq(zoneId)).and(ENABLED.eq(true)).all();
     }

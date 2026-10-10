@@ -62,7 +62,7 @@ public class SpamserviceInstallationModel extends Model {
 
     /** Returns the one configured installation row without creating it. */
     public @Nullable Row installation() {
-        return find().where(ID.eq(SINGLETON_ID)).first();
+        return findById(SINGLETON_ID);
     }
 
     @Override public Identifier getModelId() { return MODEL_ID; }

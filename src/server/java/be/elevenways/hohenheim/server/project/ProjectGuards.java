@@ -310,7 +310,7 @@ public final class ProjectGuards {
 
     private static @Nullable Row storedProject(@NonNull Row row) {
         Object id = row.has(ProjectModel.ID.getName()) ? row.get(ProjectModel.ID) : null;
-        return id == null ? null : Models.get(ProjectModel.class).findById(id);
+        return Models.get(ProjectModel.class).findById(id);
     }
 
 }

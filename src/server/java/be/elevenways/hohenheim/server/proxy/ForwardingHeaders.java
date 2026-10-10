@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.proxy.auth.ProxyAuthKeys;
+import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.server.http.TrustedProxies;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.HeaderMap;
@@ -184,7 +185,7 @@ final class ForwardingHeaders {
             // Only the Basic scheme is Hohenheim's: a Bearer token on a Basic-gated route is
             // the upstream's own credential and passes (the gate never reads it).
             String authorization = headers.getFirst(Headers.AUTHORIZATION);
-            if (authorization != null && authorization.regionMatches(true, 0, "Basic ", 0, 6)) {
+            if (authorization != null && BlastString.startsWithIgnoreCase(authorization, "Basic ")) {
                 headers.remove(Headers.AUTHORIZATION);
             }
         }

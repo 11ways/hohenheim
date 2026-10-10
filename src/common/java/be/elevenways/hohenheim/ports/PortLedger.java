@@ -114,8 +114,7 @@ public final class PortLedger {
 
     /** The ledger row currently holding a claim key, or null when the port is unclaimed. */
     public static @Nullable Row holderOf(@NonNull String claimKey) {
-        return Models.get(PortAllocationModel.class).find()
-            .where(PortAllocationModel.CLAIM_KEY.eq(claimKey)).first();
+        return Models.get(PortAllocationModel.class).findFirst(PortAllocationModel.CLAIM_KEY, claimKey);
     }
 
     /**

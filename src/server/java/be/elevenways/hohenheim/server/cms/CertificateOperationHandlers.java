@@ -161,7 +161,7 @@ final class CertificateOperationHandlers {
                 email.isEmpty() ? null : email, order.challenge(), publisher, requester);
             Integer certId = outcome.certificateId();
             if (!outcome.issued() || certId == null) {
-                Row failed = certId != null ? Models.get(CertificateModel.class).findById(certId) : null;
+                Row failed = Models.get(CertificateModel.class).findById(certId);
                 throw refused(AcmeProblem.sentenceFor(failed != null ? failed.get(CertificateModel.RENEWAL_ERROR) : null));
             }
             ActivityLog.record(Models.get(CertificateModel.class), certId, HohenheimActivityAction.REQUESTED, niceName);

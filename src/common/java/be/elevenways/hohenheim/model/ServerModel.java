@@ -689,7 +689,7 @@ public class ServerModel extends Model {
 
     /** The server with this unique name, or null if none. */
     public Row findByName(String name) {
-        return find().where(NAME.eq(name)).first();
+        return findFirst(NAME, name);
     }
 
     // -- the runtime declaration ----------------------------------------------

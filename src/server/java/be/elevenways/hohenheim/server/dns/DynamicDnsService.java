@@ -105,11 +105,8 @@ public final class DynamicDnsService {
 
     /** @return the credential row for a record, or null when the record is not dynamic */
     public static @Nullable Row credentialFor(@Nullable Integer recordId) {
-        if (recordId == null) {
-            return null;
-        }
-        return Models.get(DnsDyndnsCredentialModel.class).find()
-            .where(DnsDyndnsCredentialModel.RECORD_ID.eq(recordId)).first();
+        return recordId == null ? null
+            : Models.get(DnsDyndnsCredentialModel.class).findFirst(DnsDyndnsCredentialModel.RECORD_ID, recordId);
     }
 
     /**

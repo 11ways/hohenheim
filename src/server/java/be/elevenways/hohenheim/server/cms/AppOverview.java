@@ -272,7 +272,7 @@ final class AppOverview {
     static @NonNull String siteLead(@NonNull Row site, @NonNull Conduit conduit) {
         String kind = SiteParts.upstreamLabel(site).resolve(conduit.getLocales(), conduit.getMessageResolver());
         Integer instanceId = site.get(SiteModel.INSTANCE_ID);
-        Row instance = instanceId == null ? null : Models.get(InstanceModel.class).findById(instanceId);
+        Row instance = Models.get(InstanceModel.class).findById(instanceId);
         if (instance == null) {
             return kind;
         }
@@ -307,7 +307,7 @@ final class AppOverview {
         facts.add(WidgetFact.of(text("kind", locales, resolver),
             SiteParts.upstreamLabel(site).resolve(locales, resolver)));
         Integer instanceId = site.get(SiteModel.INSTANCE_ID);
-        Row instance = instanceId == null ? null : Models.get(InstanceModel.class).findById(instanceId);
+        Row instance = Models.get(InstanceModel.class).findById(instanceId);
         if (instance != null) {
             String workload = Models.get(InstanceModel.class).getDisplayTitle(instance);
             facts.add(opens(access, HohenheimSlugs.INSTANCES, instanceId, null)
@@ -347,7 +347,7 @@ final class AppOverview {
     }
 
     private static @NonNull String listName(@Nullable Integer accessListId) {
-        Row list = accessListId == null ? null : Models.get(AccessListModel.class).findById(accessListId);
+        Row list = Models.get(AccessListModel.class).findById(accessListId);
         return list == null ? "#" + accessListId : String.valueOf((Object) list.get(AccessListModel.NAME));
     }
 

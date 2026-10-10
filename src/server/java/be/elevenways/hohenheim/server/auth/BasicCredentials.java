@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.auth;
 
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.server.PasswordHasher;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -104,7 +105,7 @@ public final class BasicCredentials {
     }
 
     private static @Nullable Presented parse(@Nullable String authHeader, boolean allowBareUser) {
-        if (authHeader == null || !authHeader.regionMatches(true, 0, SCHEME, 0, SCHEME.length())) {
+        if (authHeader == null || !BlastString.startsWithIgnoreCase(authHeader, SCHEME)) {
             return null;
         }
         try {

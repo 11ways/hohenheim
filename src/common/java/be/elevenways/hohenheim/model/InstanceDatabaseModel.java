@@ -88,7 +88,7 @@ public class InstanceDatabaseModel extends Model {
 
     /** All links pointing at a database. */
     public List<Row> findByDatabaseId(Integer databaseId) {
-        return find().where(DATABASE_ID.eq(databaseId)).all();
+        return findAll(DATABASE_ID, databaseId);
     }
 
     static {

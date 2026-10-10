@@ -399,7 +399,7 @@ public final class DockerReconciler {
                 return Models.get(DatabaseModel.class).findByName(name) != null;
             }
             if (DatabaseEngineModel.MODEL_ID.equals(model)) {
-                return Models.get(DatabaseEngineModel.class).findByName(name) != null;
+                return Models.get(DatabaseEngineModel.class).findFirst(DatabaseEngineModel.NAME, name) != null;
             }
             if (StackModel.MODEL_ID.equals(model)) {
                 return Models.get(StackModel.class).find()

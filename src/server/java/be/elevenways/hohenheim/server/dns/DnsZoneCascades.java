@@ -67,7 +67,7 @@ public final class DnsZoneCascades {
             }
             Row stored = StoredRows.of(Models.get(DnsRecordModel.class), row);
             Object zoneId = row.afterWrite(DnsRecordModel.ZONE_ID, stored);
-            Row zone = zoneId != null ? Models.get(DnsZoneModel.class).findById(zoneId) : null;
+            Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
             if (zone != null && DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
                 throw Violations.ofField(DnsRecordModel.ZONE_ID.getName(), zoneId,
                     HohenheimMicrocopy.VIOLATIONS.of("record_secondary_zone"));

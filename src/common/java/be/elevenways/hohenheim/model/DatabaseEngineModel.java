@@ -94,11 +94,6 @@ public class DatabaseEngineModel extends Model {
         });
     }
 
-    /** The engine with this unique name, or null if none. */
-    public Row findByName(String name) {
-        return find().where(NAME.eq(name)).first();
-    }
-
     /** The engine of this kind on this host, or null when the host has none yet. */
     public Row findOnHost(int serverId, String engineToken) {
         return find().where(SERVER_ID.eq(serverId)).where(ENGINE.eq(engineToken)).first();

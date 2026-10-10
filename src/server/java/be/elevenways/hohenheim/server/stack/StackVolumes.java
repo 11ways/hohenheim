@@ -286,9 +286,6 @@ public final class StackVolumes {
     }
 
     private static @Nullable String stackNameOf(@Nullable Integer stackId) {
-        if (stackId == null) {
-            return null;
-        }
         Row stack = Models.get(StackModel.class).findById(stackId);
         return stack == null ? null : stack.get(StackModel.NAME);
     }

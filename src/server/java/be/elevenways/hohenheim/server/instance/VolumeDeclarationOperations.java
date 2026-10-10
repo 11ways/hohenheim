@@ -102,7 +102,7 @@ public final class VolumeDeclarationOperations {
     }
 
     private static int requireOwner(@Nullable Integer owner) {
-        Row row = owner == null ? null : Models.get(InstanceModel.class).findById(owner);
+        Row row = Models.get(InstanceModel.class).findById(owner);
         if (row == null) throw Violations.ofField("instance_id", owner,
                 HohenheimMicrocopy.VIOLATIONS.of("unknown_instance"));
         InstanceKindHandler handler = InstanceKinds.handlerOf(row);

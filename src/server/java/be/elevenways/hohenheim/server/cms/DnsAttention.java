@@ -91,7 +91,7 @@ public final class DnsAttention {
             }
             Integer zoneId = link.get(DnsZonePeerModel.ZONE_ID);
             Integer peerId = link.get(DnsZonePeerModel.PEER_ID);
-            Row peer = peerId != null ? peers.findById(peerId) : null;
+            Row peer = peers.findById(peerId);
             if (zoneId != null && peer != null) {
                 staleByZone.computeIfAbsent(zoneId, id -> new ArrayList<>()).add(new Row[] {link, peer});
             }

@@ -43,7 +43,7 @@ class SecretFieldsTest extends HohenheimTestBase {
             "name=Ops+alerts&format=slack&url=" + java.net.URLEncoder.encode(WEBHOOK_URL, "UTF-8"));
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
-        Row row = Models.get(NotificationChannelModel.class).findByName("Ops alerts");
+        Row row = Models.get(NotificationChannelModel.class).findFirst(NotificationChannelModel.NAME, "Ops alerts");
         assertThat(row).isNotNull();
         assertThat((String) row.get(NotificationChannelModel.URL)).isEqualTo(WEBHOOK_URL);
         Integer channelId = row.get(NotificationChannelModel.ID);
@@ -57,7 +57,8 @@ class SecretFieldsTest extends HohenheimTestBase {
         response = adminPostForm("/admin/notifications/" + channelId, "name=Ops+alerts+renamed&format=slack&url=");
         assertThat(response.statusCode()).isIn(200, 302, 303);
 
-        Row storedChannel = Models.get(NotificationChannelModel.class).findByName("Ops alerts renamed");
+        Row storedChannel = Models.get(NotificationChannelModel.class)
+            .findFirst(NotificationChannelModel.NAME, "Ops alerts renamed");
         assertThat(storedChannel).isNotNull();
         assertThat((String) storedChannel.get(NotificationChannelModel.URL)).isEqualTo(WEBHOOK_URL);
 

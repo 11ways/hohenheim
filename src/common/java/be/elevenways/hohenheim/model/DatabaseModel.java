@@ -379,7 +379,7 @@ public class DatabaseModel extends Model {
 
     /** The database with this unique name, or null if none. */
     public Row findByName(String name) {
-        return find().where(NAME.eq(name)).first();
+        return findFirst(NAME, name);
     }
 
     @Override

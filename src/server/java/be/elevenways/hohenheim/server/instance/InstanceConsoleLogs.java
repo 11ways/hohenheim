@@ -54,7 +54,7 @@ final class InstanceConsoleLogs {
                 }
                 Runnable write = () -> {
                     InstanceLogModel model = Models.get(InstanceLogModel.class);
-                    Row row = this.rowId == null ? null : model.findById(this.rowId);
+                    Row row = model.findById(this.rowId);
                     if (row == null) {
                         row = model.createEmptyRow();
                         row.set(InstanceLogModel.INSTANCE_ID, instanceId);

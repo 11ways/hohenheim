@@ -77,14 +77,6 @@ public class DnsZonePeerModel extends Model {
             .remoteKey(DnsPeerModel.ID)
             .build());
 
-    public List<Row> findByZoneId(int zoneId) {
-        return find().where(ZONE_ID.eq(zoneId)).all();
-    }
-
-    public List<Row> findByPeerId(int peerId) {
-        return find().where(PEER_ID.eq(peerId)).all();
-    }
-
     @Override
     public Identifier getModelId() { return MODEL_ID; }
 

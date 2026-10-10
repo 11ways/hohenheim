@@ -376,7 +376,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
     }
 
     private static Integer domainIdOf(String hostname) {
-        return Models.get(SiteDomainModel.class).findByHostname(hostname).get(0)
+        return Models.get(SiteDomainModel.class).findAll(SiteDomainModel.HOSTNAME, hostname).get(0)
             .get(SiteDomainModel.ID);
     }
 

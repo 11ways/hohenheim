@@ -582,7 +582,7 @@ public final class InstanceParts {
      */
     private static void resize(@NonNull RowSave save) {
         Integer instanceId = save.row().get(InstanceModel.ID);
-        Row stored = instanceId == null ? null : Models.get(InstanceModel.class).findById(instanceId);
+        Row stored = Models.get(InstanceModel.class).findById(instanceId);
         InstanceModel.prepareConfigurationSave(save.row());
         if (instanceId != null && stored != null) {
             InstanceResize.recreateAfterCommit(instanceId, InstanceResize.settingsOf(stored),

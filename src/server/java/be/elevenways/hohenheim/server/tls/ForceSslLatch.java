@@ -47,7 +47,7 @@ public final class ForceSslLatch {
         CertificateModel.SCHEMA.addAfterSaveHook(context -> {
             Row saved = context.getRow();
             Integer id = saved != null ? saved.get(CertificateModel.ID) : null;
-            Row cert = id != null ? Models.get(CertificateModel.class).findById(id) : null;
+            Row cert = Models.get(CertificateModel.class).findById(id);
             // With a proxy in this process the row is not the rule: its store loading the certificate fires.
             if (cert != null && ServerMain.getProxyServer() == null
                     && CertificateModel.STATUS_ACTIVE.equals(cert.get(CertificateModel.STATUS))

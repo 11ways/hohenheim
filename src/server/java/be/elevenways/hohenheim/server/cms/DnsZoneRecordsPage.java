@@ -331,7 +331,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         String origin = zone.get(DnsZoneModel.ORIGIN);
 
         Integer peerId = zone.get(DnsZoneModel.PRIMARY_PEER_ID);
-        Row peer = peerId != null ? Models.get(DnsPeerModel.class).findById(peerId) : null;
+        Row peer = Models.get(DnsPeerModel.class).findById(peerId);
         DnsPeerApi api = DnsPeerApi.forPeer(peer);
 
         List<DnsRecordView> records = new ArrayList<>();
@@ -425,7 +425,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
             return CmsActionResult.refresh();
         }
         Integer peerId = zone.get(DnsZoneModel.PRIMARY_PEER_ID);
-        DnsPeerApi api = DnsPeerApi.forPeer(peerId != null ? Models.get(DnsPeerModel.class).findById(peerId) : null);
+        DnsPeerApi api = DnsPeerApi.forPeer(Models.get(DnsPeerModel.class).findById(peerId));
         if (api == null) {
             return CmsActionResult.errorToast(HohenheimMicrocopy.DNS_REMOTE.of("peer_not_configured"));
         }

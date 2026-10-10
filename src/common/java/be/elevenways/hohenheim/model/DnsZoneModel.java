@@ -11,6 +11,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.ui.ColorHue;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
@@ -165,7 +166,7 @@ public class DnsZoneModel extends Model {
             .build());
 
     public List<Row> findEnabled() {
-        return find().where(ENABLED.eq(true)).all();
+        return findAll(ENABLED, true);
     }
 
     /** @return the zone's role, defaulting to primary for rows predating federation */
@@ -196,8 +197,9 @@ public class DnsZoneModel extends Model {
         return find().where(ROLE.eq(ROLE_SECONDARY)).and(ENABLED.eq(true)).all();
     }
 
-    public Row findByOrigin(String origin) {
-        return find().where(ORIGIN.eq(origin)).first();
+    /** The zone with this origin, which is the zone's identity; null when none. */
+    public @Nullable Row findByOrigin(String origin) {
+        return findFirst(ORIGIN, origin);
     }
 
     static {

@@ -257,7 +257,7 @@ public final class InstanceTemplates {
             }
             owning = environmentProject;
         }
-        return owning == null ? null : Models.get(ProjectModel.class).findById(owning);
+        return Models.get(ProjectModel.class).findById(owning);
     }
 
     /**

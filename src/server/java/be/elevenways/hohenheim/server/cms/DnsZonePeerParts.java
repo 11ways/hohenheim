@@ -157,7 +157,7 @@ public final class DnsZonePeerParts {
 
     private static @Nullable Row peerOf(@NonNull Row link) {
         Integer peerId = link.get(DnsZonePeerModel.PEER_ID);
-        return peerId != null ? Models.get(DnsPeerModel.class).findById(peerId) : null;
+        return Models.get(DnsPeerModel.class).findById(peerId);
     }
 
     /** A link's freshness as probed from this primary. */
@@ -245,7 +245,7 @@ public final class DnsZonePeerParts {
 
     private static @NonNull List<FieldOption<Integer>> peerOptions() {
         List<FieldOption<Integer>> options = new ArrayList<>();
-        for (Row peer : Models.get(DnsPeerModel.class).findEnabled()) {
+        for (Row peer : Models.get(DnsPeerModel.class).findAll(DnsPeerModel.ENABLED, true)) {
             options.add(FieldOption.of(peer.get(DnsPeerModel.ID), String.valueOf(peer.get(DnsPeerModel.NAME))));
         }
         return options;

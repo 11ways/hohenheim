@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.protoblast.common.binary.BinaryReader;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.ByteArrayOutputStream;
@@ -7,6 +8,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.ProtocolException;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Locale;
@@ -76,7 +78,7 @@ public final class TlsClientHelloReader {
             wire.write(recordHeader);
             validateRecordHeader(recordHeader);
 
-            int recordLength = unsignedShort(recordHeader, 3);
+            int recordLength = new BinaryReader(recordHeader, 3, 2, ByteOrder.BIG_ENDIAN).u16();
             if (recordLength == 0 || recordLength > MAX_TLS_PLAINTEXT_LENGTH) {
                 throw new ProtocolException("invalid TLS handshake record length");
             }
@@ -96,7 +98,7 @@ public final class TlsClientHelloReader {
             }
             if (handshake.size() >= 4 && expectedHandshakeLength < 0) {
                 byte[] handshakeBytes = handshake.toByteArray();
-                expectedHandshakeLength = 4 + unsignedMedium(handshakeBytes, 1);
+                expectedHandshakeLength = 4 + new BinaryReader(handshakeBytes, 1, 3, ByteOrder.BIG_ENDIAN).u24();
                 if (expectedHandshakeLength > maxBytes) {
                     throw new ProtocolException("ClientHello exceeds the configured limit");
                 }
@@ -249,65 +251,50 @@ public final class TlsClientHelloReader {
         return result;
     }
 
-    private static int unsignedShort(byte[] bytes, int offset) {
-        return ((bytes[offset] & 0xff) << 8) | (bytes[offset + 1] & 0xff);
-    }
-
-    private static int unsignedMedium(byte[] bytes, int offset) {
-        return ((bytes[offset] & 0xff) << 16)
-            | ((bytes[offset + 1] & 0xff) << 8)
-            | (bytes[offset + 2] & 0xff);
-    }
-
+    /**
+     * A big-endian reader over one ClientHello window that names the truncated field in a ProtocolException.
+     *
+     * Every read is checked here first, so the BinaryReader underneath never has to refuse.
+     */
     private static final class Cursor {
 
-        private final byte[] bytes;
-        private final int end;
-        private int position;
+        private final BinaryReader reader;
 
         private Cursor(byte[] bytes, int start, int end) throws ProtocolException {
             if (start < 0 || end < start || end > bytes.length) {
                 throw new ProtocolException("ClientHello length exceeds available handshake bytes");
             }
-            this.bytes = bytes;
-            this.position = start;
-            this.end = end;
+            this.reader = new BinaryReader(bytes, start, end - start, ByteOrder.BIG_ENDIAN);
         }
 
         private int remaining() {
-            return end - position;
+            return reader.remaining();
         }
 
         private int readUnsignedByte(String field) throws ProtocolException {
             require(1, field);
-            return bytes[position++] & 0xff;
+            return reader.u8();
         }
 
         private int readUnsignedShort(String field) throws ProtocolException {
             require(2, field);
-            int result = unsignedShort(bytes, position);
-            position += 2;
-            return result;
+            return reader.u16();
         }
 
         private void skip(int length, String field) throws ProtocolException {
             require(length, field);
-            position += length;
+            reader.skip(length);
         }
 
         private byte[] readBytes(int length, String field) throws ProtocolException {
             require(length, field);
-            byte[] result = new byte[length];
-            System.arraycopy(bytes, position, result, 0, length);
-            position += length;
-            return result;
+            return reader.bytes(length);
         }
 
         private Cursor readSlice(int length, String field) throws ProtocolException {
             require(length, field);
-            Cursor result = new Cursor(bytes, position, position + length);
-            position += length;
-            return result;
+            int start = reader.skip(length);
+            return new Cursor(reader.array(), start, start + length);
         }
 
         private void require(int length, String field) throws ProtocolException {

@@ -377,7 +377,7 @@ public final class StackParts {
         if (save.values().containsKey(StackModel.NAME.getName())) {
             row.set(StackModel.NAME, name);
         }
-        Row duplicate = Models.get(StackModel.class).findByName(name);
+        Row duplicate = Models.get(StackModel.class).findFirst(StackModel.NAME, name);
         if (duplicate != null
             && (existing == null || !duplicate.get(StackModel.ID).equals(existing.get(StackModel.ID)))) {
             throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("stack_name_taken"));

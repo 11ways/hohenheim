@@ -200,9 +200,7 @@ public final class InstanceDevices {
 
     /** The device rows of one instance (admin surfaces, reconcile, tests). */
     public @NonNull List<Row> rowsFor(int instanceId) {
-        return Models.get(InstanceDeviceModel.class).find()
-            .where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
-            .all();
+        return Models.get(InstanceDeviceModel.class).findAll(InstanceDeviceModel.INSTANCE_ID, instanceId);
     }
 
     /**

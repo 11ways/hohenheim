@@ -294,7 +294,7 @@ class DatabaseModelTest {
             row.set(DatabaseEngineModel.ROOT_PASSWORD, "secret123");
             row.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_PROVISIONING);
             engines.save(row);
-            Row reloaded = engines.findByName("mongo-local");
+            Row reloaded = engines.findFirst(DatabaseEngineModel.NAME, "mongo-local");
             assertThat(reloaded).as("step 2: the ordinary spelling saves").isNotNull();
             assertThat((Integer) reloaded.get(DatabaseEngineModel.SERVER_ID))
                 .as("step 2: the host FK defaults to the local daemon")

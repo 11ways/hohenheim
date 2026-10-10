@@ -80,7 +80,7 @@ public final class InstanceScheduleOperationHandlers {
     private static @NonNull Integer deleteStep(@NonNull OperationCall<Row, Void> call) {
         Row step = call.subject();
         Integer scheduleId = step.get(RecordScheduleStepModel.SCHEDULE_ID);
-        Row schedule = scheduleId == null ? null : Models.get(RecordScheduleModel.class).findById(scheduleId);
+        Row schedule = Models.get(RecordScheduleModel.class).findById(scheduleId);
         if (schedule != null) {
             InstanceScheduleParts.requireManage(access(call),
                 InstanceScheduleParts.parseInstanceId(schedule.get(RecordScheduleModel.RECORD_ID)));

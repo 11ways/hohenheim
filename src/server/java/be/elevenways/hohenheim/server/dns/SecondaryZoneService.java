@@ -412,7 +412,7 @@ public final class SecondaryZoneService {
 
     private static @Nullable Row peerFor(@NonNull Row zone) {
         Integer peerId = zone.get(DnsZoneModel.PRIMARY_PEER_ID);
-        return peerId != null ? Models.get(DnsPeerModel.class).findById(peerId) : null;
+        return Models.get(DnsPeerModel.class).findById(peerId);
     }
 
     /** RFC 1982 serial arithmetic: true when remote is not strictly newer than local. */

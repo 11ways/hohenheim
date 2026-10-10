@@ -130,7 +130,7 @@ public final class DnsFederationKeys {
         DnsPeerModel peers = Models.get(DnsPeerModel.class);
         Row peer = peers.findByTsigKeyName(keyName);
         if (peer == null) {
-            peer = peers.findByName(peerName);
+            peer = peers.findFirst(DnsPeerModel.NAME, peerName);
         }
         if (peer == null) {
             peer = peers.createEmptyRow();
@@ -167,7 +167,7 @@ public final class DnsFederationKeys {
         String base = peerName.isBlank() ? "peer" : peerName.trim();
         String candidate = base;
         int suffix = 2;
-        while (peers.findByName(candidate) != null) {
+        while (peers.findFirst(DnsPeerModel.NAME, candidate) != null) {
             candidate = base + "-" + suffix;
             suffix++;
         }

@@ -155,7 +155,7 @@ final class DatabaseOverview {
             return HohenheimMicrocopy.DATABASE_OVERVIEW.of("runs_on_dedicated").withArg("host", host);
         }
         Integer engineId = database.get(DatabaseModel.ENGINE_ID);
-        Row engine = engineId == null ? null : Models.get(DatabaseEngineModel.class).findById(engineId);
+        Row engine = Models.get(DatabaseEngineModel.class).findById(engineId);
         return HohenheimMicrocopy.DATABASE_OVERVIEW.of("runs_on_shared").withArg("host", host)
             .withArg("engine", engine != null ? String.valueOf((Object) engine.get(DatabaseEngineModel.NAME))
                 : "#" + engineId);

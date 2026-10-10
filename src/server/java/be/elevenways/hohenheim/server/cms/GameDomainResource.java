@@ -87,7 +87,7 @@ public final class GameDomainResource {
      */
     private static @Nullable String hostname(@NonNull Row mapping) {
         Integer domainId = mapping.get(GameDomainModel.SITE_DOMAIN_ID);
-        Row domain = domainId != null ? Models.get(SiteDomainModel.class).findById(domainId) : null;
+        Row domain = Models.get(SiteDomainModel.class).findById(domainId);
         String hostname = domain != null ? domain.get(SiteDomainModel.HOSTNAME) : null;
         return hostname != null && !hostname.isBlank() ? hostname : null;
     }

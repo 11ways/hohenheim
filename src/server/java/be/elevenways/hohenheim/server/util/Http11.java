@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.util;
 
+import be.elevenways.protoblast.common.util.BlastString;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -460,13 +461,7 @@ public final class Http11 {
             if (semicolon >= 0) {
                 sizeToken = sizeToken.substring(0, semicolon);
             }
-            long size;
-            try {
-                size = Long.parseLong(sizeToken.trim(), 16);
-            } catch (NumberFormatException bad) {
-                throw new IOException("Malformed chunked body from " + peer
-                    + ": bad chunk size '" + sizeToken + "'");
-            }
+            long size = chunkSize(sizeToken.trim(), Long.MAX_VALUE, peer);
             if (size == 0) {
                 // Trailers (if any) end at the first empty line.
                 while (!readLine(in, peer).isEmpty()) {
@@ -495,6 +490,29 @@ public final class Http11 {
                     + ": chunk not CRLF-terminated");
             }
         }
+    }
+
+    /**
+     * The size a chunk header declares, read as the bare ASCII hex RFC 9112 allows.
+     *
+     * Long.parseLong and Integer.parseInt accept a leading sign, so "-0" used to end a body early and "-1" read a
+     * negative size.
+     *
+     * @throws IOException when the token is empty, holds anything but 0-9 a-f A-F, or exceeds max
+     */
+    private static long chunkSize(String token, long max, String peer) throws IOException {
+        boolean valid = !token.isEmpty();
+        long size = 0;
+        for (int i = 0; valid && i < token.length(); i++) {
+            int digit = BlastString.hexDigitValue(token.charAt(i));
+            // size * 16 + digit must stay within max, checked before the shift can overflow.
+            valid = digit >= 0 && size <= (max - digit) >> 4;
+            size = (size << 4) | digit;
+        }
+        if (!valid) {
+            throw new IOException("Malformed chunked body from " + peer + ": bad chunk size '" + token + "'");
+        }
+        return size;
     }
 
     /** One CRLF-terminated line off the stream (the terminator is consumed, not returned). */
@@ -531,13 +549,7 @@ public final class Http11 {
             if (semicolon >= 0) {
                 sizeToken = sizeToken.substring(0, semicolon);
             }
-            int size;
-            try {
-                size = Integer.parseInt(sizeToken, 16);
-            } catch (NumberFormatException e) {
-                throw new IOException("Malformed chunked body from " + peer
-                    + ": bad chunk size '" + sizeToken + "'");
-            }
+            int size = (int) chunkSize(sizeToken, Integer.MAX_VALUE, peer);
             if (size == 0) {
                 break;                                          // terminating chunk
             }

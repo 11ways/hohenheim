@@ -376,16 +376,9 @@ public class SiteDomainModel extends Model {
 
 
 
+    /** The domains a site answers on. */
     public List<Row> findBySiteId(int siteId) {
-        return find()
-            .where(SITE_ID.eq(siteId))
-            .all();
-    }
-
-    public List<Row> findByHostname(String hostname) {
-        return find()
-            .where(HOSTNAME.eq(hostname))
-            .all();
+        return findAll(SITE_ID, siteId);
     }
 
     @Override

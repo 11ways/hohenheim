@@ -273,7 +273,7 @@ public final class InternalDnsTxtPublisher implements DnsTxtPublisher {
     private static @Nullable Row owningPeer(@NonNull DnsZoneSnapshot zone) {
         Row row = Models.get(DnsZoneModel.class).findById(zone.getZoneId());
         Integer peerId = row != null ? row.get(DnsZoneModel.PRIMARY_PEER_ID) : null;
-        return peerId != null ? Models.get(DnsPeerModel.class).findById(peerId) : null;
+        return Models.get(DnsPeerModel.class).findById(peerId);
     }
 
     /** Names the owning primary for an operator: the peer's name, else the zone's SOA host. */

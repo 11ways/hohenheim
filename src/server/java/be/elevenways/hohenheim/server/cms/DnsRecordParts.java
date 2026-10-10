@@ -258,7 +258,7 @@ public final class DnsRecordParts {
             return value;
         }
         Integer zoneId = row.get(DnsRecordModel.ZONE_ID);
-        Row zone = zoneId != null ? Models.get(DnsZoneModel.class).findById(zoneId) : null;
+        Row zone = Models.get(DnsZoneModel.class).findById(zoneId);
         // The seconds go in as TEXT: a TTL is an identifier of a cache window, not a
         // quantity, so it must never pick up locale digit grouping ("3,600" is not a TTL).
         return HohenheimMicrocopy.DNS_RECORD.of("ttl_zone_default")

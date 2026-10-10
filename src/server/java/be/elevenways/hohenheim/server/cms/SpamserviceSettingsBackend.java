@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.spamservice.client.SettingEntry;
@@ -287,8 +288,7 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
     }
 
     private static String humanize(String value) {
-        String text = value.replace('_', ' ');
-        return text.isEmpty() ? text : Character.toUpperCase(text.charAt(0)) + text.substring(1);
+        return BlastString.upperFirst(value.replace('_', ' '));
     }
 
     private record BuiltSnapshot(Snapshot snapshot, Map<String, SettingDefinition<?>> definitions,

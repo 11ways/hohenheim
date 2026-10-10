@@ -145,7 +145,7 @@ public final class DnsZoneApi {
 
     private static @Nullable Row zoneOf(@NonNull Conduit conduit) {
         Integer zoneId = conduit.getParameter(HohenheimEndpoints.ZONE_ID);
-        return zoneId == null ? null : Models.get(DnsZoneModel.class).findById(zoneId);
+        return Models.get(DnsZoneModel.class).findById(zoneId);
     }
 
     /** THE enumerated view of a zone row: the operator columns plus its served apex NS names. */

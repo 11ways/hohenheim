@@ -1043,18 +1043,12 @@ public final class InstanceBackups {
 
     /** The grouping environment's name, or null when unset or dangling. */
     private static @Nullable String environmentName(@Nullable Integer environmentId) {
-        if (environmentId == null) {
-            return null;
-        }
         Row row = Models.get(EnvironmentModel.class).findById(environmentId);
         return row != null ? row.get(EnvironmentModel.NAME) : null;
     }
 
     /** The backup destination's name, or null when unset or dangling. */
     private static @Nullable String targetName(@Nullable Integer targetId) {
-        if (targetId == null) {
-            return null;
-        }
         Row row = Models.get(BackupTargetModel.class).findById(targetId);
         return row != null ? row.get(BackupTargetModel.NAME) : null;
     }

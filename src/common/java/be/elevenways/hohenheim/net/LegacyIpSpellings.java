@@ -172,6 +172,8 @@ public final class LegacyIpSpellings {
             }
             int accumulator = 0;
             for (int i = 0; i < group.length(); i++) {
+                // Deliberately Character.digit, not the ASCII-only BlastString.hexDigitValue: the frozen
+                // parser read fullwidth digits, and AccessRuleNetworkSpellingMigrationTest pins that reading.
                 int digit = Character.digit(group.charAt(i), 16);
                 if (digit < 0) {
                     return null;

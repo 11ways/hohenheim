@@ -40,9 +40,9 @@ public final class DnsZonePeers {
     public static @NonNull List<Linked> linked(int zoneId) {
         DnsPeerModel peers = Models.get(DnsPeerModel.class);
         List<Linked> linked = new ArrayList<>();
-        for (Row link : Models.get(DnsZonePeerModel.class).findByZoneId(zoneId)) {
+        for (Row link : Models.get(DnsZonePeerModel.class).findAll(DnsZonePeerModel.ZONE_ID, zoneId)) {
             Integer peerId = link.get(DnsZonePeerModel.PEER_ID);
-            Row peer = peerId != null ? peers.findById(peerId) : null;
+            Row peer = peers.findById(peerId);
             if (peer != null) {
                 linked.add(new Linked(link, peer));
             }

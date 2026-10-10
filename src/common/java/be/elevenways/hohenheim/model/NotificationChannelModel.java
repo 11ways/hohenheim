@@ -55,11 +55,6 @@ public class NotificationChannelModel extends Model {
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
 
-    /** The channel with this unique name, or null if none. */
-    public Row findByName(String name) {
-        return find().where(NAME.eq(name)).first();
-    }
-
     @Override
     public Identifier getModelId() { return MODEL_ID; }
 

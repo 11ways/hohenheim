@@ -171,13 +171,13 @@ public final class InstanceScheduleStepParts {
         }
         Conduit conduit = access.conduit();
         if (conduit == null) {
-            return loadSchedule(scheduleId);
+            return Models.get(RecordScheduleModel.class).findById(scheduleId);
         }
         Map<Integer, Row> cache = conduit.memo(SCHEDULE_ROWS, LinkedHashMap::new);
         if (cache.containsKey(scheduleId)) {
             return cache.get(scheduleId);
         }
-        Row schedule = loadSchedule(scheduleId);
+        Row schedule = Models.get(RecordScheduleModel.class).findById(scheduleId);
         cache.put(scheduleId, schedule);
         return schedule;
     }
@@ -203,7 +203,7 @@ public final class InstanceScheduleStepParts {
                     HohenheimMicrocopy.VIOLATIONS.of("schedule_step_schedule_fixed"));
             }
         }
-        Row schedule = scheduleId instanceof Integer id ? loadSchedule(id) : null;
+        Row schedule = scheduleId instanceof Integer id ? Models.get(RecordScheduleModel.class).findById(id) : null;
         if (!InstanceScheduleParts.isInstanceSchedule(schedule)) {
             throw Violations.ofField("schedule_id", scheduleId, HohenheimMicrocopy.VIOLATIONS.of("unknown_schedule"));
         }
@@ -216,12 +216,5 @@ public final class InstanceScheduleStepParts {
         if (refusal != null) {
             throw Violations.ofField("action", action, refusal.message());
         }
-    }
-
-    private static @Nullable Row loadSchedule(@Nullable Integer scheduleId) {
-        if (scheduleId == null) {
-            return null;
-        }
-        return Models.get(RecordScheduleModel.class).find().where(RecordScheduleModel.ID.eq(scheduleId)).first();
     }
 }

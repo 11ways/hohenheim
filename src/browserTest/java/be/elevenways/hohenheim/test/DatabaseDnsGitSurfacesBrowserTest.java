@@ -243,7 +243,7 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
      */
     private static PanelSurfaces capture(SurfaceCase fixture) {
         List<String> enabledPeers = new ArrayList<>();
-        for (Row peer : Models.get(DnsPeerModel.class).findEnabled()) {
+        for (Row peer : Models.get(DnsPeerModel.class).findAll(DnsPeerModel.ENABLED, true)) {
             enabledPeers.add(String.valueOf((Object) peer.get(DnsPeerModel.ID)));
         }
         List<String> allPeers = new ArrayList<>();
