@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.cms.common.CmsSettings;
 import be.elevenways.zenit.common.Zenit;
 import org.junit.jupiter.api.Test;

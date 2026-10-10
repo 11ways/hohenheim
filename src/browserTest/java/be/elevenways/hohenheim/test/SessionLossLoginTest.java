@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.auth.server.PasswordService;
 import be.elevenways.zenit.auth.server.ZenitAuth;
@@ -10,6 +9,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.csrf.CsrfTokens;
 import be.elevenways.zenit.common.session.Session;
+import be.elevenways.zenit.server.http.SessionCookies;
 import com.microsoft.playwright.options.Cookie;
 import org.junit.jupiter.api.Test;
 
@@ -47,7 +47,7 @@ class SessionLossLoginTest extends HohenheimTestBase {
         Zenit.getSessionStore().save(session);
 
         page.context().addCookies(List.of(
-            new Cookie(AuthCookieSupport.sessionCookieName(), session.token().secret())
+            new Cookie(SessionCookies.name(), session.token().secret())
                 .setDomain("localhost")
                 .setPath("/")));
         page.navigate("http://localhost:" + getServerPort() + "/admin/dashboard");

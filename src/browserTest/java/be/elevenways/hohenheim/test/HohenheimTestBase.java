@@ -9,7 +9,6 @@ import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.auth.AuthSettings;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
@@ -19,6 +18,7 @@ import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.csrf.CsrfTokens;
 import be.elevenways.zenit.common.session.Session;
+import be.elevenways.zenit.server.http.SessionCookies;
 import com.microsoft.playwright.options.Cookie;
 
 import java.io.IOException;
@@ -270,7 +270,7 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
 
     /** The Cookie header value that carries {@code session}. */
     protected static @NonNull String sessionCookieHeader(@NonNull String session) {
-        return AuthCookieSupport.sessionCookieName() + "=" + session;
+        return SessionCookies.name() + "=" + session;
     }
 
     protected HttpResponse<String> httpGet(String path, @Nullable String session)
@@ -386,7 +386,7 @@ public abstract class HohenheimTestBase extends ZenitBrowserTestBase {
     protected void navigateToApp(String path) {
         // Inject the zenit-auth session cookie before navigation so gated admin pages are reachable.
         page.context().addCookies(List.of(
-            new Cookie(AuthCookieSupport.sessionCookieName(), sessionToken)
+            new Cookie(SessionCookies.name(), sessionToken)
                 .setDomain("localhost")
                 .setPath("/")
         ));

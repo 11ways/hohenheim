@@ -27,7 +27,6 @@ import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -35,6 +34,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.kvm.common.ScreenMessage;
 import be.elevenways.zenit.kvm.common.ScreenStatus;
 import be.elevenways.zenit.kvm.test.support.RecordingScreenSocket;
+import be.elevenways.zenit.server.http.SessionCookies;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
@@ -107,7 +107,7 @@ class VmScreenJourneyTest extends HohenheimTestBase {
             // 3. A console delegate joins from the manage panel: he sees the same screen, but only watches, so his
             //    key never reaches the VM; he is offered to ask for control.
             tenantContext = browser.newContext();
-            tenantContext.addCookies(List.of(new Cookie(AuthCookieSupport.sessionCookieName(),
+            tenantContext.addCookies(List.of(new Cookie(SessionCookies.name(),
                 sessionFor(tenantId).token()).setDomain("localhost").setPath("/")));
             Page tenant = tenantContext.newPage();
             tenant.navigate(baseUrl() + "/manage/instances/" + instanceId + "/page/framebuffer");

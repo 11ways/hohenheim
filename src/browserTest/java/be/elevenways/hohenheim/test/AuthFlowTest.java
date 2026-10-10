@@ -3,13 +3,13 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.zenit.auth.AuthKeys;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.auth.server.ZenitAuth;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.security.csrf.CsrfTokens;
 import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.server.http.ReturnTarget;
+import be.elevenways.zenit.server.http.SessionCookies;
 import org.junit.jupiter.api.*;
 
 import java.net.http.HttpRequest;
@@ -73,7 +73,7 @@ class AuthFlowTest extends HohenheimTestBase {
         throwaway.set(CsrfTokens.TOKEN, ZenitAuth.randomToken());
         Zenit.getSessionStore().save(throwaway);
         context.addCookies(java.util.List.of(new com.microsoft.playwright.options.Cookie(
-            AuthCookieSupport.sessionCookieName(), throwaway.token().secret())
+            SessionCookies.name(), throwaway.token().secret())
             .setDomain("localhost").setPath("/")));
 
         // Navigate RAW, never through navigateToApp: the base helper re-injects the

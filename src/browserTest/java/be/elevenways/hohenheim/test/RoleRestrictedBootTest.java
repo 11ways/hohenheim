@@ -23,7 +23,6 @@ import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.task.UpdateSystemUsers;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.ApiKeyService;
-import be.elevenways.zenit.auth.server.AuthCookieSupport;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -33,6 +32,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.task.TaskCatalog;
 import be.elevenways.zenit.common.task.orm.SystemTaskModel;
 import be.elevenways.zenit.server.ServerZenitRuntime;
+import be.elevenways.zenit.server.http.SessionCookies;
 import be.elevenways.zenit.server.http.ZenitHttpServer;
 import be.elevenways.zenit.server.setting.ServerSettings;
 import org.junit.jupiter.api.AfterAll;
@@ -317,7 +317,7 @@ class RoleRestrictedBootTest {
             throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create("http://127.0.0.1:" + port + path))
-            .header("Cookie", AuthCookieSupport.sessionCookieName() + "=" + session)
+            .header("Cookie", SessionCookies.name() + "=" + session)
             .GET().build();
         HttpResponse<Void> response = client.send(request, HttpResponse.BodyHandlers.discarding());
         return response.statusCode();
