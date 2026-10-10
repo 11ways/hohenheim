@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.ports.PortHolders;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
@@ -586,8 +587,11 @@ public final class StackParts {
             Row ownInstance = existingId != null ? StackInstances.owned(existingId) : null;
             if (holder != null && !(ownInstance != null && PortLedger.isOwnedBy(holder,
                     InstanceModel.MODEL_ID, ownInstance.get(InstanceModel.ID)))) {
-                throw Violations.ofField("ports." + index + ".host_port", host,
-                    HohenheimMicrocopy.VIOLATIONS.of("port_held").withArg("holder", PortLedger.describeHolder(holder)));
+                // The holder is named only to a caller who may read it (PortHolders), never from the bare ledger row.
+                String named = PortHolders.describedTo(holder);
+                throw Violations.ofField("ports." + index + ".host_port", host, named == null
+                    ? HohenheimMicrocopy.VIOLATIONS.of("port_held_unnamed")
+                    : HohenheimMicrocopy.VIOLATIONS.of("port_held").withArg("holder", named));
             }
         }
     }

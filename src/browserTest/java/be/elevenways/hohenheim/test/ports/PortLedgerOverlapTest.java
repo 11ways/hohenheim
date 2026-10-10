@@ -4,20 +4,31 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.HohenheimDatabase;
+import be.elevenways.hohenheim.server.ports.PortClaimFence;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.thread.ExecutionContext;
+import be.elevenways.zenit.common.orm.OrmConstants;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.datasource.Datasource.Transaction;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
+import be.elevenways.zenit.common.orm.lease.LeaseModel;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.server.orm.SqliteDatasource;
+import be.elevenways.zenit.server.orm.migration.MigrationRunner;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CyclicBarrier;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -208,6 +219,123 @@ class PortLedgerOverlapTest {
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, owners[0]);
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, owners[1]);
         });
+    }
+
+    /**
+     * A claim whose lease a successor took over before the claim committed lands nothing: its decide-then-write
+     * commits only while storage still names it the lease's owner, so a stalled claimant can never save a row it
+     * decided on with lost ownership.
+     */
+    @Test
+    void aClaimWhoseLeaseWasTakenOverBeforeItCommittedLandsNothing() throws Exception {
+        int[] owner = new int[1];
+        int[] localId = new int[1];
+        Db.run(datasource, () -> {
+            owner[0] = instance("stalled-claimant");
+            localId[0] = ServerModel.localServerId();
+        });
+        String key = PortLedger.claimKeyOf(localId[0], "", 8471, "tcp");
+        StealingDatasource stalled = new StealingDatasource(HohenheimDatabase.resolution().url());
+        try {
+            // 1. Between taking the host's claim lease and opening its write, the claimant's lease is taken over in
+            //    storage by a successor (the expired-and-stolen shape a stall past the lease's TTL produces).
+            stalled.stealBeforeTransaction = PortClaimFence.keyFor(localId[0]);
+            assertThatThrownBy(() -> Db.run(stalled, () -> PortLedger.claim(localId[0], "", 8471, "tcp",
+                    InstanceModel.MODEL_ID, owner[0], null)))
+                .as("step 1: the claim is refused at its commit, naming the lost lease")
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Lost lease");
+            assertThat(stalled.stealBeforeTransaction).as("step 1: sanity, the lease was taken over").isNull();
+
+            // 2. Nothing of the claim committed: the port holds no row of the stalled claimant.
+            Db.run(datasource, () -> assertThat(PortLedger.holderOf(key))
+                .as("step 2: the claim decided under lost ownership rolled back").isNull());
+        } finally {
+            stalled.close();
+            // The successor never existed: hand the host's claim lease back, or every later claim of the host waits.
+            new LeaseModel(datasource).find().where(LeaseModel.LEASE_KEY.eq(PortClaimFence.keyFor(localId[0])))
+                .and(LeaseModel.OWNER_TOKEN.eq("port-successor")).assign(LeaseModel.OWNER_TOKEN, null).updateAll();
+            Db.run(datasource, () -> PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, owner[0]));
+        }
+    }
+
+    /**
+     * A delete aimed at another control-plane database parks THAT database's claims of the removed owner, never the
+     * ambient database's claims of an owner with the same id.
+     */
+    @Test
+    void aDeleteAimedAtAnotherDatabaseParksOnlyThatDatabasesClaims() throws Exception {
+        // A second control-plane database of its own, migrated from empty: TestDatabases swaps the shared one.
+        File file = File.createTempFile("hohenheim-colliding", ".db");
+        file.delete();
+        file.deleteOnExit();
+        SqliteDatasource other = new SqliteDatasource("jdbc:sqlite:" + file.getAbsolutePath());
+        new MigrationRunner(other).migrate().requireSuccess();
+        int ownerId = 990_001;
+        try {
+            // 1. Both databases hold an instance with the same id, and each holds a claim of it on port 8481.
+            for (SqlDatasource database : List.of(datasource, other)) {
+                Db.run(database, () -> {
+                    Row row = Models.get(InstanceModel.class).createEmptyRow();
+                    row.set(InstanceModel.ID, ownerId);
+                    row.set(InstanceModel.NAME, "colliding-owner");
+                    row.set(InstanceModel.KIND, "hohenheim:docker_container");
+                    Models.get(InstanceModel.class).insert(row);
+                    PortLedger.claim(ServerModel.localServerId(), "", 8481, "tcp", InstanceModel.MODEL_ID,
+                        ownerId, null);
+                });
+            }
+
+            // 2. With the first database ambient, the instance is hard-deleted from the OTHER one.
+            Db.run(datasource, () -> assertThat(Models.get(InstanceModel.class).find()
+                    .where(InstanceModel.ID.eq(ownerId))
+                    .hint(OrmConstants.SOFT_DELETE_FORCE_HINT, Boolean.TRUE)
+                    .on(other).delete())
+                .as("step 2: the delete removed the other database's owner").isEqualTo(1));
+
+            // 3. The other database's claim is parked, and the ambient database's claim of its own owner is not.
+            Db.run(other, () -> assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, ownerId))
+                .as("step 3: THE ASSERTION -- the removed owner's claim is parked where it was removed")
+                .singleElement().satisfies(claim -> assertThat(PortLedger.isReleasing(claim)).isTrue()));
+            Db.run(datasource, () -> assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, ownerId))
+                .as("step 3: the ambient database's same-id owner keeps its claim held")
+                .singleElement().satisfies(claim -> assertThat(PortLedger.isReleasing(claim)).isFalse()));
+        } finally {
+            Db.run(datasource, () -> {
+                PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, ownerId);
+                HardDeletes.byId(Models.get(InstanceModel.class), ownerId);
+            });
+            other.close();
+        }
+    }
+
+    /**
+     * The control-plane database, opened a second time: before the next outermost transaction it hands the named
+     * lease to a successor through the first connection, the way a stalled holder loses it.
+     */
+    private static final class StealingDatasource extends SqliteDatasource {
+
+        private volatile @Nullable String stealBeforeTransaction;
+
+        private StealingDatasource(String url) {
+            super(url);
+        }
+
+        @Override
+        public void withTransaction(Consumer<Transaction> block) {
+            String lease = this.stealBeforeTransaction;
+            if (lease != null && !super.hasActiveTransaction()) {
+                int taken = new LeaseModel(datasource).find()
+                    .where(LeaseModel.LEASE_KEY.eq(lease))
+                    .assign(LeaseModel.OWNER_TOKEN, "port-successor")
+                    .increment(LeaseModel.FENCE)
+                    .updateAll();
+                if (taken == 1) {
+                    this.stealBeforeTransaction = null;
+                }
+            }
+            super.withTransaction(block);
+        }
     }
 
     private static int instance(String name) {

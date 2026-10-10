@@ -5748,6 +5748,10 @@
     "text": "Deze hostpoort is al geclaimd door {$holder}",
     "scope": "violations"
   },
+  "port_held_unnamed": {
+    "text": "Deze hostpoort is al geclaimd door een andere workload",
+    "scope": "violations"
+  },
   "depends_unknown_service": {
     "text": "Er bestaat geen service met die naam in deze stack",
     "scope": "violations"
@@ -7802,6 +7806,10 @@
   },
   "port_conflict": {
     "text": "Hostpoort {$port} is al geclaimd door {$holder}",
+    "scope": "violations"
+  },
+  "port_conflict_unnamed": {
+    "text": "Hostpoort {$port} is al geclaimd door een andere workload",
     "scope": "violations"
   },
   "port_shape_without_port": {

@@ -8,10 +8,12 @@ import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.server.ports.PortHolders;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
 import be.elevenways.hohenheim.server.util.PortProbe;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -235,7 +237,7 @@ final class PortPublications {
         Row rival = PortLedger.rivalHolder(serverId, bind, port, protocol,
             InstanceModel.MODEL_ID, instanceId);
         if (rival != null) {
-            throw conflictRefusal(port, PortLedger.describeHolder(rival));
+            throw conflictRefusal(port, rival, PortLedger.describeHolder(rival));
         }
         boolean reclaimingOwnRow =
             PortLedger.conflictingHolder(serverId, bind, port, protocol) != null;
@@ -247,11 +249,22 @@ final class PortPublications {
             PortLedger.claimPreallocated(serverId, bind, port, protocol,
                 InstanceModel.MODEL_ID, instanceId, null);
         } catch (PortLedger.PortConflict conflict) {
-            throw conflictRefusal(port, conflict.getHolder());
+            throw conflictRefusal(port, conflict.getHolderClaim(), conflict.getHolder());
         }
     }
 
-    private static Violations conflictRefusal(int port, @NonNull String holder) {
+    /**
+     * The refusal of a port another owner holds, naming that owner only to a caller who may read it
+     * ({@link PortHolders#describedTo}); the full diagnostic goes to the log otherwise.
+     */
+    private static Violations conflictRefusal(int port, @Nullable Row holderClaim, @NonNull String diagnostic) {
+        String holder = holderClaim == null ? null : PortHolders.describedTo(holderClaim);
+        if (holder == null) {
+            Blast.log("PORTS: host port", port, "is held by", diagnostic,
+                "- refused without naming it to a caller who may not read that owner");
+            return Violations.ofField("settings.host_port", port,
+                HohenheimMicrocopy.VIOLATIONS.of("port_conflict_unnamed").withArg("port", port));
+        }
         return Violations.ofField("settings.host_port", port,
             HohenheimMicrocopy.VIOLATIONS.of("port_conflict")
                 .withArg("port", port)

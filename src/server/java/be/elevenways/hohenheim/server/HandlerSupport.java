@@ -171,7 +171,7 @@ public final class HandlerSupport {
      */
     public static void inBackground(@NonNull Runnable work) {
         Datasource datasource = Db.currentOrDefault();
-        JobRunner.startVirtualThread(() -> Db.run(datasource, work));
+        JobRunner.startVirtualThread(() -> Db.run(datasource, work::run));
     }
 
     /** {@link #inBackground} for fire-and-forget work: a refusal is logged under {@code what}, never thrown. */
@@ -190,7 +190,7 @@ public final class HandlerSupport {
         if (datasource == null) {
             body.run();
         } else {
-            Db.run(datasource, body);
+            Db.run(datasource, body::run);
         }
     }
 }

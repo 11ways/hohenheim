@@ -88,7 +88,7 @@ public final class ProjectGuards {
 
         // Delete guard + explicit auth-footprint teardown (hard deletes; projects
         // have no soft delete).
-        DoomedRows.handOver(ProjectModel.SCHEMA, ProjectGuards::refuseNonEmptyAndCapture,
+        DoomedRows.handOverInDeletesDatasource(ProjectModel.SCHEMA, ProjectGuards::refuseNonEmptyAndCapture,
             ProjectGuards::removeDoomedGroups);
 
         // The other direction of the same invariant: /admin/roles offers a plain Delete on

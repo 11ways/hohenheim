@@ -210,6 +210,9 @@ public class M011_ReviewHardening extends HohenheimMigration {
             M011_ReviewHardening::respellHostWildcards);
         // A port claim's controller fence was written null by every caller and read by none.
         schema.alterTable("port_allocations", table -> table.dropColumn("controller_fence"));
+        // Every port claim of a host excludes the others through core's fenced subject: the host's own row.
+        schema.alterTable("servers", table -> table.addColumn("port_claim_fence", ColumnType.LONG,
+            column -> column.nullable(true)));
         schema.data("start every instance's claim fence over in its own claim lease's generations", "1",
             M011_ReviewHardening::clearInstanceClaimFences);
         // Who set each operator-trustable target: false for a row the next build writes without the system tier.

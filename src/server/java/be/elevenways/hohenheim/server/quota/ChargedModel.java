@@ -134,7 +134,7 @@ public enum ChargedModel {
         }
         this.installed = true;
         this.schema.addBeforeWriteHook(this::charge);
-        DoomedRows.handOver(this.schema, this::doomedReleases, this::releaseDoomed);
+        DoomedRows.handOverInDeletesDatasource(this.schema, this::doomedReleases, this::releaseDoomed);
     }
 
     /** @return every live row of this model (the reconciler's truth; trashed rows are hidden) */

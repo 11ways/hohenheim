@@ -71,7 +71,7 @@ public final class InstanceDatabaseLinks {
         // Captured BEFORE the delete because the sweep runs AFTER it: the sweep reads
         // the surviving rows to decide what stays, and the doomed row must be gone by
         // then or it would vote to keep its own network.
-        DoomedRows.handOver(InstanceDatabaseModel.SCHEMA, context -> {
+        DoomedRows.handOverInDeletesDatasource(InstanceDatabaseModel.SCHEMA, context -> {
             Set<Integer> detached = new LinkedHashSet<>();
             for (Row row : context.doomedRows()) {
                 Integer instanceId = row.get(InstanceDatabaseModel.INSTANCE_ID);

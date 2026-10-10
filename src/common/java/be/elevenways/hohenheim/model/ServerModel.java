@@ -262,6 +262,14 @@ public class ServerModel extends Model {
         TextField.builder().name("last_error").nullable(true).build());
 
     /**
+     * The generation of the port-claim lease that last claimed a port on this host: the fenced subject every claim
+     * pins inside its transaction (core Commands' fence), so two claims of one host's ports exclude each other through
+     * the commit on every engine, joined transactions included. Written only by that pin.
+     */
+    public static final LongField PORT_CLAIM_FENCE = SCHEMA.addField(
+        LongField.builder("port_claim_fence").filterable(false).build());
+
+    /**
      * When this host's identity was found to CONTRADICT a pin; null means never, and only
      * a repin clears it.
      *

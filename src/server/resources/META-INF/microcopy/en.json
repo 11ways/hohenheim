@@ -5748,6 +5748,10 @@
     "text": "This host port is already claimed by {$holder}",
     "scope": "violations"
   },
+  "port_held_unnamed": {
+    "text": "This host port is already claimed by another workload",
+    "scope": "violations"
+  },
   "depends_unknown_service": {
     "text": "No service with that name exists in this stack",
     "scope": "violations"
@@ -7802,6 +7806,10 @@
   },
   "port_conflict": {
     "text": "Host port {$port} is already claimed by {$holder}",
+    "scope": "violations"
+  },
+  "port_conflict_unnamed": {
+    "text": "Host port {$port} is already claimed by another workload",
     "scope": "violations"
   },
   "port_shape_without_port": {

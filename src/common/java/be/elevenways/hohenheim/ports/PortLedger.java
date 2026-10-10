@@ -4,18 +4,18 @@ import be.elevenways.zenit.common.orm.model.DoomedRows;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.platform.PlatformSeam;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.BlastString;
-import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.DuplicateKeyException;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
-import be.elevenways.zenit.common.orm.lease.Lease;
-import be.elevenways.zenit.common.orm.lease.Leases;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -35,12 +35,13 @@ import static be.elevenways.hohenheim.RawValues.trimmed;
  * AIDEV-NOTE: concurrency posture. The unique index covers only the EXACT claim key, so
  * it cannot see a whole-host bind racing an address-specific bind of the same port (two
  * different keys, one impossible pair of kernel binds). Every write therefore runs its
- * overlap check and its write under ONE fenced zenit {@link Leases} lease keyed on
- * (server, port, protocol) -- the kernel resource both spellings contend for -- which is
- * the portable decide-then-write guard (row locks and write serialization each cover only
- * some backends). Inside an open write transaction on a single-writer engine (SQLite) a
- * lease cannot be acquired and is not needed: that transaction already excludes every
- * rival writer. The unique index stays the storage-level backstop. The OS probe
+ * overlap check and its write inside core's fenced subject ({@link #EXCLUSION}, a Commands
+ * fence on the host's own row): the fence pin is a guarded UPDATE of that row in the
+ * claim's transaction, so a rival claim of the same host waits on it through the actual
+ * commit, a joined outer transaction's included, and a holder that lost its lease cannot
+ * commit after its successor. A lease alone could not do this: it expires while its
+ * holder stalls, and a joined claim used to release it before the outer commit. The
+ * unique index stays the storage-level backstop. The OS probe
  * ({@code PortProbe}) stays a SEPARATE, later check: kernel-ephemeral consumers
  * (testcontainers, orphans) will never have ledger rows, so the ledger can never replace
  * the probe.
@@ -49,12 +50,6 @@ public final class PortLedger {
 
     /** RouteClaims' separator convention: no part of a claim tuple can contain a newline. */
     private static final String SEPARATOR = "\n";
-
-    /** The lease-key prefix of the per-(server, port, protocol) claim guard. */
-    private static final String CLAIM_LEASE_PREFIX = "hohenheim_port_";
-
-    /** How long a claim waits for a concurrent claim of the same resource to finish. */
-    private static final int CLAIM_LEASE_WAIT_SECONDS = 5;
 
     private PortLedger() {
     }
@@ -68,23 +63,58 @@ public final class PortLedger {
 
         private final @NonNull String claimKey;
         private final @NonNull String holder;
+        private final @Nullable Row holderClaim;
 
-        PortConflict(@NonNull String claimKey, @NonNull String holder, @Nullable Throwable cause) {
+        PortConflict(@NonNull String claimKey, @Nullable Row holderClaim, @NonNull String holder,
+                     @Nullable Throwable cause) {
             super("Port " + claimKey.replace(SEPARATOR, " | ") + " is already claimed by " + holder,
                 cause);
             this.claimKey = claimKey;
             this.holder = holder;
+            this.holderClaim = holderClaim;
         }
 
         public @NonNull String getClaimKey() {
             return this.claimKey;
         }
 
-        /** Human description of the owning record, for the operator-facing refusal. */
+        /**
+         * Human description of the owning record: a privileged diagnostic (logs, the operator), never shown to a
+         * caller who may not read that owner; the presentation boundary decides from {@link #getHolderClaim}.
+         */
         public @NonNull String getHolder() {
             return this.holder;
         }
+
+        /** @return the ledger row that holds the port, null when no row could be named (a busy claim) */
+        public @Nullable Row getHolderClaim() {
+            return this.holderClaim;
+        }
     }
+
+    /**
+     * One claim's check-and-write; it blocks (it reads and writes rows).
+     *
+     * AIDEV-NOTE: a standalone SAM on purpose, never a java.util.function type: on the browser it suspends, and a
+     * suspending JDK callback lets every call through that JDK interface in the bundle suspend (protoblast's
+     * SyncFamilyVerifierPlugin fails such a bundle).
+     */
+    @FunctionalInterface
+    public interface ClaimWrite {
+        void write();
+    }
+
+    /** Runs one claim's check-and-write exclusively among every claim of the same host. */
+    public interface ClaimExclusion {
+
+        /**
+         * @throws DomainRefusal {@code IN_PROGRESS} when a rival claim of the host holds it past the wait
+         */
+        void exclusively(int serverId, @NonNull ClaimWrite body);
+    }
+
+    /** The host-wide claim exclusion: core Commands' fenced subject, installed by the server (PortClaimFence). */
+    public static final PlatformSeam<ClaimExclusion> EXCLUSION = PlatformSeam.required(ClaimExclusion.class);
 
     /**
      * The canonical per-host claim string, VERBATIM the spelling
@@ -134,7 +164,7 @@ public final class PortLedger {
      *
      * AIDEV-NOTE: an ADVISORY read for callers choosing a port. It answers with the first
      * overlapping row whoever owns it, so a caller that must tell its own row from a rival
-     * asks {@link #rivalHolder}; the claim itself re-checks under the claim lease.
+     * asks {@link #rivalHolder}; the claim itself re-checks inside its exclusion.
      */
     public static @Nullable Row conflictingHolder(int serverId, @Nullable Object hostIp, int port,
                                                   @Nullable Object protocol) {
@@ -254,12 +284,12 @@ public final class PortLedger {
                                   @Nullable Integer ownerId, @Nullable String note,
                                   @Nullable String mode) {
         String key = claimKeyOf(serverId, hostIp, port, protocol);
-        underClaimLease(serverId, port, key, () -> writeClaim(serverId, hostIp, port, protocol,
+        claimExclusively(serverId, key, () -> writeClaim(serverId, hostIp, port, protocol,
             key, ownerModel, ownerId, note, mode));
     }
 
     /**
-     * The decide-then-write body of every claim, run under the tuple's claim lease.
+     * The decide-then-write body of every claim, run exclusively among the host's claims.
      *
      * AIDEV-NOTE: the owner's own overlapping row is UPDATED IN PLACE, never deleted and
      * re-inserted: between a delete and an insert the tuple is momentarily unclaimed, and
@@ -273,7 +303,7 @@ public final class PortLedger {
                                    @Nullable String note, @Nullable String mode) {
         Row rival = rivalHolder(serverId, hostIp, port, protocol, ownerModel, ownerId);
         if (rival != null) {
-            throw new PortConflict(key, describeHolder(rival), null);
+            throw new PortConflict(key, rival, describeHolder(rival), null);
         }
         // No rival: every overlapping row left is the owner's own.
         List<Row> own = overlappingClaims(serverId, hostIp, port, protocol);
@@ -314,30 +344,18 @@ public final class PortLedger {
     }
 
     /**
-     * Run one claim's check-and-write under the lease of the kernel resource it contends
-     * for, so no rival writer can slip an overlapping row in between.
+     * Run one claim's check-and-write exclusively among every claim of the same host ({@link #EXCLUSION}).
      *
-     * @throws PortConflict when a concurrent claim of the same resource holds the lease
-     *         past the wait
+     * @throws PortConflict when a concurrent claim of the same host holds the exclusion past the wait
      */
-    private static void underClaimLease(int serverId, int port, @NonNull String key,
-                                        @NonNull Runnable body) {
-        Leases leases = Leases.of(Db.currentOrDefault());
-        if (!leases.canAcquireHere()) {
-            // Inside a write transaction on a single-writer engine: that transaction is
-            // already a database-wide exclusion, and a lease statement would block on it.
-            body.run();
-            return;
-        }
-        Lease lease = leases.acquire(CLAIM_LEASE_PREFIX + serverId + "_" + port + "_"
-            + canonicalProtocolOf(key), CLAIM_LEASE_WAIT_SECONDS);
-        if (lease == null) {
-            throw new PortConflict(key, "a concurrent claim of the same port", null);
-        }
+    private static void claimExclusively(int serverId, @NonNull String key, @NonNull ClaimWrite body) {
         try {
-            body.run();
-        } finally {
-            lease.release();
+            EXCLUSION.require().exclusively(serverId, body);
+        } catch (DomainRefusal refused) {
+            if (!refused.is(ZenitRefusalReason.IN_PROGRESS)) {
+                throw refused;
+            }
+            throw new PortConflict(key, null, "a concurrent claim of the same host", refused);
         }
     }
 
@@ -562,10 +580,11 @@ public final class PortLedger {
      * no observer vouched for. The doomed ids are read BEFORE the delete and the claims
      * parked AFTER it ({@link DoomedRows}): an after-remove-only hook reading
      * {@code context.getRow()} silently parked NOTHING, and the ports stayed permanently
-     * unclaimable.
+     * unclaimable. Both halves run in the delete's own datasource: a delete aimed at another
+     * database parks that database's claims, never the ambient one's colliding ids.
      */
     public static void parkClaimsOnRemove(@NonNull Schema ownerSchema) {
-        DoomedRows.handOver(ownerSchema, PortLedger::doomedOwnerIds, PortLedger::parkClaimsOf);
+        DoomedRows.handOverInDeletesDatasource(ownerSchema, PortLedger::doomedOwnerIds, PortLedger::parkClaimsOf);
     }
 
     /** The integer ids of the owners a pending delete removes, or null when there are none. */
@@ -595,7 +614,7 @@ public final class PortLedger {
                                                      @NonNull Throwable cause) {
         Row holder = holderOf(key);
         String description = holder != null ? describeHolder(holder) : "an unknown owner";
-        return new PortConflict(key, description, cause);
+        return new PortConflict(key, holder, description, cause);
     }
 
     private static @NonNull String canonicalAddressOf(@NonNull String claimKey) {

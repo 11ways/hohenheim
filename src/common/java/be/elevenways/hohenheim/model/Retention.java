@@ -15,8 +15,6 @@ import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-import java.util.function.Consumer;
-
 /**
  * Count-based retention: the rows of a newest-first query past its newest N are removed, a thousand per sweep.
  *
@@ -33,10 +31,22 @@ public final class Retention {
     private Retention() {
     }
 
+    /**
+     * Removes one row past the newest N; it blocks (a delete).
+     *
+     * AIDEV-NOTE: a standalone SAM on purpose, never a java.util.function type: on the browser it suspends, and a
+     * suspending JDK callback lets every call through that JDK interface in the bundle suspend (protoblast's
+     * SyncFamilyVerifierPlugin fails such a bundle).
+     */
+    @FunctionalInterface
+    public interface Removal {
+        void remove(@NonNull Row row);
+    }
+
     /** Hands every row of {@code newestFirst} past its newest {@code keep} to {@code remove}. */
-    public static void keepNewest(@NonNull QueryBuilder<Row> newestFirst, int keep, @NonNull Consumer<Row> remove) {
+    public static void keepNewest(@NonNull QueryBuilder<Row> newestFirst, int keep, @NonNull Removal remove) {
         for (Row old : newestFirst.offset(keep).limit(SWEEP_LIMIT).all()) {
-            remove.accept(old);
+            remove.remove(old);
         }
     }
 
@@ -62,7 +72,7 @@ public final class Retention {
          * for the next sweep, never thrown, because the capture it follows already succeeded. A null or non-positive
          * retention keeps everything.
          */
-        public void sweep(int instanceId, @NonNull Consumer<Row> remove) {
+        public void sweep(int instanceId, @NonNull Removal remove) {
             Integer keep = Zenit.SETTINGS_VALUES.getValue(this.retention);
             if (keep == null || keep <= 0) {
                 return;
@@ -75,7 +85,7 @@ public final class Retention {
             keepNewest(newestFirst, keep, old -> {
                 Integer id = old.get(this.idField);
                 try {
-                    remove.accept(old);
+                    remove.remove(old);
                 } catch (Violations refused) {
                     Blast.log(this.lane + ": retention could not remove " + noun, id, "- kept for a later sweep");
                 } catch (RuntimeException unexpected) {
