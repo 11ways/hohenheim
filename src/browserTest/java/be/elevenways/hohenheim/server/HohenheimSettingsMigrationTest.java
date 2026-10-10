@@ -39,7 +39,7 @@ class HohenheimSettingsMigrationTest {
         Files.writeString(local, "{\"network\":{\"port\":2999}}", StandardCharsets.UTF_8);
 
         // 2. The boot's adoption moves every key under hohenheim.* in the framework file and keeps the rest.
-        RetiredConfiguration.adopt(this.root, local);
+        RetiredConfiguration.adopt(this.root, this.root.resolve("home"), local);
         Map<String, Object> merged = new DryFileSource(local).snapshot();
         assertThat(merged.get("network")).as("step 2: the framework keys stay").isEqualTo(Map.of("port", 2999));
         assertThat(merged.get("hohenheim")).as("step 2: the old keys live under hohenheim.* now")
@@ -65,7 +65,7 @@ class HohenheimSettingsMigrationTest {
         // 4b. The retired comms file an existing deployment carries is adopted the same way, under comms.*.
         Path oldComms = this.root.resolve("settings/comms.dry");
         Files.writeString(oldComms, "{\"channels\":{\"mail_transports\":\"hub://herald\"}}", StandardCharsets.UTF_8);
-        RetiredConfiguration.adopt(this.root, local);
+        RetiredConfiguration.adopt(this.root, this.root.resolve("home"), local);
         assertThat(new DryFileSource(local).snapshot().get("comms")).as("step 4b: the comms keys live under comms.*")
             .isEqualTo(Map.of("channels", Map.of("mail_transports", "hub://herald")));
         assertThat(Files.exists(oldComms)).as("step 4b: the old comms file is moved away").isFalse();
