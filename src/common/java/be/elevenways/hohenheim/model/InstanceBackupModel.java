@@ -61,7 +61,7 @@ public class InstanceBackupModel extends Model {
         .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-exclamation")
             .label(HohenheimMicrocopy.BACKUP_STATUS.of("failed")).color(ColorHue.RED))
         .defaultValue(STATUS_FAILED)
-        .build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("status")).build());
 
     /** The committed key on the target (the .part staging key is never recorded). */
     public static final StringField REMOTE_KEY = SCHEMA.addField(
@@ -74,7 +74,8 @@ public class InstanceBackupModel extends Model {
         StringField.builder().name("sha256").filterable(false).build());
 
     public static final LongField SIZE_BYTES = SCHEMA.addField(
-        LongField.builder("size_bytes").filterable(false).build());
+        LongField.builder("size_bytes").filterable(false)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("size_bytes")).build());
 
     /**
      * NON-sensitive manifest summary (name, kind, image, volume inventory with
@@ -86,7 +87,8 @@ public class InstanceBackupModel extends Model {
 
     public static final TextField ERROR = SCHEMA.addField(TextField.builder().name("error").build());
 
-    public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
+    public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("created_at")).build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
     @Override public Identifier getModelId() { return MODEL_ID; }

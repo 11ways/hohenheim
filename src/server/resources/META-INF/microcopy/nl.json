@@ -4952,6 +4952,10 @@
   "created_at": [
     {
       "text": "Aangemaakt",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Aangemaakt",
       "scope": "spamservice_key"
     },
     {
@@ -7228,10 +7232,16 @@
     "text": "geen",
     "scope": "instance_provisioning"
   },
-  "install_state": {
-    "text": "Installatiestatus",
-    "scope": "instance_provisioning"
-  },
+  "install_state": [
+    {
+      "text": "Installatiestatus",
+      "scope": "instance_provisioning"
+    },
+    {
+      "text": "Installatiestatus",
+      "scope": "hohenheim_field"
+    }
+  ],
   "secret_set": {
     "text": "geheim ingesteld",
     "scope": "instance_provisioning"
@@ -12598,14 +12608,26 @@
     "text": "Actualiteit",
     "scope": "dns_secondaries"
   },
-  "served_serial": {
-    "text": "Geserveerd serienummer",
-    "scope": "dns_secondaries"
-  },
-  "probed_at": {
-    "text": "Gepeild",
-    "scope": "dns_secondaries"
-  },
+  "served_serial": [
+    {
+      "text": "Geserveerd serienummer",
+      "scope": "dns_secondaries"
+    },
+    {
+      "text": "Geserveerd serienummer",
+      "scope": "hohenheim_field"
+    }
+  ],
+  "probed_at": [
+    {
+      "text": "Gepeild",
+      "scope": "dns_secondaries"
+    },
+    {
+      "text": "Gecontroleerd op",
+      "scope": "hohenheim_field"
+    }
+  ],
   "check_health": {
     "text": "Gezondheid controleren",
     "scope": "dns_zone"
@@ -12770,10 +12792,16 @@
       "scope": "admin_inbox"
     }
   ],
-  "last_axfr_serial": {
-    "text": "AXFR-serienummer",
-    "scope": "dns_secondaries"
-  },
+  "last_axfr_serial": [
+    {
+      "text": "AXFR-serienummer",
+      "scope": "dns_secondaries"
+    },
+    {
+      "text": "Laatst overgedragen serienummer",
+      "scope": "hohenheim_field"
+    }
+  ],
   "last_notify_result": {
     "text": "NOTIFY-resultaat",
     "scope": "dns_secondaries"
@@ -14913,10 +14941,16 @@
     "text": "Een adres of bereik per regel, bijvoorbeeld 203.0.113.0/24.",
     "scope": "protect_path"
   },
-  "provider": {
-    "text": "Aanmeldprovider",
-    "scope": "protect_path"
-  },
+  "provider": [
+    {
+      "text": "Aanmeldprovider",
+      "scope": "protect_path"
+    },
+    {
+      "text": "Provider",
+      "scope": "hohenheim_field"
+    }
+  ],
   "protect_path_nobody": {
     "text": "Voeg minstens een persoon toe met een gebruikersnaam en een wachtwoord.",
     "scope": "violations"
@@ -17186,5 +17220,41 @@
       "text": "Aanmelden via een Proteus single-sign-on-realm",
       "scope": "auth_provider_type_description"
     }
-  ]
+  ],
+  "id": {
+    "text": "ID",
+    "scope": "hohenheim_field"
+  },
+  "started_at": {
+    "text": "Gestart",
+    "scope": "hohenheim_field"
+  },
+  "issued_on": {
+    "text": "Uitgegeven op",
+    "scope": "hohenheim_field"
+  },
+  "last_axfr_at": {
+    "text": "Laatste zoneoverdracht",
+    "scope": "hohenheim_field"
+  },
+  "last_notify_at": {
+    "text": "Laatste melding",
+    "scope": "hohenheim_field"
+  },
+  "last_notify_outcome": {
+    "text": "Resultaat laatste melding",
+    "scope": "hohenheim_field"
+  },
+  "size_bytes": {
+    "text": "Grootte",
+    "scope": "hohenheim_field"
+  },
+  "total_bytes": {
+    "text": "Totale grootte",
+    "scope": "hohenheim_field"
+  },
+  "used_bytes": {
+    "text": "Gebruikt",
+    "scope": "hohenheim_field"
+  }
 }

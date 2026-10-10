@@ -101,7 +101,8 @@ public class PreviewDeploymentModel extends Model {
         TextField.builder().name("last_error").filterable(false).visibleIn(EditView.EDIT, EditView.DETAIL)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("last_error")).build());
 
-    public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
+    public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("created_at")).build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());
 

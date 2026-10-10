@@ -51,7 +51,8 @@ public class NotificationChannelModel extends Model {
         ListField.<String>builder(StringField.builder().name("event").build()).name("events")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("events"))
             .help(HohenheimMicrocopy.HELP.of("notification_events")).build());
-    public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
+    public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("created_at")).build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
 

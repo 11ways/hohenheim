@@ -183,7 +183,7 @@ public class InstanceModel extends Model {
             builder.value(status.token(), v -> v.displayName(status.displayName()).icon(status.icon())
                 .label(status.label()).color(status.color()));
         }
-        return builder.defaultValue(STATUS_CREATED).build();
+        return builder.defaultValue(STATUS_CREATED).label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("status")).build();
     }
 
     /** {@link #INSTALL_STATE}: this instance has no install lifecycle (no template step). */
@@ -244,7 +244,7 @@ public class InstanceModel extends Model {
         .value(INSTALL_FAILED, v -> v.displayName("Install failed").icon("circle-exclamation")
             .label(HohenheimMicrocopy.INSTALL_STATE.of("install_failed")).color(ColorHue.RED))
         .defaultValue(INSTALL_NONE)
-        .build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("install_state")).build());
 
     /**
      * Whether an {@link #INSTALL_STATE} member is worth SHOWING as a badge.
@@ -529,7 +529,8 @@ public class InstanceModel extends Model {
     public static final IntegerField MIGRATE_RESERVED_MB = SCHEMA.addField(
         IntegerField.builder().name("migrate_reserved_mb").filterable(false).build());
 
-    public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
+    public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("created_at")).build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     public static final DateTimeField DELETED_AT = SCHEMA.addField(DateTimeField.builder().name("deleted_at").build());
 

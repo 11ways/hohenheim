@@ -75,7 +75,7 @@ public class CertificateModel extends Model {
             .label(HohenheimMicrocopy.CERT_PROVIDER.of(PROVIDER_CUSTOM)).icon("file-import").color(ColorHue.BLUE))
         .value(PROVIDER_ACME_ACCOUNT, v -> v.displayName("ACME account")
             .label(HohenheimMicrocopy.CERT_PROVIDER.of(PROVIDER_ACME_ACCOUNT)).color(ColorHue.GRAY))
-        .build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("provider")).build());
     public static final TextField CERTIFICATE_PEM = SCHEMA.addField(TextField.builder("certificate_pem")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_certificate_pem"))
         .help(HohenheimMicrocopy.HELP.of("cert_certificate_pem")).build());
@@ -101,7 +101,8 @@ public class CertificateModel extends Model {
             .color(BadgeVariant.DESTRUCTIVE))
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("status"))
         .build());
-    public static final DateTimeField ISSUED_ON = SCHEMA.addField(DateTimeField.builder().name("issued_on").build());
+    public static final DateTimeField ISSUED_ON = SCHEMA.addField(DateTimeField.builder().name("issued_on")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("issued_on")).build());
     public static final StringField RENEWAL_ERROR = SCHEMA.addField(StringField.builder().name("renewal_error")
         .visibleIn(EditView.EDIT)
         .attribute(FieldAttributes.GROUP, "renewal")
@@ -179,7 +180,8 @@ public class CertificateModel extends Model {
 
     /** Dedup stamp for the expiring-soon alert; a renewal moves expires_on forward, re-arming it. */
     public static final DateTimeField EXPIRY_NOTIFIED_AT = SCHEMA.addField(DateTimeField.builder().name("expiry_notified_at").build());
-    public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
+    public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("created_at")).build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
 

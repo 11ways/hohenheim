@@ -82,7 +82,7 @@ public class BuildOperationModel extends Model {
         OperationStatus.REFUSED);
 
     public static final IntegerField ID = SCHEMA.addField(
-        IntegerField.builder().name("id").build());
+        IntegerField.builder().name("id").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("id")).build());
 
     public static final EnumField BUILDER_KIND = SCHEMA.addField(EnumField.builder("builder_kind")
         .value(KIND_DOCKERFILE, v -> v.displayName("Dockerfile")
@@ -167,7 +167,7 @@ public class BuildOperationModel extends Model {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("artifact_bytes")).build());
 
     public static final DateTimeField STARTED_AT = SCHEMA.addField(
-        DateTimeField.builder().name("started_at").build());
+        DateTimeField.builder().name("started_at").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("started_at")).build());
     public static final DateTimeField FINISHED_AT = SCHEMA.addField(
         DateTimeField.builder().name("finished_at").build());
     public static final IntegerField DURATION_MS = SCHEMA.addField(

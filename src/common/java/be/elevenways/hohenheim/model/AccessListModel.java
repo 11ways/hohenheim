@@ -59,7 +59,8 @@ public class AccessListModel extends Model {
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("access_list_shared"))
         .help(HohenheimMicrocopy.HELP.of("access_list_shared"))
         .build());
-    public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
+    public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("created_at")).build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
     static {

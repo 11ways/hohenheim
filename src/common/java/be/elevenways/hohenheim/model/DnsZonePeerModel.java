@@ -29,9 +29,10 @@ public class DnsZonePeerModel extends Model {
     // --- Freshness of the secondary, as probed from THIS primary (DnsSecondaryFreshness) ---
     /** The SOA serial the peer answered with at the last probe; null when it never answered. */
     public static final IntegerField SERVED_SERIAL = SCHEMA.addField(
-        IntegerField.builder().name("served_serial").build());
+        IntegerField.builder().name("served_serial")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("served_serial")).build());
     public static final DateTimeField PROBED_AT = SCHEMA.addField(
-        DateTimeField.builder().name("probed_at").build());
+        DateTimeField.builder().name("probed_at").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("probed_at")).build());
     /** Why the last probe got no usable answer; null when the peer answered. */
     public static final StringField PROBE_ERROR = SCHEMA.addField(
         StringField.builder().name("probe_error").build());
@@ -45,19 +46,23 @@ public class DnsZonePeerModel extends Model {
     // --- What THIS primary last did for the peer (DnsFederationTrace) ---
     /** When this primary last streamed the zone to the peer's TSIG key over AXFR. */
     public static final DateTimeField LAST_AXFR_AT = SCHEMA.addField(
-        DateTimeField.builder().name("last_axfr_at").build());
+        DateTimeField.builder().name("last_axfr_at")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("last_axfr_at")).build());
     /** The serial that last served AXFR carried. */
     public static final IntegerField LAST_AXFR_SERIAL = SCHEMA.addField(
-        IntegerField.builder().name("last_axfr_serial").build());
+        IntegerField.builder().name("last_axfr_serial")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("last_axfr_serial")).build());
     /** When this primary last sent the peer a NOTIFY for the zone. */
     public static final DateTimeField LAST_NOTIFY_AT = SCHEMA.addField(
-        DateTimeField.builder().name("last_notify_at").build());
+        DateTimeField.builder().name("last_notify_at")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("last_notify_at")).build());
     /** The serial that NOTIFY announced: the one the serving view published, not a re-read. */
     public static final IntegerField LAST_NOTIFY_SERIAL = SCHEMA.addField(
         IntegerField.builder().name("last_notify_serial").build());
     /** What came back for that NOTIFY: the ack's rcode, a timeout, or the send error. */
     public static final StringField LAST_NOTIFY_OUTCOME = SCHEMA.addField(
-        StringField.builder().name("last_notify_outcome").build());
+        StringField.builder().name("last_notify_outcome")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("last_notify_outcome")).build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

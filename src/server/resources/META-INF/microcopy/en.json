@@ -4952,6 +4952,10 @@
   "created_at": [
     {
       "text": "Created",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "Created",
       "scope": "spamservice_key"
     },
     {
@@ -7228,10 +7232,16 @@
     "text": "none",
     "scope": "instance_provisioning"
   },
-  "install_state": {
-    "text": "Install state",
-    "scope": "instance_provisioning"
-  },
+  "install_state": [
+    {
+      "text": "Install state",
+      "scope": "instance_provisioning"
+    },
+    {
+      "text": "Install state",
+      "scope": "hohenheim_field"
+    }
+  ],
   "secret_set": {
     "text": "secret set",
     "scope": "instance_provisioning"
@@ -12598,14 +12608,26 @@
     "text": "Freshness",
     "scope": "dns_secondaries"
   },
-  "served_serial": {
-    "text": "Served serial",
-    "scope": "dns_secondaries"
-  },
-  "probed_at": {
-    "text": "Probed",
-    "scope": "dns_secondaries"
-  },
+  "served_serial": [
+    {
+      "text": "Served serial",
+      "scope": "dns_secondaries"
+    },
+    {
+      "text": "Served serial",
+      "scope": "hohenheim_field"
+    }
+  ],
+  "probed_at": [
+    {
+      "text": "Probed",
+      "scope": "dns_secondaries"
+    },
+    {
+      "text": "Probed at",
+      "scope": "hohenheim_field"
+    }
+  ],
   "check_health": {
     "text": "Check health",
     "scope": "dns_zone"
@@ -12770,10 +12792,16 @@
       "scope": "admin_inbox"
     }
   ],
-  "last_axfr_serial": {
-    "text": "AXFR serial",
-    "scope": "dns_secondaries"
-  },
+  "last_axfr_serial": [
+    {
+      "text": "AXFR serial",
+      "scope": "dns_secondaries"
+    },
+    {
+      "text": "Last transferred serial",
+      "scope": "hohenheim_field"
+    }
+  ],
   "last_notify_result": {
     "text": "NOTIFY result",
     "scope": "dns_secondaries"
@@ -14913,10 +14941,16 @@
     "text": "One address or range per line, for example 203.0.113.0/24.",
     "scope": "protect_path"
   },
-  "provider": {
-    "text": "Sign-in provider",
-    "scope": "protect_path"
-  },
+  "provider": [
+    {
+      "text": "Sign-in provider",
+      "scope": "protect_path"
+    },
+    {
+      "text": "Provider",
+      "scope": "hohenheim_field"
+    }
+  ],
   "protect_path_nobody": {
     "text": "Add at least one person with a username and a password.",
     "scope": "violations"
@@ -17186,5 +17220,41 @@
       "text": "Sign in through a Proteus single sign-on realm",
       "scope": "auth_provider_type_description"
     }
-  ]
+  ],
+  "id": {
+    "text": "ID",
+    "scope": "hohenheim_field"
+  },
+  "started_at": {
+    "text": "Started",
+    "scope": "hohenheim_field"
+  },
+  "issued_on": {
+    "text": "Issued on",
+    "scope": "hohenheim_field"
+  },
+  "last_axfr_at": {
+    "text": "Last zone transfer",
+    "scope": "hohenheim_field"
+  },
+  "last_notify_at": {
+    "text": "Last notify",
+    "scope": "hohenheim_field"
+  },
+  "last_notify_outcome": {
+    "text": "Last notify outcome",
+    "scope": "hohenheim_field"
+  },
+  "size_bytes": {
+    "text": "Size",
+    "scope": "hohenheim_field"
+  },
+  "total_bytes": {
+    "text": "Total size",
+    "scope": "hohenheim_field"
+  },
+  "used_bytes": {
+    "text": "Used",
+    "scope": "hohenheim_field"
+  }
 }

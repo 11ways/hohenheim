@@ -105,7 +105,7 @@ public class StackModel extends Model {
             .label(HohenheimMicrocopy.STACK_STATUS.of(STATUS_STOPPED)).icon("circle-stop")
             .color(BadgeVariant.SECONDARY))
         .defaultValue(STATUS_INACTIVE)
-        .build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("status")).build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

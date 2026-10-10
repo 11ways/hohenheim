@@ -66,7 +66,7 @@ public class ReleaseOperationModel extends Model {
     public static final List<String> TRAFFIC_TAKEN_STATUSES = LIFECYCLE.stored(TOOK_TRAFFIC::contains);
 
     public static final IntegerField ID = SCHEMA.addField(
-        IntegerField.builder().name("id").build());
+        IntegerField.builder().name("id").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("id")).build());
 
     public static final EnumField KIND = SCHEMA.addField(EnumField.builder("kind")
         .value(KIND_RELEASE, v -> v.displayName("Release")
@@ -120,7 +120,7 @@ public class ReleaseOperationModel extends Model {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("step_log")).build());
 
     public static final DateTimeField STARTED_AT = SCHEMA.addField(
-        DateTimeField.builder().name("started_at").build());
+        DateTimeField.builder().name("started_at").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("started_at")).build());
     public static final DateTimeField FINISHED_AT = SCHEMA.addField(
         DateTimeField.builder().name("finished_at").build());
     public static final IntegerField DURATION_MS = SCHEMA.addField(

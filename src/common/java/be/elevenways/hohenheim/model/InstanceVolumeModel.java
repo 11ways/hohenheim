@@ -75,7 +75,7 @@ public class InstanceVolumeModel extends Model {
             .build());
 
     public static final LongField USED_BYTES = SCHEMA.addField(
-        LongField.builder().name("used_bytes").build());
+        LongField.builder().name("used_bytes").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("used_bytes")).build());
 
     public static final DateTimeField OBSERVED_AT = SCHEMA.addField(
         DateTimeField.builder().name("observed_at").build());

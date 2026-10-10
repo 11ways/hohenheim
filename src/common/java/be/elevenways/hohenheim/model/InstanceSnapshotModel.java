@@ -39,7 +39,7 @@ public class InstanceSnapshotModel extends Model {
         .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-exclamation")
             .label(HohenheimMicrocopy.SNAPSHOT_STATUS.of("failed")).color(ColorHue.RED))
         .defaultValue(STATUS_FAILED)
-        .build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("status")).build());
 
     /** Free-form operator note ("before 1.20 upgrade"). */
     public static final StringField NOTE = SCHEMA.addField(StringField.builder().name("note")
@@ -67,11 +67,13 @@ public class InstanceSnapshotModel extends Model {
         SchemaField.builder("volumes").build());
 
     public static final LongField TOTAL_BYTES = SCHEMA.addField(
-        LongField.builder("total_bytes").filterable(false).build());
+        LongField.builder("total_bytes").filterable(false)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("total_bytes")).build());
 
     public static final TextField ERROR = SCHEMA.addField(TextField.builder().name("error").build());
 
-    public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
+    public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("created_at")).build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 
     static {
