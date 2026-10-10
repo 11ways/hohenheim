@@ -310,22 +310,22 @@ public final class StackParts {
     // -- placed operations --------------------------------------------------------------------------------------------
 
     private static @NonNull List<PanelAction<Row>> stackActions() {
-        ConfirmationSpec purge = Confirmations.of(HohenheimMicrocopy.STACK.of("purge_volumes"),
+        ConfirmationSpec purge = ConfirmationSpec.of(HohenheimMicrocopy.STACK.of("purge_volumes"),
             HohenheimMicrocopy.STACK.of("purge_volumes_ok"),
             HohenheimMicrocopy.STACK.of("purge_volumes_confirm_generic"), ActionStyle.DESTRUCTIVE);
         return List.of(
             PanelAction.<Row, Void>places(StackOperations.DEPLOY, ActionPlacement.ROW, queued("deploy_queued"))
                 .description(HohenheimMicrocopy.STACK.of("deploy_hint"))
-                .confirmation(Confirmations.of(HohenheimMicrocopy.STACK.of("deploy"),
+                .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.STACK.of("deploy"),
                     HohenheimMicrocopy.STACK.of("deploy_confirm"), ActionStyle.DEFAULT))
                 .build(),
             PanelAction.<Row, Void>places(StackOperations.STOP, ActionPlacement.ROW, queued("stop_queued"))
-                .confirmation(Confirmations.of(HohenheimMicrocopy.STACK.of("stop"),
+                .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.STACK.of("stop"),
                     HohenheimMicrocopy.STACK.of("stop_confirm"), ActionStyle.DEFAULT))
                 .build(),
             PanelAction.<Row, Void>places(StackOperations.ROLLBACK, ActionPlacement.ROW, queued("rollback_queued"))
                 .description(HohenheimMicrocopy.STACK.of("rollback_hint"))
-                .confirmation(Confirmations.of(HohenheimMicrocopy.STACK.of("rollback"),
+                .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.STACK.of("rollback"),
                     HohenheimMicrocopy.STACK.of("rollback_confirm"), ActionStyle.DEFAULT))
                 .build(),
             // The one stack operation that destroys data instead of processes, so it asks for the stack's OWN name
@@ -337,9 +337,9 @@ public final class StackParts {
                 .style(ActionStyle.DESTRUCTIVE)
                 .inlineInRow(false)
                 .confirmation(purge)
-                .dynamicConfirmation(stack -> Confirmations.typed(purge.withBody(HohenheimMicrocopy.STACK
-                    .of("purge_volumes_confirm").withArg("name", stack.get(StackModel.NAME))),
-                    stack.get(StackModel.NAME)))
+                .dynamicConfirmation(stack -> purge.withBody(HohenheimMicrocopy.STACK
+                    .of("purge_volumes_confirm").withArg("name", stack.get(StackModel.NAME)))
+                    .withTypedConfirmation(stack.get(StackModel.NAME)))
                 .build(),
             PanelAction.<Row, String>places(StackOperations.REFRESH, ActionPlacement.ROW,
                     (request, result) -> CmsActionResult.refreshWithToast(
@@ -349,7 +349,7 @@ public final class StackParts {
             PanelAction.<Row, Void>places(StackOperations.RECLAIM_IMAGES, ActionPlacement.HEADER,
                     queued("reclaim_images_started"))
                 .description(HohenheimMicrocopy.STACK.of("reclaim_images_hint"))
-                .confirmation(Confirmations.of(HohenheimMicrocopy.STACK.of("reclaim_images"),
+                .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.STACK.of("reclaim_images"),
                     HohenheimMicrocopy.STACK.of("reclaim_images_confirm"), ActionStyle.DEFAULT))
                 .build());
     }

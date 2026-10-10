@@ -16,6 +16,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.render.action.PageFormState;
@@ -52,7 +53,7 @@ public final class InstanceMigratePage implements RecordTab.Rendered<Row> {
                 HohenheimMicrocopy.INSTANCE.of("migrated_toast")
                     .withArg("name", request.subject().get(InstanceModel.NAME))
                     .withArg("host", ServerModel.nameOf(result.value()))))
-        .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE_MIGRATE.of("migrate"),
+        .confirmation(ConfirmationSpec.of(HohenheimMicrocopy.INSTANCE_MIGRATE.of("migrate"),
             HohenheimMicrocopy.INSTANCE_MIGRATE.of("migrate_here"), HohenheimMicrocopy.INSTANCE_MIGRATE.of("cold_note"),
             ActionStyle.DESTRUCTIVE))
         // The destination is the row's own; the dialog names it beside the source, so a move is confirmed for

@@ -42,7 +42,7 @@ column description at=1 shown=false hidden=true sortable=false filterable=false 
 column project_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 link hohenheim:environment_variable at=0 lead=false target=/{panel}/environment-variables
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Denvironment,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Denvironment,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline name
 tab history at=0 landing=false view=false
 control CREATE%20project_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.project,rules:,siblings:,resolver:,clearable:false,creatable:false
@@ -64,7 +64,7 @@ column description at=1 shown=false hidden=true sortable=false filterable=false 
 column project_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 link hohenheim:environment_variable at=0 lead=false target=/{panel}/environment-variables
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled=environment_in_use confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Denvironment,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled=environment_in_use confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Denvironment,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline name
 tab history at=0 landing=false view=false
 control CREATE%20project_id at=0 kind=zenitforms:form/relation-pick input=number required=true readonly=false options= binding=source:hohenheim.project,rules:,siblings:,resolver:,clearable:false,creatable:false
@@ -98,7 +98,7 @@ column key at=0 shown=true hidden=false sortable=false filterable=true copyable=
 column kind at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column environment_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Denvironment_variable,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Denvironment_variable,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
 control CREATE%20environment_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.environment,rules:,siblings:,resolver:,clearable:true,creatable:true
 control CREATE%20key at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
@@ -120,7 +120,7 @@ column key at=0 shown=true hidden=false sortable=false filterable=true copyable=
 column kind at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 column environment_id at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Denvironment_variable,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Denvironment_variable,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
 control CREATE%20environment_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.environment,rules:,siblings:,resolver:,clearable:true,creatable:true
 control CREATE%20key at=1 kind=zenitforms:control/string input=text required=true readonly=false options= binding=

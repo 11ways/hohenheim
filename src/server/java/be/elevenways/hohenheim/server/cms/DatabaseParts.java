@@ -582,10 +582,10 @@ public final class DatabaseParts {
             .inlineInRow(false)
             .inlineOnRecord(false)
             // The record-less fallback the framework requires beside a dynamic one.
-            .confirmation(Confirmations.of(HohenheimMicrocopy.DATABASE.of("move_shared"),
+            .confirmation(ConfirmationSpec.of(HohenheimMicrocopy.DATABASE.of("move_shared"),
                 HohenheimMicrocopy.DATABASE.of("move_shared_ok"),
                 HohenheimMicrocopy.DATABASE.of("move_shared_confirm_generic"), ActionStyle.PRIMARY))
-            .dynamicConfirmation(database -> Confirmations.of(HohenheimMicrocopy.DATABASE.of("move_shared"),
+            .dynamicConfirmation(database -> ConfirmationSpec.of(HohenheimMicrocopy.DATABASE.of("move_shared"),
                 HohenheimMicrocopy.DATABASE.of("move_shared_ok"),
                 HohenheimMicrocopy.DATABASE.of("move_shared_confirm").withArg("name", database.get(DatabaseModel.NAME)),
                 ActionStyle.PRIMARY))
@@ -602,16 +602,16 @@ public final class DatabaseParts {
      */
     private static @NonNull PanelAction<Row> forceDelete(@NonNull Operation<Row, Void, Void> operation,
                                                          @NonNull HohenheimMicrocopy scope, @NonNull StringField name) {
-        ConfirmationSpec force = Confirmations.of(scope.of("force_delete"), scope.of("force_delete_confirm_generic"),
-            ActionStyle.DESTRUCTIVE);
+        ConfirmationSpec force = ConfirmationSpec.verb(scope.of("force_delete"),
+            scope.of("force_delete_confirm_generic"), ActionStyle.DESTRUCTIVE);
         return PanelAction.<Row, Void>places(operation, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.refreshWithToast(scope.of("force_delete_done")
                     .withArg("name", request.subject().get(name))))
             .style(ActionStyle.DESTRUCTIVE)
             .inlineInRow(false)
             .confirmation(force)
-            .dynamicConfirmation(row -> Confirmations.typed(force.withBody(scope.of("force_delete_confirm")
-                .withArg("name", row.get(name))), row.get(name)))
+            .dynamicConfirmation(row -> force.withBody(scope.of("force_delete_confirm")
+                .withArg("name", row.get(name))).withTypedConfirmation(row.get(name)))
             .build();
     }
 

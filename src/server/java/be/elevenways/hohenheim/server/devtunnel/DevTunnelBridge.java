@@ -1,9 +1,9 @@
 package be.elevenways.hohenheim.server.devtunnel;
 
-import be.elevenways.hohenheim.server.util.Closeables;
 import be.elevenways.hohenheim.server.util.LoopbackPeers;
 import be.elevenways.hohenheim.server.util.SameUidListener;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.util.Closeables;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;

@@ -1,9 +1,9 @@
 package be.elevenways.hohenheim.server.dns;
 
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.server.util.Closeables;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.util.Closeables;
 import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;

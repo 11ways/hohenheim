@@ -26,7 +26,7 @@ column database_id at=1 shown=true hidden=false sortable=false filterable=false 
 column env_prefix at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
 column created_at at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dinstance_database,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dinstance_database,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline env_prefix
 tab history at=0 landing=false view=false
 control CREATE%20instance_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:true,creatable:false
@@ -73,7 +73,7 @@ column database_id at=1 shown=true hidden=false sortable=false filterable=false 
 column env_prefix at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
 column created_at at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dinstance_database,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dinstance_database,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline env_prefix
 control CREATE%20instance_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20database_id at=1 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.database,rules:,siblings:,resolver:,clearable:true,creatable:false

@@ -14,6 +14,7 @@ import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.ChildList;
@@ -224,7 +225,7 @@ public final class InstanceTemplateParts {
                     .of("approved_toast")
                     .withArg("name", request.subject().get(InstanceTemplateModel.NAME))))
             .inlineInRow(false)
-            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("approve"),
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("approve"),
                 HohenheimMicrocopy.INSTANCE_TEMPLATE.of("approve_confirm"), ActionStyle.DEFAULT))
             .build();
     }
@@ -235,7 +236,7 @@ public final class InstanceTemplateParts {
                     .of("unapproved_toast")
                     .withArg("name", request.subject().get(InstanceTemplateModel.NAME))))
             .inlineInRow(false)
-            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("unapprove"),
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("unapprove"),
                 HohenheimMicrocopy.INSTANCE_TEMPLATE.of("unapprove_confirm"), ActionStyle.DEFAULT))
             .build();
     }

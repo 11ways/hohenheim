@@ -88,7 +88,7 @@ public final class VolumeParts {
     }
 
     private static PanelAction<Row> destroy() {
-        ConfirmationSpec destroy = Confirmations.of(HohenheimMicrocopy.INSTANCE_VOLUME.of("destroy"),
+        ConfirmationSpec destroy = ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE_VOLUME.of("destroy"),
             HohenheimMicrocopy.INSTANCE_VOLUME.of("destroy_confirm"), ActionStyle.DESTRUCTIVE);
         return PanelAction.<Row, Void>places(VolumeOperations.DESTROY, ActionPlacement.ROW,
                 (context, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_VOLUME
@@ -96,8 +96,8 @@ public final class VolumeParts {
                     .withArg("name", context.subjects().getFirst().get(InstanceVolumeModel.NAME))))
             .style(ActionStyle.DESTRUCTIVE).inlineInRow(false)
             .confirmation(destroy)
-            .dynamicConfirmation(row -> Confirmations.typed(destroy.withBody(HohenheimMicrocopy.INSTANCE_VOLUME
-                .of("destroy_confirm_named").withArg("name", row.get(InstanceVolumeModel.NAME))),
-                row.get(InstanceVolumeModel.NAME))).build();
+            .dynamicConfirmation(row -> destroy.withBody(HohenheimMicrocopy.INSTANCE_VOLUME
+                .of("destroy_confirm_named").withArg("name", row.get(InstanceVolumeModel.NAME)))
+                .withTypedConfirmation(row.get(InstanceVolumeModel.NAME))).build();
     }
 }

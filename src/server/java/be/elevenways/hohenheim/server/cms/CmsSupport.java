@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -196,7 +197,7 @@ public final class CmsSupport {
                     Objects.requireNonNull(result.value(), "the operation answers the record it made")))))
             .inlineOnRecord(false)
             .inlineInRow(false)
-            .confirmation(Confirmations.of(verb, body, ActionStyle.DEFAULT));
+            .confirmation(ConfirmationSpec.verb(verb, body, ActionStyle.DEFAULT));
     }
 
     /**

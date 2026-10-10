@@ -171,7 +171,8 @@ public final class InstanceAttachmentParts {
                 .ownsWriteEnvelope(ResourceVerb.CREATE, ResourceVerb.UPDATE, ResourceVerb.DELETE)
                 .build())
             // Detach DELETES the backing volume at the daemon, so the confirmation says that in so many words.
-            .deleteConfirmation(DeleteConfirmation.of(Confirmations.of(HohenheimMicrocopy.INSTANCE_DEVICE.of("detach"),
+            .deleteConfirmation(DeleteConfirmation.of(ConfirmationSpec.verb(
+                HohenheimMicrocopy.INSTANCE_DEVICE.of("detach"),
                 HohenheimMicrocopy.INSTANCE_DEVICE.of("detach_confirm"), ActionStyle.DESTRUCTIVE)))
             // AIDEV-NOTE: the SAME capability InstanceDevices asks as the first statement of every mutator, asked
             // earlier so the surface stops offering what the funnel will refuse. Read stays WIDER on purpose: seeing

@@ -24,7 +24,7 @@ column size_bytes at=3 shown=false hidden=true sortable=false filterable=false c
 column remote_key at=4 shown=false hidden=true sortable=false filterable=false copyable=true subtext= relation=false
 column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 row hohenheim:restore_backup at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:restore_new%252Cscope%3Dinstance_backup,body:restore_new_confirm%252Cscope%3Dinstance_backup,confirm:restore_new%252Cscope%3Dinstance_backup,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/restore_backup
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
 control EDIT%20instance_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:true,creatable:false
 
@@ -39,7 +39,7 @@ column status at=2 shown=true hidden=false sortable=false filterable=true copyab
 column size_bytes at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column remote_key at=4 shown=false hidden=true sortable=false filterable=false copyable=true subtext= relation=false
 column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-row zenit:delete at=0 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=0 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
 control EDIT%20instance_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:true,creatable:false
 
@@ -75,6 +75,6 @@ column status at=2 shown=true hidden=false sortable=false filterable=true copyab
 column size_bytes at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column remote_key at=4 shown=false hidden=true sortable=false filterable=false copyable=true subtext= relation=false
 column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-row zenit:delete at=0 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=0 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 control EDIT%20instance_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:true,creatable:false
 

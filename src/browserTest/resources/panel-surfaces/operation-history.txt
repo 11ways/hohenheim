@@ -46,7 +46,7 @@ column image_id at=6 shown=true hidden=false sortable=false filterable=false cop
 column duration_ms at=7 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column started_at at=8 shown=true hidden=false sortable=true filterable=false copyable=false subtext= relation=false
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
 control EDIT%20builder_kind at=0 kind=zenitforms:form/select input=select required=false readonly=true options=dockerfile,nixpacks,workspace binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20for_model at=1 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
@@ -82,7 +82,7 @@ column image_id at=5 shown=true hidden=false sortable=false filterable=false cop
 column duration_ms at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column started_at at=7 shown=true hidden=false sortable=true filterable=false copyable=false subtext= relation=false
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 control EDIT%20kind at=0 kind=zenitforms:form/select input=select required=false readonly=true options=release,rollback binding=searchable:false,clearable:true,presentation:DEFAULT
 control EDIT%20for_model at=1 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 control EDIT%20for_id at=2 kind=zenitforms:control/number input=number required=false readonly=true options= binding=

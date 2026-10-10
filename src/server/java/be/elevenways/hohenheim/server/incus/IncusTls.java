@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.incus;
 
-import be.elevenways.hohenheim.server.util.Closeables;
+import be.elevenways.protoblast.common.util.Closeables;
 import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 

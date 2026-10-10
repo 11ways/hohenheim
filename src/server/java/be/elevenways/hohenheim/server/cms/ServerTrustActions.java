@@ -65,11 +65,11 @@ final class ServerTrustActions {
     private static List<PanelAction<Row>> declarePlaced() {
         List<PanelAction<Row>> actions = new ArrayList<>();
         for (TrustLane lane : TRUST_LANES) {
-            ConfirmationSpec confirm = Confirmations.of(HohenheimMicrocopy.SERVER.of(lane.copy().confirm()),
+            ConfirmationSpec confirm = ConfirmationSpec.verb(HohenheimMicrocopy.SERVER.of(lane.copy().confirm()),
                 HohenheimMicrocopy.SERVER.of(lane.copy().confirm() + "_generic"), ActionStyle.DEFAULT);
-            ConfirmationSpec repin = Confirmations.of(HohenheimMicrocopy.SERVER.of(lane.copy().repin()),
+            ConfirmationSpec repin = ConfirmationSpec.verb(HohenheimMicrocopy.SERVER.of(lane.copy().repin()),
                 HohenheimMicrocopy.SERVER.of(lane.copy().repin() + "_generic"), ActionStyle.DESTRUCTIVE);
-            ConfirmationSpec rotate = Confirmations.of(HohenheimMicrocopy.SERVER.of(lane.copy().rotate()),
+            ConfirmationSpec rotate = ConfirmationSpec.verb(HohenheimMicrocopy.SERVER.of(lane.copy().rotate()),
                 HohenheimMicrocopy.SERVER.of(lane.copy().rotate() + "_generic"), ActionStyle.DESTRUCTIVE);
             actions.add(ServerLifecycleActions.place("scan_" + lane.id(),
                 HohenheimMicrocopy.SERVER.of(lane.copy().scan()), row -> {
@@ -96,9 +96,10 @@ final class ServerTrustActions {
                 .icon(Icon.of("shield-halved"))
                 .inlineInRow(false)
                 .confirmation(confirm)
-                .dynamicConfirmation(row -> Confirmations.typed(confirm.withBody(HohenheimMicrocopy.SERVER
+                .dynamicConfirmation(row -> confirm.withBody(HohenheimMicrocopy.SERVER
                     .of(lane.copy().confirm() + "_body").withArg("name", row.get(ServerModel.NAME))
-                    .withArg("fingerprint", row.get(lane.slot().fingerprint()))), row.get(lane.slot().fingerprint())))
+                    .withArg("fingerprint", row.get(lane.slot().fingerprint())))
+                    .withTypedConfirmation(row.get(lane.slot().fingerprint())))
                 .build());
             actions.add(ServerLifecycleActions.place("repin_" + lane.id(),
                 HohenheimMicrocopy.SERVER.of(lane.copy().repin()), row -> {
@@ -113,10 +114,10 @@ final class ServerTrustActions {
                     String offered = lane.slot().offeredOf(row);
                     if (offered.isBlank()) return repin;
                     String fingerprint = lane.digest().apply(offered);
-                    return Confirmations.typed(repin.withBody(HohenheimMicrocopy.SERVER
+                    return repin.withBody(HohenheimMicrocopy.SERVER
                         .of(lane.copy().repin() + "_body").withArg("name", row.get(ServerModel.NAME))
-                        .withArg("pinned", row.get(lane.slot().fingerprint())).withArg("offered", fingerprint)),
-                        fingerprint);
+                        .withArg("pinned", row.get(lane.slot().fingerprint())).withArg("offered", fingerprint))
+                        .withTypedConfirmation(fingerprint);
                 }).build());
             actions.add(ServerLifecycleActions.place("rotate_" + lane.id(),
                 HohenheimMicrocopy.SERVER.of(lane.copy().rotate()), row -> {
@@ -126,9 +127,9 @@ final class ServerTrustActions {
             }, lane.applies()).description(HohenheimMicrocopy.SERVER.of(lane.copy().rotate() + "_hint"))
                 .icon(Icon.of("key")).style(ActionStyle.DESTRUCTIVE).inlineInRow(false)
                 .confirmation(rotate)
-                .dynamicConfirmation(row -> Confirmations.typed(rotate.withBody(HohenheimMicrocopy.SERVER
-                    .of(lane.copy().rotate() + "_body").withArg("name", row.get(ServerModel.NAME))),
-                    row.get(ServerModel.NAME))).build());
+                .dynamicConfirmation(row -> rotate.withBody(HohenheimMicrocopy.SERVER
+                    .of(lane.copy().rotate() + "_body").withArg("name", row.get(ServerModel.NAME)))
+                    .withTypedConfirmation(row.get(ServerModel.NAME))).build());
         }
         return List.copyOf(actions);
     }

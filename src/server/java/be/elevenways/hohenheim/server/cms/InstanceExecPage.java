@@ -15,6 +15,7 @@ import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionRequest;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -46,7 +47,7 @@ public final class InstanceExecPage implements ConsoleModes.Mode {
     private static final PanelAction<Row> EXEC = PanelAction.<Row, ExecRun>places(InstanceOperations.EXEC,
             ActionPlacement.PAGE, InstanceExecPage::ran)
         // The form's title and submit: the card the tab always drew, its description the one line of context.
-        .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE_EXEC.of("title"),
+        .confirmation(ConfirmationSpec.of(HohenheimMicrocopy.INSTANCE_EXEC.of("title"),
             HohenheimMicrocopy.INSTANCE_EXEC.of("run"), HohenheimMicrocopy.INSTANCE_EXEC.of("description"),
             ActionStyle.DEFAULT))
         .selectedByRoute(instance -> String.valueOf((Object) instance.get(InstanceModel.ID)))

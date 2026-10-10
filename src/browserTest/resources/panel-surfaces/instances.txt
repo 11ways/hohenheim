@@ -195,7 +195,7 @@ row hohenheim:backup_instance at=7 verb=invoke band=overflow style=DEFAULT disab
 row hohenheim:install_instance at=8 verb=invoke band=overflow style=DEFAULT disabled=host_not_admitted confirm= target=/{panel}/{entry}/{record}/action/install_instance
 row hohenheim:reinstall_instance at=9 verb=invoke band=overflow style=DEFAULT disabled=host_not_admitted confirm=style:DEFAULT,title:reinstall%252Cscope%3Dinstance,body:reinstall_confirm%252Cscope%3Dinstance,confirm:reinstall%252Cscope%3Dinstance,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/reinstall_instance
 row hohenheim:destroy_instance_data at=10 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:delete_with_data%252Cscope%3Dinstance,body:delete_with_data_confirm%252Cscope%3Dinstance,confirm:delete_with_data%252Cscope%3Dinstance,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Db14-instances-instance,input:false target=/{panel}/{entry}/{record}/action/destroy_instance_data
-row zenit:delete at=11 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dinstance,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=11 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dinstance,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline name
 tab overview at=0 landing=true view=false
 tab console at=1 landing=false view=false
@@ -495,7 +495,7 @@ column install_state at=3 shown=false hidden=true sortable=false filterable=fals
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:start_instance at=1 verb=invoke band=inline style=DEFAULT disabled=deploy_blocked_delegated confirm= target=/{panel}/{entry}/invoke/hohenheim.start_instance?ids%3D{record}
 row hohenheim:restart_instance at=2 verb=invoke band=overflow style=DEFAULT disabled=deploy_blocked_delegated confirm=style:DEFAULT,title:restart%252Cscope%3Dinstance,body:restart_confirm%252Cscope%3Dinstance,confirm:restart%252Cscope%3Dinstance,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/invoke/hohenheim.restart_instance?ids%3D{record}
-row zenit:delete at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dinstance,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dinstance,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline name
 tab overview at=0 landing=true view=false
 tab console at=1 landing=false view=false

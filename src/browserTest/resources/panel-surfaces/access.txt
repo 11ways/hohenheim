@@ -90,7 +90,7 @@ column created_at at=5 shown=false hidden=true sortable=false filterable=false c
 filter name at=0 kind=TEXT facet=false param=filter.name
 filter satisfy at=1 kind=SELECT facet=true param=filter.satisfy
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Daccess_list,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Daccess_list,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline name
 tab rules at=0 landing=false view=false
 tab history at=1 landing=false view=false
@@ -118,7 +118,7 @@ column created_at at=5 shown=false hidden=true sortable=false filterable=false c
 filter name at=0 kind=TEXT facet=false param=filter.name
 filter satisfy at=1 kind=SELECT facet=true param=filter.satisfy
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_gating%252Cscope%3Daccess_list,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_gating%252Cscope%3Daccess_list,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline name
 tab rules at=0 landing=false view=false
 tab history at=1 landing=false view=false
@@ -161,7 +161,7 @@ column access_list_id at=1 shown=true hidden=false sortable=false filterable=fal
 column protection at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
 control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20path at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
@@ -184,7 +184,7 @@ column used_by at=3 shown=true hidden=false sortable=false filterable=false copy
 column created_at at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 filter name at=0 kind=TEXT facet=false param=filter.name
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dauth_provider,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dauth_provider,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20provider_type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:basic,hohenheim:proteus binding=searchable:false,clearable:true,presentation:DEFAULT
@@ -219,7 +219,7 @@ column used_by at=3 shown=true hidden=false sortable=false filterable=false copy
 column created_at at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 filter name at=0 kind=TEXT facet=false param=filter.name
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled=delete_in_use confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dauth_provider,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled=delete_in_use confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dauth_provider,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20provider_type at=1 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:basic,hohenheim:proteus binding=searchable:false,clearable:true,presentation:DEFAULT
@@ -314,7 +314,7 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
 column satisfy at=1 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_gating%252Cscope%3Daccess_list,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_gating%252Cscope%3Daccess_list,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline name
 tab rules at=0 landing=false view=false
 tab access at=1 landing=false view=false
@@ -347,7 +347,7 @@ column access_list_id at=1 shown=true hidden=false sortable=false filterable=fal
 column protection at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column site_id at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20path at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20access_list_id at=2 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.access_list,rules:,siblings:,resolver:,clearable:true,creatable:false

@@ -17,6 +17,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -163,7 +164,7 @@ public final class PreviewParts {
                     .withArg("hostname", request.subject().get(PreviewDeploymentModel.HOSTNAME))))
             .label(HohenheimMicrocopy.PREVIEW_DEPLOYMENT.of("destroy_now"))
             .icon(Icon.of("trash"))
-            .confirmation(Confirmations.of(HohenheimMicrocopy.PREVIEW_DEPLOYMENT.of("destroy_now"),
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.PREVIEW_DEPLOYMENT.of("destroy_now"),
                 HohenheimMicrocopy.PREVIEW_DEPLOYMENT.of("destroy_confirm"), ActionStyle.DESTRUCTIVE)).build();
     }
 }

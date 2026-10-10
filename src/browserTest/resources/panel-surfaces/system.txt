@@ -76,7 +76,7 @@ filter name at=0 kind=TEXT facet=false param=filter.name
 filter format at=1 kind=SELECT facet=true param=filter.format
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:test_channel at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/test_channel
-row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dnotification_channel,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dnotification_channel,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline name
 tab history at=0 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
@@ -100,7 +100,7 @@ column kind at=1 shown=true hidden=false sortable=false filterable=true copyable
 column created_at at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row hohenheim:test_backup_target at=1 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/test_backup_target
-row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=false readonly=false options=hohenheim:filesystem,hohenheim:ssh binding=searchable:false,clearable:true,presentation:DEFAULT

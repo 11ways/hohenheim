@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.security.ThreatScorer;
 import be.elevenways.protoblast.common.time.RelativeTime;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.resource.ListScope;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -224,7 +225,7 @@ public final class BanParts {
                 .label(HohenheimMicrocopy.BAN.of("lift"))
                 .description(HohenheimMicrocopy.BAN.of("lift_hint"))
                 .icon(Icon.of("unlock"))
-                .confirmation(Confirmations.of(HohenheimMicrocopy.BAN.of("lift_title"),
+                .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.BAN.of("lift_title"),
                     HohenheimMicrocopy.BAN.of("lift_confirm"), ActionStyle.DEFAULT))
                 .build()))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())

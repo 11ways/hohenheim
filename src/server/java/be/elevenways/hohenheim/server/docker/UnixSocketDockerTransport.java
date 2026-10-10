@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.docker;
 
-import be.elevenways.hohenheim.server.util.Closeables;
 import be.elevenways.hohenheim.server.util.Watchdog;
+import be.elevenways.protoblast.common.util.Closeables;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

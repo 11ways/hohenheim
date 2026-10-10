@@ -56,7 +56,7 @@ final class ServerLifecycleActions {
     static @NonNull List<PanelAction<Row>> placed() { return PLACED; }
 
     private static List<PanelAction<Row>> declarePlaced() {
-        ConfirmationSpec acknowledge = Confirmations.of(HohenheimMicrocopy.SERVER.of("acknowledge"),
+        ConfirmationSpec acknowledge = ConfirmationSpec.verb(HohenheimMicrocopy.SERVER.of("acknowledge"),
             HohenheimMicrocopy.SERVER.of("acknowledge_generic"), ActionStyle.DESTRUCTIVE);
         return List.of(
             place("acknowledge_posture", HohenheimMicrocopy.SERVER.of("acknowledge"), row -> {
@@ -66,8 +66,9 @@ final class ServerLifecycleActions {
                 .description(HohenheimMicrocopy.SERVER.of("acknowledge_hint")).icon(Icon.of("triangle-exclamation"))
                 .style(ActionStyle.DESTRUCTIVE)
                 .confirmation(acknowledge)
-                .dynamicConfirmation(row -> Confirmations.typed(acknowledge.withBody(HohenheimMicrocopy.SERVER
-                    .of("acknowledge_body").withArg("name", row.get(ServerModel.NAME))), row.get(ServerModel.NAME)))
+                .dynamicConfirmation(row -> acknowledge.withBody(HohenheimMicrocopy.SERVER
+                    .of("acknowledge_body").withArg("name", row.get(ServerModel.NAME)))
+                    .withTypedConfirmation(row.get(ServerModel.NAME)))
                 .build(),
             place("probe_server", HohenheimMicrocopy.SERVER.of("probe_now"), row -> {
                 String name = row.get(ServerModel.NAME);
@@ -96,7 +97,7 @@ final class ServerLifecycleActions {
                 return HohenheimMicrocopy.SERVER.of("host_cordoned").withArg("name", row.get(ServerModel.NAME));
             }, row -> ServerModel.ADMISSION_ADMITTED.equals(row.get(ServerModel.ADMISSION)))
                 .icon(Icon.of("circle-pause")).style(ActionStyle.DESTRUCTIVE)
-                .confirmation(Confirmations.of(HohenheimMicrocopy.SERVER.of("cordon"),
+                .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SERVER.of("cordon"),
                     HohenheimMicrocopy.SERVER.of("cordon_confirm"), ActionStyle.DESTRUCTIVE)).build(),
             place("drain_server", HohenheimMicrocopy.SERVER.of("drain"), row -> {
                 // AIDEV-NOTE: fenced updateAll writes fire no hook; InstanceMigrations records the moves explicitly.
@@ -110,7 +111,7 @@ final class ServerLifecycleActions {
                         .collect(Collectors.joining(", ")));
             }, row -> ServerModel.ADMISSION_CORDONED.equals(row.get(ServerModel.ADMISSION)))
                 .icon(Icon.of("truck-arrow-right")).style(ActionStyle.DESTRUCTIVE)
-                .confirmation(Confirmations.of(HohenheimMicrocopy.SERVER.of("drain"),
+                .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SERVER.of("drain"),
                     HohenheimMicrocopy.SERVER.of("drain_confirm"), ActionStyle.DESTRUCTIVE)).build(),
             place("uncordon_server", HohenheimMicrocopy.SERVER.of("uncordon"), row -> {
                 HostAdmission.requireAdmittable(row);
@@ -126,7 +127,7 @@ final class ServerLifecycleActions {
                     .withArg("name", row.get(ServerModel.NAME))
                     .withArg("removed", reaped[0].removed().size()).withArg("refused", reaped[0].refused().size());
             }, ServerModel::isIncus).icon(Icon.of("broom")).style(ActionStyle.DESTRUCTIVE)
-                .confirmation(Confirmations.of(HohenheimMicrocopy.SERVER.of("reap_controller_objects"),
+                .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SERVER.of("reap_controller_objects"),
                     HohenheimMicrocopy.SERVER.of("reap_controller_objects_confirm"), ActionStyle.DESTRUCTIVE)).build());
     }
 

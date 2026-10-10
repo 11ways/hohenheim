@@ -88,7 +88,7 @@ public final class InstanceSnapshotParts {
         return nativeName != null && !nativeName.isBlank() ? nativeName : null;
     }
     private static PanelAction<Row> restore() {
-        ConfirmationSpec restore = Confirmations.of(HohenheimMicrocopy.INSTANCE_SNAPSHOT.of("restore"),
+        ConfirmationSpec restore = ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE_SNAPSHOT.of("restore"),
             HohenheimMicrocopy.INSTANCE_SNAPSHOT.of("restore_confirm_generic"), ActionStyle.DESTRUCTIVE);
         return PanelAction.<Row, Void>places(InstanceSnapshotOperations.RESTORE, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_SNAPSHOT
@@ -96,8 +96,9 @@ public final class InstanceSnapshotParts {
                     .withArg("name", instanceName(request.subject()))))
             .style(ActionStyle.DESTRUCTIVE)
             .confirmation(restore)
-            .dynamicConfirmation(row -> Confirmations.typed(restore.withBody(HohenheimMicrocopy.INSTANCE_SNAPSHOT
-                .of("restore_confirm").withArg("name", instanceName(row))), instanceName(row))).build();
+            .dynamicConfirmation(row -> restore.withBody(HohenheimMicrocopy.INSTANCE_SNAPSHOT
+                .of("restore_confirm").withArg("name", instanceName(row)))
+                .withTypedConfirmation(instanceName(row))).build();
     }
     private static String instanceName(Row row) {
         Row owner = StoredRows.byId(Models.get(InstanceModel.class), row.get(InstanceSnapshotModel.INSTANCE_ID));

@@ -280,7 +280,7 @@ row hohenheim:site_open at=1 verb=link band=overflow style=DEFAULT disabled= con
 row hohenheim:clone_site at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:clone%252Cscope%3Dsite,body:clone_confirm%252Cscope%3Dsite,confirm:clone%252Cscope%3Dsite,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/{record}/action/clone_site
 row hohenheim:protect_path at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:action%252Cscope%3Dprotect_path,body:description%252Cscope%3Dprotect_path,confirm:action%252Cscope%3Dprotect_path,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.protect_path?ids%3D{record}
 row hohenheim:toggle_site at=4 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:disable%252Cscope%3Dsite,body:disable_confirm%252Cscope%3Dsite,confirm:disable%252Cscope%3Dsite,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/toggle_site
-row zenit:delete at=5 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_hostnames%252Cscope%3Dsite,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=5 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_hostnames%252Cscope%3Dsite,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab overview at=0 landing=true view=false
 tab domains at=1 landing=false view=false
 tab protected-paths at=2 landing=false view=false
@@ -381,9 +381,9 @@ filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:request_domain_certificate at=1 verb=invoke band=inline style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_domain_certificate?ids%3D{record}
+row hohenheim:request_domain_certificate at=1 verb=invoke band=inline style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_domain_certificate?ids%3D{record}
 row hohenheim:check_address_reach at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/invoke/hohenheim.check_address_reach?ids%3D{record}
-row zenit:delete at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
 control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
@@ -433,7 +433,7 @@ row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= targe
 row hohenheim:template_create_instance at=1 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/put-online?template%3D{approved_template}
 row hohenheim:export_template at=2 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/export
 row hohenheim:unapprove_template at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:unapprove%252Cscope%3Dinstance_template,body:unapprove_confirm%252Cscope%3Dinstance_template,confirm:unapprove%252Cscope%3Dinstance_template,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/unapprove_template
-row zenit:delete at=4 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=4 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab contents at=0 landing=false view=false
 tab history at=1 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:form/plain input=text required=true readonly=false options= binding=
@@ -716,7 +716,7 @@ row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= targe
 row hohenheim:template_create_instance at=1 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/put-online?template%3D{unapproved_template}
 row hohenheim:export_template at=2 verb=link band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/export
 row hohenheim:approve_template at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:approve%252Cscope%3Dinstance_template,body:approve_confirm%252Cscope%3Dinstance_template,confirm:approve%252Cscope%3Dinstance_template,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/approve_template
-row zenit:delete at=4 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=4 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab contents at=0 landing=false view=false
 tab history at=1 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:form/plain input=text required=true readonly=false options= binding=
@@ -1008,7 +1008,7 @@ row hohenheim:site_add_address at=1 verb=link band=overflow style=DEFAULT disabl
 row hohenheim:toggle_site at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:enable%252Cscope%3Dsite,body:enable_confirm_no_hostnames%252Cscope%3Dsite,confirm:enable%252Cscope%3Dsite,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/toggle_site
 row hohenheim:clone_site at=3 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:clone%252Cscope%3Dsite,body:clone_confirm%252Cscope%3Dsite,confirm:clone%252Cscope%3Dsite,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/{record}/action/clone_site
 row hohenheim:protect_path at=4 verb=invoke band=overflow style=DEFAULT disabled= confirm=style:DEFAULT,title:action%252Cscope%3Dprotect_path,body:description%252Cscope%3Dprotect_path,confirm:action%252Cscope%3Dprotect_path,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.protect_path?ids%3D{record}
-row zenit:delete at=5 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dsite,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=5 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dsite,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab overview at=0 landing=true view=false
 tab domains at=1 landing=false view=false
 tab protected-paths at=2 landing=false view=false
@@ -1114,7 +1114,7 @@ link hohenheim:site_domain at=0 lead=false target=/{panel}/domains
 link hohenheim:auth_provider at=1 lead=false target=/{panel}/auth-providers
 link hohenheim:preview_deployment at=2 lead=false target=/{panel}/previews
 bulk zenit:trash_restore at=0 style=DEFAULT disabled= confirm= target=/{panel}/{entry}/bulk/trash_restore
-bulk zenit:trash_purge at=1 style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:purge_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitle,body:purge_confirm%252Cscope%3Dcms%25252Ctarget%3Dbulk,confirm:delete_permanently%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/bulk/trash_purge
+bulk zenit:trash_purge at=1 style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:purge_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitle,body:purge_confirm%252Cscope%3Dcms%25252Ctarget%3Dbulk,confirm:delete_permanently%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/bulk/trash_purge
 tab overview at=0 landing=true view=false
 tab domains at=1 landing=false view=false
 tab protected-paths at=2 landing=false view=false
@@ -1185,11 +1185,11 @@ link hohenheim:site_domain at=0 lead=false target=/{panel}/domains
 link hohenheim:auth_provider at=1 lead=false target=/{panel}/auth-providers
 link hohenheim:preview_deployment at=2 lead=false target=/{panel}/previews
 bulk zenit:trash_restore at=0 style=DEFAULT disabled= confirm= target=/{panel}/{entry}/bulk/trash_restore
-bulk zenit:trash_purge at=1 style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:purge_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitle,body:purge_confirm%252Cscope%3Dcms%25252Ctarget%3Dbulk,confirm:delete_permanently%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/bulk/trash_purge
+bulk zenit:trash_purge at=1 style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:purge_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitle,body:purge_confirm%252Cscope%3Dcms%25252Ctarget%3Dbulk,confirm:delete_permanently%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/bulk/trash_purge
 selected zenit:trash_restore kept=0
 selected zenit:trash_purge kept=0
 row zenit:trash_restore at=0 verb=invoke band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}/action/trash_restore
-row zenit:trash_purge at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:purge_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitle,body:purge_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete_permanently%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/action/trash_purge
+row zenit:trash_purge at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:purge_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitle,body:purge_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete_permanently%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/trash_purge
 tab overview at=0 landing=true view=false
 tab domains at=1 landing=false view=false
 tab protected-paths at=2 landing=false view=false
@@ -1658,7 +1658,7 @@ filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 control CREATE%20site_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=false options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false
 control CREATE%20hostname at=1 kind=zenitforms:form/plain input=text required=false readonly=false options= binding=
 control CREATE%20force_ssl at=2 kind=zenitforms:form/plain input=checkbox required=false readonly=false options= binding=

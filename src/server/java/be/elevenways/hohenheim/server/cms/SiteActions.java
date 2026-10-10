@@ -188,7 +188,7 @@ final class SiteActions {
     }
 
     private static @NonNull PanelAction<Row> enableAction() {
-        ConfirmationSpec enable = Confirmations.of(HohenheimMicrocopy.SITE.of("enable"),
+        ConfirmationSpec enable = ConfirmationSpec.verb(HohenheimMicrocopy.SITE.of("enable"),
             HohenheimMicrocopy.SITE.of("toggle_confirm"), ActionStyle.DEFAULT);
         return PanelAction.<Row, Void>places(SiteOperations.ENABLE, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.refreshWithToast(
@@ -201,7 +201,7 @@ final class SiteActions {
     }
 
     private static @NonNull PanelAction<Row> disableAction() {
-        ConfirmationSpec disable = Confirmations.of(HohenheimMicrocopy.SITE.of("disable"),
+        ConfirmationSpec disable = ConfirmationSpec.verb(HohenheimMicrocopy.SITE.of("disable"),
             HohenheimMicrocopy.SITE.of("toggle_confirm"), ActionStyle.DESTRUCTIVE);
         return PanelAction.<Row, Void>places(SiteOperations.DISABLE, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.refreshWithToast(
@@ -264,7 +264,7 @@ final class SiteActions {
                     HohenheimMicrocopy.SITE.of("rollback_done").withArg("name", request.subject().get(SiteModel.NAME))))
             .inlineInRow(false)
             .description(HohenheimMicrocopy.SITE.of("rollback_hint"))
-            .confirmation(Confirmations.of(HohenheimMicrocopy.SITE.of("rollback"),
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SITE.of("rollback"),
                 HohenheimMicrocopy.SITE.of("rollback_confirm"), ActionStyle.DESTRUCTIVE))
             .build();
     }

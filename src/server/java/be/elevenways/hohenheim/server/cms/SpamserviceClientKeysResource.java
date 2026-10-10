@@ -13,6 +13,7 @@ import be.elevenways.spamservice.client.SpamserviceClient;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
@@ -239,7 +240,7 @@ public final class SpamserviceClientKeysResource {
                     .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("revoke"))
                     .icon(Icon.of("xmark"))
                     .hiddenWhen(key -> !key.active())
-                    .confirmation(Confirmations.of(HohenheimMicrocopy.SPAMSERVICE_KEY.of("revoke"),
+                    .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SPAMSERVICE_KEY.of("revoke"),
                         HohenheimMicrocopy.SPAMSERVICE_KEY.of("revoke_confirm"), ActionStyle.DEFAULT))
                     .build()))
             .build();

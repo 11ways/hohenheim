@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.proxy;
 
-import be.elevenways.hohenheim.server.util.Closeables;
 import be.elevenways.hohenheim.server.util.LoopbackPeers;
 import be.elevenways.hohenheim.server.util.SameUidListener;
+import be.elevenways.protoblast.common.util.Closeables;
 
 import java.io.IOException;
 import java.net.StandardProtocolFamily;

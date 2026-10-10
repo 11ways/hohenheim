@@ -13,6 +13,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -136,7 +137,7 @@ public final class InstanceBackupParts {
                 })
             .label(verb)
             .icon(Icon.of("clone"))
-            .confirmation(Confirmations.of(verb, HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new_confirm"),
+            .confirmation(ConfirmationSpec.verb(verb, HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new_confirm"),
                 ActionStyle.DEFAULT))
             .build();
     }

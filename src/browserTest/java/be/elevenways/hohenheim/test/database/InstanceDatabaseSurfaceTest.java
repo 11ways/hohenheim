@@ -49,8 +49,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 /**
  * The operator-facing surface of a database attachment, end to end: the attachment is
  * titled by BOTH its sides, its delete dialog names them and the consequence, a database
- * a live workload holds is offered DEAD with the workloads and the page a detach happens
- * on, that page (the instance's Databases tab) EXISTS and lists the attachment, and the
+ * a live workload holds is offered DEAD naming the workloads (names only: a reason is a
+ * sentence, never a path), the instance's Databases tab EXISTS and lists the attachment, and the
  * attachment's edit form hydrates both relation pickers (F6 + F7, 2026-08-29), and a
  * workload whose database is not ready yet cannot be deployed at all.
  *
@@ -149,24 +149,24 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         assertThat(String.valueOf(body.args().get("prefix"))).isEqualTo("DB");
 
         // 3. The database's delete is OFFERED BUT DEAD while the workload holds it,
-        //    naming the workload and the page it is detached on -- the same facts the
-        //    submit refuses with, so the dead button is never the gate.
+        //    naming the workload by name, never a path in the sentence -- the same facts
+        //    the submit refuses with, so the dead button is never the gate.
         AccessContext operator = TenantConduits.operator();
         Microcopy reason = deleteUnavailable(database, operator);
         assertThat(reason).as("step 3: the delete is dead with a reason").isNotNull();
         assertThat(reason.key()).isEqualTo("delete_in_use");
         String workloads = String.valueOf(reason.args().get("workloads"));
         assertThat(workloads)
-            .as("step 3: the reason names the workload AND the detach page")
+            .as("step 3: the reason names the workload and carries no path")
             .contains(PREFIX + "web")
-            .contains(tabUrl);
+            .doesNotContain(tabUrl);
         Throwable refused = catchThrowable(() -> ResourceWrites.delete(admin,
             DatabaseParts.admin(), database, operator));
         assertThat(refused).isInstanceOfSatisfying(Violations.class, violations ->
             assertThat(violations.all()).anySatisfy(violation -> {
                 assertThat(violation.message().key()).isEqualTo("delete_in_use");
                 assertThat(String.valueOf(violation.message().args().get("workloads")))
-                    .contains(tabUrl);
+                    .contains(PREFIX + "web");
             }));
 
         // 4. That page EXISTS on the instance record and lists the attachment; the
@@ -179,8 +179,8 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
         var detail = adminGet(CmsRoutes.detail("admin", "databases", databaseId).toUrl());
         assertThat(detail.statusCode()).isEqualTo(200);
         assertThat(detail.body())
-            .as("step 4: the database page carries the detach page in its dead-delete reason")
-            .contains(tabUrl);
+            .as("step 4: the database page names the holding workload in its dead-delete reason")
+            .contains(PREFIX + "web");
 
         // 5. THE BROWSER: the attachment's edit form hydrates BOTH relation pickers
         //    with their chosen titles (the Database one rendered empty in the QA pass).

@@ -15,6 +15,7 @@ import be.elevenways.protoblast.common.typed.rule.Operand;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
@@ -79,7 +80,7 @@ public final class ReconcileFindingParts {
                         .of("orphan_removed")
                         .withArg("name", request.subject().get(ReconcileFindingModel.RESOURCE_NAME))))
                 .icon(Icon.of("trash")).style(ActionStyle.DESTRUCTIVE)
-                .confirmation(Confirmations.of(HohenheimMicrocopy.RECONCILE_FINDING.of("remove_orphan"),
+                .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.RECONCILE_FINDING.of("remove_orphan"),
                     HohenheimMicrocopy.RECONCILE_FINDING.of("remove_orphan_confirm"), ActionStyle.DESTRUCTIVE))
                 .build())).build();
     }

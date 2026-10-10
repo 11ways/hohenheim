@@ -541,7 +541,7 @@ public final class DnsZoneParts {
     /** The framework's delete dialog with a zone-specific body, typed-confirmation gated on the origin. */
     private static @NonNull ConfirmationSpec deleteConfirmation(@NonNull Microcopy body,
                                                                 @Nullable String origin) {
-        return Confirmations.typed(DeleteConfirmation.body(body), origin);
+        return DeleteConfirmation.body(body).withTypedConfirmation(origin);
     }
 
     /**

@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype;
 
-import be.elevenways.hohenheim.server.util.Closeables;
+import be.elevenways.protoblast.common.util.Closeables;
 import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;

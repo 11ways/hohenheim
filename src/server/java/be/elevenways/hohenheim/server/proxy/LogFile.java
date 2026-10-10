@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
-import be.elevenways.hohenheim.server.util.Closeables;
+import be.elevenways.protoblast.common.util.Closeables;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 

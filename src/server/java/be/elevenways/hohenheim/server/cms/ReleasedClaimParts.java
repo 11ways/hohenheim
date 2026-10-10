@@ -155,13 +155,13 @@ public final class ReleasedClaimParts {
     }
 
     private static @NonNull PanelAction<Row> liftAction() {
-        ConfirmationSpec lift = Confirmations.of(HohenheimMicrocopy.RELEASED_CLAIM.of("lift"),
+        ConfirmationSpec lift = ConfirmationSpec.verb(HohenheimMicrocopy.RELEASED_CLAIM.of("lift"),
             HohenheimMicrocopy.RELEASED_CLAIM.of("lift_confirm"), ActionStyle.DESTRUCTIVE);
         return PanelAction.<Row, Void>places(LIFT, ActionPlacement.ROW, (request, result) ->
                 CmsActionResult.refreshWithToast(HohenheimMicrocopy.RELEASED_CLAIM.of("lifted_toast")))
             .description(HohenheimMicrocopy.RELEASED_CLAIM.of("lift_hint"))
             .confirmation(lift)
-            .dynamicConfirmation(claim -> Confirmations.typed(lift, claim.get(ReleasedRouteClaimModel.HOSTNAME)))
+            .dynamicConfirmation(claim -> lift.withTypedConfirmation(claim.get(ReleasedRouteClaimModel.HOSTNAME)))
             .build();
     }
 }

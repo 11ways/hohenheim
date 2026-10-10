@@ -11,6 +11,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.RowSingleton;
@@ -84,7 +85,7 @@ public final class SpamserviceInstallationResource extends RowSingleton {
                                                           @NonNull String name) {
         return toasting(operation, name)
             .style(ActionStyle.DESTRUCTIVE)
-            .confirmation(Confirmations.of(HohenheimMicrocopy.SPAMSERVICE.of(name),
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SPAMSERVICE.of(name),
                 HohenheimMicrocopy.SPAMSERVICE.of(name + "_confirm"), ActionStyle.DESTRUCTIVE))
             .build();
     }

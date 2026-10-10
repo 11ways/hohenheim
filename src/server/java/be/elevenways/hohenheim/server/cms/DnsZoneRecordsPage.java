@@ -24,6 +24,7 @@ import be.elevenways.protoblast.common.typed.rule.Operand;
 import be.elevenways.plumage.component.Pager;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
@@ -90,7 +91,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
     private static final PanelAction<Row> REMOTE_EDIT = PanelAction.<Row, CmsActionResult>places(
         DnsOperations.REMOTE_EDIT, ActionPlacement.PAGE, (request, result) -> result.value())
         .transport("action", "record_id")
-        .confirmation(Confirmations.of(HohenheimMicrocopy.DNS_REMOTE.of("save_remote"),
+        .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.DNS_REMOTE.of("save_remote"),
             HohenheimMicrocopy.DNS_REMOTE.of("edit_saved"), ActionStyle.DEFAULT))
         .selectedByRoute(zone -> String.valueOf((Object) zone.get(DnsZoneModel.ID))).build();
 

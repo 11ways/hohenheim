@@ -33,7 +33,7 @@ column cron at=3 shown=true hidden=false sortable=false filterable=false copyabl
 column enabled at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext=disabled_reason relation=false
 column disabled_reason at=5 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab steps at=0 landing=true view=false
 tab history at=1 landing=false view=false
 control CREATE%20record_id at=0 kind=zenitforms:form/relation-pick input=text required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
@@ -78,7 +78,7 @@ column cron at=3 shown=true hidden=false sortable=false filterable=false copyabl
 column enabled at=4 shown=true hidden=false sortable=false filterable=true copyable=false subtext=disabled_reason relation=false
 column disabled_reason at=5 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
+row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab steps at=0 landing=true view=false
 control CREATE%20record_id at=0 kind=zenitforms:form/relation-pick input=text required=false readonly=false options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:false,creatable:false
 control CREATE%20name at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=

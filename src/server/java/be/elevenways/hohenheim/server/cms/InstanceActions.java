@@ -123,7 +123,7 @@ final class InstanceActions {
             .inlineInRow(false)
             .style(ActionStyle.DESTRUCTIVE)
             .hiddenWhen(row -> !InstanceModel.STATUS_RUNNING.equals(row.get(InstanceModel.STATUS)))
-            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE.of("stop"),
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("stop"),
                 HohenheimMicrocopy.INSTANCE.of("stop_confirm"), ActionStyle.DESTRUCTIVE))
             .build();
     }
@@ -141,7 +141,7 @@ final class InstanceActions {
             .icon(Icon.of("rotate-right"))
             .inlineInRow(false)
             .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, delegated, access))
-            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE.of("restart"),
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("restart"),
                 HohenheimMicrocopy.INSTANCE.of("restart_confirm"), ActionStyle.DEFAULT))
             .build();
     }
@@ -159,7 +159,7 @@ final class InstanceActions {
             .inlineOnRecord(false)
             .inlineInRow(false)
             .preset(row -> new InstanceOperations.SnapshotInput(null))
-            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE.of("snapshot"),
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("snapshot"),
                 HohenheimMicrocopy.INSTANCE.of("snapshot_confirm"), ActionStyle.DEFAULT))
             .build();
     }
@@ -173,7 +173,7 @@ final class InstanceActions {
             .icon(Icon.of("box-archive"))
             .inlineOnRecord(false)
             .inlineInRow(false)
-            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE.of("backup_now"),
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("backup_now"),
                 HohenheimMicrocopy.INSTANCE.of("backup_confirm"), ActionStyle.DEFAULT))
             .build();
     }
@@ -230,7 +230,7 @@ final class InstanceActions {
             .inlineInRow(false)
             .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, false, access))
             .description(HohenheimMicrocopy.INSTANCE.of("rollback_hint"))
-            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE.of("rollback"),
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("rollback"),
                 HohenheimMicrocopy.INSTANCE.of("rollback_confirm"), ActionStyle.DESTRUCTIVE))
             .build();
     }
@@ -266,15 +266,15 @@ final class InstanceActions {
             .inlineOnRecord(false)
             .inlineInRow(false)
             .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, false, access))
-            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE.of("reinstall"),
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("reinstall"),
                 HohenheimMicrocopy.INSTANCE.of("reinstall_confirm"), ActionStyle.DEFAULT))
             .dynamicConfirmation(row -> {
                 boolean clears = templateClearsOnReinstall(row);
-                ConfirmationSpec spec = Confirmations.of(HohenheimMicrocopy.INSTANCE.of("reinstall"),
+                ConfirmationSpec spec = ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("reinstall"),
                     HohenheimMicrocopy.INSTANCE.of(clears ? "reinstall_clear_confirm" : "reinstall_confirm")
                         .withArg("name", row.get(InstanceModel.NAME)),
                     clears ? ActionStyle.DESTRUCTIVE : ActionStyle.DEFAULT);
-                return clears ? Confirmations.typed(spec, String.valueOf((Object) row.get(InstanceModel.NAME))) : spec;
+                return clears ? spec.withTypedConfirmation(String.valueOf((Object) row.get(InstanceModel.NAME))) : spec;
             })
             .build();
     }
@@ -294,7 +294,7 @@ final class InstanceActions {
             .inlineInRow(false)
             .hiddenWhen(row -> !InstanceAppUpdates.hasUpdateScript(row))
             .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, delegated, access))
-            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE.of("app_update"),
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("app_update"),
                 HohenheimMicrocopy.INSTANCE.of("app_update_confirm"), ActionStyle.DEFAULT))
             .build();
     }
@@ -312,7 +312,7 @@ final class InstanceActions {
             .inlineOnRecord(false)
             .inlineInRow(false)
             .hiddenWhen(row -> !InstanceModel.STATUS_RUNNING.equals(row.get(InstanceModel.STATUS)))
-            .confirmation(Confirmations.of(InstanceOperations.CONSOLE_COMMAND.label(),
+            .confirmation(ConfirmationSpec.of(InstanceOperations.CONSOLE_COMMAND.label(),
                 HohenheimMicrocopy.INSTANCE_CONSOLE.of("send"),
                 HohenheimMicrocopy.INSTANCE.of("console_command_confirm"), ActionStyle.DEFAULT))
             .build();
@@ -390,11 +390,11 @@ final class InstanceActions {
             .inlineInRow(false)
             // The record-less fallback the dynamic one refines; a dynamic confirmation without it is refused at
             // registration (WriteAffordanceParityTest).
-            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE.of("delete_with_data"),
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("delete_with_data"),
                 HohenheimMicrocopy.INSTANCE.of("delete_with_data_confirm"), ActionStyle.DESTRUCTIVE))
-            .dynamicConfirmation(row -> Confirmations.typed(Confirmations.of(
-                    HohenheimMicrocopy.INSTANCE.of("delete_with_data"), withDataBody(row), ActionStyle.DESTRUCTIVE),
-                String.valueOf((Object) row.get(InstanceModel.NAME))))
+            .dynamicConfirmation(row -> ConfirmationSpec.verb(
+                    HohenheimMicrocopy.INSTANCE.of("delete_with_data"), withDataBody(row), ActionStyle.DESTRUCTIVE)
+                    .withTypedConfirmation(String.valueOf((Object) row.get(InstanceModel.NAME))))
             .build();
     }
 

@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.incus;
 
-import be.elevenways.hohenheim.server.util.Closeables;
+import be.elevenways.protoblast.common.util.Closeables;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 

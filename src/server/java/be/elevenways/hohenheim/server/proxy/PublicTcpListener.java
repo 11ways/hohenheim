@@ -1,9 +1,9 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.security.IpLiterals;
-import be.elevenways.hohenheim.server.util.Closeables;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Backoff;
+import be.elevenways.protoblast.common.util.Closeables;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.BufferedInputStream;
