@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim;
 
+import org.checkerframework.checker.nullness.qual.NonNull;
+import java.util.Objects;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.setting.SettingDefinition;
@@ -10,6 +12,7 @@ import be.elevenways.zenit.common.validation.PathKind;
 import be.elevenways.zenit.common.validation.PrivateNetworkOptIn;
 import be.elevenways.zenit.common.validation.PrivateNetworkOptIn.Consumer;
 import be.elevenways.hohenheim.model.BackupTargetModel;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.net.IpLiterals;
 import be.elevenways.hohenheim.net.LegacyIpSpellings;
 import be.elevenways.protoblast.common.util.BlastString;
@@ -35,6 +38,22 @@ public class HohenheimSettings {
         .readPermission(HohenheimSources.ADMIN_ACCESS)
         .writePermission(HohenheimSources.ADMIN_ACCESS)
         .label(Microcopy.of("settings.hohenheim.label"));
+
+    /** @return the configured value, or the setting's own default when it is unset or not positive */
+    public static int positiveOrDefault(@NonNull SettingDefinition<Integer> setting) {
+        Integer configured = Zenit.SETTINGS_VALUES.getValue(setting);
+        return configured != null && configured > 0 ? configured : Objects.requireNonNull(setting.getDefaultValue());
+    }
+
+    /** @return {@link #positiveOrDefault} of a megabyte setting, in bytes */
+    public static long positiveMbAsBytes(@NonNull SettingDefinition<Integer> setting) {
+        return positiveOrDefault(setting) * 1024L * 1024L;
+    }
+
+    /** @return whether the switch is on; an unset value counts as off */
+    public static boolean isOn(@NonNull SettingDefinition<Boolean> setting) {
+        return Boolean.TRUE.equals(Zenit.SETTINGS_VALUES.getValue(setting));
+    }
 
     // Nested groups below are force-loaded at compile time via @BlastAutoLoad
     // (loadInnerClasses=true): Protoblast's Gradle plugin emits a reference to
@@ -544,7 +563,7 @@ public class HohenheimSettings {
                     return hours == null || hours >= 1 ? null
                         : "stacks.reclaim_min_age_hours is " + hours + "; it must be at least 1";
                 })
-                .says(HohenheimViolations.text("setting_reclaim_min_age"))
+                .says(HohenheimMicrocopy.VIOLATIONS.of("setting_reclaim_min_age"))
                 .addTo(Zenit.SETTINGS_VALUES);
 
         /** A whole number from a number or a numeric string; anything else is not one. */
@@ -1139,7 +1158,7 @@ public class HohenheimSettings {
                     }
                     return null;
                 })
-                .says(HohenheimViolations.text("setting_public_port_window")
+                .says(HohenheimMicrocopy.VIOLATIONS.of("setting_public_port_window")
                     .withArg("max", MAX_PORT))
                 .addTo(Zenit.SETTINGS_VALUES);
     }
@@ -1199,7 +1218,7 @@ public class HohenheimSettings {
                     return version != null && version.matches("[0-9]+\\.[0-9]+\\.[0-9]+") ? null
                         : "builds.nixpacks_version must be a numeric major.minor.patch release";
                 })
-                .says(HohenheimViolations.text("setting_nixpacks_release_version"))
+                .says(HohenheimMicrocopy.VIOLATIONS.of("setting_nixpacks_release_version"))
                 .addTo(Zenit.SETTINGS_VALUES);
 
         public static final SettingDefinition<String> NIXPACKS_SHA256 = GROUP
@@ -1212,13 +1231,13 @@ public class HohenheimSettings {
             .build();
 
         public static final SettingDefinition<Double> CPU_LIMIT = GROUP
-            .buildSetting("cpu_limit", Double.class)
+            .buildSetting(InstanceKindFields.CPU_LIMIT, Double.class)
             .defaultValue(2.0)
             .description("CPUs one build may use (1.5 = one and a half cores)")
             .build();
 
         public static final SettingDefinition<Integer> MEMORY_LIMIT_MB = GROUP
-            .buildSetting("memory_limit_mb", Integer.class)
+            .buildSetting(InstanceKindFields.MEMORY_LIMIT_MB, Integer.class)
             .defaultValue(2048)
             .suffix("MiB")
             .description("Memory ceiling of one build container; the kernel OOM-kills the "

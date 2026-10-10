@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
@@ -25,6 +24,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
+
 /**
  * The notification channel, backup target and ban entries of the Hohenheim legacy-admin remainder, stored before they
  * move onto shared parts and compared exactly after it.
@@ -39,7 +40,6 @@ import java.util.Map;
 class SystemSurfacesBrowserTest extends HohenheimTestBase {
 
     private static final String PREFIX = "system-surfaces-";
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
     private static final String CHANNELS = "notifications";
     private static final String TARGETS = "backup-targets";
     private static final String BANS = "bans";

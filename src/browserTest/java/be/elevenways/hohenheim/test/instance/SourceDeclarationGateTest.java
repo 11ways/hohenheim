@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.SourceBuildDetail;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -92,7 +92,7 @@ class SourceDeclarationGateTest extends HohenheimTestBase {
 
         // 4. Once a tenant owns the record, the same path can no longer be written.
         RecordGrants.grant(GrantSubjectType.USER, ApiSupport.user("gate-tenant@hohenheim.local"),
-            InstanceModel.MODEL_ID, applicationId, HohenheimAccess.MANAGE, true);
+            InstanceModel.MODEL_ID, applicationId, HohenheimCapabilities.MANAGE, true);
         Row owned = Models.get(InstanceModel.class).findById(applicationId);
         owned.set(InstanceModel.SETTINGS, source("file:///srv/repos/app.git"));
         assertThat(catchThrowable(() -> Models.get(InstanceModel.class).save(owned)))

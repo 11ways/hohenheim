@@ -12,36 +12,14 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
- * THE home of Hohenheim's violation copy: every message Hohenheim raises is declared under {@code scope=violations}.
- *
- * AIDEV-NOTE: the scope is spelled here and nowhere else; a raiser that spells it itself is how one message silently
- * loses the filter and resolves some other entry of the same word. Hohenheim's catalog keeps its own scope rather
- * than core's ValidationMicrocopy one: re-keying it would let Hohenheim entries shadow core's validation messages.
+ * THE home of Hohenheim's refusals: every message Hohenheim raises is a {@link HohenheimMicrocopy#VIOLATIONS} key.
  *
  * @author Jelle De Loecker
  * @since 0.1.0
  */
 public final class HohenheimViolations {
 
-    /** The filter value every Hohenheim violation message is declared and looked up under. */
-    public static final String SCOPE = "violations";
-
     private HohenheimViolations() {
-    }
-
-    /** @return the message under the violations scope, ready for its args */
-    public static @NonNull Microcopy text(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", SCOPE);
-    }
-
-    /** @return a refusal anchored on one field */
-    public static @NonNull Violations ofField(@NonNull String field, @Nullable Object value, @NonNull String key) {
-        return Violations.ofField(field, value, text(key));
-    }
-
-    /** @return a form-level refusal */
-    public static @NonNull Violations ofForm(@NonNull String key) {
-        return Violations.ofForm(text(key));
     }
 
     /**
@@ -50,7 +28,8 @@ public final class HohenheimViolations {
      */
     public static @NonNull Microcopy instanceRefusalText(@NonNull String key, @NonNull Row instance,
                                                          @Nullable Throwable cause) {
-        Microcopy text = text(key).withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)));
+        Microcopy text = HohenheimMicrocopy.VIOLATIONS.of(key)
+            .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)));
         return cause == null ? text : text.withArg("reason", reasonOf(cause));
     }
 
@@ -58,6 +37,18 @@ public final class HohenheimViolations {
     public static @NonNull Violations instanceRefusal(@NonNull String key, @NonNull Row instance,
                                                       @Nullable Throwable cause) {
         return Violations.ofForm(instanceRefusalText(key, instance, cause));
+    }
+
+    /**
+     * The refusal of a managed database the caller may not act on.
+     *
+     * AIDEV-NOTE: a missing, hidden and denied database all get this same answer, naming neither the database nor the
+     * missing capability: a refusal that tells them apart is an oracle for which databases exist.
+     *
+     * @return the form-level {@code database_not_permitted} refusal
+     */
+    public static @NonNull Violations databaseNotPermitted() {
+        return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("database_not_permitted"));
     }
 
     /**
@@ -108,7 +99,7 @@ public final class HohenheimViolations {
         if (!isToken(key)) {
             return stored;
         }
-        Microcopy message = text(key);
+        Microcopy message = HohenheimMicrocopy.VIOLATIONS.of(key);
         if (space >= 0) {
             String args = entry.substring(space + 1);
             if (!args.startsWith("{") || !args.endsWith("}")) {

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.project;
 
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
@@ -175,7 +176,7 @@ public final class ProjectAdoption {
         }
         // Set-based on purpose: the quota hook must not re-run on a bookkeeping restamp.
         instances.find().where(InstanceModel.ID.eq(row.get(InstanceModel.ID)))
-            .assign(InstanceModel.QUOTA_BUCKET, InstanceQuota.bucketKeyOf(newPack)).updateAll();
+            .assign(InstanceModel.QUOTA_BUCKET, OwnerBudget.INSTANCES.bucketOf(newPack)).updateAll();
         return moved;
     }
 

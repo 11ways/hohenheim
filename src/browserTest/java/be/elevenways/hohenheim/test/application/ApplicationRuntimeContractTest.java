@@ -1,13 +1,13 @@
 package be.elevenways.hohenheim.test.application;
 
 import be.elevenways.hohenheim.server.cms.InstanceParts;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
-import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 class ApplicationRuntimeContractTest {
 
-    private static final String OPERATOR_BUCKET = InstanceQuota.bucketKeyOf("");
+    private static final String OPERATOR_BUCKET = OwnerBudget.INSTANCES.bucketOf("");
     private static final String OWNER_MODEL = InstanceModel.MODEL_ID.toString();
 
     @BeforeAll

@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -31,20 +30,20 @@ public class InstanceSnapshotModel extends Model {
 
     public static final IntegerField INSTANCE_ID = SCHEMA.addField(
         IntegerField.builder().name("instance_id")
-            .label(HohenheimFormCopy.label("instance"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("instance"))
             .build());
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_COMPLETE, v -> v.displayName("Complete").icon("circle-check")
-            .label(Microcopy.of("complete").withFilter("scope", "snapshot_status")).color(ColorHue.GREEN))
+            .label(HohenheimMicrocopy.SNAPSHOT_STATUS.of("complete")).color(ColorHue.GREEN))
         .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-exclamation")
-            .label(Microcopy.of("failed").withFilter("scope", "snapshot_status")).color(ColorHue.RED))
+            .label(HohenheimMicrocopy.SNAPSHOT_STATUS.of("failed")).color(ColorHue.RED))
         .defaultValue(STATUS_FAILED)
         .build());
 
     /** Free-form operator note ("before 1.20 upgrade"). */
     public static final StringField NOTE = SCHEMA.addField(StringField.builder().name("note")
-        .label(HohenheimFormCopy.label("note"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("note"))
         .build());
 
     /** Host directory holding this snapshot's payload files (volume-tar lane only). */

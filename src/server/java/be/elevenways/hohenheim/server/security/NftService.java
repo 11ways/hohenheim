@@ -75,8 +75,7 @@ public class NftService {
 
     public NftService() {
         this(new NftRunner.Sudo(),
-            () -> Boolean.TRUE.equals(
-                Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NFTABLES_ENABLED)));
+            () -> HohenheimSettings.isOn(HohenheimSettings.Security.NFTABLES_ENABLED));
     }
 
     /** Test constructor: inject the executor and the enable gate. */

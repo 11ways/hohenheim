@@ -280,12 +280,6 @@
       "case": "sentence"
     }
   ],
-  "key": [
-    {
-      "text": "Key",
-      "scope": "template_contents"
-    }
-  ],
   "value": [
     {
       "text": "Value",
@@ -566,10 +560,6 @@
     {
       "text": "Image",
       "scope": "stack_services"
-    },
-    {
-      "text": "Image",
-      "scope": "template_contents"
     }
   ],
   "image_tag": [
@@ -848,10 +838,6 @@
     {
       "text": "Container bind mounts in host-path:container-path form.",
       "scope": "help"
-    },
-    {
-      "text": "Declared volumes",
-      "scope": "template_contents"
     }
   ],
   "wait_for_ready": [
@@ -979,20 +965,22 @@
     {
       "text": "Attach database",
       "scope": "site_databases"
-    },
-    {
-      "text": "Add secondary",
-      "scope": "dns_secondaries"
     }
   ],
   "auto_deploy_disabled": {
     "text": "Auto-deploy is disabled: pushes are acknowledged but not deployed. Enable it in the application's source settings.",
     "scope": "deployments"
   },
-  "build_log": {
-    "text": "Build log",
-    "scope": "deployments"
-  },
+  "build_log": [
+    {
+      "text": "Build log",
+      "scope": "deployments"
+    },
+    {
+      "text": "Build log",
+      "scope": "hohenheim_field"
+    }
+  ],
   "cancel": [
     {
       "text": "Cancel deploy",
@@ -1083,6 +1071,10 @@
     {
       "text": "Database",
       "scope": "instance_overview"
+    },
+    {
+      "text": "Database",
+      "scope": "hohenheim_field"
     }
   ],
   "database_not_running": {
@@ -1185,20 +1177,12 @@
       "scope": "dev_sessions"
     },
     {
-      "text": "No secondaries configured",
-      "scope": "dns_secondaries"
-    },
-    {
       "text": "No services yet",
       "scope": "stack_services"
     },
     {
       "text": "No deployments yet",
       "scope": "stack_deployments"
-    },
-    {
-      "text": "No steps yet",
-      "scope": "schedule_step"
     },
     {
       "text": "This directory is empty",
@@ -1287,10 +1271,6 @@
     {
       "text": "Database engine. Fixed after creation; destroy and recreate to change it.",
       "scope": "help"
-    },
-    {
-      "text": "Engine",
-      "scope": "template_contents"
     }
   ],
   "env_prefix": [
@@ -1318,10 +1298,6 @@
     },
     {
       "text": "Failed",
-      "scope": "stack_deploy_status"
-    },
-    {
-      "text": "Failed",
       "scope": "snapshot_status"
     },
     {
@@ -1342,20 +1318,16 @@
     },
     {
       "text": "Failed",
-      "scope": "build_status"
-    },
-    {
-      "text": "Failed",
       "scope": "preview_status"
-    },
-    {
-      "text": "Failed",
-      "scope": "release_status"
     },
     {
       "text": "failed",
       "scope": "database_status",
       "case": "sentence"
+    },
+    {
+      "text": "Failed",
+      "scope": "operation_status"
     }
   ],
   "hostname": [
@@ -1629,6 +1601,10 @@
     {
       "text": "Port open",
       "scope": "readiness_kind"
+    },
+    {
+      "text": "Port",
+      "scope": "hohenheim_field"
     }
   ],
   "primary": {
@@ -1765,6 +1741,10 @@
     {
       "text": "Secret",
       "scope": "variable_type"
+    },
+    {
+      "text": "Stored encrypted and masked on every form; can be generated for you",
+      "scope": "variable_type_description"
     }
   ],
   "start": [
@@ -2048,10 +2028,6 @@
     {
       "text": "Name",
       "scope": "instance_files"
-    },
-    {
-      "text": "Name",
-      "scope": "template_contents"
     },
     {
       "text": "App",
@@ -2873,10 +2849,6 @@
       "scope": "site"
     },
     {
-      "text": "Declared databases",
-      "scope": "template_contents"
-    },
-    {
       "text": "Databases",
       "scope": "database_engine"
     },
@@ -3124,7 +3096,7 @@
     }
   ],
   "database_name": {
-    "text": "Unique name for this managed database; also names its container and volume. Lowercase letters, digits, and dashes.",
+    "text": "Unique name for this managed database; also names its container and volume. Letters, digits, dots, dashes and underscores, starting with a letter or digit.",
     "scope": "help"
   },
   "database_failure_reason": {
@@ -3795,6 +3767,10 @@
     {
       "text": "ISO URL",
       "scope": "server_media"
+    },
+    {
+      "text": "URL",
+      "scope": "hohenheim_field"
     }
   ],
   "connected_since": {
@@ -3966,10 +3942,6 @@
   "peer_none": {
     "text": "None",
     "scope": "dns_peer"
-  },
-  "peer": {
-    "text": "Peer",
-    "scope": "dns_secondaries"
   },
   "transfer_host": {
     "text": "Transfer host",
@@ -5014,10 +4986,6 @@
     },
     {
       "text": "Type",
-      "scope": "template_contents"
-    },
-    {
-      "text": "Type",
       "scope": "instance_device"
     }
   ],
@@ -5045,6 +5013,10 @@
     {
       "text": "Detail",
       "scope": "server_overview"
+    },
+    {
+      "text": "Detail",
+      "scope": "hohenheim_field"
     }
   ],
   "word": {
@@ -5666,19 +5638,11 @@
     },
     {
       "text": "Running",
-      "scope": "stack_deploy_status"
-    },
-    {
-      "text": "Running",
       "scope": "instance_status"
     },
     {
       "text": "Running",
       "scope": "schedule_run_status"
-    },
-    {
-      "text": "Running",
-      "scope": "build_status"
     },
     {
       "text": "Running",
@@ -5696,6 +5660,10 @@
       "text": "running",
       "scope": "database_status",
       "case": "sentence"
+    },
+    {
+      "text": "Running",
+      "scope": "operation_status"
     }
   ],
   "unhealthy": {
@@ -5765,13 +5733,9 @@
     },
     {
       "text": "Deploying",
-      "scope": "release_status"
+      "scope": "operation_status"
     }
   ],
-  "success": {
-    "text": "Success",
-    "scope": "stack_deploy_status"
-  },
   "workload_identity": {
     "text": "Site {$name} workload identity",
     "scope": "attention_title"
@@ -5879,16 +5843,6 @@
     },
     {
       "text": "Delete the record of engine '{$name}' WITHOUT verifying its container was removed? Whatever still runs on the host survives, and the root credentials are lost. Type the engine name to confirm.",
-      "scope": "database_engine"
-    }
-  ],
-  "force_delete_ok": [
-    {
-      "text": "Force delete",
-      "scope": "database"
-    },
-    {
-      "text": "Force delete",
       "scope": "database_engine"
     }
   ],
@@ -6088,7 +6042,7 @@
   },
   "host_not_admitted": [
     {
-      "text": "{$name} is not admitted to run apps yet; Check and admit it first",
+      "text": "{$name} is not admitted to run apps yet. Check and admit it first.",
       "scope": "violations"
     },
     {
@@ -7137,7 +7091,7 @@
     },
     {
       "text": "Pending",
-      "scope": "release_status"
+      "scope": "operation_status"
     }
   ],
   "installing": {
@@ -7162,22 +7116,46 @@
     "text": "Interactive terminal",
     "scope": "console_kind"
   },
-  "string": {
-    "text": "Text",
-    "scope": "variable_type"
-  },
-  "integer": {
-    "text": "Number",
-    "scope": "variable_type"
-  },
-  "boolean": {
-    "text": "Switch",
-    "scope": "variable_type"
-  },
-  "select": {
-    "text": "Choice",
-    "scope": "variable_type"
-  },
+  "string": [
+    {
+      "text": "Text",
+      "scope": "variable_type"
+    },
+    {
+      "text": "Free text, optionally held to a pattern or a maximum length",
+      "scope": "variable_type_description"
+    }
+  ],
+  "integer": [
+    {
+      "text": "Number",
+      "scope": "variable_type"
+    },
+    {
+      "text": "A whole number, optionally between a minimum and a maximum",
+      "scope": "variable_type_description"
+    }
+  ],
+  "boolean": [
+    {
+      "text": "Switch",
+      "scope": "variable_type"
+    },
+    {
+      "text": "On or off",
+      "scope": "variable_type_description"
+    }
+  ],
+  "select": [
+    {
+      "text": "Choice",
+      "scope": "variable_type"
+    },
+    {
+      "text": "One of the options you list",
+      "scope": "variable_type_description"
+    }
+  ],
   "install": [
     {
       "text": "Run install",
@@ -7208,32 +7186,12 @@
     "text": "Reinstall {$name}? This template's policy WIPES its data volumes first. Type the instance name to confirm.",
     "scope": "instance"
   },
-  "add_variable": {
-    "text": "Add variable",
-    "scope": "template_contents"
-  },
-  "label": {
-    "text": "Label",
-    "scope": "template_contents"
-  },
   "required": [
-    {
-      "text": "Required",
-      "scope": "template_contents"
-    },
     {
       "text": "Required",
       "scope": "server_overview"
     }
   ],
-  "default": {
-    "text": "Default",
-    "scope": "template_contents"
-  },
-  "yes": {
-    "text": "Yes",
-    "scope": "template_contents"
-  },
   "path": [
     {
       "text": "Path",
@@ -7254,10 +7212,6 @@
       "scope": "instance_files"
     }
   ],
-  "no_variables": {
-    "text": "No variables",
-    "scope": "template_contents"
-  },
   "no_variables_description": {
     "text": "This template declares no variables yet.",
     "scope": "template_contents"
@@ -7505,10 +7459,6 @@
   },
   "add": [
     {
-      "text": "Add step",
-      "scope": "schedule_step"
-    },
-    {
       "text": "Add to this directory",
       "scope": "instance_files"
     },
@@ -7541,15 +7491,7 @@
     "text": "This schedule has not run yet.",
     "scope": "instance_schedule"
   },
-  "order": {
-    "text": "Order",
-    "scope": "schedule_step"
-  },
   "action": [
-    {
-      "text": "Action",
-      "scope": "schedule_step"
-    },
     {
       "text": "Action",
       "scope": "instance_migrate"
@@ -7559,15 +7501,7 @@
       "scope": "protect_path"
     }
   ],
-  "offset": {
-    "text": "Offset",
-    "scope": "schedule_step"
-  },
   "on_failure": [
-    {
-      "text": "On failure",
-      "scope": "schedule_step"
-    },
     {
       "text": "On failure",
       "scope": "restart_policy"
@@ -8086,6 +8020,10 @@
     {
       "text": "One service of a managed stack (managed by its stack)",
       "scope": "instance_kind_description"
+    },
+    {
+      "text": "Service",
+      "scope": "hohenheim_field"
     }
   ],
   "stack_port_bind_unsupported": {
@@ -8136,7 +8074,7 @@
   ],
   "rollback_done": [
     {
-      "text": "Rolled back to the retained release",
+      "text": "Rolled back {$name} to the retained release",
       "scope": "site"
     },
     {
@@ -9781,10 +9719,16 @@
       "scope": "instance_schedule"
     }
   ],
-  "exit_code": {
-    "text": "Exit code {$code}",
-    "scope": "instance_exec"
-  },
+  "exit_code": [
+    {
+      "text": "Exit code {$code}",
+      "scope": "instance_exec"
+    },
+    {
+      "text": "Exit code",
+      "scope": "hohenheim_field"
+    }
+  ],
   "exec_command_required": {
     "text": "Enter a command to run",
     "scope": "violations"
@@ -9897,10 +9841,6 @@
     {
       "text": "{$name} - Steps",
       "scope": "schedule_step"
-    },
-    {
-      "text": "{$name} - Secondaries",
-      "scope": "dns_secondaries"
     },
     {
       "text": "{$name} - Zone file",
@@ -10141,10 +10081,16 @@
     "text": "Verify the machine out of band, then re-pin the identity it now presents. Re-pinning IS the only way a quarantine clears; there is deliberately no other switch.",
     "scope": "server_overview"
   },
-  "last_error": {
-    "text": "Its last check failed",
-    "scope": "server_overview"
-  },
+  "last_error": [
+    {
+      "text": "Its last check failed",
+      "scope": "server_overview"
+    },
+    {
+      "text": "Last error",
+      "scope": "hohenheim_field"
+    }
+  ],
   "trust_ssh": {
     "text": "SSH host key",
     "scope": "server_overview"
@@ -10523,10 +10469,16 @@
       "scope": "put_online"
     }
   ],
-  "protocol": {
-    "text": "Protocol",
-    "scope": "instance_overview"
-  },
+  "protocol": [
+    {
+      "text": "Protocol",
+      "scope": "instance_overview"
+    },
+    {
+      "text": "Protocol",
+      "scope": "hohenheim_field"
+    }
+  ],
   "port_state": {
     "text": "State",
     "scope": "instance_overview"
@@ -10658,7 +10610,7 @@
     },
     {
       "text": "Refused",
-      "scope": "build_status"
+      "scope": "operation_status"
     }
   ],
   "deleted_database": {
@@ -10899,10 +10851,16 @@
     "text": "Satisfy",
     "scope": "hohenheim_field"
   },
-  "events": {
-    "text": "Events",
-    "scope": "notification_channel"
-  },
+  "events": [
+    {
+      "text": "Events",
+      "scope": "notification_channel"
+    },
+    {
+      "text": "Events",
+      "scope": "hohenheim_field"
+    }
+  ],
   "auto": {
     "text": "Automatic",
     "scope": "ban_source"
@@ -11819,10 +11777,6 @@
     {
       "text": "Exclusive",
       "scope": "instance_volume"
-    },
-    {
-      "text": "Exclusive",
-      "scope": "template_contents"
     }
   ],
   "never_measured": {
@@ -12359,27 +12313,23 @@
   "succeeded": [
     {
       "text": "Succeeded",
-      "scope": "build_status"
-    },
-    {
-      "text": "Succeeded",
-      "scope": "release_status"
+      "scope": "operation_status"
     }
   ],
   "timed_out": {
     "text": "Timed out",
-    "scope": "build_status"
+    "scope": "operation_status"
   },
   "quota_exceeded": {
     "text": "Quota exceeded",
-    "scope": "build_status"
+    "scope": "operation_status"
   },
   "letsencrypt": {
     "text": "Let's Encrypt",
     "scope": "cert_provider"
   },
   "custom": {
-    "text": "Custom",
+    "text": "Uploaded",
     "scope": "cert_provider"
   },
   "acme_account": {
@@ -12482,19 +12432,19 @@
   },
   "probing": {
     "text": "Probing",
-    "scope": "release_status"
+    "scope": "operation_status"
   },
   "switching": {
     "text": "Switching",
-    "scope": "release_status"
+    "scope": "operation_status"
   },
   "draining": {
     "text": "Draining",
-    "scope": "release_status"
+    "scope": "operation_status"
   },
   "interrupted": {
     "text": "Interrupted",
-    "scope": "release_status"
+    "scope": "operation_status"
   },
   "local": {
     "text": "Local",
@@ -12738,24 +12688,8 @@
     "text": "Engine image override for the created database; leave blank for the engine's default image.",
     "scope": "help"
   },
-  "add_database": {
-    "text": "Add database",
-    "scope": "template_contents"
-  },
-  "no_databases": {
-    "text": "No declared databases",
-    "scope": "template_contents"
-  },
   "no_databases_description": {
     "text": "This template declares no managed databases; an instance created from it has to attach one by hand.",
-    "scope": "template_contents"
-  },
-  "add_volume": {
-    "text": "Add volume",
-    "scope": "template_contents"
-  },
-  "no_volumes": {
-    "text": "No declared volumes",
     "scope": "template_contents"
   },
   "no_volumes_description": {
@@ -12765,10 +12699,6 @@
   "template_volume_name_taken": {
     "text": "This template already declares a volume named '{$name}'. Two declarations of one name become a single volume on every instance, so one of them would be lost.",
     "scope": "violations"
-  },
-  "prefix": {
-    "text": "Env prefix",
-    "scope": "template_contents"
   },
   "template_required": {
     "text": "Choose a template",
@@ -13458,7 +13388,7 @@
     "scope": "help"
   },
   "database_engine_name": {
-    "text": "Names the engine container and its data volume: lowercase letters, digits and dashes.",
+    "text": "Names the engine container and its data volume: letters, digits, dots, dashes and underscores, starting with a letter or digit.",
     "scope": "help"
   },
   "database_engine_root_user": {
@@ -14496,7 +14426,7 @@
   },
   "cannot_start": [
     {
-      "text": "{$name} cannot start yet",
+      "text": "Cannot start yet",
       "scope": "app_health"
     },
     {
@@ -15539,6 +15469,9 @@
   "back_up_started": {"text": "Backing up {$name}; the dump shows under Backups when it is done.", "scope": "database"},
   "back_up_temporary": {"text": "A temporary database is not backed up.", "scope": "database"},
   "back_up_not_active": {"text": "Only a running database can be backed up.", "scope": "database"},
+  "back_up_not_serving": {"text": "No backup can be made now. {$reason}.", "scope": "database"},
+  "move_not_active": {"text": "Only a running database can move.", "scope": "database"},
+  "move_not_serving": {"text": "It cannot move now. {$reason}.", "scope": "database"},
   "back_up_database": {"text": "{$actor} backed up database {$subject}", "scope": "hohenheim", "target": "happened"},
   "runs_on_column": {"text": "Runs on", "scope": "database_list"},
   "last_backup_column": {"text": "Last backup", "scope": "database_list"},
@@ -15797,7 +15730,7 @@
       "scope": "nav_cluster"
     },
     {
-      "text": "Your addresses, DNS records, certificates and access lists.",
+      "text": "Your addresses and everything that goes with them.",
       "scope": "nav_cluster_hint"
     }
   ],
@@ -16805,10 +16738,6 @@
     "text": "Open blocked addresses",
     "scope": "attention_action"
   },
-  "fix": {
-    "text": "Fix",
-    "scope": "app_list"
-  },
   "live_not_running": {
     "text": "It is not running, so it uses none.",
     "scope": "instance_overview"
@@ -16824,6 +16753,10 @@
   "cpu_first_reading": {
     "text": "The first reading carries no CPU figure yet.",
     "scope": "instance_overview"
+  },
+  "offset_value": {
+    "text": ".match {$count :number}\none {{1 second}}\n* {{{$count} seconds}}",
+    "scope": "schedule_step"
   },
   "cores": {
     "text": ".match {$count :number}\none {{1 core}}\n* {{{$count} cores}}",
@@ -16988,6 +16921,10 @@
     "text": ".match {$more :number}\none {{Asked for {$names} and 1 more, {$ago}}}\n* {{Asked for {$names} and {$more} more, {$ago}}}",
     "scope": "ban"
   },
+  "other_names_column": {
+    "text": "Other names",
+    "scope": "certificate"
+  },
   "no_misses": {
     "text": "No address asked for a name this server does not serve in the past hour",
     "scope": "ban"
@@ -17114,6 +17051,138 @@
       "text": "{$subject} stopped and its automatic restart was refused",
       "scope": "hohenheim",
       "target": "happened"
+    }
+  ],
+  "format": {
+    "text": "Format",
+    "scope": "hohenheim_field"
+  },
+  "for_model": {
+    "text": "Record type",
+    "scope": "hohenheim_field"
+  },
+  "for_id": {
+    "text": "Record ID",
+    "scope": "hohenheim_field"
+  },
+  "source_ref": {
+    "text": "Source revision",
+    "scope": "hohenheim_field"
+  },
+  "disk_limit_mb": {
+    "text": "Disk limit (MB)",
+    "scope": "hohenheim_field"
+  },
+  "pids_limit": {
+    "text": "Process limit",
+    "scope": "hohenheim_field"
+  },
+  "timeout_seconds": {
+    "text": "Time limit (seconds)",
+    "scope": "hohenheim_field"
+  },
+  "peak_disk_bytes": {
+    "text": "Peak disk use (bytes)",
+    "scope": "hohenheim_field"
+  },
+  "artifact_bytes": {
+    "text": "Artifact size (bytes)",
+    "scope": "hohenheim_field"
+  },
+  "duration_ms": {
+    "text": "Duration (ms)",
+    "scope": "hohenheim_field"
+  },
+  "candidate_instance": {
+    "text": "New instance",
+    "scope": "hohenheim_field"
+  },
+  "retired_instance": {
+    "text": "Replaced instance",
+    "scope": "hohenheim_field"
+  },
+  "step_log": {
+    "text": "Steps",
+    "scope": "hohenheim_field"
+  },
+  "pr_number": {
+    "text": "Pull request",
+    "scope": "hohenheim_field"
+  },
+  "head_sha": {
+    "text": "Commit",
+    "scope": "hohenheim_field"
+  },
+  "finding_bucket": {
+    "text": "Ownership",
+    "scope": "hohenheim_field"
+  },
+  "resource_name": {
+    "text": "Resource",
+    "scope": "hohenheim_field"
+  },
+  "evidence": {
+    "text": "Evidence",
+    "scope": "hohenheim_field"
+  },
+  "max_heap_mb": {
+    "text": "Maximum heap (MB)",
+    "scope": "hohenheim_field"
+  },
+  "system_user": {
+    "text": "System user",
+    "scope": "hohenheim_field"
+  },
+  "site": {
+    "text": "Site",
+    "scope": "hohenheim_field"
+  },
+  "stack": {
+    "text": "Stack",
+    "scope": "hohenheim_field"
+  },
+  "zone": {
+    "text": "Zone",
+    "scope": "hohenheim_field"
+  },
+  "peer": {
+    "text": "Peer",
+    "scope": "hohenheim_field"
+  },
+  "device_type": {
+    "text": "Type",
+    "scope": "hohenheim_field"
+  },
+  "variable_kind": {
+    "text": "Kind",
+    "scope": "hohenheim_field"
+  },
+  "mount_type": {
+    "text": "Type",
+    "scope": "hohenheim_field"
+  },
+  "depends_condition": {
+    "text": "Condition",
+    "scope": "hohenheim_field"
+  },
+  "basic": [
+    {
+      "text": "HTTP Basic Auth",
+      "scope": "auth_provider_type"
+    },
+    {
+      "text": "A username and password the browser asks for",
+      "scope": "auth_provider_type_description"
+    }
+  ],
+  "proteus": [
+    {
+      "text": "Proteus SSO",
+      "scope": "auth_provider_type"
+    },
+    {
+      "text": "Sign in through a Proteus single sign-on realm",
+      "scope": "auth_provider_type_description"
     }
   ]
 }

@@ -1,12 +1,12 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
+import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -16,8 +16,6 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -35,9 +33,6 @@ import java.util.stream.Stream;
  * @since  0.9.0
  */
 public final class DatabaseBackups {
-
-    private static final DateTimeFormatter STAMP =
-        DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
 
     /**
      * One dump on disk.
@@ -64,7 +59,7 @@ public final class DatabaseBackups {
      */
     public static @NonNull Path backUp(@NonNull DatabaseService service, @NonNull String name) throws IOException {
         Path directory = directoryOf(name);
-        Path written = service.backupToFile(name, directory, STAMP.format(Now.instant()));
+        Path written = service.backupToFile(name, directory, UtcStamp.now());
         prune(directory, Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_RETENTION));
         return written;
     }
@@ -86,8 +81,8 @@ public final class DatabaseBackups {
         } catch (Exception e) {
             Blast.log("BACKUP: database", name, "failed:", e.getMessage());
             Alerts.trySend(NotificationEvents.BACKUP_FAILED, Alerts.about(DatabaseModel.MODEL_ID, name),
-                Microcopy.of("database_backup_failed_subject").withFilter("scope", "alert").withArg("name", name),
-                Microcopy.of("database_backup_failed_body").withFilter("scope", "alert")
+                HohenheimMicrocopy.ALERT.of("database_backup_failed_subject").withArg("name", name),
+                HohenheimMicrocopy.ALERT.of("database_backup_failed_body")
                     .withArg("name", name).withArg("reason", String.valueOf(e.getMessage())));
             return name + ": " + e.getMessage();
         }

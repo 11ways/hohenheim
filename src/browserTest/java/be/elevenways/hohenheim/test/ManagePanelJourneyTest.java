@@ -9,20 +9,19 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.AppParts;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.cms.HostFields;
-import be.elevenways.hohenheim.server.cms.InstanceParts;
-import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.cms.OnboardingCollector;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelCluster;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelNav;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -109,7 +108,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         domains.save(domain);
         this.domainId = domain.get(SiteDomainModel.ID);
         RecordGrants.grant(GrantSubjectType.USER, this.tenantId, InstanceModel.MODEL_ID, this.appId,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         this.tenant = sessionFor(this.tenantId).token();
         this.previousCountCap = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER);
     }
@@ -136,8 +135,8 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             .contains("Open w9b-survival")
             .doesNotContain("All clear");
         assertThat(page("/manage/instances/" + this.appId + "/page/overview"))
-            .as("step 2: the app's page leads with the same verdict")
-            .contains("w9b-survival cannot start yet");
+            .as("step 2: the app's page leads with the same verdict, its heading naming the app")
+            .contains("Cannot start yet");
 
         // 3. The Apps band, headed "Your apps" as the board heads it, lists the app by name, linked to its page.
         assertThat(home)
@@ -199,9 +198,9 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
 
         // 7. Granted console and file reading, the two tabs appear and the card lists them.
         RecordGrants.grant(GrantSubjectType.USER, this.tenantId, InstanceModel.MODEL_ID, this.appId,
-            HohenheimAccess.CONSOLE, true);
+            HohenheimCapabilities.CONSOLE, true);
         RecordGrants.grant(GrantSubjectType.USER, this.tenantId, InstanceModel.MODEL_ID, this.appId,
-            HohenheimAccess.FILES_READ, true);
+            HohenheimCapabilities.FILES_READ, true);
         String granted = page("/manage/instances/" + this.appId + "/page/overview");
         assertThat(granted)
             .as("step 7: the console and files tabs follow the grant")
@@ -214,7 +213,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
 
         // 7b. Granted power, the app page offers Restart beside Deploy (board Manage-App).
         RecordGrants.grant(GrantSubjectType.USER, this.tenantId, InstanceModel.MODEL_ID, this.appId,
-            HohenheimAccess.POWER, true);
+            HohenheimCapabilities.POWER, true);
         assertThat(page("/manage/instances/" + this.appId + "/page/overview"))
             .as("step 7b: Restart follows the POWER grant")
             .contains("hohenheim.restart_instance")
@@ -224,6 +223,34 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         assertThat(adminGet("/manage/dashboard").body())
             .as("step 8: an operator is offered Put something online")
             .contains("/manage/put-online");
+
+        // 9. The Domains cluster offers Access lists only where a list can guard something: a tenant of an app alone
+        //    reads Certificates there, never an empty Access lists tab; managing a site, it gets the tab (DD6).
+        assertThat(domainsTabs())
+            .as("step 9: no Access lists tab for a tenant holding no site and no list")
+            .contains(HohenheimSlugs.CERTIFICATES)
+            .doesNotContain(HohenheimSlugs.ACCESS_LISTS);
+        PanelCluster domains = (PanelCluster) Objects.requireNonNull(Objects.requireNonNull(
+            PanelRegistry.getBySlug(HohenheimSlugs.MANAGE)).entryBySlug(HohenheimSlugs.Cluster.DOMAIN_NAMES));
+        assertThat(Objects.requireNonNull(domains.description()).resolve(LocaleChain.ofTags("en"),
+                Zenit.getMessageResolver()))
+            .as("step 9: the cluster's lead names no tab a tenant may lack, as DNS records and Access lists (DD10b)")
+            .isEqualTo("Your addresses and everything that goes with them.");
+        RecordGrants.grant(GrantSubjectType.USER, this.tenantId, SiteModel.MODEL_ID, this.siteId,
+            HohenheimCapabilities.MANAGE, true);
+        assertThat(domainsTabs())
+            .as("step 9: a tenant managing a site has the Access lists tab")
+            .contains(HohenheimSlugs.ACCESS_LISTS);
+    }
+
+    /** @return the slugs of the Domains cluster's tabs the tenant sees, read afresh (the scope memo is per conduit) */
+    private List<String> domainsTabs() {
+        Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
+        PanelCluster domains = (PanelCluster) Objects.requireNonNull(
+            manage.entryBySlug(HohenheimSlugs.Cluster.DOMAIN_NAMES));
+        AccessContext tenantAccess = AccessContext.of(TenantConduits.stubFor(
+            new UserPrincipal(this.tenantId, "W9b Tenant")));
+        return PanelNav.clusterMembers(manage, domains, tenantAccess).stream().map(PanelEntry::slug).toList();
     }
 
     @Test
@@ -247,8 +274,8 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         instances.save(hidden);
         int hiddenId = hidden.get(InstanceModel.ID);
         RecordGrants.grant(GrantSubjectType.USER, this.tenantId, InstanceModel.MODEL_ID, hiddenId,
-            HohenheimAccess.VIEW, true);
-        Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(ManagePanel.SLUG));
+            HohenheimCapabilities.VIEW, true);
+        Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
         AccessContext tenantAccess = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(this.tenantId, "W9b Tenant")));
 
@@ -294,7 +321,8 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             }
         }
         Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
-        assertThat(PartsLists.filterVocabulary(admin, Objects.requireNonNull(admin.entryBySlug(InstanceParts.SLUG)),
+        assertThat(PartsLists.filterVocabulary(admin, Objects.requireNonNull(admin
+            .entryBySlug(HohenheimSlugs.INSTANCES)),
                 TenantConduits.operator()).find(InstanceModel.SERVER_ID.getName()))
             .as("step 2: the operator's own list still filters by host").isNotNull();
 
@@ -343,7 +371,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         // 7. A Destroy grant has its door: /manage offers the verified destroy, dead with the gate's own words to a
         //    reader without destroy (removal stays the operator's, as the card says), live to a holder, whose card no
         //    longer leaves removal to the operator.
-        PanelEntry manageInstances = Objects.requireNonNull(manage.entryBySlug(InstanceParts.SLUG));
+        PanelEntry manageInstances = Objects.requireNonNull(manage.entryBySlug(HohenheimSlugs.INSTANCES));
         Row app = instances.findById(this.appId);
         assertThat(tenantApp).as("step 7: the app page offers the delete").contains("delete_instance")
             .contains("Removing this app.");
@@ -351,7 +379,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             .as("step 7: dead without destroy, in the gate's words").isNotNull()
             .extracting(Microcopy::key).isEqualTo("instance_not_permitted");
         RecordGrants.grant(GrantSubjectType.USER, this.tenantId, InstanceModel.MODEL_ID, this.appId,
-            HohenheimAccess.DESTROY, true);
+            HohenheimCapabilities.DESTROY, true);
         AccessContext destroyer = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(this.tenantId, "W9b Tenant")));
         assertThat(ResourceVerbs.unavailable(manage, manageInstances, ResourceVerb.DELETE, app, destroyer))
@@ -414,7 +442,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
 
             // 3. Granted the site, the tenant may use a fix: the band offers it and names nobody else.
             RecordGrants.grant(GrantSubjectType.USER, this.tenantId, SiteModel.MODEL_ID, this.siteId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             assertThat(page(overview))
                 .as("step 3: the band offers the tenant's own fix and no longer sends them to the operator")
                 .contains("data-cms-record-health-fixes")
@@ -423,7 +451,7 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
             // 4. "What you can do here" says what the grant allows in words: the tenant level as its description, the
             //    verbs it implies never listed again (DEP10: "Console, Power, Configure, Run commands, ...").
             RecordGrants.grant(GrantSubjectType.USER, this.tenantId, InstanceModel.MODEL_ID, this.appId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             String managed = page(overview);
             assertThat(managed)
                 .as("step 4: the umbrella capability reads as what it allows, its verbs not repeated")
@@ -446,9 +474,10 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
 
             // 6. The app page stands under Apps: that sidebar row is the current one, and the title reads the app,
             //    never the Instances list it is reached through.
-            Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(ManagePanel.SLUG));
-            assertThat(PanelNav.sidebarEntryOf(manage, Objects.requireNonNull(manage.entryBySlug(InstanceParts.SLUG)))
-                .slug()).as("step 6: the app page's sidebar row is Apps").isEqualTo(AppParts.SLUG);
+            Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
+            assertThat(PanelNav.sidebarEntryOf(manage, Objects.requireNonNull(manage
+                .entryBySlug(HohenheimSlugs.INSTANCES)))
+                .slug()).as("step 6: the app page's sidebar row is Apps").isEqualTo(HohenheimSlugs.APPS);
             String title = managed.substring(managed.indexOf("<title>") + "<title>".length(),
                 managed.indexOf("</title>"));
             assertThat(title).as("step 6: the page title reads the app under Apps")

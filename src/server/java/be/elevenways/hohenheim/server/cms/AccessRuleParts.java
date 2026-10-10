@@ -1,13 +1,16 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.PanelAction;
@@ -70,9 +73,6 @@ import java.util.stream.Stream;
 public final class AccessRuleParts {
     private static final OperationCommand COMMAND = OperationCommand.perSubject();
 
-    /** The entry slug both twins share, which the Rules tab's links and the add lane's landing name. */
-    public static final String SLUG = "access-rules";
-
     /** The virtual column holding the rule's localized one-line summary. */
     static final String RULE_COLUMN = "rule";
 
@@ -85,7 +85,7 @@ public final class AccessRuleParts {
     /** Switches a rule on or off; switching one on runs the model's completeness hook. */
     public static final Operation<Row, Void, Void> TOGGLE = Operation.declare(HohenheimIds.id("access_rule_toggle"))
         .happened(OperationSentences.of("access_rule_toggle"))
-        .label(Microcopy.of("toggle").withFilter("scope", "access_rule"))
+        .label(HohenheimMicrocopy.ACCESS_RULE.of("toggle"))
         .icon(Icon.of("power-off"))
         .one(SUBJECT)
         .gate(OperationGate.open())
@@ -97,7 +97,7 @@ public final class AccessRuleParts {
     public static final Operation<Row, Void, Integer> DELETE =
         Operation.declare(HohenheimIds.id("delete_access_rule"))
             .happened(OperationSentences.of("delete_access_rule"))
-            .label(Microcopy.of("delete").withFilter("scope", "cms"))
+            .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(SUBJECT)
             .gate(OperationGate.open())
@@ -127,26 +127,24 @@ public final class AccessRuleParts {
 
     /** @return the admin access-rule resource */
     public static @NonNull PanelResource<Row> admin() {
-        return entry("access_rule")
+        return entry(HohenheimIds.id("access_rule"))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
     }
 
     /** @return the /manage twin: the rules of the lists the caller manages */
     public static @NonNull PanelResource<Row> manage() {
-        return entry("manage_access_rule")
-            .scope(TenantScopes.ACCESS_RULES)
-            // The contributed tabs only: the admin activity and revision history stays off the delegated surface.
-            .tabs(ResourceTabs.<Row>none().withContributions())
+        return ManageTwin.reached(entry(ManageTwin.id("access_rule")), TenantScopes.ACCESS_RULES,
+                ResourceTabs.<Row>none().withContributions())
             .build();
     }
 
     /** The identity, list, form, reads, writes, actions, parent and authority both twins share. */
-    private static PanelResource.@NonNull Builder<Row> entry(@NonNull String id) {
+    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
         // A rule has no name: it is what it decides, so its first column is that summary. search_text is DATA (it
         // opens with the raw type token), so it stays a search field and is never shown.
         TableSpec<Row> table = TableSpec.<Row>builder()
-            .column(ColumnSpec.virtual(RULE_COLUMN, Microcopy.of("rule").withFilter("scope", "access_rule")).build())
+            .column(ColumnSpec.virtual(RULE_COLUMN, HohenheimMicrocopy.ACCESS_RULE.of("rule")).build())
             .column(ColumnSpec.fromField(AccessRuleModel.TYPE).filterable().build())
             .column(ColumnSpec.fromField(AccessRuleModel.ACCESS_LIST_ID)
                 .relation(RelationPick.of(AccessRuleModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID).build())
@@ -161,15 +159,16 @@ public final class AccessRuleParts {
             .add(Nested.of(AccessRuleModel.DATA).schemaFrom("type").build())
             .add(AccessRuleModel.ENABLED)
             .build();
-        return PanelResource.builder(HohenheimIds.id(id), SLUG, SUBJECT)
-            .label(Microcopy.of("plural").withFilter("scope", "access_rule"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "access_rule"))
+        return PanelResource.builder(id, HohenheimSlugs.ACCESS_RULES, SUBJECT)
+            .label(HohenheimMicrocopy.ACCESS_RULE.of("plural"))
+            .recordLabel(HohenheimMicrocopy.ACCESS_RULE.of("singular"))
             .icon(Icon.of("shield-halved"))
             .navGroup(HohenheimPanel.NETWORK_GROUP)
             .navOrder(31)
             .showInNav(false)
             .standsUnder(HohenheimSlugs.ACCESS_LISTS)
-            .parent(ResourceParent.of(HohenheimSlugs.ACCESS_LISTS, AccessRuleModel.ACCESS_LIST_ID).tab("rules"))
+            .parent(ResourceParent.of(HohenheimSlugs.ACCESS_LISTS, AccessRuleModel.ACCESS_LIST_ID)
+            .tab(HohenheimSlugs.Tab.RULES))
             .reads(ResourceReads.<Row>rows().title(AccessRuleSummaries::titleOf))
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
                 .search(AccessRuleModel.SEARCH_TEXT)
@@ -207,7 +206,7 @@ public final class AccessRuleParts {
     /** @return null when the caller may write the rule (manage on its list), else the not-found refusal */
     private static @Nullable DomainRefusal writeRefusal(@NonNull Row rule, @NonNull AccessContext access) {
         return HohenheimAccess.reachesRecord(access, AccessListModel.MODEL_ID,
-            rule.get(AccessRuleModel.ACCESS_LIST_ID), HohenheimAccess.MANAGE) ? null
+            rule.get(AccessRuleModel.ACCESS_LIST_ID), HohenheimCapabilities.MANAGE) ? null
             : new DomainRefusal(ZenitRefusalReason.NOT_FOUND, "rule " + rule.get(AccessRuleModel.ID)
                 + " is not reachable");
     }
@@ -220,12 +219,12 @@ public final class AccessRuleParts {
     private static @NonNull PanelAction<Row> toggleAction() {
         return PanelAction.<Row, Void>places(TOGGLE, ActionPlacement.ROW, (request, result) ->
                 // The toast names the state the rule landed in, read back from the store.
-                CmsActionResult.refreshWithToast(Microcopy.of(switchedOn(request.subject())
-                    ? "turned_on" : "turned_off").withFilter("scope", "access_rule")))
+                CmsActionResult.refreshWithToast(HohenheimMicrocopy.ACCESS_RULE.of(switchedOn(request.subject())
+                    ? "turned_on" : "turned_off")))
             // The button says what the CLICK does, not what the field is called.
-            .dynamicLabel(rule -> Microcopy.of(Boolean.TRUE.equals(rule.get(AccessRuleModel.ENABLED))
-                ? "switch_off" : "switch_on").withFilter("scope", "access_rule"))
-            .description(Microcopy.of("toggle_hint").withFilter("scope", "access_rule"))
+            .dynamicLabel(rule -> HohenheimMicrocopy.ACCESS_RULE.of(
+                Boolean.TRUE.equals(rule.get(AccessRuleModel.ENABLED)) ? "switch_off" : "switch_on"))
+            .description(HohenheimMicrocopy.ACCESS_RULE.of("toggle_hint"))
             .build();
     }
 }

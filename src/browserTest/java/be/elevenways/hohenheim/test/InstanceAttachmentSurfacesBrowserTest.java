@@ -6,8 +6,7 @@ import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -28,6 +27,9 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
+import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
+
 /**
  * The instance-database attachment entry and its /manage twin, stored before their move onto shared parts and
  * compared exactly after it. The device twins' set lives beside the other /manage captures
@@ -39,9 +41,7 @@ import java.util.Map;
 class InstanceAttachmentSurfacesBrowserTest extends HohenheimTestBase {
 
     private static final String PREFIX = "b14-attachments-";
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
-    private static final String MANAGE = HohenheimSlugs.MANAGE;
-    private static final String DATABASES = InstanceAttachmentParts.DATABASES;
+    private static final String DATABASES = HohenheimSlugs.INSTANCE_DATABASES;
 
     private static String instanceId;
     private static String databaseId;
@@ -62,9 +62,9 @@ class InstanceAttachmentSurfacesBrowserTest extends HohenheimTestBase {
         linkId = String.valueOf(link(instance, database));
 
         RecordGrants.grant(GrantSubjectType.USER, databasesUser, InstanceModel.MODEL_ID, instance,
-            HohenheimAccess.CONFIG, true);
+            HohenheimCapabilities.CONFIG, true);
         RecordGrants.grant(GrantSubjectType.USER, databasesUser, DatabaseModel.MODEL_ID, database,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         operator = access(operatorPrincipal());
         outsider = access(new UserPrincipal(outsiderUser, "B14 Attachments Outsider"));

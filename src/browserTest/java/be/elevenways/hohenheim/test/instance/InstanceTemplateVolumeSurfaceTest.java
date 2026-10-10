@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVolumeModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
-import be.elevenways.hohenheim.server.cms.TemplateChildParts;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -68,7 +68,7 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
 
         // 1. The peer exists in the admin panel and every declaration it makes about its
         //    own list is one the framework can honour.
-        PanelResource<?> resource = registeredResource(TemplateChildParts.VOLUMES);
+        PanelResource<?> resource = registeredResource(HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES);
         assertThat(resource).as("step 1: the panel offers the template volumes resource")
             .isNotNull();
         resource.validateIn(PanelRegistry.getBySlug("admin"));
@@ -78,7 +78,7 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
         // 2. An operator declares a volume on a template through the resource -- the only
         //    thing that used to require writing the row by hand.
         int templateId = template(PREFIX + "carrier", ApplicationKind.ID.toString());
-        PanelResourceCalls.create("admin", TemplateChildParts.VOLUMES, Map.of(
+        PanelResourceCalls.create("admin", HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES, Map.of(
             "template_id", templateId,
             "name", "data",
             "container_path", "/var/lib/app",
@@ -114,13 +114,15 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
     @Test
     void theResourceRefusesADeclarationTheCreateCouldNeverHonour() {
         int templateId = template(PREFIX + "refusing", ApplicationKind.ID.toString());
-        PanelResourceCalls.create("admin", TemplateChildParts.VOLUMES, Map.of("template_id", templateId, "name", "data",
+        PanelResourceCalls.create("admin", HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES, Map.of("template_id", templateId,
+            "name", "data",
             "container_path", "/var/lib/app", "exclusive", false), TenantConduits.operator());
 
         // 1. A second declaration of one NAME would become a single volume on every
         //    instance (the copy re-declares that one name), so one of the two would be
         //    silently lost.
-        assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin", TemplateChildParts.VOLUMES,
+        assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin",
+            HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
                 Map.of("template_id", templateId, "name", "data",
                      "container_path", "/var/other", "exclusive", false), TenantConduits.operator()))))
             .as("step 1: a duplicate volume name is refused, named")
@@ -128,14 +130,16 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
 
         // 2. Two volumes at one container path would hand the daemon two binds at one
         //    path -- the volume tier's own collision rule, asked at authoring time.
-        assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin", TemplateChildParts.VOLUMES,
+        assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin",
+            HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
                 Map.of("template_id", templateId, "name", "cache",
                      "container_path", "/var/lib/app", "exclusive", false), TenantConduits.operator()))))
             .as("step 2: a colliding container path is refused, named")
             .contains("volume_container_path_conflict");
 
         // 3. A name that is not a plain directory name is the containment guarantee.
-        assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin", TemplateChildParts.VOLUMES,
+        assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin",
+            HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
                 Map.of("template_id", templateId, "name", "../etc",
                      "container_path", "/var/cache/app", "exclusive", false), TenantConduits.operator()))))
             .as("step 3: a traversing volume name is refused, named")
@@ -143,7 +147,8 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
 
         // 4. A quota no backend could apply would be stored, shown as a limit and never
         //    enforced.
-        assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin", TemplateChildParts.VOLUMES,
+        assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin",
+            HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
                 Map.of("template_id", templateId, "name", "cache",
                     "container_path", "/var/cache/app", "quota_bytes", 0L,
                      "exclusive", false), TenantConduits.operator()))))
@@ -153,7 +158,8 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
         // 5. And a template whose kind mounts no volumes at all cannot be given one here,
         //    rather than being given one that refuses every create it is used for.
         int wrongKind = template(PREFIX + "wrong-kind", "hohenheim:docker_container");
-        assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin", TemplateChildParts.VOLUMES,
+        assertThat(violationKeys(catchThrowable(() -> PanelResourceCalls.create("admin",
+            HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
                 Map.of("template_id", wrongKind, "name", "data",
                      "container_path", "/var/lib/app", "exclusive", false), TenantConduits.operator()))))
             .as("step 5: a kind that mounts none is refused, named")
@@ -161,7 +167,8 @@ class InstanceTemplateVolumeSurfaceTest extends HohenheimTestBase {
 
         // 6. FALSIFIED: a free name at a free path on the same template is accepted, so
         //    every refusal above discriminates rather than forbidding a second volume.
-        PanelResourceCalls.create("admin", TemplateChildParts.VOLUMES, Map.of("template_id", templateId, "name", "cache",
+        PanelResourceCalls.create("admin", HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES, Map.of("template_id", templateId,
+            "name", "cache",
             "container_path", "/var/cache/app", "exclusive", false), TenantConduits.operator());
         assertThat(Models.get(InstanceTemplateVolumeModel.class).findByTemplateId(templateId))
             .as("step 6: the template carries both volumes").hasSize(2);

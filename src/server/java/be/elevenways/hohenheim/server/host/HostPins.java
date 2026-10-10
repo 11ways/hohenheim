@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
@@ -125,7 +126,7 @@ public final class HostPins {
      */
     public static void confirm(@NonNull Row server, @NonNull HostTrustSlot slot) {
         if (!slot.isPinned(server)) {
-            throw Violations.ofForm(HostKeys.violation("host_key_not_pinned"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_key_not_pinned"));
         }
         ActivityLog.withAction(ZenitActivityAction.UPDATE, "host_key_verified", () -> {
             server.set(slot.verified(), true);
@@ -148,7 +149,7 @@ public final class HostPins {
                              @NonNull UnaryOperator<String> fingerprintOf) {
         String offered = slot.offeredOf(server);
         if (offered.isBlank()) {
-            throw Violations.ofForm(HostKeys.violation("host_key_no_offer"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_key_no_offer"));
         }
         String previous = server.get(slot.fingerprint());
         String fingerprint = fingerprintOf.apply(offered);

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.guard.NamedPattern;
@@ -45,7 +46,8 @@ class PageTitleLocalizationTest {
         Pattern.compile("render\\(\\w+,\\s*\"\\d{3}\",\\s*(\".*)$");
 
     /** The only spellings a title may start with; everything else must carry no literal. */
-    private static final List<String> RESOLVED = List.of("CmsSupport.pageTitle(", "Microcopy.of(");
+    private static final List<String> RESOLVED = List.of("CmsSupport.pageTitle(", "Microcopy.of(",
+        "HohenheimMicrocopy.");
 
     @Test
     void noPageBuildsItsTitleByConcatenatingALiteral() throws IOException {
@@ -101,7 +103,7 @@ class PageTitleLocalizationTest {
         ShippedCatalogs catalogs = new ShippedCatalogs();
         List<String> broken = new ArrayList<>();
 
-        Microcopy putOnlineTitle = Microcopy.of("put_online").withFilter("scope", "put_online");
+        Microcopy putOnlineTitle = HohenheimMicrocopy.PUT_ONLINE.of("put_online");
         for (String tag : List.of("en", "nl")) {
             LocaleChain chain = LocaleChain.ofTags(tag);
             if (catalogs.resolveSource(putOnlineTitle.key(), chain, putOnlineTitle.filters()) == null) {
@@ -109,16 +111,17 @@ class PageTitleLocalizationTest {
             }
         }
 
-        for (String scope : List.of("instance_device", "schedule_step",
-                "dns_secondaries", "dns_zone_file", "dns_zone_records", "dev_sessions",
-                "site_databases", "database_restore", "spamservice_sample",
-                "instance_deployments", "instance_volume", "site_domains")) {
+        for (HohenheimMicrocopy scope : List.of(HohenheimMicrocopy.INSTANCE_DEVICE, HohenheimMicrocopy.SCHEDULE_STEP,
+                HohenheimMicrocopy.DNS_ZONE_FILE, HohenheimMicrocopy.DNS_ZONE_RECORDS, HohenheimMicrocopy.DEV_SESSIONS,
+                HohenheimMicrocopy.SITE_DATABASES, HohenheimMicrocopy.DATABASE_RESTORE,
+                HohenheimMicrocopy.SPAMSERVICE_SAMPLE, HohenheimMicrocopy.INSTANCE_DEPLOYMENTS,
+                HohenheimMicrocopy.INSTANCE_VOLUME, HohenheimMicrocopy.SITE_DOMAINS)) {
             for (String tag : List.of("en", "nl")) {
-                String resolved = Microcopy.of("page_title").withFilter("scope", scope)
+                String resolved = scope.of("page_title")
                     .withArg("name", "acme-one")
                     .resolve(LocaleChain.ofTags(tag), catalogs);
                 if (resolved.contains("page_title") || !resolved.contains("acme-one")) {
-                    broken.add(tag + " page_title[scope=" + scope + "] -> '" + resolved + "'");
+                    broken.add(tag + " page_title[scope=" + scope.scope() + "] -> '" + resolved + "'");
                 }
             }
         }
@@ -126,7 +129,7 @@ class PageTitleLocalizationTest {
         for (String key : List.of("not_found_title", "not_found_message", "bad_gateway_title",
                 "unreachable_message", "dev_offline_title", "dev_offline_message")) {
             for (String tag : List.of("en", "nl")) {
-                String resolved = Microcopy.of(key).withFilter("scope", "proxy_error")
+                String resolved = HohenheimMicrocopy.PROXY_ERROR.of(key)
                     .withArg("name", "acme-one")
                     .resolve(LocaleChain.ofTags(tag), catalogs);
                 if (resolved.contains(key)) {

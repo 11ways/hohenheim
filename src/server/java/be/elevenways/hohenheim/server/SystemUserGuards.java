@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
@@ -46,7 +47,7 @@ public final class SystemUserGuards {
             return;
         }
         Row user = installations.first().get(SpamserviceInstallationModel.SYSTEM_USER);
-        throw Violations.ofForm(CmsSupport.violationText("system_user_in_use")
+        throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("system_user_in_use")
             .withArg("name", user != null ? String.valueOf((Object) user.get(SystemUserModel.NAME)) : ""));
     }
 }

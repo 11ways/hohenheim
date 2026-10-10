@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.HostTrustSlot;
@@ -25,6 +26,8 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * THE ssh trust and credential seam: every {@code ssh} argv the product ever builds
@@ -178,7 +181,7 @@ public final class HostKeys {
      * single-colon test exists.
      */
     public static @NonNull Target parseTarget(@Nullable String raw) {
-        String value = raw != null ? raw.trim() : "";
+        String value = trimmed(raw);
         String user = "";
         int at = value.lastIndexOf('@');
         if (at >= 0) {
@@ -309,7 +312,7 @@ public final class HostKeys {
             }
         }
         if (best == null) {
-            throw Violations.ofForm(violation("host_key_scan_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_key_scan_failed")
                 .withArg("target", String.valueOf((Object) server.get(ServerModel.SSH_TARGET)))
                 .withArg("detail", failure.isEmpty() ? "no host keys offered" : failure));
         }
@@ -423,9 +426,5 @@ public final class HostKeys {
         } catch (IOException | UnsupportedOperationException ignored) {
             // Non-POSIX filesystem; the content is still authoritative.
         }
-    }
-
-    static Microcopy violation(String key) {
-        return HohenheimViolations.text(key);
     }
 }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.hohenheim.server.util.Closeables;
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -77,7 +78,7 @@ abstract class StreamIncusTransport implements IncusTransport {
         byte[] request = Http11.request(method, pathAndQuery, hostHeader(), body,
             body != null ? "application/json" : null, headers);
         Channel channel = open(timeoutMs);
-        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> closeQuietly(channel), timeoutMs);
+        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel), timeoutMs);
         try {
             OutputStream out = channel.out();
             out.write(request);
@@ -91,7 +92,7 @@ abstract class StreamIncusTransport implements IncusTransport {
             throw e;
         } finally {
             watchdog.cancel(false);
-            closeQuietly(channel);
+            Closeables.closeQuietly(channel);
         }
     }
 
@@ -116,7 +117,7 @@ abstract class StreamIncusTransport implements IncusTransport {
             length, extraHeaders);
 
         Channel channel = open(timeoutMs);
-        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> closeQuietly(channel), timeoutMs);
+        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel), timeoutMs);
         try {
             OutputStream out = channel.out();
             out.write(head);
@@ -131,7 +132,7 @@ abstract class StreamIncusTransport implements IncusTransport {
             throw e;
         } finally {
             watchdog.cancel(false);
-            closeQuietly(channel);
+            Closeables.closeQuietly(channel);
         }
     }
 
@@ -143,7 +144,7 @@ abstract class StreamIncusTransport implements IncusTransport {
             throws IOException {
         byte[] request = Http11.request(method, pathAndQuery, hostHeader(), null, null, null);
         Channel channel = open(timeoutMs);
-        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> closeQuietly(channel), timeoutMs);
+        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel), timeoutMs);
         try {
             OutputStream out = channel.out();
             out.write(request);
@@ -172,7 +173,7 @@ abstract class StreamIncusTransport implements IncusTransport {
             throw e;
         } finally {
             watchdog.cancel(false);
-            closeQuietly(channel);
+            Closeables.closeQuietly(channel);
         }
     }
 
@@ -192,7 +193,7 @@ abstract class StreamIncusTransport implements IncusTransport {
         Channel channel = open(connectTimeoutMs);
         // The watchdog covers connect + handshake ONLY: an established stream lives
         // until a side closes it.
-        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> closeQuietly(channel),
+        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel),
             connectTimeoutMs);
         try {
             OutputStream out = channel.out();
@@ -204,7 +205,7 @@ abstract class StreamIncusTransport implements IncusTransport {
             watchdog.cancel(false);
             return new Rfc6455WebSocket(in, out, channel);
         } catch (IOException e) {
-            closeQuietly(channel);
+            Closeables.closeQuietly(channel);
             if (watchdog.isDone()) {
                 throw new IOException("Incus websocket handshake with " + describe()
                     + " timed out after " + connectTimeoutMs + "ms");
@@ -270,14 +271,6 @@ abstract class StreamIncusTransport implements IncusTransport {
             return Base64.getEncoder().encodeToString(digest);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-1 unavailable", e);
-        }
-    }
-
-    private static void closeQuietly(@NonNull Channel channel) {
-        try {
-            channel.close();
-        } catch (IOException ignored) {
-            // best effort
         }
     }
 }

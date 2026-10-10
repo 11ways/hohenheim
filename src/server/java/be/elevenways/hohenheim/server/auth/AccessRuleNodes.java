@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
@@ -58,13 +59,8 @@ public final class AccessRuleNodes {
      *         onto another list's tree or onto a leaf
      */
     public static @Nullable Integer parentIn(@Nullable String submitted, int listId) {
-        if (submitted == null || submitted.isBlank()) {
-            return null;
-        }
-        int parentId;
-        try {
-            parentId = Integer.parseInt(submitted.trim());
-        } catch (NumberFormatException notANumber) {
+        Integer parentId = RawValues.parsedInt(submitted);
+        if (parentId == null) {
             return null;
         }
         List<Row> candidates = Models.get(AccessRuleModel.class).find()

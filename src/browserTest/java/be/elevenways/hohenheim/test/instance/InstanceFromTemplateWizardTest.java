@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.InstanceFromTemplatePage;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -56,7 +55,7 @@ class InstanceFromTemplateWizardTest extends HohenheimTestBase {
 
     @Test
     void theWizardChoosesATemplateFirstThenCreatesFromOneDocument() throws Exception {
-        String page = "/" + HohenheimSlugs.ADMIN + "/" + InstanceFromTemplatePage.SLUG;
+        String page = "/" + HohenheimSlugs.ADMIN + "/" + HohenheimSlugs.INSTANCES_FROM_TEMPLATE;
 
         // 1. Without a selection the page is the chooser, offering the template by its own link.
         HttpResponse<String> chooser = httpGet(page, sessionToken);

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.notification;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -76,7 +77,7 @@ public enum NotificationEvents {
 
     /** The subscription checkbox label for this event. */
     public @NonNull Microcopy label() {
-        return Microcopy.of(this.token).withFilter("scope", "notification_event");
+        return HohenheimMicrocopy.NOTIFICATION_EVENT.of(this.token);
     }
 
     public static boolean isKnown(@Nullable String event) {

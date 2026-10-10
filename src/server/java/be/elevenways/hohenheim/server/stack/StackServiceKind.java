@@ -1,29 +1,22 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimViolations;
-import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
-import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
-import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.HealthCheck;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
-import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DoubleField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
@@ -37,12 +30,13 @@ import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * The instance kind ONE service of a managed stack lowers onto: an operator-authored
@@ -96,21 +90,19 @@ public final class StackServiceKind implements InstanceKindHandler {
 
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
-    public static final StringField IMAGE = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("image").label(HohenheimFormCopy.label("image")).build());
+    public static final StringField IMAGE = SETTINGS_SCHEMA.addField(InstanceKindFields.image());
 
     public static final ListField<String> COMMAND = SETTINGS_SCHEMA.addField(
         ListField.builder(StringField.builder().name("arg").build()).name("command")
-            .label(HohenheimFormCopy.label("command")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("command")).build());
 
     // secret(): redacted on derived surfaces (revisions, activity), like every env map.
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
-        StringMapField.builder("environment_variables")
-            .label(HohenheimFormCopy.label("environment_variables")).secret().build());
+        InstanceKindFields.environmentVariables());
 
     /** Materialized volume name to container path; the names are stack-scoped, not id-keyed. */
     public static final StringMapField VOLUMES = SETTINGS_SCHEMA.addField(
-        StringMapField.builder("volumes").label(HohenheimFormCopy.label("volumes")).build());
+        StringMapField.builder("volumes").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("volumes")).build());
 
     public static final ListField<String> TMPFS_PATHS = SETTINGS_SCHEMA.addField(
         ListField.builder(StringField.builder().name("path").build()).name("tmpfs_paths")
@@ -124,46 +116,42 @@ public final class StackServiceKind implements InstanceKindHandler {
     public static final Schema PORT_SCHEMA = new Schema();
     public static final IntegerField PORT_CONTAINER = PORT_SCHEMA.addField(
         IntegerField.builder().name(StackServiceModel.PORT_CONTAINER.getName())
-            .label(HohenheimFormCopy.label("container_port")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_port")).build());
     public static final IntegerField PORT_HOST = PORT_SCHEMA.addField(
         IntegerField.builder().name(StackServiceModel.PORT_HOST.getName())
-            .label(HohenheimFormCopy.label("host_port")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("host_port")).build());
     public static final StringField PORT_PROTOCOL = PORT_SCHEMA.addField(
         StringField.builder().name(StackServiceModel.PORT_PROTOCOL.getName()).build());
     public static final StringField PORT_HOST_IP = PORT_SCHEMA.addField(
         StringField.builder().name(StackServiceModel.PORT_HOST_IP.getName())
-            .label(HohenheimFormCopy.label("host_ip")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("host_ip")).build());
 
     public static final SchemaField PORTS = SETTINGS_SCHEMA.addField(
         SchemaField.builder("ports").subSchema(PORT_SCHEMA).list()
-            .label(HohenheimFormCopy.label("ports")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("ports")).build());
 
     public static final ListField<String> CAPABILITIES = SETTINGS_SCHEMA.addField(
         ListField.builder(StringField.builder().name("capability").build()).name("capabilities")
-            .label(HohenheimFormCopy.label("capabilities")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("capabilities")).build());
 
     public static final StringField HEALTH_CMD = SETTINGS_SCHEMA.addField(
         StringField.builder().name("health_cmd")
-            .label(HohenheimFormCopy.label("health_cmd")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("health_cmd")).build());
     public static final IntegerField HEALTH_INTERVAL_SECONDS = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("health_interval_seconds").defaultValue(10).suffix("s")
-            .label(HohenheimFormCopy.label("health_interval")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("health_interval")).build());
     public static final IntegerField HEALTH_TIMEOUT_SECONDS = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("health_timeout_seconds").defaultValue(5).suffix("s")
-            .label(HohenheimFormCopy.label("health_timeout")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("health_timeout")).build());
     public static final IntegerField HEALTH_RETRIES = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("health_retries").defaultValue(5)
-            .label(HohenheimFormCopy.label("health_retries")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("health_retries")).build());
     public static final IntegerField HEALTH_START_PERIOD_SECONDS = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("health_start_period_seconds").defaultValue(0).suffix("s")
-            .label(HohenheimFormCopy.label("health_start_period")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("health_start_period")).build());
 
-    public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("memory_limit_mb")
-            .label(HohenheimFormCopy.label("memory_limit")).build());
-    public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(
-        DoubleField.builder().name("cpu_limit")
-            .label(HohenheimFormCopy.label("cpu_limit")).build());
+    public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
+    public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(InstanceKindFields.cpuLimit());
 
     /** The link handle of the stack's shared network; the join happens between create and start. */
     public static final StringField STACK_NETWORK = SETTINGS_SCHEMA.addField(
@@ -249,16 +237,6 @@ public final class StackServiceKind implements InstanceKindHandler {
     public @NonNull String getDisplayName() { return "Stack service"; }
 
     @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("stack_service").withFilter("scope", "instance_kind");
-    }
-
-    @Override
-    public @NonNull Microcopy getDescription() {
-        return Microcopy.of("stack_service").withFilter("scope", "instance_kind_description");
-    }
-
-    @Override
     public Icon getIcon() { return Icon.of("layer-group"); }
 
     @Override
@@ -276,14 +254,12 @@ public final class StackServiceKind implements InstanceKindHandler {
 
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
-        return new DockerInstanceRuntime(new ServerService().clientFor(serverName),
-            WorkloadNetworkPolicy.forServer(serverName), NetworkPosture.PRIVATE, EGRESS);
+        return DockerInstanceRuntime.onServer(serverName, EGRESS);
     }
 
     @Override
     public @NonNull InstanceSpec specFor(int instanceId, @NonNull Map<String, Object> settings) {
-        String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
-        String name = str(settings.get(SERVICE_NAME.getName()));
+        String name = trimmed(settings.get(SERVICE_NAME.getName()));
 
         List<String> command = PrimitiveCoercion.toTextList(settings.get(COMMAND.getName()));
         List<String> capabilities = PrimitiveCoercion.toTextList(settings.get(CAPABILITIES.getName()));
@@ -302,20 +278,18 @@ public final class StackServiceKind implements InstanceKindHandler {
             }
         }
 
-        String healthCmd = str(settings.get(HEALTH_CMD.getName()));
+        String healthCmd = trimmed(settings.get(HEALTH_CMD.getName()));
         HealthCheck health = healthCmd.isEmpty() ? null : new HealthCheck(healthCmd,
-            intOr(settings.get(HEALTH_INTERVAL_SECONDS.getName()), 10),
-            intOr(settings.get(HEALTH_TIMEOUT_SECONDS.getName()), 5),
-            intOr(settings.get(HEALTH_RETRIES.getName()), 5),
-            intOr(settings.get(HEALTH_START_PERIOD_SECONDS.getName()), 0));
+            RawValues.intOr(settings.get(HEALTH_INTERVAL_SECONDS.getName()), 10),
+            RawValues.intOr(settings.get(HEALTH_TIMEOUT_SECONDS.getName()), 5),
+            RawValues.intOr(settings.get(HEALTH_RETRIES.getName()), 5),
+            RawValues.intOr(settings.get(HEALTH_START_PERIOD_SECONDS.getName()), 0));
 
         // The environment arrives through the RESOLVED settings: InstanceService.resolve
         // folds the instance's secret variable rows (where the stack's env now lives) into
         // this key, on top of whatever a pre-upgrade row still carries in plaintext.
-        return InstanceSpec.builder(handle, str(settings.get(IMAGE.getName())),
-                ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
-                resolvedHardening(name, capabilities),
-                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
+        return InstanceSpec.forInstance(instanceId, trimmed(settings.get(IMAGE.getName())), settings,
+                defaultFootprintMb(settings), resolvedHardening(name, capabilities))
             .command(command.isEmpty() ? null : command)
             .env(EnvVars.toMap(settings.get(ENVIRONMENT_VARIABLES.getName())))
             .volumes(volumes)
@@ -339,16 +313,16 @@ public final class StackServiceKind implements InstanceKindHandler {
     private static @NonNull List<PortPublication> publicationsOf(@NonNull Map<String, Object> settings,
                                                                  @NonNull String service) {
         List<PortPublication> publications = new ArrayList<>();
-        for (Object entry : listOf(settings.get(PORTS.getName()))) {
+        for (Object entry : RawValues.list(settings.get(PORTS.getName()))) {
             if (!(entry instanceof Map<?, ?> port)) {
                 continue;
             }
-            int containerPort = intOr(port.get(PORT_CONTAINER.getName()), 0);
-            int hostPort = intOr(port.get(PORT_HOST.getName()), 0);
+            int containerPort = RawValues.intOr(port.get(PORT_CONTAINER.getName()), 0);
+            int hostPort = RawValues.intOr(port.get(PORT_HOST.getName()), 0);
             if (containerPort <= 0 || hostPort <= 0) {
                 continue;
             }
-            String hostIp = str(port.get(PORT_HOST_IP.getName()));
+            String hostIp = trimmed(port.get(PORT_HOST_IP.getName()));
             boolean publicExposure;
             if (hostIp.isEmpty() || "0.0.0.0".equals(hostIp) || "::".equals(hostIp)) {
                 publicExposure = true;
@@ -356,26 +330,14 @@ public final class StackServiceKind implements InstanceKindHandler {
                 publicExposure = false;
             } else {
                 throw Violations.ofField("settings.ports", hostIp,
-                    HohenheimViolations.text("stack_port_bind_unsupported")
+                    HohenheimMicrocopy.VIOLATIONS.of("stack_port_bind_unsupported")
                         .withArg("service", service).withArg("address", hostIp));
             }
-            String protocol = str(port.get(PORT_PROTOCOL.getName()));
+            String protocol = trimmed(port.get(PORT_PROTOCOL.getName()));
             publications.add(new PortPublication(containerPort,
                 PortPublication.UDP.equals(protocol) ? PortPublication.UDP : PortPublication.TCP,
                 publicExposure, hostPort, null));
         }
         return List.copyOf(publications);
-    }
-
-    private static @NonNull List<?> listOf(@Nullable Object value) {
-        return value instanceof List<?> list ? list : List.of();
-    }
-
-    private static int intOr(@Nullable Object value, int fallback) {
-        return value instanceof Number number ? number.intValue() : fallback;
-    }
-
-    private static String str(Object value) {
-        return value == null ? "" : value.toString().trim();
     }
 }

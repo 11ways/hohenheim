@@ -1,11 +1,9 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
-import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.runtime.ImageOrigin;
+import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -25,13 +23,9 @@ final class IncusSpecs {
 
     static InstanceSpec.@NonNull Builder spec(int instanceId, @NonNull Map<String, Object> settings,
                                               int defaultFootprintMb, ContainerHardening.@NonNull Profile hardening) {
-        String image = settings.get("image") != null ? String.valueOf(settings.get("image")).trim() : "";
-        ImageOrigin imageOrigin = ImageOrigin.fromKey(
-            settings.get("image_origin") instanceof String origin ? origin : null);
-        return InstanceSpec.builder(ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId), image,
-                ResourceLimits.fromSettings(settings, defaultFootprintMb), hardening,
-                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
-            .imageOrigin(imageOrigin)
+        return InstanceSpec.forInstance(instanceId, RawValues.trimmed(settings.get(InstanceKindFields.IMAGE)), settings,
+                defaultFootprintMb, hardening)
+            .imageOrigin(ImageOrigin.of(settings))
             .rootDiskGb(RootDisk.declaredGb(settings))
             .networkLimitMbit(NetworkBandwidth.declaredMbit(settings));
     }

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.build;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.hohenheim.server.util.PosixPaths;
 import be.elevenways.hohenheim.server.util.Tar;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.setting.SettingDefinition;
@@ -70,7 +71,7 @@ public final class NixpacksDistribution {
         }
 
         byte[] archive = download(version);
-        String actual = sha256Hex(archive);
+        String actual = SecureTokens.sha256Hex(archive);
         if (!actual.equals(sha256)) {
             throw new IOException("REFUSED to install nixpacks " + version + ": the"
                 + " downloaded archive hashes to " + actual + " but the pinned sha256 is "
@@ -138,9 +139,7 @@ public final class NixpacksDistribution {
             Tar.Reader reader = new Tar.Reader(in);
             Tar.Entry entry;
             while ((entry = reader.next()) != null) {
-                String name = entry.name();
-                String base = name.substring(name.lastIndexOf('/') + 1);
-                if (entry.kind() == Tar.Kind.FILE && BINARY_NAME.equals(base)) {
+                if (entry.kind() == Tar.Kind.FILE && BINARY_NAME.equals(PosixPaths.nameOf(entry.name()))) {
                     try (OutputStream out = Files.newOutputStream(target,
                             StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
                         reader.body().transferTo(out);
@@ -151,9 +150,5 @@ public final class NixpacksDistribution {
         }
         throw new IOException("The nixpacks release archive contains no '" + BINARY_NAME
             + "' binary");
-    }
-
-    private static @NonNull String sha256Hex(byte[] data) throws IOException {
-        return SecureTokens.sha256Hex(new ByteArrayInputStream(data));
     }
 }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.host.HostStanding;
 import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.instance.ConsoleKind;
@@ -136,14 +137,34 @@ class StatusPresentationDriftTest {
             .filter(state -> state.dot() == StatusDotStatus.ONLINE).toList();
         assertThat(online).as("step 2: only OK looks healthy").containsExactly(HostState.OK);
 
-        // 3. Every state that is not OK says something; OK shows the daemon label instead.
+        // 3. Every state says something; OK's words name the daemon that answered ("Docker 27.1, seen ...").
         for (HostState state : HostState.values()) {
-            if (state == HostState.OK) {
-                assertThat(state.wording()).as("step 3: OK has no state word").isNull();
-            } else {
-                assertThat(state.wording()).as("step 3: %s carries wording", state).isNotNull();
-            }
+            assertThat(state.wording()).as("step 3: %s carries wording", state).isNotNull();
         }
+        assertThat(HostState.OK.namesDaemon()).as("step 3: OK names the daemon that answered").isTrue();
+    }
+
+    @Test
+    @DisplayName("a stored admission wears its host standing's badge")
+    void admissionWearsTheStandingBadge() {
+        // 1. Every stored admission token is carried by a standing, so none is stored without a badge.
+        assertThat(ServerModel.ADMISSION.getValues().keySet()).as("step 1: the standings carry every stored token")
+            .containsExactlyInAnyOrder(ServerModel.ADMISSION_BLOCKED, ServerModel.ADMISSION_ADMITTED,
+                ServerModel.ADMISSION_CORDONED);
+
+        // 2. The Hosts list's badge and the admission field's are one: a host waiting for its checks is amber in
+        //    both, never red in one of them (DD3).
+        for (HostStanding standing : HostStanding.values()) {
+            if (standing.admission() == null) {
+                continue;
+            }
+            EnumField.EnumValue value = ServerModel.ADMISSION.getValues().get(standing.admission());
+            assertThat(value.color()).as("step 2: %s's colour", standing).isEqualTo(standing.variant());
+            assertThat(value.getIcon().name()).as("step 2: %s's icon", standing).isEqualTo(standing.icon());
+            assertThat(value.getLabel()).as("step 2: %s's words", standing).isEqualTo(standing.label());
+        }
+        assertThat(ServerModel.ADMISSION.getValues().get(ServerModel.ADMISSION_BLOCKED).color())
+            .as("step 2: waiting is amber").isEqualTo(BadgeVariant.WARNING);
     }
 
     @Test

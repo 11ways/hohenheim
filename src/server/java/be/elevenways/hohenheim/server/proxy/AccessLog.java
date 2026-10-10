@@ -30,7 +30,7 @@ public final class AccessLog {
 
     /** Register a completion listener that appends one access-log line once the response is sent. */
     public void logAccess(HttpServerExchange exchange, String hostname, String clientIp) {
-        if (!LogFile.enabled(HohenheimSettings.Logging.ACCESS_TO_FILE)) {
+        if (!HohenheimSettings.isOn(HohenheimSettings.Logging.ACCESS_TO_FILE)) {
             return;
         }
 

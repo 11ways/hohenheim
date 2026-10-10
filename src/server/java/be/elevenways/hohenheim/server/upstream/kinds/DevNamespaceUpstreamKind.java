@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.hohenheim.server.devtunnel.DevLease;
@@ -41,8 +40,8 @@ public class DevNamespaceUpstreamKind implements UpstreamKindHandler {
     public static final StringField REGISTRATION_TOKEN = SETTINGS_SCHEMA.addField(
         StringField.builder().name(REGISTRATION_TOKEN_KEY)
             .secret()
-            .label(HohenheimFormCopy.label("registration_token"))
-            .help(HohenheimFormCopy.help("registration_token"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("registration_token"))
+            .help(HohenheimMicrocopy.HELP.of("registration_token"))
             .build());
 
     @Override
@@ -50,16 +49,6 @@ public class DevNamespaceUpstreamKind implements UpstreamKindHandler {
 
     @Override
     public String getDisplayName() { return "Dev namespace"; }
-
-    @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("dev_namespace").withFilter("scope", "upstream_kind");
-    }
-
-    @Override
-    public @NonNull Microcopy getDescription() {
-        return Microcopy.of("dev_namespace").withFilter("scope", "upstream_kind_description");
-    }
 
     @Override
     public Icon getIcon() { return Icon.of("flask"); }

@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.behaviour.OptimisticLockingBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -39,38 +39,39 @@ public class InstanceVolumeModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
     public static final IntegerField INSTANCE_ID = SCHEMA.addField(
-        IntegerField.builder().name("instance_id").build());
+        IntegerField.builder().name("instance_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("instance")).build());
 
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .required()
-        .label(HohenheimFormCopy.label("volume_name"))
-        .help(HohenheimFormCopy.help("volume_name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("volume_name"))
+        .help(HohenheimMicrocopy.HELP.of("volume_name"))
         .build());
 
     public static final StringField CONTAINER_PATH = SCHEMA.addField(
         StringField.builder().name("container_path")
             .required()
-            .label(HohenheimFormCopy.label("container_path"))
-            .help(HohenheimFormCopy.help("container_path"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_path"))
+            .help(HohenheimMicrocopy.HELP.of("container_path"))
             .build());
 
     /** Enforced size cap; null = no cap (only legal on a backend that cannot enforce one). */
     public static final LongField QUOTA_BYTES = SCHEMA.addField(
         LongField.builder().name("quota_bytes")
-            .label(HohenheimFormCopy.label("quota_bytes"))
-            .help(HohenheimFormCopy.help("quota_bytes"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("quota_bytes"))
+            .help(HohenheimMicrocopy.HELP.of("quota_bytes"))
             .build());
 
     /** A volume no two releases may hold at once: its instance stops before the next starts. */
     public static final BooleanField EXCLUSIVE = SCHEMA.addField(
         BooleanField.builder("exclusive").defaultValue(false)
-            .label(HohenheimFormCopy.label("exclusive_volume"))
-            .help(HohenheimFormCopy.help("exclusive_volume"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("exclusive_volume"))
+            .help(HohenheimMicrocopy.HELP.of("exclusive_volume"))
             .build());
 
     public static final StringField HOST_PATH = SCHEMA.addField(
         StringField.builder().name("host_path")
-            .label(HohenheimFormCopy.label("host_path"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("host_path"))
             .build());
 
     public static final LongField USED_BYTES = SCHEMA.addField(

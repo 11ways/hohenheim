@@ -1,23 +1,20 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
-import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
-import be.elevenways.hohenheim.server.runtime.ImageOrigin;
+import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
@@ -28,7 +25,6 @@ import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.hohenheim.source.GitSourceSchema;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DoubleField;
@@ -49,6 +45,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * A persistent development box: one container per workspace, on Docker or Incus, started
@@ -97,14 +95,14 @@ public final class WorkspaceKind implements InstanceKindHandler {
     /** Overrides the runtime image's default command; blank = the image decides. */
     public static final StringField START_COMMAND = SETTINGS_SCHEMA.addField(
         StringField.builder().name("start_command")
-            .label(HohenheimFormCopy.label("start_command"))
-            .help(HohenheimFormCopy.help("start_command")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("start_command"))
+            .help(HohenheimMicrocopy.HELP.of("start_command")).build());
 
     /** The port the workspace's process listens on, for readiness and for exposure. */
     public static final IntegerField CONTAINER_PORT = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("container_port")
-            .label(HohenheimFormCopy.label("container_port"))
-            .help(HohenheimFormCopy.help("instance_container_port")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_port"))
+            .help(HohenheimMicrocopy.HELP.of("instance_container_port")).build());
 
     // AIDEV-NOTE: there is deliberately no build_command field HERE. GitSourceSchema
     // already declares one and this schema is built from it, so a second declaration is a
@@ -114,30 +112,19 @@ public final class WorkspaceKind implements InstanceKindHandler {
     /** Size cap of the home volume in MB; blank leaves the declaration's own quota. */
     public static final IntegerField HOME_QUOTA_MB = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("home_quota_mb")
-            .label(HohenheimFormCopy.label("home_quota"))
-            .help(HohenheimFormCopy.help("home_quota")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("home_quota"))
+            .help(HohenheimMicrocopy.HELP.of("home_quota")).build());
 
     // secret(): redacted on derived surfaces, masked in forms, kept on blank submit.
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
-        StringMapField.builder("environment_variables")
-            .label(HohenheimFormCopy.label("environment_variables"))
-            .help(HohenheimFormCopy.help("environment_variables")).secret().build());
+        InstanceKindFields.environmentVariables());
 
-    public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("memory_limit_mb")
-            .label(HohenheimFormCopy.label("memory_limit"))
-            .help(HohenheimFormCopy.help("memory_limit")).build());
+    public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
 
-    public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(
-        DoubleField.builder().name("cpu_limit")
-            .label(HohenheimFormCopy.label("cpu_limit"))
-            .help(HohenheimFormCopy.help("cpu_limit")).build());
+    public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(InstanceKindFields.cpuLimit());
 
     /** Which console the start command gets; {@link ConsoleKind} is the vocabulary's home. */
-    public static final EnumField CONSOLE_KIND = SETTINGS_SCHEMA.addField(
-        ConsoleKind.fieldBuilder(ConsoleKind.SETTING)
-            .label(HohenheimFormCopy.label("console_kind"))
-            .help(HohenheimFormCopy.help("console_kind")).build());
+    public static final EnumField CONSOLE_KIND = SETTINGS_SCHEMA.addField(InstanceKindFields.consoleKind());
 
     // What a person DECIDES when creating a workspace is where the code comes from, what
     // builds it, what starts it and which port it serves. Everything else has a working
@@ -164,14 +151,6 @@ public final class WorkspaceKind implements InstanceKindHandler {
     @Override public @NonNull Identifier typeId() { return ID; }
 
     @Override public @NonNull String getDisplayName() { return "Workspace"; }
-
-    @Override public @NonNull Microcopy getLabel() {
-        return Microcopy.of("workspace").withFilter("scope", "instance_kind");
-    }
-
-    @Override public @NonNull Microcopy getDescription() {
-        return Microcopy.of("workspace").withFilter("scope", "instance_kind_description");
-    }
 
     @Override public Icon getIcon() { return Icon.of("code"); }
 
@@ -233,17 +212,15 @@ public final class WorkspaceKind implements InstanceKindHandler {
 
         Row instance = requireInstance(instanceId);
         Row image = RuntimeImages.requireFor(instance);
-        String serverName = ServerModel.nameOf(
-            ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)));
+        String serverName = ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID));
         String runtime = runtimeOf(serverName);
         boolean incus = ServerModel.RUNTIME_INCUS.equals(runtime);
 
-        String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
         int uid = WorkspaceUids.forInstance(instanceId);
         String startCommand = startCommandOf(settings, image);
 
         Map<String, String> env = new LinkedHashMap<>(
-            EnvVars.toMap(settings.get("environment_variables")));
+            EnvVars.toMap(settings.get(ENVIRONMENT_VARIABLES.getName())));
 
         // AIDEV-NOTE: the mounted SET is derived here and MATERIALIZED in prepareForDeploy,
         // both from InstanceVolumes.declaredMounts -- one derivation, so a volume the
@@ -263,11 +240,8 @@ public final class WorkspaceKind implements InstanceKindHandler {
         InstanceVolumes.addMount(binds,
             InstanceVolumes.hostPathFor(instanceId, HOME_VOLUME), HOME_PATH);
 
-        InstanceSpec.Builder spec = InstanceSpec.builder(handle,
-                RuntimeImages.referenceFor(image, runtime),
-                ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
-                incus ? INCUS_HARDENING : HARDENING,
-                OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
+        InstanceSpec.Builder spec = InstanceSpec.forInstance(instanceId, RuntimeImages.referenceFor(image, runtime),
+                settings, defaultFootprintMb(settings), incus ? INCUS_HARDENING : HARDENING)
             .binds(binds)
             .publication(publicationOf(settings, image))
             .runUser(uid)
@@ -376,11 +350,11 @@ public final class WorkspaceKind implements InstanceKindHandler {
     /** What the record and the image say to run, before the source lane wraps it. */
     private static @NonNull String declaredStartCommandOf(@NonNull Map<String, Object> settings,
                                                           @NonNull Row image) {
-        String declared = str(settings.get("start_command"));
+        String declared = trimmed(settings.get("start_command"));
         if (!declared.isEmpty()) {
             return declared;
         }
-        String fromImage = str(image.get(RuntimeImageModel.DEFAULT_COMMAND));
+        String fromImage = trimmed(image.get(RuntimeImageModel.DEFAULT_COMMAND));
         // A runtime image with no default command is a userland to live in, not a service:
         // it idles so the shell and the files tab have something to attach to.
         return fromImage.isEmpty() ? IDLE_COMMAND : fromImage;
@@ -389,11 +363,11 @@ public final class WorkspaceKind implements InstanceKindHandler {
     /** The build command run inside the workspace: the instance's override, else the image's. */
     public static @NonNull String buildCommandOf(@NonNull Map<String, Object> settings,
                                           @NonNull Row image) {
-        String declared = str(settings.get("build_command"));
+        String declared = trimmed(settings.get(GitSourceSchema.BUILD_COMMAND));
         if (!declared.isEmpty()) {
             return declared;
         }
-        return str(image.get(RuntimeImageModel.DEFAULT_BUILD_COMMAND));
+        return trimmed(image.get(RuntimeImageModel.DEFAULT_BUILD_COMMAND));
     }
 
     /** Loopback publication of the declared port, else the runtime image's default port. */
@@ -414,7 +388,8 @@ public final class WorkspaceKind implements InstanceKindHandler {
     private static @NonNull Row requireInstance(int instanceId) {
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
         if (instance == null) {
-            throw Violations.ofForm(HohenheimViolations.text("instance_not_found").withArg("id", String.valueOf(instanceId)));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_not_found")
+                .withArg("id", String.valueOf(instanceId)));
         }
         return instance;
     }
@@ -423,9 +398,5 @@ public final class WorkspaceKind implements InstanceKindHandler {
     static @NonNull String runtimeOf(@NonNull String serverName) {
         Row server = Models.get(ServerModel.class).findByName(serverName);
         return server == null ? ServerModel.RUNTIME_DOCKER : ServerModel.runtimeOf(server);
-    }
-
-    private static @NonNull String str(@Nullable Object value) {
-        return value == null ? "" : value.toString().trim();
     }
 }

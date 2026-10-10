@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.HohenheimChannels;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
@@ -55,7 +57,7 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
 
     @Override
     public void onOpen(@Nullable Object openData) {
-        Integer instanceId = parseInstanceId(openData);
+        Integer instanceId = RawValues.parsedInt(openData);
         if (instanceId == null || !this.permitted(instanceId)) {
             // The SAME refusal for "no such instance" and "not yours": naming the
             // difference would make this an instance-existence oracle. Typed, so the
@@ -127,20 +129,6 @@ public final class InstanceStatsHandler implements ChannelHandler<Object, Object
         // null, and the seam a socketless FakeChannelLink answers too.
         Principal principal = this.link.getPrincipal();
         return principal != null && HohenheimAccess.hasInstanceCapability(
-            principal, instanceId, HohenheimAccess.VIEW);
-    }
-
-    private static @Nullable Integer parseInstanceId(@Nullable Object openData) {
-        if (openData instanceof Number number) {
-            return number.intValue();
-        }
-        if (openData == null) {
-            return null;
-        }
-        try {
-            return Integer.parseInt(String.valueOf(openData).trim());
-        } catch (NumberFormatException notAnId) {
-            return null;
-        }
+            principal, instanceId, HohenheimCapabilities.VIEW);
     }
 }

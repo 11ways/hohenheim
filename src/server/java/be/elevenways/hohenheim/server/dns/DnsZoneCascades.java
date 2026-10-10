@@ -1,15 +1,15 @@
 package be.elevenways.hohenheim.server.dns;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.orm.PendingDeletes;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
-import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * A hosted zone's integrity on every write lane: its delete cascade (its records, generated
@@ -19,7 +19,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * AIDEV-NOTE: moved here from {@code DnsZoneResource.deleteRow} on 2026-08-29, so a zone
  * removed by anything other than the admin form (a direct model delete, the peer API) no
  * longer strands its records; the zone-peer sweep was never on the resource at all, so a
- * deleted zone left links behind that only {@code DnsZoneSecondariesPage} could see. The
+ * deleted zone left links behind that only the zone's Secondaries tab could see. The
  * SWEEPING scope is required, not decoration: a generated row is un-deletable through
  * every tenant path (GeneratedDnsRecords' remove guard), and a cascade from the declaring
  * container is the one legitimate exception -- the record the challenge was published
@@ -65,22 +65,13 @@ public final class DnsZoneCascades {
             if (row == null) {
                 return;
             }
-            Object zoneId = effectiveZoneId(row);
+            Row stored = StoredRows.of(Models.get(DnsRecordModel.class), row);
+            Object zoneId = row.afterWrite(DnsRecordModel.ZONE_ID, stored);
             Row zone = zoneId != null ? Models.get(DnsZoneModel.class).findById(zoneId) : null;
             if (zone != null && DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
                 throw Violations.ofField(DnsRecordModel.ZONE_ID.getName(), zoneId,
-                    HohenheimViolations.text("record_secondary_zone"));
+                    HohenheimMicrocopy.VIOLATIONS.of("record_secondary_zone"));
             }
         });
-    }
-
-    /** The zone a record write ends up in, reading the stored row on a partial update. */
-    private static @Nullable Object effectiveZoneId(@NonNull Row row) {
-        if (row.has(DnsRecordModel.ZONE_ID.getName())) {
-            return row.get(DnsRecordModel.ZONE_ID);
-        }
-        Object id = row.has(DnsRecordModel.ID.getName()) ? row.get(DnsRecordModel.ID) : null;
-        Row stored = id != null ? Models.get(DnsRecordModel.class).findById(id) : null;
-        return stored != null ? stored.get(DnsRecordModel.ZONE_ID) : null;
     }
 }

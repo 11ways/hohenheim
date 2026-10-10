@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -74,7 +75,7 @@ public final class RestoreCapacity {
                 : availableBytes(serverId,
                     new ServerService().clientFor(ServerModel.nameOf(serverId)));
         } catch (IOException | RuntimeException error) {
-            throw Violations.ofForm(HohenheimViolations.text("restore_capacity_unknown")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("restore_capacity_unknown")
                 .withArg("server", ServerModel.labelOf(serverId))
                 .withArg("reason", HohenheimViolations.reasonOf(error)));
         }
@@ -90,7 +91,7 @@ public final class RestoreCapacity {
     public static void judge(int serverId, long availableBytes, long requiredBytes) {
         long needed = (long) (requiredBytes * HEADROOM_FACTOR);
         if (availableBytes < needed) {
-            throw Violations.ofForm(HohenheimViolations.text("restore_capacity")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("restore_capacity")
                 .withArg("server", ServerModel.labelOf(serverId))
                 .withArg("needed", needed)
                 .withArg("available", availableBytes));

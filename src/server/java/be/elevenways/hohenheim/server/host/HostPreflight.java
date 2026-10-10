@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.host.PreflightStatus;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
@@ -24,6 +25,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -198,16 +200,16 @@ public final class HostPreflight {
         try {
             Map<String, Object> version = docker.version();
             Map<String, Object> info = docker.info();
-            facts.put(HostFact.DOCKER_VERSION.token(), stringOf(version.get("Version")));
-            facts.put(HostFact.API_VERSION.token(), stringOf(version.get("ApiVersion")));
-            facts.put(HostFact.KERNEL_VERSION.token(), stringOf(version.get("KernelVersion")));
-            facts.put(HostFact.OS.token(), stringOf(info.get("OperatingSystem")));
-            facts.put(HostFact.OS_TYPE.token(), stringOf(info.get("OSType")));
-            facts.put(HostFact.ARCHITECTURE.token(), stringOf(info.get("Architecture")));
+            facts.put(HostFact.DOCKER_VERSION.token(), Objects.toString(version.get("Version"), ""));
+            facts.put(HostFact.API_VERSION.token(), Objects.toString(version.get("ApiVersion"), ""));
+            facts.put(HostFact.KERNEL_VERSION.token(), Objects.toString(version.get("KernelVersion"), ""));
+            facts.put(HostFact.OS.token(), Objects.toString(info.get("OperatingSystem"), ""));
+            facts.put(HostFact.OS_TYPE.token(), Objects.toString(info.get("OSType"), ""));
+            facts.put(HostFact.ARCHITECTURE.token(), Objects.toString(info.get("Architecture"), ""));
             facts.put(HostFact.NCPU.token(), numberOf(info.get("NCPU")));
             facts.put(HostFact.MEM_TOTAL.token(), memTotalOf(info));
-            facts.put(HostFact.CGROUP_VERSION.token(), stringOf(info.get("CgroupVersion")));
-            facts.put(HostFact.CGROUP_DRIVER.token(), stringOf(info.get("CgroupDriver")));
+            facts.put(HostFact.CGROUP_VERSION.token(), Objects.toString(info.get("CgroupVersion"), ""));
+            facts.put(HostFact.CGROUP_DRIVER.token(), Objects.toString(info.get("CgroupDriver"), ""));
             facts.put(HostFact.CONTAINERS.token(), numberOf(info.get("Containers")));
             facts.put(HostFact.CONTAINERS_RUNNING.token(), numberOf(info.get("ContainersRunning")));
             facts.put(HostFact.IMAGES.token(), numberOf(info.get("Images")));
@@ -564,7 +566,7 @@ public final class HostPreflight {
      */
     public static @NonNull Microcopy checkLabel(@NonNull String checkName) {
         return declaredCheck(checkName)
-            ? Microcopy.of("check_" + checkName).withFilter("scope", "host_check")
+            ? HohenheimMicrocopy.HOST_CHECK.of("check_" + checkName)
             : Microcopy.literal(checkName);
     }
 
@@ -876,10 +878,6 @@ public final class HostPreflight {
         } catch (RuntimeException unreadable) {
             return null;
         }
-    }
-
-    private static String stringOf(@Nullable Object value) {
-        return value != null ? String.valueOf(value) : "";
     }
 
     private static Object numberOf(@Nullable Object value) {

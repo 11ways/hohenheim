@@ -10,7 +10,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
  * The history query every operation model keyed by its owning record ({@code for_model}, {@code for_id}) answers
- * alike: the build and the release operations.
+ * alike: the build and the release operations; their pruning is {@link Retention#keepNewest}.
  *
  * @author Jelle De Loecker
  * @since 0.1.0

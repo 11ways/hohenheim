@@ -1,9 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.cms.HohenheimPanel;
-import be.elevenways.hohenheim.server.cms.InstanceScheduleParts;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
@@ -90,7 +89,7 @@ class InstanceScheduleZoneTest extends HohenheimTestBase {
         TimeZone original = TimeZone.getDefault();
         TimeZone.setDefault(TimeZone.getTimeZone("Asia/Kathmandu"));
         try {
-            PanelResource<Row> resource = PanelEntryViews.of(HohenheimPanel.SLUG, InstanceScheduleParts.SLUG);
+            PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_SCHEDULES);
             AccessContext operator = operator();
 
             // 1. A schedule saved with NO timezone arms its first fire at 04:00 UTC -- the

@@ -8,6 +8,7 @@ import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import be.elevenways.zenit.server.net.PinnedFetcher;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import be.elevenways.hohenheim.server.util.Json;
+import be.elevenways.zenit.common.text.Texts;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
@@ -46,11 +47,24 @@ abstract class ApiProviderClient implements GitProviderClient {
     private static final PinnedFetcher ANY_ADDRESS_FETCHER = fetcherFor(OutboundUrlGuard.ANY_ADDRESS);
 
     private final @NonNull PinnedFetcher fetcher;
+    private final @Nullable String accessToken;
 
-    /** @param guard the reach of this provider, from {@link SourceOwnership#providerGuard} */
-    protected ApiProviderClient(@NonNull OutboundUrlGuard guard) {
+    /**
+     * @param guard the reach of this provider, from {@link SourceOwnership#providerGuard}
+     * @param accessToken the stored token, blank meaning none
+     */
+    protected ApiProviderClient(@NonNull OutboundUrlGuard guard, @Nullable String accessToken) {
         this.fetcher = guard == OutboundUrlGuard.PUBLIC_INTERNET ? PUBLIC_FETCHER
             : guard == OutboundUrlGuard.ANY_ADDRESS ? ANY_ADDRESS_FETCHER : fetcherFor(guard);
+        this.accessToken = Texts.blankAsNull(accessToken);
+    }
+
+    /** @throws IOException when the provider has no stored access token */
+    protected final @NonNull String requireToken() throws IOException {
+        if (this.accessToken == null) {
+            throw new IOException("Provider has no access token configured");
+        }
+        return this.accessToken;
     }
 
     private static @NonNull PinnedFetcher fetcherFor(@NonNull OutboundUrlGuard guard) {
@@ -184,10 +198,6 @@ abstract class ApiProviderClient implements GitProviderClient {
 
     protected static @NonNull String trimSlash(@NonNull String url) {
         return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
-    }
-
-    protected static @Nullable String blankToNull(@Nullable String value) {
-        return value == null || value.isBlank() ? null : value;
     }
 
     protected static @NonNull String truncate(@NonNull String value, int max) {

@@ -729,8 +729,7 @@ public class SiteDispatcher implements HttpHandler {
 
     /** @return whether the global force_https setting sends this route to HTTPS (it waits for a working certificate) */
     private static boolean forcedBySetting(RouteEntry entry) {
-        return entry.globalForce && Boolean.TRUE.equals(
-            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Proxy.FORCE_HTTPS));
+        return entry.globalForce && HohenheimSettings.isOn(HohenheimSettings.Proxy.FORCE_HTTPS);
     }
 
     /** The proxy-auth session store, shared with every per-site auth gate. */

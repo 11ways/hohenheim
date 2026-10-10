@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.instance;
 
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.validation.Violations;
@@ -55,7 +55,7 @@ public enum ConsoleKind {
     }
 
     public @NonNull Microcopy label() {
-        return Microcopy.of(this.token).withFilter("scope", "console_kind");
+        return HohenheimMicrocopy.CONSOLE_KIND.of(this.token);
     }
 
     /**
@@ -66,13 +66,10 @@ public enum ConsoleKind {
         return this.interactive;
     }
 
-    /**
-     * The schema-field builder carrying this vocabulary, so no stored option set can drift.
-     * Callers finish it with their own label/help, never with more values.
-     */
-    public static EnumField.@NonNull Builder fieldBuilder(@NonNull String name) {
+    /** The schema-field builder carrying this vocabulary under {@link #SETTING}; InstanceKindFields finishes it. */
+    public static EnumField.@NonNull Builder fieldBuilder() {
 
-        EnumField.Builder builder = EnumField.builder(name);
+        EnumField.Builder builder = EnumField.builder(SETTING);
 
         for (ConsoleKind kind : values()) {
             builder.value(kind.token(), value -> value
@@ -128,7 +125,7 @@ public enum ConsoleKind {
         if (kind == null) {
             throw Violations.ofField("settings." + SETTING,
                 String.valueOf(settings == null ? null : settings.get(SETTING)),
-                HohenheimViolations.text("console_kind_unknown")
+                HohenheimMicrocopy.VIOLATIONS.of("console_kind_unknown")
                     .withArg("token", String.valueOf(settings == null ? null : settings.get(SETTING))));
         }
 

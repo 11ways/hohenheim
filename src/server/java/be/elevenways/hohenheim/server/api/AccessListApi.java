@@ -1,15 +1,17 @@
 package be.elevenways.hohenheim.server.api;
 
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.server.auth.AccessRuleNodes;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.AccessListParts;
 import be.elevenways.hohenheim.server.cms.AccessRuleParts;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -58,7 +60,6 @@ import java.util.Objects;
  * yet cannot be walked.
  */
 public final class AccessListApi {
-
 
     private AccessListApi() {
     }
@@ -179,13 +180,13 @@ public final class AccessListApi {
                                                           @NonNull PanelResource<Row> rules,
                                                           int listId) {
         Map<String, Object> form = FormSubmissionRawValues.fromConduit(conduit);
-        String type = stringOf(form.get("type"));
+        String type = HandlerSupport.submittedString(form, "type");
         if (!AccessRuleModel.ALL_TYPES.contains(type)) {
             return ApiConduits.refusal(conduit, Violations.ofField("type", type,
-                Microcopy.of("unknown_type").withFilter("scope", "access_rule")));
+                HohenheimMicrocopy.ACCESS_RULE.of("unknown_type")));
         }
         Row rule = AccessRuleNodes.add(listId,
-            AccessRuleNodes.parentIn(stringOf(form.get("parent_id")), listId), type);
+            AccessRuleNodes.parentIn(HandlerSupport.submittedString(form, "parent_id"), listId), type);
         // Only the rule form's own entries travel on: parent_id is a tree fact the birth
         // above consumed, and ResourceWrites refuses a key the form does not declare.
         Map<String, Object> values = new LinkedHashMap<>();
@@ -235,7 +236,7 @@ public final class AccessListApi {
      * @return the entry, or null when the response has already been ended (the uniform 404 of a proxy-less node)
      */
     private static @Nullable PanelResource<Row> ruleResource(@NonNull Conduit conduit, @NonNull AccessContext ctx) {
-        return ApiConduits.rowEntry(conduit, panelFor(ctx), AccessRuleParts.SLUG);
+        return ApiConduits.rowEntry(conduit, panelFor(ctx), HohenheimSlugs.ACCESS_RULES);
     }
 
     /** The lists this context manages; an admin's walk answers ALL, so it sees every one. */
@@ -243,7 +244,7 @@ public final class AccessListApi {
         var model = Models.get(AccessListModel.class);
         var query = model.find();
         Criteria scope = HohenheimAccess.grantScope(ctx, model, AccessListModel.MODEL_ID,
-            HohenheimAccess.MANAGE, AccessListModel.ID::in);
+            HohenheimCapabilities.MANAGE, AccessListModel.ID::in);
         if (scope != null) {
             query.where(scope);
         }
@@ -264,7 +265,7 @@ public final class AccessListApi {
         Row list = listId == null ? null
             : Models.get(AccessListModel.class).findById(listId);
         if (list == null || !HohenheimAccess.reachesRecord(ctx, AccessListModel.MODEL_ID,
-                listId, HohenheimAccess.MANAGE)) {
+                listId, HohenheimCapabilities.MANAGE)) {
             conduit.notFound();
             return null;
         }
@@ -314,12 +315,5 @@ public final class AccessListApi {
         entry.put("has_password", AccessRuleModel.dataOf(rule)
             .get(AccessRuleModel.BASIC_AUTH_PASSWORD.getName()) != null);
         return entry;
-    }
-
-    /** One raw submit value as a trimmed string; a list takes its first, absent is "". */
-    private static @NonNull String stringOf(@Nullable Object value) {
-        Object single = value instanceof List<?> list
-            ? (list.isEmpty() ? null : list.get(0)) : value;
-        return single == null ? "" : String.valueOf(single).trim();
     }
 }

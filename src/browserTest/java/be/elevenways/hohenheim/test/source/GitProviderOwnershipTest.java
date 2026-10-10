@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.source;
 
 import be.elevenways.hohenheim.model.GitProviderModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.source.GitProviderKinds;
 import be.elevenways.hohenheim.server.source.GitProviders;
@@ -61,9 +62,9 @@ class GitProviderOwnershipTest extends HohenheimTestBase {
         strangerUserId = ApiSupport.user("provider-stranger@hohenheim.local", "Provider Stranger");
 
         RecordGrants.grant(GrantSubjectType.USER, tenantUserId,
-            GitProviderModel.MODEL_ID, tenantProviderId, HohenheimAccess.MANAGE, true);
+            GitProviderModel.MODEL_ID, tenantProviderId, HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, strangerUserId,
-            GitProviderModel.MODEL_ID, strangerProviderId, HohenheimAccess.MANAGE, true);
+            GitProviderModel.MODEL_ID, strangerProviderId, HohenheimCapabilities.MANAGE, true);
 
         TestSession tenantAuth = sessionFor(tenantUserId);
         tenantSession = tenantAuth.token();

@@ -1,9 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
@@ -38,12 +39,6 @@ import java.util.List;
  * @since  0.9.0
  */
 public final class OperationHistoryParts {
-
-    /** The build history's slug, which the instance list names as a related page. */
-    public static final String BUILDS = "builds";
-
-    /** The release history's slug, which the instance list names as a related page. */
-    public static final String RELEASES = "releases";
 
     private OperationHistoryParts() {
     }
@@ -93,7 +88,9 @@ public final class OperationHistoryParts {
             .column(ColumnSpec.fromField(BuildOperationModel.STARTED_AT).sortable().build())
             .build();
         // A build is traced back from a commit, an image, a tag, or the reason it failed.
-        return history("build_operation", BUILDS, SubjectType.record(BuildOperationModel.MODEL_ID), form, table,
+        return history(HohenheimMicrocopy.BUILD_OPERATION, HohenheimSlugs.BUILDS, SubjectType
+            .record(BuildOperationModel.MODEL_ID),
+            form, table,
             List.of(BuildOperationModel.SOURCE_REF, BuildOperationModel.IMAGE_ID, BuildOperationModel.TAG,
                 BuildOperationModel.FAILURE_REASON))
             .navOrder(17)
@@ -134,7 +131,8 @@ public final class OperationHistoryParts {
             .column(ColumnSpec.fromField(ReleaseOperationModel.STARTED_AT).sortable().build())
             .build();
         // A release is traced back from the image it shipped or the reason it did not.
-        return history("release_operation", RELEASES, SubjectType.record(ReleaseOperationModel.MODEL_ID), form,
+        return history(HohenheimMicrocopy.RELEASE_OPERATION, HohenheimSlugs.RELEASES,
+            SubjectType.record(ReleaseOperationModel.MODEL_ID), form,
             table, List.of(ReleaseOperationModel.IMAGE_ID, ReleaseOperationModel.FAILURE_REASON))
             .navOrder(18)
             .icon(Icon.of("rocket"))
@@ -150,7 +148,7 @@ public final class OperationHistoryParts {
      *
      * @param scope the microcopy scope, which is also the identifier path
      */
-    private static PanelResource.@NonNull Builder<Row> history(@NonNull String scope, @NonNull String slug,
+    private static PanelResource.@NonNull Builder<Row> history(@NonNull HohenheimMicrocopy scope, @NonNull String slug,
                                                                @NonNull SubjectType<Row> subject,
                                                                @NonNull FormSpec form, @NonNull TableSpec<Row> table,
                                                                @NonNull List<Field<?, ?>> search) {
@@ -158,15 +156,15 @@ public final class OperationHistoryParts {
         for (FormEntry entry : form.entries()) {
             readOnly.add(ResourceFieldBinding.of(entry.name(), FieldAccess.alwaysReadonly()));
         }
-        return PanelResource.builder(HohenheimIds.id(scope), slug, subject)
-            .label(Microcopy.of("plural").withFilter("scope", scope))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", scope))
+        return PanelResource.builder(HohenheimIds.id(scope.scope()), slug, subject)
+            .label(scope.of("plural"))
+            .recordLabel(scope.of("singular"))
             // Demoted out of the sidebar, so this sentence reaches a reader through the panel index and the
             // related-pages menu of the list that names it.
             .description(CmsSupport.navHint(scope))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .showInNav(false)
-            .standsUnder(AppParts.SLUG)
+            .standsUnder(HohenheimSlugs.APPS)
             .reads(ResourceReads.rows())
             .list(ResourceList.rows(table).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()
                 .search(search.toArray(Field<?, ?>[]::new)).build())

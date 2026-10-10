@@ -1,12 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceAuthority;
@@ -30,7 +30,6 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * Runtime catalog parts. Built-ins remain code-owned; names and descriptions are unlocalized user data.
@@ -43,17 +42,16 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class RuntimeImageParts {
 
-    public static final String SLUG = "runtime-images";
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_runtime_image"))
         .happened(OperationSentences.of("delete_runtime_image"))
-        .label(Microcopy.of("delete").withFilter("scope", "cms"))
+        .label(CmsMicrocopy.of("delete"))
         .one(SubjectType.record(RuntimeImageModel.MODEL_ID))
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();
 
     static {
         OperationHandlers.attach(DELETE).applies(RuntimeImageParts::custom)
-            .availability((row, access) -> unavailable(row))
+            .availability((row, access) -> DeleteImpact.runtimeImageInUse(row))
             .handle(call -> {
                 Models.get(RuntimeImageModel.class).delete(call.subject());
                 return 1;
@@ -63,11 +61,11 @@ public final class RuntimeImageParts {
     private RuntimeImageParts() {}
 
     public static @NonNull PanelResource<Row> admin() {
-        return PanelResource.builder(HohenheimIds.id("runtime_image"), SLUG,
+        return PanelResource.builder(HohenheimIds.id("runtime_image"), HohenheimSlugs.RUNTIME_IMAGES,
                 SubjectType.record(RuntimeImageModel.MODEL_ID))
-            .label(Microcopy.of("plural").withFilter("scope", "runtime_image"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "runtime_image"))
-            .description(CmsSupport.navHint("runtime_image"))
+            .label(HohenheimMicrocopy.RUNTIME_IMAGE.of("plural"))
+            .recordLabel(HohenheimMicrocopy.RUNTIME_IMAGE.of("singular"))
+            .description(CmsSupport.navHint(HohenheimMicrocopy.RUNTIME_IMAGE))
             .navGroup(HohenheimPanel.DEPLOY_GROUP).navOrder(35).icon(Icon.of("layer-group"))
             .form(ResourceForm.<Row>of(formSpec()).build())
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL)
@@ -106,16 +104,5 @@ public final class RuntimeImageParts {
 
     static boolean custom(@NonNull Row row) {
         return !Boolean.TRUE.equals(row.get(RuntimeImageModel.BUILTIN));
-    }
-
-    static @Nullable Microcopy unavailable(@NonNull Row row) {
-        Integer id = row.get(RuntimeImageModel.ID);
-        long instances = Models.get(InstanceModel.class).find().where(InstanceModel.RUNTIME_IMAGE_ID.eq(id)).count();
-        long templates = Models.get(InstanceTemplateModel.class).find()
-            .where(InstanceTemplateModel.RUNTIME_IMAGE_ID.eq(id)).count();
-        return instances > 0 || templates > 0
-            ? Microcopy.of("delete_in_use").withFilter("scope", "runtime_image")
-                .withArg("instances", instances).withArg("templates", templates)
-            : null;
     }
 }

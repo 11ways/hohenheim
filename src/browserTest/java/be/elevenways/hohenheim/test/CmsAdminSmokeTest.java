@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,7 +34,7 @@ class CmsAdminSmokeTest extends HohenheimTestBase {
 
         // The zenit-auth resources are wired into THIS panel, as tabs of the Access cluster. Their own behaviour
         // (create/edit/toggle/grants/roles journeys) is zenit-auth's to prove -- AuthCmsResourcesIntegrationTest.
-        page.locator("pl-app-sidebar a[href='/admin/" + HohenheimPanel.ACCESS_CLUSTER + "']").click();
+        page.locator("pl-app-sidebar a[href='/admin/" + HohenheimSlugs.Cluster.ACCESS + "']").click();
         page.waitForCondition(() -> page.locator("[data-cms-cluster-tabs] a[href='/admin/users']").count() > 0);
         assertThat(page.locator("[data-cms-cluster-tabs] a[href='/admin/roles']").count())
             .as("zenit-auth's roles resource is mounted in the hohenheim panel")

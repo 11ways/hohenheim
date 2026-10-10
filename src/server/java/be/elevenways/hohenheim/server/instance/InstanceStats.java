@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimStatsFunctions;
 import be.elevenways.hohenheim.HohenheimStatsFunctions.Metric;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
 import be.elevenways.protoblast.common.Blast;
@@ -262,11 +263,10 @@ public final class InstanceStats {
             SESSIONS.remove(this.instanceId, this);
         }
 
-        @SuppressWarnings("unchecked")
         private static @Nullable Map<String, Object> parseSample(@NonNull String line) {
             try {
                 Object parsed = new Dry().parse(line);
-                return parsed instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
+                return RawValues.mapOrNull(parsed);
             } catch (RuntimeException notJson) {
                 return null;
             }
@@ -310,24 +310,18 @@ public final class InstanceStats {
         if (networks != null) {
             for (Object value : networks.values()) {
                 if (value instanceof Map<?, ?> iface) {
-                    rx += number(castMap(iface), "rx_bytes");
-                    tx += number(castMap(iface), "tx_bytes");
+                    rx += number(RawValues.map(iface), "rx_bytes");
+                    tx += number(RawValues.map(iface), "tx_bytes");
                 }
             }
         }
         return new Sample(Now.millis(), cpu, memory, limit, rx, tx, (int) cores);
     }
 
-    @SuppressWarnings("unchecked")
     private static @Nullable Map<String, Object> child(@Nullable Map<String, Object> parent,
                                                        @NonNull String key) {
         Object value = parent == null ? null : parent.get(key);
-        return value instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static @NonNull Map<String, Object> castMap(@NonNull Map<?, ?> map) {
-        return (Map<String, Object>) map;
+        return RawValues.mapOrNull(value);
     }
 
     private static long number(@Nullable Map<String, Object> parent, @NonNull String key) {

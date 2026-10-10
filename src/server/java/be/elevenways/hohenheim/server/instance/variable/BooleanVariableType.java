@@ -26,11 +26,6 @@ public final class BooleanVariableType implements VariableTypeHandler {
     public @NonNull String getDisplayName() { return "Switch"; }
 
     @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("boolean").withFilter("scope", "variable_type");
-    }
-
-    @Override
     public Icon getIcon() { return Icon.of("toggle-on"); }
 
     @Override

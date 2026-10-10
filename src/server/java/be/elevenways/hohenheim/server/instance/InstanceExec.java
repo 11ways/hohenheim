@@ -1,13 +1,14 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ExecSupport;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -68,25 +69,25 @@ public final class InstanceExec {
     public @NonNull Run run(int instanceId, @NonNull String command) {
         // The gate, FIRST and on the funnel: nothing about the instance is resolved for a
         // caller who may not exec, so this is not an existence oracle either.
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.EXEC);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.EXEC);
 
         List<String> argv = splitCommand(command);
         if (argv.isEmpty()) {
             throw Violations.ofField("command", command,
-                HohenheimViolations.text("exec_command_required"));
+                HohenheimMicrocopy.VIOLATIONS.of("exec_command_required"));
         }
 
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
         if (!(resolved.runtime() instanceof ExecSupport support)) {
-            throw refusal("exec_unsupported", resolved.row(), null);
+            throw HohenheimViolations.instanceRefusal("exec_unsupported", resolved.row(), null);
         }
 
         ExecSupport.ExecOutcome outcome;
         try {
             outcome = support.runExec(resolved.spec(), argv, EXEC_TIMEOUT_MS);
         } catch (IOException e) {
-            throw refusal("exec_failed", resolved.row(), e);
+            throw HohenheimViolations.instanceRefusal("exec_failed", resolved.row(), e);
         }
 
         // Recorded on the record, never only in a log line: an arbitrary command inside a
@@ -136,12 +137,5 @@ public final class InstanceExec {
             argv.add(current.toString());
         }
         return argv;
-    }
-
-    private static @NonNull Violations refusal(@NonNull String key, @NonNull Row instance,
-                                               IOException cause) {
-        return Violations.ofForm(HohenheimViolations.text(key)
-            .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
-            .withArg("reason", cause == null ? "" : String.valueOf(cause.getMessage())));
     }
 }

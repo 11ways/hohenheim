@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -20,6 +21,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
+
 /**
  * The build and release histories, stored before they moved off the legacy OperationHistoryResource base onto
  * OperationHistoryParts and compared exactly after it: no declared difference.
@@ -30,9 +33,8 @@ import java.util.List;
 class OperationHistorySurfacesBrowserTest extends HohenheimTestBase {
 
     private static final String PREFIX = "batch7-history-";
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
-    private static final String BUILDS = OperationHistoryParts.BUILDS;
-    private static final String RELEASES = OperationHistoryParts.RELEASES;
+    private static final String BUILDS = HohenheimSlugs.BUILDS;
+    private static final String RELEASES = HohenheimSlugs.RELEASES;
 
     private static String buildId;
     private static String releaseId;
@@ -88,7 +90,7 @@ class OperationHistorySurfacesBrowserTest extends HohenheimTestBase {
         row.set(BuildOperationModel.BUILDER_KIND, BuildOperationModel.KIND_DOCKERFILE);
         row.set(BuildOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
         row.set(BuildOperationModel.FOR_ID, 1);
-        row.set(BuildOperationModel.STATUS, BuildOperationModel.STATUS_SUCCEEDED);
+        row.set(BuildOperationModel.STATUS, BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
         row.set(BuildOperationModel.SOURCE_REF, PREFIX + "ref");
         row.set(BuildOperationModel.IMAGE_ID, "sha256:" + PREFIX + "image");
         builds.save(row);
@@ -101,7 +103,7 @@ class OperationHistorySurfacesBrowserTest extends HohenheimTestBase {
         row.set(ReleaseOperationModel.KIND, ReleaseOperationModel.KIND_RELEASE);
         row.set(ReleaseOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
         row.set(ReleaseOperationModel.FOR_ID, 1);
-        row.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.STATUS_FAILED);
+        row.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED));
         row.set(ReleaseOperationModel.IMAGE_ID, "sha256:" + PREFIX + "image");
         row.set(ReleaseOperationModel.FAILURE_REASON, PREFIX + "probe failed");
         releases.save(row);

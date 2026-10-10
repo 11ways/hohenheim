@@ -1,14 +1,15 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -97,9 +98,9 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         instanceAId = instance(PREFIX + "alpha");
         instanceBId = instance(PREFIX + "bravo");
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantBId, InstanceModel.MODEL_ID, instanceBId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         approvedTemplateId = template(PREFIX + "approved", true);
         unapprovedTemplateId = template(PREFIX + "unapproved", false);
@@ -325,7 +326,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         //    capability gate. The grant was already in force when step 1 ran; what this
         //    pins is that the gate is asked at EXECUTION, every time.
         RecordGrants.revoke(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
-            HohenheimAccess.MANAGE);
+            HohenheimCapabilities.MANAGE);
         Throwable revoked = catchThrowable(() ->
             TenantConduits.as(principalA, () -> new InstanceService().deploy(instanceAId)));
         assertThat(violationKeys(revoked))
@@ -339,7 +340,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
 
         // 4. Restore the grant the other journeys re-assert anyway.
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         Throwable restored = catchThrowable(() ->
             TenantConduits.as(principalA, () -> new InstanceService().deploy(instanceAId)));
         assertThat(violationKeys(restored))
@@ -362,7 +363,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         // 2. With the snapshots capability the SAME call passes the gate and is stopped
         //    by the driver-level requirement instead.
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
-            HohenheimAccess.SNAPSHOTS, true);
+            HohenheimCapabilities.SNAPSHOTS, true);
         Throwable withSnapshots = catchThrowable(() -> TenantConduits.as(principalA,
             () -> new be.elevenways.hohenheim.server.instance.InstanceSnapshots()
                 .create(instanceAId, null)));
@@ -504,19 +505,19 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
 
             // 6. The QUOTA charged the TENANT's bucket, not the operator's -- the whole
             //    reason a per-owner cap can bind a self-service create at all.
-            String tenantBucket = InstanceQuota.bucketKeyOf(
+            String tenantBucket = OwnerBudget.INSTANCES.bucketOf(
                 HohenheimAccess.packSubjects(java.util.Set.of("user:" + tenantAId)));
             assertThat((String) instance.get(InstanceModel.QUOTA_BUCKET))
                 .as("step 6: the create is charged to the creating tenant's bucket")
                 .isEqualTo(tenantBucket);
             assertThat((String) instance.get(InstanceModel.QUOTA_BUCKET))
                 .as("step 6: and emphatically NOT to the shared operator bucket")
-                .isNotEqualTo(InstanceQuota.bucketKeyOf(""));
+                .isNotEqualTo(OwnerBudget.INSTANCES.bucketOf(""));
 
             // 7. And the cap binds: set the tenant's limit to what it already uses and the
             //    next create is refused by name.
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER,
-                (int) InstanceQuota.usedBy(HohenheimAccess.packSubjects(
+                (int) OwnerBudget.INSTANCES.usedBy(HohenheimAccess.packSubjects(
                     java.util.Set.of("user:" + tenantAId))));
             HttpResponse<String> capped = tenantPost(createUrl, "name=" + PREFIX + "over-cap"
                 + "&" + ApiSupport.fromTemplateTransport());
@@ -581,7 +582,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
      */
     private static void ensureManageGrant() {
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
     }
 
     /**
@@ -617,7 +618,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
 
         // 3. With files.read but NOT files.write, no mutating form is drawn at all.
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
-            HohenheimAccess.FILES_READ, true);
+            HohenheimCapabilities.FILES_READ, true);
         HttpResponse<String> readOnly = tenantGet(filesUrl);
         assertThat(readOnly.statusCode()).as("step 3: the read-only files tab renders").isEqualTo(200);
         assertThat(readOnly.body())
@@ -655,7 +656,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
         //    everything -- what follows is the undeployed workload's own answer, which is
         //    a different refusal and none of this step's business.
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
-            HohenheimAccess.FILES_WRITE, true);
+            HohenheimCapabilities.FILES_WRITE, true);
         try {
             HttpResponse<String> permitted = tenantPost(
                 "/instances/" + instanceAId + "/files/action", forgedBody);
@@ -665,7 +666,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
                 .isNotEqualTo("instance_not_permitted");
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
-                HohenheimAccess.FILES_WRITE);
+                HohenheimCapabilities.FILES_WRITE);
         }
 
         // 6. And the revoke really took: the refusal is back, so no other journey in this
@@ -773,7 +774,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             // 1. A VIEW-only delegate. The record itself is genuinely visible, so every
             //    refusal below is about the ACT and not about the record being hidden.
             RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, consoleInstanceId,
-                HohenheimAccess.VIEW, true);
+                HohenheimCapabilities.VIEW, true);
             assertThat(tenantGet("/manage/instances/" + consoleInstanceId).statusCode())
                 .as("step 1: the view delegate really can open the record")
                 .isEqualTo(200);
@@ -799,7 +800,7 @@ class TenantInstanceSurfaceTest extends HohenheimTestBase {
             // 4. POSITIVE ANCHOR: the console holder gets the tab AND the stored text.
             //    Without this the test would pass on a tab that is simply broken.
             RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, consoleInstanceId,
-                HohenheimAccess.CONSOLE, true);
+                HohenheimCapabilities.CONSOLE, true);
             HttpResponse<String> allowed = tenantGet(tabUrl + "?log=" + logId);
             assertThat(allowed.statusCode())
                 .as("step 4: the console delegate opens the tab").isEqualTo(200);

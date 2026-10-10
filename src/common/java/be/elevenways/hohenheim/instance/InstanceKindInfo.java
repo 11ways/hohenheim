@@ -1,9 +1,8 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.WordedKind;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
-import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.orm.field.TypeDefinition;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -14,15 +13,17 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * now, {@code system_container} and {@code vm} reserved), because
  * {@code SchemaField.schemaFrom} takes exactly one sibling field.
  */
-public interface InstanceKindInfo extends TypeDefinition {
+public interface InstanceKindInfo extends WordedKind {
 
-    /** @return the registry identifier; its string form is the stored column value */
-    @NonNull Identifier typeId();
+    @Override
+    default @NonNull HohenheimMicrocopy labelScope() {
+        return HohenheimMicrocopy.INSTANCE_KIND;
+    }
 
-    /**
-     * Short description shown in the kind selector UI.
-     */
-    @NonNull Microcopy getDescription();
+    @Override
+    default @NonNull HohenheimMicrocopy descriptionScope() {
+        return HohenheimMicrocopy.INSTANCE_KIND_DESCRIPTION;
+    }
 
     /**
      * The "Put something online" group this kind is created under from scratch (no template); null when it is never

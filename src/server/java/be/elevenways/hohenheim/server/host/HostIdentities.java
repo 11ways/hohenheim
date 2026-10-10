@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -73,7 +74,7 @@ public final class HostIdentities {
             Path publicHalf = directory.resolve(publicName);
             ProcessOutcome result = minter.command(privateHalf, publicHalf, name).runChecked();
             if (!result.succeeded() || !Files.exists(privateHalf) || !Files.exists(publicHalf)) {
-                throw Violations.ofForm(HohenheimViolations.text("identity_generation_failed")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("identity_generation_failed")
                     .withArg("detail", result.failureText()));
             }
             String privateKey = Files.readString(privateHalf, StandardCharsets.UTF_8);
@@ -86,7 +87,7 @@ public final class HostIdentities {
             });
             Blast.slog("hohenheim.host.identity_rotated", Map.of("server", name));
         } catch (IOException e) {
-            throw Violations.ofForm(HohenheimViolations.text("identity_generation_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("identity_generation_failed")
                 .withArg("detail", String.valueOf(e.getMessage())));
         } finally {
             // Best effort: a scratch directory that survives holds a key the row already replaced.

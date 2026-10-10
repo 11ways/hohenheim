@@ -102,7 +102,8 @@ public final class ProxyReloadHooks {
         });
     }
 
-    private static void reload() {
+    /** Rebuilds the proxy routing table now, when this process runs the proxy. */
+    public static void reload() {
         var proxy = ServerMain.getProxyServer();
         if (proxy != null) {
             proxy.reload();

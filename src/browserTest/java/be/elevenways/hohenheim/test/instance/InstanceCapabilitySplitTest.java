@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceExec;
@@ -82,11 +84,11 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
 
         // The delegation under test: console + power, and NOTHING else.
         RecordGrants.grant(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.CONSOLE, true);
+            HohenheimCapabilities.CONSOLE, true);
         RecordGrants.grant(GrantSubjectType.USER, powerUserId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.POWER, true);
+            HohenheimCapabilities.POWER, true);
         RecordGrants.grant(GrantSubjectType.USER, managerUserId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
     }
 
     @AfterAll
@@ -150,8 +152,8 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
     void theVocabularyDeclaresExecUnreachableAndTheNarrowVerbsDelegable() {
         // Step 1: every narrow verb the gates name exists and is delegable, so an
         // operator can hand out console ALONE.
-        for (String capability : List.of(HohenheimAccess.VIEW, HohenheimAccess.CONSOLE,
-                HohenheimAccess.POWER, HohenheimAccess.CONFIG, HohenheimAccess.DESTROY)) {
+        for (String capability : List.of(HohenheimCapabilities.VIEW, HohenheimCapabilities.CONSOLE,
+                HohenheimCapabilities.POWER, HohenheimCapabilities.CONFIG, HohenheimCapabilities.DESTROY)) {
             assertThat(KnownCapabilities.get(InstanceModel.MODEL_ID, capability))
                 .as("step 1: " + capability + " must be a registered instance capability")
                 .isNotNull();
@@ -162,26 +164,26 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
 
         // Step 2: exec is registered (so it is refusable by name rather than unknown)
         // and is NOT delegable -- the dyndns standard applied to a host-escape verb.
-        assertThat(KnownCapabilities.get(InstanceModel.MODEL_ID, HohenheimAccess.EXEC))
+        assertThat(KnownCapabilities.get(InstanceModel.MODEL_ID, HohenheimCapabilities.EXEC))
             .as("step 2: exec must be a registered capability").isNotNull();
-        assertThat(KnownCapabilities.isDelegable(InstanceModel.MODEL_ID, HohenheimAccess.EXEC))
+        assertThat(KnownCapabilities.isDelegable(InstanceModel.MODEL_ID, HohenheimCapabilities.EXEC))
             .as("step 2: exec must never be delegable").isFalse();
-        assertThat(KnownCapabilities.isOwnerImplied(InstanceModel.MODEL_ID, HohenheimAccess.EXEC))
+        assertThat(KnownCapabilities.isOwnerImplied(InstanceModel.MODEL_ID, HohenheimCapabilities.EXEC))
             .as("step 2: exec must never be owner-implied").isFalse();
 
         // Step 3 (LOAD-BEARING): exec is implied by NOTHING. This is the clause the
         // Phase 3 gate rests on, and KnownCapability enforces it structurally -- an
         // ADMIN capability cannot even carry an impliedBy set.
-        assertThat(KnownCapabilities.impliersOf(InstanceModel.MODEL_ID, HohenheimAccess.EXEC))
+        assertThat(KnownCapabilities.impliersOf(InstanceModel.MODEL_ID, HohenheimCapabilities.EXEC))
             .as("step 3: no capability may imply exec").isEmpty();
 
         // Step 4: manage IS the umbrella over exactly the five verbs that rode it before
         // the split -- not over files/snapshots/backups/image_any, which would silently
         // widen every already-stored manage row.
-        assertThat(KnownCapabilities.impliersOf(InstanceModel.MODEL_ID, HohenheimAccess.CONSOLE))
-            .as("step 4: console is implied by manage").containsExactly(HohenheimAccess.MANAGE);
-        for (String untouched : List.of(HohenheimAccess.FILES_READ, HohenheimAccess.FILES_WRITE,
-                HohenheimAccess.SNAPSHOTS, HohenheimAccess.BACKUPS, HohenheimAccess.IMAGE_ANY)) {
+        assertThat(KnownCapabilities.impliersOf(InstanceModel.MODEL_ID, HohenheimCapabilities.CONSOLE))
+            .as("step 4: console is implied by manage").containsExactly(HohenheimCapabilities.MANAGE);
+        for (String untouched : List.of(HohenheimCapabilities.FILES_READ, HohenheimCapabilities.FILES_WRITE,
+                HohenheimCapabilities.SNAPSHOTS, HohenheimCapabilities.BACKUPS, HohenheimCapabilities.IMAGE_ANY)) {
             assertThat(KnownCapabilities.impliersOf(InstanceModel.MODEL_ID, untouched))
                 .as("step 4: " + untouched + " must NOT be reachable through manage")
                 .isEmpty();
@@ -199,8 +201,8 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
 
         // Step 1: the umbrella row DECIDES it -- not a grant row, which is what proves
         // the implication is doing the work rather than a leftover fixture.
-        for (String implied : List.of(HohenheimAccess.VIEW, HohenheimAccess.CONSOLE,
-                HohenheimAccess.POWER, HohenheimAccess.CONFIG, HohenheimAccess.DESTROY)) {
+        for (String implied : List.of(HohenheimCapabilities.VIEW, HohenheimCapabilities.CONSOLE,
+                HohenheimCapabilities.POWER, HohenheimCapabilities.CONFIG, HohenheimCapabilities.DESTROY)) {
             assertThat(manager.capabilityDecision(InstanceModel.MODEL_ID, instanceId, implied))
                 .as("step 1: manage must imply " + implied + " through the umbrella row")
                 .isEqualTo(RecordCapabilityDecision.IMPLIED_GRANT);
@@ -208,14 +210,14 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
 
         // Step 2: and manage still decides itself by its own grant.
         assertThat(manager.capabilityDecision(InstanceModel.MODEL_ID, instanceId,
-                HohenheimAccess.MANAGE))
+                HohenheimCapabilities.MANAGE))
             .as("step 2: manage itself is a plain positive grant")
             .isEqualTo(RecordCapabilityDecision.GRANT_ALLOWED);
 
         // Step 3 (LOAD-BEARING): manage does NOT reach exec, nor the artifact and file
         // verbs it never carried.
-        for (String outside : List.of(HohenheimAccess.EXEC, HohenheimAccess.SNAPSHOTS,
-                HohenheimAccess.BACKUPS, HohenheimAccess.FILES_READ, HohenheimAccess.FILES_WRITE)) {
+        for (String outside : List.of(HohenheimCapabilities.EXEC, HohenheimCapabilities.SNAPSHOTS,
+                HohenheimCapabilities.BACKUPS, HohenheimCapabilities.FILES_READ, HohenheimCapabilities.FILES_WRITE)) {
             assertThat(manager.hasCapability(InstanceModel.MODEL_ID, instanceId, outside))
                 .as("step 3: manage must NOT confer " + outside).isFalse();
         }
@@ -223,19 +225,19 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // Step 4: an explicit DENY of a narrow verb beats the umbrella, so an operator
         // can hand out manage-minus-one.
         RecordGrants.grant(GrantSubjectType.USER, managerUserId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.DESTROY, false);
+            HohenheimCapabilities.DESTROY, false);
         try {
             assertThat(contextOf(managerPrincipal)
-                    .capabilityDecision(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.DESTROY))
+                    .capabilityDecision(InstanceModel.MODEL_ID, instanceId, HohenheimCapabilities.DESTROY))
                 .as("step 4: an explicit deny must beat the manage umbrella")
                 .isEqualTo(RecordCapabilityDecision.GRANT_DENIED);
         } finally {
             // In a finally: a deny left behind would decide what another journey sees.
             RecordGrants.revoke(GrantSubjectType.USER, managerUserId, InstanceModel.MODEL_ID,
-                instanceId, HohenheimAccess.DESTROY);
+                instanceId, HohenheimCapabilities.DESTROY);
         }
         assertThat(contextOf(managerPrincipal)
-                .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.DESTROY))
+                .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimCapabilities.DESTROY))
             .as("step 4: revoking the deny restores the umbrella exactly").isTrue();
     }
 
@@ -247,7 +249,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // Step 1: console implies view, so the delegate holds view WITHOUT anyone having
         // granted it -- the operator never has to remember a second checkbox.
         assertThat(delegate.capabilityDecision(InstanceModel.MODEL_ID, instanceId,
-                HohenheimAccess.VIEW))
+                HohenheimCapabilities.VIEW))
             .as("step 1: console must imply view")
             .isEqualTo(RecordCapabilityDecision.IMPLIED_GRANT);
 
@@ -262,7 +264,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // Step 3: the console WebSocket's own principal-only walk (no conduit at open
         // time) answers the same way.
         assertThat(HohenheimAccess.hasInstanceCapability(
-                consolePrincipal, instanceId, HohenheimAccess.CONSOLE))
+                consolePrincipal, instanceId, HohenheimCapabilities.CONSOLE))
             .as("step 3: the principal-only console walk allows the delegate").isTrue();
 
         // Step 4: and the console COMMAND funnel passes the capability gate -- the
@@ -324,7 +326,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
             .as("step 4: a console-only delegate is refused an exec")
             .contains("instance_not_permitted");
         assertThat(contextOf(consolePrincipal)
-                .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.EXEC))
+                .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimCapabilities.EXEC))
             .as("step 4: and the walk agrees the delegate holds no exec").isFalse();
 
         // Step 5: the exec MODE is not reachable either -- the admin panel gate answers
@@ -348,7 +350,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // Step 1: what it HOLDS, it may pass on -- the positive anchor without which
         // every refusal below could be explained by a broken boundary.
         List<RecordGrantChange> passOnConsole = List.of(new RecordGrantChange(
-            GrantSubjectType.USER, powerUserId, HohenheimAccess.CONSOLE, Boolean.TRUE));
+            GrantSubjectType.USER, powerUserId, HohenheimCapabilities.CONSOLE, Boolean.TRUE));
         assertThat(GrantAdministration.requireAuthorizedRecordDiff(delegate,
                 InstanceModel.MODEL_ID, instanceId, "grants", passOnConsole))
             .as("step 1: a console holder may delegate console")
@@ -357,7 +359,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // Step 2: CONFIG -- refused for lack of the capability itself.
         Throwable config = catchThrowable(() -> GrantAdministration.requireAuthorizedRecordDiff(
             delegate, InstanceModel.MODEL_ID, instanceId, "grants",
-            List.of(new RecordGrantChange(GrantSubjectType.USER, powerUserId, HohenheimAccess.CONFIG,
+            List.of(new RecordGrantChange(GrantSubjectType.USER, powerUserId, HohenheimCapabilities.CONFIG,
                 Boolean.TRUE))));
         assertThat(refusalTargets(config))
             .as("step 2: refused because the actor does not hold config")
@@ -366,7 +368,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // Step 3: DESTROY -- same refusal identity.
         Throwable destroy = catchThrowable(() -> GrantAdministration.requireAuthorizedRecordDiff(
             delegate, InstanceModel.MODEL_ID, instanceId, "grants",
-            List.of(new RecordGrantChange(GrantSubjectType.USER, powerUserId, HohenheimAccess.DESTROY,
+            List.of(new RecordGrantChange(GrantSubjectType.USER, powerUserId, HohenheimCapabilities.DESTROY,
                 Boolean.TRUE))));
         assertThat(refusalTargets(destroy))
             .as("step 3: refused because the actor does not hold destroy")
@@ -376,7 +378,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // delegable -- which is what makes it unreachable even for a holder.
         Throwable exec = catchThrowable(() -> GrantAdministration.requireAuthorizedRecordDiff(
             delegate, InstanceModel.MODEL_ID, instanceId, "grants",
-            List.of(new RecordGrantChange(GrantSubjectType.USER, powerUserId, HohenheimAccess.EXEC,
+            List.of(new RecordGrantChange(GrantSubjectType.USER, powerUserId, HohenheimCapabilities.EXEC,
                 Boolean.TRUE))));
         assertThat(refusalTargets(exec))
             .as("step 4: exec is refused as NON-DELEGABLE, not merely as unheld")
@@ -389,15 +391,15 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // narrower than a dedicated one would be.)
         Throwable byManager = catchThrowable(() -> GrantAdministration.requireAuthorizedRecordDiff(
             contextOf(managerPrincipal), InstanceModel.MODEL_ID, instanceId, "grants",
-            List.of(new RecordGrantChange(GrantSubjectType.USER, powerUserId, HohenheimAccess.EXEC,
+            List.of(new RecordGrantChange(GrantSubjectType.USER, powerUserId, HohenheimCapabilities.EXEC,
                 Boolean.TRUE))));
         assertThat(refusalTargets(byManager))
             .as("step 5: even a manage holder cannot mint exec")
             .contains("record_delegate");
 
         // Step 6 (STATE): not one of those refusals wrote a row.
-        for (String capability : List.of(HohenheimAccess.CONFIG, HohenheimAccess.DESTROY,
-                HohenheimAccess.EXEC)) {
+        for (String capability : List.of(HohenheimCapabilities.CONFIG, HohenheimCapabilities.DESTROY,
+                HohenheimCapabilities.EXEC)) {
             assertThat(contextOf(powerPrincipal)
                     .hasCapability(InstanceModel.MODEL_ID, instanceId, capability))
                 .as("step 6 (STATE): no refused delegation may have granted " + capability)
@@ -418,7 +420,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
 
         // Step 2: and cannot reach the console, by either face of the walk.
         assertThat(HohenheimAccess.hasInstanceCapability(
-                powerPrincipal, instanceId, HohenheimAccess.CONSOLE))
+                powerPrincipal, instanceId, HohenheimCapabilities.CONSOLE))
             .as("step 2: power does not carry console (principal-only walk)").isFalse();
         Throwable command = catchThrowable(() -> TenantConduits.as(powerPrincipal,
             () -> InstanceConsoles.sendCommand(instanceId, "say hello")));
@@ -429,7 +431,7 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // Step 3: power still implies view, so the delegate is not locked out of the
         // page carrying the button.
         assertThat(contextOf(powerPrincipal)
-                .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.VIEW))
+                .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimCapabilities.VIEW))
             .as("step 3: power implies view").isTrue();
 
         // Step 4: and it does not carry config -- the row must not move.
@@ -461,11 +463,11 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
 
         // Step 1: every registered capability, exec included, resolves through the ADMIN
         // bypass row.
-        for (String capability : List.of(HohenheimAccess.MANAGE, HohenheimAccess.VIEW,
-                HohenheimAccess.CONSOLE, HohenheimAccess.POWER, HohenheimAccess.CONFIG,
-                HohenheimAccess.DESTROY, HohenheimAccess.EXEC, HohenheimAccess.SNAPSHOTS,
-                HohenheimAccess.BACKUPS, HohenheimAccess.FILES_READ,
-                HohenheimAccess.FILES_WRITE, HohenheimAccess.IMAGE_ANY)) {
+        for (String capability : List.of(HohenheimCapabilities.MANAGE, HohenheimCapabilities.VIEW,
+                HohenheimCapabilities.CONSOLE, HohenheimCapabilities.POWER, HohenheimCapabilities.CONFIG,
+                HohenheimCapabilities.DESTROY, HohenheimCapabilities.EXEC, HohenheimCapabilities.SNAPSHOTS,
+                HohenheimCapabilities.BACKUPS, HohenheimCapabilities.FILES_READ,
+                HohenheimCapabilities.FILES_WRITE, HohenheimCapabilities.IMAGE_ANY)) {
             assertThat(operator.capabilityDecision(InstanceModel.MODEL_ID, instanceId, capability))
                 .as("step 1: an admin holds " + capability + " by bypass")
                 .isEqualTo(RecordCapabilityDecision.ADMIN_BYPASS);
@@ -481,12 +483,12 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
             .isNotInstanceOf(OperationPipeline.Offer.Available.class);
         assertThat(ConsoleModes.operator().tabs())
             .as("step 1b: the console's one-off command mode places the exec operation")
-            .filteredOn(tab -> InstanceExecPage.SLUG.equals(tab.slug()))
+            .filteredOn(tab -> HohenheimSlugs.Tab.EXEC.equals(tab.slug()))
             .singleElement().satisfies(tab -> assertThat(tab.actions())
                 .singleElement().matches(action -> action.id().equals(InstanceOperations.EXEC.id())));
         assertThat(ConsoleModes.delegated().tabs())
             .as("step 1b: and the delegated console has no one-off command mode")
-            .noneMatch(tab -> InstanceExecPage.SLUG.equals(tab.slug()));
+            .noneMatch(tab -> HohenheimSlugs.Tab.EXEC.equals(tab.slug()));
 
         // Step 2: and the tenant-write invariant never fires for an operator, so the
         // config edit the delegates were refused genuinely lands.
@@ -508,25 +510,25 @@ class InstanceCapabilitySplitTest extends HohenheimTestBase {
         // Step 3: an admin may plant exec deliberately (the operator choice the plan
         // describes) -- and the recipient STILL cannot pass it on.
         RecordGrants.grant(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.EXEC, true);
+            HohenheimCapabilities.EXEC, true);
         try {
             assertThat(contextOf(consolePrincipal)
-                    .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.EXEC))
+                    .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimCapabilities.EXEC))
                 .as("step 3: an operator-planted exec grant is effective").isTrue();
             Throwable relay = catchThrowable(() -> GrantAdministration.requireAuthorizedRecordDiff(
                 contextOf(consolePrincipal), InstanceModel.MODEL_ID, instanceId, "grants",
                 List.of(new RecordGrantChange(GrantSubjectType.USER, powerUserId,
-                    HohenheimAccess.EXEC, Boolean.TRUE))));
+                    HohenheimCapabilities.EXEC, Boolean.TRUE))));
             assertThat(refusalTargets(relay))
                 .as("step 3: a HOLDER of exec still cannot re-delegate it")
                 .contains("record_delegate");
             assertThat(contextOf(powerPrincipal)
-                    .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimAccess.EXEC))
+                    .hasCapability(InstanceModel.MODEL_ID, instanceId, HohenheimCapabilities.EXEC))
                 .as("step 3 (STATE): and no exec row was written for the third party").isFalse();
         } finally {
             // In a finally: the console journey asserts the delegate holds no exec.
             RecordGrants.revoke(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID,
-                instanceId, HohenheimAccess.EXEC);
+                instanceId, HohenheimCapabilities.EXEC);
         }
     }
 }

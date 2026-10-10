@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsNames;
@@ -34,18 +36,18 @@ public final class DnsRecordEdits {
         Object zoneValue = coerced.containsKey("zone_id") ? coerced.get("zone_id")
             : existing != null ? existing.get(DnsRecordModel.ZONE_ID) : null;
         if (!(zoneValue instanceof Integer zoneId)) {
-            throw Violations.ofField("zone_id", zoneValue, CmsSupport.violationText("dns_zone_required"));
+            throw Violations.ofField("zone_id", zoneValue, HohenheimMicrocopy.VIOLATIONS.of("dns_zone_required"));
         }
         Row zone = Models.get(DnsZoneModel.class).find().where(DnsZoneModel.ID.eq(zoneId)).first();
         if (zone == null) {
-            throw Violations.ofField("zone_id", zoneId, CmsSupport.violationText("dns_zone_required"));
+            throw Violations.ofField("zone_id", zoneId, HohenheimMicrocopy.VIOLATIONS.of("dns_zone_required"));
         }
 
         Object nameValue = coerced.containsKey("name") ? coerced.get("name")
             : existing != null ? existing.get(DnsRecordModel.NAME) : "";
         String owner = DnsNames.normalizeOwner(nameValue != null ? String.valueOf(nameValue) : "");
         if (owner == null) {
-            throw Violations.ofField("name", nameValue, CmsSupport.violationText("dns_name_format"));
+            throw Violations.ofField("name", nameValue, HohenheimMicrocopy.VIOLATIONS.of("dns_name_format"));
         }
         coerced.put("name", owner);
 
@@ -57,7 +59,7 @@ public final class DnsRecordEdits {
             : existing != null ? existing.get(DnsRecordModel.VALUE) : "";
         String value = valueValue != null ? String.valueOf(valueValue) : "";
 
-        Integer ttl = CmsSupport.parsedInt(coerced.containsKey("ttl") ? coerced.get("ttl")
+        Integer ttl = RawValues.parsedInt(coerced.containsKey("ttl") ? coerced.get("ttl")
             : existing != null ? existing.get(DnsRecordModel.TTL) : null);
 
         // Normalize the type-specific extras into the shape the TYPE declares: exactly
@@ -78,7 +80,7 @@ public final class DnsRecordEdits {
             DnsRecordCodec.toRecord(originName, owner, type, effectiveTtl, value, priority, weight, port);
         }
         catch (TextParseException e) {
-            throw Violations.ofField("name", owner, CmsSupport.violationText("dns_name_format"));
+            throw Violations.ofField("name", owner, HohenheimMicrocopy.VIOLATIONS.of("dns_name_format"));
         }
         catch (DnsValueException e) {
             Object offending = switch (e.getField()) {
@@ -88,7 +90,7 @@ public final class DnsRecordEdits {
                 default -> coerced.get(e.getField());
             };
             throw Violations.ofField(entryPathFor(e.getField()), offending,
-                CmsSupport.violationText(e.getMicrocopyKey()));
+                HohenheimMicrocopy.VIOLATIONS.of(e.getMicrocopyKey()));
         }
 
         Integer selfId = existing != null ? existing.get(DnsRecordModel.ID) : null;
@@ -109,7 +111,7 @@ public final class DnsRecordEdits {
     private static void checkCnameExclusivity(@NonNull Model model, int zoneId, @NonNull String owner,
                                               @NonNull String type, @Nullable Integer selfId) {
         if (DnsRecordModel.TYPE_CNAME.equals(type) && DnsNames.APEX.equals(owner)) {
-            throw Violations.ofField("type", type, CmsSupport.violationText("dns_cname_exclusive"));
+            throw Violations.ofField("type", type, HohenheimMicrocopy.VIOLATIONS.of("dns_cname_exclusive"));
         }
         List<Row> siblings = model.find()
             .where(DnsRecordModel.ZONE_ID.eq(zoneId))
@@ -123,7 +125,7 @@ public final class DnsRecordEdits {
             boolean conflict = DnsRecordModel.TYPE_CNAME.equals(type)
                 || DnsRecordModel.TYPE_CNAME.equals(siblingType);
             if (conflict) {
-                throw Violations.ofField("type", type, CmsSupport.violationText("dns_cname_exclusive"));
+                throw Violations.ofField("type", type, HohenheimMicrocopy.VIOLATIONS.of("dns_cname_exclusive"));
             }
         }
     }
@@ -138,7 +140,7 @@ public final class DnsRecordEdits {
             .where(DnsRecordModel.VALUE.eq(value))
             .first();
         if (duplicate != null && (selfId == null || !selfId.equals(duplicate.get(DnsRecordModel.ID)))) {
-            throw Violations.ofField("value", value, CmsSupport.violationText("dns_record_duplicate"));
+            throw Violations.ofField("value", value, HohenheimMicrocopy.VIOLATIONS.of("dns_record_duplicate"));
         }
     }
 

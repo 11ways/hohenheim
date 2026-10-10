@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.source;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.GitProviderModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
@@ -33,7 +33,7 @@ public final class GitProviderOperations {
     public static final Operation<Row, Void, ConnectionTest> TEST_CONNECTION =
         Operation.declare(HohenheimIds.id("test_git_provider"))
             .happened(OperationSentences.of("test_git_provider"))
-            .label(Microcopy.of("test_connection").withFilter("scope", "git_provider"))
+            .label(HohenheimMicrocopy.GIT_PROVIDER.of("test_connection"))
             .icon(Icon.of("plug-circle-check"))
             .one(PROVIDER)
             .gate(OperationGate.open().subjectCapability(HohenheimCapabilities.MANAGE))

@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.ChildList;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
@@ -12,6 +12,7 @@ import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
+import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.data.RowScope;
@@ -37,9 +38,6 @@ import java.util.Objects;
  */
 public final class InstanceVariableParts {
 
-    /** The child entry's slug on both panels. */
-    public static final String SLUG = "instance-variables";
-
     /** The computed column carrying a plain value, absent for a secret or unknown kind. */
     public static final String VALUE_COLUMN = "value";
 
@@ -47,32 +45,24 @@ public final class InstanceVariableParts {
     public static final RowScope ROWS = RowScope.within(() -> InstanceVariableModel.INSTANCE_ID.isNotNull());
 
     /** The Provisioning tab's embedded section over this entry. */
-    public static final ChildList<Row> PROVISIONING = ChildList.sections(InstanceProvisioningPage.SLUG,
-        Microcopy.of("variables").withFilter("scope", "template_contents"), SLUG);
+    public static final ChildList<Row> PROVISIONING = ChildList.sections(HohenheimSlugs.Tab.PROVISIONING,
+        HohenheimMicrocopy.TEMPLATE_CONTENTS.of("variables"), HohenheimSlugs.INSTANCE_VARIABLES);
 
     private InstanceVariableParts() {}
 
-    /**
-     * @param id    the entry id, one per panel
-     * @param scope the rows this panel's viewers may read
-     */
-    public static @NonNull PanelResource<Row> create(@NonNull Identifier id, @NonNull RowScope scope) {
-        return entry(id, scope).build();
-    }
-
-    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id, @NonNull RowScope scope) {
+    /** The identity, nav placement, parent, reads and list both twins share. */
+    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
         TableSpec<Row> table = tableSpec();
-        return PanelResource.builder(Objects.requireNonNull(id, "id cannot be null"), SLUG,
+        return PanelResource.builder(Objects.requireNonNull(id, "id cannot be null"), HohenheimSlugs.INSTANCE_VARIABLES,
                 SubjectType.record(InstanceVariableModel.MODEL_ID))
-            .label(Microcopy.of("plural").withFilter("scope", "instance_variable"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "instance_variable"))
+            .label(HohenheimMicrocopy.INSTANCE_VARIABLE.of("plural"))
+            .recordLabel(HohenheimMicrocopy.INSTANCE_VARIABLE.of("singular"))
             .icon(Icon.of("sliders"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .showInNav(false)
             .standsUnder(HohenheimSlugs.INSTANCES)
-            .scope(Objects.requireNonNull(scope, "scope cannot be null"))
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceVariableModel.INSTANCE_ID)
-                .tab(InstanceProvisioningPage.SLUG))
+                .tab(HohenheimSlugs.Tab.PROVISIONING))
             .reads(ResourceReads.rows())
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).search(InstanceVariableModel.KEY)
                 .computed(Objects.requireNonNull(table.column(VALUE_COLUMN)),
@@ -88,12 +78,13 @@ public final class InstanceVariableParts {
      * panel's only resource over the model.
      */
     public static @NonNull PanelResource<Row> admin() {
-        return entry(HohenheimIds.id("instance_variable"), ROWS).pickerSource().build();
+        return entry(HohenheimIds.id("instance_variable")).scope(ROWS).pickerSource().build();
     }
 
     /** The /manage entry: the values of instances the viewer may view. */
     public static @NonNull PanelResource<Row> manage() {
-        return create(HohenheimIds.id("manage_instance_variable"), TenantScopes.INSTANCE_VARIABLES);
+        return ManageTwin.reached(entry(ManageTwin.id("instance_variable")), TenantScopes.INSTANCE_VARIABLES,
+            ResourceTabs.none()).build();
     }
 
     static @NonNull TableSpec<Row> tableSpec() {
@@ -101,7 +92,7 @@ public final class InstanceVariableParts {
             .column(ColumnSpec.fromField(InstanceVariableModel.KEY).sortable().build())
             .column(ColumnSpec.fromField(InstanceVariableModel.KIND).sortable(false).build())
             .column(ColumnSpec.virtual(VALUE_COLUMN,
-                Microcopy.of("value").withFilter("scope", "instance_provisioning")).sortable(false).build())
+                HohenheimMicrocopy.INSTANCE_PROVISIONING.of("value")).sortable(false).build())
             .defaultSort(SortSpec.asc(InstanceVariableModel.KEY.getName()))
             .build();
     }

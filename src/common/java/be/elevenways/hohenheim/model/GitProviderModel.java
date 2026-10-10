@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.source.GitProviderKindRegistry;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.*;
@@ -32,7 +32,7 @@ public class GitProviderModel extends Model {
     /** Never localized: a provider name is operator data. */
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .required()
-        .label(HohenheimFormCopy.label("provider_name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("provider_name"))
         .build());
 
     // ONE discriminator over the kind registry: values enumerate it live, so a new kind is
@@ -45,8 +45,8 @@ public class GitProviderModel extends Model {
             // must refuse a provider without one -- a UI-only rule would let the other
             // writers store a row no client can ever be built for.
             .required()
-            .label(HohenheimFormCopy.label("provider_kind"))
-            .help(HohenheimFormCopy.help("provider_kind"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("provider_kind"))
+            .help(HohenheimMicrocopy.HELP.of("provider_kind"))
             .build());
 
     /**
@@ -61,13 +61,13 @@ public class GitProviderModel extends Model {
     public static final SchemaField SETTINGS = SCHEMA.addField(
         SchemaField.builder("settings")
             .schemaFrom("kind")
-            .label(HohenheimFormCopy.label("provider_settings"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("provider_settings"))
             .build());
 
     /** Blank = the public host of the kind (https://github.com); set for self-hosted. */
     public static final StringField BASE_URL = SCHEMA.addField(StringField.builder().name("base_url")
-        .label(HohenheimFormCopy.label("provider_base_url"))
-        .help(HohenheimFormCopy.help("provider_base_url"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("provider_base_url"))
+        .help(HohenheimMicrocopy.HELP.of("provider_base_url"))
         .build());
 
     /**
@@ -87,8 +87,8 @@ public class GitProviderModel extends Model {
     /** Personal/deploy access token; the fallback credential when no App is configured. */
     public static final StringField ACCESS_TOKEN = SCHEMA.addField(
         StringField.builder().name("access_token").secret().encrypted()
-            .label(HohenheimFormCopy.label("provider_access_token"))
-            .help(HohenheimFormCopy.help("provider_access_token"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("provider_access_token"))
+            .help(HohenheimMicrocopy.HELP.of("provider_access_token"))
             .build());
 
     /**
@@ -99,15 +99,15 @@ public class GitProviderModel extends Model {
      */
     public static final BooleanField SHARED = SCHEMA.addField(BooleanField.builder("shared")
         .defaultValue(false)
-        .label(HohenheimFormCopy.label("provider_shared"))
-        .help(HohenheimFormCopy.help("provider_shared"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("provider_shared"))
+        .help(HohenheimMicrocopy.HELP.of("provider_shared"))
         .build());
 
     /** The App's RS256 private key (PEM), encrypted at rest. */
     public static final TextField APP_PRIVATE_KEY_PEM = SCHEMA.addField(
         TextField.builder().name("app_private_key_pem").secret().encrypted()
-            .label(HohenheimFormCopy.label("provider_app_private_key"))
-            .help(HohenheimFormCopy.help("provider_app_private_key"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("provider_app_private_key"))
+            .help(HohenheimMicrocopy.HELP.of("provider_app_private_key"))
             .build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());

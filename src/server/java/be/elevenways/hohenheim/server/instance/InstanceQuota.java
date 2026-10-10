@@ -180,50 +180,12 @@ public final class InstanceQuota {
     }
 
     /**
-     * The quota bucket for a packed subject set; over-long packs fold through a sha256
-     * digest so the key always fits the ledger's 191-char primary key.
-     */
-    public static @NonNull String bucketKeyOf(@NonNull String packedSubjects) {
-        return OwnerBudget.INSTANCES.bucketOf(packedSubjects);
-    }
-
-    /** The owner-memory bucket for a packed subject set; same 191-char fold. */
-    public static @NonNull String memoryBucketOf(@NonNull String packedSubjects) {
-        return OwnerBudget.OWNER_MEMORY.bucketOf(packedSubjects);
-    }
-
-    /**
      * The owner-memory bucket matching the COUNT bucket a row was charged to -- the one
      * derivation the release paths and the M088 heal share, so a folded owner's two
      * dimensions can never land in different buckets.
      */
     public static @NonNull String memoryBucketOfChargedBucket(@NonNull String countBucket) {
-        return memoryBucketOf(OwnerBudget.INSTANCES.packOf(countBucket));
-    }
-
-    /**
-     * The cap for one owner: the per-owner override row when one exists (0 is a real
-     * cap: nothing allowed), else the global default, where 0 or less means NO cap.
-     *
-     * @return the cap, or null for uncapped
-     */
-    public static @Nullable Integer limitFor(@NonNull String packedSubjects) {
-        return OwnerBudget.INSTANCES.limitFor(packedSubjects);
-    }
-
-    /** The owner's workload-memory cap in MB; same override/default semantics. */
-    public static @Nullable Integer memoryLimitFor(@NonNull String packedSubjects) {
-        return OwnerBudget.OWNER_MEMORY.limitFor(packedSubjects);
-    }
-
-    /** How much of an owner's cap is spent (admin surfaces, tests). */
-    public static long usedBy(@NonNull String packedSubjects) {
-        return OwnerBudget.INSTANCES.usedBy(packedSubjects);
-    }
-
-    /** How much workload memory (MB) an owner is holding (admin surfaces, tests). */
-    public static long memoryUsedBy(@NonNull String packedSubjects) {
-        return OwnerBudget.OWNER_MEMORY.usedBy(packedSubjects);
+        return OwnerBudget.OWNER_MEMORY.bucketOf(OwnerBudget.INSTANCES.packOf(countBucket));
     }
 
     /**
@@ -241,7 +203,7 @@ public final class InstanceQuota {
      * @return 1 when the charges moved, 0 when the row is already in that bucket
      */
     public static int moveOwnerCharges(@NonNull Row stored, @NonNull String newPack) {
-        String newBucket = bucketKeyOf(newPack);
+        String newBucket = OwnerBudget.INSTANCES.bucketOf(newPack);
         String oldBucket = chargedBucketOf(stored);
         if (newBucket.equals(oldBucket)) {
             return 0;
@@ -251,7 +213,7 @@ public final class InstanceQuota {
         Quotas.reserve(newBucket, 1, Long.MAX_VALUE);
         if (memory > 0) {
             Quotas.release(memoryBucketOfChargedBucket(oldBucket), memory);
-            Quotas.reserve(memoryBucketOf(newPack), memory, Long.MAX_VALUE);
+            Quotas.reserve(OwnerBudget.OWNER_MEMORY.bucketOf(newPack), memory, Long.MAX_VALUE);
         }
         return 1;
     }
@@ -267,7 +229,7 @@ public final class InstanceQuota {
      * else.
      */
     public static @NonNull String creationBucket() {
-        return bucketKeyOf(creationOwnerPackOf());
+        return OwnerBudget.INSTANCES.bucketOf(creationOwnerPackOf());
     }
 
     /**

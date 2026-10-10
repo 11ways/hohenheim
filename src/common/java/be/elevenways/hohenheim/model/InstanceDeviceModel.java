@@ -1,9 +1,8 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -48,33 +47,35 @@ public class InstanceDeviceModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
     public static final IntegerField INSTANCE_ID = SCHEMA.addField(
-        IntegerField.builder().name("instance_id").build());
+        IntegerField.builder().name("instance_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("instance")).build());
 
     public static final EnumField TYPE = SCHEMA.addField(EnumField.builder("type")
         .value(TYPE_DISK, v -> v.displayName("Disk").icon("hard-drive")
-            .label(Microcopy.of("disk").withFilter("scope", "instance_device")))
+            .label(HohenheimMicrocopy.INSTANCE_DEVICE.of("disk")))
         .value(TYPE_NIC, v -> v.displayName("NIC").icon("network-wired")
-            .label(Microcopy.of("nic").withFilter("scope", "instance_device")))
+            .label(HohenheimMicrocopy.INSTANCE_DEVICE.of("nic")))
         .value(TYPE_CDROM, v -> v.displayName("Install media").icon("compact-disc")
-            .label(Microcopy.of("cdrom").withFilter("scope", "instance_device")))
+            .label(HohenheimMicrocopy.INSTANCE_DEVICE.of("cdrom")))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("device_type"))
         .build());
 
     // User data (a device name), never localized.
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
-        .label(HohenheimFormCopy.label("name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
         .build());
 
     /** Disk size in GB (the quota-charged amount); null for NICs. */
     public static final IntegerField SIZE_GB = SCHEMA.addField(
         IntegerField.builder().name("size_gb")
-            .label(HohenheimFormCopy.label("device_size_gb"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("device_size_gb"))
             .build());
 
     /** The host-side ISO volume name a cdrom row attaches; null for disks and NICs. */
     public static final StringField SOURCE_MEDIA = SCHEMA.addField(
         StringField.builder().name("source_media")
-            .label(HohenheimFormCopy.label("device_source_media"))
-            .help(HohenheimFormCopy.help("device_source_media"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("device_source_media"))
+            .help(HohenheimMicrocopy.HELP.of("device_source_media"))
             .build());
 
     /** The ledger bucket this row's reservation was charged to (reserve hook stamps it). */
@@ -98,7 +99,7 @@ public class InstanceDeviceModel extends Model {
                     // root and eth0 are the driver-owned devices; a row claiming either
                     // would collide with the create body's own overrides.
                     throw Violations.ofField("name", name,
-                        HohenheimViolations.text("device_name_invalid")
+                        HohenheimMicrocopy.VIOLATIONS.of("device_name_invalid")
                             .withArg("name", String.valueOf(name)));
                 }
             }
@@ -110,7 +111,7 @@ public class InstanceDeviceModel extends Model {
                     ? row.get(SOURCE_MEDIA) : null;
                 if (media == null || media.isBlank()) {
                     throw Violations.ofField("source_media", media,
-                        HohenheimViolations.text("device_media_required"));
+                        HohenheimMicrocopy.VIOLATIONS.of("device_media_required"));
                 }
             }
             // A disk write that CARRIES the type must carry a real size (a sizeless
@@ -123,7 +124,7 @@ public class InstanceDeviceModel extends Model {
                 boolean disk = declaresDisk || !row.has(TYPE.getName());
                 if (disk && (size == null || size < 1)) {
                     throw Violations.ofField("size_gb", size,
-                        HohenheimViolations.text("device_size_invalid"));
+                        HohenheimMicrocopy.VIOLATIONS.of("device_size_invalid"));
                 }
             }
         });

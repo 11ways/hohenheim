@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.protoblast.common.dry.Dry;
@@ -114,10 +115,8 @@ public class IncusClient {
     }
 
     /** All storage pools (recursed). */
-    @SuppressWarnings("unchecked")
     public @NonNull List<Map<String, Object>> storagePools() throws IOException {
-        return (List<Map<String, Object>>) (List<?>) listOf(
-            syncPayload("GET", "/1.0/storage-pools?recursion=1", null, DEFAULT_TIMEOUT_MS));
+        return recursed("/1.0/storage-pools");
     }
 
     /** The host's resource inventory ({@code GET /1.0/resources}; trusted clients only). */
@@ -126,17 +125,13 @@ public class IncusClient {
     }
 
     /** All instances of the default project, recursed to full objects. */
-    @SuppressWarnings("unchecked")
     public @NonNull List<Map<String, Object>> instances() throws IOException {
-        return (List<Map<String, Object>>) (List<?>) listOf(
-            syncPayload("GET", "/1.0/instances?recursion=1", null, DEFAULT_TIMEOUT_MS));
+        return recursed("/1.0/instances");
     }
 
     /** All networks (recursed). */
-    @SuppressWarnings("unchecked")
     public @NonNull List<Map<String, Object>> networks() throws IOException {
-        return (List<Map<String, Object>>) (List<?>) listOf(
-            syncPayload("GET", "/1.0/networks?recursion=1", null, DEFAULT_TIMEOUT_MS));
+        return recursed("/1.0/networks");
     }
 
     // -- images -----------------------------------------------------------------
@@ -148,18 +143,9 @@ public class IncusClient {
      * definition already local.
      */
     public @Nullable String imageFingerprintForAlias(@NonNull String alias) throws IOException {
-        try {
-            Map<String, Object> metadata = syncMetadata("GET",
-                "/1.0/images/aliases/" + alias, null, DEFAULT_TIMEOUT_MS);
-            Object target = metadata.get("target");
-            return target instanceof String fingerprint && !fingerprint.isBlank()
-                ? fingerprint : null;
-        } catch (ApiException e) {
-            if (e.isNotFound()) {
-                return null;
-            }
-            throw e;
-        }
+        Map<String, Object> metadata = metadataOrNull("/1.0/images/aliases/" + alias);
+        Object target = metadata != null ? metadata.get("target") : null;
+        return target instanceof String fingerprint && !fingerprint.isBlank() ? fingerprint : null;
     }
 
     /**
@@ -211,7 +197,7 @@ public class IncusClient {
             throw new IOException("Incus GET /1.0/instances/" + name
                 + " answered non-object metadata: " + metadata);
         }
-        return new Versioned(castMap(map), raw.header("etag"));
+        return new Versioned(RawValues.map(map), raw.header("etag"));
     }
 
     /** The instance's live state ({@code GET /1.0/instances/{name}/state}). */
@@ -265,7 +251,7 @@ public class IncusClient {
         if (!(metadata instanceof Map<?, ?> operation)) {
             throw new IOException("console operation of '" + name + "' carried no metadata");
         }
-        return castMap(operation);
+        return RawValues.map(operation);
     }
 
     /**
@@ -284,7 +270,7 @@ public class IncusClient {
         if (!(metadata instanceof Map<?, ?> operation)) {
             throw new IOException("vga console operation of '" + name + "' carried no metadata");
         }
-        return castMap(operation);
+        return RawValues.map(operation);
     }
 
     /** The instance's console log ring buffer (plain text, NOT an envelope). */
@@ -376,7 +362,7 @@ public class IncusClient {
                 // Key "1" = stdout, "2" = stderr; TreeMap keeps that order stable. The
                 // metadata's values are FULL API paths (logs/exec-output/... on current
                 // daemons) and are used verbatim -- reconstructing them broke once.
-                for (Object logPath : new TreeMap<>(castMap(files)).values()) {
+                for (Object logPath : new TreeMap<>(RawValues.map(files)).values()) {
                     String path = String.valueOf(logPath);
                     try {
                         output.append(rawText(path));
@@ -599,21 +585,12 @@ public class IncusClient {
      * @throws IOException on any daemon error other than 404
      */
     public @Nullable Map<String, Object> networkAcl(@NonNull String name) throws IOException {
-        try {
-            return syncMetadata("GET", "/1.0/network-acls/" + name, null, DEFAULT_TIMEOUT_MS);
-        } catch (ApiException e) {
-            if (e.isNotFound()) {
-                return null;
-            }
-            throw e;
-        }
+        return metadataOrNull("/1.0/network-acls/" + name);
     }
 
     /** All network ACLs (recursed), for callers that SCAN the daemon rather than name one. */
-    @SuppressWarnings("unchecked")
     public @NonNull List<Map<String, Object>> networkAcls() throws IOException {
-        return (List<Map<String, Object>>) (List<?>) listOf(
-            syncPayload("GET", "/1.0/network-acls?recursion=1", null, DEFAULT_TIMEOUT_MS));
+        return recursed("/1.0/network-acls");
     }
 
     /** Create a network ACL (sync; {@code POST /1.0/network-acls}). */
@@ -641,14 +618,7 @@ public class IncusClient {
      * @throws IOException on any daemon error other than 404
      */
     public @Nullable Map<String, Object> network(@NonNull String name) throws IOException {
-        try {
-            return syncMetadata("GET", "/1.0/networks/" + name, null, DEFAULT_TIMEOUT_MS);
-        } catch (ApiException e) {
-            if (e.isNotFound()) {
-                return null;
-            }
-            throw e;
-        }
+        return metadataOrNull("/1.0/networks/" + name);
     }
 
     /** Create a managed network ({@code POST /1.0/networks}; empty config = auto subnets). */
@@ -671,25 +641,13 @@ public class IncusClient {
     public @Nullable Map<String, Object> customVolume(@NonNull String pool,
                                                       @NonNull String name)
             throws IOException {
-        try {
-            return syncMetadata("GET",
-                "/1.0/storage-pools/" + pool + "/volumes/custom/" + name, null,
-                DEFAULT_TIMEOUT_MS);
-        } catch (ApiException e) {
-            if (e.isNotFound()) {
-                return null;
-            }
-            throw e;
-        }
+        return metadataOrNull("/1.0/storage-pools/" + pool + "/volumes/custom/" + name);
     }
 
     /** All custom volumes of one pool, recursed to full objects. */
-    @SuppressWarnings("unchecked")
     public @NonNull List<Map<String, Object>> customVolumes(@NonNull String pool)
             throws IOException {
-        return (List<Map<String, Object>>) (List<?>) listOf(syncPayload("GET",
-            "/1.0/storage-pools/" + pool + "/volumes/custom?recursion=1", null,
-            DEFAULT_TIMEOUT_MS));
+        return recursed("/1.0/storage-pools/" + pool + "/volumes/custom");
     }
 
     /**
@@ -778,7 +736,7 @@ public class IncusClient {
         Map<String, Object> finished = syncMetadata("GET",
             operation + "/wait?timeout=" + seconds, null, timeoutMs + 5000);
         Object statusCode = finished.get("status_code");
-        int code = statusCode instanceof Number number ? number.intValue() : -1;
+        int code = RawValues.intOr(statusCode, -1);
         if (code != 200) {
             Object err = finished.get("err");
             throw new ApiException(code == 404 ? 404 : 500, "Incus operation "
@@ -852,7 +810,7 @@ public class IncusClient {
             throw new IOException("Incus " + method + " " + path
                 + " answered non-object metadata: " + metadata);
         }
-        return castMap(map);
+        return RawValues.map(map);
     }
 
     /** One sync call, returning the envelope's {@code metadata} of whatever shape. */
@@ -895,10 +853,10 @@ public class IncusClient {
             throw new IOException("Incus answered HTTP " + raw.status()
                 + " with a non-envelope body: " + text.trim());
         }
-        Map<String, Object> envelope = castMap(map);
+        Map<String, Object> envelope = RawValues.map(map);
         if ("error".equals(envelope.get("type"))) {
             Object code = envelope.get("error_code");
-            int status = code instanceof Number number ? number.intValue() : raw.status();
+            int status = RawValues.intOr(code, raw.status());
             throw new ApiException(status, "Incus API error " + status + ": "
                 + envelope.get("error"));
         }
@@ -909,6 +867,25 @@ public class IncusClient {
         return envelope;
     }
 
+    /** A recursed collection ({@code GET <collection>?recursion=1}) as its member objects. */
+    @SuppressWarnings("unchecked")
+    private @NonNull List<Map<String, Object>> recursed(@NonNull String collection) throws IOException {
+        return (List<Map<String, Object>>) (List<?>) listOf(
+            syncPayload("GET", collection + "?recursion=1", null, DEFAULT_TIMEOUT_MS));
+    }
+
+    /** @return the metadata of {@code GET path}, or null when the daemon answers 404 */
+    private @Nullable Map<String, Object> metadataOrNull(@NonNull String path) throws IOException {
+        try {
+            return syncMetadata("GET", path, null, DEFAULT_TIMEOUT_MS);
+        } catch (ApiException e) {
+            if (e.isNotFound()) {
+                return null;
+            }
+            throw e;
+        }
+    }
+
     private static @NonNull List<Object> listOf(@Nullable Object value) {
         if (value == null) {
             return List.of();
@@ -917,10 +894,5 @@ public class IncusClient {
             return new ArrayList<>(list);
         }
         throw new IllegalStateException("expected a JSON array, got: " + value);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static @NonNull Map<String, Object> castMap(Map<?, ?> map) {
-        return (Map<String, Object>) map;
     }
 }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.tls;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -33,17 +34,14 @@ public final class CertificateExpiry {
     public static @NonNull Microcopy of(@NonNull Instant expires) {
         long days = daysLeft(expires);
         if (days < 0) {
-            return copy("certificate_expired").withArg("days", -days);
+            return HohenheimMicrocopy.CERTIFICATE.of("certificate_expired").withArg("days", -days);
         }
-        return days == 0 ? copy("certificate_expires_today") : copy("certificate_expiry").withArg("days", days);
+        return days == 0 ? HohenheimMicrocopy.CERTIFICATE.of("certificate_expires_today")
+            : HohenheimMicrocopy.CERTIFICATE.of("certificate_expiry").withArg("days", days);
     }
 
     /** @return {@link #of} spelled for the middle of a sentence ("expires in 35 days") */
     public static @NonNull Microcopy inSentence(@NonNull Instant expires) {
         return of(expires).withFilter("case", "sentence");
-    }
-
-    private static @NonNull Microcopy copy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "certificate");
     }
 }

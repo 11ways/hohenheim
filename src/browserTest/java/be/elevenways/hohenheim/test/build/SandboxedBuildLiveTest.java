@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.build;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -140,7 +141,7 @@ class SandboxedBuildLiveTest {
             assertThat(uses.succeeded()).as("step 3: a build that needs the daemon fails")
                 .isFalse();
             assertThat(uses.status()).as("step 3: as an ordinary build failure")
-                .isEqualTo(BuildOperationModel.STATUS_FAILED);
+                .isEqualTo(BuildOperationModel.LIFECYCLE.stored(OperationStatus.FAILED));
 
             // 4. Build ARGUMENTS do reach the build -- without this the environment
             //    assertions in the site journey would be proving that nothing at all is
@@ -194,7 +195,7 @@ class SandboxedBuildLiveTest {
             assertThat(timedOut.succeeded()).as("step 1: a timed-out build is not a success")
                 .isFalse();
             assertThat(timedOut.status()).as("step 1: and says why")
-                .isEqualTo(BuildOperationModel.STATUS_TIMED_OUT);
+                .isEqualTo(BuildOperationModel.LIFECYCLE.stored(OperationStatus.TIMED_OUT));
             Row timedRow = Models.get(BuildOperationModel.class).findById(timedOut.buildId());
             assertThat((String) timedRow.get(BuildOperationModel.IMAGE_ID))
                 .as("step 1: nothing partial is promotable").isNull();
@@ -219,7 +220,7 @@ class SandboxedBuildLiveTest {
                 """), Map.of(), new BuildQuota(2.0, 1024, 64L * 1024 * 1024, 240_000, 128,
                     256 * 1024, 512L * 1024 * 1024));
             assertThat(fat.status()).as("step 3: the disk quota bound")
-                .isEqualTo(BuildOperationModel.STATUS_QUOTA_EXCEEDED);
+                .isEqualTo(BuildOperationModel.LIFECYCLE.stored(OperationStatus.QUOTA_EXCEEDED));
             Row fatRow = Models.get(BuildOperationModel.class).findById(fat.buildId());
             assertThat((String) fatRow.get(BuildOperationModel.IMAGE_ID))
                 .as("step 3: and promoted nothing").isNull();

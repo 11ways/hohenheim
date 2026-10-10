@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.BanModel;
@@ -61,7 +62,7 @@ public final class AdminSources {
 
     /** The registration body, callable again so a test can replay it against a fresh registry. */
     static void declare() {
-        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimPanel.SLUG), "the admin panel");
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
         // Bans: feeds the blocked-now stat tile (rules on BanModel.BLOCKED_NOW, the list's own filter) and any
         // bans-created chart (sortable doubles as the bucketable whitelist for created_at). BanParts is a
         // panel resource, so this is the model's own source; no inline create (no pick offers
@@ -75,7 +76,7 @@ public final class AdminSources {
         // Backup targets, for the instance form's target pick: BackupTargetParts is a panel resource, whose one
         // source is panel-qualified, so the model's own source is this one, creatable through the admin entry's
         // own create form exactly as the derived default was. Absent with the instance role.
-        if (panel.entryBySlug(BackupTargetParts.SLUG) instanceof PanelResource<?> targets) {
+        if (panel.entryBySlug(HohenheimSlugs.BACKUP_TARGETS) instanceof PanelResource<?> targets) {
             RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(BackupTargetModel.class)
                 .search(BackupTargetModel.NAME), BackupTargetModel.class, panel, targets));
         }
@@ -85,7 +86,7 @@ public final class AdminSources {
         // (HohenheimPickRules.KindHostRules) narrows on exactly those two.
         RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(ServerModel.class)
             .project(ServerModel.NAME, ServerModel.RUNTIME, ServerModel.VOLUME_BACKEND)
-            .search(ServerModel.NAME), ServerModel.class, panel, panel.entryBySlug(ServerParts.SLUG)));
+            .search(ServerModel.NAME), ServerModel.class, panel, panel.entryBySlug(HohenheimSlugs.SERVERS)));
 
         // Runtime images ("yolks"), for the instance form's dependent image pick: enabled
         // and incus_image are the resolver's rule vocabulary (HohenheimPickRules.RuntimeImageRules).
@@ -96,7 +97,7 @@ public final class AdminSources {
             .subtitle(row -> {
                 Object description = row.get(RuntimeImageModel.DESCRIPTION);
                 return description != null ? String.valueOf(description) : "";
-            }), RuntimeImageModel.class, panel, panel.entryBySlug(RuntimeImageParts.SLUG)));
+            }), RuntimeImageModel.class, panel, panel.entryBySlug(HohenheimSlugs.RUNTIME_IMAGES)));
 
     }
 

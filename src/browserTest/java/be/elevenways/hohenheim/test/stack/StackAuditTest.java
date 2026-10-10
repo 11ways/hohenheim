@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.cms.StackOperations;
-import be.elevenways.hohenheim.server.cms.StackParts;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.test.Poll;
@@ -21,7 +20,6 @@ import be.elevenways.zenit.cms.common.render.action.CmsConfirmation;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -33,11 +31,9 @@ import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.security.SystemPrincipal;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.time.Duration;
@@ -139,7 +135,7 @@ class StackAuditTest {
             return id;
         });
         Db.run(datasource, () -> Accountability.runAs(operator(String.valueOf(clicker)), () -> PanelResourceCalls.invoke(
-            HohenheimSlugs.ADMIN, StackParts.SLUG, StackOperations.DEPLOY.id(), panelId,
+            HohenheimSlugs.ADMIN, HohenheimSlugs.STACKS, StackOperations.DEPLOY.id(), panelId,
             CmsConfirmation.PLAIN_PROOF,
             AccessContext.of(TenantConduits.stubFor(new UserPrincipal(clicker, "Stack Clicker"))))));
         await("step 4: the queued panel deploy settles",

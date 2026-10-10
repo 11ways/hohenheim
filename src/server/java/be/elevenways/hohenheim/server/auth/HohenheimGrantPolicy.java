@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -10,7 +12,6 @@ import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.server.GrantableModel;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.security.KnownCapabilities;
@@ -19,23 +20,23 @@ import be.elevenways.zenit.common.security.RecordCapabilityRules;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.BACKUPS;
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.CONFIG;
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.CONSOLE;
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.CREDENTIALS;
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.DESTROY;
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.DYNDNS;
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.EDIT;
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.EXEC;
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.FILES_READ;
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.FILES_WRITE;
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.IMAGE_ANY;
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.MANAGE;
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.POWER;
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.SHELL;
+import static be.elevenways.hohenheim.HohenheimCapabilities.BACKUPS;
+import static be.elevenways.hohenheim.HohenheimCapabilities.CONFIG;
+import static be.elevenways.hohenheim.HohenheimCapabilities.CONSOLE;
+import static be.elevenways.hohenheim.HohenheimCapabilities.CREDENTIALS;
+import static be.elevenways.hohenheim.HohenheimCapabilities.DESTROY;
+import static be.elevenways.hohenheim.HohenheimCapabilities.DYNDNS;
+import static be.elevenways.hohenheim.HohenheimCapabilities.EDIT;
+import static be.elevenways.hohenheim.HohenheimCapabilities.EXEC;
+import static be.elevenways.hohenheim.HohenheimCapabilities.FILES_READ;
+import static be.elevenways.hohenheim.HohenheimCapabilities.FILES_WRITE;
+import static be.elevenways.hohenheim.HohenheimCapabilities.IMAGE_ANY;
+import static be.elevenways.hohenheim.HohenheimCapabilities.MANAGE;
+import static be.elevenways.hohenheim.HohenheimCapabilities.POWER;
+import static be.elevenways.hohenheim.HohenheimCapabilities.SHELL;
 import static be.elevenways.hohenheim.server.auth.HohenheimAccess.SITES_MANAGE_ALL;
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.SNAPSHOTS;
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.VIEW;
+import static be.elevenways.hohenheim.HohenheimCapabilities.SNAPSHOTS;
+import static be.elevenways.hohenheim.HohenheimCapabilities.VIEW;
 
 /**
  * The boot-time declaration of which models hold record grants, their capability vocabularies and
@@ -77,8 +78,8 @@ final class HohenheimGrantPolicy {
         RecordGrants.declareGrantable(GrantableModel.of(SiteModel.MODEL_ID));
         KnownCapabilities.register(SiteModel.MODEL_ID,
             KnownCapability.of(MANAGE)
-                .label(Microcopy.of("manage").withFilter("scope", "capability"))
-                .describe(Microcopy.of("manage_site_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("manage"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("manage_site_description"))
                 .elevated()
                 .asDelegable());
         RecordCapabilityRules.declare(SiteModel.MODEL_ID,
@@ -108,14 +109,14 @@ final class HohenheimGrantPolicy {
             // A holder who may EDIT a record may READ it: every VIEW-asking scope (pickers, the /manage list, the
             // delete offer's subject read) then includes edit-grant holders, never a per-scope union.
             KnownCapability.of(VIEW)
-                .label(Microcopy.of("view").withFilter("scope", "capability"))
-                .describe(Microcopy.of("view_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("view"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("view_description"))
                 .impliedBy(EDIT)
                 .asDelegable()
                 .asOwnerImplied(),
             KnownCapability.of(EDIT)
-                .label(Microcopy.of("edit").withFilter("scope", "capability"))
-                .describe(Microcopy.of("edit_record_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("edit"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("edit_record_description"))
                 .elevated()
                 .asDelegable()
                 .asOwnerImplied(),
@@ -126,7 +127,7 @@ final class HohenheimGrantPolicy {
             // zone-compromise primitive, refused in the write pipeline (TenantWrites) for
             // every writer rather than offered as something an operator could grant.
             KnownCapability.of(DYNDNS)
-                .label(Microcopy.of("dyndns").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("dyndns"))
                 .elevated());
         RecordCapabilityRules.declare(DnsRecordModel.MODEL_ID,
             RecordCapabilityRules.create()
@@ -159,8 +160,8 @@ final class HohenheimGrantPolicy {
         RecordGrants.declareGrantable(GrantableModel.of(InstanceModel.MODEL_ID));
         KnownCapabilities.register(InstanceModel.MODEL_ID,
             KnownCapability.of(MANAGE)
-                .label(Microcopy.of("manage").withFilter("scope", "capability"))
-                .describe(Microcopy.of("manage_instance_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("manage"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("manage_instance_description"))
                 .elevated()
                 .asDelegable(),
             // Seeing the record is implied by every verb that operates on it: an operator
@@ -175,30 +176,30 @@ final class HohenheimGrantPolicy {
             // it claimed and nothing reported it -- InstanceFilesTabGateTest caught it
             // while proving the files tab's own gate.
             KnownCapability.of(VIEW)
-                .label(Microcopy.of("view").withFilter("scope", "capability"))
-                .describe(Microcopy.of("view_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("view"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("view_description"))
                 .asDelegable()
                 .impliedBy(MANAGE, CONSOLE, POWER, CONFIG, DESTROY,
                     FILES_READ, SNAPSHOTS, BACKUPS, SHELL),
             KnownCapability.of(CONSOLE)
-                .label(Microcopy.of("console").withFilter("scope", "capability"))
-                .describe(Microcopy.of("console_instance_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("console"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("console_instance_description"))
                 .asDelegable()
                 .impliedBy(MANAGE),
             KnownCapability.of(POWER)
-                .label(Microcopy.of("power").withFilter("scope", "capability"))
-                .describe(Microcopy.of("power_instance_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("power"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("power_instance_description"))
                 .asDelegable()
                 .impliedBy(MANAGE),
             KnownCapability.of(CONFIG)
-                .label(Microcopy.of("config").withFilter("scope", "capability"))
-                .describe(Microcopy.of("config_instance_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("config"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("config_instance_description"))
                 .elevated()
                 .asDelegable()
                 .impliedBy(MANAGE),
             KnownCapability.of(DESTROY)
-                .label(Microcopy.of("destroy").withFilter("scope", "capability"))
-                .describe(Microcopy.of("destroy_instance_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("destroy"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("destroy_instance_description"))
                 .elevated()
                 .asDelegable()
                 .impliedBy(MANAGE),
@@ -207,21 +208,21 @@ final class HohenheimGrantPolicy {
             // GrantAdministration's containment); the holder can never pass it on, mint it
             // into an API-key scope, or reach it by holding manage.
             KnownCapability.of(EXEC)
-                .label(Microcopy.of("exec").withFilter("scope", "capability"))
-                .describe(Microcopy.of("exec_instance_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("exec"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("exec_instance_description"))
                 .admin(),
             // Phase 4: the snapshot/backup actions now exist (InstanceSnapshots /
             // InstanceBackups behind the admin resources), so their capabilities
             // register per the plan's no-unwired rule. Elevated -- a snapshot
             // restore destroys data and a backup export carries secret variables.
             KnownCapability.of(SNAPSHOTS)
-                .label(Microcopy.of("snapshots").withFilter("scope", "capability"))
-                .describe(Microcopy.of("snapshots_instance_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("snapshots"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("snapshots_instance_description"))
                 .elevated()
                 .asDelegable(),
             KnownCapability.of(BACKUPS)
-                .label(Microcopy.of("backups").withFilter("scope", "capability"))
-                .describe(Microcopy.of("backups_instance_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("backups"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("backups_instance_description"))
                 .elevated()
                 .asDelegable(),
             // Phase 5: the image gate exists (InstanceImagePolicy on the write funnel),
@@ -229,8 +230,8 @@ final class HohenheimGrantPolicy {
             // The grant matrix this declaration attaches is the instances access page
             // that manage/snapshots/backups already surface.
             KnownCapability.of(IMAGE_ANY)
-                .label(Microcopy.of("image_any").withFilter("scope", "capability"))
-                .describe(Microcopy.of("image_any_instance_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("image_any"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("image_any_instance_description"))
                 .elevated(),
             // Phase 6: the file manager exists (InstanceFiles behind the Files tab and the
             // /api/v1 file lane), so its two capabilities register WITH their enforcement
@@ -245,12 +246,12 @@ final class HohenheimGrantPolicy {
             // implied by write. InstanceFiles asks for exactly one of the two on every
             // call, so an operator can hand out a read-only file browser.
             KnownCapability.of(FILES_READ)
-                .label(Microcopy.of("files_read").withFilter("scope", "capability"))
-                .describe(Microcopy.of("files_read_instance_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("files_read"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("files_read_instance_description"))
                 .asDelegable(),
             KnownCapability.of(FILES_WRITE)
-                .label(Microcopy.of("files_write").withFilter("scope", "capability"))
-                .describe(Microcopy.of("files_write_instance_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("files_write"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("files_write_instance_description"))
                 .elevated()
                 .asDelegable(),
             // The interactive shell lands WITH its enforcing surface (InstanceShell behind
@@ -259,8 +260,8 @@ final class HohenheimGrantPolicy {
             // surface, and it implies VIEW so a shell delegate is not 404'd off the record
             // carrying the tab -- the defect files.read/snapshots/backups shipped with.
             KnownCapability.of(SHELL)
-                .label(Microcopy.of("shell").withFilter("scope", "capability"))
-                .describe(Microcopy.of("shell_instance_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("shell"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("shell_instance_description"))
                 .elevated()
                 .asDelegable());
         RecordCapabilityRules.declare(InstanceModel.MODEL_ID,
@@ -307,17 +308,17 @@ final class HohenheimGrantPolicy {
         RecordGrants.declareGrantable(GrantableModel.of(DatabaseModel.MODEL_ID));
         KnownCapabilities.register(DatabaseModel.MODEL_ID,
             KnownCapability.of(MANAGE)
-                .label(Microcopy.of("manage").withFilter("scope", "capability"))
-                .describe(Microcopy.of("manage_database_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("manage"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("manage_database_description"))
                 .elevated()
                 .asDelegable(),
             KnownCapability.of(VIEW)
-                .label(Microcopy.of("view").withFilter("scope", "capability"))
-                .describe(Microcopy.of("view_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("view"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("view_description"))
                 .asDelegable()
                 .impliedBy(MANAGE, CREDENTIALS, BACKUPS, DESTROY),
             KnownCapability.of(CREDENTIALS)
-                .label(Microcopy.of("credentials").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("credentials"))
                 .elevated()
                 .asDelegable()
                 .impliedBy(MANAGE),
@@ -329,12 +330,12 @@ final class HohenheimGrantPolicy {
             // umbrella is chosen on the merits: a database's owner backing up their own
             // database is the ordinary case, not a delegation.
             KnownCapability.of(BACKUPS)
-                .label(Microcopy.of("backups").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("backups"))
                 .elevated()
                 .asDelegable()
                 .impliedBy(MANAGE),
             KnownCapability.of(DESTROY)
-                .label(Microcopy.of("destroy").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("destroy"))
                 .elevated()
                 .asDelegable()
                 .impliedBy(MANAGE));
@@ -352,8 +353,8 @@ final class HohenheimGrantPolicy {
         RecordGrants.declareGrantable(GrantableModel.of(GitProviderModel.MODEL_ID));
         KnownCapabilities.register(GitProviderModel.MODEL_ID,
             KnownCapability.of(MANAGE)
-                .label(Microcopy.of("manage").withFilter("scope", "capability"))
-                .describe(Microcopy.of("manage_git_provider_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("manage"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("manage_git_provider_description"))
                 .elevated()
                 .asDelegable());
         RecordCapabilityRules.declare(GitProviderModel.MODEL_ID,
@@ -370,8 +371,8 @@ final class HohenheimGrantPolicy {
         RecordGrants.declareGrantable(GrantableModel.of(AccessListModel.MODEL_ID));
         KnownCapabilities.register(AccessListModel.MODEL_ID,
             KnownCapability.of(MANAGE)
-                .label(Microcopy.of("manage").withFilter("scope", "capability"))
-                .describe(Microcopy.of("manage_access_list_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("manage"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("manage_access_list_description"))
                 .elevated()
                 .asDelegable());
         RecordCapabilityRules.declare(AccessListModel.MODEL_ID,
@@ -384,13 +385,13 @@ final class HohenheimGrantPolicy {
         // Key EXPORT and certificate UPLOAD are not capabilities at all -- hohenheim
         // terminates TLS itself so a tenant never needs the key, and an uploaded
         // certificate is unverified authority over a name. ORDERING is not one either:
-        // see the note beside HohenheimAccess.DYNDNS for why the struck `request` capability
+        // see the note beside HohenheimCapabilities.DYNDNS for why the struck `request` capability
         // could never have been the authority CertificateAuthority already decides by name
         // coverage.
         KnownCapabilities.register(CertificateModel.MODEL_ID,
             KnownCapability.of(VIEW)
-                .label(Microcopy.of("view").withFilter("scope", "capability"))
-                .describe(Microcopy.of("view_certificate_description").withFilter("scope", "capability"))
+                .label(HohenheimMicrocopy.CAPABILITY.of("view"))
+                .describe(HohenheimMicrocopy.CAPABILITY.of("view_certificate_description"))
                 .asDelegable()
                 .asOwnerImplied());
         RecordCapabilityRules.declare(CertificateModel.MODEL_ID,

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
@@ -50,7 +51,7 @@ public final class HostProbe {
 
         /** @return this failure in an operator's words, as the host list and the probe refusal say it */
         public @NonNull Microcopy label() {
-            return Microcopy.of("probe_failure_" + this.token).withFilter("scope", "host_probe");
+            return HohenheimMicrocopy.HOST_PROBE.of("probe_failure_" + this.token);
         }
 
         /** @return the member stored as this token, or null for a token this build does not know */
@@ -196,8 +197,8 @@ public final class HostProbe {
         if (previous == null || previous.isBlank()) {
             Alerts.trySend(NotificationEvents.HOST_UNREACHABLE,
                 Alerts.about(ServerModel.MODEL_ID, server.get(ServerModel.ID)),
-                Alerts.copy("host_unreachable_subject").withArg("name", serverName),
-                Alerts.copy("host_unreachable_body").withArg("failure", outcome.kind().label())
+                HohenheimMicrocopy.ALERT.of("host_unreachable_subject").withArg("name", serverName),
+                HohenheimMicrocopy.ALERT.of("host_unreachable_body").withArg("failure", outcome.kind().label())
                     .withArg("detail", outcome.detail() != null ? outcome.detail() : "-"));
         }
     }

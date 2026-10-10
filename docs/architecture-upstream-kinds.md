@@ -190,7 +190,8 @@ FormSpec.builder()
 The upstream selector is the derived `RegistryEnumField` entry; the settings block is the
 derived dynamic `SchemaField` entry, which re-renders from the selected type's schema.
 That is why a new kind needs no UI work at all: declare labels/help via
-`HohenheimFormCopy.label(...)`/`.help(...)` on the schema fields and the form is done.
+`HohenheimMicrocopy.HOHENHEIM_FIELD.of(...)`/`HohenheimMicrocopy.HELP.of(...)` on the schema fields and
+the form is done.
 The "future `<pl-schema-form>`" and "future `{% render templateId %}`" items from the old
 text are moot -- the framework's schema-driven form entry is what ships.
 
@@ -281,7 +282,7 @@ DECLARATIONS moved to `server/upstream/`. That split is deliberate for now -- th
 1. Write one class in `server/upstream/kinds/` implementing `UpstreamKindHandler` (or
    `TlsPassthroughProvider` for a pre-HTTP kind).
 2. Declare `ID`, a `SETTINGS_SCHEMA`, the facets, and `createHandler`.
-3. Give each schema field a `HohenheimFormCopy.label`/`help` and add the microcopy keys,
+3. Give each schema field a `HohenheimMicrocopy.HOHENHEIM_FIELD`/`HELP` label and help and add the microcopy keys,
    plus the `upstream_kind` and `upstream_kind_description` entries in en and nl --
    `UpstreamKindVocabularyTest` fails until both languages carry them.
 4. Declare `requiresInstance()` if the kind resolves to an instance record.

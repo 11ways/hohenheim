@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -8,7 +10,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.DESTROY;
+import static be.elevenways.hohenheim.HohenheimCapabilities.DESTROY;
 
 /**
  * The service-side operation gates of the instance and managed-database tiers, with their
@@ -117,7 +119,7 @@ final class OperationGates {
      * to a POST, so neither surface is a capability oracle the other is not.
      */
     private static @NonNull Microcopy instanceNotPermitted() {
-        return HohenheimViolations.text("instance_not_permitted");
+        return HohenheimMicrocopy.VIOLATIONS.of("instance_not_permitted");
     }
 
     /**
@@ -148,11 +150,10 @@ final class OperationGates {
      * wider door than the others. Operator and system work (the nightly backup task, the
      * reconciler, seeds) passes untouched.
      *
-     * AIDEV-NOTE: the refusal never names the missing capability and is the SAME text a
-     * caller gets for a database they cannot see at all -- the instance tier's uniform
-     * refusal, for the same reason: a refusal that distinguishes the two is an oracle.
+     * AIDEV-NOTE: the refusal is {@link HohenheimViolations#databaseNotPermitted}, the uniform answer that never tells
+     * a denied database from one the caller cannot see; never a capability-naming refusal here.
      *
-     * @throws Violations {@code database_not_permitted}
+     * @throws Violations {@link HohenheimViolations#databaseNotPermitted}
      */
     static void requireDatabaseCapability(int databaseId, @NonNull String capability) {
         if (!TenantWrites.isTenantOriginated()) {
@@ -161,12 +162,7 @@ final class OperationGates {
         AccessContext ctx = TenantWrites.acting();
         if (ctx == null || !ctx.isAccount()
                 || !HohenheimAccess.hasDatabaseCapability(ctx, databaseId, capability)) {
-            throw databaseRefusal();
+            throw HohenheimViolations.databaseNotPermitted();
         }
-    }
-
-    /** THE uniform managed-database refusal; visibility, absence and denial are one answer. */
-    static @NonNull Violations databaseRefusal() {
-        return Violations.ofForm(HohenheimViolations.text("database_not_permitted"));
     }
 }

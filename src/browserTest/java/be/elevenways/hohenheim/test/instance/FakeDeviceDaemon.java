@@ -12,7 +12,6 @@ import be.elevenways.hohenheim.server.runtime.DeviceAttachSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -161,16 +160,6 @@ final class FakeDeviceDaemon {
         @Override public @NonNull Identifier typeId() { return ID; }
 
         @Override public @NonNull String getDisplayName() { return "Fake device-capable"; }
-
-        @Override
-        public @NonNull Microcopy getLabel() {
-            return Microcopy.of("fake_device_capable").withFilter("scope", "instance_kind");
-        }
-
-        @Override
-        public @NonNull Microcopy getDescription() {
-            return Microcopy.of("fake_device_capable").withFilter("scope", "instance_kind_description");
-        }
 
         @Override public Icon getIcon() { return Icon.of("flask"); }
 

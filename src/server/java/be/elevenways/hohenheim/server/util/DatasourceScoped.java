@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.util;
 
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 
@@ -29,10 +30,6 @@ public abstract class DatasourceScoped {
 
     /** Run a void model operation under this service's datasource scope. */
     protected void exec(Runnable body) {
-        if (datasource == null) {
-            body.run();
-        } else {
-            Db.run(datasource, body);
-        }
+        HandlerSupport.inScope(datasource, body);
     }
 }

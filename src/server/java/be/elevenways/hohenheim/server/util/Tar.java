@@ -17,11 +17,9 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -765,15 +763,8 @@ public final class Tar {
     }
 
     private static void applyMode(Path file, int mode) throws IOException {
-        Set<PosixFilePermission> permissions = EnumSet.noneOf(PosixFilePermission.class);
-        PosixFilePermission[] order = PosixFilePermission.values();
-        for (int bit = 0; bit < 9; bit++) {
-            if ((mode & (1 << (8 - bit))) != 0) {
-                permissions.add(order[bit]);
-            }
-        }
         try {
-            Files.setPosixFilePermissions(file, permissions);
+            Files.setPosixFilePermissions(file, PermissionBits.posix(mode));
         } catch (UnsupportedOperationException notPosix) {
             // the file keeps the default mode on a non-POSIX filesystem
         }

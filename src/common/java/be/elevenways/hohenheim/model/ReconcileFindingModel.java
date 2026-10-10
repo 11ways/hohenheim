@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -40,48 +40,48 @@ public class ReconcileFindingModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField SERVER_NAME = SCHEMA.addField(
-        StringField.builder().name("server_name").build());
+        StringField.builder().name("server_name")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("server")).build());
     public static final EnumField KIND = SCHEMA.addField(EnumField.builder("kind")
         .value("container", v -> v.displayName("Container")
-            .label(kindLabel("container")).icon("cube").color(ColorHue.BLUE))
+            .label(HohenheimMicrocopy.RECONCILE_KIND.of("container")).icon("cube").color(ColorHue.BLUE))
         .value("volume", v -> v.displayName("Volume")
-            .label(kindLabel("volume")).icon("database").color(ColorHue.PURPLE))
+            .label(HohenheimMicrocopy.RECONCILE_KIND.of("volume")).icon("database").color(ColorHue.PURPLE))
         .value("network", v -> v.displayName("Network")
-            .label(kindLabel("network")).icon("diagram-project").color(ColorHue.TEAL))
+            .label(HohenheimMicrocopy.RECONCILE_KIND.of("network")).icon("diagram-project").color(ColorHue.TEAL))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("kind"))
         .build());
-
-    /** The translation token for a found resource kind; the key IS the stored value. */
-    private static Microcopy kindLabel(String kind) {
-        return Microcopy.of(kind).withFilter("scope", "reconcile_kind");
-    }
     public static final StringField RESOURCE_NAME = SCHEMA.addField(
-        StringField.builder().name("resource_name").build());
+        StringField.builder().name("resource_name")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("resource_name")).build());
     public static final EnumField BUCKET = SCHEMA.addField(EnumField.builder("bucket")
         .value(BUCKET_OWNED, v -> v.displayName("Owned")
-            .label(bucketLabel(BUCKET_OWNED)).icon("circle-check").color(ColorHue.GREEN))
+            .label(HohenheimMicrocopy.RECONCILE_BUCKET.of(BUCKET_OWNED)).icon("circle-check").color(ColorHue.GREEN))
         .value(BUCKET_ORPHANED, v -> v.displayName("Orphaned")
-            .label(bucketLabel(BUCKET_ORPHANED)).icon("circle-exclamation").color(ColorHue.RED))
+            .label(HohenheimMicrocopy.RECONCILE_BUCKET.of(BUCKET_ORPHANED)).icon("circle-exclamation")
+            .color(ColorHue.RED))
         .value(BUCKET_FOREIGN_KNOWN, v -> v.displayName("Foreign (known)")
-            .label(bucketLabel(BUCKET_FOREIGN_KNOWN)).icon("circle-info").color(ColorHue.GRAY))
+            .label(HohenheimMicrocopy.RECONCILE_BUCKET.of(BUCKET_FOREIGN_KNOWN)).icon("circle-info")
+            .color(ColorHue.GRAY))
         .value(BUCKET_FOREIGN_COLLIDING, v -> v.displayName("Foreign (colliding)")
-            .label(bucketLabel(BUCKET_FOREIGN_COLLIDING)).icon("triangle-exclamation").color(ColorHue.ORANGE))
+            .label(HohenheimMicrocopy.RECONCILE_BUCKET.of(BUCKET_FOREIGN_COLLIDING)).icon("triangle-exclamation")
+            .color(ColorHue.ORANGE))
         .value(BUCKET_FOREIGN_UNRELATED, v -> v.displayName("Foreign (unrelated)")
-            .label(bucketLabel(BUCKET_FOREIGN_UNRELATED)).icon("circle").color(ColorHue.GRAY))
+            .label(HohenheimMicrocopy.RECONCILE_BUCKET.of(BUCKET_FOREIGN_UNRELATED)).icon("circle")
+            .color(ColorHue.GRAY))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("finding_bucket"))
         .build());
-
-    /** The translation token for an ownership bucket; the key IS the stored value. */
-    private static Microcopy bucketLabel(String bucket) {
-        return Microcopy.of(bucket).withFilter("scope", "reconcile_bucket");
-    }
     /** How the attribution was made: owner_label, stack_label, name, foreign_label or none. */
     public static final StringField EVIDENCE = SCHEMA.addField(
-        StringField.builder().name("evidence").build());
+        StringField.builder().name("evidence")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("evidence")).build());
     public static final StringField OWNER_MODEL = SCHEMA.addField(
         StringField.builder().name("owner_model").nullable(true).build());
     public static final StringField OWNER_ID = SCHEMA.addField(
         StringField.builder().name("owner_id").nullable(true).build());
     public static final StringField DETAIL = SCHEMA.addField(
-        StringField.builder().name("detail").nullable(true).build());
+        StringField.builder().name("detail").nullable(true)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("detail")).build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(

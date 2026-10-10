@@ -10,7 +10,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -45,6 +45,8 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
+import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
 
 /**
  * The slice-three entries' surfaces, admin and tenant twins, stored before the move and compared exactly after it;
@@ -57,23 +59,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * comparison is a changed /manage or /admin surface, never a file to refresh. A twin table entry states one
  * deliberate tenant difference; an unlisted difference fails closed.
  *
- * AIDEV-NOTE: intended difference (W1a, 2026-10-05): the admin domain row offers {@code request_domain_certificate}
- * before its delete; that one row fact is re-recorded in the stored set.
- *
- * AIDEV-NOTE: intended difference (W1b, 2026-10-05): the site form shows its instance pick only for the instance kind
- * (SiteWrites.ADMIN_FORM's showWhen). The page still renders it, wrapped as a conditional entry the browser toggles,
- * but the surface capture does not descend into conditional entries, so the admin site cases drop the
- * {@code instance_id} control and the later controls move up one place. Only those facts were re-recorded.
- *
- * AIDEV-NOTE: intended difference, app health (W3a, 2026-10-05): a site lands on its overview tab ({@code tab overview
- * landing=true}, the app composition), the admin list gains the framework health column, and a site that answers on no
- * name offers {@code site_add_address}, the health band's fix. Only those facts changed.
+ * AIDEV-NOTE: the admin site cases carry no {@code instance_id} control although the page renders it: the site form
+ * shows its instance pick only for the instance kind (SiteWrites.ADMIN_FORM's showWhen), as a conditional entry the
+ * browser toggles, and the surface capture does not descend into conditional entries.
  */
 class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
 
     private static final String PREFIX = "surfaces-";
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
-    private static final String MANAGE = HohenheimSlugs.MANAGE;
     private static final String SITES = HohenheimSlugs.SITES;
     private static final String DOMAINS = "domains";
     private static final String TEMPLATES = HohenheimSlugs.INSTANCE_TEMPLATES;
@@ -118,8 +110,9 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
         Models.get(SiteModel.class).save(trashedRow);
         approvedTemplateId = String.valueOf(template(PREFIX + "approved", true));
         unapprovedTemplateId = String.valueOf(template(PREFIX + "unapproved", false));
-        RecordGrants.grant(GrantSubjectType.USER, oneId, SiteModel.MODEL_ID, site, HohenheimAccess.MANAGE, true);
-        RecordGrants.grant(GrantSubjectType.USER, oneId, SiteModel.MODEL_ID, disabled, HohenheimAccess.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, oneId, SiteModel.MODEL_ID, site, HohenheimCapabilities.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, oneId, SiteModel.MODEL_ID, disabled, HohenheimCapabilities.MANAGE,
+            true);
         int viewId = ApiSupport.user(PREFIX + "view@hohenheim.local", "Surfaces Instance Viewer");
         int configId = ApiSupport.user(PREFIX + "config@hohenheim.local", "Surfaces Instance Configurer");
         int instance = instance(PREFIX + "instance");
@@ -127,10 +120,10 @@ class ManagePanelSurfacesBrowserTest extends HohenheimTestBase {
         diskId = String.valueOf(device(instance, InstanceDeviceModel.TYPE_DISK, "data"));
         cdromId = String.valueOf(device(instance, InstanceDeviceModel.TYPE_CDROM, "install"));
         unknownDeviceId = String.valueOf(unknownDevice(instance));
-        RecordGrants.grant(GrantSubjectType.USER, viewId, InstanceModel.MODEL_ID, instance, HohenheimAccess.VIEW,
+        RecordGrants.grant(GrantSubjectType.USER, viewId, InstanceModel.MODEL_ID, instance, HohenheimCapabilities.VIEW,
             true);
         RecordGrants.grant(GrantSubjectType.USER, configId, InstanceModel.MODEL_ID, instance,
-            HohenheimAccess.CONFIG, true);
+            HohenheimCapabilities.CONFIG, true);
         tenantView = access(new UserPrincipal(viewId, "Surfaces Instance Viewer"));
         tenantConfig = access(new UserPrincipal(configId, "Surfaces Instance Configurer"));
         operator = access(operatorPrincipal());

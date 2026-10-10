@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.auth.types;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.auth.SiteAuthContext;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
@@ -20,6 +20,7 @@ import be.elevenways.zenit.server.net.OutboundUrlGuard;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Proteus realm auth provider: gates proxied upstreams behind a remote Proteus realm and (when a
@@ -40,17 +41,17 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
     public static final Schema CONFIG_SCHEMA = new Schema();
     static {
         CONFIG_SCHEMA.addField(UrlField.builder().name(ENDPOINT)
-            .label(HohenheimFormCopy.label("proteus_endpoint"))
-            .help(HohenheimFormCopy.help("proteus_endpoint")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("proteus_endpoint"))
+            .help(HohenheimMicrocopy.HELP.of("proteus_endpoint")).build());
         CONFIG_SCHEMA.addField(StringField.builder().name(REALM_CLIENT)
-            .label(HohenheimFormCopy.label("proteus_realm_client"))
-            .help(HohenheimFormCopy.help("proteus_realm_client")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("proteus_realm_client"))
+            .help(HohenheimMicrocopy.HELP.of("proteus_realm_client")).build());
         CONFIG_SCHEMA.addField(StringField.builder().name(ACCESS_KEY).secret()
-            .label(HohenheimFormCopy.label("proteus_access_key"))
-            .help(HohenheimFormCopy.help("proteus_access_key")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("proteus_access_key"))
+            .help(HohenheimMicrocopy.HELP.of("proteus_access_key")).build());
         CONFIG_SCHEMA.addField(StringField.builder().name(AUTHENTICATOR)
-            .label(HohenheimFormCopy.label("proteus_authenticator"))
-            .help(HohenheimFormCopy.help("proteus_authenticator")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("proteus_authenticator"))
+            .help(HohenheimMicrocopy.HELP.of("proteus_authenticator")).build());
     }
 
     /**
@@ -89,13 +90,13 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
     @Override
     public SiteAuthGate createGate(SiteAuthContext context) {
         Map<String, Object> config = context.providerSettings();
-        String endpoint = str(config.get(ENDPOINT));
-        String realmClient = str(config.get(REALM_CLIENT));
-        String accessKey = str(config.get(ACCESS_KEY));
+        String endpoint = Objects.toString(config.get(ENDPOINT), null);
+        String realmClient = Objects.toString(config.get(REALM_CLIENT), null);
+        String accessKey = Objects.toString(config.get(ACCESS_KEY), null);
         // Blank = no forced slug: Proteus then serves its chooser page offering
         // every enabled authenticator. (The old blank->"password" default was a
         // bug: no such authenticator type exists, so blank configs failed closed.)
-        String authenticator = str(config.get(AUTHENTICATOR));
+        String authenticator = Objects.toString(config.get(AUTHENTICATOR), null);
         if (authenticator != null && authenticator.isBlank()) {
             authenticator = null;
         }
@@ -110,9 +111,5 @@ public class ProteusAuthProviderType implements SiteAuthProviderTypeHandler {
             String.valueOf(context.providerId()), endpoint, realmClient);
         return new ProteusAuthGate(context, client, authenticator,
             (int) Math.min(ttl, Integer.MAX_VALUE), binding);
-    }
-
-    private static String str(Object value) {
-        return value == null ? null : String.valueOf(value);
     }
 }

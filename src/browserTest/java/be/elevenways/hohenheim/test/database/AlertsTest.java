@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.database;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimEndpoints;
@@ -269,9 +270,9 @@ class AlertsTest {
         //    pre-rendered English) is queued the same way, through the one never-throwing
         //    helper every failure path uses.
         assertThat(Alerts.trySend(NotificationEvents.BACKUP_FAILED, Alerts.about(DatabaseModel.MODEL_ID, "shop"),
-                Microcopy.of("database_backup_failed_subject").withFilter("scope", "alert")
+                HohenheimMicrocopy.ALERT.of("database_backup_failed_subject")
                     .withArg("name", "shop"),
-                Microcopy.of("database_backup_failed_body").withFilter("scope", "alert")
+                HohenheimMicrocopy.ALERT.of("database_backup_failed_body")
                     .withArg("name", "shop").withArg("reason", "disk full")))
             .as("step 5: a Microcopy alert reaches the administrator's inbox too")
             .isEqualTo(1);
@@ -283,8 +284,9 @@ class AlertsTest {
         String phoenix = Alerts.about(ServerModel.MODEL_ID, 41);
         for (int occurrence = 0; occurrence < 3; occurrence++) {
             Alerts.send(NotificationEvents.HOST_UNREACHABLE, phoenix,
-                Alerts.copy("host_unreachable_subject").withArg("name", "phoenix"),
-                Alerts.copy("host_unreachable_body").withArg("failure", HostProbe.FailureKind.UNREACHABLE.label())
+                HohenheimMicrocopy.ALERT.of("host_unreachable_subject").withArg("name", "phoenix"),
+                HohenheimMicrocopy.ALERT.of("host_unreachable_body")
+                    .withArg("failure", HostProbe.FailureKind.UNREACHABLE.label())
                     .withArg("detail", "kex_exchange_identification: read: Connection reset by peer"));
         }
         List<Row> hostItems = Models.get(CommsInboxModel.class).find()
@@ -303,7 +305,7 @@ class AlertsTest {
         //    and inbox items are bookkeeping, never a row a person's command is headed by.
         long activity = Models.get(ActivityModel.class).find().count();
         Alerts.send(NotificationEvents.HOST_UNREACHABLE, Alerts.about(ServerModel.MODEL_ID, 42),
-            Alerts.copy("host_unreachable_subject").withArg("name", "kumulus"), null);
+            HohenheimMicrocopy.ALERT.of("host_unreachable_subject").withArg("name", "kumulus"), null);
         assertThat(Models.get(CommsInboxModel.class).find().all())
             .as("step 7: another host's alert stands beside it").hasSize(4);
         assertThat(Models.get(ActivityModel.class).find().count())

@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.RoutingProblem;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -144,7 +144,7 @@ class TenantUpstreamDialTest {
                                   Map<String, Object> settings, String hostname) {
         Row site = setupSite(kind, name, slug, settings);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, site.get(SiteModel.ID),
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         addDomain(site, hostname, "exact", null, false);
         return site;
     }

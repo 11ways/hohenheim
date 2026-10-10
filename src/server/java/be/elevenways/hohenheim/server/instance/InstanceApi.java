@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.instance.InstanceOperations.PowerResult;
 import be.elevenways.hohenheim.instance.InstanceOperations;
@@ -12,6 +14,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.api.ApiConduits;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
@@ -102,7 +105,7 @@ public final class InstanceApi {
      * @return the entry, or null when the response has already been ended (the uniform 404 of an instance-less node)
      */
     private static @Nullable PanelResource<Row> instances(@NonNull Conduit conduit) {
-        return ApiConduits.rowEntry(conduit, ApiConduits.adminPanel(), InstanceParts.SLUG);
+        return ApiConduits.rowEntry(conduit, ApiConduits.adminPanel(), HohenheimSlugs.INSTANCES);
     }
 
     public static void init() {
@@ -127,7 +130,7 @@ public final class InstanceApi {
             Operation<Row, Void, PowerResult> operation = POWER_ACTIONS.get(action);
             if (operation == null) {
                 return ApiConduits.refusal(conduit, Violations.ofField("action", action,
-                    ApiConduits.violationText("unknown_power_action")));
+                    HohenheimMicrocopy.VIOLATIONS.of("unknown_power_action")));
             }
             try {
                 OperationPipeline.invoke(OperationRequest.of(operation, ZenitPlacementSurface.HTTP_API)
@@ -149,7 +152,7 @@ public final class InstanceApi {
             String command = ApiConduits.formValue(conduit, "command");
             if (command.isEmpty()) {
                 return ApiConduits.refusal(conduit, Violations.ofField("command", command,
-                    ApiConduits.violationText("console_command_required")));
+                    HohenheimMicrocopy.VIOLATIONS.of("console_command_required")));
             }
             try {
                 // The operation's gate and InstanceConsoles' own funnel ask the console capability; this lane
@@ -221,7 +224,7 @@ public final class InstanceApi {
             if (template == null) {
                 return ApiConduits.refusal(conduit,
                     Violations.ofField("template_id", form.get("template_id"),
-                        ApiConduits.violationText("unknown_template")));
+                        HohenheimMicrocopy.VIOLATIONS.of("unknown_template")));
             }
             try {
                 // The SAME funnel the create page posts to: create authority, template
@@ -310,7 +313,7 @@ public final class InstanceApi {
             }
             if (!removed) {
                 return ApiConduits.refusal(conduit, Violations.ofField("key", key,
-                    ApiConduits.violationText("variable_not_found")));
+                    HohenheimMicrocopy.VIOLATIONS.of("variable_not_found")));
             }
             ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.VARIABLE_DELETED,
                 key);
@@ -474,7 +477,6 @@ public final class InstanceApi {
         };
     }
 
-
     /**
      * The instances this context may see: admins everything live, everyone else exactly
      * the ones the walk confirms {@code view} on. The SAME scope the /manage list renders,
@@ -485,7 +487,7 @@ public final class InstanceApi {
         // record's surface; the automation API never lists or drives them.
         var query = Models.get(InstanceModel.class).find()
             .where(InstanceModel.liveAuthored());
-        Criteria scope = HohenheimAccess.instanceScope(ctx, HohenheimAccess.VIEW);
+        Criteria scope = HohenheimAccess.instanceScope(ctx, HohenheimCapabilities.VIEW);
         if (scope != null) {
             query.where(scope);
         }
@@ -510,7 +512,7 @@ public final class InstanceApi {
             .where(InstanceModel.liveAuthored())
             .first();
         if (row == null || !HohenheimAccess.hasInstanceCapability(ctx, instanceId,
-                HohenheimAccess.VIEW)) {
+                HohenheimCapabilities.VIEW)) {
             conduit.notFound();
             return null;
         }
@@ -573,7 +575,7 @@ public final class InstanceApi {
     private static @NonNull ActionResult<Object> unknownDeviceType(@NonNull Conduit conduit,
                                                                   @NonNull String type) {
         return ApiConduits.refusal(conduit, Violations.ofField("type", type,
-            ApiConduits.violationText("device_type_unknown").withArg("type", type)));
+            HohenheimMicrocopy.VIOLATIONS.of("device_type_unknown").withArg("type", type)));
     }
 
     /** The requested tail length, clamped to a sane window (default 200, max 2000). */

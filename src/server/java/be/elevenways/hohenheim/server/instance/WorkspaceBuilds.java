@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -19,7 +22,6 @@ import be.elevenways.hohenheim.server.source.GitRepository;
 import be.elevenways.hohenheim.source.GitRefNames;
 import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.source.GitSourceSchema;
-import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -109,7 +111,7 @@ public final class WorkspaceBuilds {
         }
 
         return instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
-            && SiteSources.hasRepository(castSettings(map));
+            && SiteSources.hasRepository(RawValues.map(map));
     }
 
     /**
@@ -126,20 +128,21 @@ public final class WorkspaceBuilds {
      * push that arrived.
      *
      * @param  ref the branch/tag/sha to deploy, or null for the source's declared branch
+     * @param  pushedSha the commit a forge push named, which the forge hears about until a checkout lands its own
      * @throws Violations naming the refusal (no repository, declined start, checkout, build)
      */
-    public @NonNull Outcome deploy(int instanceId, @Nullable String ref,
+    public @NonNull Outcome deploy(int instanceId, @Nullable String ref, @Nullable String pushedSha,
                                    @NonNull DeployTrigger trigger) {
         // The whole verb holds the workspace's operation lock: the checkout is an exec into
         // the running container, and a second deploy's restart must not replace the
         // container under it. QUEUED, like the application lane: a push of N+1 during the
         // deploy of N must still deploy N+1.
         return this.instances.operations().exclusive(instanceId,
-            InstanceOperationLock.Contention.QUEUE, () -> deployLocked(instanceId, ref, trigger));
+            InstanceOperationLock.Contention.QUEUE, () -> deployLocked(instanceId, ref, pushedSha, trigger));
     }
 
     /** {@link #deploy}'s body; the caller holds the workspace's operation lock. */
-    private @NonNull Outcome deployLocked(int instanceId, @Nullable String ref,
+    private @NonNull Outcome deployLocked(int instanceId, @Nullable String ref, @Nullable String pushedSha,
                                           @NonNull DeployTrigger trigger) {
         // The same admission a power action asks for: a deploy replaces the running
         // process, and a workspace booted without its database credentials looks healthy.
@@ -150,10 +153,10 @@ public final class WorkspaceBuilds {
         Map<String, Object> settings = resolved.settings();
 
         if (!SiteSources.hasRepository(settings)) {
-            throw Violations.ofForm(HohenheimViolations.text("source_no_repository"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_no_repository"));
         }
 
-        String branch = ref != null && !ref.isBlank() ? ref : declaredBranch(settings);
+        String branch = ref != null && !ref.isBlank() ? ref : GitSourceSchema.declaredBranch(settings);
         BuildLog log = new BuildLog(BuildQuota.fromSettings().logBytes());
         long startedAt = Now.millis();
         // The durable in-flight mark, SandboxedBuilds' contract verbatim: it lands before
@@ -174,9 +177,9 @@ public final class WorkspaceBuilds {
             log.line("[hohenheim] not deployed: " + message);
             // REFUSED, not FAILED: nothing broke. The row is the honest record that the
             // push arrived, which branch it named, and what was decided about it.
-            finish(operationId, BuildOperationModel.STATUS_REFUSED, null, message, log,
+            finish(operationId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.REFUSED), null, message, log,
                 startedAt);
-            reportDeclined(settings, message);
+            DeployStatuses.deployDeclined(settings, pushedSha, message);
             throw Violations.ofForm(declined);
         }
 
@@ -184,7 +187,7 @@ public final class WorkspaceBuilds {
         // good checkout still names that commit on its row, never the branch it started from.
         String commitSha = null;
         try {
-            DeployStatuses.report(settings, null, GitProviderClient.StatusState.PENDING,
+            DeployStatuses.report(settings, pushedSha, GitProviderClient.StatusState.PENDING,
                 DeployStatuses.CONTEXT_DEPLOY, "Deploying", null);
             log.line("[hohenheim] deploying " + branch);
             ensureRunning(instanceId, state);
@@ -199,7 +202,7 @@ public final class WorkspaceBuilds {
                 HohenheimActivityAction.DEPLOYED, trigger.word());
             DeployStatuses.report(settings, commitSha, GitProviderClient.StatusState.SUCCESS,
                 DeployStatuses.CONTEXT_DEPLOY, "Deployed", null);
-            finish(operationId, BuildOperationModel.STATUS_SUCCEEDED, commitSha, null, log,
+            finish(operationId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), commitSha, null, log,
                 startedAt);
             return new Outcome(commitSha, built, log.text(), status, operationId);
         } catch (RuntimeException failed) {
@@ -207,9 +210,9 @@ public final class WorkspaceBuilds {
             // Appended THROUGH the log, so the secrets the checkout registered are redacted
             // out of a refusal that quotes git's own output back.
             log.line("[hohenheim] deploy failed: " + message);
-            finish(operationId, BuildOperationModel.STATUS_FAILED, commitSha, message, log,
+            finish(operationId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), commitSha, message, log,
                 startedAt);
-            reportFailure(settings, commitSha, message);
+            DeployStatuses.deployFailed(settings, commitSha != null ? commitSha : pushedSha, message);
             throw failed;
         }
     }
@@ -226,29 +229,6 @@ public final class WorkspaceBuilds {
         }
     }
 
-    /** Tell the forge the push landed and was deliberately not deployed. */
-    private static void reportDeclined(@NonNull Map<String, Object> settings,
-                                       @NonNull String message) {
-        try {
-            DeployStatuses.report(settings, null, GitProviderClient.StatusState.FAILURE,
-                DeployStatuses.CONTEXT_DEPLOY, "Not deployed: " + message, null);
-        } catch (RuntimeException unreported) {
-            Blast.log("WORKSPACE: could not report the declined deploy -",
-                unreported.getMessage());
-        }
-    }
-
-    /** {@link #deploy} for fire-and-forget callers (webhooks); refusals are logged. */
-    public void deployQuietly(int instanceId, @Nullable String ref,
-                              @NonNull DeployTrigger trigger) {
-        try {
-            deploy(instanceId, ref, trigger);
-        } catch (RuntimeException refused) {
-            Blast.log("WORKSPACE: deploy of workspace", instanceId, "refused -",
-                refused.getMessage());
-        }
-    }
-
     /**
      * Clone or fetch the declared ref into {@link #CHECKOUT_PATH}, inside the container.
      *
@@ -257,30 +237,25 @@ public final class WorkspaceBuilds {
     public String checkout(@NonNull Resolved resolved, @NonNull String ref,
                     @NonNull Map<String, Object> settings, @NonNull BuildLog log) {
 
-        String boundUrl = GitProviders.boundCloneUrl(settings);
-        String repository = boundUrl != null ? boundUrl : str(settings.get("repository_url"));
-
-        if (repository.isEmpty()) {
-            throw Violations.ofForm(HohenheimViolations.text("source_no_repository"));
-        }
+        String repository = GitProviders.requireCloneUrl(settings);
         // Both reach git's argv inside the container: a ref git would read as an option (or
         // that is no ref at all) and a transport helper URL (ext::) are refused before the
         // script exists, stored values from before the write gate included.
         if (!GitRefNames.isValid(ref)) {
-            throw Violations.ofForm(HohenheimViolations.text("source_ref_invalid"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_ref_invalid"));
         }
         if (!GitRepository.isSupportedCloneUrl(repository)) {
-            throw Violations.ofForm(HohenheimViolations.text("source_repository_url_refused"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_repository_url_refused"));
         }
 
         Map<String, String> credentials = Map.of();
 
-        if (boundUrl != null) {
+        if (GitProviders.bindingOf(settings) != null) {
             try {
                 Map<String, String> env = GitProviders.credentialEnv(settings);
                 credentials = env == null ? Map.of() : env;
             } catch (IOException unavailable) {
-                throw Violations.ofForm(HohenheimViolations.text("source_checkout_failed")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_checkout_failed")
                     .withArg("reason", String.valueOf(unavailable.getMessage())));
             }
         }
@@ -321,14 +296,14 @@ public final class WorkspaceBuilds {
         log.append(run.outputTail());
 
         if (!run.succeeded()) {
-            throw Violations.ofForm(HohenheimViolations.text("source_checkout_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_checkout_failed")
                 .withArg("reason", excerpt(run.outputTail())));
         }
 
         String commit = markedCommit(run.outputTail());
 
         if (commit.isBlank()) {
-            throw Violations.ofForm(HohenheimViolations.text("source_checkout_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_checkout_failed")
                 .withArg("reason", "no commit identity"));
         }
 
@@ -366,7 +341,7 @@ public final class WorkspaceBuilds {
         if (!run.succeeded()) {
             // The exit code, never the output: the whole output is the build log beside the
             // reason, and a pasted npm dump made the reason unreadable on the Deploys tab.
-            throw Violations.ofForm(HohenheimViolations.text("workspace_build_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("workspace_build_failed")
                 .withArg("code", run.exitCode()));
         }
 
@@ -386,13 +361,13 @@ public final class WorkspaceBuilds {
                                                   ExecSupport.@NonNull ExecOptions options,
                                                   long timeoutMs) {
         if (!(resolved.runtime() instanceof ExecSupport support)) {
-            throw Violations.ofForm(HohenheimViolations.text("exec_unsupported"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("exec_unsupported"));
         }
         try {
             return support.runExec(resolved.spec(), List.of("/bin/bash", "-lc", script),
                 options, timeoutMs);
         } catch (IOException failed) {
-            throw Violations.ofForm(HohenheimViolations.text("workspace_exec_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("workspace_exec_failed")
                 .withArg("reason", String.valueOf(failed.getMessage())));
         }
     }
@@ -415,7 +390,7 @@ public final class WorkspaceBuilds {
         row.set(BuildOperationModel.BUILDER_KIND, BuildOperationModel.KIND_WORKSPACE);
         row.set(BuildOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
         row.set(BuildOperationModel.FOR_ID, instanceId);
-        row.set(BuildOperationModel.STATUS, BuildOperationModel.STATUS_RUNNING);
+        row.set(BuildOperationModel.STATUS, BuildOperationModel.LIFECYCLE.stored(OperationStatus.RUNNING));
         row.set(BuildOperationModel.SOURCE_REF, branch);
         row.set(BuildOperationModel.TIMEOUT_SECONDS, (int) (BUILD_TIMEOUT_MS / 1000));
         row.set(BuildOperationModel.STARTED_AT, Now.instant());
@@ -447,26 +422,9 @@ public final class WorkspaceBuilds {
             row.get(BuildOperationModel.FOR_ID), SandboxedBuilds.historyPerOwner());
     }
 
-    /** The branch a source declares, defaulting to {@code main}. */
-    static @NonNull String declaredBranch(@NonNull Map<String, Object> settings) {
-        String branch = str(settings.get(GitSourceSchema.BRANCH));
-        return branch.isEmpty() ? "main" : branch;
-    }
-
     private static void requireWorkspace(@NonNull Resolved resolved) {
         if (!WorkspaceKind.ID.equals(resolved.handler().typeId())) {
-            throw Violations.ofForm(HohenheimViolations.text("workspace_kind_required"));
-        }
-    }
-
-    private static void reportFailure(@NonNull Map<String, Object> settings,
-                                      @Nullable String commitSha, @Nullable String reason) {
-        try {
-            DeployStatuses.report(settings, commitSha, GitProviderClient.StatusState.FAILURE,
-                DeployStatuses.CONTEXT_DEPLOY, "Deploy failed: " + reason, null);
-        } catch (RuntimeException unreported) {
-            Blast.log("WORKSPACE: could not report the deploy failure -",
-                unreported.getMessage());
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("workspace_kind_required"));
         }
     }
 
@@ -509,15 +467,5 @@ public final class WorkspaceBuilds {
         }
         String text = String.join(" ", lines.subList(Math.max(0, lines.size() - EXCERPT_LINES), lines.size()));
         return text.length() <= EXCERPT_CHARS ? text : "..." + text.substring(text.length() - EXCERPT_CHARS);
-    }
-
-
-    private static @NonNull String str(@Nullable Object value) {
-        return value == null ? "" : value.toString().trim();
-    }
-
-    @SuppressWarnings("unchecked")
-    private static @NonNull Map<String, Object> castSettings(@NonNull Map<?, ?> settings) {
-        return (Map<String, Object>) settings;
     }
 }

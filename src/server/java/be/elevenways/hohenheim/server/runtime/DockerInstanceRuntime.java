@@ -1,12 +1,16 @@
 package be.elevenways.hohenheim.server.runtime;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerPtyExec;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
+import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.hohenheim.server.util.PermissionBits;
 
+import be.elevenways.hohenheim.server.util.PosixPaths;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 
@@ -108,6 +112,16 @@ public final class DockerInstanceRuntime
         this.posture = posture;
         this.egress = egress;
         this.ptyTransport = ptyTransport;
+    }
+
+    /**
+     * The driver of a Docker kind on the named host: its private network under the host's policy, and no shell.
+     *
+     * @param egress the KIND-declared egress posture
+     */
+    public static @NonNull DockerInstanceRuntime onServer(@NonNull String serverName, @NonNull Egress egress) {
+        return new DockerInstanceRuntime(new ServerService().clientFor(serverName),
+            WorkloadNetworkPolicy.forServer(serverName), NetworkPosture.PRIVATE, egress);
     }
 
     /** The KIND-declared network posture this runtime was built with. */
@@ -394,7 +408,7 @@ public final class DockerInstanceRuntime
             requireMaterialized(spec, containerPath);
             // The captured tar is rooted at the directory's basename (Docker's archive
             // envelope), so it extracts at the PARENT of the mount path.
-            this.docker.putArchiveTar(spec.handle(), parentOf(containerPath), tar.getValue());
+            this.docker.putArchiveTar(spec.handle(), PosixPaths.parentOf(containerPath), tar.getValue());
         }
     }
 
@@ -498,14 +512,7 @@ public final class DockerInstanceRuntime
 
     private static void applyMode(java.nio.file.Path file, String mode) throws IOException {
         try {
-            int octal = Integer.parseInt(mode, 8);
-            StringBuilder permissions = new StringBuilder(9);
-            String symbols = "rwxrwxrwx";
-            for (int bit = 8; bit >= 0; bit--) {
-                permissions.append((octal & (1 << bit)) != 0 ? symbols.charAt(8 - bit) : '-');
-            }
-            java.nio.file.Files.setPosixFilePermissions(file,
-                java.nio.file.attribute.PosixFilePermissions.fromString(permissions.toString()));
+            java.nio.file.Files.setPosixFilePermissions(file, PermissionBits.posix(Integer.parseInt(mode, 8)));
         } catch (NumberFormatException error) {
             throw new IOException("Bad file mode '" + mode + "' (expected octal like 0644)");
         } catch (UnsupportedOperationException unsupported) {
@@ -607,7 +614,7 @@ public final class DockerInstanceRuntime
             return null;
         }
         return new Entry(name.substring(prefix.length()), kindOfStatMode(mode), size, modified,
-            octalPermissions(mode));
+            PermissionBits.octal(mode));
     }
 
     /** POSIX {@code st_mode} type nibble, as {@code stat -c %f} reports it. */
@@ -620,22 +627,13 @@ public final class DockerInstanceRuntime
         };
     }
 
-    private static @NonNull String octalPermissions(long mode) {
-        StringBuilder octal = new StringBuilder(Long.toOctalString(mode & 0777));
-        while (octal.length() < 4) {
-            octal.insert(0, '0');
-        }
-        return octal.toString();
-    }
-
     @Override
     public @NonNull Entry stat(@NonNull String handle, @NonNull String path) throws IOException {
         DockerClient.PathStat stat = this.docker.statArchivePath(handle, path);
         Kind kind = stat.isSymlink() ? Kind.SYMLINK
             : stat.isDirectory() ? Kind.DIRECTORY
             : stat.isRegularFile() ? Kind.FILE : Kind.OTHER;
-        int slash = path.lastIndexOf('/');
-        return new Entry(slash < 0 ? path : path.substring(slash + 1), kind, stat.size(), 0,
+        return new Entry(PosixPaths.nameOf(path), kind, stat.size(), 0,
             stat.permissions());
     }
 
@@ -656,9 +654,8 @@ public final class DockerInstanceRuntime
                           @NonNull String mode, @NonNull Map<String, String> ownerLabels)
             throws IOException {
         requireOurs(handle, ownerLabels, "write a file into");
-        int slash = path.lastIndexOf('/');
-        String directory = slash <= 0 ? "/" : path.substring(0, slash);
-        String name = path.substring(slash + 1);
+        String directory = PosixPaths.parentOf(path);
+        String name = PosixPaths.nameOf(path);
 
         Path staging = Files.createTempDirectory("hohenheim-file-manager");
         try {
@@ -679,11 +676,10 @@ public final class DockerInstanceRuntime
                               @NonNull String mode, @NonNull Map<String, String> ownerLabels)
             throws IOException {
         requireOurs(handle, ownerLabels, "write a file into");
-        int slash = path.lastIndexOf('/');
-        String directory = slash <= 0 ? "/" : path.substring(0, slash);
+        String directory = PosixPaths.parentOf(path);
         applyMode(source, mode);
         // One file entry named after the target, its bytes streamed from the source file.
-        this.docker.putArchiveFile(handle, directory, source, path.substring(slash + 1));
+        this.docker.putArchiveFile(handle, directory, source, PosixPaths.nameOf(path));
         ownByDirectory(handle, path, directory);
     }
 
@@ -850,7 +846,7 @@ public final class DockerInstanceRuntime
             // which a caller could ask for another.
             session = DockerPtyExec.open(transport, spec.handle(), command,
                 spec.runUser() == null ? null : String.valueOf(spec.runUser()),
-                null, Map.of("TERM", "xterm-256color"), cols, rows);
+                null, Map.of(ConsoleStreamSupport.TERM_VARIABLE, ConsoleStreamSupport.TERM_VALUE), cols, rows);
         } catch (DockerClient.ApiException e) {
             // 409 = not running; 404 = no such container. Named, so an operator can tell
             // "the workload refused" from "the daemon is gone".
@@ -928,7 +924,7 @@ public final class DockerInstanceRuntime
         if (Boolean.TRUE.equals(state.get("Running"))) {
             return null;
         }
-        return state.get("ExitCode") instanceof Number code ? code.intValue() : -1;
+        return RawValues.intOr(state.get("ExitCode"), -1);
     }
 
     // -- InstallSupport -------------------------------------------------------
@@ -1012,8 +1008,7 @@ public final class DockerInstanceRuntime
                 boolean running = state instanceof Map<?, ?> s
                     && Boolean.TRUE.equals(s.get("Running"));
                 if (!running) {
-                    int exitCode = state instanceof Map<?, ?> s
-                        && s.get("ExitCode") instanceof Number code ? code.intValue() : -1;
+                    int exitCode = RawValues.intOr(RawValues.map(state).get("ExitCode"), -1);
                     String tail = "";
                     try {
                         tail = this.docker.containerLogs(handle, true, true, 100);
@@ -1058,14 +1053,6 @@ public final class DockerInstanceRuntime
         }
         throw new IOException("Instance '" + spec.handle() + "' declares no volume mounted at '"
             + containerPath + "'; the snapshot inventory and the instance settings disagree");
-    }
-
-    /** The parent directory of a mount path ("/data" -> "/"). */
-    private static String parentOf(String containerPath) {
-        String normalized = containerPath.endsWith("/") && containerPath.length() > 1
-            ? containerPath.substring(0, containerPath.length() - 1) : containerPath;
-        int slash = normalized.lastIndexOf('/');
-        return slash <= 0 ? "/" : normalized.substring(0, slash);
     }
 
     /**

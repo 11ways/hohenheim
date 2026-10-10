@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceFileModel;
@@ -36,20 +38,17 @@ import java.util.Map;
  */
 public final class InstanceProvisioningPage implements RecordTab.Rendered<Row> {
 
-    /** The tab's slug, which the variables child list names as its parent tab. */
-    public static final String SLUG = "provisioning";
-
     /** The admin config-file resource's slug; the panel is asked for it, never assumed. */
-    private static final String FILE_RESOURCE_SLUG = InstanceFileParts.SLUG;
+    private static final String FILE_RESOURCE_SLUG = HohenheimSlugs.INSTANCE_FILES;
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_provisioning"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("provisioning").withFilter("scope", "instance"); }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE.of("provisioning"); }
     /**
      * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
      * menu so the visible strip stays the handful of tabs an operator opens daily.
      */
     @Override public boolean secondaryTab() { return true; }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.PROVISIONING; }
     @Override public @NonNull Icon icon() { return Icon.of("wand-magic-sparkles"); }
 
     /**
@@ -91,18 +90,18 @@ public final class InstanceProvisioningPage implements RecordTab.Rendered<Row> {
         vars.put("templateName", template != null
             ? String.valueOf((Object) template.get(InstanceTemplateModel.NAME)) : "");
         vars.put("installState", installState == null ? InstanceModel.INSTALL_NONE : installState);
-        vars.put("installStateLabel", Microcopy.of(
-                installState == null ? InstanceModel.INSTALL_NONE : installState)
-            .withFilter("scope", "install_state"));
+        vars.put("installStateLabel", HohenheimMicrocopy.INSTALL_STATE.of(
+                installState == null ? InstanceModel.INSTALL_NONE : installState));
         // AIDEV-NOTE: the SECOND surface of the same leak InstanceOverview's
         // installError note describes -- this tab renders under /manage too, and the
         // stored text is the daemon's or transport's own. The install-state label above
         // carries the fact; the reason stays on the operator panel.
-        String installError = ManagePanel.SLUG.equals(panel)
+        String installError = HohenheimSlugs.MANAGE.equals(panel)
             ? null : instance.get(InstanceModel.INSTALL_ERROR);
         vars.put("installError", installError == null ? "" : installError);
         vars.put("sections", ChildListSections.embedded(request,
-            CmsSupport.rowEntry(request.panel(), InstanceParts.SLUG), instance, InstanceVariableParts.PROVISIONING));
+            CmsSupport.rowEntry(request.panel(), HohenheimSlugs.INSTANCES), instance,
+                InstanceVariableParts.PROVISIONING));
         vars.put("panelSlug", panel);
         vars.put("files", files);
         // Create form + prefill query parameter: composed off CmsEndpoints, since

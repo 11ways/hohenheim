@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceShell;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -76,12 +77,12 @@ class InstanceShellGateTest extends HohenheimTestBase {
         // The delegation under test: `shell` on both records, and nothing else.
         for (int instanceId : List.of(rootWorkloadId, incusWorkspaceId)) {
             RecordGrants.grant(GrantSubjectType.USER, shellUserId, InstanceModel.MODEL_ID,
-                instanceId, HohenheimAccess.SHELL, true);
+                instanceId, HohenheimCapabilities.SHELL, true);
         }
         // The counterfactual delegate: console is the OTHER terminal verb, and it must not
         // reach this one.
         RecordGrants.grant(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID,
-            rootWorkloadId, HohenheimAccess.CONSOLE, true);
+            rootWorkloadId, HohenheimCapabilities.CONSOLE, true);
 
         shellSession = sessionFor(shellUserId).token();
         consoleSession = sessionFor(consoleUserId).token();
@@ -246,19 +247,19 @@ class InstanceShellGateTest extends HohenheimTestBase {
     void manageDoesNotImplyShell() {
         int managerId = ApiSupport.user("manager@shellgate.test", "Manager");
         RecordGrants.grant(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID,
-            rootWorkloadId, HohenheimAccess.MANAGE, true);
+            rootWorkloadId, HohenheimCapabilities.MANAGE, true);
         Principal manager = new UserPrincipal(managerId, "Manager");
 
         // 1. Positive anchor: manage really does imply the verbs it is documented to imply.
         assertThat(HohenheimAccess.hasInstanceCapability(
-                manager, rootWorkloadId, HohenheimAccess.CONSOLE))
+                manager, rootWorkloadId, HohenheimCapabilities.CONSOLE))
             .as("step 1: manage implies console")
             .isTrue();
 
         // 2. ...and does NOT reach shell. Implication is retroactive, so folding shell in
         //    would hand a terminal to every already-stored manage grant.
         assertThat(HohenheimAccess.hasInstanceCapability(
-                manager, rootWorkloadId, HohenheimAccess.SHELL))
+                manager, rootWorkloadId, HohenheimCapabilities.SHELL))
             .withFailMessage("step 2: manage implies SHELL -- that silently grants an"
                 + " interactive terminal to every manage grant already in the database")
             .isFalse();

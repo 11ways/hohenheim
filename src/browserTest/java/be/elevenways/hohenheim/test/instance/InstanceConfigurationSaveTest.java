@@ -6,7 +6,6 @@ import be.elevenways.zenit.cms.server.panel.PartsForms;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.test.PanelEntryViews;
-import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -42,8 +41,9 @@ class InstanceConfigurationSaveTest extends HohenheimTestBase {
     void bothResourceWritersPreserveTheWinningStatusAndFence() {
         int id = instance("configuration-direct");
         try {
-            for (PanelResource<Row> resource : List.of(PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG),
-                    PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceParts.SLUG))) {
+            for (PanelResource<Row> resource : List.of(PanelEntryViews.of(HohenheimSlugs.ADMIN,
+                HohenheimSlugs.INSTANCES),
+                    PanelEntryViews.of(HohenheimSlugs.MANAGE, HohenheimSlugs.INSTANCES))) {
                 outcome(id, InstanceModel.STATUS_RUNNING, 7L);
                 Row stale = Models.get(InstanceModel.class).findById(id);
                 // 1. An existing holder still carries its old operation fields, even if they were explicitly staged.
@@ -64,7 +64,7 @@ class InstanceConfigurationSaveTest extends HohenheimTestBase {
         int id = instance("configuration-request");
         try {
             outcome(id, InstanceModel.STATUS_RUNNING, 7L);
-            PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceParts.SLUG);
+            PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, HohenheimSlugs.INSTANCES);
             Row loaded = Models.get(InstanceModel.class).findById(id);
             String snapshot = FormConcurrency.token(PartsForms.formSpec(resource),
                 PartsReads.valuesFromRow(resource, loaded));

@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -31,7 +31,8 @@ public class InstanceTemplateVolumeModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
     public static final IntegerField TEMPLATE_ID = SCHEMA.addField(
-        IntegerField.builder().name("template_id").build());
+        IntegerField.builder().name("template_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("template")).build());
 
     /** The owning template, declared so its delete takes the volumes along (InstanceCatalogGuards). */
     public static final BelongsTo<InstanceTemplateModel> TEMPLATE = SCHEMA.addRelation(
@@ -43,27 +44,27 @@ public class InstanceTemplateVolumeModel extends Model {
 
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .required()
-        .label(HohenheimFormCopy.label("volume_name"))
-        .help(HohenheimFormCopy.help("volume_name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("volume_name"))
+        .help(HohenheimMicrocopy.HELP.of("volume_name"))
         .build());
 
     public static final StringField CONTAINER_PATH = SCHEMA.addField(
         StringField.builder().name("container_path")
             .required()
-            .label(HohenheimFormCopy.label("container_path"))
-            .help(HohenheimFormCopy.help("container_path"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_path"))
+            .help(HohenheimMicrocopy.HELP.of("container_path"))
             .build());
 
     public static final LongField QUOTA_BYTES = SCHEMA.addField(
         LongField.builder().name("quota_bytes")
-            .label(HohenheimFormCopy.label("quota_bytes"))
-            .help(HohenheimFormCopy.help("quota_bytes"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("quota_bytes"))
+            .help(HohenheimMicrocopy.HELP.of("quota_bytes"))
             .build());
 
     public static final BooleanField EXCLUSIVE = SCHEMA.addField(
         BooleanField.builder("exclusive").defaultValue(false)
-            .label(HohenheimFormCopy.label("exclusive_volume"))
-            .help(HohenheimFormCopy.help("exclusive_volume"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("exclusive_volume"))
+            .help(HohenheimMicrocopy.HELP.of("exclusive_volume"))
             .build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
@@ -41,8 +43,8 @@ public final class SpamserviceOperations {
     /** Calls the management status endpoint; the result is the status the service reports. */
     public static final Operation<Void, Void, String> TEST = Operation.declare(HohenheimIds.id("spamservice_test"))
         .happened(OperationSentences.of("spamservice_test"))
-        .label(words("test"))
-        .description(words("test_hint"))
+        .label(HohenheimMicrocopy.SPAMSERVICE.of("test"))
+        .description(HohenheimMicrocopy.SPAMSERVICE.of("test_hint"))
         .icon(Icon.of("stethoscope"))
         .noSubject()
         .gate(OPERATOR)
@@ -83,17 +85,12 @@ public final class SpamserviceOperations {
         // The static initializer did the work.
     }
 
-    /** @return the spamservice scope's words for {@code key} */
-    static @NonNull Microcopy words(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "spamservice");
-    }
-
     private static @NonNull Operation<Void, Void, Void> lifecycle(@NonNull String name, @NonNull String icon,
                                                                  boolean destructive) {
         Operation.Builder<Void, Void, Void> builder = Operation.declare(HohenheimIds.id("spamservice_" + name))
             .happened(OperationSentences.of("spamservice_" + name))
-            .label(words(name))
-            .description(words(name + "_hint"))
+            .label(HohenheimMicrocopy.SPAMSERVICE.of(name))
+            .description(HohenheimMicrocopy.SPAMSERVICE.of(name + "_hint"))
             .icon(Icon.of(icon))
             .noSubject()
             .gate(OPERATOR);
@@ -118,7 +115,8 @@ public final class SpamserviceOperations {
             // The clientlib's message IS the diagnosis (connection refused, 401, a body the
             // service refused); swallowing it into cms.action.failed is what left the operator
             // with nothing to act on.
-            throw Violations.ofForm(words("test_failed").withArg("reason", reasonOf(failure)));
+            throw Violations.ofForm(HohenheimMicrocopy.SPAMSERVICE.of("test_failed")
+                .withArg("reason", HohenheimViolations.reasonOf(failure)));
         }
     }
 
@@ -126,10 +124,10 @@ public final class SpamserviceOperations {
     static @Nullable Microcopy configurationReason(@NonNull SpamserviceManager manager) {
         SpamserviceManager.Snapshot snapshot = manager.snapshot();
         if (!snapshot.configured()) {
-            return words("not_configured");
+            return HohenheimMicrocopy.SPAMSERVICE.of("not_configured");
         }
         if (!snapshot.enabled()) {
-            return words("not_enabled");
+            return HohenheimMicrocopy.SPAMSERVICE.of("not_enabled");
         }
         return null;
     }
@@ -140,7 +138,7 @@ public final class SpamserviceOperations {
         if (configuration != null) {
             return configuration;
         }
-        return manager.snapshot().pid() == null ? words("not_running") : null;
+        return manager.snapshot().pid() == null ? HohenheimMicrocopy.SPAMSERVICE.of("not_running") : null;
     }
 
     /** Why the management API cannot be called, or null when a client is installed. */
@@ -149,11 +147,6 @@ public final class SpamserviceOperations {
         if (running != null) {
             return running;
         }
-        return manager.client() == null ? words("not_connected") : null;
-    }
-
-    private static @NonNull String reasonOf(@NonNull Throwable failure) {
-        String message = failure.getMessage();
-        return message == null || message.isBlank() ? failure.getClass().getSimpleName() : message;
+        return manager.client() == null ? HohenheimMicrocopy.SPAMSERVICE.of("not_connected") : null;
     }
 }

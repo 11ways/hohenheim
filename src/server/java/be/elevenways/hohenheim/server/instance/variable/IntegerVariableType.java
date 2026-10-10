@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.instance.variable;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -24,12 +24,12 @@ public final class IntegerVariableType implements VariableTypeHandler {
 
     public static final IntegerField MIN = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("min")
-            .label(HohenheimFormCopy.label("variable_min"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_min"))
             .build());
 
     public static final IntegerField MAX = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("max")
-            .label(HohenheimFormCopy.label("variable_max"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_max"))
             .build());
 
     @Override
@@ -37,11 +37,6 @@ public final class IntegerVariableType implements VariableTypeHandler {
 
     @Override
     public @NonNull String getDisplayName() { return "Number"; }
-
-    @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("integer").withFilter("scope", "variable_type");
-    }
 
     @Override
     public Icon getIcon() { return Icon.of("hashtag"); }

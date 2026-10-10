@@ -1,8 +1,11 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
@@ -12,11 +15,13 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
+import be.elevenways.hohenheim.model.Retention;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.BootSettle;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -42,13 +47,14 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.hohenheim.server.util.Sha256;
+import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
@@ -59,8 +65,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -83,8 +87,9 @@ import java.util.Set;
  */
 public final class InstanceBackups {
 
-    private static final DateTimeFormatter STAMP =
-        DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
+    private static final Retention.InstanceCaptures RETENTION = new Retention.InstanceCaptures(InstanceBackupModel.class,
+        InstanceBackupModel.ID, InstanceBackupModel.INSTANCE_ID, InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_COMPLETE,
+        HohenheimSettings.Backup.RETENTION, "BACKUP");
 
     private final @NonNull InstanceService instances;
 
@@ -110,7 +115,7 @@ public final class InstanceBackups {
         // to any caller who could merely SEE the instance, against the uniform-refusal
         // doctrine requireOperationCapability documents. The explicit-target overload
         // asks again; the double ask is idempotent and keeps that entry gated too.
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.BACKUPS);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.BACKUPS);
         Row row = requireRow(instanceId);
         Integer targetId = row.get(InstanceModel.BACKUP_TARGET_ID);
         return backupNow(instanceId, targetId, BackupTargetKinds.targetFor(targetId));
@@ -123,7 +128,7 @@ public final class InstanceBackups {
      * the admin, a schedule step); no surface writes one of its own.
      */
     public int backupNow(int instanceId, @Nullable Integer targetId, @NonNull BackupTarget target) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.BACKUPS);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.BACKUPS);
         Row owner = requireRow(instanceId);
         int backupId;
         if (InstanceKinds.isReleaseManaged(owner.get(InstanceModel.KIND))) {
@@ -147,8 +152,7 @@ public final class InstanceBackups {
     private int backupApplication(int instanceId, @Nullable Integer targetId,
                                   @NonNull BackupTarget target) {
         Row owner = requireRow(instanceId);
-        Map<String, Object> sourceSettings = owner.get(InstanceModel.SETTINGS)
-            instanceof Map<?, ?> map ? castSettings(map) : Map.of();
+        Map<String, Object> sourceSettings = RawValues.map(owner.get(InstanceModel.SETTINGS));
         if (SiteSources.hasRepository(sourceSettings)
                 || sourceSettings.containsKey("build_context")) {
             throw HohenheimViolations.instanceRefusal("instance_backup_failed", owner,
@@ -183,17 +187,17 @@ public final class InstanceBackups {
         try {
             target.healthCheck();
         } catch (IOException unhealthy) {
-            throw Violations.ofForm(HohenheimViolations.text("backup_target_unhealthy")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_target_unhealthy")
                 .withArg("reason", HohenheimViolations.reasonOf(unhealthy)));
         }
-        InstanceStatus live = resolved.runtime().status(resolved.spec().handle());
+        InstanceStatus live = resolved.liveStatus();
         InstanceSnapshots.requirePresent(live, resolved);
         boolean wasRunning = live.running();
         if (application) {
             requireCoherentApplication(owner, resolved);
         }
 
-        String stamp = STAMP.format(Now.instant());
+        String stamp = UtcStamp.now();
         Path staging = stagingRoot().resolve("backup-" + instanceId + "-" + stamp);
         BackupManifest.ApplicationEntry applicationEntry = null;
         ImageIdentity applicationImage = null;
@@ -437,7 +441,7 @@ public final class InstanceBackups {
      */
     private static void refuseTenantRestore() {
         if (TenantWrites.isTenantOriginated()) {
-            throw Violations.ofForm(HohenheimViolations.text("backup_restore_operator_only"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_restore_operator_only"));
         }
     }
 
@@ -462,7 +466,7 @@ public final class InstanceBackups {
         Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
         if (backup == null || !InstanceBackupModel.STATUS_COMPLETE.equals(
                 backup.get(InstanceBackupModel.STATUS))) {
-            throw Violations.ofForm(HohenheimViolations.text("backup_not_restorable")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_not_restorable")
                 .withArg("id", backupId));
         }
         BackupTarget target = BackupTargetKinds.targetFor(
@@ -477,11 +481,11 @@ public final class InstanceBackups {
         refuseTenantRestore();
         if (!InstanceBackupModel.STATUS_COMPLETE.equals(
                 backup.get(InstanceBackupModel.STATUS))) {
-            throw Violations.ofForm(HohenheimViolations.text("backup_not_restorable")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_not_restorable")
                 .withArg("id", backup.get(InstanceBackupModel.ID)));
         }
         String key = backup.get(InstanceBackupModel.REMOTE_KEY);
-        String stamp = STAMP.format(Now.instant());
+        String stamp = UtcStamp.now();
         Path staging = stagingRoot().resolve("restore-" + backup.get(InstanceBackupModel.ID)
             + "-" + stamp);
         BackupArchive.Opened opened = null;
@@ -501,14 +505,14 @@ public final class InstanceBackups {
                 }
                 opened = BackupArchive.openVerified(archive, staging, keyring());
             } catch (IOException corrupt) {
-                throw Violations.ofForm(HohenheimViolations.text("backup_corrupt")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_corrupt")
                     .withArg("reason", HohenheimViolations.reasonOf(corrupt)));
             }
             BackupManifest manifest = opened.manifest();
             InstanceKindHandler restoredKind = InstanceKinds.getHandler(manifest.kind());
             if (restoredKind == null) {
                 throw Violations.ofField("kind", manifest.kind(),
-                    HohenheimViolations.text("instance_kind_unknown").withArg("kind", manifest.kind()));
+                    HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown").withArg("kind", manifest.kind()));
             }
             int serverId = serverSpelling != null
                 ? ServerModel.canonicalServerId(serverSpelling)
@@ -549,7 +553,8 @@ public final class InstanceBackups {
             record.set(InstanceModel.NAME, newName != null && !newName.isBlank()
                 ? newName : manifest.instanceName() + "-restored-" + stamp);
             record.set(InstanceModel.KIND, manifest.kind());
-            record.set(InstanceModel.SETTINGS, manifest.settings());
+            record.set(InstanceModel.SETTINGS, InstanceKindFields.typedNumbers(InstanceModel.SETTINGS, manifest.kind(),
+                manifest.restoredSettings(InstanceModel.SETTINGS.resolveSchemaForSiblingValue(manifest.kind()))));
             record.set(InstanceModel.SERVER_ID, serverId);
             record.set(InstanceModel.RUNTIME_IMAGE_ID, runtimeImageId);
             record.set(InstanceModel.CRASH_POLICY, profile != null
@@ -654,7 +659,7 @@ public final class InstanceBackups {
             // the deploy after the window CONVERGES onto it (the incus driver never
             // replaces an owned instance from its image).
             if (!(resolved.runtime() instanceof NativeSnapshotSupport nativeSupport)) {
-                throw Violations.ofForm(HohenheimViolations.text("backup_payload_mismatch")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_payload_mismatch")
                     .withArg("payload", manifest.payload())
                     .withArg("kind", manifest.kind()));
             }
@@ -683,7 +688,7 @@ public final class InstanceBackups {
             return;
         }
         HohenheimAccess.requireOperationCapability(
-            backup.get(InstanceBackupModel.INSTANCE_ID), HohenheimAccess.BACKUPS);
+            backup.get(InstanceBackupModel.INSTANCE_ID), HohenheimCapabilities.BACKUPS);
         deleteAuthorized(backup, null, null);
     }
 
@@ -715,7 +720,7 @@ public final class InstanceBackups {
                     : BackupTargetKinds.targetFor(rowTargetId);
                 target.delete(key);
             } catch (IOException | Violations unreachable) {
-                throw Violations.ofForm(HohenheimViolations.text("backup_delete_failed")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_delete_failed")
                     .withArg("reason", unreachable instanceof IOException io
                         ? HohenheimViolations.reasonOf(io) : "target unavailable"));
             }
@@ -737,37 +742,10 @@ public final class InstanceBackups {
     /**
      * The sweep as {@code backupNow} runs it, carrying the target the completed backup
      * used so same-target rows are prunable even when their id cannot be re-resolved.
-     *
-     * AIDEV-NOTE: ordered by ID, not created_at -- two backups inside one second carry
-     * the same created_at and a timestamp sort would pick the survivor arbitrarily
-     * (the snapshot lanes' rule, {@code InstanceSnapshots.pruneForRetention}).
      */
     private void pruneForRetention(int instanceId, @Nullable Integer currentTargetId,
                                    @Nullable BackupTarget currentTarget) {
-        Integer retention = Zenit.SETTINGS_VALUES.getValue(
-            HohenheimSettings.Backup.RETENTION);
-        if (retention == null || retention <= 0) {
-            return;
-        }
-        List<Row> complete = Models.get(InstanceBackupModel.class).find()
-            .where(InstanceBackupModel.INSTANCE_ID.eq(instanceId))
-            .where(InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_COMPLETE))
-            .orderBy(InstanceBackupModel.ID, SortOrder.DESC)
-            .all();
-        for (int i = retention; i < complete.size(); i++) {
-            Object id = complete.get(i).get(InstanceBackupModel.ID);
-            try {
-                deleteAuthorized(complete.get(i), currentTargetId, currentTarget);
-            } catch (Violations pruneFailed) {
-                Blast.log("BACKUP: retention could not remove backup", id,
-                    "- kept for a later sweep");
-            } catch (RuntimeException unexpected) {
-                // The backup this sweep follows already succeeded; see the same guard in
-                // InstanceSnapshots.pruneForRetention.
-                Blast.log("BACKUP: retention hit an unexpected failure on backup", id,
-                    "- kept for a later sweep:", HohenheimViolations.reasonOf(unexpected));
-            }
-        }
+        RETENTION.sweep(instanceId, old -> deleteAuthorized(old, currentTargetId, currentTarget));
     }
 
     /**
@@ -839,8 +817,7 @@ public final class InstanceBackups {
     private static void requireCoherentApplication(Row owner, Resolved serving) {
         int applicationId = owner.get(InstanceModel.ID);
         Path artifact = ArtifactDeploys.servingArtifact(applicationId);
-        Map<String, Object> servingSettings = serving.row().get(InstanceModel.SETTINGS)
-            instanceof Map<?, ?> map ? castSettings(map) : Map.of();
+        Map<String, Object> servingSettings = RawValues.map(serving.row().get(InstanceModel.SETTINGS));
         Map<String, Object> overrides = new LinkedHashMap<>(
             ArtifactDeploys.sourceOverrides(applicationId));
         // Keep the canonical artifact builder facts, but judge the SERVING source.
@@ -868,8 +845,7 @@ public final class InstanceBackups {
             throw new IOException("Application has no accepted immutable uploaded artifact");
         }
         String digest = BackupArchive.sha256Of(accepted);
-        Map<String, Object> servingSettings = serving.row().get(InstanceModel.SETTINGS)
-            instanceof Map<?, ?> map ? castSettings(map) : Map.of();
+        Map<String, Object> servingSettings = RawValues.map(serving.row().get(InstanceModel.SETTINGS));
         if (!digest.equals(servingSettings.get("commit_sha"))) {
             throw new IOException("Accepted artifact is not the serving release source;"
                 + " backup refuses a source/runtime mismatch");
@@ -889,7 +865,7 @@ public final class InstanceBackups {
         if (!digest.equals(BackupArchive.sha256Of(artifact))) {
             throw new IOException("Accepted artifact changed during backup capture");
         }
-        if (image.id() == null || !image.id().matches("sha256:[0-9a-f]{64}")) {
+        if (!Sha256.isImageId(image.id())) {
             throw new IOException("Serving application has no immutable runtime image identity");
         }
         Path imageTar = applicationDirectory.resolve("runtime-image.tar");
@@ -955,7 +931,7 @@ public final class InstanceBackups {
         BackupManifest.ApplicationEntry app = manifest.application();
         if (app == null || manifest.profile() == null
                 || !BackupManifest.PAYLOAD_VOLUME_TARS.equals(manifest.payload())
-                || manifest.imageId() == null || !manifest.imageId().matches("sha256:[0-9a-f]{64}")) {
+                || !Sha256.isImageId(manifest.imageId())) {
             throw new IllegalStateException("Application backup lacks recoverable source/image inventory");
         }
         Map<String, String> declared = new LinkedHashMap<>();
@@ -980,8 +956,7 @@ public final class InstanceBackups {
         int instanceId = owner.get(InstanceModel.ID);
         Set<String> subjects = HohenheimAccess.manageSubjectsOf(InstanceModel.MODEL_ID, instanceId);
         String ownership = subjects != null ? HohenheimAccess.packSubjects(subjects) : "";
-        Map<String, Object> settings = owner.get(InstanceModel.SETTINGS)
-                instanceof Map<?, ?> map ? castSettings(map) : Map.of();
+        Map<String, Object> settings = RawValues.map(owner.get(InstanceModel.SETTINGS));
         Integer containerPort = settings.get("container_port") instanceof Number port
             ? port.intValue() : null;
         List<BackupManifest.VolumeEntry> volumes = new ArrayList<>();
@@ -1280,14 +1255,10 @@ public final class InstanceBackups {
         return FieldEncryption.requireKeyring();
     }
 
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> castSettings(Map<?, ?> map) {
-        return (Map<String, Object>) map;
-    }
 
 
-
-    private static Path stagingRoot() {
+    /** @return the configured backup staging root, which migrations stage through too */
+    static @NonNull Path stagingRoot() {
         return Path.of(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Backup.STAGING_PATH));
     }
 }

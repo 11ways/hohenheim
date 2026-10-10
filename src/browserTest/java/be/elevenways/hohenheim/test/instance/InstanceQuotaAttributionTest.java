@@ -1,10 +1,11 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -65,12 +66,12 @@ class InstanceQuotaAttributionTest extends HohenheimTestBase {
         tenantSiteId = site(PREFIX + "tenant-site");
         secondTenantSiteId = site(PREFIX + "tenant-site-two");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, tenantSiteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, secondTenantSiteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
-        operatorBucket = InstanceQuota.bucketKeyOf("");
-        tenantBucket = InstanceQuota.bucketKeyOf(
+        operatorBucket = OwnerBudget.INSTANCES.bucketOf("");
+        tenantBucket = OwnerBudget.INSTANCES.bucketOf(
             HohenheimAccess.packSubjects(Set.of("user:" + tenantId)));
     }
 

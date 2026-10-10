@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.application;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
@@ -187,8 +188,8 @@ class ReleaseConvergenceSerializationTest {
                 //    drain settles it: stopped, its observed port claim released. Nothing
                 //    is stranded holding a port or a booking.
                 await("step 7: A's flip completes after its drain window",
-                    () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
-                        latestOp(applicationId).get(ReleaseOperationModel.STATUS)));
+                    () -> ReleaseOperationModel.LIFECYCLE.is(
+                        latestOp(applicationId).get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED));
                 Row previous = Models.get(InstanceModel.class).findById(firstId);
                 assertThat(previous.get(InstanceModel.RUNTIME_ROLE))
                     .as("step 7: the previously serving release is retired")
@@ -239,8 +240,8 @@ class ReleaseConvergenceSerializationTest {
                 int newerId = ApplicationReleases.ownedServing(applicationId)
                     .get(InstanceModel.ID);
                 await("step 0: the flip settled",
-                    () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
-                        latestOp(applicationId).get(ReleaseOperationModel.STATUS)));
+                    () -> ReleaseOperationModel.LIFECYCLE.is(
+                        latestOp(applicationId).get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED));
 
                 // 1. Hand-write the corrupt state: the older release is serving again,
                 //    beside the newer one. Nothing in the engine walks this shape --
@@ -314,7 +315,7 @@ class ReleaseConvergenceSerializationTest {
                 Row forward = latestOp(applicationId);
                 assertThat((String) forward.get(ReleaseOperationModel.STATUS))
                     .as("step 1: the forward release is still draining")
-                    .isEqualTo(ReleaseOperationModel.STATUS_DRAINING);
+                    .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DRAINING));
 
                 // 2. The operator rolls back INSIDE that window.
                 ReleaseEngine.rollback(applicationId);
@@ -330,7 +331,7 @@ class ReleaseConvergenceSerializationTest {
                     .findById(forward.get(ReleaseOperationModel.ID));
                 assertThat((String) forwardAfter.get(ReleaseOperationModel.STATUS))
                     .as("step 3: the superseded drain is finished, not still pending")
-                    .isEqualTo(ReleaseOperationModel.STATUS_SUCCEEDED);
+                    .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
                 assertThat((String) forwardAfter.get(ReleaseOperationModel.STEP_LOG))
                     .as("step 3: and says why it finished early")
                     .contains("superseded by a newer operation");

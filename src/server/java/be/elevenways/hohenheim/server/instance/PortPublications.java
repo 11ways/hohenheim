@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -152,7 +153,7 @@ final class PortPublications {
             }
             return publication.withPreallocatedPort(port);
         }
-        throw Violations.ofForm(HohenheimViolations.text("port_window_exhausted")
+        throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("port_window_exhausted")
             .withArg("first", first)
             .withArg("count", count));
     }
@@ -240,7 +241,7 @@ final class PortPublications {
             PortLedger.conflictingHolder(serverId, bind, port, protocol) != null;
         if (localHost && !reclaimingOwnRow && !PortProbe.isFree(bind, port, protocol)) {
             throw Violations.ofField("settings.host_port", port,
-                HohenheimViolations.text("port_bound_on_host").withArg("port", port));
+                HohenheimMicrocopy.VIOLATIONS.of("port_bound_on_host").withArg("port", port));
         }
         try {
             PortLedger.claimPreallocated(serverId, bind, port, protocol,
@@ -252,7 +253,7 @@ final class PortPublications {
 
     private static Violations conflictRefusal(int port, @NonNull String holder) {
         return Violations.ofField("settings.host_port", port,
-            HohenheimViolations.text("port_conflict")
+            HohenheimMicrocopy.VIOLATIONS.of("port_conflict")
                 .withArg("port", port)
                 .withArg("holder", holder));
     }

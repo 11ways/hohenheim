@@ -1,8 +1,9 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
@@ -39,7 +40,7 @@ public final class InstanceScheduleOperations {
     public static final Operation<Row, Void, String> RUN_SCHEDULE =
         Operation.declare(HohenheimIds.id("run_schedule"))
             .happened(OperationSentences.of("run_schedule"))
-            .label(Microcopy.of("run_now").withFilter("scope", "instance_schedule"))
+            .label(HohenheimMicrocopy.INSTANCE_SCHEDULE.of("run_now"))
             .icon(Icon.of("play"))
             .one(SCHEDULE)
             .gate(OperationGate.open())
@@ -51,7 +52,7 @@ public final class InstanceScheduleOperations {
     public static final Operation<Row, Void, Integer> DELETE_SCHEDULE =
         Operation.declare(HohenheimIds.id("delete_schedule"))
             .happened(OperationSentences.of("delete_schedule"))
-            .label(Microcopy.of("delete").withFilter("scope", "cms"))
+            .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(SCHEDULE)
             .gate(OperationGate.open())
@@ -63,7 +64,7 @@ public final class InstanceScheduleOperations {
     public static final Operation<Row, Void, Integer> DELETE_STEP =
         Operation.declare(HohenheimIds.id("delete_schedule_step"))
             .happened(OperationSentences.of("delete_schedule_step"))
-            .label(Microcopy.of("delete").withFilter("scope", "cms"))
+            .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(STEP)
             .gate(OperationGate.open())

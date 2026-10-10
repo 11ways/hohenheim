@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.InputType;
@@ -67,61 +66,56 @@ public class CertificateModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NICE_NAME = SCHEMA.addField(StringField.builder().name("nice_name")
-        .label(HohenheimFormCopy.label("cert_nice_name"))
-        .help(HohenheimFormCopy.help("cert_nice_name")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_nice_name"))
+        .help(HohenheimMicrocopy.HELP.of("cert_nice_name")).build());
     public static final EnumField PROVIDER = SCHEMA.addField(EnumField.builder("provider")
         .value(PROVIDER_LETSENCRYPT, v -> v.displayName("Let's Encrypt")
-            .label(providerLabel(PROVIDER_LETSENCRYPT)).icon("lock").color(ColorHue.GREEN))
-        .value(PROVIDER_CUSTOM, v -> v.displayName("Custom")
-            .label(providerLabel(PROVIDER_CUSTOM)).icon("file-import").color(ColorHue.BLUE))
+            .label(HohenheimMicrocopy.CERT_PROVIDER.of(PROVIDER_LETSENCRYPT)).icon("lock").color(ColorHue.GREEN))
+        .value(PROVIDER_CUSTOM, v -> v.displayName("Uploaded")
+            .label(HohenheimMicrocopy.CERT_PROVIDER.of(PROVIDER_CUSTOM)).icon("file-import").color(ColorHue.BLUE))
         .value(PROVIDER_ACME_ACCOUNT, v -> v.displayName("ACME account")
-            .label(providerLabel(PROVIDER_ACME_ACCOUNT)).color(ColorHue.GRAY))
+            .label(HohenheimMicrocopy.CERT_PROVIDER.of(PROVIDER_ACME_ACCOUNT)).color(ColorHue.GRAY))
         .build());
-
-    /** The translation token for a certificate provider; the key IS the stored value. */
-    private static Microcopy providerLabel(String provider) {
-        return Microcopy.of(provider).withFilter("scope", "cert_provider");
-    }
     public static final TextField CERTIFICATE_PEM = SCHEMA.addField(TextField.builder("certificate_pem")
-        .label(HohenheimFormCopy.label("cert_certificate_pem"))
-        .help(HohenheimFormCopy.help("cert_certificate_pem")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_certificate_pem"))
+        .help(HohenheimMicrocopy.HELP.of("cert_certificate_pem")).build());
     public static final TextField PRIVATE_KEY_PEM = SCHEMA.addField(TextField.builder("private_key_pem")
         .secret().encrypted().inputHint(InputType.MULTILINE)
-        .label(HohenheimFormCopy.label("cert_private_key_pem"))
-        .help(HohenheimFormCopy.help("cert_private_key_pem")).build());
-    public static final DateTimeField EXPIRES_ON = SCHEMA.addField(DateTimeField.builder().name("expires_on").build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_private_key_pem"))
+        .help(HohenheimMicrocopy.HELP.of("cert_private_key_pem")).build());
+    /** Absent until a certificate is issued; list, record and the admin overview say so in the same words. */
+    public static final DateTimeField EXPIRES_ON = SCHEMA.addField(DateTimeField.builder().name("expires_on")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_expires_on"))
+        .absent(HohenheimMicrocopy.CERTIFICATE.of("expiry_none")).build());
     public static final BooleanField AUTO_RENEW = SCHEMA.addField(BooleanField.builder("auto_renew").defaultValue(true)
         .visibleIn(EditView.EDIT, EditView.DETAIL)
-        .label(HohenheimFormCopy.label("cert_auto_renew"))
-        .help(HohenheimFormCopy.help("cert_auto_renew")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_auto_renew"))
+        .help(HohenheimMicrocopy.HELP.of("cert_auto_renew")).build());
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_ACTIVE, v -> v.displayName("Active")
-            .label(statusLabel(STATUS_ACTIVE)).icon("circle-check").color(BadgeVariant.SUCCESS))
+            .label(HohenheimMicrocopy.CERT_STATUS.of(STATUS_ACTIVE)).icon("circle-check").color(BadgeVariant.SUCCESS))
         .value(STATUS_PENDING, v -> v.displayName("Pending")
-            .label(statusLabel(STATUS_PENDING)).icon("clock").color(BadgeVariant.WARNING))
+            .label(HohenheimMicrocopy.CERT_STATUS.of(STATUS_PENDING)).icon("clock").color(BadgeVariant.WARNING))
         .value(STATUS_ERROR, v -> v.displayName("Error")
-            .label(statusLabel(STATUS_ERROR)).icon("triangle-exclamation").color(BadgeVariant.DESTRUCTIVE))
+            .label(HohenheimMicrocopy.CERT_STATUS.of(STATUS_ERROR)).icon("triangle-exclamation")
+            .color(BadgeVariant.DESTRUCTIVE))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("status"))
         .build());
-
-    /** The translation token for a certificate status; the key IS the stored value. */
-    private static Microcopy statusLabel(String status) {
-        return Microcopy.of(status).withFilter("scope", "cert_status");
-    }
     public static final DateTimeField ISSUED_ON = SCHEMA.addField(DateTimeField.builder().name("issued_on").build());
     public static final StringField RENEWAL_ERROR = SCHEMA.addField(StringField.builder().name("renewal_error")
         .visibleIn(EditView.EDIT)
         .attribute(FieldAttributes.GROUP, "renewal")
-        .label(HohenheimFormCopy.label("cert_renewal_error")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_renewal_error")).build());
     public static final IntegerField ERROR_COUNT = SCHEMA.addField(IntegerField.builder().name("error_count")
         .visibleIn(EditView.EDIT, EditView.DETAIL)
         .attribute(FieldAttributes.GROUP, "renewal")
-        .label(HohenheimFormCopy.label("cert_error_count")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_error_count")).build());
     public static final DateTimeField NEXT_ATTEMPT_AT = SCHEMA.addField(DateTimeField.builder().name("next_attempt_at")
         .visibleIn(EditView.EDIT)
         .attribute(FieldAttributes.GROUP, "renewal")
-        .label(HohenheimFormCopy.label("cert_next_attempt_at")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_next_attempt_at")).build());
     public static final StringField DOMAIN_NAMES_TEXT = SCHEMA.addField(StringField.builder().name("domain_names_text")
-        .label(HohenheimFormCopy.label("cert_domain_names")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_domain_names")).build());
 
     /** Per-cert ACME account email override; null means the global account. */
     public static final StringField LETSENCRYPT_EMAIL = SCHEMA.addField(StringField.builder().name("letsencrypt_email").build());
@@ -132,41 +126,36 @@ public class CertificateModel extends Model {
     public static EnumField.Builder challengeTypeField() {
         return EnumField.builder("challenge_type")
             .value(CHALLENGE_HTTP, value -> value.displayName("HTTP-01")
-                .label(challengeLabel(CHALLENGE_HTTP)).icon("globe").color(ColorHue.BLUE))
+                .label(HohenheimMicrocopy.CERT_CHALLENGE.of(CHALLENGE_HTTP)).icon("globe").color(ColorHue.BLUE))
             .value(CHALLENGE_DNS, value -> value.displayName("DNS-01")
-                .label(challengeLabel(CHALLENGE_DNS)).icon("at").color(ColorHue.VIOLET));
+                .label(HohenheimMicrocopy.CERT_CHALLENGE.of(CHALLENGE_DNS)).icon("at").color(ColorHue.VIOLET));
     }
 
     /** THE DNS-01 publisher vocabulary, shared by the stored column and the certificate request's input. */
     public static EnumField.Builder dnsPublisherField() {
         return EnumField.builder("dns_publisher")
             .value(DNS_PUBLISHER_MANUAL, v -> v.displayName("Manual")
-                .label(Microcopy.of("manual").withFilter("scope", "dns_publisher"))
+                .label(HohenheimMicrocopy.DNS_PUBLISHER.of("manual"))
                 .icon("pen").color(ColorHue.GRAY))
             .value(DNS_PUBLISHER_INTERNAL, v -> v.displayName("Internal")
-                .label(Microcopy.of("internal").withFilter("scope", "dns_publisher"))
+                .label(HohenheimMicrocopy.DNS_PUBLISHER.of("internal"))
                 .icon("server").color(ColorHue.GREEN))
             .value(DNS_PUBLISHER_COMMAND, v -> v.displayName("Command hook")
-                .label(Microcopy.of("command").withFilter("scope", "dns_publisher"))
+                .label(HohenheimMicrocopy.DNS_PUBLISHER.of("command"))
                 .icon("terminal").color(ColorHue.BLUE));
     }
 
     public static final EnumField CHALLENGE_TYPE = SCHEMA.addField(challengeTypeField()
-        .label(HohenheimFormCopy.label("cert_challenge_type"))
-        .help(HohenheimFormCopy.help("cert_challenge_type"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_challenge_type"))
+        .help(HohenheimMicrocopy.HELP.of("cert_challenge_type"))
         .visibleIn(EditView.EDIT)
         .build());
-
-    /** The translation token for an ACME challenge type; the key IS the stored value. */
-    private static Microcopy challengeLabel(String challenge) {
-        return Microcopy.of(challenge).withFilter("scope", "cert_challenge");
-    }
 
     public static final EnumField DNS_PUBLISHER = SCHEMA.addField(
         dnsPublisherField()
             .visibleIn(EditView.EDIT)
-            .label(HohenheimFormCopy.label("cert_dns_publisher"))
-            .help(HohenheimFormCopy.help("cert_dns_publisher")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_dns_publisher"))
+            .help(HohenheimMicrocopy.HELP.of("cert_dns_publisher")).build());
 
     /**
      * The id of the principal whose authority this certificate was issued under, beside

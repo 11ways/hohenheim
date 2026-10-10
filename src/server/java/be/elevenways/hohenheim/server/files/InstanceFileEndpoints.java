@@ -2,14 +2,14 @@ package be.elevenways.hohenheim.server.files;
 
 import be.elevenways.domino.common.DominoFile;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
-import be.elevenways.hohenheim.server.cms.InstanceFilesPage;
+import be.elevenways.hohenheim.server.util.PosixPaths;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -67,7 +67,7 @@ public final class InstanceFileEndpoints {
             } catch (Violations refused) {
                 return HandlerSupport.redirectUntyped(filesUrl(conduit, instanceId, parentOf(path), refused));
             }
-            HandlerSupport.download(conduit, "application/octet-stream", baseName(path), content);
+            HandlerSupport.download(conduit, "application/octet-stream", PosixPaths.nameOf(path), content);
             return null;
         });
 
@@ -131,10 +131,11 @@ public final class InstanceFileEndpoints {
             int instanceId = instance.get(InstanceModel.ID);
             String path = conduit.getQueryParam("path");
             if (path == null || path.isEmpty()) {
-                return ApiConduits.refusal(conduit, InstanceFilePath.refused());
+                return ApiConduits.refusal(conduit,
+                    Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused")));
             }
             try {
-                HandlerSupport.download(conduit, "application/octet-stream", baseName(path),
+                HandlerSupport.download(conduit, "application/octet-stream", PosixPaths.nameOf(path),
                     new InstanceFiles().read(instanceId, path));
                 return null;
             } catch (Violations refused) {
@@ -193,7 +194,7 @@ public final class InstanceFileEndpoints {
             case "mkdir" -> verbs.makeDirectory(instanceId, path);
             case "rename" -> verbs.rename(instanceId, path, string(form, "target"));
             case "delete" -> verbs.delete(instanceId, path);
-            default -> throw Violations.ofForm(HohenheimViolations.text("files_unknown_action"));
+            default -> throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_unknown_action"));
         }
     }
 
@@ -234,7 +235,7 @@ public final class InstanceFileEndpoints {
         DominoFile uploaded = uploadedFile(form);
         if (uploaded == null) {
             throw Violations.ofForm(
-                HohenheimViolations.text("files_upload_missing"));
+                HohenheimMicrocopy.VIOLATIONS.of("files_upload_missing"));
         }
         return uploaded.getBytes();
     }
@@ -296,19 +297,15 @@ public final class InstanceFileEndpoints {
         }
         String base = ReturnPath.pathOr(ReturnTarget.readPath(conduit),
             CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES, instanceId,
-                InstanceFilesPage.SLUG).toUrl());
+                HohenheimSlugs.Tab.FILES).toUrl());
         return RouteLocation.with(base, HohenheimParams.FILES_PATH,
             directory.isEmpty() ? null : directory);
     }
 
+    /** @return the parent directory as the route's directory value, empty for a top-level path */
     private static @NonNull String parentOf(@NonNull String path) {
-        int slash = path.lastIndexOf('/');
-        return slash <= 0 ? "" : path.substring(0, slash);
-    }
-
-    private static @NonNull String baseName(@NonNull String path) {
-        int slash = path.lastIndexOf('/');
-        return slash < 0 || slash == path.length() - 1 ? path : path.substring(slash + 1);
+        String parent = PosixPaths.parentOf(path);
+        return parent.equals("/") ? "" : parent;
     }
 
     /**

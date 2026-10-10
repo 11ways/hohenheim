@@ -7,13 +7,9 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.refusal.DomainRefusal;
-import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.server.operation.OperationCall;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -29,7 +25,7 @@ public final class InstanceBackupOperationHandlers {
     static {
         OperationHandlers.attach(InstanceBackupOperations.RESTORE_BACKUP)
             .applies(backup -> InstanceBackupModel.STATUS_COMPLETE.equals(backup.get(InstanceBackupModel.STATUS)))
-            .authorize(InstanceBackupOperationHandlers::operatorOnly)
+            .authorize(HohenheimAccess.operatorOnly("restore-to-new is an operator act"))
             .handle(InstanceBackupOperationHandlers::restore);
         OperationHandlers.attach(InstanceBackupOperations.DELETE_BACKUP)
             .handle(InstanceBackupOperationHandlers::delete);
@@ -41,12 +37,6 @@ public final class InstanceBackupOperationHandlers {
     /** Loads the class, attaching the handler; idempotent. */
     public static void init() {
         // The static initializer did the work.
-    }
-
-    private static @Nullable DomainRefusal operatorOnly(@NonNull Row backup, @Nullable Void input,
-                                                        @NonNull AccessContext access) {
-        return HohenheimAccess.isAdmin(access) ? null
-            : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "restore-to-new is an operator act");
     }
 
     /** Removes the artifact from its target and the row; the activity row names the act. */

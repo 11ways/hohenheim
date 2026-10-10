@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -20,10 +21,11 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * Where an OPERATOR-OWNED record connects is written under the non-delegable {@code hohenheim.admin.system} alone, and
@@ -75,7 +77,7 @@ public final class OperatorTrustedWrites {
             return new Target(GitSourceSchema.REPOSITORY_URL, InstanceModel.SETTINGS,
                 row -> {
                     Object url = InstanceModel.settingsOf(row).get(GitSourceSchema.REPOSITORY_URL);
-                    String text = url == null ? "" : url.toString().trim();
+                    String text = trimmed(url);
                     return text.isEmpty() ? null : text;
                 }, null, value -> GitRepository.isLocalCloneUrl((String) value));
         }
@@ -122,14 +124,7 @@ public final class OperatorTrustedWrites {
 
     /** Whether the work in flight may aim an operator-owned record: declared system work, or a system-tier caller. */
     public static boolean mayWriteTrustedTargets() {
-        ExecutionIdentity identity = ExecutionIdentity.current();
-        if (identity == null) {
-            return false;
-        }
-        return switch (identity.kind()) {
-            case SYSTEM -> true;
-            case CALLER -> Objects.requireNonNull(identity.callerContext()).hasPermission(HohenheimSources.ADMIN_SYSTEM);
-        };
+        return TenantWrites.systemOrCaller(caller -> caller.hasPermission(HohenheimSources.ADMIN_SYSTEM));
     }
 
     /**
@@ -156,7 +151,8 @@ public final class OperatorTrustedWrites {
             }
             changed = true;
             if (!systemTier && value != null && target.refusable().test(value) && operatorOwned(guarded, stored)) {
-                throw Violations.ofField(target.field(), value, CmsSupport.violationText("operator_trusted_target"));
+                throw Violations.ofField(target.field(), value,
+                    HohenheimMicrocopy.VIOLATIONS.of("operator_trusted_target"));
             }
         }
         boolean storedMark = stored != null && Boolean.TRUE.equals(stored.get(guarded.mark()));

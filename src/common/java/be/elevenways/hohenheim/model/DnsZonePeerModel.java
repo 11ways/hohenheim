@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -20,8 +21,10 @@ public class DnsZonePeerModel extends Model {
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
-    public static final IntegerField ZONE_ID = SCHEMA.addField(IntegerField.builder().name("zone_id").build());
-    public static final IntegerField PEER_ID = SCHEMA.addField(IntegerField.builder().name("peer_id").build());
+    public static final IntegerField ZONE_ID = SCHEMA.addField(IntegerField.builder().name("zone_id")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("zone")).build());
+    public static final IntegerField PEER_ID = SCHEMA.addField(IntegerField.builder().name("peer_id")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peer")).build());
 
     // --- Freshness of the secondary, as probed from THIS primary (DnsSecondaryFreshness) ---
     /** The SOA serial the peer answered with at the last probe; null when it never answered. */

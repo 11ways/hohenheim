@@ -1,11 +1,13 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.StateLineCell;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.BanModel;
-import be.elevenways.hohenheim.security.BanStateCell;
+import be.elevenways.hohenheim.security.BanState;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
@@ -13,6 +15,7 @@ import be.elevenways.hohenheim.server.security.IpLiterals;
 import be.elevenways.hohenheim.server.security.ThreatScorer;
 import be.elevenways.protoblast.common.time.RelativeTime;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.resource.ListScope;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -20,13 +23,13 @@ import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.CardWidget;
 import be.elevenways.zenit.widget.common.builtin.FactListWidget;
+import be.elevenways.zenit.widget.common.builtin.TextBlockWidget;
 import be.elevenways.zenit.widget.common.data.WidgetFact;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
-import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
@@ -83,9 +86,6 @@ import java.util.Objects;
  */
 public final class BanParts {
 
-    /** The IP ban entry's slug, which the panel's clusters name. */
-    public static final String SLUG = "bans";
-
     /** The list's state column: enforced, lifted or expired, derived from the stored facts. */
     static final String STATE_COLUMN = "state";
 
@@ -97,17 +97,17 @@ public final class BanParts {
     /** Duration choices for a manual ban; "permanent" maps to a null TTL. */
     private static final EnumField DURATION = EnumField.builder(DURATION_NAME)
         .value("1h", v -> v.displayName("1 hour")
-            .label(Microcopy.of("duration_1h").withFilter("scope", "ban")))
+            .label(HohenheimMicrocopy.BAN.of("duration_1h")))
         .value("24h", v -> v.displayName("24 hours")
-            .label(Microcopy.of("duration_24h").withFilter("scope", "ban")))
+            .label(HohenheimMicrocopy.BAN.of("duration_24h")))
         .value("7d", v -> v.displayName("7 days")
-            .label(Microcopy.of("duration_7d").withFilter("scope", "ban")))
+            .label(HohenheimMicrocopy.BAN.of("duration_7d")))
         .value("30d", v -> v.displayName("30 days")
-            .label(Microcopy.of("duration_30d").withFilter("scope", "ban")))
+            .label(HohenheimMicrocopy.BAN.of("duration_30d")))
         .value("permanent", v -> v.displayName("Permanent")
-            .label(Microcopy.of("duration_permanent").withFilter("scope", "ban")))
+            .label(HohenheimMicrocopy.BAN.of("duration_permanent")))
         .defaultValue("24h")
-        .label(HohenheimFormCopy.label("ban_duration"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("ban_duration"))
         .build();
 
     /** The entries a RECORD shows (read-only) and the create form does not. */
@@ -118,7 +118,7 @@ public final class BanParts {
     /** Lifts an enforced ban: the kernel set drops the address and the row records who lifted it and when. */
     public static final Operation<Row, Void, Void> LIFT = Operation.declare(HohenheimIds.id("lift_ban"))
         .happened(OperationSentences.of("lift_ban"))
-        .label(Microcopy.of("lift").withFilter("scope", "ban"))
+        .label(HohenheimMicrocopy.BAN.of("lift"))
         .icon(Icon.of("unlock"))
         .one(SUBJECT)
         .gate(OperationGate.open())
@@ -147,19 +147,21 @@ public final class BanParts {
         TableSpec<Row> table = TableSpec.<Row>builder()
             // The Access-Blocked board reads a ban as the address and why, who blocked it, and until when; which
             // traffic it refuses, the event that tripped it and when it began stay in the picker and the filters.
-            .column(ColumnSpec.fromField(BanModel.IP).label(banText("address_column"))
+            .column(ColumnSpec.fromField(BanModel.IP).label(HohenheimMicrocopy.BAN.of("address_column"))
                 .filterable().subtext("reason").copyable().build())
             .column(ColumnSpec.fromField(BanModel.REASON).hidden().build())
-            .column(ColumnSpec.fromField(BanModel.SOURCE).label(banText("by_column")).filterable().build())
+            .column(ColumnSpec.fromField(BanModel.SOURCE).label(HohenheimMicrocopy.BAN.of("by_column")).filterable()
+                .build())
             // WHICH traffic the ban refuses: an SSH ban and a web ban are different rows.
             .column(ColumnSpec.fromField(BanModel.SCOPE).filterable().hidden().build())
             // ONE state badge (active / lifted / expired); the `active` filter keeps answering "still enforced?".
-            .column(ColumnSpec.virtual(STATE_COLUMN, Microcopy.of("state").withFilter("scope", "ban"))
-                .renderer(HohenheimTemplateIds.CELL_BAN_STATE).build())
+            .column(ColumnSpec.virtual(STATE_COLUMN, HohenheimMicrocopy.BAN.of("state"))
+                .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
             .column(ColumnSpec.fromField(BanModel.ACTIVE).hidden().build())
-            // A block without an expiry holds until someone lifts it: the empty cell says so, not "None".
-            .column(ColumnSpec.fromField(BanModel.EXPIRES_AT).label(banText("until_column"))
-                .absent(banText("until_lifted")).build())
+            // A block without an expiry holds until someone lifts it: the empty cell says so, not "None". A lifted
+            // block reads when it was lifted (BanState.until), never the expiry it no longer has.
+            .column(ColumnSpec.fromField(BanModel.EXPIRES_AT).label(HohenheimMicrocopy.BAN.of("until_column"))
+                .absent(HohenheimMicrocopy.BAN.of("until_lifted")).build())
             .column(ColumnSpec.fromField(BanModel.EVENT_TYPE).filterable().hidden().build())
             .column(ColumnSpec.fromField(BanModel.CREATED_AT).hidden().build())
             .filter(FilterSpec.leaf(BanModel.IP, CoreTypes.CONTAINS)
@@ -170,14 +172,15 @@ public final class BanParts {
                 .label(FieldLabels.labelFor(BanModel.SCOPE)).build())
             // "Blocked now" is BanModel.blockedNow (enforced, unlifted, unexpired), never the stored flag the expiry
             // sweep clears late.
-            .filter(FilterSpec.globalLeaf(BanModel.BLOCKED_NOW, banText("blocked_now"), BanModel.BLOCKED_NOW,
+            .filter(FilterSpec.globalLeaf(BanModel.BLOCKED_NOW, HohenheimMicrocopy.BAN.of("blocked_now"),
+                BanModel.BLOCKED_NOW,
                 CoreTypes.IS_TRUE, CoreTypes.IS_FALSE).build())
             .filter(FilterSpec.leaf(BanModel.EVENT_TYPE, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(BanModel.EVENT_TYPE)).build())
             .defaultSort(SortSpec.desc("created_at"))
             .build();
         FormSpec form = FormSpec.builder()
-            .createTitle(banText("create_title"))
+            .createTitle(HohenheimMicrocopy.BAN.of("create_title"))
             .add(BanModel.IP)
             .add(BanModel.REASON)
             // The DERIVED entry, never a bare Plain: an EnumField in Plain renders as free text and is outside the
@@ -189,10 +192,10 @@ public final class BanParts {
             .add(BanModel.LIFTED_AT)
             .add(BanModel.LIFTED_BY)
             .build();
-        return PanelResource.builder(HohenheimIds.id("ban"), SLUG, SUBJECT)
-            .label(Microcopy.of("plural").withFilter("scope", "ban"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "ban"))
-            .description(Microcopy.of("nav_hint").withFilter("scope", "ban"))
+        return PanelResource.builder(HohenheimIds.id("ban"), HohenheimSlugs.BANS, SUBJECT)
+            .label(HohenheimMicrocopy.BAN.of("plural"))
+            .recordLabel(HohenheimMicrocopy.BAN.of("singular"))
+            .description(HohenheimMicrocopy.BAN.of("nav_hint"))
             .icon(Icon.of("ban"))
             .navGroup(HohenheimPanel.SECURITY_GROUP)
             .navOrder(40)
@@ -204,9 +207,9 @@ public final class BanParts {
                 .search(BanModel.IP, BanModel.REASON)
                 // Opens on what is blocked NOW: a default the reader removes to see lifted and expired bans.
                 .defaultFilter(FilterState.empty().with(BanModel.BLOCKED_NOW, Boolean.TRUE.toString()),
-                    filter -> BanModel.BLOCKED_NOW.equals(filter) ? banText("blocked_now") : null)
+                    filter -> BanModel.BLOCKED_NOW.equals(filter) ? HohenheimMicrocopy.BAN.of("blocked_now") : null)
                 .computed(Objects.requireNonNull(table.column(STATE_COLUMN)), (ban, request) ->
-                    BanStateCell.of(ban, Now.instant()))
+                    StateLineCell.of(BanState.of(ban, Now.instant()), null))
                 // Under the list (board Access-Blocked): who is close to being blocked, and who never is.
                 .widgetsBelow(BanParts::belowList)
                 .build())
@@ -217,14 +220,12 @@ public final class BanParts {
                 .build())
             .writes(ResourceMutations.rows().create(BanParts::create).build())
             .actions(List.of(PanelAction.<Row, Void>places(LIFT, ActionPlacement.ROW, (request, result) ->
-                    CmsActionResult.refreshWithToast(Microcopy.of("lifted").withFilter("scope", "ban")))
-                .label(Microcopy.of("lift").withFilter("scope", "ban"))
-                .description(Microcopy.of("lift_hint").withFilter("scope", "ban"))
+                    CmsActionResult.refreshWithToast(HohenheimMicrocopy.BAN.of("lifted")))
+                .label(HohenheimMicrocopy.BAN.of("lift"))
+                .description(HohenheimMicrocopy.BAN.of("lift_hint"))
                 .icon(Icon.of("unlock"))
-                .confirmation(ConfirmationSpec.builder()
-                    .title(Microcopy.of("lift_title").withFilter("scope", "ban"))
-                    .body(Microcopy.of("lift_confirm").withFilter("scope", "ban"))
-                    .build())
+                .confirmation(Confirmations.of(HohenheimMicrocopy.BAN.of("lift_title"),
+                    HohenheimMicrocopy.BAN.of("lift_confirm"), ActionStyle.DEFAULT))
                 .build()))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
@@ -258,24 +259,25 @@ public final class BanParts {
         ThreatScorer scorer = HohenheimSecurity.scorer();
         List<ThreatScorer.Misses> misses = scorer.recentMisses(Now.millis() - RECENT_MISSES.toMillis(),
             RECENT_MISSES_SHOWN);
-        RelativeTimeWording wording = RelativeTimeWording.resolve(conduit.getLocales(), conduit.getMessageResolver());
+        RelativeTimeWording wording = CmsSupport.timeWording(conduit);
         List<WidgetFact> facts = new ArrayList<>();
         for (ThreatScorer.Misses missed : misses) {
             List<String> names = missed.names();
             int shown = Math.min(MISSED_NAMES_SHOWN, names.size());
-            facts.add(WidgetFact.of(missed.actor(), banText(names.size() > shown ? "missed_names_more" : "missed_names")
+            facts.add(WidgetFact.of(missed.actor(),
+                HohenheimMicrocopy.BAN.of(names.size() > shown ? "missed_names_more" : "missed_names")
                 .withArg("names", String.join(", ", names.subList(0, shown)))
                 .withArg("more", names.size() - shown)
                 .withArg("ago", RelativeTime.ago(Instant.ofEpochMilli(missed.lastMs()), wording))
                 .resolve(conduit.getLocales(), conduit.getMessageResolver())));
         }
+        // The empty state is a sentence, never a fact without a value: that renders the widgets' "Unknown" beside it.
         WidgetTree body = facts.isEmpty()
-            ? new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(List.of(
-                WidgetFact.of(banText("no_misses").resolve(conduit.getLocales(), conduit.getMessageResolver()),
-                    null)))))
+            ? new WidgetTree(List.of(new WidgetInstance(TextBlockWidget.ID, Map.of("body",
+                HohenheimMicrocopy.BAN.of("no_misses").resolve(conduit.getLocales(), conduit.getMessageResolver())))))
             : new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts)));
-        return new WidgetInstance(CardWidget.ID, Map.of("title", banText("recent_misses_title"),
-            "lead", banText("recent_misses_lead").withArg("threshold", scorer.banThreshold())
+        return new WidgetInstance(CardWidget.ID, Map.of("title", HohenheimMicrocopy.BAN.of("recent_misses_title"),
+            "lead", HohenheimMicrocopy.BAN.of("recent_misses_lead").withArg("threshold", scorer.banThreshold())
                 .withArg("minutes", Math.max(1, scorer.windowSeconds() / 60))), body);
     }
 
@@ -293,17 +295,18 @@ public final class BanParts {
                 String key = IpLiterals.isLiteral(trimmed) ? "never_block_address"
                     : slash > 0 && IpLiterals.isLiteral(trimmed.substring(0, slash)) ? "never_block_network"
                     : "never_block_name";
-                facts.add(WidgetFact.of(entry.trim(), banText(key).resolve(conduit.getLocales(),
+                facts.add(WidgetFact.of(entry.trim(), HohenheimMicrocopy.BAN.of(key).resolve(conduit.getLocales(),
                     conduit.getMessageResolver())));
             }
         }
-        facts.add(WidgetFact.of(banText("never_block_server").resolve(conduit.getLocales(),
-            conduit.getMessageResolver()), banText("never_block_own").resolve(conduit.getLocales(),
+        facts.add(WidgetFact.of(HohenheimMicrocopy.BAN.of("never_block_server").resolve(conduit.getLocales(),
+            conduit.getMessageResolver()), HohenheimMicrocopy.BAN.of("never_block_own").resolve(conduit.getLocales(),
             conduit.getMessageResolver())));
-        WidgetInstance card = new WidgetInstance(CardWidget.ID, Map.of("title", banText("never_block_title"),
-            "lead", banText(facts.size() > 1 ? "never_block_lead" : "never_block_empty")),
+        WidgetInstance card = new WidgetInstance(CardWidget.ID,
+            Map.of("title", HohenheimMicrocopy.BAN.of("never_block_title"),
+            "lead", HohenheimMicrocopy.BAN.of(facts.size() > 1 ? "never_block_lead" : "never_block_empty")),
             new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));
-        return CardWidget.withLink(card, banText("never_block_change"),
+        return CardWidget.withLink(card, HohenheimMicrocopy.BAN.of("never_block_change"),
             AttentionCollector.securitySettingsTarget().toUrl(), "gear");
     }
 
@@ -331,17 +334,17 @@ public final class BanParts {
         return SchemaVocabulary.of(Models.get(BanModel.class)).extend(List.of(BanModel.blockedNowVariable()));
     }
 
-    private static @NonNull Microcopy banText(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "ban");
-    }
-
     /**
-     * A ban's cells in words: the event that tripped it by its description, and an automatic ban's reason stored as
-     * the old score line read as that event instead ({@link HohenheimSecurity#legacyCause}).
+     * A ban's cells in words: the event that tripped it by its description, an automatic ban's reason stored as the
+     * old score line read as that event instead ({@link HohenheimSecurity#legacyCause}), and "Until" as
+     * {@link BanState#until}.
      */
     private static @Nullable Object cell(@NonNull Row ban, @NonNull ColumnSpec column) {
         if (BanModel.EVENT_TYPE.getName().equals(column.name())) {
             return eventLabel(ban);
+        }
+        if (BanModel.EXPIRES_AT.getName().equals(column.name())) {
+            return BanState.until(ban);
         }
         if (BanModel.REASON.getName().equals(column.name())
                 && BanModel.SOURCE_AUTO.equals(ban.get(BanModel.SOURCE))) {
@@ -365,7 +368,7 @@ public final class BanParts {
         String problem = ip.isEmpty() ? "empty ip" : BanService.protectionProblem(ip);
         if (problem != null) {
             throw Violations.ofField(BanModel.IP.getName(), ip,
-                CmsSupport.violationText("ban_ip_refused").withArg("reason", problem));
+                HohenheimMicrocopy.VIOLATIONS.of("ban_ip_refused").withArg("reason", problem));
         }
         String reason = values.get(BanModel.REASON.getName()) instanceof String text && !text.isBlank()
             ? text.trim() : null;

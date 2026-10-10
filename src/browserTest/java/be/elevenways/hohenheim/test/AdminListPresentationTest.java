@@ -1,11 +1,11 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
@@ -77,7 +77,7 @@ class AdminListPresentationTest extends HohenheimTestBase {
     @Test
     void everyResourceDeclarationSurvivesRegistration() throws Exception {
         List<Declared> resources = new ArrayList<>();
-        for (String slug : List.of("admin", ManagePanel.SLUG)) {
+        for (String slug : List.of("admin", HohenheimSlugs.MANAGE)) {
             Panel panel = PanelRegistry.getBySlug(slug);
             assertThat(panel).as("the '" + slug + "' panel is registered").isNotNull();
             for (PanelEntry entry : panel.entries()) {

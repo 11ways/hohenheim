@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.BanModel;
-import be.elevenways.hohenheim.security.BanStateCell;
+import be.elevenways.hohenheim.security.BanState;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -64,7 +64,7 @@ class BanStateSurfaceTest extends HohenheimTestBase {
         HttpResponse<String> list = adminGet("/admin/bans");
         assertThat(list.body())
             .as("step 3: the list shows the enforced state")
-            .contains("data-ban-state=\"" + BanStateCell.ACTIVE + "\"");
+            .contains("data-state=\"" + BanState.ACTIVE.token() + "\"");
 
         // 4. Lifting stamps the actor, and both surfaces say so.
         BanService.INSTANCE.lift(Models.get(BanModel.class).findById(banId), "qa-operator");
@@ -77,16 +77,23 @@ class BanStateSurfaceTest extends HohenheimTestBase {
         HttpResponse<String> listAfter = adminGet("/admin/bans?filter." + BanModel.BLOCKED_NOW + "=false");
         assertThat(listAfter.body())
             .as("step 4: the list shows the lifted state")
-            .contains("data-ban-state=\"" + BanStateCell.LIFTED + "\"");
+            .contains("data-state=\"" + BanState.LIFTED.token() + "\"");
 
         // 5. The state derivation itself: a lift beats an expiry, an expiry beats the stored active flag.
         Instant now = Now.instant();
-        assertThat(BanStateCell.of(stored(false, now, now.plus(Duration.ofHours(1))), now).token())
-            .as("step 5: a lift beats an expiry").isEqualTo(BanStateCell.LIFTED);
-        assertThat(BanStateCell.of(stored(true, null, now.minusSeconds(1)), now).token())
-            .as("step 5: a passed expiry beats the flag the sweep clears late").isEqualTo(BanStateCell.EXPIRED);
-        assertThat(BanStateCell.of(stored(true, null, null), now).token())
-            .as("step 5: a permanent active ban is active").isEqualTo(BanStateCell.ACTIVE);
+        assertThat(BanState.of(stored(false, now, now.plus(Duration.ofHours(1))), now))
+            .as("step 5: a lift beats an expiry").isEqualTo(BanState.LIFTED);
+        assertThat(BanState.of(stored(true, null, now.minusSeconds(1)), now))
+            .as("step 5: a passed expiry beats the flag the sweep clears late").isEqualTo(BanState.EXPIRED);
+        assertThat(BanState.of(stored(true, null, null), now))
+            .as("step 5: a permanent active ban is active").isEqualTo(BanState.ACTIVE);
+
+        // 6. "Until" follows the same precedence: a lift beats the expiry, and a permanent ban has none.
+        assertThat(BanState.until(stored(false, now, now.plus(Duration.ofHours(1)))))
+            .as("step 6: a lifted ban holds until its lift").isEqualTo(now);
+        assertThat(BanState.until(stored(true, null, now.plus(Duration.ofHours(1)))))
+            .as("step 6: an enforced ban until its expiry").isEqualTo(now.plus(Duration.ofHours(1)));
+        assertThat(BanState.until(stored(true, null, null))).as("step 6: a permanent ban until lifted").isNull();
     }
 
     /** An unsaved ban row carrying only the facts the state reads. */

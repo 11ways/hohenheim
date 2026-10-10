@@ -248,7 +248,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Een enkele permissienaam, bv. \"site.internal\", vergeleken met de permissie-claims van de identiteit. Alleen gebruikt door claims-gebaseerde providers zoals Proteus (HTTP Basic Auth negeert dit). Leeg vraagt hohenheim.site.<slug>, de permissie genoemd naar de beschermde site.",
+      "text": "Een enkele permissienaam, bv. \"site.internal\", vergeleken met de permissie-claims van de identiteit. Alleen gebruikt door claims-gebaseerde providers zoals Proteus (HTTP-basisauthenticatie negeert dit). Leeg vraagt hohenheim.site.<slug>, de permissie genoemd naar de beschermde site.",
       "scope": "help"
     }
   ],
@@ -278,12 +278,6 @@
       "text": "inloggegevens",
       "scope": "capability",
       "case": "sentence"
-    }
-  ],
-  "key": [
-    {
-      "text": "Sleutel",
-      "scope": "template_contents"
     }
   ],
   "value": [
@@ -566,10 +560,6 @@
     {
       "text": "Image",
       "scope": "stack_services"
-    },
-    {
-      "text": "Image",
-      "scope": "template_contents"
     }
   ],
   "image_tag": [
@@ -848,10 +838,6 @@
     {
       "text": "Containerkoppelingen in de vorm hostpad:containerpad.",
       "scope": "help"
-    },
-    {
-      "text": "Gedeclareerde volumes",
-      "scope": "template_contents"
     }
   ],
   "wait_for_ready": [
@@ -979,20 +965,22 @@
     {
       "text": "Database koppelen",
       "scope": "site_databases"
-    },
-    {
-      "text": "Secondary toevoegen",
-      "scope": "dns_secondaries"
     }
   ],
   "auto_deploy_disabled": {
     "text": "Automatische uitrol staat uit: pushes worden aanvaard maar niet uitgerold. Schakel dit in bij de broninstellingen van de site.",
     "scope": "deployments"
   },
-  "build_log": {
-    "text": "Buildlog",
-    "scope": "deployments"
-  },
+  "build_log": [
+    {
+      "text": "Buildlog",
+      "scope": "deployments"
+    },
+    {
+      "text": "Buildlog",
+      "scope": "hohenheim_field"
+    }
+  ],
   "cancel": [
     {
       "text": "Deployment annuleren",
@@ -1083,6 +1071,10 @@
     {
       "text": "Database",
       "scope": "instance_overview"
+    },
+    {
+      "text": "Database",
+      "scope": "hohenheim_field"
     }
   ],
   "database_not_running": {
@@ -1185,20 +1177,12 @@
       "scope": "dev_sessions"
     },
     {
-      "text": "Geen secondaries geconfigureerd",
-      "scope": "dns_secondaries"
-    },
-    {
       "text": "Nog geen services",
       "scope": "stack_services"
     },
     {
       "text": "Nog geen deployments",
       "scope": "stack_deployments"
-    },
-    {
-      "text": "Nog geen stappen",
-      "scope": "schedule_step"
     },
     {
       "text": "Deze map is leeg",
@@ -1287,10 +1271,6 @@
     {
       "text": "Database-engine. Vast na aanmaak; vernietig en maak opnieuw aan om te wijzigen.",
       "scope": "help"
-    },
-    {
-      "text": "Engine",
-      "scope": "template_contents"
     }
   ],
   "env_prefix": [
@@ -1318,10 +1298,6 @@
     },
     {
       "text": "Mislukt",
-      "scope": "stack_deploy_status"
-    },
-    {
-      "text": "Mislukt",
       "scope": "snapshot_status"
     },
     {
@@ -1342,20 +1318,16 @@
     },
     {
       "text": "Mislukt",
-      "scope": "build_status"
-    },
-    {
-      "text": "Mislukt",
       "scope": "preview_status"
-    },
-    {
-      "text": "Mislukt",
-      "scope": "release_status"
     },
     {
       "text": "mislukt",
       "scope": "database_status",
       "case": "sentence"
+    },
+    {
+      "text": "Mislukt",
+      "scope": "operation_status"
     }
   ],
   "hostname": [
@@ -1629,6 +1601,10 @@
     {
       "text": "Poort open",
       "scope": "readiness_kind"
+    },
+    {
+      "text": "Poort",
+      "scope": "hohenheim_field"
     }
   ],
   "primary": {
@@ -1765,6 +1741,10 @@
     {
       "text": "Geheim",
       "scope": "variable_type"
+    },
+    {
+      "text": "Versleuteld bewaard en op elk formulier gemaskeerd; kan voor je gegenereerd worden",
+      "scope": "variable_type_description"
     }
   ],
   "start": [
@@ -2048,10 +2028,6 @@
     {
       "text": "Naam",
       "scope": "instance_files"
-    },
-    {
-      "text": "Naam",
-      "scope": "template_contents"
     },
     {
       "text": "App",
@@ -2873,10 +2849,6 @@
       "scope": "site"
     },
     {
-      "text": "Gedeclareerde databanken",
-      "scope": "template_contents"
-    },
-    {
       "text": "Databases",
       "scope": "database_engine"
     },
@@ -3124,7 +3096,7 @@
     }
   ],
   "database_name": {
-    "text": "Unieke naam voor deze beheerde database; benoemt ook de container en het volume. Kleine letters, cijfers en streepjes.",
+    "text": "Unieke naam voor deze beheerde database; benoemt ook de container en het volume. Letters, cijfers, punten, streepjes en liggende streepjes, beginnend met een letter of cijfer.",
     "scope": "help"
   },
   "database_failure_reason": {
@@ -3795,6 +3767,10 @@
     {
       "text": "ISO-URL",
       "scope": "server_media"
+    },
+    {
+      "text": "URL",
+      "scope": "hohenheim_field"
     }
   ],
   "connected_since": {
@@ -3966,10 +3942,6 @@
   "peer_none": {
     "text": "Geen",
     "scope": "dns_peer"
-  },
-  "peer": {
-    "text": "Peer",
-    "scope": "dns_secondaries"
   },
   "transfer_host": {
     "text": "Transfer-host",
@@ -5014,10 +4986,6 @@
     },
     {
       "text": "Type",
-      "scope": "template_contents"
-    },
-    {
-      "text": "Type",
       "scope": "instance_device"
     }
   ],
@@ -5045,6 +5013,10 @@
     {
       "text": "Detail",
       "scope": "server_overview"
+    },
+    {
+      "text": "Detail",
+      "scope": "hohenheim_field"
     }
   ],
   "word": {
@@ -5665,20 +5637,12 @@
       "scope": "stack_state"
     },
     {
-      "text": "Bezig",
-      "scope": "stack_deploy_status"
-    },
-    {
       "text": "Actief",
       "scope": "instance_status"
     },
     {
       "text": "Bezig",
       "scope": "schedule_run_status"
-    },
-    {
-      "text": "Bezig",
-      "scope": "build_status"
     },
     {
       "text": "Actief",
@@ -5696,6 +5660,10 @@
       "text": "draait",
       "scope": "database_status",
       "case": "sentence"
+    },
+    {
+      "text": "Bezig",
+      "scope": "operation_status"
     }
   ],
   "unhealthy": {
@@ -5765,13 +5733,9 @@
     },
     {
       "text": "Bezig met uitrollen",
-      "scope": "release_status"
+      "scope": "operation_status"
     }
   ],
-  "success": {
-    "text": "Geslaagd",
-    "scope": "stack_deploy_status"
-  },
   "workload_identity": {
     "text": "Workload-identiteit van site {$name}",
     "scope": "attention_title"
@@ -5879,16 +5843,6 @@
     },
     {
       "text": "Het record van engine '{$name}' verwijderen ZONDER te bevestigen dat de container weg is? Wat nog op de host draait blijft bestaan en de rootgegevens gaan verloren. Typ de enginenaam om te bevestigen.",
-      "scope": "database_engine"
-    }
-  ],
-  "force_delete_ok": [
-    {
-      "text": "Geforceerd verwijderen",
-      "scope": "database"
-    },
-    {
-      "text": "Verwijdering forceren",
       "scope": "database_engine"
     }
   ],
@@ -6088,7 +6042,7 @@
   },
   "host_not_admitted": [
     {
-      "text": "{$name} is nog niet toegelaten om apps te draaien; kies eerst Controleren en toelaten",
+      "text": "{$name} is nog niet toegelaten om apps te draaien. Kies eerst Controleren en toelaten.",
       "scope": "violations"
     },
     {
@@ -7137,7 +7091,7 @@
     },
     {
       "text": "In wachtrij",
-      "scope": "release_status"
+      "scope": "operation_status"
     }
   ],
   "installing": {
@@ -7162,22 +7116,46 @@
     "text": "Interactieve terminal",
     "scope": "console_kind"
   },
-  "string": {
-    "text": "Tekst",
-    "scope": "variable_type"
-  },
-  "integer": {
-    "text": "Getal",
-    "scope": "variable_type"
-  },
-  "boolean": {
-    "text": "Schakelaar",
-    "scope": "variable_type"
-  },
-  "select": {
-    "text": "Keuze",
-    "scope": "variable_type"
-  },
+  "string": [
+    {
+      "text": "Tekst",
+      "scope": "variable_type"
+    },
+    {
+      "text": "Vrije tekst, eventueel gebonden aan een patroon of een maximale lengte",
+      "scope": "variable_type_description"
+    }
+  ],
+  "integer": [
+    {
+      "text": "Getal",
+      "scope": "variable_type"
+    },
+    {
+      "text": "Een geheel getal, eventueel tussen een minimum en een maximum",
+      "scope": "variable_type_description"
+    }
+  ],
+  "boolean": [
+    {
+      "text": "Schakelaar",
+      "scope": "variable_type"
+    },
+    {
+      "text": "Aan of uit",
+      "scope": "variable_type_description"
+    }
+  ],
+  "select": [
+    {
+      "text": "Keuze",
+      "scope": "variable_type"
+    },
+    {
+      "text": "Een van de opties die je opgeeft",
+      "scope": "variable_type_description"
+    }
+  ],
   "install": [
     {
       "text": "Installatie uitvoeren",
@@ -7208,32 +7186,12 @@
     "text": "{$name} herinstalleren? Het beleid van dit sjabloon WIST eerst de datavolumes. Typ de instantienaam om te bevestigen.",
     "scope": "instance"
   },
-  "add_variable": {
-    "text": "Variabele toevoegen",
-    "scope": "template_contents"
-  },
-  "label": {
-    "text": "Label",
-    "scope": "template_contents"
-  },
   "required": [
-    {
-      "text": "Verplicht",
-      "scope": "template_contents"
-    },
     {
       "text": "Vereist",
       "scope": "server_overview"
     }
   ],
-  "default": {
-    "text": "Standaard",
-    "scope": "template_contents"
-  },
-  "yes": {
-    "text": "Ja",
-    "scope": "template_contents"
-  },
   "path": [
     {
       "text": "Pad",
@@ -7254,10 +7212,6 @@
       "scope": "instance_files"
     }
   ],
-  "no_variables": {
-    "text": "Geen variabelen",
-    "scope": "template_contents"
-  },
   "no_variables_description": {
     "text": "Dit sjabloon heeft nog geen variabelen.",
     "scope": "template_contents"
@@ -7505,10 +7459,6 @@
   },
   "add": [
     {
-      "text": "Stap toevoegen",
-      "scope": "schedule_step"
-    },
-    {
       "text": "Toevoegen aan deze map",
       "scope": "instance_files"
     },
@@ -7541,15 +7491,7 @@
     "text": "Deze planning is nog niet uitgevoerd.",
     "scope": "instance_schedule"
   },
-  "order": {
-    "text": "Volgorde",
-    "scope": "schedule_step"
-  },
   "action": [
-    {
-      "text": "Actie",
-      "scope": "schedule_step"
-    },
     {
       "text": "Actie",
       "scope": "instance_migrate"
@@ -7559,15 +7501,7 @@
       "scope": "protect_path"
     }
   ],
-  "offset": {
-    "text": "Wachttijd",
-    "scope": "schedule_step"
-  },
   "on_failure": [
-    {
-      "text": "Bij falen",
-      "scope": "schedule_step"
-    },
     {
       "text": "Bij fout",
       "scope": "restart_policy"
@@ -8076,6 +8010,10 @@
     {
       "text": "Een dienst van een beheerde stack (beheerd door die stack)",
       "scope": "instance_kind_description"
+    },
+    {
+      "text": "Service",
+      "scope": "hohenheim_field"
     }
   ],
   "stack_port_bind_unsupported": {
@@ -8136,7 +8074,7 @@
   ],
   "rollback_done": [
     {
-      "text": "Teruggedraaid naar de bewaarde release",
+      "text": "{$name} teruggedraaid naar de bewaarde release",
       "scope": "site"
     },
     {
@@ -9781,10 +9719,16 @@
       "scope": "instance_schedule"
     }
   ],
-  "exit_code": {
-    "text": "Afsluitcode {$code}",
-    "scope": "instance_exec"
-  },
+  "exit_code": [
+    {
+      "text": "Afsluitcode {$code}",
+      "scope": "instance_exec"
+    },
+    {
+      "text": "Afsluitcode",
+      "scope": "hohenheim_field"
+    }
+  ],
   "exec_command_required": {
     "text": "Geef een uit te voeren opdracht op",
     "scope": "violations"
@@ -9897,10 +9841,6 @@
     {
       "text": "{$name} - Stappen",
       "scope": "schedule_step"
-    },
-    {
-      "text": "{$name} - Secundairen",
-      "scope": "dns_secondaries"
     },
     {
       "text": "{$name} - Zonebestand",
@@ -10141,10 +10081,16 @@
     "text": "Verifieer de machine buiten deze verbinding om en pin daarna de identiteit die ze nu aanbiedt opnieuw vast. Opnieuw vastpinnen IS de enige manier waarop een quarantaine verdwijnt; een andere knop bestaat bewust niet.",
     "scope": "server_overview"
   },
-  "last_error": {
-    "text": "De laatste controle is mislukt",
-    "scope": "server_overview"
-  },
+  "last_error": [
+    {
+      "text": "De laatste controle is mislukt",
+      "scope": "server_overview"
+    },
+    {
+      "text": "Laatste fout",
+      "scope": "hohenheim_field"
+    }
+  ],
   "trust_ssh": {
     "text": "SSH-hostsleutel",
     "scope": "server_overview"
@@ -10523,10 +10469,16 @@
       "scope": "put_online"
     }
   ],
-  "protocol": {
-    "text": "Protocol",
-    "scope": "instance_overview"
-  },
+  "protocol": [
+    {
+      "text": "Protocol",
+      "scope": "instance_overview"
+    },
+    {
+      "text": "Protocol",
+      "scope": "hohenheim_field"
+    }
+  ],
   "port_state": {
     "text": "Toestand",
     "scope": "instance_overview"
@@ -10658,7 +10610,7 @@
     },
     {
       "text": "Geweigerd",
-      "scope": "build_status"
+      "scope": "operation_status"
     }
   ],
   "deleted_database": {
@@ -10899,10 +10851,16 @@
     "text": "Voldoen aan",
     "scope": "hohenheim_field"
   },
-  "events": {
-    "text": "Gebeurtenissen",
-    "scope": "notification_channel"
-  },
+  "events": [
+    {
+      "text": "Gebeurtenissen",
+      "scope": "notification_channel"
+    },
+    {
+      "text": "Gebeurtenissen",
+      "scope": "hohenheim_field"
+    }
+  ],
   "auto": {
     "text": "Automatisch",
     "scope": "ban_source"
@@ -11819,10 +11777,6 @@
     {
       "text": "Exclusief",
       "scope": "instance_volume"
-    },
-    {
-      "text": "Exclusief",
-      "scope": "template_contents"
     }
   ],
   "never_measured": {
@@ -12359,27 +12313,23 @@
   "succeeded": [
     {
       "text": "Geslaagd",
-      "scope": "build_status"
-    },
-    {
-      "text": "Geslaagd",
-      "scope": "release_status"
+      "scope": "operation_status"
     }
   ],
   "timed_out": {
     "text": "Time-out",
-    "scope": "build_status"
+    "scope": "operation_status"
   },
   "quota_exceeded": {
     "text": "Quota overschreden",
-    "scope": "build_status"
+    "scope": "operation_status"
   },
   "letsencrypt": {
     "text": "Let's Encrypt",
     "scope": "cert_provider"
   },
   "custom": {
-    "text": "Eigen",
+    "text": "Geupload",
     "scope": "cert_provider"
   },
   "acme_account": {
@@ -12482,19 +12432,19 @@
   },
   "probing": {
     "text": "Wordt gecontroleerd",
-    "scope": "release_status"
+    "scope": "operation_status"
   },
   "switching": {
     "text": "Wordt omgeschakeld",
-    "scope": "release_status"
+    "scope": "operation_status"
   },
   "draining": {
     "text": "Wordt afgebouwd",
-    "scope": "release_status"
+    "scope": "operation_status"
   },
   "interrupted": {
     "text": "Onderbroken",
-    "scope": "release_status"
+    "scope": "operation_status"
   },
   "local": {
     "text": "Lokaal",
@@ -12738,24 +12688,8 @@
     "text": "Image-override voor de aangemaakte databank; laat leeg voor de standaardimage van de engine.",
     "scope": "help"
   },
-  "add_database": {
-    "text": "Databank toevoegen",
-    "scope": "template_contents"
-  },
-  "no_databases": {
-    "text": "Geen gedeclareerde databanken",
-    "scope": "template_contents"
-  },
   "no_databases_description": {
     "text": "Dit sjabloon declareert geen beheerde databanken; een instantie uit dit sjabloon moet er zelf een koppelen.",
-    "scope": "template_contents"
-  },
-  "add_volume": {
-    "text": "Volume toevoegen",
-    "scope": "template_contents"
-  },
-  "no_volumes": {
-    "text": "Geen gedeclareerde volumes",
     "scope": "template_contents"
   },
   "no_volumes_description": {
@@ -12765,10 +12699,6 @@
   "template_volume_name_taken": {
     "text": "Dit sjabloon declareert al een volume met de naam '{$name}'. Twee declaraties van een naam worden een enkel volume op elke instantie, dus een ervan zou verloren gaan.",
     "scope": "violations"
-  },
-  "prefix": {
-    "text": "Env-voorvoegsel",
-    "scope": "template_contents"
   },
   "template_required": {
     "text": "Kies een sjabloon",
@@ -13458,7 +13388,7 @@
     "scope": "help"
   },
   "database_engine_name": {
-    "text": "Bepaalt de naam van de enginecontainer en het datavolume: kleine letters, cijfers en streepjes.",
+    "text": "Bepaalt de naam van de enginecontainer en het datavolume: letters, cijfers, punten, streepjes en liggende streepjes, beginnend met een letter of cijfer.",
     "scope": "help"
   },
   "database_engine_root_user": {
@@ -14496,7 +14426,7 @@
   },
   "cannot_start": [
     {
-      "text": "{$name} kan nog niet starten",
+      "text": "Kan nog niet starten",
       "scope": "app_health"
     },
     {
@@ -15539,6 +15469,9 @@
   "back_up_started": {"text": "Backup van {$name} gestart; de dump verschijnt onder Backups zodra hij klaar is.", "scope": "database"},
   "back_up_temporary": {"text": "Een tijdelijke database krijgt geen backup.", "scope": "database"},
   "back_up_not_active": {"text": "Alleen van een draaiende database kan een backup gemaakt worden.", "scope": "database"},
+  "back_up_not_serving": {"text": "Er kan nu geen backup gemaakt worden. {$reason}.", "scope": "database"},
+  "move_not_active": {"text": "Alleen een draaiende database kan verhuizen.", "scope": "database"},
+  "move_not_serving": {"text": "Verhuizen kan nu niet. {$reason}.", "scope": "database"},
   "back_up_database": {"text": "{$actor} maakte een backup van database {$subject}", "scope": "hohenheim", "target": "happened"},
   "runs_on_column": {"text": "Draait op", "scope": "database_list"},
   "last_backup_column": {"text": "Laatste backup", "scope": "database_list"},
@@ -15797,7 +15730,7 @@
       "scope": "nav_cluster"
     },
     {
-      "text": "Je adressen, DNS-records, certificaten en toegangslijsten.",
+      "text": "Je adressen en alles wat erbij hoort.",
       "scope": "nav_cluster_hint"
     }
   ],
@@ -16805,10 +16738,6 @@
     "text": "Geblokkeerde adressen openen",
     "scope": "attention_action"
   },
-  "fix": {
-    "text": "Oplossing",
-    "scope": "app_list"
-  },
   "live_not_running": {
     "text": "Het draait niet, dus het gebruikt niets.",
     "scope": "instance_overview"
@@ -16824,6 +16753,10 @@
   "cpu_first_reading": {
     "text": "De eerste meting heeft nog geen CPU-cijfer.",
     "scope": "instance_overview"
+  },
+  "offset_value": {
+    "text": ".match {$count :number}\none {{1 seconde}}\n* {{{$count} seconden}}",
+    "scope": "schedule_step"
   },
   "cores": {
     "text": ".match {$count :number}\none {{1 kern}}\n* {{{$count} kernen}}",
@@ -16988,6 +16921,10 @@
     "text": ".match {$more :number}\none {{Vroeg naar {$names} en nog 1, {$ago}}}\n* {{Vroeg naar {$names} en nog {$more}, {$ago}}}",
     "scope": "ban"
   },
+  "other_names_column": {
+    "text": "Andere namen",
+    "scope": "certificate"
+  },
   "no_misses": {
     "text": "Het voorbije uur vroeg geen enkel adres naar een naam die deze server niet bedient",
     "scope": "ban"
@@ -17114,6 +17051,138 @@
       "text": "{$subject} stopte en de automatische herstart werd geweigerd",
       "scope": "hohenheim",
       "target": "happened"
+    }
+  ],
+  "format": {
+    "text": "Formaat",
+    "scope": "hohenheim_field"
+  },
+  "for_model": {
+    "text": "Recordtype",
+    "scope": "hohenheim_field"
+  },
+  "for_id": {
+    "text": "Record-ID",
+    "scope": "hohenheim_field"
+  },
+  "source_ref": {
+    "text": "Bronrevisie",
+    "scope": "hohenheim_field"
+  },
+  "disk_limit_mb": {
+    "text": "Schijflimiet (MB)",
+    "scope": "hohenheim_field"
+  },
+  "pids_limit": {
+    "text": "Proceslimiet",
+    "scope": "hohenheim_field"
+  },
+  "timeout_seconds": {
+    "text": "Tijdslimiet (seconden)",
+    "scope": "hohenheim_field"
+  },
+  "peak_disk_bytes": {
+    "text": "Hoogste schijfgebruik (bytes)",
+    "scope": "hohenheim_field"
+  },
+  "artifact_bytes": {
+    "text": "Artefactgrootte (bytes)",
+    "scope": "hohenheim_field"
+  },
+  "duration_ms": {
+    "text": "Duur (ms)",
+    "scope": "hohenheim_field"
+  },
+  "candidate_instance": {
+    "text": "Nieuwe instantie",
+    "scope": "hohenheim_field"
+  },
+  "retired_instance": {
+    "text": "Vervangen instantie",
+    "scope": "hohenheim_field"
+  },
+  "step_log": {
+    "text": "Stappen",
+    "scope": "hohenheim_field"
+  },
+  "pr_number": {
+    "text": "Pull request",
+    "scope": "hohenheim_field"
+  },
+  "head_sha": {
+    "text": "Commit",
+    "scope": "hohenheim_field"
+  },
+  "finding_bucket": {
+    "text": "Eigenaarschap",
+    "scope": "hohenheim_field"
+  },
+  "resource_name": {
+    "text": "Resource",
+    "scope": "hohenheim_field"
+  },
+  "evidence": {
+    "text": "Bewijs",
+    "scope": "hohenheim_field"
+  },
+  "max_heap_mb": {
+    "text": "Maximale heap (MB)",
+    "scope": "hohenheim_field"
+  },
+  "system_user": {
+    "text": "Systeemgebruiker",
+    "scope": "hohenheim_field"
+  },
+  "site": {
+    "text": "Site",
+    "scope": "hohenheim_field"
+  },
+  "stack": {
+    "text": "Stack",
+    "scope": "hohenheim_field"
+  },
+  "zone": {
+    "text": "Zone",
+    "scope": "hohenheim_field"
+  },
+  "peer": {
+    "text": "Peer",
+    "scope": "hohenheim_field"
+  },
+  "device_type": {
+    "text": "Type",
+    "scope": "hohenheim_field"
+  },
+  "variable_kind": {
+    "text": "Soort",
+    "scope": "hohenheim_field"
+  },
+  "mount_type": {
+    "text": "Type",
+    "scope": "hohenheim_field"
+  },
+  "depends_condition": {
+    "text": "Voorwaarde",
+    "scope": "hohenheim_field"
+  },
+  "basic": [
+    {
+      "text": "HTTP-basisauthenticatie",
+      "scope": "auth_provider_type"
+    },
+    {
+      "text": "Een gebruikersnaam en wachtwoord waar de browser om vraagt",
+      "scope": "auth_provider_type_description"
+    }
+  ],
+  "proteus": [
+    {
+      "text": "Proteus SSO",
+      "scope": "auth_provider_type"
+    },
+    {
+      "text": "Aanmelden via een Proteus single-sign-on-realm",
+      "scope": "auth_provider_type_description"
     }
   ]
 }

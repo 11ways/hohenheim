@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.files;
 
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.server.runtime.InstanceFileSupport;
+import be.elevenways.hohenheim.server.util.PosixPaths;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.validation.Violation;
@@ -74,7 +75,7 @@ final class InstanceSftpMount implements SftpMount {
     public @Nullable SftpEntry stat(@NonNull String path) {
         return refusing(() -> {
             if (this.virtualChildren(path) != null) {
-                return virtualEntry(nameOf(path));
+                return virtualEntry(PosixPaths.nameOf(path));
             }
             InstanceFiles.Entry entry = this.files.stat(this.instanceId, path);
             return entry == null ? null : entryOf(entry);
@@ -177,10 +178,6 @@ final class InstanceSftpMount implements SftpMount {
         };
     }
 
-    /** @return the last segment of an absolute path, empty for the root */
-    private static @NonNull String nameOf(@NonNull String path) {
-        return path.substring(path.lastIndexOf('/') + 1);
-    }
 
     /**
      * Runs one file-manager call, turning the capability refusal into the permission refusal SFTP reports.

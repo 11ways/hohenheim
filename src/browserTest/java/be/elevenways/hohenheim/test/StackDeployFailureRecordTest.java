@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
@@ -94,7 +95,8 @@ class StackDeployFailureRecordTest extends HohenheimTestBase {
         assertThat(rows).as("step 2: exactly one deployment row exists").hasSize(1);
         Row first = rows.get(0);
         assertThat(first.get(StackDeploymentModel.STATUS))
-            .as("step 2: it settled as failed").isEqualTo(StackDeploymentModel.STATUS_FAILED);
+            .as("step 2: it settled as failed").isEqualTo(
+                StackDeploymentModel.LIFECYCLE.stored(OperationStatus.FAILED));
         assertThat((String) first.get(StackDeploymentModel.ERROR))
             .as("step 2: the error names the cause").contains("ghost");
         assertThat((String) first.get(StackDeploymentModel.LOG))
@@ -142,7 +144,7 @@ class StackDeployFailureRecordTest extends HohenheimTestBase {
         Model deployments = Models.get(StackDeploymentModel.class);
         Row interrupted = deployments.createEmptyRow();
         interrupted.set(StackDeploymentModel.STACK_ID, stackId);
-        interrupted.set(StackDeploymentModel.STATUS, StackDeploymentModel.STATUS_RUNNING);
+        interrupted.set(StackDeploymentModel.STATUS, StackDeploymentModel.LIFECYCLE.stored(OperationStatus.RUNNING));
         interrupted.set(StackDeploymentModel.REASON, "manual");
         interrupted.set(StackDeploymentModel.STARTED_AT, Now.instant());
         deployments.save(interrupted);
@@ -154,7 +156,7 @@ class StackDeployFailureRecordTest extends HohenheimTestBase {
         Row swept = deployments.findById(interrupted.get(StackDeploymentModel.ID));
         assertThat(swept.get(StackDeploymentModel.STATUS))
             .as("step 5: the interrupted row settled as failed")
-            .isEqualTo(StackDeploymentModel.STATUS_FAILED);
+            .isEqualTo(StackDeploymentModel.LIFECYCLE.stored(OperationStatus.FAILED));
         assertThat((String) swept.get(StackDeploymentModel.ERROR))
             .as("step 5: with the restart named as the reason")
             .isEqualTo(StackRuntime.INTERRUPTED_BY_RESTART);

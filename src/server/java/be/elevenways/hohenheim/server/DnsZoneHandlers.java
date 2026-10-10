@@ -2,13 +2,13 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.cms.DnsRecordParts;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -52,7 +52,7 @@ final class DnsZoneHandlers {
             Map<String, String> form = HandlerSupport.formMap(conduit);
             String text = form.getOrDefault("zone_text", "");
             if (text.isBlank()) {
-                HohenheimFlash.error(conduit, zoneError("import_empty"));
+                HohenheimFlash.error(conduit, HohenheimMicrocopy.DNS_ZONE.of("import_empty"));
                 return HandlerSupport.redirect(back);
             }
 
@@ -63,16 +63,16 @@ final class DnsZoneHandlers {
                     zone.get(DnsZoneModel.ORIGIN));
                 String notes = String.join("; ", result.notes());
                 if (!result.skipped().isEmpty()) {
-                    HohenheimFlash.warning(conduit, zoneError("import_partial")
+                    HohenheimFlash.warning(conduit, HohenheimMicrocopy.DNS_ZONE.of("import_partial")
                         .withArg("count", result.imported())
                         .withArg("skipped", String.join("; ", result.skipped()))
                         .withArg("notes", notes));
                 } else if (!notes.isEmpty()) {
-                    HohenheimFlash.success(conduit, zoneError("import_done_notes")
+                    HohenheimFlash.success(conduit, HohenheimMicrocopy.DNS_ZONE.of("import_done_notes")
                         .withArg("count", result.imported())
                         .withArg("notes", notes));
                 } else {
-                    HohenheimFlash.success(conduit, zoneError("import_done")
+                    HohenheimFlash.success(conduit, HohenheimMicrocopy.DNS_ZONE.of("import_done")
                         .withArg("count", result.imported()));
                 }
                 return HandlerSupport.redirect(back);
@@ -82,7 +82,7 @@ final class DnsZoneHandlers {
                 return HandlerSupport.redirect(back);
             }
             catch (Exception e) {
-                HohenheimFlash.error(conduit, zoneError("import_failed")
+                HohenheimFlash.error(conduit, HohenheimMicrocopy.DNS_ZONE.of("import_failed")
                     .withArg("reason", String.valueOf(e.getMessage())));
                 return HandlerSupport.redirect(back);
             }
@@ -91,19 +91,14 @@ final class DnsZoneHandlers {
 
     /** The operator panel's zone list, where an unknown or unfit zone lands. */
     private static @NonNull BoundEndpoint<?> zoneList() {
-        return CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.DNS_ZONES);
-    }
-
-    /** A zone-tab outcome message. */
-    private static Microcopy zoneError(String key) {
-        return Microcopy.of(key).withFilter("scope", "dns_zone");
+        return CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.DNS_ZONES);
     }
 
     /** The zone tab {@code slug}, as a target extra parameters can still be bound onto. */
     private static @NonNull BoundEndpoint<Map<String, Object>> zoneSubpage(@NonNull Integer zoneId,
                                                                           @NonNull String slug) {
         return CmsEndpoints.RECORD_SUBPAGE
-            .with(CmsEndpoints.PANEL_PARAM, HandlerSupport.ADMIN)
+            .with(CmsEndpoints.PANEL_PARAM, HohenheimSlugs.ADMIN)
             .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.DNS_ZONES)
             .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(zoneId))
             .with(CmsEndpoints.SUBPAGE_PARAM, slug);

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -93,7 +94,7 @@ public enum PreflightFinding {
 
     /** @return this finding's catalog entry, without its arguments */
     public @NonNull Microcopy copy() {
-        return Microcopy.of("finding_" + this.token()).withFilter("scope", "host_check");
+        return HohenheimMicrocopy.HOST_CHECK.of("finding_" + this.token());
     }
 
     /**

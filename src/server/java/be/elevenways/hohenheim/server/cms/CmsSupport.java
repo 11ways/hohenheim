@@ -1,17 +1,18 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import java.util.Objects;
 import be.elevenways.protoblast.common.http.Uri;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.HohenheimViolations;
-import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
@@ -23,7 +24,6 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
-import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -36,6 +36,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
+import static be.elevenways.hohenheim.RawValues.parsedInt;
 
 /**
  * Shared helpers for the CMS resources: proxy reload and coerced-map copies.
@@ -80,14 +83,6 @@ public final class CmsSupport {
     private CmsSupport() {
     }
 
-    /** Rebuild the proxy routing table from the current configuration. */
-    public static void reloadProxy() {
-        var proxy = ServerMain.getProxyServer();
-        if (proxy != null) {
-            proxy.reload();
-        }
-    }
-
     /** The coerced maps the CMS hands to persist/update are immutable; copy before staging values. */
     public static @NonNull Map<String, Object> mutable(@NonNull Map<String, Object> coerced) {
         return new LinkedHashMap<>(coerced);
@@ -123,7 +118,7 @@ public final class CmsSupport {
     public static @NonNull String textOf(@NonNull Map<String, Object> coerced,
                                          @Nullable Row existing, @NonNull Field<?, ?> field) {
         Object value = valueOf(coerced, existing, field);
-        return value != null ? String.valueOf(value).trim() : "";
+        return trimmed(value);
     }
 
     /** {@link #valueOf} as an Integer; anything that is not one reads as null. */
@@ -193,25 +188,17 @@ public final class CmsSupport {
      * the panel then opens; the caller adds what differs (sheet, row inlining, prefill).
      *
      * @param landing the URL of the made record, from the panel slug and its id
+     * @param verb    the form's title and its submit button
      */
     static PanelAction.@NonNull OperationBuilder<Row, Integer> opensWhatItMade(
             @NonNull Operation<?, ?, Integer> operation, @NonNull BiFunction<String, Integer, String> landing,
-            @NonNull Microcopy title, @NonNull Microcopy body, @Nullable Microcopy confirmLabel) {
-        ConfirmationSpec.Builder confirmation = ConfirmationSpec.builder().title(title).body(body);
-        if (confirmLabel != null) {
-            confirmation = confirmation.confirmLabel(confirmLabel);
-        }
+            @NonNull Microcopy verb, @NonNull Microcopy body) {
         return PanelAction.<Row, Integer>places(operation, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.redirect(new Uri(landing.apply(request.request().panelSlug(),
                     Objects.requireNonNull(result.value(), "the operation answers the record it made")))))
             .inlineOnRecord(false)
             .inlineInRow(false)
-            .confirmation(confirmation.build());
-    }
-
-    /** A violation-scoped microcopy message (catalog entries carry {@code scope=violations}). */
-    public static @NonNull Microcopy violationText(@NonNull String key) {
-        return HohenheimViolations.text(key);
+            .confirmation(Confirmations.of(verb, body, ActionStyle.DEFAULT));
     }
 
     /**
@@ -219,8 +206,8 @@ public final class CmsSupport {
      * OWN scope, so the sidebar entry, the panel index and the related-pages menu item a
      * demoted peer is reached through all read the same sentence.
      */
-    public static @NonNull Microcopy navHint(@NonNull String scope) {
-        return Microcopy.of("nav_hint").withFilter("scope", scope);
+    public static @NonNull Microcopy navHint(@NonNull HohenheimMicrocopy scope) {
+        return scope.of("nav_hint");
     }
 
     /**
@@ -236,13 +223,12 @@ public final class CmsSupport {
      * surface owns its own short keys. `page_title` is guarded against reintroduction by
      * PageTitleLocalizationTest.
      *
-     * @param scope the page's microcopy scope, e.g. {@code instance_device}
+     * @param scope the page's microcopy scope, e.g. {@link HohenheimMicrocopy#INSTANCE_DEVICE}
      * @param name the record's own name, never translated (it is user data)
      */
-    public static @NonNull String pageTitle(@NonNull Conduit conduit, @NonNull String scope,
+    public static @NonNull String pageTitle(@NonNull Conduit conduit, @NonNull HohenheimMicrocopy scope,
                                             @Nullable Object name) {
-        return Microcopy.of("page_title").withFilter("scope", scope)
-            .withArg("name", String.valueOf(name))
+        return scope.of("page_title").withArg("name", String.valueOf(name))
             .resolve(conduit.getLocales(), conduit.getMessageResolver());
     }
 
@@ -272,15 +258,18 @@ public final class CmsSupport {
         return parsedInt(conduit.getParameter(CmsEndpoints.RESOURCE_ID_PARAM));
     }
 
-    /**
-     * One raw request value as an Integer, riding zenit's {@link PrimitiveCoercion}.
-     *
-     * @return the parsed integer, or null for an absent, blank or malformed value
-     */
-    public static @Nullable Integer parsedInt(@Nullable Object raw) {
-        PrimitiveCoercion.Result<Integer> coerced = PrimitiveCoercion.toInteger(raw,
-            PrimitiveCoercion.NumberRule.INTEGRAL_SOURCES, PrimitiveCoercion.TextRule.TRIMMED_BLANK_IS_NULL);
-        return coerced.ok() ? coerced.value() : null;
+    /** @return the quick-add bar's preset {@code field -> }{@link #scopedParentId}, empty when it names no parent */
+    public static @NonNull Map<String, Object> parentPreset(@NonNull AccessContext access, @NonNull String field,
+                                                            @NonNull String parentSlug) {
+        Conduit conduit = access.conduit();
+        Integer id = conduit == null ? null : scopedParentId(conduit, field, parentSlug);
+        return id != null ? Map.of(field, id) : Map.of();
+    }
+
+    /** @return the relative-time wording in the request's locale, the English defaults outside a request */
+    public static @NonNull RelativeTimeWording timeWording(@Nullable Conduit conduit) {
+        return conduit == null ? RelativeTimeWording.agoDefaults()
+            : RelativeTimeWording.resolve(conduit.getLocales(), conduit.getMessageResolver());
     }
 
     /**
@@ -333,6 +322,12 @@ public final class CmsSupport {
         return value;
     }
 
+    /** {@link #memo(Conduit, IdentifierKey, Supplier)} on the current request; without one, a fresh read per call. */
+    public static <V> @NonNull V memo(@NonNull IdentifierKey<V> key, @NonNull Supplier<V> read) {
+        Conduit conduit = RouteScope.currentConduit();
+        return conduit == null ? read.get() : memo(conduit, key, read);
+    }
+
     /**
      * Whether this render is the DELEGATED tenant panel rather than the operator one.
      *
@@ -348,7 +343,7 @@ public final class CmsSupport {
      * -- reaches a tenant unless the page asks this.
      */
     public static boolean isDelegatedPanel(@NonNull Conduit conduit) {
-        return ManagePanel.SLUG.equals(panelSlug(conduit));
+        return HohenheimSlugs.MANAGE.equals(panelSlug(conduit));
     }
 
     /**

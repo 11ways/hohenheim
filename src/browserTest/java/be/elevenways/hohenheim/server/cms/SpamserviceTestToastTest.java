@@ -62,13 +62,13 @@ class SpamserviceTestToastTest extends HohenheimTestBase {
             assertThat(SpamserviceOperations.connectedReason(manager)).as("step 1: TEST is available").isNull();
 
             // 2. Invoke the registered HEADER operation through its authenticated, CSRF-protected HTTP route.
-            String invoke = CmsRoutes.invoke(HohenheimSlugs.ADMIN, SpamserviceInstallationResource.SLUG,
+            String invoke = CmsRoutes.invoke(HohenheimSlugs.ADMIN, HohenheimSlugs.SPAMSERVICE_INSTALLATION,
                 SpamserviceOperations.TEST.id()).toUrl();
             var answer = httpPostForm(invoke, PanelResourceCalls.createEnvelope(), sessionToken, csrfToken);
             assertThat(answer.statusCode()).as("step 2: the form-less invoke returns to the installation")
                 .isBetween(300, 399);
             assertThat(landingOf(answer)).as("step 2: the error stays on its installation")
-                .isEqualTo(CmsRoutes.list(HohenheimSlugs.ADMIN, SpamserviceInstallationResource.SLUG).toUrl());
+                .isEqualTo(CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.SPAMSERVICE_INSTALLATION).toUrl());
             assertThat(calls.get()).as("step 2: the real client reached the failing backend once").isEqualTo(1);
 
             // 3. The one-shot flash retains the refusal key, scope, reason and ERROR appearance.

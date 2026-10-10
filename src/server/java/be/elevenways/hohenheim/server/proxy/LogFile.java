@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.hohenheim.server.util.Closeables;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 
@@ -31,11 +32,6 @@ final class LogFile {
     private Writer writer;
     private Path writerPath;
     private Object writerFileKey;
-
-    /** Whether a log's on/off setting is on. */
-    static boolean enabled(SettingDefinition<Boolean> setting) {
-        return Boolean.TRUE.equals(Zenit.SETTINGS_VALUES.getValue(setting));
-    }
 
     /** Append one line to the file the path setting names; nothing when it names none. */
     void appendTo(SettingDefinition<String> pathSetting, String line) {
@@ -132,13 +128,7 @@ final class LogFile {
     }
 
     private void closeWriter() {
-        if (this.writer != null) {
-            try {
-                this.writer.close();
-            } catch (IOException ignored) {
-                // best effort
-            }
-        }
+        Closeables.closeQuietly(this.writer);
         this.writer = null;
         this.writerPath = null;
         this.writerFileKey = null;

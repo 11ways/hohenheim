@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.host.HostStanding;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -12,7 +13,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
-import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
 
 /**
  * Whether one host takes new apps, why not, and what clears it: ONE reading of the placement gate
@@ -48,15 +48,15 @@ record HostVerdict(@NonNull HostStanding standing, @Nullable Microcopy reason,
                 : new HostVerdict(HostStanding.REFUSING, refusal, PlacementRefusal.remedyOf(refusal));
         }
         if (ServerModel.ADMISSION_CORDONED.equals(admission)) {
-            return new HostVerdict(HostStanding.PAUSED, ServerParts.listCopy("cordoned_detail"),
+            return new HostVerdict(HostStanding.PAUSED, HohenheimMicrocopy.HOST_LIST.of("cordoned_detail"),
                 PlacementRefusal.Remedy.OPEN_HOST);
         }
         // An unknown or missing token reads as waiting, the state that places nothing: fail closed.
         List<Microcopy> failed = HostAttention.failedRequiredChecks(server);
         Microcopy reason = !failed.isEmpty()
-            ? ServerParts.listCopy("checks_failed").withArg("count", failed.size()).withArg("checks", failed)
-            : server.get(ServerModel.PROBED_AT) == null ? ServerParts.listCopy("never_checked")
-            : ServerParts.listCopy("checks_pass");
+            ? HohenheimMicrocopy.HOST_LIST.of("checks_failed").withArg("count", failed.size()).withArg("checks", failed)
+            : server.get(ServerModel.PROBED_AT) == null ? HohenheimMicrocopy.HOST_LIST.of("never_checked")
+            : HohenheimMicrocopy.HOST_LIST.of("checks_pass");
         return new HostVerdict(HostStanding.WAITING, reason, PlacementRefusal.Remedy.CHECK_AND_ADMIT);
     }
 
@@ -67,12 +67,11 @@ record HostVerdict(@NonNull HostStanding standing, @Nullable Microcopy reason,
 
     /**
      * @return the Hosts list's state cell: the standing in words, with why only where no attention item says it; a
-     *         standing that raises one ({@link HostStanding#raisesAttention}) has its reason in the list's band above,
+     *         standing that raises one ({@link HostStanding#severity}) has its reason in the list's band above,
      *         so the row does not repeat that sentence word for word (board Hosts: the card shows the badge)
      */
     @NonNull StateLineCell cell() {
-        return new StateLineCell(this.standing.token(), this.standing.variant(), this.standing.label(),
-            this.standing.raisesAttention() ? null : this.reason, null);
+        return StateLineCell.of(this.standing, this.standing.severity() != null ? null : this.reason);
     }
 
     /**
@@ -81,11 +80,11 @@ record HostVerdict(@NonNull HostStanding standing, @Nullable Microcopy reason,
      */
     @NonNull Microcopy remedyAction(@NonNull Object name) {
         return switch (this.remedy) {
-            case CHECK_AND_ADMIT -> action("act_check_admit");
-            case CHECK_AGAIN -> action("act_check_again");
-            case CONFIRM_KEY -> action("act_confirm_host_key");
-            case REVIEW_KEY -> action("act_review_host_key");
-            case OPEN_HOST -> action("act_open_app", "name", name);
+            case CHECK_AND_ADMIT -> HohenheimMicrocopy.ATTENTION_ACTION.of("act_check_admit");
+            case CHECK_AGAIN -> HohenheimMicrocopy.ATTENTION_ACTION.of("act_check_again");
+            case CONFIRM_KEY -> HohenheimMicrocopy.ATTENTION_ACTION.of("act_confirm_host_key");
+            case REVIEW_KEY -> HohenheimMicrocopy.ATTENTION_ACTION.of("act_review_host_key");
+            case OPEN_HOST -> HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_app").withArg("name", name);
         };
     }
 }

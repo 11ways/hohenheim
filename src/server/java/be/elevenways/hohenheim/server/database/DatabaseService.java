@@ -1,14 +1,15 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
-import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -22,10 +23,10 @@ import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.server.util.DatasourceScoped;
+import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.ExecutionContext;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -42,8 +43,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -63,9 +62,6 @@ import java.util.concurrent.Executors;
  * @since   0.1.0
  */
 public class DatabaseService extends DatasourceScoped {
-
-    private static final DateTimeFormatter STAMP =
-        DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
 
     // Background pool for provisioning (image pull + container start can take tens of seconds);
     // shared because handlers construct DatabaseService per request. Bounded to limit load.
@@ -418,7 +414,7 @@ public class DatabaseService extends DatasourceScoped {
         DatabaseModel model = model();
         if (model.findByName(name) != null) {
             throw Violations.ofField(DatabaseModel.NAME.getName(), name,
-                HohenheimViolations.text("database_name_taken")
+                HohenheimMicrocopy.VIOLATIONS.of("database_name_taken")
                     .withArg("name", name));
         }
         String resolvedPlacement = placement == null || placement.isBlank()
@@ -429,14 +425,14 @@ public class DatabaseService extends DatasourceScoped {
             requireLogicalIdentifiers(user, password, database);
             if (limits.memoryMb() != null || limits.cpus() != null) {
                 throw Violations.ofField(DatabaseModel.MEMORY_LIMIT_MB.getName(),
-                    limits.memoryMb(), CmsSupport.violationText("database_shared_limits"));
+                    limits.memoryMb(), HohenheimMicrocopy.VIOLATIONS.of("database_shared_limits"));
             }
             engineRow = engineId != null ? explicitEngine(engineId, serverId, engine, image)
                 : DatabaseEngines.findOrCreateShared(serverId, engine, image);
             requireLogicalFree(engineRow.get(DatabaseEngineModel.ID), database, user, null);
         } else if (!DatabaseModel.PLACEMENT_DEDICATED.equals(resolvedPlacement)) {
             throw Violations.ofField(DatabaseModel.PLACEMENT.getName(), resolvedPlacement,
-                CmsSupport.violationText("database_placement_unknown")
+                HohenheimMicrocopy.VIOLATIONS.of("database_placement_unknown")
                     .withArg("placement", resolvedPlacement));
         }
         Row row = model.createEmptyRow();
@@ -467,13 +463,13 @@ public class DatabaseService extends DatasourceScoped {
         Row engineRow = Models.get(DatabaseEngineModel.class).findById(engineId);
         if (engineRow == null || !engine.token().equals(engineRow.get(DatabaseEngineModel.ENGINE))) {
             throw Violations.ofField(DatabaseModel.ENGINE_ID.getName(), engineId,
-                CmsSupport.violationText("database_engine_kind_mismatch")
+                HohenheimMicrocopy.VIOLATIONS.of("database_engine_kind_mismatch")
                     .withArg("engine", engine.token()));
         }
         int engineServer = ServerModel.canonicalServerId(engineRow.get(DatabaseEngineModel.SERVER_ID));
         if (engineServer != serverId) {
             throw Violations.ofField(DatabaseModel.ENGINE_ID.getName(), engineId,
-                CmsSupport.violationText("database_engine_host_mismatch")
+                HohenheimMicrocopy.VIOLATIONS.of("database_engine_host_mismatch")
                     .withArg("name", String.valueOf((Object) engineRow.get(DatabaseEngineModel.NAME)))
                     .withArg("server", ServerModel.nameOf(engineServer))
                     .withArg("database_server", ServerModel.nameOf(serverId)));
@@ -489,15 +485,15 @@ public class DatabaseService extends DatasourceScoped {
     static void requireLogicalIdentifiers(String user, String password, String database) {
         if (!ManagedDatabase.Engine.isLogicalIdentifier(database)) {
             throw Violations.ofField(DatabaseModel.DB_NAME.getName(), database,
-                CmsSupport.violationText("database_logical_identifier"));
+                HohenheimMicrocopy.VIOLATIONS.of("database_logical_identifier"));
         }
         if (!ManagedDatabase.Engine.isLogicalIdentifier(user)) {
             throw Violations.ofField(DatabaseModel.DB_USER.getName(), user,
-                CmsSupport.violationText("database_logical_identifier"));
+                HohenheimMicrocopy.VIOLATIONS.of("database_logical_identifier"));
         }
         if (!ManagedDatabase.Engine.isLogicalIdentifier(password)) {
             throw Violations.ofField(DatabaseModel.DB_PASSWORD.getName(), "",
-                CmsSupport.violationText("database_logical_identifier"));
+                HohenheimMicrocopy.VIOLATIONS.of("database_logical_identifier"));
         }
     }
 
@@ -758,7 +754,7 @@ public class DatabaseService extends DatasourceScoped {
      * engine with the engine's root credentials.
      */
     public Path backupToFile(String name, Path directory, String baseName) throws IOException {
-        Row row = requireWith(name, HohenheimAccess.BACKUPS);
+        Row row = requireWith(name, HohenheimCapabilities.BACKUPS);
         return backupRowToFile(row, directory, baseName);
     }
 
@@ -799,7 +795,7 @@ public class DatabaseService extends DatasourceScoped {
      * @throws IOException when the dump fails; nothing is left on disk
      */
     public BackupStream backupStream(String name) throws IOException {
-        Row row = requireWith(name, HohenheimAccess.BACKUPS);
+        Row row = requireWith(name, HohenheimCapabilities.BACKUPS);
         EngineHost host = hostOf(row);
         Path directory = Files.createTempDirectory("hohenheim-backup");
         Path dump = directory.resolve(name + "." + host.engine().dumpExtension());
@@ -863,7 +859,7 @@ public class DatabaseService extends DatasourceScoped {
         if (row != null) {
             Integer recordId = row.get(DatabaseModel.ID);
             if (recordId != null) {
-                HohenheimAccess.requireDatabaseCapability(recordId, HohenheimAccess.DESTROY);
+                HohenheimAccess.requireDatabaseCapability(recordId, HohenheimCapabilities.DESTROY);
             }
             try {
                 scoped(() -> {
@@ -1042,7 +1038,7 @@ public class DatabaseService extends DatasourceScoped {
             Path backupRoot = Path.of(Zenit.SETTINGS_VALUES.getValue(
                 HohenheimSettings.Database.BACKUP_PATH));
             Path dump = backupRowToFile(row, backupRoot.resolve("moves").resolve(name),
-                STAMP.format(Now.instant()));
+                UtcStamp.now());
             EngineHost old = hostOf(row);
             String oldHandle = handleOf(row, old);
             String before = fingerprint(old, oldHandle, database);
@@ -1113,9 +1109,9 @@ public class DatabaseService extends DatasourceScoped {
                 Blast.log("DB-MOVE: the old dedicated engine of", name,
                     "could not be destroyed after the move -", e.getMessage());
                 Alerts.trySend(NotificationEvents.DATABASE_MOVE_LEFTOVER, Alerts.about(DatabaseModel.MODEL_ID, name),
-                    Microcopy.of("database_move_leftover_subject").withFilter("scope", "alert")
+                    HohenheimMicrocopy.ALERT.of("database_move_leftover_subject")
                         .withArg("name", name),
-                    Microcopy.of("database_move_leftover_body").withFilter("scope", "alert")
+                    HohenheimMicrocopy.ALERT.of("database_move_leftover_body")
                         .withArg("name", name).withArg("engine", target.name())
                         .withArg("reason", String.valueOf(e.getMessage())));
             }
@@ -1163,22 +1159,22 @@ public class DatabaseService extends DatasourceScoped {
      */
     public static @Nullable Microcopy moveRefusal(@NonNull Row row) {
         if (DatabaseModel.isShared(row)) {
-            return CmsSupport.violationText("database_already_shared")
+            return HohenheimMicrocopy.VIOLATIONS.of("database_already_shared")
                 .withArg("name", row.get(DatabaseModel.NAME));
         }
         if (!DatabaseModel.STATUS_ACTIVE.equals(row.get(DatabaseModel.STATUS))) {
-            return CmsSupport.violationText("database_not_active")
+            return HohenheimMicrocopy.VIOLATIONS.of("database_not_active")
                 .withArg("name", row.get(DatabaseModel.NAME))
                 .withArg("status", String.valueOf((Object) row.get(DatabaseModel.STATUS)));
         }
         ManagedDatabase.Engine engine =
             ManagedDatabase.Engine.forToken(row.get(DatabaseModel.ENGINE));
         if (engine == null || !engine.supportsLogicalDatabases()) {
-            return CmsSupport.violationText("database_placement_unsupported")
+            return HohenheimMicrocopy.VIOLATIONS.of("database_placement_unsupported")
                 .withArg("engine", String.valueOf((Object) row.get(DatabaseModel.ENGINE)));
         }
         if (Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL))) {
-            return CmsSupport.violationText("database_ephemeral_shared");
+            return HohenheimMicrocopy.VIOLATIONS.of("database_ephemeral_shared");
         }
         // The host's shared engine, if one exists yet, must not already hold a logical
         // database of this name: that is another record's data, and the restore would
@@ -1190,7 +1186,7 @@ public class DatabaseService extends DatasourceScoped {
             Row holder = holderOf(existing.get(DatabaseEngineModel.ID), DatabaseModel.DB_NAME,
                 row.get(DatabaseModel.DB_NAME), recordId);
             if (holder != null) {
-                return CmsSupport.violationText("database_logical_name_taken")
+                return HohenheimMicrocopy.VIOLATIONS.of("database_logical_name_taken")
                     .withArg("database", row.get(DatabaseModel.DB_NAME))
                     .withArg("engine", existing.get(DatabaseEngineModel.NAME))
                     .withArg("record", holder.get(DatabaseModel.NAME));
@@ -1216,14 +1212,14 @@ public class DatabaseService extends DatasourceScoped {
         Row nameHolder = holderOf(engineId, DatabaseModel.DB_NAME, database, excludeRecordId);
         if (nameHolder != null) {
             throw Violations.ofField(DatabaseModel.DB_NAME.getName(), database,
-                CmsSupport.violationText("database_logical_name_taken")
+                HohenheimMicrocopy.VIOLATIONS.of("database_logical_name_taken")
                     .withArg("database", database).withArg("engine", engineName)
                     .withArg("record", nameHolder.get(DatabaseModel.NAME)));
         }
         Row userHolder = holderOf(engineId, DatabaseModel.DB_USER, user, excludeRecordId);
         if (userHolder != null) {
             throw Violations.ofField(DatabaseModel.DB_USER.getName(), user,
-                CmsSupport.violationText("database_logical_user_taken")
+                HohenheimMicrocopy.VIOLATIONS.of("database_logical_user_taken")
                     .withArg("user", user).withArg("engine", engineName)
                     .withArg("record", userHolder.get(DatabaseModel.NAME)));
         }
@@ -1267,7 +1263,7 @@ public class DatabaseService extends DatasourceScoped {
             Row fresh = query(() -> model().findByName(name));
             Microcopy reason = fresh == null ? null : query(() -> moveRefusal(fresh));
             throw Violations.ofForm(reason != null ? reason
-                : CmsSupport.violationText("database_not_active").withArg("name", name)
+                : HohenheimMicrocopy.VIOLATIONS.of("database_not_active").withArg("name", name)
                     .withArg("status", DatabaseModel.STATUS_PROVISIONING));
         }
         submit(() -> {
@@ -1338,7 +1334,7 @@ public class DatabaseService extends DatasourceScoped {
         Row row = require(name);
         if (capability == null) {
             if (TenantWrites.isTenantOriginated()) {
-                throw HohenheimAccess.databaseRefusal();
+                throw HohenheimViolations.databaseNotPermitted();
             }
             return row;
         }

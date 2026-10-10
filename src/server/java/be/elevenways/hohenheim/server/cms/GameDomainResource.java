@@ -1,12 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.game.GameDomainOperations;
 import be.elevenways.hohenheim.model.GameDomainModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
@@ -29,16 +29,14 @@ import java.util.Objects;
  * The game-domain mapping entry's parts (domain record to backend instance through a Velocity proxy), and the admin
  * entry built from them; every write is a {@link GameDomainOperations} operation over the GameDomains funnel.
  *
- * AIDEV-NOTE: still named GameDomainResource because the instance list names {@link #SLUG} here as a related page,
+ * AIDEV-NOTE: still named GameDomainResource because the instance list names {@link HohenheimSlugs#GAME_DOMAINS} here
+ * as a related page,
  * and that file is not this slice's to edit; it is a parts holder, never instantiated.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
  */
 public final class GameDomainResource {
-
-    /** This entry's slug, which the instance list names as a related page. */
-    public static final String SLUG = "game-domains";
 
     private GameDomainResource() {
     }
@@ -58,12 +56,13 @@ public final class GameDomainResource {
             .column(ColumnSpec.fromField(GameDomainModel.BACKEND_PORT).build())
             .column(ColumnSpec.fromField(GameDomainModel.ENABLED).build())
             .build();
-        return PanelResource.builder(HohenheimIds.id("game_domain"), SLUG, GameDomainOperations.MAPPING)
-            .label(Microcopy.of("plural").withFilter("scope", "game_domain"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "game_domain"))
+        return PanelResource.builder(HohenheimIds.id("game_domain"), HohenheimSlugs.GAME_DOMAINS,
+            GameDomainOperations.MAPPING)
+            .label(HohenheimMicrocopy.GAME_DOMAIN.of("plural"))
+            .recordLabel(HohenheimMicrocopy.GAME_DOMAIN.of("singular"))
             // Demoted out of the sidebar, so this sentence reaches a reader through the panel index and the
             // related-pages menu of the list that names it.
-            .description(CmsSupport.navHint("game_domain"))
+            .description(CmsSupport.navHint(HohenheimMicrocopy.GAME_DOMAIN))
             .icon(Icon.of("gamepad"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(21)

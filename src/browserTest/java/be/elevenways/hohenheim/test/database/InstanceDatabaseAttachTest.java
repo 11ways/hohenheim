@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
@@ -180,26 +181,26 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         // MANAGE is the ownership marker and implies CONFIG on an instance, so A is a
         // legitimate attacher on its own pair.
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceA,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, incusInstance,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, remoteInstance,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, DatabaseModel.MODEL_ID, databaseA,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantBId, InstanceModel.MODEL_ID, instanceB,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantBId, DatabaseModel.MODEL_ID, databaseB,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         // Tenant B also owns a database on the OTHER host: the fixture whose stored
         // (owner-namespaced) name and host the pre-fix mismatch refusal leaked.
         RecordGrants.grant(GrantSubjectType.USER, tenantBId, DatabaseModel.MODEL_ID, databaseRemote,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         // The read-only teammate: VIEW on both ends of a legitimate pair, and nothing more.
         RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceA,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         RecordGrants.grant(GrantSubjectType.USER, viewerId, DatabaseModel.MODEL_ID, databaseA,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         return new Pairing(tag, instanceA, instanceB, incusInstance, remoteInstance,
             databaseA, databaseB, databaseRemote);
     }
@@ -390,7 +391,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         int incusInstanceId = p.incusInstance();
         int remoteInstanceId = p.remoteInstance();
 
-        PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
+        PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_DATABASES);
         AccessContext admin = AccessContext.anonymous();
 
         // 1. An Incus instance has no link networks at all, so its container could never
@@ -519,7 +520,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
      * absent id, {@code database_instance_server_mismatch} interpolating the stored
      * (owner-namespaced) database NAME plus both host names for a foreign cross-host id,
      * and the uniform refusal only for a foreign same-host id. That violates
-     * {@code HohenheimAccess.databaseRefusal}'s contract: visibility, absence and denial
+     * {@code database_not_permitted}'s contract: visibility, absence and denial
      * are one answer.
      */
     @Test
@@ -534,7 +535,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         int probeInstanceId = p.instanceA();
         assertThat(HohenheimAccess.hasInstanceCapability(
                 AccessContext.of(TenantConduits.stubFor(principalA)), probeInstanceId,
-                HohenheimAccess.CONFIG))
+                HohenheimCapabilities.CONFIG))
             .as("precondition: tenant A authors the probe instance")
             .isTrue();
 
@@ -577,7 +578,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         // 3. POSITIVE ANCHOR: the legitimate owner attaches THROUGH THE SAME FORM PATH,
         //    so the collapse above is an ordering, not a form that refuses everyone.
         TenantConduits.as(principalA, () -> PartsWrites.persistRow(
-            PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES),
+            PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_DATABASES),
             Map.of("instance_id", probeInstanceId, "database_id", databaseAId,
                 "env_prefix", "DB"),
             AccessContext.of(TenantConduits.stubFor(principalA))));
@@ -589,7 +590,8 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         //    nothing.
         Row link = links.get(0);
         Throwable repointed = catchThrowable(() -> TenantConduits.as(principalA,
-            () -> PartsWrites.updateRow(PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES), link,
+            () -> PartsWrites.updateRow(PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_DATABASES),
+                link,
                 Map.of("database_id", databaseRemoteId),
                 AccessContext.of(TenantConduits.stubFor(principalA)))));
         assertThat(violationKeys(repointed))
@@ -607,7 +609,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
         //    gets the reachability message by name -- the collapse is tenant-scoped
         //    ordering, not a lobotomized validator.
         Throwable operator = catchThrowable(() -> PartsWrites.persistRow(
-            PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES),
+            PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_DATABASES),
             Map.of("instance_id", probeInstanceId, "database_id", databaseRemoteId,
                 "env_prefix", "OP"), AccessContext.anonymous()));
         assertThat(violationKeys(operator))
@@ -619,7 +621,7 @@ class InstanceDatabaseAttachTest extends HohenheimTestBase {
     private static Throwable probeAs(Principal principal, Integer instanceId,
                                      Integer databaseId) {
         return catchThrowable(() -> TenantConduits.as(principal,
-            () -> PartsWrites.persistRow(PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES),
+            () -> PartsWrites.persistRow(PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_DATABASES),
                 Map.of("instance_id", instanceId, "database_id", databaseId,
                     "env_prefix", "DB"),
                 AccessContext.of(TenantConduits.stubFor(principal)))));

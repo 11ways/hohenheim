@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -25,7 +25,8 @@ public class StackFileModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
     public static final IntegerField STACK_SERVICE_ID = SCHEMA.addField(
-        IntegerField.builder().name("stack_service_id").build());
+        IntegerField.builder().name("stack_service_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("stack_service")).build());
 
     /** The owning service, declared so its delete takes the files along (StackCascades). */
     public static final BelongsTo<StackServiceModel> SERVICE = SCHEMA.addRelation(
@@ -37,20 +38,20 @@ public class StackFileModel extends Model {
 
     public static final StringField CONTAINER_PATH = SCHEMA.addField(StringField.builder().name("container_path")
         .required()
-        .label(HohenheimFormCopy.label("container_path"))
-        .help(HohenheimFormCopy.help("file_container_path"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_path"))
+        .help(HohenheimMicrocopy.HELP.of("file_container_path"))
         .build());
 
     public static final TextField CONTENT = SCHEMA.addField(TextField.builder().name("content")
         .encrypted()
-        .label(HohenheimFormCopy.label("file_content"))
-        .help(HohenheimFormCopy.help("file_content"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("file_content"))
+        .help(HohenheimMicrocopy.HELP.of("file_content"))
         .build());
 
     public static final StringField MODE = SCHEMA.addField(StringField.builder().name("mode")
         .defaultValue("0644")
-        .label(HohenheimFormCopy.label("file_mode"))
-        .help(HohenheimFormCopy.help("file_mode"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("file_mode"))
+        .help(HohenheimMicrocopy.HELP.of("file_mode"))
         .build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());

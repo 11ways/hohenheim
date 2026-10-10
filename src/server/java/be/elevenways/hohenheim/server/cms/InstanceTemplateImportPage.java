@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.server.instance.CommunityScripts;
@@ -25,7 +26,7 @@ import java.util.Map;
 public final class InstanceTemplateImportPage extends PanelPage {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_templates_import"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("import").withFilter("scope", "instance_template"); }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE_TEMPLATE.of("import"); }
     @Override public @NonNull String slug() { return HohenheimSlugs.INSTANCE_TEMPLATES_IMPORT; }
     @Override public @NonNull Icon icon() { return Icon.of("file-import"); }
     @Override public boolean showInNav() { return false; }
@@ -35,7 +36,7 @@ public final class InstanceTemplateImportPage extends PanelPage {
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
         Conduit conduit = request.conduit();
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", Microcopy.of("import").withFilter("scope", "instance_template")
+        vars.put("title", HohenheimMicrocopy.INSTANCE_TEMPLATE.of("import")
             .resolve(conduit.getLocales(), conduit.getMessageResolver()));
         vars.put("catalogApps", CommunityScripts.catalogApps());
         vars.put("catalogRevision", CommunityScripts.catalogRevision());

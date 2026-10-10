@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -49,7 +50,7 @@ public enum WebhookOutcome {
     }
 
     public @NonNull Microcopy label() {
-        return Microcopy.of(this.token).withFilter("scope", "webhook_outcome");
+        return HohenheimMicrocopy.WEBHOOK_OUTCOME.of(this.token);
     }
 
     /** @return the outcome a stored action token names, or null for a delivery still being decided */

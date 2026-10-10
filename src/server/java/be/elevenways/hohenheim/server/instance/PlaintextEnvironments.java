@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.protoblast.common.Blast;
@@ -52,7 +53,7 @@ public final class PlaintextEnvironments {
                 stored.forEach((key, value) -> settings.put(String.valueOf(key), value));
             }
             Integer instanceId = instance.get(InstanceModel.ID);
-            if (instanceId == null || !settings.containsKey(InstanceVariables.ENVIRONMENT_SETTING)) {
+            if (instanceId == null || !settings.containsKey(InstanceKindFields.ENVIRONMENT_VARIABLES)) {
                 continue;
             }
             String ownerToken = instance.get(InstanceModel.GENERATED_FOR_MODEL);

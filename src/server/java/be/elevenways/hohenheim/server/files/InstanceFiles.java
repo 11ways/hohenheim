@@ -1,14 +1,16 @@
 package be.elevenways.hohenheim.server.files;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceFileSupport;
-import be.elevenways.zenit.common.Zenit;
+import be.elevenways.hohenheim.server.util.PermissionBits;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -27,7 +29,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
  * THE per-instance file manager: browse, read, write, upload, download, rename, delete
@@ -84,13 +85,12 @@ import java.util.regex.Pattern;
 public final class InstanceFiles {
 
     /** Read a file, list a directory, download. An ordinary tenant capability. */
-    public static final String READ = HohenheimAccess.FILES_READ;
+    public static final String READ = HohenheimCapabilities.FILES_READ;
 
     /** Write, upload, rename, delete, mkdir. Elevated: it changes what runs. */
-    public static final String WRITE = HohenheimAccess.FILES_WRITE;
+    public static final String WRITE = HohenheimCapabilities.FILES_WRITE;
 
     /** What {@link #setMode} accepts: permission bits only, never setuid, setgid or sticky. */
-    private static final Pattern PERMISSION_BITS = Pattern.compile("0?[0-7]{3}");
 
     private final @NonNull InstanceService instances;
 
@@ -164,17 +164,17 @@ public final class InstanceFiles {
     public @NonNull Listing list(int instanceId, @Nullable String requestedPath) {
         Opened opened = open(instanceId, READ);
         if (opened.roots().isEmpty()) {
-            throw refusal("files_no_volumes");
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_no_volumes"));
         }
         String path = requestedPath == null || requestedPath.isEmpty()
             ? opened.roots().get(0) : requestedPath;
         InstanceFilePath target = opened.parse(path);
         InstanceFileSupport.Entry leaf = opened.walk(target);
         if (leaf == null) {
-            throw refusal("files_not_found");
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_not_found"));
         }
         if (leaf.kind() != InstanceFileSupport.Kind.DIRECTORY) {
-            throw refusal("files_not_a_directory");
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_not_a_directory"));
         }
 
         Set<String> managed = managedPaths(instanceId);
@@ -223,13 +223,13 @@ public final class InstanceFiles {
      */
     private static void requireReadableFile(InstanceFileSupport.@Nullable Entry leaf, long cap) {
         if (leaf == null) {
-            throw refusal("files_not_found");
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_not_found"));
         }
         if (leaf.kind() != InstanceFileSupport.Kind.FILE) {
-            throw refusal("files_not_a_file");
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_not_a_file"));
         }
         if (leaf.size() > cap) {
-            throw tooLarge(cap);
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_too_large").withArg("bytes", cap));
         }
     }
 
@@ -276,7 +276,7 @@ public final class InstanceFiles {
         HohenheimAccess.requireOperationCapability(instanceId, WRITE);
         long cap = maxFileBytes();
         if (content.length > cap) {
-            throw tooLarge(cap);
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_too_large").withArg("bytes", cap));
         }
         FileTarget target = fileTarget(instanceId, requestedPath, true);
         try {
@@ -298,7 +298,7 @@ public final class InstanceFiles {
         HohenheimAccess.requireOperationCapability(instanceId, WRITE);
         try {
             if (Files.size(source) > maxBytes) {
-                throw tooLarge(maxBytes);
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_too_large").withArg("bytes", maxBytes));
             }
         } catch (IOException e) {
             throw failure(e);
@@ -319,8 +319,8 @@ public final class InstanceFiles {
      *             refuse, so no transport can mint a setuid binary in a workload
      */
     public void setMode(int instanceId, @NonNull String requestedPath, @NonNull String mode) {
-        if (!PERMISSION_BITS.matcher(mode).matches()) {
-            throw refusal("files_mode_refused");
+        if (!PermissionBits.TEXT.matcher(mode).matches()) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_mode_refused"));
         }
         ExistingTarget target = attributeTarget(instanceId, requestedPath);
         try {
@@ -350,7 +350,7 @@ public final class InstanceFiles {
         // staging fail (or land INSIDE it): the managed boundary covers mkdir too.
         requireNotManaged(instanceId, target);
         if (opened.walk(target) != null) {
-            throw refusal("files_exists");
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_exists"));
         }
         try {
             opened.files().makeDirectory(opened.handle(), target.absolute(), opened.ownerLabels());
@@ -367,13 +367,13 @@ public final class InstanceFiles {
         requireNotManaged(instanceId, from);
         requireNotManaged(instanceId, to);
         if (from.isVolumeRoot() || to.isVolumeRoot()) {
-            throw refusal("files_volume_root");
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_volume_root"));
         }
         if (opened.walk(from) == null) {
-            throw refusal("files_not_found");
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_not_found"));
         }
         if (opened.walk(to) != null) {
-            throw refusal("files_exists");
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_exists"));
         }
         try {
             opened.files().rename(opened.handle(), from.absolute(), to.absolute(),
@@ -430,7 +430,7 @@ public final class InstanceFiles {
         InstanceFileSupport.@Nullable Entry walk(@NonNull InstanceFilePath target) {
             InstanceFileSupport files = files();
             if (!containedParents(files, handle(), target)) {
-                throw InstanceFilePath.refused();
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
             }
             return statOrNull(files, handle(), target.absolute());
         }
@@ -469,10 +469,10 @@ public final class InstanceFiles {
             return new FileTarget(opened, target, "0644");
         }
         if (leaf.kind() != InstanceFileSupport.Kind.FILE) {
-            throw refusal("files_not_a_file");
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_not_a_file"));
         }
         if (!replace) {
-            throw refusal("files_exists");
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_exists"));
         }
         return new FileTarget(opened, target, leaf.mode());
     }
@@ -486,11 +486,11 @@ public final class InstanceFiles {
         InstanceFilePath target = opened.parse(requestedPath);
         requireNotManaged(instanceId, target);
         if (target.isVolumeRoot()) {
-            throw refusal("files_volume_root");
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_volume_root"));
         }
         InstanceFileSupport.Entry leaf = opened.walk(target);
         if (leaf == null) {
-            throw refusal("files_not_found");
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_not_found"));
         }
         return new ExistingTarget(opened, target, leaf);
     }
@@ -500,7 +500,7 @@ public final class InstanceFiles {
         ExistingTarget target = existingTarget(instanceId, requestedPath);
         InstanceFileSupport.Kind kind = target.leaf().kind();
         if (kind != InstanceFileSupport.Kind.FILE && kind != InstanceFileSupport.Kind.DIRECTORY) {
-            throw refusal("files_link_refused");
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_link_refused"));
         }
         return target;
     }
@@ -539,7 +539,7 @@ public final class InstanceFiles {
                 return false;
             }
             if (entry.kind() != InstanceFileSupport.Kind.DIRECTORY) {
-                throw InstanceFilePath.refused();
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
             }
         }
         return true;
@@ -588,13 +588,13 @@ public final class InstanceFiles {
     private static void requireNotManaged(int instanceId, @NonNull InstanceFilePath target) {
         Set<String> managed = managedPaths(instanceId);
         if (managed.contains(target.absolute())) {
-            throw refusal("files_managed_config");
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_managed_config"));
         }
         String prefix = target.absolute().endsWith("/")
             ? target.absolute() : target.absolute() + "/";
         for (String path : managed) {
             if (path.startsWith(prefix)) {
-                throw refusal("files_managed_ancestor");
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_managed_ancestor"));
             }
         }
     }
@@ -624,7 +624,7 @@ public final class InstanceFiles {
         if (resolved.runtime() instanceof InstanceFileSupport files) {
             return files;
         }
-        throw refusal("files_unsupported");
+        throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_unsupported"));
     }
 
     /** UTF-8 text convenience for the editor surfaces. */
@@ -633,18 +633,12 @@ public final class InstanceFiles {
     }
 
     private static int maxEntries() {
-        Integer configured = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Files.MAX_ENTRIES);
-        return configured == null || configured <= 0 ? 2000 : configured;
+        return HohenheimSettings.positiveOrDefault(HohenheimSettings.Files.MAX_ENTRIES);
     }
 
     /** The cap on ONE file, in both directions. */
     public static long maxFileBytes() {
-        Integer kilobytes = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Files.MAX_FILE_KB);
-        return (kilobytes == null || kilobytes <= 0 ? 8192L : kilobytes.longValue()) * 1024;
-    }
-
-    private static @NonNull Violations tooLarge(long cap) {
-        return Violations.ofForm(HohenheimViolations.text("files_too_large").withArg("bytes", cap));
+        return HohenheimSettings.positiveOrDefault(HohenheimSettings.Files.MAX_FILE_KB) * 1024L;
     }
 
     /**
@@ -654,19 +648,9 @@ public final class InstanceFiles {
      */
     private static @NonNull Violations failure(@NonNull IOException error) {
         if (error instanceof DockerInstanceRuntime.WorkloadNotBrowsableException) {
-            return refusal("files_workload_not_browsable");
+            return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_workload_not_browsable"));
         }
-        return Violations.ofForm(HohenheimViolations.text("files_failed")
+        return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_failed")
             .withArg("reason", HohenheimViolations.reasonOf(error)));
-    }
-
-    private static @NonNull Violations refusal(@NonNull String key) {
-        return Violations.ofForm(HohenheimViolations.text(key));
-    }
-
-
-    /** The instance's display name, for page titles. */
-    public static @NonNull String nameOf(@NonNull Row instance) {
-        return String.valueOf((Object) instance.get(InstanceModel.NAME));
     }
 }

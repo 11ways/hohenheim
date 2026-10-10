@@ -1,14 +1,15 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.VolumeOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.VolumeDeclarationOperations;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -42,21 +43,20 @@ import java.util.Map;
  * @since 0.1.0
  */
 public final class VolumeParts {
-    public static final String SLUG = "instance-volumes";
     private VolumeParts() {}
 
     public static @NonNull PanelResource<Row> admin() {
         VolumeDeclarationOperations.init();
-        return PanelResource.builder(HohenheimIds.id("instance_volume"), SLUG,
+        return PanelResource.builder(HohenheimIds.id("instance_volume"), HohenheimSlugs.INSTANCE_VOLUMES,
                 SubjectType.record(InstanceVolumeModel.MODEL_ID))
-            .label(Microcopy.of("plural").withFilter("scope", "instance_volume"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "instance_volume"))
-            .description(CmsSupport.navHint("instance_volume"))
+            .label(HohenheimMicrocopy.INSTANCE_VOLUME.of("plural"))
+            .recordLabel(HohenheimMicrocopy.INSTANCE_VOLUME.of("singular"))
+            .description(CmsSupport.navHint(HohenheimMicrocopy.INSTANCE_VOLUME))
             .navGroup(HohenheimPanel.DEPLOY_GROUP).navOrder(19).icon(Icon.of("database")).showInNav(false)
             .standsUnder(HohenheimSlugs.INSTANCES)
             .scope(RowScope.within(() -> InstanceVolumeModel.INSTANCE_ID.isNotNull()))
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceVolumeModel.INSTANCE_ID)
-                .tab(InstanceVolumesTab.SLUG))
+                .tab(HohenheimSlugs.Tab.VOLUMES))
             .form(ResourceForm.<Row>of(VolumeOperations.FORM).createDefaults(request -> {
                 Map<String, Object> values = new LinkedHashMap<>(VolumeOperations.FORM.defaultValues());
                 Integer owner = CmsSupport.prefill(request.conduit(), HohenheimParams.INSTANCE_ID_PREFILL);
@@ -73,7 +73,7 @@ public final class VolumeParts {
                 .update(VolumeOperations.UPDATE, row -> row.get(InstanceVolumeModel.VERSION)).build())
             .authority(ResourceAuthority.<Row>builder().update(null, (row, access) ->
                 HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID,
-                    row.get(InstanceVolumeModel.INSTANCE_ID), HohenheimAccess.CONFIG)).build())
+                    row.get(InstanceVolumeModel.INSTANCE_ID), HohenheimCapabilities.CONFIG)).build())
             .actions(List.of(destroy()))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions()).build();
     }
@@ -89,23 +89,16 @@ public final class VolumeParts {
     }
 
     private static PanelAction<Row> destroy() {
+        ConfirmationSpec destroy = Confirmations.of(HohenheimMicrocopy.INSTANCE_VOLUME.of("destroy"),
+            HohenheimMicrocopy.INSTANCE_VOLUME.of("destroy_confirm"), ActionStyle.DESTRUCTIVE);
         return PanelAction.<Row, Void>places(VolumeOperations.DESTROY, ActionPlacement.ROW,
-                (context, result) -> CmsActionResult.refreshWithToast(Microcopy.of("destroyed_toast")
-                    .withFilter("scope", "instance_volume")
+                (context, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_VOLUME
+                    .of("destroyed_toast")
                     .withArg("name", context.subjects().getFirst().get(InstanceVolumeModel.NAME))))
             .style(ActionStyle.DESTRUCTIVE).inlineInRow(false)
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("destroy").withFilter("scope", "instance_volume"))
-                .body(Microcopy.of("destroy_confirm").withFilter("scope", "instance_volume"))
-                .confirmLabel(Microcopy.of("destroy").withFilter("scope", "instance_volume"))
-                .style(ActionStyle.DESTRUCTIVE).build())
-            .dynamicConfirmation(row -> {
-                String name = row.get(InstanceVolumeModel.NAME);
-                return ConfirmationSpec.builder()
-                    .title(Microcopy.of("destroy").withFilter("scope", "instance_volume"))
-                    .body(Microcopy.of("destroy_confirm_named").withFilter("scope", "instance_volume").withArg("name", name))
-                    .confirmLabel(Microcopy.of("destroy").withFilter("scope", "instance_volume"))
-                    .style(ActionStyle.DESTRUCTIVE).requireTypedConfirmation(name).build();
-            }).build();
+            .confirmation(destroy)
+            .dynamicConfirmation(row -> Confirmations.typed(destroy.withBody(HohenheimMicrocopy.INSTANCE_VOLUME
+                .of("destroy_confirm_named").withArg("name", row.get(InstanceVolumeModel.NAME))),
+                row.get(InstanceVolumeModel.NAME))).build();
     }
 }

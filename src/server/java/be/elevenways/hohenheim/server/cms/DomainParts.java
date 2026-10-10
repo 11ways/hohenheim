@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
@@ -10,16 +11,17 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.hohenheim.server.tls.HostnameReach;
 import be.elevenways.hohenheim.server.upstream.kinds.TlsPassthroughUpstreamKind;
-import be.elevenways.hohenheim.site.DomainCertCell;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
@@ -32,7 +34,6 @@ import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RecordLead;
-import be.elevenways.zenit.cms.common.resource.ResourceAuthority;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
@@ -63,7 +64,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -93,9 +93,6 @@ public final class DomainParts {
     /** Domains of live sites; the /manage scope narrows this same base per principal. */
     public static final RowScope ROWS = RowScope.within(DomainParts::liveSiteScope);
 
-    /** The entry slug both twins share, which a site's Domains tab and the parent links name. */
-    public static final String SLUG = "domains";
-
     /** The "Points here" column: whether the name resolves to this proxy. */
     static final String REACH_COLUMN = "points_here";
 
@@ -122,7 +119,7 @@ public final class DomainParts {
     private static final SubjectType<Row> SUBJECT = SubjectType.record(SiteDomainModel.MODEL_ID);
 
     /** The create verb in the Domains board's words: the list's button and the form's heading ("Add address"). */
-    private static final Microcopy CREATE_TITLE = Microcopy.of("create_title").withFilter("scope", "site_domain");
+    private static final Microcopy CREATE_TITLE = HohenheimMicrocopy.SITE_DOMAIN.of("create_title");
 
     /**
      * Looks the address's name up again now, past the minute an answer is remembered: the row's way to see a DNS
@@ -130,7 +127,7 @@ public final class DomainParts {
      */
     public static final Operation<Row, Void, Void> CHECK_REACH = Operation.declare(HohenheimIds.id("check_address_reach"))
         .happened(OperationSentences.of("check_address_reach"))
-        .label(domainText("check_reach"))
+        .label(HohenheimMicrocopy.SITE_DOMAINS.of("check_reach"))
         .icon(Icon.of("rotate"))
         .one(SUBJECT)
         .gate(OperationGate.open())
@@ -154,7 +151,7 @@ public final class DomainParts {
 
     /** @return the admin domain resource: every domain of a live site */
     public static @NonNull PanelResource<Row> admin() {
-        return entry("site_domain")
+        return entry(HohenheimIds.id("site_domain"))
             .scope(ROWS)
             .form(form(adminFormSpec()))
             // Requesting a certificate stays installation administration (an issued certificate is authority over a
@@ -167,53 +164,35 @@ public final class DomainParts {
     /** The row's "Check again": the list redraws with the fresh answer; rare beside the row's own actions. */
     private static @NonNull PanelAction<Row> checkReachAction() {
         return PanelAction.<Row, Void>places(CHECK_REACH, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(domainText("reach_checked")))
+                (request,
+                    result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.SITE_DOMAINS.of("reach_checked")))
             .inlineInRow(false)
             .build();
     }
 
     /** @return the /manage twin: the domains of the sites the caller manages, through the delegated form */
     public static @NonNull PanelResource<Row> manage() {
-        return entry("manage_site_domain")
-            .scope(TenantScopes.DOMAINS)
+        // A Domains cluster member, shown while the tenant manages a site.
+        return ManageTwin.listed(entry(ManageTwin.id("site_domain")), TenantScopes.DOMAINS, ResourceTabs.none(),
+                ManagePanel::hasManageScope)
             .form(form(manageFormSpec()))
-            // NAV-ONLY (zero granted sites hide the empty list); the route itself stays scoped.
-            .hasInScopeRecords(ManagePanel::hasManageScope)
             .build();
     }
 
     /** The entry, list, reads, writes, authority and parent both twins share. */
-    private static PanelResource.@NonNull Builder<Row> entry(@NonNull String id) {
-        return PanelResource.builder(HohenheimIds.id(id), SLUG, SUBJECT)
-            .label(Microcopy.of("plural").withFilter("scope", "site_domain"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "site_domain"))
-            .description(Microcopy.of("nav_hint").withFilter("scope", "site_domain"))
+    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
+        return PanelResource.builder(id, HohenheimSlugs.DOMAINS, SUBJECT)
+            .label(HohenheimMicrocopy.SITE_DOMAIN.of("plural"))
+            .recordLabel(HohenheimMicrocopy.SITE_DOMAIN.of("singular"))
+            .description(HohenheimMicrocopy.SITE_DOMAIN.of("nav_hint"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(20)
             .icon(Icon.of("at"))
-            .parent(ResourceParent.of(HohenheimSlugs.SITES, SiteDomainModel.SITE_ID).tab(SLUG))
+            .parent(ResourceParent.of(HohenheimSlugs.SITES, SiteDomainModel.SITE_ID).tab(HohenheimSlugs.DOMAINS))
             .list(list())
             .reads(ResourceReads.rows())
             .writes(ResourceMutations.rows().create().update().delete().build())
-            .authority(authority());
-    }
-
-    /**
-     * Writing a domain row demands {@code manage} on the site it binds to.
-     *
-     * AIDEV-NOTE: reachesRecord, never canManageSite: this runs once per RENDERED ROW, and the per-record walk would
-     * be a grant-store round trip per row on a page whose own scope criteria already asked the same question
-     * set-wise. The write pipeline's {@code TenantWrites} freeze stays the gate; this decides the affordance, so a
-     * view-only delegate is never shown a control that can only refuse.
-     */
-    private static @NonNull ResourceAuthority<Row> authority() {
-        return ResourceAuthority.<Row>builder()
-            .write(null, (record, access) -> HohenheimAccess.reachesRecord(access, SiteModel.MODEL_ID,
-                record.get(SiteDomainModel.SITE_ID), HohenheimAccess.MANAGE))
-            // A create under a site (its Domains tab's add, the create form, the submit) asks the same of that site.
-            .createUnder((site, access) -> site instanceof Integer id
-                && HohenheimAccess.reachesRecord(access, SiteModel.MODEL_ID, id, HohenheimAccess.MANAGE))
-            .build();
+            .authority(SiteParts.childAuthority(SiteDomainModel.SITE_ID));
     }
 
     /**
@@ -228,21 +207,21 @@ public final class DomainParts {
     private static @NonNull ResourceList<Row> list() {
         TableSpec<Row> table = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(SiteDomainModel.HOSTNAME)
-                .label(Microcopy.of("address_column").withFilter("scope", "site_domains"))
+                .label(HohenheimMicrocopy.SITE_DOMAINS.of("address_column"))
                 .filterable().copyable().subtext("path").build())
             // How the name matches stays in the picker and the filter strip: the Domains board reads addresses by
             // the name visitors type, and a pattern's "Points here" speaks for the names it catches.
             .column(ColumnSpec.fromField(SiteDomainModel.MATCH_TYPE).filterable().hidden().build())
             .column(ColumnSpec.fromField(SiteDomainModel.PATH).hidden().build())
             // The app this address serves, by name, linked to the app's front door (appCell).
-            .column(ColumnSpec.virtual(APP_COLUMN, Microcopy.of("app_column").withFilter("scope", "site_domains"))
+            .column(ColumnSpec.virtual(APP_COLUMN, HohenheimMicrocopy.SITE_DOMAINS.of("app_column"))
                 .renderer(CmsTemplateIds.CELL_RECORD_LINKS).build())
             .column(ColumnSpec.virtual(REACH_COLUMN,
-                    Microcopy.of("points_here_column").withFilter("scope", "site_domains"))
+                    HohenheimMicrocopy.SITE_DOMAINS.of("points_here_column"))
                 .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
             .column(ColumnSpec.virtual(CERTIFICATE_COLUMN,
-                    Microcopy.of("https_column").withFilter("scope", "site_domains"))
-                .renderer(HohenheimTemplateIds.CELL_DOMAIN_CERTIFICATE).build())
+                    HohenheimMicrocopy.SITE_DOMAINS.of("https_column"))
+                .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
             .column(ColumnSpec.fromField(SiteDomainModel.FORCE_SSL).filterable().hidden().build())
             .filter(FilterSpec.leaf(SiteDomainModel.HOSTNAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(SiteDomainModel.HOSTNAME)).build())
@@ -255,7 +234,7 @@ public final class DomainParts {
             .chrome(ListChrome.MINIMAL)
             .search(SiteDomainModel.HOSTNAME, SiteDomainModel.PATH)
             // What an empty list (a new site's Domains tab above all: it routes nothing yet) tells the reader to do.
-            .emptyDescription(Microcopy.of("empty_description").withFilter("scope", "site_domains"))
+            .emptyDescription(HohenheimMicrocopy.SITE_DOMAINS.of("empty_description"))
             .computed(Objects.requireNonNull(table.column(APP_COLUMN)), DomainParts::appCell)
             .computed(Objects.requireNonNull(table.column(REACH_COLUMN)), DomainParts::reachCell)
             .computed(Objects.requireNonNull(table.column(CERTIFICATE_COLUMN)), DomainParts::certificateCell)
@@ -277,7 +256,7 @@ public final class DomainParts {
             return null;
         }
         boolean opens = AppDirectory.offers(request.panel(), HohenheimSlugs.SITES, request.access())
-            && HohenheimAccess.reachesRecord(request.access(), SiteModel.MODEL_ID, siteId, HohenheimAccess.VIEW);
+            && HohenheimAccess.reachesRecord(request.access(), SiteModel.MODEL_ID, siteId, HohenheimCapabilities.VIEW);
         return RecordLinksCell.of(new RecordLink(appName(site, request.access()),
             opens ? CmsRoutes.open(request.panelSlug(), HohenheimSlugs.SITES, siteId).toUrl() : null));
     }
@@ -289,7 +268,7 @@ public final class DomainParts {
     private static @NonNull String appName(@NonNull Row site, @NonNull AccessContext access) {
         Integer instanceId = site.get(SiteModel.INSTANCE_ID);
         return AppDirectory.nameOf(site, instanceId != null
-            && HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID, instanceId, HohenheimAccess.VIEW));
+            && HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID, instanceId, HohenheimCapabilities.VIEW));
     }
 
     /** @return every site by id, read once for a rendered page */
@@ -325,29 +304,28 @@ public final class DomainParts {
         boolean exact = AppHealth.exact(domain);
         String checked = checkedName(domain);
         if (checked == null) {
-            return new StateLineCell("per_name", BadgeVariant.OUTLINE, domainText("points_here_per_name"),
-                domainText("points_per_name_detail"), null);
+            return StateLineCell.of(AddressReach.PER_NAME,
+                HohenheimMicrocopy.SITE_DOMAINS.of("points_per_name_detail"));
         }
         HostnameReach.Reach reach = HostnameReach.recent(checked, waitMs);
         String addresses = String.join(", ", reach.addresses());
         return switch (reach.verdict()) {
-            case CHECKING -> new StateLineCell("checking", BadgeVariant.OUTLINE, domainText("points_here_checking"),
-                domainText("points_checking_detail"), null);
-            case NOT_CHECKED -> new StateLineCell("not_checked", BadgeVariant.OUTLINE,
-                domainText("points_here_not_checked"), domainText("points_not_checked_detail"), null);
-            case POINTS_HERE -> new StateLineCell("points_here", BadgeVariant.SUCCESS, domainText("points_here_yes"),
-                exact ? null : domainText("points_here_caught_detail").withArg("sample", checked), null);
-            case POINTS_ELSEWHERE -> new StateLineCell("points_elsewhere", BadgeVariant.WARNING,
-                domainText("points_here_no"),
-                domainText(exact ? "points_elsewhere_detail" : "points_elsewhere_caught_detail")
-                    .withArg("addresses", addresses), null);
+            case CHECKING -> StateLineCell.of(AddressReach.CHECKING,
+                HohenheimMicrocopy.SITE_DOMAINS.of("points_checking_detail"));
+            case NOT_CHECKED -> StateLineCell.of(AddressReach.NOT_CHECKED,
+                HohenheimMicrocopy.SITE_DOMAINS.of("points_not_checked_detail"));
+            case POINTS_HERE -> StateLineCell.of(AddressReach.POINTS_HERE, exact ? null
+                : HohenheimMicrocopy.SITE_DOMAINS.of("points_here_caught_detail").withArg("sample", checked));
+            case POINTS_ELSEWHERE -> StateLineCell.of(AddressReach.POINTS_ELSEWHERE,
+                HohenheimMicrocopy.SITE_DOMAINS.of(exact ? "points_elsewhere_detail" : "points_elsewhere_caught_detail")
+                    .withArg("addresses", addresses));
             case UNRESOLVED -> exact
-                ? new StateLineCell("unresolved", BadgeVariant.WARNING, domainText("points_here_unresolved"),
-                    domainText("points_unresolved_detail"), null)
-                : new StateLineCell("per_name", BadgeVariant.OUTLINE, domainText("points_here_per_name"),
-                    domainText("points_unresolved_caught_detail"), null);
-            case UNKNOWN -> new StateLineCell("unknown", BadgeVariant.OUTLINE, domainText("points_here_unknown"),
-                domainText("points_unknown_detail").withArg("addresses", addresses), null);
+                ? StateLineCell.of(AddressReach.UNRESOLVED,
+                    HohenheimMicrocopy.SITE_DOMAINS.of("points_unresolved_detail"))
+                : StateLineCell.of(AddressReach.PER_NAME,
+                    HohenheimMicrocopy.SITE_DOMAINS.of("points_unresolved_caught_detail"));
+            case UNKNOWN -> StateLineCell.of(AddressReach.UNKNOWN,
+                HohenheimMicrocopy.SITE_DOMAINS.of("points_unknown_detail").withArg("addresses", addresses));
         };
     }
 
@@ -373,17 +351,8 @@ public final class DomainParts {
     /** What this request's next reach cell may still wait: the rest of the page budget, at most one lookup's wait. */
     private static long reachWaitMs(@NonNull PanelRequest request) {
         long now = Now.millis();
-        Long deadline;
-        try {
-            deadline = request.conduit().getAttribute(REACH_DEADLINE);
-            if (deadline == null) {
-                deadline = now + REACH_RENDER_BUDGET_MS;
-                request.conduit().setAttribute(REACH_DEADLINE, deadline);
-            }
-        } catch (UnsupportedOperationException noAttributes) {
-            // A conduit without request attributes (a bare test double) still gets one lookup's bound per cell.
-            return HostnameReach.LOOKUP_WAIT_MS;
-        }
+        // An attribute-less conduit starts a fresh budget per cell, so each still gets one lookup's bound.
+        long deadline = CmsSupport.memo(request.conduit(), REACH_DEADLINE, () -> now + REACH_RENDER_BUDGET_MS);
         return Math.max(0, Math.min(HostnameReach.LOOKUP_WAIT_MS, deadline - now));
     }
 
@@ -395,7 +364,7 @@ public final class DomainParts {
      * ({@code view}, the question the certificate resource's scope asks): the covering certificate is usually the
      * operator's wildcard, and printing its name to a tenant for whom it is a 404 was a leak.
      */
-    static @Nullable DomainCertCell certificateCell(@NonNull Row domain, @NonNull PanelRequest request) {
+    static @Nullable StateLineCell certificateCell(@NonNull Row domain, @NonNull PanelRequest request) {
         boolean passthrough = SiteParts.tlsPassthrough(
             Models.get(SiteModel.class).findById(domain.get(SiteDomainModel.SITE_ID)));
         return certificateCell(domain, passthrough, AppHealth.workingNames(), request.access(),
@@ -411,26 +380,24 @@ public final class DomainParts {
      * @param access      who reads it, which decides whether the certificate is named and linked
      * @param panelSlug   the panel the link points into
      */
-    static @Nullable DomainCertCell certificateCell(@NonNull Row domain, boolean passthrough,
-                                                    @NonNull Set<String> working, @NonNull AccessContext access,
-                                                    @NonNull String panelSlug) {
+    static @Nullable StateLineCell certificateCell(@NonNull Row domain, boolean passthrough,
+                                                   @NonNull Set<String> working, @NonNull AccessContext access,
+                                                   @NonNull String panelSlug) {
         CertCoverage coverage = AppHealth.httpsOf(domain, passthrough, working);
         Row cert = coverage.hasCertificate()
             ? CertificateCoverage.coveringCertificate(domain.get(SiteDomainModel.HOSTNAME)) : null;
-        Microcopy detail = httpsDetail(domain, coverage, cert);
+        StateLineCell cell = StateLineCell.of(coverage, httpsDetail(domain, coverage, cert));
         if (cert == null) {
-            return new DomainCertCell(coverage.key(), coverage.badgeVariant(), coverage.label(), detail, null, null,
-                null);
+            return cell;
         }
         Instant expiresOn = cert.get(CertificateModel.EXPIRES_ON);
         Integer certId = cert.get(CertificateModel.ID);
-        boolean canOpen = HohenheimAccess.reachesRecord(access, CertificateModel.MODEL_ID, certId,
-            HohenheimAccess.VIEW);
-        // The panel this list renders under carries a certificates entry on both faces.
-        return new DomainCertCell(coverage.key(), coverage.badgeVariant(), coverage.label(), detail,
-            canOpen ? String.valueOf((Object) cert.get(CertificateModel.NICE_NAME)) : null,
-            canOpen ? CmsRoutes.detail(panelSlug, HohenheimSlugs.CERTIFICATES, certId).toUrl() : null,
-            expiresOn != null ? CertificateExpiry.of(expiresOn) : null);
+        if (HohenheimAccess.reachesRecord(access, CertificateModel.MODEL_ID, certId, HohenheimCapabilities.VIEW)) {
+            // The panel this list renders under carries a certificates entry on both faces.
+            cell = cell.withLink(String.valueOf((Object) cert.get(CertificateModel.NICE_NAME)),
+                CmsRoutes.detail(panelSlug, HohenheimSlugs.CERTIFICATES, certId).toUrl());
+        }
+        return cell.withNote(expiresOn != null ? CertificateExpiry.of(expiresOn) : null);
     }
 
     /**
@@ -446,22 +413,18 @@ public final class DomainParts {
         boolean excluded = Boolean.TRUE.equals(domain.get(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT));
         return switch (coverage) {
             case ACTIVE -> null;
-            case NOT_USED -> domainText("https_passthrough");
-            case PATTERN -> domainText("https_pattern");
-            case PENDING -> domainText("https_being_issued");
-            case NONE -> domainText(excluded ? "https_uncovered_excluded" : "https_uncovered");
+            case NOT_USED -> HohenheimMicrocopy.SITE_DOMAINS.of("https_passthrough");
+            case PATTERN -> HohenheimMicrocopy.SITE_DOMAINS.of("https_pattern");
+            case PENDING -> HohenheimMicrocopy.SITE_DOMAINS.of("https_being_issued");
+            case NONE -> HohenheimMicrocopy.SITE_DOMAINS.of(excluded ? "https_uncovered_excluded" : "https_uncovered");
             case ERROR -> cert != null && CertificateModel.STATUS_ERROR.equals(cert.get(CertificateModel.STATUS))
-                ? domainText("https_certificate_failing")
+                ? HohenheimMicrocopy.SITE_DOMAINS.of("https_certificate_failing")
                 // Stored as working, but the proxy cannot serve it (AppHealth.httpsOf).
                 : cert != null && CertificateModel.STATUS_ACTIVE.equals(cert.get(CertificateModel.STATUS))
-                ? domainText("https_certificate_unserved")
-                : !forced ? domainText("https_uncovered")
-                : domainText(excluded ? "https_forced_excluded" : "https_forced_uncovered");
+                ? HohenheimMicrocopy.SITE_DOMAINS.of("https_certificate_unserved")
+                : !forced ? HohenheimMicrocopy.SITE_DOMAINS.of("https_uncovered")
+                : HohenheimMicrocopy.SITE_DOMAINS.of(excluded ? "https_forced_excluded" : "https_forced_uncovered");
         };
-    }
-
-    private static @NonNull Microcopy domainText(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "site_domains");
     }
 
     /**
@@ -469,7 +432,7 @@ public final class DomainParts {
      * TLS switches as inline cells.
      *
      * AIDEV-NOTE: every inline write is correct on a ONE-ENTRY map by construction, because the route invariant reads
-     * its inputs through {@link SiteDomainModel#effective} rather than off the coerced map. HOSTNAME, PATH, LISTEN_ON
+     * its inputs through {@code Row.afterWrite} rather than off the coerced map. HOSTNAME, PATH, LISTEN_ON
      * and MATCH_TYPE are excluded on purpose: those four ARE the live route claim, and a one-click cell edit would
      * quarantine a hostname the operator still believes they own; that belongs on a form, next to the refusals that
      * explain it.
@@ -478,7 +441,8 @@ public final class DomainParts {
         return ResourceForm.<Row>of(spec)
             .createDefaults(request -> createDefaults(spec, request))
             .quickCreate(QUICK_CREATE)
-            .quickCreatePresets(DomainParts::quickCreatePresets)
+            .quickCreatePresets(access -> CmsSupport.parentPreset(access, SiteDomainModel.SITE_ID.getName(),
+                HohenheimSlugs.SITES))
             .inlineEditable(SiteDomainModel.FORCE_SSL, SiteDomainModel.HSTS_ENABLED,
                 SiteDomainModel.HSTS_SUBDOMAINS, SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT)
             .lead(DomainParts::lead)
@@ -498,7 +462,7 @@ public final class DomainParts {
         String app = site == null ? "" : appName(site, access);
         StateLineCell reach = reachCell(domain, HostnameReach.LOOKUP_WAIT_MS);
         CertCoverage https = AppHealth.httpsOf(domain, SiteParts.tlsPassthrough(site), AppHealth.workingNames());
-        return new RecordLead(Microcopy.of("address_lead").withFilter("scope", "site_domains")
+        return new RecordLead(HohenheimMicrocopy.SITE_DOMAINS.of("address_lead")
             .withArg("app", app)
             .withArg("reach", reach.label().resolve(conduit.getLocales(), conduit.getMessageResolver()))
             .withArg("https", https.label().resolve(conduit.getLocales(), conduit.getMessageResolver()))
@@ -527,17 +491,6 @@ public final class DomainParts {
             }
         }
         return Map.copyOf(values);
-    }
-
-    /** The site the bar adds into: the {@code ?site_id=} prefill, else the tab's own record. */
-    private static @NonNull Map<String, Object> quickCreatePresets(@NonNull AccessContext access) {
-        Conduit conduit = access.conduit();
-        if (conduit == null) {
-            return Map.of();
-        }
-        Integer siteId = CmsSupport.scopedParentId(conduit, SiteDomainModel.SITE_ID.getName(),
-            HohenheimSlugs.SITES);
-        return siteId != null ? Map.of(SiteDomainModel.SITE_ID.getName(), siteId) : Map.of();
     }
 
     /** Discovered local addresses (refreshed hourly by UpdateSystemIpAddresses); blank = all interfaces. */

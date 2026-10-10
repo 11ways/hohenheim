@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.application;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
@@ -14,6 +15,7 @@ import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
@@ -38,21 +40,18 @@ import be.elevenways.zenit.comms.server.Comms;
 import be.elevenways.zenit.comms.server.CommsDispatcher;
 import be.elevenways.zenit.comms.server.transport.TransportTypes;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import be.elevenways.zenit.test.support.OutboundFixture;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -232,16 +231,16 @@ class ApplicationReleaseContractTest {
                 assertThat(inherited).isNotEqualTo(rolledBack);
                 assertThat(new InstanceService().resolve(inherited).spec().env())
                     .containsEntry("JAR", "environment.jar");
-                await("inherited release settled", () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
-                    latestOp(applicationId).get(ReleaseOperationModel.STATUS)));
+                await("inherited release settled", () -> ReleaseOperationModel.LIFECYCLE.is(
+                    latestOp(applicationId).get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED));
                 runtime.set(RuntimeImageModel.DEFAULT_PORT, 9090);
                 Models.get(RuntimeImageModel.class).save(runtime);
                 int changedRuntime = ApplicationReleases.converge(applicationId, Map.of()).instanceId();
                 assertThat(changedRuntime).isNotEqualTo(inherited);
                 assertThat(new InstanceService().resolve(changedRuntime).spec().publication().containerPort())
                     .isEqualTo(9090);
-                await("runtime change settled", () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
-                    latestOp(applicationId).get(ReleaseOperationModel.STATUS)));
+                await("runtime change settled", () -> ReleaseOperationModel.LIFECYCLE.is(
+                    latestOp(applicationId).get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED));
                 Row changed = Models.get(InstanceModel.class).findById(applicationId);
                 @SuppressWarnings("unchecked")
                 Map<String, Object> explicit = new LinkedHashMap<>(
@@ -256,8 +255,8 @@ class ApplicationReleaseContractTest {
                 assertThat(overriddenSpec.command()).containsExactly("java", "-jar", "custom.jar");
                 assertThat(overriddenSpec.workdir()).isEqualTo("/opt/service");
                 assertThat(overriddenSpec.publication().containerPort()).isEqualTo(7070);
-                await("explicit overrides settled", () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
-                    latestOp(applicationId).get(ReleaseOperationModel.STATUS)));
+                await("explicit overrides settled", () -> ReleaseOperationModel.LIFECYCLE.is(
+                    latestOp(applicationId).get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED));
             } finally {
                 ApplicationReleases.destroyFor(applicationId);
             }
@@ -301,7 +300,7 @@ class ApplicationReleaseContractTest {
                     Row operation = latestOp(applicationId);
                     assertThat(operation.get(ReleaseOperationModel.STATUS))
                         .as("step 2: the operation is stored as failed")
-                        .isEqualTo(ReleaseOperationModel.STATUS_FAILED);
+                        .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED));
                     assertThat(daemon.exists(FakeDockerDaemon.handleOf(
                         operation.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID))))
                         .as("step 2: the candidate container is removed").isFalse();
@@ -344,7 +343,7 @@ class ApplicationReleaseContractTest {
                     .isEqualTo(FakeDockerDaemon.digestOf("fake/app:v1"));
                 assertThat(latestOp(applicationId).get(ReleaseOperationModel.STATUS))
                     .as("step 1: the initial release is a recorded, succeeded operation")
-                    .isEqualTo(ReleaseOperationModel.STATUS_SUCCEEDED);
+                    .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
                 assertThat(daemon.isRunning(FakeDockerDaemon.handleOf(servingId)))
                     .as("step 1: and the workload is really running at the daemon").isTrue();
 
@@ -365,7 +364,7 @@ class ApplicationReleaseContractTest {
                 Row op = latestOp(applicationId);
                 assertThat(op.get(ReleaseOperationModel.STATUS))
                     .as("step 3: the refused release is recorded FAILED, never forgotten")
-                    .isEqualTo(ReleaseOperationModel.STATUS_FAILED);
+                    .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED));
 
                 // 4. STATE of the refused candidate: soft-deleted record, no container at
                 //    the daemon, no port claim -- and the daemon's own call sequence shows
@@ -441,7 +440,7 @@ class ApplicationReleaseContractTest {
                     () -> ReleaseSettling.settled(applicationId));
                 assertThat(reload(swapOp).get(ReleaseOperationModel.STATUS))
                     .as("step 2: and the settled operation is the swap")
-                    .isEqualTo(ReleaseOperationModel.STATUS_SUCCEEDED);
+                    .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
                 assertThat(daemon.exists(FakeDockerDaemon.handleOf(firstId)))
                     .as("step 2: the retained release's container is KEPT").isTrue();
                 assertThat(daemon.isRunning(FakeDockerDaemon.handleOf(firstId)))
@@ -467,8 +466,8 @@ class ApplicationReleaseContractTest {
                 // 4. RECLAIM: the v2 release becomes the new rollback target and the
                 //    ORIGINAL v1 instance is destroyed, record and container alike.
                 await("step 4: the rollback operation completes after the drain window",
-                    () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
-                        reload(rollbackOp).get(ReleaseOperationModel.STATUS)));
+                    () -> ReleaseOperationModel.LIFECYCLE.is(
+                        reload(rollbackOp).get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED));
                 assertThat((Object) StoredRows.byId(Models.get(InstanceModel.class), firstId)
                         .get(InstanceModel.DELETED_AT))
                     .as("step 4: the older retired release was reclaimed (record)")
@@ -508,8 +507,8 @@ class ApplicationReleaseContractTest {
                 // the reclaim and destroyFor cannot race over the same rows.
                 Row forwardOp = latestOp(applicationId);
                 await("step 6: the forward release completes after its drain window",
-                    () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
-                        reload(forwardOp).get(ReleaseOperationModel.STATUS)));
+                    () -> ReleaseOperationModel.LIFECYCLE.is(
+                        reload(forwardOp).get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED));
             } finally {
                 ApplicationReleases.destroyFor(applicationId);
             }
@@ -533,8 +532,8 @@ class ApplicationReleaseContractTest {
                 int tenantId = ApiSupport.user("drain-tenant@hohenheim.local", "Drain Tenant");
                 UserPrincipal tenant = new UserPrincipal(tenantId, "Drain Tenant");
                 RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, applicationId,
-                    HohenheimAccess.POWER, true);
-                assertThat(HohenheimAccess.hasInstanceCapability(tenant, firstId, HohenheimAccess.POWER))
+                    HohenheimCapabilities.POWER, true);
+                assertThat(HohenheimAccess.hasInstanceCapability(tenant, firstId, HohenheimCapabilities.POWER))
                     .as("step 1: the tenant holds no POWER on the generated release itself").isFalse();
 
                 // 2. The tenant deploys v2 through the power verb: a new release takes traffic.
@@ -552,8 +551,8 @@ class ApplicationReleaseContractTest {
 
                 // 4. The drain is the system's convergence: the superseded release stops anyway.
                 await("step 4: the tenant's release operation completes after its drain window",
-                    () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
-                        reload(op).get(ReleaseOperationModel.STATUS)));
+                    () -> ReleaseOperationModel.LIFECYCLE.is(
+                        reload(op).get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED));
                 assertThat(daemon.isRunning(FakeDockerDaemon.handleOf(firstId)))
                     .as("step 4: the superseded release was stopped").isFalse();
                 assertThat((String) reload(op).get(ReleaseOperationModel.STEP_LOG))
@@ -588,7 +587,7 @@ class ApplicationReleaseContractTest {
                 Row drainingOp = latestOp(applicationId);
                 assertThat(drainingOp.get(ReleaseOperationModel.STATUS))
                     .as("step 1: the superseded release is still draining")
-                    .isEqualTo(ReleaseOperationModel.STATUS_DRAINING);
+                    .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DRAINING));
                 assertThat(daemon.isRunning(FakeDockerDaemon.handleOf(firstId)))
                     .as("step 1: and its workload is still running").isTrue();
 
@@ -600,7 +599,8 @@ class ApplicationReleaseContractTest {
                     InstanceModel.ROLE_SERVING, "v9");
                 int halfRetiring = ownedRelease(applicationId, "recover-half-old",
                     InstanceModel.ROLE_SERVING, "v8");
-                Row switchingOp = operationRow(applicationId, ReleaseOperationModel.STATUS_SWITCHING,
+                Row switchingOp = operationRow(applicationId,
+                    ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SWITCHING),
                     halfCandidate, halfRetiring);
 
                 // 3. A PRE-SWITCH operation with a live candidate: the crash-during-probe
@@ -608,7 +608,8 @@ class ApplicationReleaseContractTest {
                 int probingCandidate = ownedRelease(applicationId, "recover-probe",
                     InstanceModel.ROLE_CANDIDATE, "v7");
                 deployOwned(applicationId, probingCandidate);
-                Row probingOp = operationRow(applicationId, ReleaseOperationModel.STATUS_PROBING,
+                Row probingOp = operationRow(applicationId,
+                    ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.PROBING),
                     probingCandidate, null);
 
                 // 4. And an ORPHAN candidate no operation answers for at all.
@@ -621,7 +622,7 @@ class ApplicationReleaseContractTest {
                 // 5. STATE after recovery, every branch:
                 assertThat(reload(drainingOp).get(ReleaseOperationModel.STATUS))
                     .as("step 5: the lost drain finishes SUCCEEDED (the switch had landed)")
-                    .isEqualTo(ReleaseOperationModel.STATUS_SUCCEEDED);
+                    .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
                 assertThat(daemon.isRunning(FakeDockerDaemon.handleOf(firstId)))
                     .as("step 5: and recovery stopped its superseded workload").isFalse();
 
@@ -636,14 +637,14 @@ class ApplicationReleaseContractTest {
                     .isEqualTo(InstanceModel.ROLE_SERVING);
                 assertThat(reload(switchingOp).get(ReleaseOperationModel.STATUS))
                     .as("step 5: the half-flipped operation settles SUCCEEDED, not failed")
-                    .isEqualTo(ReleaseOperationModel.STATUS_SUCCEEDED);
+                    .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
                 assertThat((String) reload(switchingOp).get(ReleaseOperationModel.STEP_LOG))
                     .as("step 5: and says so on the durable record")
                     .contains("boot recovery completed the half-flipped switch");
 
                 assertThat(reload(probingOp).get(ReleaseOperationModel.STATUS))
                     .as("step 5: the pre-switch operation is INTERRUPTED, visibly")
-                    .isEqualTo(ReleaseOperationModel.STATUS_INTERRUPTED);
+                    .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.INTERRUPTED));
                 assertThat((Object) StoredRows.byId(Models.get(InstanceModel.class), probingCandidate)
                         .get(InstanceModel.DELETED_AT))
                     .as("step 5: its candidate's record died").isNotNull();
@@ -777,7 +778,7 @@ class ApplicationReleaseContractTest {
                             (Object) op.get(ReleaseOperationModel.FAILURE_REASON))))
                     .as("step 4: a release whose traffic switch landed is SUCCEEDED, and"
                         + " carries no failure reason -- the stop is not the release")
-                    .isEqualTo(Map.of("status", ReleaseOperationModel.STATUS_SUCCEEDED,
+                    .isEqualTo(Map.of("status", ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED),
                         "reason", "null"));
                 assertThat((String) op.get(ReleaseOperationModel.STEP_LOG))
                     .as("step 4: the stop failure is recorded verbatim on the record")
@@ -857,7 +858,7 @@ class ApplicationReleaseContractTest {
                         "status", String.valueOf((Object) op.get(ReleaseOperationModel.STATUS)),
                         "image", String.valueOf((Object) op.get(ReleaseOperationModel.IMAGE_ID))))
                     .as("step 2: the operation's own outcome columns landed")
-                    .isEqualTo(Map.of("status", ReleaseOperationModel.STATUS_SUCCEEDED,
+                    .isEqualTo(Map.of("status", ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED),
                         "image", FakeDockerDaemon.digestOf("fake/app:v1")));
                 assertThat((String) op.get(ReleaseOperationModel.STEP_LOG))
                     .as("step 2: including the step log the terminal write appends to")

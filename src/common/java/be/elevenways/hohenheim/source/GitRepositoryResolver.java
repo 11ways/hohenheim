@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.source;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.data.DataProvider;
 import be.elevenways.zenit.common.edit.EmptyNarrowingReason;
@@ -20,7 +22,7 @@ public record GitRepositoryResolver() implements SiblingProviderResolver, EmptyN
 
     @Override
     public @Nullable DataProvider resolve(@NonNull Map<String, Object> siblingValues) {
-        Integer providerId = providerIdOf(siblingValues.get("provider_id"));
+        Integer providerId = RawValues.positiveInt(siblingValues.get(GitSourceSchema.PROVIDER_ID));
         return providerId == null ? null : new GitRepositoryProvider(providerId);
     }
 
@@ -30,21 +32,6 @@ public record GitRepositoryResolver() implements SiblingProviderResolver, EmptyN
      */
     @Override
     public @Nullable Microcopy reasonNothingQualifies(@NonNull Map<String, Object> siblingValues) {
-        return Microcopy.of("no_repositories").withFilter("scope", "git_provider");
-    }
-
-    static @Nullable Integer providerIdOf(@Nullable Object value) {
-        if (value instanceof Number number) {
-            return number.intValue() > 0 ? number.intValue() : null;
-        }
-        if (value != null) {
-            try {
-                int parsed = Integer.parseInt(String.valueOf(value).trim());
-                return parsed > 0 ? parsed : null;
-            } catch (NumberFormatException notNumeric) {
-                return null;
-            }
-        }
-        return null;
+        return HohenheimMicrocopy.GIT_PROVIDER.of("no_repositories");
     }
 }

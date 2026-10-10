@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -56,7 +56,7 @@ class AccessListApiTest extends HohenheimTestBase {
             .plaintext();
         keyTenant = ApiKeyService.create(tenantId, PREFIX + "tenant",
             List.of(MANAGE_ACCESS,
-                CapabilityScopes.format(AccessListModel.MODEL_ID, HohenheimAccess.MANAGE)), null)
+                CapabilityScopes.format(AccessListModel.MODEL_ID, HohenheimCapabilities.MANAGE)), null)
             .plaintext();
         // The admin's OWN key narrowed to an unrelated vocabulary: no hohenheim permission
         // survives the narrowing, so every door here must be shut for it.

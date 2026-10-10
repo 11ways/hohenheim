@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
@@ -13,7 +14,6 @@ import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
-import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -284,7 +284,7 @@ class IncusSnapshotBackupLiveTest {
                 //    and -- the attribution half -- the daemon attributes the imported
                 //    instance to the NEW record, not the source it was exported from.
                 String operatorBucket = HohenheimAccess.packSubjects(Set.of());
-                long quotaBefore = InstanceQuota.usedBy(operatorBucket);
+                long quotaBefore = OwnerBudget.INSTANCES.usedBy(operatorBucket);
                 newId = backups.restoreToNew(backupId, "incus-clone", null).instanceId();
                 newHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, newId);
                 assertThat(newId).as("step 7: the new instance has its own id")
@@ -293,7 +293,7 @@ class IncusSnapshotBackupLiveTest {
                 assertThat((String) restored.get(InstanceModel.STATUS))
                     .as("step 7: the new instance is running")
                     .isEqualTo(InstanceModel.STATUS_RUNNING);
-                assertThat(InstanceQuota.usedBy(operatorBucket))
+                assertThat(OwnerBudget.INSTANCES.usedBy(operatorBucket))
                     .as("step 7: restore-to-new consumed one quota slot")
                     .isEqualTo(quotaBefore + 1);
                 assertThat(restored.get(InstanceModel.SETTINGS))
@@ -323,7 +323,7 @@ class IncusSnapshotBackupLiveTest {
                 bytes[bytes.length - 40] ^= 0x01;
                 write(artifact, bytes);
                 long instancesBefore = Models.get(InstanceModel.class).find().count();
-                long quotaBeforeCorrupt = InstanceQuota.usedBy(operatorBucket);
+                long quotaBeforeCorrupt = OwnerBudget.INSTANCES.usedBy(operatorBucket);
                 Set<String> daemonBefore = daemonInstanceHandles();
                 assertThat(catchThrowable(() ->
                         backups.restoreToNew(backupId, "never-born", null)))
@@ -333,7 +333,7 @@ class IncusSnapshotBackupLiveTest {
                             assertThat(violation.message().key()).isEqualTo("backup_corrupt")));
                 assertThat(Models.get(InstanceModel.class).find().count())
                     .as("step 8: no instance record was created").isEqualTo(instancesBefore);
-                assertThat(InstanceQuota.usedBy(operatorBucket))
+                assertThat(OwnerBudget.INSTANCES.usedBy(operatorBucket))
                     .as("step 8: no quota was spent").isEqualTo(quotaBeforeCorrupt);
                 Set<String> appeared = daemonInstanceHandles();
                 appeared.removeAll(daemonBefore);

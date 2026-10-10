@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.seed.SeedContext;
@@ -96,12 +97,12 @@ public final class WordPressTemplateSeeder implements Seeder {
     /** The kind settings baseline every WordPress template starts from. */
     public static @NonNull Map<String, Object> settingsFor(@NonNull WordPressPhp php) {
         Map<String, Object> settings = new LinkedHashMap<>();
-        settings.put("image", WordPressPhp.IMAGE);
+        settings.put(InstanceKindFields.IMAGE, WordPressPhp.IMAGE);
         settings.put("tag", php.tag());
         settings.put("container_port", 80);
-        settings.put("environment_variables", Map.of("WORDPRESS_CONFIG_EXTRA", CONFIG_EXTRA));
+        settings.put(InstanceKindFields.ENVIRONMENT_VARIABLES, Map.of("WORDPRESS_CONFIG_EXTRA", CONFIG_EXTRA));
         settings.put("volumes", Map.of(DOCROOT_VOLUME, DOCROOT));
-        settings.put("memory_limit_mb", 512);
+        settings.put(InstanceKindFields.MEMORY_LIMIT_MB, 512);
         return settings;
     }
 

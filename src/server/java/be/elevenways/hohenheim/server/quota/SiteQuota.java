@@ -58,19 +58,4 @@ public final class SiteQuota {
 
     private SiteQuota() {
     }
-
-    /** The site bucket for a packed subject set (the 191-char fold, one owner). */
-    public static @NonNull String bucketKeyOf(@NonNull String packedSubjects) {
-        return OwnerBudget.SITES.bucketOf(packedSubjects);
-    }
-
-    /** The site cap for one owner; override 0 = nothing allowed, global 0-or-less = uncapped. */
-    public static @Nullable Integer limitFor(@NonNull String packedSubjects) {
-        return OwnerBudget.SITES.limitFor(packedSubjects);
-    }
-
-    /** How many of an owner's site slots are spent (admin surfaces, tests). */
-    public static long usedBy(@NonNull String packedSubjects) {
-        return OwnerBudget.SITES.usedBy(packedSubjects);
-    }
 }

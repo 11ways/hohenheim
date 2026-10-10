@@ -1,21 +1,21 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.runtime.Egress;
-import be.elevenways.hohenheim.server.runtime.ImageOrigin;
+import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DoubleField;
@@ -66,8 +66,8 @@ public final class VmKind implements InstanceKindHandler {
         new ContainerHardening.Profile("incus-vm", List.of());
 
     public static final StringField IMAGE = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("image").label(HohenheimFormCopy.label("vm_image"))
-            .help(HohenheimFormCopy.help("vm_image")).build());
+        StringField.builder().name(InstanceKindFields.IMAGE).label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("vm_image"))
+            .help(HohenheimMicrocopy.HELP.of("vm_image")).build());
 
     /**
      * Cloud-init user-data, {@code {{KEY}}} placeholders resolved against the
@@ -83,16 +83,12 @@ public final class VmKind implements InstanceKindHandler {
      * mask/keep-on-blank/__clear lane, exactly like every sibling env-var map.
      */
     public static final TextField CLOUD_INIT = SETTINGS_SCHEMA.addField(
-        TextField.builder().name("cloud_init").label(HohenheimFormCopy.label("cloud_init"))
-            .help(HohenheimFormCopy.help("cloud_init")).secret().build());
+        TextField.builder().name("cloud_init").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cloud_init"))
+            .help(HohenheimMicrocopy.HELP.of("cloud_init")).secret().build());
 
-    public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("memory_limit_mb").label(HohenheimFormCopy.label("memory_limit"))
-            .help(HohenheimFormCopy.help("memory_limit")).build());
+    public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
 
-    public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(
-        DoubleField.builder().name("cpu_limit").label(HohenheimFormCopy.label("cpu_limit"))
-            .help(HohenheimFormCopy.help("cpu_limit")).build());
+    public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(InstanceKindFields.cpuLimit());
 
     /**
      * The guest's own root disk in GB; blank inherits the image's size. A VM root is a
@@ -112,20 +108,7 @@ public final class VmKind implements InstanceKindHandler {
      * a second spelling of "catalog"/"prepared" here would be a parallel vocabulary the
      * driver and the form could drift apart on.
      */
-    public static final EnumField IMAGE_ORIGIN = SETTINGS_SCHEMA.addField(
-        EnumField.builder("image_origin")
-            .value(ImageOrigin.CATALOG.key(), v -> v.displayName("Catalog")
-                .icon("cloud-arrow-down")
-                .label(Microcopy.of("catalog").withFilter("scope", "image_origin")))
-            .value(ImageOrigin.PREPARED.key(), v -> v.displayName("Prepared template")
-                .icon("hard-drive")
-                .label(Microcopy.of("prepared").withFilter("scope", "image_origin")))
-            .value(ImageOrigin.INSTALL_MEDIA.key(), v -> v.displayName("Install media (empty VM)")
-                .icon("compact-disc")
-                .label(Microcopy.of("install_media").withFilter("scope", "image_origin")))
-            .defaultValue(ImageOrigin.CATALOG.key())
-            .label(HohenheimFormCopy.label("image_origin"))
-            .help(HohenheimFormCopy.help("image_origin")).build());
+    public static final EnumField IMAGE_ORIGIN = SETTINGS_SCHEMA.addField(InstanceKindFields.imageOrigin(true));
 
     /**
      * DECLARED, not hardcoded: this driver always forced {@code security.secureboot=false}
@@ -135,8 +118,8 @@ public final class VmKind implements InstanceKindHandler {
      */
     public static final BooleanField SECURE_BOOT = SETTINGS_SCHEMA.addField(
         BooleanField.builder("secure_boot").defaultValue(false)
-            .label(HohenheimFormCopy.label("secure_boot"))
-            .help(HohenheimFormCopy.help("secure_boot")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("secure_boot"))
+            .help(HohenheimMicrocopy.HELP.of("secure_boot")).build());
 
     /**
      * A prepared image may carry no incus guest agent at all; when declared false, an
@@ -145,8 +128,8 @@ public final class VmKind implements InstanceKindHandler {
      */
     public static final BooleanField GUEST_AGENT = SETTINGS_SCHEMA.addField(
         BooleanField.builder("guest_agent").defaultValue(true)
-            .label(HohenheimFormCopy.label("guest_agent"))
-            .help(HohenheimFormCopy.help("guest_agent")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("guest_agent"))
+            .help(HohenheimMicrocopy.HELP.of("guest_agent")).build());
 
     // A VM is SIZED when it is created, so memory, cores and disk stay visible -- this is
     // the one kind where the ceilings ARE the decision. What folds is the guest half:
@@ -162,16 +145,6 @@ public final class VmKind implements InstanceKindHandler {
 
     @Override
     public @NonNull String getDisplayName() { return "Virtual machine"; }
-
-    @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("vm").withFilter("scope", "instance_kind");
-    }
-
-    @Override
-    public @NonNull Microcopy getDescription() {
-        return Microcopy.of("vm").withFilter("scope", "instance_kind_description");
-    }
 
     @Override
     public Icon getIcon() { return Icon.of("server"); }
@@ -221,8 +194,8 @@ public final class VmKind implements InstanceKindHandler {
     public @NonNull InstanceSpec specFor(int instanceId, @NonNull Map<String, Object> settings) {
         String cloudInit = settings.get("cloud_init") instanceof String text
             && !text.isBlank() ? text : null;
-        boolean secureBoot = Boolean.TRUE.equals(settings.get("secure_boot"));
-        boolean guestAgent = !Boolean.FALSE.equals(settings.get("guest_agent"));
+        boolean secureBoot = RawValues.isOn(settings, SECURE_BOOT);
+        boolean guestAgent = RawValues.isOn(settings, GUEST_AGENT);
         // No command override (a VM boots its own kernel), no env (nothing injects
         // into a guest's init -- cloud-init is the provisioning lane), no named
         // volumes (attached disks are instance_devices rows), no port publication
@@ -257,8 +230,7 @@ public final class VmKind implements InstanceKindHandler {
      */
     @Override
     public boolean allowsBlankImage(@NonNull Map<String, Object> settings) {
-        return ImageOrigin.fromKey(settings.get("image_origin") instanceof String key
-            ? key : null) == ImageOrigin.INSTALL_MEDIA;
+        return ImageOrigin.of(settings) == ImageOrigin.INSTALL_MEDIA;
     }
 
     /**
@@ -272,19 +244,18 @@ public final class VmKind implements InstanceKindHandler {
     static void requirePreparedImageOn(@NonNull String serverName,
                                        @NonNull Map<String, Object> settings,
                                        @NonNull IncusWorkloadType type) {
-        ImageOrigin origin = ImageOrigin.fromKey(
-            settings.get("image_origin") instanceof String key ? key : null);
+        ImageOrigin origin = ImageOrigin.of(settings);
         if (origin != ImageOrigin.PREPARED) {
             return;
         }
-        String image = settings.get("image") != null
-            ? String.valueOf(settings.get("image")).trim() : "";
+        String image = settings.get(IMAGE.getName()) != null
+            ? String.valueOf(settings.get(IMAGE.getName())).trim() : "";
         try {
             new IncusInstanceRuntime(new ServerService().incusClientFor(serverName),
                 Egress.OPEN, type, serverName)
                 .requirePreparedImagePresent(image, origin, false);
         } catch (IOException absent) {
-            throw Violations.ofForm(HohenheimViolations.text("host_prepared_image_missing")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_prepared_image_missing")
                 .withArg("name", serverName)
                 .withArg("image", image));
         }

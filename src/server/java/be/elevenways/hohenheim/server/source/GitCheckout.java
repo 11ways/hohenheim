@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.source.GitRefNames;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.server.util.FileTrees;
@@ -67,19 +69,14 @@ public final class GitCheckout {
                                               @NonNull Map<String, Object> sourceSettings,
                                               @NonNull File checkout) throws Exception {
 
-        String boundUrl = GitProviders.boundCloneUrl(sourceSettings);
-        String repoUrl = boundUrl != null ? boundUrl : str(sourceSettings.get("repository_url"));
-
-        if (repoUrl.isEmpty()) {
-            throw Violations.ofForm(HohenheimViolations.text("source_no_repository"));
-        }
+        String repoUrl = GitProviders.requireCloneUrl(sourceSettings);
 
         if (!GitRefNames.isValid(ref)) {
-            throw Violations.ofForm(HohenheimViolations.text("source_ref_invalid"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_ref_invalid"));
         }
 
         if (GitRepository.embeddedCredential(repoUrl) != null) {
-            throw Violations.ofForm(HohenheimViolations.text("repository_url_credential"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("repository_url_credential"));
         }
 
         boolean localAllowed = SourceOwnership.localSourcesAllowed(ownerModel, ownerId);
@@ -87,19 +84,19 @@ public final class GitCheckout {
         if (!GitRepository.isRemoteCloneUrl(repoUrl)
                 && !(localAllowed && GitRepository.isLocalCloneUrl(repoUrl))) {
             if (GitRepository.isLocalCloneUrl(repoUrl)) {
-                throw Violations.ofForm(HohenheimViolations.text("source_repository_local_refused"));
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_repository_local_refused"));
             }
-            throw Violations.ofForm(HohenheimViolations.text("source_repository_url_refused"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_repository_url_refused"));
         }
 
         // shallow_clone defaults to true (the field's declared default): only an explicit
         // false asks for the whole history.
         GitRepository repo = new GitRepository(repoUrl, ref,
-            !Boolean.FALSE.equals(sourceSettings.get(GitSourceSchema.SHALLOW_CLONE)),
-            Boolean.TRUE.equals(sourceSettings.get(GitSourceSchema.SUBMODULES)), null,
+            RawValues.isOn(sourceSettings, GitSourceSchema.SHALLOW_CLONE, true),
+            RawValues.isOn(sourceSettings, GitSourceSchema.SUBMODULES, false), null,
             localAllowed);
 
-        if (boundUrl != null) {
+        if (GitProviders.bindingOf(sourceSettings) != null) {
             repo.setCredentialEnv(() -> {
                 try {
                     return GitProviders.credentialEnv(sourceSettings);
@@ -125,14 +122,14 @@ public final class GitCheckout {
         }
 
         if (!result.success()) {
-            throw Violations.ofForm(HohenheimViolations.text("source_checkout_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_checkout_failed")
                 .withArg("reason", result.output()));
         }
 
         String commit = repo.getCurrentCommit(checkout);
 
         if (commit == null || commit.isBlank()) {
-            throw Violations.ofForm(HohenheimViolations.text("source_checkout_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_checkout_failed")
                 .withArg("reason", "no commit identity"));
         }
 
@@ -158,8 +155,4 @@ public final class GitCheckout {
         }
     }
 
-
-    private static @NonNull String str(@Nullable Object value) {
-        return value == null ? "" : value.toString().trim();
-    }
 }

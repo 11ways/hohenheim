@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.Blast;
@@ -86,7 +87,7 @@ public final class HostLeases {
     public long requireFence(int serverId) {
         Lease lease = this.currentLease(serverId, true);
         if (lease == null) {
-            throw Violations.ofForm(HohenheimViolations.text("host_lease_unavailable")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_lease_unavailable")
                 .withArg("server", serverId));
         }
         return lease.fence();

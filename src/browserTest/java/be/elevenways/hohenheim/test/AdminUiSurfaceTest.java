@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.VolumeOperations;
@@ -12,7 +13,6 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
-import be.elevenways.hohenheim.server.cms.VolumeParts;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -273,7 +273,7 @@ class AdminUiSurfaceTest extends HohenheimTestBase {
             .where(InstanceVolumeModel.INSTANCE_ID.eq(workspaceId))
             .where(InstanceVolumeModel.NAME.eq("home")).first();
         HttpResponse<String> destroyHome = httpPostForm(
-            CmsRoutes.invoke("admin", VolumeParts.SLUG, VolumeOperations.DESTROY.id())
+            CmsRoutes.invoke("admin", HohenheimSlugs.INSTANCE_VOLUMES, VolumeOperations.DESTROY.id())
                 .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(home.get(InstanceVolumeModel.ID))).toUrl(),
             confirmed("", "home"), sessionToken, csrfToken);
         assertThat(destroyHome.statusCode()).isIn(302, 303);

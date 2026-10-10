@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
@@ -10,8 +12,8 @@ import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
 import be.elevenways.hohenheim.server.task.ReclaimDockerImages;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
@@ -53,7 +55,7 @@ public final class StackOperations {
     /** Queues a deploy of the stack's desired state. */
     public static final Operation<Row, Void, Void> DEPLOY = Operation.declare(HohenheimIds.id("deploy_stack"))
         .happened(OperationSentences.of("deploy_stack"))
-        .label(words("deploy"))
+        .label(HohenheimMicrocopy.STACK.of("deploy"))
         .icon(Icon.of("rocket"))
         .one(STACK)
         .gate(OPERATOR)
@@ -64,7 +66,7 @@ public final class StackOperations {
     /** Queues stopping the stack's containers; applies to an active or degraded stack. */
     public static final Operation<Row, Void, Void> STOP = Operation.declare(HohenheimIds.id("stop_stack"))
         .happened(OperationSentences.of("stop_stack"))
-        .label(words("stop"))
+        .label(HohenheimMicrocopy.STACK.of("stop"))
         .icon(Icon.of("circle-stop"))
         .one(STACK)
         .gate(OPERATOR)
@@ -75,7 +77,7 @@ public final class StackOperations {
     /** Queues redeploying the last successful deployment; applies when one exists. */
     public static final Operation<Row, Void, Void> ROLLBACK = Operation.declare(HohenheimIds.id("rollback_stack"))
         .happened(OperationSentences.of("rollback_stack"))
-        .label(words("rollback"))
+        .label(HohenheimMicrocopy.STACK.of("rollback"))
         .icon(Icon.of("clock-rotate-left"))
         .one(STACK)
         .gate(OPERATOR)
@@ -87,7 +89,7 @@ public final class StackOperations {
     public static final Operation<Row, Void, Void> PURGE_VOLUMES =
         Operation.declare(HohenheimIds.id("purge_stack_volumes"))
             .happened(OperationSentences.of("purge_stack_volumes"))
-            .label(words("purge_volumes"))
+            .label(HohenheimMicrocopy.STACK.of("purge_volumes"))
             .icon(Icon.of("hard-drive"))
             .one(STACK)
             .gate(OPERATOR)
@@ -98,7 +100,7 @@ public final class StackOperations {
     /** Reads the stack's live state back into its status; the result is that status. */
     public static final Operation<Row, Void, String> REFRESH = Operation.declare(HohenheimIds.id("refresh_stack"))
         .happened(OperationSentences.of("refresh_stack"))
-        .label(words("refresh_status"))
+        .label(HohenheimMicrocopy.STACK.of("refresh_status"))
         .icon(Icon.of("rotate"))
         .one(STACK)
         .gate(OPERATOR)
@@ -111,7 +113,7 @@ public final class StackOperations {
     public static final Operation<Void, Void, Void> RECLAIM_IMAGES =
         Operation.declare(HohenheimIds.id("reclaim_images"))
             .happened(OperationSentences.of("reclaim_images"))
-            .label(words("reclaim_images"))
+            .label(HohenheimMicrocopy.STACK.of("reclaim_images"))
             .icon(Icon.of("broom"))
             .noSubject()
             .gate(OPERATOR)
@@ -122,7 +124,7 @@ public final class StackOperations {
     /** Removes the stack's owned containers and network (volumes stay), then the stack with its rows. */
     public static final Operation<Row, Void, Integer> DELETE_STACK = Operation.declare(HohenheimIds.id("delete_stack"))
         .happened(OperationSentences.of("delete_stack"))
-        .label(Microcopy.of("delete").withFilter("scope", "cms"))
+        .label(CmsMicrocopy.of("delete"))
         .icon(Icon.TRASH)
         .one(STACK)
         .gate(OPERATOR)
@@ -135,7 +137,7 @@ public final class StackOperations {
     public static final Operation<Row, Void, Integer> DELETE_SERVICE =
         Operation.declare(HohenheimIds.id("delete_stack_service"))
             .happened(OperationSentences.of("delete_stack_service"))
-            .label(Microcopy.of("delete").withFilter("scope", "cms"))
+            .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(SERVICE)
             .gate(OPERATOR)
@@ -185,11 +187,6 @@ public final class StackOperations {
         // The static initializer did the work.
     }
 
-    /** @return the stack scope's words for {@code key} */
-    static @NonNull Microcopy words(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "stack");
-    }
-
     /**
      * A sweep visits every daemon and can remove multi-GB images, so it never runs on the request thread; the outcome
      * lands in the server log exactly like the nightly task's.
@@ -197,7 +194,7 @@ public final class StackOperations {
     private static void reclaimInBackground() {
         JobRunner.startVirtualThread(() -> {
             Map<String, DockerReclaim.Outcome> outcomes = StackRuntime.get().reclaimImages(
-                ReclaimDockerImages.minimumAge(), ReclaimDockerImages.includeUnattributed());
+                ReclaimDockerImages.minimumAge(), HohenheimSettings.isOn(HohenheimSettings.Stacks.RECLAIM_UNTRACKED));
             DockerReclaim.Outcome total = outcomes.values().stream()
                 .reduce(DockerReclaim.Outcome.EMPTY, DockerReclaim.Outcome::plus);
             Blast.log("DOCKER RECLAIM: manual sweep removed", total.removed(), "images,", total.megabytes(),
@@ -219,7 +216,7 @@ public final class StackOperations {
         } catch (IOException teardown) {
             Blast.log("STACK: delete of stack", stackId, "refused -- the runtime teardown failed:",
                 teardown.getMessage());
-            throw Violations.ofForm(CmsSupport.violationText("stack_destroy_failed"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("stack_destroy_failed"));
         }
         boolean[] deleted = new boolean[1];
         Models.get(StackModel.class).getResolvedDatasource().withTransaction(transaction ->
@@ -247,7 +244,7 @@ public final class StackOperations {
         try {
             StackInstances.destroyFor(serviceId);
         } catch (IOException undeletable) {
-            throw Violations.ofForm(CmsSupport.violationText("stack_destroy_failed"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("stack_destroy_failed"));
         }
         return Models.get(StackServiceModel.class).delete(service) ? 1 : 0;
     }

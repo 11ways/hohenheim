@@ -31,6 +31,12 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
     /** The abuse-protection section's icon in the settings list. */
     private static final String ROOT_ICON = "robot";
 
+    /** The groups this host words (help and icon); a future remote group has neither and reads as a folder. */
+    private static final Map<String, GroupLook> KNOWN_GROUPS = Map.of(
+        "scoring", new GroupLook(Microcopy.of("settings.spamservice.scoring.help"), "gauge"),
+        "reputation", new GroupLook(Microcopy.of("settings.spamservice.reputation.help"), "star"),
+        "events", new GroupLook(Microcopy.of("settings.spamservice.events.help"), "list"));
+
     private final Supplier<SpamserviceClient> clientSupplier;
     private volatile @Nullable BuiltSnapshot lastSnapshot;
 
@@ -184,21 +190,11 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
                     .withFallback(humanize(part)));
                 // The wire carries setting metadata, not group descriptions. This host words its known groups;
                 // a future remote group keeps an absent description instead of rendering an unclaimed key.
-                Microcopy description = switch (key) {
-                    case "scoring" -> Microcopy.of("settings.spamservice.scoring.help");
-                    case "reputation" -> Microcopy.of("settings.spamservice.reputation.help");
-                    case "events" -> Microcopy.of("settings.spamservice.events.help");
-                    default -> null;
-                };
-                if (description != null) known.describe(description);
+                GroupLook look = KNOWN_GROUPS.get(key);
+                if (look != null) known.describe(look.help());
                 // Every row of the settings list carries an icon (board Settings); a future remote group reads as a
                 // folder until this host words it.
-                known.icon(switch (key) {
-                    case "scoring" -> "gauge";
-                    case "reputation" -> "star";
-                    case "events" -> "list";
-                    default -> "folder";
-                });
+                known.icon(look != null ? look.icon() : "folder");
                 groups.put(key, known);
             }
             current = known;
@@ -297,4 +293,8 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
 
     private record BuiltSnapshot(Snapshot snapshot, Map<String, SettingDefinition<?>> definitions,
                                  Map<String, SettingEntry> entries) {}
+
+    /** How this host words one known settings group. */
+    private record GroupLook(@NonNull Microcopy help, @NonNull String icon) {
+    }
 }

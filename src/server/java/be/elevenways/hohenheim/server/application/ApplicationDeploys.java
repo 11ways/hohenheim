@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.server.application;
 
+import be.elevenways.hohenheim.model.OperationStatus;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -13,13 +16,9 @@ import be.elevenways.hohenheim.server.source.GitCheckout;
 import be.elevenways.hohenheim.server.source.GitProviderClient;
 import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.source.GitSourceSchema;
-import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.datasource.Datasource;
-import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -64,12 +63,14 @@ public final class ApplicationDeploys {
      * skip.
      *
      * @param  ref the branch/tag/sha to deploy, or null for the source's declared branch
+     * @param  pushedSha the commit a forge push named, which the forge hears about until a checkout lands its own
      * @return the release that ends up serving
      * @throws Violations naming the refusal (declined start, no repository, checkout,
      *         build, probe)
      */
     public static ApplicationReleases.@NonNull Release deploy(int applicationId,
                                                               @Nullable String ref,
+                                                              @Nullable String pushedSha,
                                                               @NonNull DeployTrigger trigger) {
         // AIDEV-NOTE: the WHOLE verb -- checkout, converge, the durable records -- runs
         // under the application's operation lock. The checkout used to run OUTSIDE the
@@ -82,7 +83,7 @@ public final class ApplicationDeploys {
         InstanceService.requireDeployAdmitted(applicationId);
         return InstanceOperationLock.production().exclusive(applicationId,
             InstanceOperationLock.Contention.QUEUE,
-            () -> deployLocked(applicationId, ref, trigger));
+            () -> deployLocked(applicationId, ref, pushedSha, trigger));
     }
 
     /**
@@ -102,14 +103,14 @@ public final class ApplicationDeploys {
                                           @NonNull DeployTrigger trigger) {
         ApplicationReleases.requireApplication(applicationId);
         InstanceService.requireDeployAdmitted(applicationId);
-        Datasource datasource = Db.currentOrDefault();
-        JobRunner.startVirtualThread(() -> Db.run(datasource, () ->
-            deployQuietly(applicationId, ref, trigger)));
+        HandlerSupport.inBackgroundLogged("APPLICATION: deploy of application " + applicationId,
+            () -> deploy(applicationId, ref, null, trigger));
     }
 
     /** {@link #deploy}'s body; the caller holds the application's operation lock. */
     private static ApplicationReleases.@NonNull Release deployLocked(int applicationId,
                                                                      @Nullable String ref,
+                                                                     @Nullable String pushedSha,
                                                                      @NonNull DeployTrigger trigger) {
         // The admission every deploy lane shares (power on a tenant-originated call, every
         // attached database ready), asked HERE so the API, the forge webhook and the button
@@ -129,24 +130,24 @@ public final class ApplicationDeploys {
         if (declined != null) {
             String message = HohenheimViolations.textOf(declined);
             recordRefusal(applicationId, settings, ref, message);
-            reportDeclined(settings, message);
+            DeployStatuses.deployDeclined(settings, pushedSha, message);
             throw Violations.ofForm(declined);
         }
 
         if (SiteSources.hasRepository(settings)) {
-            String branch = ref != null && !ref.isBlank() ? ref : declaredBranch(settings);
+            String branch = ref != null && !ref.isBlank() ? ref : GitSourceSchema.declaredBranch(settings);
             File checkout = GitCheckout.directoryFor(InstanceModel.MODEL_ID, applicationId);
             try {
-                DeployStatuses.report(settings, null, GitProviderClient.StatusState.PENDING,
+                DeployStatuses.report(settings, pushedSha, GitProviderClient.StatusState.PENDING,
                     DeployStatuses.CONTEXT_DEPLOY, "Deploying", null);
                 commitSha = GitCheckout.materialize(InstanceModel.MODEL_ID, applicationId,
                     branch, settings, checkout);
             } catch (Violations refused) {
-                reportFailure(settings, null, HohenheimViolations.reasonOf(refused));
+                DeployStatuses.deployFailed(settings, pushedSha, HohenheimViolations.reasonOf(refused));
                 throw refused;
             } catch (Exception failed) {
-                reportFailure(settings, null, HohenheimViolations.reasonOf(failed));
-                throw Violations.ofForm(HohenheimViolations.text("source_checkout_failed")
+                DeployStatuses.deployFailed(settings, pushedSha, HohenheimViolations.reasonOf(failed));
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_checkout_failed")
                     .withArg("reason", HohenheimViolations.reasonOf(failed)));
             }
             overrides.put("build_context", checkout.getAbsolutePath());
@@ -167,19 +168,8 @@ public final class ApplicationDeploys {
             }
             return release;
         } catch (RuntimeException failed) {
-            reportFailure(settings, commitSha, HohenheimViolations.reasonOf(failed));
+            DeployStatuses.deployFailed(settings, commitSha, HohenheimViolations.reasonOf(failed));
             throw failed;
-        }
-    }
-
-    /** {@link #deploy} for fire-and-forget callers (webhooks); refusals are logged. */
-    public static void deployQuietly(int applicationId, @Nullable String ref,
-                                     @NonNull DeployTrigger trigger) {
-        try {
-            deploy(applicationId, ref, trigger);
-        } catch (RuntimeException refused) {
-            Blast.log("APPLICATION: deploy of application", applicationId, "refused -",
-                refused.getMessage());
         }
     }
 
@@ -196,13 +186,13 @@ public final class ApplicationDeploys {
                                       @Nullable String ref, @NonNull String message) {
         BuildOperationModel model = Models.get(BuildOperationModel.class);
         Row row = model.createEmptyRow();
-        String branch = ref != null && !ref.isBlank() ? ref : declaredBranch(settings);
+        String branch = ref != null && !ref.isBlank() ? ref : GitSourceSchema.declaredBranch(settings);
         Instant now = Now.instant();
         row.set(BuildOperationModel.BUILDER_KIND,
             BuildOperationModel.kindOrDefault(settings.get("builder")));
         row.set(BuildOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
         row.set(BuildOperationModel.FOR_ID, applicationId);
-        row.set(BuildOperationModel.STATUS, BuildOperationModel.STATUS_REFUSED);
+        row.set(BuildOperationModel.STATUS, BuildOperationModel.LIFECYCLE.stored(OperationStatus.REFUSED));
         row.set(BuildOperationModel.SOURCE_REF, branch);
         row.set(BuildOperationModel.FAILURE_REASON, message);
         row.set(BuildOperationModel.LOG, "[hohenheim] deploying " + branch
@@ -211,35 +201,5 @@ public final class ApplicationDeploys {
         row.set(BuildOperationModel.FINISHED_AT, now);
         row.set(BuildOperationModel.DURATION_MS, 0);
         model.save(row);
-    }
-
-    /** Tell the forge the push landed and was deliberately not deployed. */
-    private static void reportDeclined(@NonNull Map<String, Object> settings,
-                                       @NonNull String message) {
-        try {
-            DeployStatuses.report(settings, null, GitProviderClient.StatusState.FAILURE,
-                DeployStatuses.CONTEXT_DEPLOY, "Not deployed: " + message, null);
-        } catch (RuntimeException unreported) {
-            Blast.log("APPLICATION: could not report the declined deploy -",
-                unreported.getMessage());
-        }
-    }
-
-    /** The branch a source declares, defaulting to {@code main}. */
-    public static @NonNull String declaredBranch(@NonNull Map<String, Object> settings) {
-        Object branch = settings.get(GitSourceSchema.BRANCH);
-        String named = branch == null ? "" : branch.toString().trim();
-        return named.isEmpty() ? "main" : named;
-    }
-
-    private static void reportFailure(@NonNull Map<String, Object> settings,
-                                      @Nullable String commitSha, @Nullable String reason) {
-        try {
-            DeployStatuses.report(settings, commitSha, GitProviderClient.StatusState.FAILURE,
-                DeployStatuses.CONTEXT_DEPLOY, "Deploy failed: " + reason, null);
-        } catch (RuntimeException unreported) {
-            Blast.log("APPLICATION: could not report the deploy failure -",
-                unreported.getMessage());
-        }
     }
 }

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.runtime;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
+import be.elevenways.hohenheim.instance.ImageOrigin;
 
 import java.io.IOException;
 import java.util.EnumSet;

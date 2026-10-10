@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.instance.variable;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.BooleanField;
@@ -30,14 +30,14 @@ public final class SecretVariableType implements VariableTypeHandler {
     public static final BooleanField GENERATE = SETTINGS_SCHEMA.addField(
         BooleanField.builder("generate")
             .defaultValue(true)
-            .label(HohenheimFormCopy.label("variable_generate"))
-            .help(HohenheimFormCopy.help("variable_generate"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_generate"))
+            .help(HohenheimMicrocopy.HELP.of("variable_generate"))
             .build());
 
     public static final IntegerField GENERATE_BYTES = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("generate_bytes")
             .defaultValue(32)
-            .label(HohenheimFormCopy.label("variable_generate_bytes"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_generate_bytes"))
             .build());
 
     @Override
@@ -45,11 +45,6 @@ public final class SecretVariableType implements VariableTypeHandler {
 
     @Override
     public @NonNull String getDisplayName() { return "Secret"; }
-
-    @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("secret").withFilter("scope", "variable_type");
-    }
 
     @Override
     public Icon getIcon() { return Icon.of("key"); }

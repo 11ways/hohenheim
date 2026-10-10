@@ -1,13 +1,13 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.common.flash.FlashLevel;
@@ -55,8 +55,7 @@ class DeployControlSettleTest extends HohenheimTestBase {
         //    can flash the domain's own sentence.
         SiteControlHandlers.Settled refused = SiteControlHandlers.settleWithin(
             Duration.ofSeconds(2), "test verb", () -> {
-                throw Violations.ofForm(Microcopy.of("release_no_rollback_target")
-                    .withFilter("scope", "violations"));
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("release_no_rollback_target"));
             });
         assertThat(refused.failure()).as("step 2: the refusal is handed back typed")
             .isInstanceOf(Violations.class);

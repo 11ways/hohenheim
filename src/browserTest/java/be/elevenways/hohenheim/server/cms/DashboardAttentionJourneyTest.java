@@ -1,10 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.CertCoverage;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.OnboardingStep;
@@ -166,7 +168,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 Row instance = Models.get(InstanceModel.class).findById(instances.get(i).get(InstanceModel.ID));
                 assertThat(say(AppHealth.instances(false).read(instance, TenantConduits.operator()).headline()))
                     .as("step 2: the app's own page still says it cannot start")
-                    .isEqualTo(PREFIX + "app-" + (i + 1) + " cannot start yet");
+                    .isEqualTo("Cannot start yet");
             }
             assertThat(heldBack(local)).as("step 2: the host holds both apps back").isEqualTo(baseline + 2);
             List<AttentionItem> unfolded = AttentionCollector.collect();
@@ -273,7 +275,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             // the inbox's unread alerts no longer badge Activity.
             Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
             AccessContext operator = TenantConduits.operator();
-            assertThat(admin.entryBySlug(AppParts.SLUG).navBadge(operator))
+            assertThat(admin.entryBySlug(HohenheimSlugs.APPS).navBadge(operator))
                 .as("step 8: the sidebar badges Apps with its 2 problems, the tile's own count").isEqualTo(2L);
             assertThat(admin.entryBySlug("inbox").navBadge(operator))
                 .as("step 8: the inbox's unread alerts no longer badge Activity").isNull();
@@ -771,14 +773,14 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
 
         // 2. A sentence counting things says real plurals, in en and nl, never "(s)".
         Microcopy inUse = new ServerModel.References(1, 0, 0, 2, 1)
-            .describe(Microcopy.of("server_in_use").withFilter("scope", "violations").withArg("name", "local"));
+            .describe(HohenheimMicrocopy.VIOLATIONS.of("server_in_use").withArg("name", "local"));
         assertThat(say(inUse)).as("step 2: each count in its own plural")
             .isEqualTo("Host local is still used by 1 stack, 0 databases, 0 shared database engines, 2 instances "
                 + "and 1 port claim; remove or move them (release the claims) first");
         assertThat(inUse.resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
             .as("step 2: in Dutch too").contains("1 stack, 0 databases, 0 gedeelde database-engines, 2 instanties "
                 + "en 1 poortclaim");
-        Microcopy template = Microcopy.of("template_in_use").withFilter("scope", "violations").withArg("name", "Blog");
+        Microcopy template = HohenheimMicrocopy.VIOLATIONS.of("template_in_use").withArg("name", "Blog");
         assertThat(say(template.withArg("count", 1))).as("step 2: one").isEqualTo("Template Blog is still used by 1 instance");
         assertThat(template.withArg("count", 3).resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
             .as("step 2: several, in Dutch").isEqualTo("Sjabloon Blog wordt nog gebruikt door 3 instanties");
@@ -875,7 +877,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             forcedDomain(forcedSite, "forced.d13f.test");
             assertThat(appRow(adminGet("/admin/dashboard").body(), PREFIX + "forced"))
                 .as("step 4: an app HTTPS breaks keeps the HTTPS badge, which names its cause")
-                .contains("data-cert-status=\"" + CertCoverage.ERROR.key() + "\"")
+                .contains("data-cert-status=\"" + CertCoverage.ERROR.token() + "\"")
                 .doesNotContain("data-hh-app-verdict");
 
             // 5. A persistent database nobody backed up yet: the Backups tile says so under its count.
@@ -913,6 +915,90 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 }
             }
             assertThat(untitled).as("step 7: every problem headline has its naming title in en and nl").isEmpty();
+        } finally {
+            for (int i = cleanup.size() - 1; i >= 0; i--) {
+                cleanup.get(i).run();
+            }
+            captured.restore();
+        }
+    }
+
+    @Test
+    @Timeout(120)
+    void anAppHeldByItsHostTellsTheHostsStoryEverywhereWhileItsOldFailureStaysInRecent() throws Exception {
+        HostFixtures.LocalHostState captured = HostFixtures.captureLocal();
+        List<Runnable> cleanup = new ArrayList<>();
+        try {
+            // 1. D13f's shop: a host that is not admitted, an app on it whose earlier start failed (a container name
+            //    conflict, recorded with the ERROR status it stamped) and a second app on the same host.
+            HostFixtures.blockLocal();
+            int local = ServerModel.localServerId();
+            AttentionSubject localHost = AttentionSubject.host(local);
+            Row held = instance(PREFIX + "held", local);
+            cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), held));
+            int heldId = held.get(InstanceModel.ID);
+            ActivityLog.record(Models.get(InstanceModel.class), heldId, HohenheimActivityAction.WORKLOAD_START_FAILED,
+                "Conflict. The container name /hohenheim-held is already in use");
+            errored(heldId);
+            Row second = instance(PREFIX + "held-2", local);
+            cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), second));
+            String refusal = ServerModel.nameOf(local) + " is not admitted to run apps yet. Check and admit it first.";
+
+            // 2. The verdict is the root's: it cannot start, because of the host, in a sentence that names no app.
+            RecordHealth verdict = AppHealth.instances(false)
+                .read(Models.get(InstanceModel.class).findById(heldId), TenantConduits.operator());
+            assertThat(List.of(verdict.tone(), say(verdict.headline()), say(verdict.detail())))
+                .as("step 2: the host's refusal leads, never the older failed start")
+                .containsExactly(HealthTone.ATTENTION, "Cannot start yet", refusal);
+
+            // 3. The app's page: its band and its Details Status read that one verdict; Recent keeps the old failure.
+            String page = adminGet("/admin/instances/" + heldId + "/page/overview").body();
+            assertThat(page).as("step 3: the band reads the verdict in proper sentences")
+                .contains("data-cms-record-health=\"attention\"").contains("Cannot start yet").contains(refusal)
+                .doesNotContain("yet; Check").doesNotContain("Could not start");
+            int status = page.indexOf("widget-facts-term\">Status</dt>");
+            assertThat(status).as("step 3: Details has a Status").isNotNegative();
+            assertThat(page.substring(status, page.indexOf("</dd>", status)))
+                .as("step 3: the Status is the band's verdict, not the stored error")
+                .contains("Cannot start yet").doesNotContain("Error");
+            assertThat(page).as("step 3: Recent still lists the old failed start")
+                .contains(PREFIX + "held could not be started");
+
+            // 4. The disabled Deploy carries the same reason through the framework's disabled-reason hint.
+            int deploy = page.indexOf("data-action-id=\"hohenheim:start_instance\"");
+            assertThat(deploy).as("step 4: the heading offers Deploy").isNotNegative();
+            String trigger = page.substring(deploy, page.indexOf("</pl-tooltip>", deploy));
+            Matcher hint = Pattern.compile("<pl-tooltip-content id=\"([^\"]+)\"").matcher(trigger);
+            assertThat(hint.find()).as("step 4: dead, with a disabled-reason hint").isTrue();
+            assertThat(trigger).as("step 4: dead").contains("disabled");
+            // The hint's words are drawn in its popup panel at the end of the body, keyed by the hint's id.
+            int panel = page.indexOf("id=\"" + hint.group(1) + "--panel\"");
+            assertThat(panel).as("step 4: the hint has its panel").isNotNegative();
+            assertThat(page.substring(panel, page.indexOf("</pb-microcopy>", panel)))
+                .as("step 4: saying why in the verdict's words").contains(refusal);
+
+            // 5. The dashboard: the failed start's item folds under the host, the one root naming both apps.
+            AttentionItem heldItem = rootOf(AttentionCollector.collect(), AttentionSubject.instance(heldId));
+            assertThat(heldItem).as("step 5: unfolded, the old failure still has an item").isNotNull();
+            assertThat(heldItem.causedBy()).as("step 5: caused by the host").isEqualTo(localHost);
+            assertThat(mine(DashboardAttention.read().attention())).as("step 5: folded, no app item of mine is drawn")
+                .isEmpty();
+            assertThat(heldBack(local)).as("step 5: the host holds both apps back").isGreaterThanOrEqualTo(2);
+
+            // 6. Each app's row badge is the verdict's short words; the row's own title already names the app.
+            String dashboard = adminGet("/admin/dashboard").body();
+            for (String name : List.of(PREFIX + "held", PREFIX + "held-2")) {
+                assertThat(appRow(dashboard, name)).as("step 6: " + name + "'s badge reads the verdict")
+                    .contains("data-hh-app-verdict=\"attention\"").contains("Cannot start yet")
+                    .doesNotContain(name + " cannot start yet");
+            }
+
+            // 7. Once the host takes apps again, the recorded failure is what is left: the verdict says it then.
+            HostFixtures.makeLocalPlaceable(16L * 1024);
+            RecordHealth after = AppHealth.instances(false)
+                .read(Models.get(InstanceModel.class).findById(heldId), TenantConduits.operator());
+            assertThat(say(after.headline())).as("step 7: the old failure leads once its root is gone")
+                .isEqualTo("Could not start");
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();
@@ -1011,7 +1097,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
         row.set(ReleaseOperationModel.KIND, ReleaseOperationModel.KIND_RELEASE);
         row.set(ReleaseOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
         row.set(ReleaseOperationModel.FOR_ID, applicationId);
-        row.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.STATUS_FAILED);
+        row.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED));
         row.set(ReleaseOperationModel.IMAGE_ID, "d11-failed");
         row.set(ReleaseOperationModel.FAILURE_REASON, reason);
         row.set(ReleaseOperationModel.STARTED_AT, Now.instant().minusSeconds(60));

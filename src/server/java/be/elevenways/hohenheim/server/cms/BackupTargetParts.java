@@ -1,12 +1,13 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.protoblast.common.dry.BlastDrySerializers;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.PanelAction;
@@ -48,16 +49,13 @@ import java.util.Objects;
  */
 public final class BackupTargetParts {
 
-    /** This entry's slug, which the instance list names as a related page. */
-    public static final String SLUG = "backup-targets";
-
     private static final SubjectType<Row> SUBJECT = SubjectType.record(BackupTargetModel.MODEL_ID);
 
     /** Runs the target's health check against its real destination. */
     public static final Operation<Row, Void, TestOutcome> TEST =
         Operation.declare(HohenheimIds.id("test_backup_target"))
             .happened(OperationSentences.of("test_backup_target"))
-            .label(Microcopy.of("test_connection").withFilter("scope", "backup_target"))
+            .label(HohenheimMicrocopy.BACKUP_TARGET.of("test_connection"))
             .icon(Icon.of("plug-circle-check"))
             .one(SUBJECT)
             .gate(OperationGate.open())
@@ -117,12 +115,12 @@ public final class BackupTargetParts {
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(BackupTargetModel.KIND))
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(BackupTargetModel.SETTINGS))
             .build();
-        return PanelResource.builder(HohenheimIds.id("backup_target"), SLUG, SUBJECT)
-            .label(Microcopy.of("plural").withFilter("scope", "backup_target"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "backup_target"))
+        return PanelResource.builder(HohenheimIds.id("backup_target"), HohenheimSlugs.BACKUP_TARGETS, SUBJECT)
+            .label(HohenheimMicrocopy.BACKUP_TARGET.of("plural"))
+            .recordLabel(HohenheimMicrocopy.BACKUP_TARGET.of("singular"))
             // A sidebar entry of its own in System, beside Settings, whose control-plane backup setting names one of
             // these targets: without it the page was reachable only from the instance list's related pages.
-            .description(CmsSupport.navHint("backup_target"))
+            .description(CmsSupport.navHint(HohenheimMicrocopy.BACKUP_TARGET))
             .icon(Icon.of("box-archive"))
             .navGroup(NavGroup.SYSTEM)
             .navOrder(94)
@@ -134,7 +132,7 @@ public final class BackupTargetParts {
             .writes(ResourceMutations.rows().create().update().delete().build())
             .actions(List.of(PanelAction.<Row, TestOutcome>places(TEST, ActionPlacement.ROW,
                     (request, result) -> testWords(Objects.requireNonNull(result.value(), "a test answers")))
-                .label(Microcopy.of("test_connection").withFilter("scope", "backup_target"))
+                .label(HohenheimMicrocopy.BACKUP_TARGET.of("test_connection"))
                 .icon(Icon.of("plug-circle-check"))
                 .build()))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
@@ -143,10 +141,10 @@ public final class BackupTargetParts {
 
     private static @NonNull CmsActionResult testWords(@NonNull TestOutcome outcome) {
         if (outcome.failure() != null) {
-            return CmsActionResult.errorToast(Microcopy.of("test_failed").withFilter("scope", "backup_target")
+            return CmsActionResult.errorToast(HohenheimMicrocopy.BACKUP_TARGET.of("test_failed")
                 .withArg("reason", outcome.failure()));
         }
-        return CmsActionResult.toast(Microcopy.of("test_ok").withFilter("scope", "backup_target")
+        return CmsActionResult.toast(HohenheimMicrocopy.BACKUP_TARGET.of("test_ok")
             .withArg("name", outcome.name()));
     }
 }

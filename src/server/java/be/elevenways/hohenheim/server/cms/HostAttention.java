@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionSubject;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.host.HostStanding;
@@ -32,11 +33,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.byHost;
-import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 
 /**
  * The host tier's attention items: the local daemon, host admission and the port ledger.
@@ -47,8 +47,6 @@ import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
  * @since 0.1.0
  */
 public final class HostAttention {
-
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
 
     /** How long a claim may sit in {@code releasing} before it is an alarm: two hourly
      *  reconciler sweeps should have observed and freed it by then. */
@@ -68,10 +66,10 @@ public final class HostAttention {
             return null;
         }
         return item(AttentionSeverity.ERROR, "cubes",
-            copy("docker_unreachable", "attention_title"),
+            HohenheimMicrocopy.ATTENTION_TITLE.of("docker_unreachable"),
             literal(health.problem()),
             CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG),
-            action("act_open_settings"));
+            HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_settings"));
     }
 
     /**
@@ -98,14 +96,15 @@ public final class HostAttention {
             int id = server.get(ServerModel.ID);
             HostVerdict verdict = HostVerdict.of(server);
             AppHealth.HeldBack held = heldBack.get(id);
-            boolean raised = verdict.standing().raisesAttention();
-            if (!raised && held == null) {
+            AttentionSeverity raised = verdict.standing().severity();
+            if (raised == null && held == null) {
                 continue;
             }
             Object name = server.get(ServerModel.NAME);
-            items.add(item(AttentionSeverity.WARNING, "server", verdict.standing().attentionTitle(name),
-                raised ? verdict.reason() : held.reason(),
-                CmsRoutes.open(ADMIN, ServerParts.SLUG, id),
+            // A host that raises nothing itself but holds apps back warns for them.
+            items.add(item(raised != null ? raised : AttentionSeverity.WARNING, "server",
+                verdict.standing().attentionTitle(name), raised != null ? verdict.reason() : held.reason(),
+                CmsRoutes.open(ADMIN, HohenheimSlugs.SERVERS, id),
                 verdict.remedyAction(name))
                 .about(AttentionSubject.host(id), heldBackText(held))
                 .forStage(OnboardingStage.ADMISSION));
@@ -132,12 +131,14 @@ public final class HostAttention {
             Object name = ServerModel.nameOf(host);
             int apps = held.getOrDefault(host, 0);
             items.add(item(apps > 0 ? AttentionSeverity.ERROR : AttentionSeverity.WARNING, "shield-halved",
-                copy("isolation_unenforced", "attention_title", "host", name),
-                copy("isolation_unenforced", "attention_detail"),
-                AttentionCollector.securitySettingsTarget(), action("act_open_settings"))
+                HohenheimMicrocopy.ATTENTION_TITLE.of("isolation_unenforced").withArg("host", name),
+                HohenheimMicrocopy.ATTENTION_DETAIL.of("isolation_unenforced"),
+                AttentionCollector.securitySettingsTarget(),
+                    HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_settings"))
                 .about(AttentionSubject.host(host),
-                    apps == 0 ? null : copy("could_not_start_held", "attention_detail", "count", apps))
-                .withNote(copy("isolation_unenforced_note", "attention_detail", "host", name)));
+                    apps == 0 ? null : HohenheimMicrocopy.ATTENTION_DETAIL.of("could_not_start_held")
+                        .withArg("count", apps))
+                .withNote(HohenheimMicrocopy.ATTENTION_DETAIL.of("isolation_unenforced_note").withArg("host", name)));
         }
     }
 
@@ -208,7 +209,7 @@ public final class HostAttention {
 
     /** @return "2 apps wait for it", null when the host holds nothing back */
     private static @Nullable Microcopy heldBackText(AppHealth.@Nullable HeldBack held) {
-        return held == null ? null : copy("held_back", "attention_detail", "count", held.apps());
+        return held == null ? null : HohenheimMicrocopy.ATTENTION_DETAIL.of("held_back").withArg("count", held.apps());
     }
 
     /** @return the host's required preflight checks that did not pass, in words, in the stored report's order */
@@ -242,11 +243,9 @@ public final class HostAttention {
             .toList();
         byHost(stuck, claim -> serverNameOf(claim.get(PortAllocationModel.SERVER_ID)),
             claim -> claim.get(PortAllocationModel.PORT) + "/" + claim.get(PortAllocationModel.PROTOCOL)).forEach((server, ports) -> items.add(item(AttentionSeverity.WARNING, "ethernet",
-            copy("ports_releasing", "attention_title", "server", server),
-            copy("ports_releasing", "attention_detail",
-                "count", ports.size(),
-                "hours", RELEASING_STUCK_AFTER.toHours(),
-                "ports", String.join(", ", ports)))));
+            HohenheimMicrocopy.ATTENTION_TITLE.of("ports_releasing").withArg("server", server),
+            HohenheimMicrocopy.ATTENTION_DETAIL.of("ports_releasing").withArg("count", ports.size())
+                .withArg("hours", RELEASING_STUCK_AFTER.toHours()).withArg("ports", String.join(", ", ports)))));
     }
 
     // A releasing claim can outlive its servers row (host removal parks claims and

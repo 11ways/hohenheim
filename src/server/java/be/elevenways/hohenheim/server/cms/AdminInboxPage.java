@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.plumage.component.Pager;
@@ -47,19 +49,19 @@ import java.util.Map;
 public final class AdminInboxPage extends PanelPage {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("inbox"); }
-    @Override public @NonNull String slug() { return "inbox"; }
+    @Override public @NonNull String slug() { return HohenheimSlugs.INBOX; }
     @Override public @NonNull Icon icon() { return Icon.of("envelope"); }
     @Override public @NonNull NavGroup navGroup() { return NavGroup.SYSTEM; }
     @Override public int navOrder() { return 91; }
 
     @Override
     public @NonNull Microcopy label() {
-        return Microcopy.of("plural").withFilter("scope", "admin_inbox");
+        return HohenheimMicrocopy.ADMIN_INBOX.of("plural");
     }
 
     @Override
     public @Nullable Microcopy description() {
-        return Microcopy.of("nav_hint").withFilter("scope", "admin_inbox");
+        return HohenheimMicrocopy.ADMIN_INBOX.of("nav_hint");
     }
 
     @Override
@@ -85,7 +87,7 @@ public final class AdminInboxPage extends PanelPage {
      * Page 1 is the bare route, the parameter's absence.
      */
     private @NonNull RouteTarget pageUrl(int page) {
-        BoundEndpoint<?> list = CmsRoutes.list(HohenheimPanel.SLUG, slug());
+        BoundEndpoint<?> list = CmsRoutes.list(HohenheimSlugs.ADMIN, slug());
         return page <= 1 ? list : list.with(HohenheimParams.INBOX_PAGE, page);
     }
 

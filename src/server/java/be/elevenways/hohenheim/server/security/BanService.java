@@ -1,9 +1,9 @@
 package be.elevenways.hohenheim.server.security;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.security.BanScope;
-import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.task.UpdateSystemIpAddresses;
 import be.elevenways.protoblast.common.Blast;
@@ -192,7 +192,7 @@ public final class BanService {
      * only): v4 addresses match exactly, v6 addresses match their /64 key.
      */
     public boolean isBanned(@NonNull String ip) {
-        if (!enforcementEnabled()) {
+        if (!HohenheimSettings.isOn(HohenheimSettings.Security.BANS_ENABLED)) {
             return false;
         }
         Set<String> bans = this.currentCache();
@@ -207,11 +207,6 @@ public final class BanService {
             return key != null && bans.contains(key);
         }
         return bans.contains(ip);
-    }
-
-    public boolean enforcementEnabled() {
-        return Boolean.TRUE.equals(
-            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.BANS_ENABLED));
     }
 
     // -----------------------------------------------------------------------
@@ -229,7 +224,7 @@ public final class BanService {
      * caller that must observe the row.
      */
     public void autoBan(@NonNull String ip, @Nullable String eventType, @NonNull String reason) {
-        if (!enforcementEnabled()) {
+        if (!HohenheimSettings.isOn(HohenheimSettings.Security.BANS_ENABLED)) {
             return;
         }
         String trimmed = ip.trim();
@@ -390,8 +385,8 @@ public final class BanService {
     private void notifyBudgetExhausted(int budget) {
         try {
             this.notifier.send(NotificationEvents.AUTO_BAN_BUDGET_EXHAUSTED,
-                Alerts.copy("auto_ban_budget_subject"),
-                Alerts.copy("auto_ban_budget_body").withArg("budget", budget));
+                HohenheimMicrocopy.ALERT.of("auto_ban_budget_subject"),
+                HohenheimMicrocopy.ALERT.of("auto_ban_budget_body").withArg("budget", budget));
         } catch (RuntimeException e) {
             Blast.log("BANS: could not send budget-exhaustion notification -",
                 e.getMessage());

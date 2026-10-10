@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -75,7 +76,7 @@ record TemplateFamily(@NonNull String name, @NonNull List<Row> members) {
      */
     @NonNull Microcopy cardLine() {
         if (InstanceTemplateModel.SOURCE_STARTER.equals(this.current().get(InstanceTemplateModel.SOURCE))) {
-            return Microcopy.of(cardKey(this.name)).withFilter("scope", "put_online").withFilter("target", "card")
+            return HohenheimMicrocopy.PUT_ONLINE.of(cardKey(this.name)).withFilter("target", "card")
                 .withFallback(this.description());
         }
         return Microcopy.literal(this.description());

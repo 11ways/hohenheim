@@ -10,9 +10,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * Whether HTTPS works for one exact hostname: which certificate state covers it, the vocabulary every HTTPS cell
  * (a domain row, a site's summary) renders.
  *
- * AIDEV-NOTE: the three covered states DERIVE their key from CertificateModel's own STATUS values
+ * AIDEV-NOTE: the three covered states DERIVE their token from CertificateModel's own STATUS values
  * (the declaring home); NONE is the one state that model cannot express. How a state renders -- the
- * {@code data-cert-status} key, the badge variant and the wording a reader who may not open the
+ * {@code data-state} token, the badge variant and the wording a reader who may not open the
  * certificate sees -- is a fact on the member, so the domains tab compares no literal. An unknown
  * certificate status fails CLOSED onto {@link #ERROR}: a coverage badge never claims coverage it
  * cannot vouch for. NOT_USED is the second state without a certificate, for a name this proxy terminates no TLS for;
@@ -22,44 +22,46 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @author Jelle De Loecker
  * @since  0.1.0
  */
-public enum CertCoverage {
+public enum CertCoverage implements WordedState {
 
-    NONE("none", BadgeVariant.OUTLINE, Microcopy.of("none").withFilter("scope", "site_domains")),
+    NONE("none", BadgeVariant.OUTLINE, HohenheimMicrocopy.SITE_DOMAINS.of("none")),
     /** HTTPS is not this proxy's to give: a TLS passthrough site terminates nothing here. */
-    NOT_USED("not_used", BadgeVariant.OUTLINE, Microcopy.of("not_used").withFilter("scope", "site_domains")),
+    NOT_USED("not_used", BadgeVariant.OUTLINE, HohenheimMicrocopy.SITE_DOMAINS.of("not_used")),
     /**
      * A pattern answers many names, so no one certificate answers for it: HTTPS works for each name a certificate
      * covers. The fourth state without a certificate, so a catch-all's HTTPS cell says so instead of staying empty.
      */
-    PATTERN("pattern", BadgeVariant.OUTLINE, Microcopy.of("per_name").withFilter("scope", "site_domains")),
+    PATTERN("pattern", BadgeVariant.OUTLINE, HohenheimMicrocopy.SITE_DOMAINS.of("per_name")),
     ACTIVE(CertificateModel.STATUS_ACTIVE, BadgeVariant.SUCCESS,
-        Microcopy.of("covered").withFilter("scope", "site_domains")),
+        HohenheimMicrocopy.SITE_DOMAINS.of("covered")),
     PENDING(CertificateModel.STATUS_PENDING, BadgeVariant.WARNING,
-        Microcopy.of("coverage_pending").withFilter("scope", "site_domains")),
+        HohenheimMicrocopy.SITE_DOMAINS.of("coverage_pending")),
     ERROR(CertificateModel.STATUS_ERROR, BadgeVariant.DESTRUCTIVE,
-        Microcopy.of("not_covered").withFilter("scope", "site_domains"));
+        HohenheimMicrocopy.SITE_DOMAINS.of("not_covered"));
 
-    private final String key;
-    private final BadgeVariant badgeVariant;
+    private final String token;
+    private final BadgeVariant variant;
     private final Microcopy label;
 
-    CertCoverage(@NonNull String key, @NonNull BadgeVariant badgeVariant, @NonNull Microcopy label) {
-        this.key = key;
-        this.badgeVariant = badgeVariant;
+    CertCoverage(@NonNull String token, @NonNull BadgeVariant variant, @NonNull Microcopy label) {
+        this.token = token;
+        this.variant = variant;
         this.label = label;
     }
 
-    /** @return the rendered {@code data-cert-status} value */
-    public @NonNull String key() {
-        return this.key;
+    /** @return the rendered {@code data-state} value */
+    @Override
+    public @NonNull String token() {
+        return this.token;
     }
 
-    /** @return the pl-badge variant this state wears */
-    public @NonNull BadgeVariant badgeVariant() {
-        return this.badgeVariant;
+    @Override
+    public @NonNull BadgeVariant variant() {
+        return this.variant;
     }
 
     /** @return the state's wording for a reader who may not open the certificate itself */
+    @Override
     public @NonNull Microcopy label() {
         return this.label;
     }
@@ -82,7 +84,7 @@ public enum CertCoverage {
             return NONE;
         }
         for (CertCoverage coverage : values()) {
-            if (coverage.hasCertificate() && coverage.key.equals(status)) {
+            if (coverage.hasCertificate() && coverage.token.equals(status)) {
                 return coverage;
             }
         }

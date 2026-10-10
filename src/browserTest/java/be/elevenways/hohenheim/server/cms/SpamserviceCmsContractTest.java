@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.spamservice.client.ManagedClient;
@@ -96,7 +97,7 @@ class SpamserviceCmsContractTest {
             null, null, null, 50, null, null, null, "r1");
         assertThat(SpamserviceClientsResource.keysTarget(client).toUrl())
             .isEqualTo("/admin/spamservice-clients/" + clientId + "/page/keys");
-        assertThat(resources.get(1).parent().subpageSlug()).isEqualTo(SpamserviceClientKeysResource.TAB);
+        assertThat(resources.get(1).parent().subpageSlug()).isEqualTo(HohenheimSlugs.Tab.KEYS);
     }
 
     @Test

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.model.Schema;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -47,8 +48,8 @@ public final class NetworkBandwidth {
     /** Add the knob to a kind's settings schema; the returned field is the kind's constant. */
     public static @NonNull IntegerField addTo(@NonNull Schema schema) {
         return schema.addField(IntegerField.builder().name(SETTING)
-            .label(HohenheimFormCopy.label("network_limit_mbit"))
-            .help(HohenheimFormCopy.help("network_limit_mbit"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("network_limit_mbit"))
+            .help(HohenheimMicrocopy.HELP.of("network_limit_mbit"))
             .suffix("Mbit/s")
             .build());
     }
@@ -61,7 +62,7 @@ public final class NetworkBandwidth {
      * there is nothing a zero could mean except "no cap".
      */
     public static @Nullable Integer declaredMbit(@NonNull Map<String, Object> settings) {
-        return KindSettingValues.positive(settings.get(SETTING));
+        return RawValues.positiveInt(settings.get(SETTING));
     }
 
     /** The daemon's own spelling of a rate: {@code 100Mbit}. */

@@ -1,17 +1,21 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.AccountabilityOrigin;
 import be.elevenways.zenit.common.security.CallerChannel;
@@ -125,6 +129,37 @@ class ServerOverviewTest extends HohenheimTestBase {
             .as("positive anchor: the CREATE form still states what enrolling grants,"
                 + " so the edit-side absence is the view split and not a deleted notice")
             .contains("data-path=\"trust_notice\"");
+    }
+
+    /**
+     * The trust notice is worded in the VIEWER's language: a Dutch browser reads it in Dutch while the installation's
+     * own default stays English. It used to resolve in the server default, so every viewer read English.
+     */
+    @Test
+    void aDutchViewerReadsTheTrustNoticeInDutch() throws Exception {
+        // 1. The installation's own default language is English.
+        assertThat(RouteLocales.get().getDefaultLocale().language())
+            .as("step 1: the server default is English, so a Dutch notice can only come from the viewer")
+            .isEqualTo("en");
+        String dutchNotice = noticeIn("nl");
+        String englishNotice = noticeIn("en");
+        assertThat(dutchNotice).as("step 1: the catalog words the notice differently per language")
+            .isNotEqualTo(englishNotice);
+
+        // 2. A Dutch browser's create form states what enrolling grants in Dutch, and never in English.
+        HttpResponse<String> create = sendRequest(requestTo("/admin/servers/new").GET()
+            .header("Cookie", sessionCookieHeader(sessionToken))
+            .header("Accept-Language", "nl"));
+        assertThat(create.statusCode()).as("step 2: the create form renders").isEqualTo(200);
+        assertThat(create.body())
+            .as("step 2: the Dutch viewer reads the Dutch notice")
+            .contains(dutchNotice.substring(0, 40))
+            .doesNotContain(englishNotice.substring(0, 40));
+    }
+
+    private static String noticeIn(String language) {
+        return HohenheimMicrocopy.SERVER.of("trust_notice_body")
+            .resolve(LocaleChain.ofTags(language), Zenit.getMessageResolver());
     }
 
     /**

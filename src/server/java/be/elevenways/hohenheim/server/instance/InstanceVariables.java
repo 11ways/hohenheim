@@ -1,11 +1,14 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.VariableKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.variable.SecretVariableType;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypeHandler;
@@ -43,7 +46,7 @@ public final class InstanceVariables {
         for (Row declared : declaredVariables) {
             String key = declared.get(InstanceTemplateVariableModel.KEY);
             VariableTypeHandler handler = handlerOf(declared);
-            Map<String, Object> settings = settingsOf(declared);
+            Map<String, Object> settings = RawValues.map(declared.get(InstanceTemplateVariableModel.SETTINGS));
             String value = handler.toStoredString(coercedValues.get(key));
 
             // AIDEV-NOTE: a declared default beats generation. The template author's own
@@ -98,16 +101,16 @@ public final class InstanceVariables {
         requireVariableAuthority(instanceId);
         if (key.isBlank()) {
             throw Violations.ofField("key", key,
-                HohenheimViolations.text("variable_key_required"));
+                HohenheimMicrocopy.VIOLATIONS.of("variable_key_required"));
         }
         if ((instanceId == null) == (environmentId == null)) {
             throw Violations.ofField("environment_id", environmentId,
-                HohenheimViolations.text("variable_one_owner"));
+                HohenheimMicrocopy.VIOLATIONS.of("variable_one_owner"));
         }
         VariableKind parsed = VariableKind.parse(kind);
         if (parsed == null) {
             throw Violations.ofField("kind", kind,
-                HohenheimViolations.text("variable_kind_unknown")
+                HohenheimMicrocopy.VIOLATIONS.of("variable_kind_unknown")
                     .withArg("kind", kind));
         }
         boolean secret = parsed.isSecret();
@@ -132,9 +135,6 @@ public final class InstanceVariables {
         model.save(row);
     }
 
-    /** The settings key a generated record's environment travels under. */
-    public static final String ENVIRONMENT_SETTING = "environment_variables";
-
     /**
      * Take a generated record's {@code environment_variables} out of its settings map.
      *
@@ -147,7 +147,7 @@ public final class InstanceVariables {
      * @return the removed environment, empty when the settings carried none
      */
     public static @NonNull Map<String, String> detachEnvironment(@NonNull Map<String, Object> settings) {
-        return EnvVars.toMap(settings.remove(ENVIRONMENT_SETTING));
+        return EnvVars.toMap(settings.remove(InstanceKindFields.ENVIRONMENT_VARIABLES));
     }
 
     /**
@@ -200,7 +200,7 @@ public final class InstanceVariables {
      * same endpoint through InstanceApi's shared visibility resolver, which checks
      * {@code view} alone. Requiring config moves no boundary: a config holder already
      * rewrites {@code settings.command} through the /manage instance entry (InstanceParts.manage), so this enforces
-     * the line HohenheimAccess.CONFIG already declares rather than drawing a new one. A
+     * the line HohenheimCapabilities.CONFIG already declares rather than drawing a new one. A
      * separate {@code variables} verb was rejected for exactly that reason -- it would add
      * a grant-matrix column carrying authority config already covers.
      *
@@ -220,7 +220,7 @@ public final class InstanceVariables {
      */
     private static void requireVariableAuthority(@Nullable Integer instanceId) {
         if (instanceId != null) {
-            HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
+            HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.CONFIG);
         }
     }
 
@@ -316,7 +316,7 @@ public final class InstanceVariables {
         Map<String, Object> applied = new LinkedHashMap<>(settings);
 
         Map<String, String> env = new LinkedHashMap<>(derived);
-        if (settings.get(ENVIRONMENT_SETTING) instanceof Map<?, ?> baseline) {
+        if (settings.get(InstanceKindFields.ENVIRONMENT_VARIABLES) instanceof Map<?, ?> baseline) {
             baseline.forEach((name, value) -> {
                 if (name != null && value != null) {
                     env.put(String.valueOf(name), String.valueOf(value));
@@ -324,7 +324,7 @@ public final class InstanceVariables {
             });
         }
         env.putAll(declared);
-        applied.put(ENVIRONMENT_SETTING, env);
+        applied.put(InstanceKindFields.ENVIRONMENT_VARIABLES, env);
 
         Map<String, String> substitutions = layered(derived, declared);
         if (settings.get("command") instanceof String command && !command.isEmpty()) {
@@ -363,13 +363,6 @@ public final class InstanceVariables {
         return result;
     }
 
-    /** The declared variable's per-type settings map (empty when unset). */
-    @SuppressWarnings("unchecked")
-    static @NonNull Map<String, Object> settingsOf(@NonNull Row declared) {
-        Object settings = declared.get(InstanceTemplateVariableModel.SETTINGS);
-        return settings instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
-    }
-
     /**
      * @throws Violations when the declared type has no registered handler
      */
@@ -378,7 +371,7 @@ public final class InstanceVariables {
         VariableTypeHandler handler = VariableTypes.getHandler(type);
         if (handler == null) {
             throw Violations.ofField("type", type,
-                HohenheimViolations.text("variable_type_unknown")
+                HohenheimMicrocopy.VIOLATIONS.of("variable_type_unknown")
                     .withArg("type", String.valueOf(type)));
         }
         return handler;

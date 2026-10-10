@@ -1,9 +1,10 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.model.OperationStatus;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.InstanceDeploymentsPage;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -60,11 +61,11 @@ class DeploymentsTabCensorTest extends HohenheimTestBase {
         applicationId = app.get(InstanceModel.ID);
 
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, applicationId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
-        operation(ReleaseOperationModel.STATUS_FAILED, DAEMON_TEXT, STEP_TEXT + "\n",
+        operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), DAEMON_TEXT, STEP_TEXT + "\n",
             Instant.parse("2026-09-01T09:00:00Z"));
-        operation(ReleaseOperationModel.STATUS_SWITCHING, null, "switching traffic\n",
+        operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SWITCHING), null, "switching traffic\n",
             Instant.parse("2026-09-01T10:00:00Z"));
     }
 
@@ -92,7 +93,7 @@ class DeploymentsTabCensorTest extends HohenheimTestBase {
     }
 
     private static String url(String panel) {
-        return "/" + panel + "/instances/" + applicationId + "/page/" + InstanceDeploymentsPage.SLUG;
+        return "/" + panel + "/instances/" + applicationId + "/page/" + HohenheimSlugs.Tab.DEPLOYMENTS;
     }
 
     /** The markup of the pl-button whose face reads {@code label}, opening tag included. */

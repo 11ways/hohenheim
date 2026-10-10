@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -38,7 +40,7 @@ public final class InstanceDevices {
      * THE capability every device operation demands on the device's instance; the write gate ({@link #target}) and
      * the render faces below ask this one name.
      */
-    private static final String DEVICE_CAPABILITY = HohenheimAccess.CONFIG;
+    private static final String DEVICE_CAPABILITY = HohenheimCapabilities.CONFIG;
 
     private final @NonNull InstanceService instances;
 
@@ -101,7 +103,7 @@ public final class InstanceDevices {
 
         Row row = rowOf(instanceId, name);
         if (row == null || DeviceType.parse(row.get(InstanceDeviceModel.TYPE)) != DeviceType.DISK) {
-            throw Violations.ofField("name", name, HohenheimViolations.text("device_not_found")
+            throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("device_not_found")
                 .withArg("device", name));
         }
         Integer before = row.get(InstanceDeviceModel.SIZE_GB);
@@ -115,7 +117,8 @@ public final class InstanceDevices {
             support.resizeDisk(resolved.spec(), name, sizeGb);
         } catch (IOException e) {
             revertSize(row, before);
-            throw refusal("device_resize_failed", resolved.row(), name, e);
+            throw Violations.ofForm(HohenheimViolations.instanceRefusalText("device_resize_failed", resolved.row(), e)
+                .withArg("device", name));
         }
     }
 
@@ -171,7 +174,7 @@ public final class InstanceDevices {
 
         Row row = rowOf(instanceId, name);
         if (row == null) {
-            throw Violations.ofField("name", name, HohenheimViolations.text("device_not_found")
+            throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("device_not_found")
                 .withArg("device", name));
         }
         // Symmetry with attachCdrom: install media is an OPERATOR device end to
@@ -188,7 +191,8 @@ public final class InstanceDevices {
         try {
             support.removeDevice(resolved.spec(), name, type != null && type.ownsVolume());
         } catch (IOException e) {
-            throw refusal("device_detach_failed", resolved.row(), name, e);
+            throw Violations.ofForm(HohenheimViolations.instanceRefusalText("device_detach_failed", resolved.row(), e)
+                .withArg("device", name));
         }
         // Hard delete: the remove-hook pairing releases the reservation.
         Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID));
@@ -287,7 +291,7 @@ public final class InstanceDevices {
 
     private static void requireAbsentRow(int instanceId, @NonNull String name) {
         if (rowOf(instanceId, name) != null) {
-            throw Violations.ofField("name", name, HohenheimViolations.text("device_exists")
+            throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("device_exists")
                 .withArg("device", name));
         }
     }
@@ -296,12 +300,11 @@ public final class InstanceDevices {
         if (resolved.runtime() instanceof DeviceAttachSupport support) {
             return support;
         }
-        throw Violations.ofForm(HohenheimViolations.text("devices_unsupported")
-            .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
+        throw HohenheimViolations.instanceRefusal("devices_unsupported", resolved.row(), null);
     }
 
     private static boolean workloadAbsent(@NonNull Resolved resolved) {
-        return resolved.runtime().status(resolved.spec().handle()).state()
+        return resolved.liveStatus().state()
             == ContainerState.ABSENT;
     }
 
@@ -351,14 +354,9 @@ public final class InstanceDevices {
             daemon.run();
         } catch (IOException e) {
             Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID));
-            throw refusal("device_attach_failed", target.resolved().row(), name, e);
+            throw Violations.ofForm(HohenheimViolations.instanceRefusalText("device_attach_failed",
+                    target.resolved().row(), e)
+                .withArg("device", name));
         }
     }
-
-    private static Violations refusal(String key, Row instanceRow, String device,
-                                      IOException cause) {
-        return Violations.ofForm(HohenheimViolations.instanceRefusalText(key, instanceRow, cause)
-            .withArg("device", device));
-    }
-
 }

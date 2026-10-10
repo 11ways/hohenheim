@@ -1,13 +1,13 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.application.InstanceUpstreamHandler;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.BooleanField;
@@ -50,23 +50,23 @@ public final class InstanceUpstreamKind implements UpstreamKindHandler {
      */
     public static final StringField PORT = SETTINGS_SCHEMA.addField(
         StringField.builder().name("port")
-            .label(HohenheimFormCopy.label("instance_port"))
-            .help(HohenheimFormCopy.help("instance_port"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("instance_port"))
+            .help(HohenheimMicrocopy.HELP.of("instance_port"))
             .build());
 
     public static final EnumField SCHEME = SETTINGS_SCHEMA.addField(
         EnumField.builder("scheme")
-            .value("http", "HTTP", UpstreamCopy.scheme("http"))
-            .value("https", "HTTPS", UpstreamCopy.scheme("https"))
+            .value("http", "HTTP", HohenheimMicrocopy.UPSTREAM_SCHEME.of("http"))
+            .value("https", "HTTPS", HohenheimMicrocopy.UPSTREAM_SCHEME.of("https"))
             .defaultValue("http")
-            .label(HohenheimFormCopy.label("forward_scheme"))
-            .help(HohenheimFormCopy.help("forward_scheme"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("forward_scheme"))
+            .help(HohenheimMicrocopy.HELP.of("forward_scheme"))
             .build());
 
     public static final BooleanField WEBSOCKET_UPGRADE = SETTINGS_SCHEMA.addField(
         BooleanField.builder("websocket_upgrade").defaultValue(true)
-            .label(HohenheimFormCopy.label("websocket_upgrade"))
-            .help(HohenheimFormCopy.help("websocket_upgrade")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("websocket_upgrade"))
+            .help(HohenheimMicrocopy.HELP.of("websocket_upgrade")).build());
 
     public static final IntegerField REQUEST_TIMEOUT = SETTINGS_SCHEMA.addField(
         UpstreamSettings.requestTimeout());
@@ -74,14 +74,6 @@ public final class InstanceUpstreamKind implements UpstreamKindHandler {
     @Override public Identifier typeId() { return ID; }
 
     @Override public String getDisplayName() { return "Instance"; }
-
-    @Override public @NonNull Microcopy getLabel() {
-        return Microcopy.of("instance").withFilter("scope", "upstream_kind");
-    }
-
-    @Override public @NonNull Microcopy getDescription() {
-        return Microcopy.of("instance").withFilter("scope", "upstream_kind_description");
-    }
 
     @Override public Icon getIcon() { return Icon.of("box"); }
 
@@ -98,13 +90,13 @@ public final class InstanceUpstreamKind implements UpstreamKindHandler {
 
         if (instanceId == null) {
             return new FaultedSiteHandler(site.get(SiteModel.ID),
-                Microcopy.of("no_instance").withFilter("scope", "site_fault"));
+                HohenheimMicrocopy.SITE_FAULT.of("no_instance"));
         }
 
         Object scheme = settings.get(SCHEME.getName());
 
         return new InstanceUpstreamHandler(site.get(SiteModel.ID), instanceId,
-            !Boolean.FALSE.equals(settings.get(WEBSOCKET_UPGRADE.getName())),
+            RawValues.isOn(settings, WEBSOCKET_UPGRADE),
             scheme == null || scheme.toString().isBlank() ? "http" : scheme.toString());
     }
 }

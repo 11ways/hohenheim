@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.AccessListModel;
@@ -18,8 +19,8 @@ import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -51,20 +52,13 @@ public final class ManagePanel extends Panel {
     /** Aliased from the common constant so the two faces can never spell it differently. */
     public static final Permission ACCESS = HohenheimSources.MANAGE_ACCESS;
 
-    /**
-     * This panel's URL slug, so a page that must PROJECT differently here compares
-     * against the declaration instead of re-spelling the literal
-     * ({@code CmsSupport.isDelegatedPanel} is the one reader).
-     */
-    public static final String SLUG = HohenheimSlugs.MANAGE;
-
     private static volatile boolean sourceRegistered = false;
 
     /** The panel's title, "Your services": the shell names it and the landing is headed by it (board Manage-Home). */
-    static final Microcopy TITLE = Microcopy.of("title").withFilter("scope", "manage");
+    static final Microcopy TITLE = HohenheimMicrocopy.MANAGE.of("title");
 
     public ManagePanel() {
-        super(HohenheimIds.id(SLUG), SLUG, TITLE, ACCESS);
+        super(HohenheimIds.id(HohenheimSlugs.MANAGE), HohenheimSlugs.MANAGE, TITLE, ACCESS);
     }
 
     /** The one eligibility computation, held so a JVM that boots twice installs the same instance. */
@@ -96,10 +90,10 @@ public final class ManagePanel extends Panel {
      */
     static boolean eligible(@NonNull AccessContext ctx) {
         return HohenheimAccess.managesAnySite(ctx)
-            || HohenheimAccess.reachesAny(ctx, InstanceModel.MODEL_ID, HohenheimAccess.VIEW)
-            || HohenheimAccess.reachesAny(ctx, DatabaseModel.MODEL_ID, HohenheimAccess.VIEW)
-            || HohenheimAccess.reachesAny(ctx, GitProviderModel.MODEL_ID, HohenheimAccess.MANAGE)
-            || HohenheimAccess.reachesAny(ctx, AccessListModel.MODEL_ID, HohenheimAccess.MANAGE)
+            || HohenheimAccess.reachesAny(ctx, InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW)
+            || HohenheimAccess.reachesAny(ctx, DatabaseModel.MODEL_ID, HohenheimCapabilities.VIEW)
+            || HohenheimAccess.reachesAny(ctx, GitProviderModel.MODEL_ID, HohenheimCapabilities.MANAGE)
+            || HohenheimAccess.reachesAny(ctx, AccessListModel.MODEL_ID, HohenheimCapabilities.MANAGE)
             || !Projects.visibleTo(ctx).isEmpty();
     }
 
@@ -107,7 +101,8 @@ public final class ManagePanel extends Panel {
      * AIDEV-NOTE: the sidebar is the admin's shape cut to what a tenant holds (board Manage-Home, W9b): Overview, Apps,
      * Databases, Domains and Team in one unlabelled block. Domains and Team are clusters like the admin's; every other
      * entry is showInNav(false) and keeps a declared way in (Sites, Instances, Templates, Previews and Git connections
-     * from the Apps list's toolbar; the rest from the record that owns them). ManagePanelJourneyTest pins the rows.
+     * from the Apps list's toolbar; the rest from the record that owns them). Each twin says which through
+     * {@link ManageTwin} (listed with its nav probe, or reached). ManagePanelJourneyTest pins the rows.
      *
      * AIDEV-NOTE: every tier's projection is gated on the SAME role its admin surface is
      * gated on ({@link HohenheimPanel#addIf}, one home). Until 2026-08-29 this list carried
@@ -153,8 +148,7 @@ public final class ManagePanel extends Panel {
         // The managed-database tier's tenant projection: allocate, read credentials
         // (its own capability, its own tab), back up and destroy your OWN databases.
         HohenheimPanel.addIf(peers, DatabaseParts.manage(), Role.DATABASES);
-        // Needs BOTH tiers to exist: it joins an instance to a managed database.
-        if (HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES)) {
+        if (InstanceAttachmentParts.databasesServed()) {
             peers.add(InstanceAttachmentParts.databasesManage());
         }
         // The project tier's tenant projection: which projects the principal is a
@@ -176,20 +170,20 @@ public final class ManagePanel extends Panel {
         // The tenant's apps: its sites and instances read as one list (AppDirectory). Declared last, because its
         // toolbar names the sibling entries this node registered.
         HohenheimPanel.addIf(peers, AppParts.manage(HohenheimPanel.present(peers, HohenheimSlugs.SITES,
-                InstanceParts.SLUG, HohenheimSlugs.INSTANCE_TEMPLATES, PreviewParts.SLUG, HohenheimSlugs.GIT_PROVIDERS),
-            HohenheimPanel.present(peers, PutOnlinePage.SLUG).isEmpty() ? null : PutOnlinePage.SLUG),
+                HohenheimSlugs.INSTANCES, HohenheimSlugs.INSTANCE_TEMPLATES, HohenheimSlugs.PREVIEWS,
+                    HohenheimSlugs.GIT_PROVIDERS),
+            HohenheimPanel.present(peers, HohenheimSlugs.PUT_ONLINE).isEmpty() ? null : HohenheimSlugs.PUT_ONLINE),
             Role.PROXY, Role.INSTANCES);
-        HohenheimPanel.addCluster(peers, HohenheimPanel.cluster("tenant_domains", HohenheimPanel.DOMAINS_CLUSTER,
-            "globe", 50), DomainParts.SLUG, DnsRecordParts.SLUG, HohenheimSlugs.CERTIFICATES, HohenheimSlugs.ACCESS_LISTS);
-        HohenheimPanel.addCluster(peers, HohenheimPanel.cluster("team", TEAM_CLUSTER, "users", 60), ProjectParts.SLUG,
-            ProjectMembershipParts.SLUG);
+        HohenheimPanel.addCluster(peers, HohenheimPanel.cluster("tenant_domains", HohenheimSlugs.Cluster.DOMAIN_NAMES,
+            "globe", 50), HohenheimSlugs.DOMAINS, HohenheimSlugs.DNS_RECORDS, HohenheimSlugs.CERTIFICATES,
+                HohenheimSlugs.ACCESS_LISTS);
+        HohenheimPanel.addCluster(peers, HohenheimPanel.cluster("team", HohenheimSlugs.Cluster.TEAM, "users", 60),
+            HohenheimSlugs.PROJECTS,
+            HohenheimSlugs.PROJECT_MEMBERS);
         // The host is operator inventory: no twin here may filter, sort, search or read by it.
         HostFields.requireWithheld(peers);
         return peers;
     }
-
-    /** The Team cluster's slug: the projects the principal is in and the people in them. */
-    public static final String TEAM_CLUSTER = "team";
 
     /**
      * THE SiteModel default source, serving the admin pickers AND the /manage
@@ -318,7 +312,7 @@ public final class ManagePanel extends Panel {
         var dnsRecords = RecordSource.of(DnsRecordModel.class)
             .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
             .scopedBy(TenantScopes.DNS_RECORDS);
-        RecordSourceRegistry.INSTANCE.override(adminCreatable(dnsRecords, admin, DnsRecordParts.SLUG).build());
+        RecordSourceRegistry.INSTANCE.override(adminCreatable(dnsRecords, admin, HohenheimSlugs.DNS_RECORDS).build());
 
         // Certificates: this REPLACES the common ADMIN_ACCESS-gated registration (which the
         // browser registry keeps, legitimately -- the scope below reads zenit-auth record

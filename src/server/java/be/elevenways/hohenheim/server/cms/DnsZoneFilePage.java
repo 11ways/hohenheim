@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -31,8 +33,8 @@ import java.util.Map;
 public final class DnsZoneFilePage implements RecordTab.Rendered<Row> {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("dns_zone_file"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("zone_file").withFilter("scope", "dns_zone"); }
-    @Override public @NonNull String slug() { return "zonefile"; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.DNS_ZONE.of("zone_file"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.ZONEFILE; }
     @Override public @NonNull Icon icon() { return Icon.of("file-lines"); }
 
     @Override
@@ -45,7 +47,7 @@ public final class DnsZoneFilePage implements RecordTab.Rendered<Row> {
                                            @NonNull Row zone) {
         Map<String, Object> vars = new HashMap<>();
         String origin = zone.get(DnsZoneModel.ORIGIN);
-        vars.put("title", CmsSupport.pageTitle(conduit, "dns_zone_file", origin));
+        vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.DNS_ZONE_FILE, origin));
         vars.put("zoneId", zone.get(DnsZoneModel.ID));
         vars.put("origin", origin);
         vars.put("zoneText", DnsZoneFiles.export(zone));

@@ -1,9 +1,10 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
@@ -25,12 +26,12 @@ public final class InstanceSnapshotOperations {
     public static final SubjectType<Row> SNAPSHOT = SubjectType.record(InstanceSnapshotModel.MODEL_ID);
     public static final Operation<Row, Void, Void> RESTORE = Operation.declare(HohenheimIds.id("restore_snapshot"))
         .happened(OperationSentences.of("restore_snapshot"))
-        .label(Microcopy.of("restore").withFilter("scope", "instance_snapshot"))
+        .label(HohenheimMicrocopy.INSTANCE_SNAPSHOT.of("restore"))
         .icon(Icon.of("clock-rotate-left")).one(SNAPSHOT).gate(OperationGate.open())
         .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE).command(COMMAND).register();
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_snapshot"))
         .happened(OperationSentences.of("delete_snapshot"))
-        .label(Microcopy.of("delete").withFilter("scope", "cms")).icon(Icon.TRASH)
+        .label(CmsMicrocopy.of("delete")).icon(Icon.TRASH)
         .one(SNAPSHOT).gate(OperationGate.open()).result(Integer.class)
         .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE).command(COMMAND).register();
     private InstanceSnapshotOperations() {}

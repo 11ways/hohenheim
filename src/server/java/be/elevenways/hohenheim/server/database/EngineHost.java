@@ -11,6 +11,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.Objects;
+
 /**
  * THE engine PROCESS a managed database lives in, as the runtime tier sees it: which
  * product record owns the container, what runs in it, and the root credentials the
@@ -44,9 +46,9 @@ public record EngineHost(@NonNull Identifier ownerModel, int ownerId, @NonNull S
             String.valueOf((Object) database.get(DatabaseModel.NAME)),
             ManagedDatabase.engineOf(database), database.get(DatabaseModel.IMAGE),
             Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL)),
-            orEmpty(database.get(DatabaseModel.DB_USER)),
-            orEmpty(database.get(DatabaseModel.DB_PASSWORD)),
-            orEmpty(database.get(DatabaseModel.DB_NAME)),
+            Objects.toString(database.get(DatabaseModel.DB_USER), ""),
+            Objects.toString(database.get(DatabaseModel.DB_PASSWORD), ""),
+            Objects.toString(database.get(DatabaseModel.DB_NAME), ""),
             ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID)),
             ResourceLimits.of(database.get(DatabaseModel.MEMORY_LIMIT_MB),
                 database.get(DatabaseModel.CPU_LIMIT)),
@@ -60,11 +62,11 @@ public record EngineHost(@NonNull Identifier ownerModel, int ownerId, @NonNull S
         if (engine == null) {
             throw new IllegalArgumentException("Unknown database engine token: " + token);
         }
-        String rootUser = orEmpty(engineRow.get(DatabaseEngineModel.ROOT_USER));
+        String rootUser = Objects.toString(engineRow.get(DatabaseEngineModel.ROOT_USER), "");
         return new EngineHost(DatabaseEngineModel.MODEL_ID, engineRow.get(DatabaseEngineModel.ID),
             String.valueOf((Object) engineRow.get(DatabaseEngineModel.NAME)),
             engine, engineRow.get(DatabaseEngineModel.IMAGE), false,
-            rootUser, orEmpty(engineRow.get(DatabaseEngineModel.ROOT_PASSWORD)),
+            rootUser, Objects.toString(engineRow.get(DatabaseEngineModel.ROOT_PASSWORD), ""),
             engine.rootDatabase(rootUser),
             ServerModel.canonicalServerId(engineRow.get(DatabaseEngineModel.SERVER_ID)),
             ResourceLimits.of(engineRow.get(DatabaseEngineModel.MEMORY_LIMIT_MB),
@@ -108,9 +110,5 @@ public record EngineHost(@NonNull Identifier ownerModel, int ownerId, @NonNull S
     /** The image to run: the declared one, else the engine's default. */
     public @NonNull String resolvedImage() {
         return this.image == null || this.image.isBlank() ? this.engine.defaultImage : this.image;
-    }
-
-    private static @NonNull String orEmpty(@Nullable Object value) {
-        return value == null ? "" : String.valueOf(value);
     }
 }

@@ -32,7 +32,7 @@ public final class DnsNames {
             return null;
         }
         for (String label : origin.split("\\.", -1)) {
-            if (!isHostLabel(label)) {
+            if (!isLabel(label, false)) {
                 return null;
             }
         }
@@ -57,7 +57,7 @@ public final class DnsNames {
                 }
                 continue;
             }
-            if (!isOwnerLabel(label)) {
+            if (!isLabel(label, true)) {
                 return null;
             }
         }
@@ -113,25 +113,17 @@ public final class DnsNames {
         return relative(origin, fqdn) != null;
     }
 
-    /** Hostname label: letters, digits, hyphens; no leading/trailing hyphen. */
-    private static boolean isHostLabel(@NonNull String label) {
+    /**
+     * A hostname label (letters, digits, hyphens; no leading or trailing hyphen), or with {@code underscores} an owner
+     * label, which also allows underscores (_acme-challenge, _dmarc, ...).
+     */
+    private static boolean isLabel(@NonNull String label, boolean underscores) {
         if (label.isEmpty() || label.length() > 63) {
             return false;
         }
         if (label.startsWith("-") || label.endsWith("-")) {
             return false;
         }
-        return label.matches("[a-z0-9-]+");
-    }
-
-    /** Owner label: hostname label, but underscores allowed (_acme-challenge, _dmarc, ...). */
-    private static boolean isOwnerLabel(@NonNull String label) {
-        if (label.isEmpty() || label.length() > 63) {
-            return false;
-        }
-        if (label.startsWith("-") || label.endsWith("-")) {
-            return false;
-        }
-        return label.matches("[a-z0-9_-]+");
+        return label.matches(underscores ? "[a-z0-9_-]+" : "[a-z0-9-]+");
     }
 }

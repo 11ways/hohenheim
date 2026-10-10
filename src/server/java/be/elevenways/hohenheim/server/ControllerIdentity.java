@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.model.ControllerIdentityModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -101,7 +102,7 @@ public final class ControllerIdentity {
             return null;
         }
         String token = row.get(ControllerIdentityModel.TOKEN);
-        return token == null || token.isBlank() ? null : token;
+        return Texts.blankAsNull(token);
     }
 
     private static @NonNull String mint(ControllerIdentityModel model) {

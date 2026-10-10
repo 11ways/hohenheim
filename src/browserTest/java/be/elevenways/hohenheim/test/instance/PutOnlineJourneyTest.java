@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -9,7 +10,6 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.PutOnline;
-import be.elevenways.hohenheim.server.cms.PutOnlinePage;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -110,8 +110,8 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         // 1. The dashboard leads to the chooser; the chooser offers the template and the address kinds, and dev
         //    namespaces and served instances are no apps.
         assertThat(adminGet("/admin/dashboard").body()).as("step 1: the dashboard's header offers the flow")
-            .contains("data-cms-dashboard-actions").contains("href=\"/admin/" + PutOnlinePage.SLUG + "\"");
-        String chooser = adminGet("/admin/" + PutOnlinePage.SLUG).body();
+            .contains("data-cms-dashboard-actions").contains("href=\"/admin/" + HohenheimSlugs.PUT_ONLINE + "\"");
+        String chooser = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE).body();
         assertThat(chooser).as("step 1: the templates group lists the template")
             .contains("data-hh-put-online-group=\"templates\"").contains(PREFIX + "shop");
         assertThat(chooser).as("step 1: the address kinds are a group of their own")
@@ -134,7 +134,7 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         starter.set(InstanceTemplateModel.APPROVED_BY_USER_ID, 1L);
         Models.get(InstanceTemplateModel.class).save(starter);
         try {
-            String shipped = adminGet("/admin/" + PutOnlinePage.SLUG).body();
+            String shipped = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE).body();
             assertThat(shipped).as("step 1b: the shipped WordPress family reads its short line")
                 .contains("A WordPress site with its own database.")
                 .doesNotContain("Catalogue form: official Apache image, PHP 99.9");
@@ -144,19 +144,21 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
             HardDeletes.row(Models.get(InstanceTemplateModel.class), starter);
         }
 
-        HttpResponse<String> picked = adminGet("/admin/" + PutOnlinePage.SLUG + "?choice=kind:hohenheim:redirect");
+        HttpResponse<String> picked = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE
+            + "?choice=kind:hohenheim:redirect");
         assertThat(picked.headers().firstValue("location").orElse(""))
             .as("step 1: Continue with a card opens that card's flow")
-            .contains(PutOnlinePage.SLUG).contains("kind=hohenheim%3Aredirect");
-        assertThat(adminGet("/admin/" + PutOnlinePage.SLUG + "?choice=https://elsewhere.example").body())
+            .contains(HohenheimSlugs.PUT_ONLINE).contains("kind=hohenheim%3Aredirect");
+        assertThat(adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?choice=https://elsewhere.example").body())
             .as("step 1: a value the chooser did not draw only redraws the chooser").contains("data-hh-put-online-chooser");
 
         // 2. Choosing opens the stepped wizard: where, the template's options, HTTPS.
-        String wizard = adminGet("/admin/" + PutOnlinePage.SLUG + "?template=" + template.get(InstanceTemplateModel.ID))
+        String wizard = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?template=" + template
+            .get(InstanceTemplateModel.ID))
             .body();
         assertThat(wizard).as("step 2: the template's wizard has its Where and HTTPS steps")
             .contains("data-zf-step=\"where\"").contains("data-zf-step=\"https\"");
-        String addressWizard = adminGet("/admin/" + PutOnlinePage.SLUG + "?kind=hohenheim:redirect").body();
+        String addressWizard = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?kind=hohenheim:redirect").body();
         assertThat(addressWizard).as("step 2: an address kind opens its own wizard")
             .contains("data-zf-step=\"where\"").contains("data-zf-step=\"https\"");
         assertThat(wizard).as("step 2: a template may go online without an address, and its hint says so")

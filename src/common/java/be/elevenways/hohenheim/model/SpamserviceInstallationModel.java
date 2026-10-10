@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -29,10 +30,12 @@ public class SpamserviceInstallationModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(
         IntegerField.builder().name("id").defaultValue(SINGLETON_ID).build());
     public static final BooleanField ENABLED = SCHEMA.addField(
-        BooleanField.builder("enabled").defaultValue(false).build());
+        BooleanField.builder("enabled").defaultValue(false)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("enabled")).build());
     public static final IntegerField PORT = SCHEMA.addField(
         IntegerField.builder().name("port").defaultValue(8095)
-            .validator(Range.of(MIN_PORT, MAX_PORT)).build());
+            .validator(Range.of(MIN_PORT, MAX_PORT))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("port")).build());
     // AIDEV-NOTE: deliberately NOT .required(). The requirement is CONDITIONAL -- only an
     // ENABLED installation needs a system user, and that is enforced where it is knowable
     // (SpamserviceManager's installation store refuses to start without a resolvable user).
@@ -40,10 +43,12 @@ public class SpamserviceInstallationModel extends Model {
     // no user yet, unrepresentable through the validating save path: it could only ever be
     // written by the raw INSERT that used to sit in M041.
     public static final IntegerField SYSTEM_USER_ID = SCHEMA.addField(
-        IntegerField.builder().name("system_user_id").build());
+        IntegerField.builder().name("system_user_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("system_user")).build());
     public static final IntegerField MAX_HEAP_MB = SCHEMA.addField(
         IntegerField.builder().name("max_heap_mb").defaultValue(512)
-            .validator(Range.of(MIN_HEAP_SIZE_MB, MAX_HEAP_SIZE_MB)).build());
+            .validator(Range.of(MIN_HEAP_SIZE_MB, MAX_HEAP_SIZE_MB))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("max_heap_mb")).build());
     public static final StringField CONTROLLER_KEY = SCHEMA.addField(
         StringField.builder().name("controller_key").secret().encrypted().filterable(false).build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(

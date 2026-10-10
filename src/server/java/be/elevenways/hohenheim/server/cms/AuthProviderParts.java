@@ -1,7 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderTypeHandler;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviders;
@@ -50,9 +53,6 @@ import java.util.Objects;
  */
 public final class AuthProviderParts {
 
-    /** The entry slug, which the site form's related link and the sites' related pages name. */
-    public static final String SLUG = "auth-providers";
-
     private static final SubjectType<Row> SUBJECT = SubjectType.record(SiteAuthProviderModel.MODEL_ID);
 
     /** Deletes a provider no site and no access rule names; offered dead while one does. */
@@ -60,7 +60,7 @@ public final class AuthProviderParts {
         RowDeleteOperations.declare(SiteAuthProviderModel.class, SubjectArity.ONE,
                 OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .id(HohenheimIds.id("delete_auth_provider"))
-            .availability((provider, access) -> inUseReason(provider))
+            .availability((provider, access) -> DeleteImpact.authProviderInUse(provider))
             .register();
 
     private AuthProviderParts() {
@@ -74,8 +74,8 @@ public final class AuthProviderParts {
         long uses = DeleteImpact.rulesNamingAuthProvider(providerId)
             + DeleteImpact.sitesGatedByAuthProvider(providerId).size();
         return uses == 0
-            ? Microcopy.of("used_by_nothing").withFilter("scope", "auth_provider")
-            : Microcopy.of("used_by_count").withFilter("scope", "auth_provider").withArg("count", uses);
+            ? HohenheimMicrocopy.AUTH_PROVIDER.of("used_by_nothing")
+            : HohenheimMicrocopy.AUTH_PROVIDER.of("used_by_count").withArg("count", uses);
     }
 
     /** @return the admin auth-provider resource */
@@ -88,8 +88,7 @@ public final class AuthProviderParts {
             .column(ColumnSpec.fromField(SiteAuthProviderModel.REQUIRED_PERMISSION).hidden().build())
             .column(ColumnSpec.fromField(SiteAuthProviderModel.PROVIDER_TYPE).filterable().build())
             // Where it is used, the Access board's "used by" line: access-list rules naming it plus sites it gates.
-            .column(ColumnSpec.virtual(USED_BY_COLUMN, Microcopy.of("used_by_column").withFilter("scope",
-                "auth_provider")).build())
+            .column(ColumnSpec.virtual(USED_BY_COLUMN, HohenheimMicrocopy.AUTH_PROVIDER.of("used_by_column")).build())
             .column(ColumnSpec.fromField(SiteAuthProviderModel.CREATED_AT).hidden().build())
             .filter(FilterSpec.leaf(SiteAuthProviderModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(SiteAuthProviderModel.NAME)).build())
@@ -100,10 +99,10 @@ public final class AuthProviderParts {
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteAuthProviderModel.CONFIG))
             .add(SiteAuthProviderModel.REQUIRED_PERMISSION)
             .build();
-        return PanelResource.builder(HohenheimIds.id("auth_provider"), SLUG, SUBJECT)
-            .label(Microcopy.of("plural").withFilter("scope", "auth_provider"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "auth_provider"))
-            .description(CmsSupport.navHint("auth_provider"))
+        return PanelResource.builder(HohenheimIds.id("auth_provider"), HohenheimSlugs.AUTH_PROVIDERS, SUBJECT)
+            .label(HohenheimMicrocopy.AUTH_PROVIDER.of("plural"))
+            .recordLabel(HohenheimMicrocopy.AUTH_PROVIDER.of("singular"))
+            .description(CmsSupport.navHint(HohenheimMicrocopy.AUTH_PROVIDER))
             .icon(Icon.of("key"))
             .navGroup(HohenheimPanel.NETWORK_GROUP)
             .navOrder(50)
@@ -133,30 +132,9 @@ public final class AuthProviderParts {
                 .delete(DELETE)
                 .build())
             .deleteConfirmation(DeleteConfirmation.of(DeleteConfirmation.body(
-                Microcopy.of("delete_confirm").withFilter("scope", "auth_provider"))))
+                HohenheimMicrocopy.AUTH_PROVIDER.of("delete_confirm"))))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
-    }
-
-    /**
-     * The reason a provider cannot go: sites gated by it (named) and access rules naming it (counted).
-     *
-     * @return null when nothing names the provider
-     */
-    static @Nullable Microcopy inUseReason(@NonNull Row provider) {
-        Integer id = provider.get(SiteAuthProviderModel.ID);
-        String sites = DeleteImpact.join(DeleteImpact.sitesGatedByAuthProvider(id));
-        long rules = DeleteImpact.rulesNamingAuthProvider(id);
-        if (!sites.isEmpty()) {
-            return Microcopy.of("delete_in_use").withFilter("scope", "auth_provider")
-                .withArg("sites", sites)
-                .withArg("rules", rules);
-        }
-        if (rules > 0) {
-            return Microcopy.of("delete_in_use_rules").withFilter("scope", "auth_provider")
-                .withArg("rules", rules);
-        }
-        return null;
     }
 
     /**
@@ -169,7 +147,6 @@ public final class AuthProviderParts {
      * @param existing the stored provider, null on a create
      * @throws Violations on the provider type when no handler knows it
      */
-    @SuppressWarnings("unchecked")
     static @NonNull Map<String, Object> normalized(@NonNull Map<String, Object> values, @Nullable Row existing) {
         Map<String, Object> written = new LinkedHashMap<>(values);
         Object typeValue = CmsSupport.valueOf(written, existing, SiteAuthProviderModel.PROVIDER_TYPE);
@@ -177,15 +154,15 @@ public final class AuthProviderParts {
         SiteAuthProviderTypeHandler handler = SiteAuthProviders.getHandler(providerType);
         if (handler == null) {
             throw Violations.ofField("provider_type", providerType,
-                CmsSupport.violationText("unknown_provider_type").withArg("type", providerType));
+                HohenheimMicrocopy.VIOLATIONS.of("unknown_provider_type").withArg("type", providerType));
         }
         if (existing != null && !written.containsKey(SiteAuthProviderModel.CONFIG.getName())) {
             return written;
         }
         Object rawConfig = written.get(SiteAuthProviderModel.CONFIG.getName());
-        Map<String, Object> submitted = rawConfig instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+        Map<String, Object> submitted = RawValues.map(rawConfig);
         Map<String, Object> existingConfig = existing != null
-            ? (Map<String, Object>) existing.get(SiteAuthProviderModel.CONFIG) : null;
+            ? RawValues.mapOrNull(existing.get(SiteAuthProviderModel.CONFIG)) : null;
         written.put(SiteAuthProviderModel.CONFIG.getName(), handler.normalizeConfigForSave(submitted, existingConfig));
         return written;
     }

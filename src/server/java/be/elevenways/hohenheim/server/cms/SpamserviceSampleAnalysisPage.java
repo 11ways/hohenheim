@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -14,7 +16,6 @@ import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -24,7 +25,6 @@ import java.util.function.Supplier;
 /** Analysis tab for a remotely stored Spamservice sample. */
 public final class SpamserviceSampleAnalysisPage implements RecordTab.Rendered<SampleSummary> {
 
-    public static final String SLUG = "analysis";
     private final Supplier<SpamserviceClient> clients;
 
     SpamserviceSampleAnalysisPage(@NonNull Supplier<SpamserviceClient> clients) {
@@ -32,8 +32,8 @@ public final class SpamserviceSampleAnalysisPage implements RecordTab.Rendered<S
     }
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_sample_analysis"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("analysis").withFilter("scope", "spamservice_sample"); }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("analysis"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.ANALYSIS; }
     @Override public @NonNull Icon icon() { return Icon.of("magnifying-glass-chart"); }
 
     @Override
@@ -41,16 +41,16 @@ public final class SpamserviceSampleAnalysisPage implements RecordTab.Rendered<S
         Conduit conduit = request.conduit();
         SampleDetail detail = SpamserviceRemoteStore.require(this.clients).sample(record.id());
         Map<String, Object> vars = new LinkedHashMap<>();
-        vars.put("title", CmsSupport.pageTitle(conduit, "spamservice_sample",
-            value(record.ip(), record.id())));
+        vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.SPAMSERVICE_SAMPLE,
+            Objects.toString(record.ip(), record.id())));
         vars.put("summary", summary(detail));
         vars.put("location", SpamserviceRemoteStore.nameValueRows(detail.location()));
         vars.put("asn", SpamserviceRemoteStore.nameValueRows(detail.asn()));
         vars.put("properties", detail.properties().stream().map(property -> Map.<String, Object>of(
-            "name", property.name(), "value", value(property.value(), ""),
-            "language", value(property.language(), ""))).toList());
+            "name", property.name(), "value", Objects.requireNonNullElse(property.value(), ""),
+            "language", Objects.requireNonNullElse(property.language(), ""))).toList());
         vars.put("breakdown", detail.breakdown().stream().map(line -> Map.<String, Object>of(
-            "flag", line.flag(), "points", line.points(), "detail", value(line.detail(), ""))).toList());
+            "flag", line.flag(), "points", line.points(), "detail", Objects.requireNonNullElse(line.detail(), ""))).toList());
         vars.put("head", this.recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.SPAMSERVICE_SAMPLE_ANALYSIS, vars);
     }
@@ -63,17 +63,13 @@ public final class SpamserviceSampleAnalysisPage implements RecordTab.Rendered<S
         result.put("confirmed", row.confirmed());
         result.put("threshold", detail.threshold());
         result.put("heuristicScore", detail.heuristicScore());
-        result.put("confirmedOrigin", value(detail.confirmedOrigin(), ""));
-        result.put("clientId", value(row.clientId(), ""));
-        result.put("ip", value(row.ip(), ""));
-        result.put("useragent", value(detail.useragent(), ""));
-        result.put("languages", value(row.languages(), ""));
-        result.put("flags", value(row.flags(), ""));
+        result.put("confirmedOrigin", Objects.requireNonNullElse(detail.confirmedOrigin(), ""));
+        result.put("clientId", Objects.requireNonNullElse(row.clientId(), ""));
+        result.put("ip", Objects.requireNonNullElse(row.ip(), ""));
+        result.put("useragent", Objects.requireNonNullElse(detail.useragent(), ""));
+        result.put("languages", Objects.requireNonNullElse(row.languages(), ""));
+        result.put("flags", Objects.requireNonNullElse(row.flags(), ""));
         result.put("createdAt", row.createdAt() != null ? row.createdAt().toString() : "");
         return result;
-    }
-
-    private static String value(@Nullable String value, String fallback) {
-        return value != null ? value : fallback;
     }
 }

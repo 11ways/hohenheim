@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
@@ -167,8 +168,7 @@ public class ProxyServer {
         startHttpsListener();
         warnIfForceSslRefusing();
 
-        boolean acmeEnabled = Boolean.TRUE.equals(
-            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED));
+        boolean acmeEnabled = HohenheimSettings.isOn(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED);
         if (acmeEnabled) {
             acmeService.start();
         }
@@ -512,16 +512,16 @@ public class ProxyServer {
         if (!httpDownAlertSent && httpState == State.FAILED && httpRestartAttempts >= 2) {
             httpDownAlertSent = true;
             Alerts.trySend(NotificationEvents.PROXY_LISTENER_DOWN, "listener#http",
-                Alerts.copy("listener_down_subject").withArg("protocol", "HTTP"),
-                Alerts.copy("listener_down_body").withArg("reason", reasonOrDash(httpFailureReason)));
+                HohenheimMicrocopy.ALERT.of("listener_down_subject").withArg("protocol", "HTTP"),
+                HohenheimMicrocopy.ALERT.of("listener_down_body").withArg("reason", reasonOrDash(httpFailureReason)));
         }
         boolean httpsDown = httpsState == State.FAILED
             || (httpsState == State.RUNNING && httpsFailureReason != null);
         if (!httpsDownAlertSent && httpsDown && httpsRestartAttempts >= 2) {
             httpsDownAlertSent = true;
             Alerts.trySend(NotificationEvents.PROXY_LISTENER_DOWN, "listener#https",
-                Alerts.copy("listener_down_subject").withArg("protocol", "HTTPS"),
-                Alerts.copy("listener_down_body").withArg("reason", reasonOrDash(httpsFailureReason)));
+                HohenheimMicrocopy.ALERT.of("listener_down_subject").withArg("protocol", "HTTPS"),
+                HohenheimMicrocopy.ALERT.of("listener_down_body").withArg("reason", reasonOrDash(httpsFailureReason)));
         }
     }
 

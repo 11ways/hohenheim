@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.dns.DnsApiErrorResponse;
 import be.elevenways.hohenheim.dns.DnsRecordDeleteResponse;
@@ -155,7 +157,7 @@ final class DnsRecordApiHandlers {
         String value = submitted.trim();
         if (!DnsRecordModel.MANAGED_BY_VALUES.contains(value)) {
             throw Violations.ofField(DnsRecordModel.MANAGED_BY.getName(), value,
-                CmsSupport.violationText("dns_managed_by_unknown"));
+                HohenheimMicrocopy.VIOLATIONS.of("dns_managed_by_unknown"));
         }
         return value;
     }
@@ -260,7 +262,7 @@ final class DnsRecordApiHandlers {
             row.set(DnsRecordModel.VALUE, String.valueOf(values.get("value")));
         }
         if (values.containsKey("ttl")) {
-            row.set(DnsRecordModel.TTL, CmsSupport.parsedInt(values.get("ttl")));
+            row.set(DnsRecordModel.TTL, RawValues.parsedInt(values.get("ttl")));
         }
         // validate() always leaves the normalized per-type data map behind.
         row.set(DnsRecordModel.DATA, values.get("data"));

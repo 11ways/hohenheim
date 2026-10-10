@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
@@ -76,7 +77,7 @@ public final class InstanceInstalls {
      * @throws Violations naming every refusal or failure; the record survives all of them
      */
     public void install(int instanceId) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.CONFIG);
         // Under the record's claim, like every other verb on it (re-entered from a funnel that already holds it).
         this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
             () -> this.installHeld(instanceId));
@@ -106,7 +107,7 @@ public final class InstanceInstalls {
      * human.
      */
     public void reinstall(int instanceId) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.CONFIG);
         this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
             () -> this.reinstallHeld(instanceId));
     }
@@ -134,7 +135,7 @@ public final class InstanceInstalls {
             // destroyed: a clear reinstall is irreversible for the tenant's own data,
             // which is exactly what DESTROY answers for. CONFIG alone (asked at the top,
             // as for every other "author what the instance is" act) does not buy it.
-            HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.DESTROY);
+            HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.DESTROY);
             // A driver with named volumes must be able to wipe them owner-verified; a
             // rootfs-stateful driver (incus) has none -- destroying the workload IS the
             // wipe there, and the install re-creates the rootfs from the image.
@@ -244,7 +245,7 @@ public final class InstanceInstalls {
      * @throws Violations {@code install_requires_stopped} while the workload runs
      */
     private static void requireNotRunning(@NonNull Resolved resolved) {
-        InstanceStatus live = resolved.runtime().status(resolved.spec().handle());
+        InstanceStatus live = resolved.liveStatus();
         if (live.state() == ContainerState.RUNNING) {
             throw HohenheimViolations.instanceRefusal("install_requires_stopped", resolved.row(), null);
         }

@@ -1,7 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -22,7 +25,6 @@ import be.elevenways.hohenheim.server.source.WebhookOutcome;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -50,6 +52,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Pattern;
@@ -73,11 +76,9 @@ import java.util.regex.Pattern;
  */
 public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
 
-    public static final String SLUG = "deployments";
-
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_deployments"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("title").withFilter("scope", "deployments"); }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.DEPLOYMENTS.of("title"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.DEPLOYMENTS; }
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
 
     /**
@@ -97,7 +98,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         AccessContext accessContext = request.access();
         Integer instanceId = instance.get(InstanceModel.ID);
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", CmsSupport.pageTitle(conduit, "instance_deployments",
+        vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.INSTANCE_DEPLOYMENTS,
             instance.get(InstanceModel.NAME)));
         vars.put("instanceId", instanceId);
         vars.put("instanceName", instance.get(InstanceModel.NAME));
@@ -135,8 +136,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         vars.put("rollbackTarget", HohenheimEndpoints.INSTANCES_ROLLBACK
             .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
         vars.put("head", recordHead(conduit));
-        vars.put("timeWording", RelativeTimeWording.resolve(
-            conduit.getLocales(), conduit.getMessageResolver()));
+        vars.put("timeWording", CmsSupport.timeWording(conduit));
 
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_DEPLOYMENTS, vars);
     }
@@ -175,7 +175,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             Integer candidate = row.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID);
             Map<String, Object> entry = entry(row.get(ReleaseOperationModel.ID),
                 ReleaseOperationModel.STATUS, row.get(ReleaseOperationModel.STATUS),
-                orEmpty(row.get(ReleaseOperationModel.KIND)),
+                Objects.toString(row.get(ReleaseOperationModel.KIND), ""),
                 candidate == null ? null : commits.get(candidate),
                 row.get(ReleaseOperationModel.DURATION_MS),
                 failures.shown(row.get(ReleaseOperationModel.FAILURE_REASON)),
@@ -184,8 +184,10 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
                 // only. A workspace BUILD log below stays visible -- it is the output of the
                 // tenant's own checkout and build, and without it they cannot fix a build.
                 failures.operatorOnly(row.get(ReleaseOperationModel.STEP_LOG)));
-            entry.put("kindLabel", enumLabel(ReleaseOperationModel.KIND, row.get(ReleaseOperationModel.KIND)));
-            boolean succeeded = ReleaseOperationModel.STATUS_SUCCEEDED.equals(row.get(ReleaseOperationModel.STATUS));
+            entry.put("kindLabel",
+                CmsSupport.enumLabel(ReleaseOperationModel.KIND, row.get(ReleaseOperationModel.KIND)));
+            boolean succeeded = ReleaseOperationModel.LIFECYCLE.is(
+                    row.get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED);
             ReleaseMark mark = !succeeded || candidate == null ? null
                 : candidate.equals(servingId) ? ReleaseMark.LIVE
                 : candidate.equals(keptId) ? ReleaseMark.KEPT
@@ -230,7 +232,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     private static void putPreviewVars(Map<String, Object> vars, PanelRequest request, Row application) {
         int instanceId = application.get(InstanceModel.ID);
         Map<String, Object> settings = ApplicationReleases.storedSettings(application);
-        boolean enabled = Boolean.TRUE.equals(settings.get(GitSourceSchema.PREVIEWS_ENABLED));
+        boolean enabled = RawValues.isOn(settings, GitSourceSchema.PREVIEWS_ENABLED, false);
         List<Row> previews = new ArrayList<>();
         for (Row preview : Models.get(PreviewDeploymentModel.class).findLiveByApplicationId(instanceId)) {
             Object status = preview.get(PreviewDeploymentModel.STATUS);
@@ -240,7 +242,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             }
         }
         vars.put("previewsShown", enabled || !previews.isEmpty());
-        PanelEntry entry = request.panel().entryBySlug(PreviewParts.SLUG);
+        PanelEntry entry = request.panel().entryBySlug(HohenheimSlugs.PREVIEWS);
         if (!(entry instanceof PanelResource<?>) || (!enabled && previews.isEmpty())) {
             vars.put("previews", List.of());
             vars.put("previewCreateUrl", "");
@@ -248,7 +250,8 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         }
         @SuppressWarnings("unchecked")
         PanelResource<Row> previewEntry = (PanelResource<Row>) entry;
-        String pageUrl = CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.INSTANCES, instanceId, SLUG).toUrl();
+        String pageUrl = CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.INSTANCES, instanceId,
+            HohenheimSlugs.Tab.DEPLOYMENTS).toUrl();
         Function<Row, List<RowOffer>> offers = PanelActionOffers.rowsForRender(request, previewEntry, null, previews,
             request.access(), ReturnPath.of(pageUrl));
         List<Map<String, Object>> rows = new ArrayList<>();
@@ -256,27 +259,27 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             Map<String, Object> row = new HashMap<>();
             Object status = preview.get(PreviewDeploymentModel.STATUS);
             WidgetBadge.Colors colors = WidgetBadge.colorsOf(PreviewDeploymentModel.STATUS, status);
-            row.put("ref", orEmpty(preview.get(PreviewDeploymentModel.REF)));
+            row.put("ref", Objects.toString(preview.get(PreviewDeploymentModel.REF), ""));
             Integer pr = preview.get(PreviewDeploymentModel.PR_NUMBER);
             row.put("pullRequest", pr == null ? "" : String.valueOf(pr));
-            String hostname = orEmpty(preview.get(PreviewDeploymentModel.HOSTNAME));
+            String hostname = Objects.toString(preview.get(PreviewDeploymentModel.HOSTNAME), "");
             row.put("hostname", hostname);
             // A preview answers on its own generated name over plain HTTP until a certificate covers it.
             row.put("liveUrl", hostname.isEmpty() ? "" : "http://" + hostname);
-            row.put("statusLabel", enumLabel(PreviewDeploymentModel.STATUS, status));
+            row.put("statusLabel", CmsSupport.enumLabel(PreviewDeploymentModel.STATUS, status));
             row.put("statusVariant", colors.variant());
             row.put("statusColorSet", colors.colorSet());
             row.put("running", PreviewDeploymentModel.STATUS_RUNNING.equals(status));
             Instant expires = preview.get(PreviewDeploymentModel.EXPIRES_AT);
             row.put("expiresIso", expires == null ? "" : expires.toString());
-            row.put("openUrl", CmsRoutes.open(request.panelSlug(), PreviewParts.SLUG,
+            row.put("openUrl", CmsRoutes.open(request.panelSlug(), HohenheimSlugs.PREVIEWS,
                 preview.get(PreviewDeploymentModel.ID)).toUrl());
             row.put("invokes", ActionStateTranslator.bandRowOffers(offers.apply(preview), 0).allInvokes());
             rows.add(row);
         }
         vars.put("previews", rows);
         vars.put("previewCreateUrl", enabled
-            ? CmsRoutes.create(request.panelSlug(), PreviewParts.SLUG).toUrl()
+            ? CmsRoutes.create(request.panelSlug(), HohenheimSlugs.PREVIEWS).toUrl()
                 + "?" + HohenheimParams.PREVIEW_APPLICATION.getName() + "=" + instanceId
             : "");
     }
@@ -287,18 +290,18 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
      */
     private static void putSourceVars(Map<String, Object> vars, Row application) {
         Map<String, Object> settings = ApplicationReleases.storedSettings(application);
-        vars.put("sourceRepository", orEmpty(settings.get(GitSourceSchema.REPOSITORY_URL)).isEmpty()
-            ? orEmpty(settings.get(GitSourceSchema.REPOSITORY))
-            : orEmpty(settings.get(GitSourceSchema.REPOSITORY_URL)));
-        vars.put("sourceBranch", orEmpty(settings.get(GitSourceSchema.BRANCH)));
-        vars.put("autoDeploy", Boolean.TRUE.equals(settings.get(GitSourceSchema.AUTO_DEPLOY)));
+        vars.put("sourceRepository", Objects.toString(settings.get(GitSourceSchema.REPOSITORY_URL), "").isEmpty()
+            ? Objects.toString(settings.get(GitSourceSchema.REPOSITORY), "")
+            : Objects.toString(settings.get(GitSourceSchema.REPOSITORY_URL), ""));
+        vars.put("sourceBranch", Objects.toString(settings.get(GitSourceSchema.BRANCH), ""));
+        vars.put("autoDeploy", GitSourceSchema.autoDeploys(settings));
         List<Map<String, Object>> pushes = new ArrayList<>();
         for (Row delivery : Models.get(WebhookDeliveryModel.class).findRecent(application.get(InstanceModel.ID), 10)) {
             Map<String, Object> push = new HashMap<>();
             WebhookOutcome outcome = WebhookOutcome.ofToken(delivery.get(WebhookDeliveryModel.ACTION));
-            push.put("event", orEmpty(delivery.get(WebhookDeliveryModel.EVENT)));
+            push.put("event", Objects.toString(delivery.get(WebhookDeliveryModel.EVENT), ""));
             push.put("outcome", outcome == null
-                ? CmsSupport.resolvedTextOrDefault(Microcopy.of("received").withFilter("scope", "webhook_outcome"))
+                ? CmsSupport.resolvedTextOrDefault(HohenheimMicrocopy.WEBHOOK_OUTCOME.of("received"))
                 : CmsSupport.resolvedTextOrDefault(outcome.label()));
             push.put("acted", outcome != null && outcome.acted());
             Instant received = delivery.get(WebhookDeliveryModel.RECEIVED_AT);
@@ -310,9 +313,9 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
 
     /** Where a succeeded release stands now: serving, kept for one-step rollback, or replaced and removed. */
     private enum ReleaseMark {
-        LIVE("live", Microcopy.of("mark_live").withFilter("scope", "deployments")),
-        KEPT("kept", Microcopy.of("mark_kept").withFilter("scope", "deployments")),
-        REPLACED("replaced", Microcopy.of("mark_replaced").withFilter("scope", "deployments"));
+        LIVE("live", HohenheimMicrocopy.DEPLOYMENTS.of("mark_live")),
+        KEPT("kept", HohenheimMicrocopy.DEPLOYMENTS.of("mark_kept")),
+        REPLACED("replaced", HohenheimMicrocopy.DEPLOYMENTS.of("mark_replaced"));
 
         private final String token;
         private final Microcopy label;
@@ -321,14 +324,6 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             this.token = token;
             this.label = label;
         }
-    }
-
-    private static @NonNull String enumLabel(@NonNull EnumField field, @Nullable Object value) {
-        if (value == null) {
-            return "";
-        }
-        EnumField.EnumValue known = field.getValues().get(String.valueOf(value));
-        return known == null ? String.valueOf(value) : CmsSupport.resolvedTextOrDefault(known.getLabel());
     }
 
     /**
@@ -345,7 +340,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             instanceId, 50);
 
         vars.put("isDeploying", operations.stream().anyMatch(row ->
-            BuildOperationModel.STATUS_RUNNING.equals(row.get(BuildOperationModel.STATUS))));
+            BuildOperationModel.LIFECYCLE.is(row.get(BuildOperationModel.STATUS), OperationStatus.RUNNING)));
         vars.put("canRollback", false);
 
         Row latest = model.latestSuccess(InstanceModel.MODEL_ID.toString(), instanceId);
@@ -375,17 +370,17 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
                                                      @Nullable String log) {
         Map<String, Object> entry = new HashMap<>();
         entry.put("id", id);
-        entry.put("status", orEmpty(status));
+        entry.put("status", Objects.toString(status, ""));
         // AIDEV-NOTE: forward the shared enum facets so semantic roles and categorical hues survive both lanes.
         WidgetBadge.Colors colors = WidgetBadge.colorsOf(statusField, status);
         entry.put("statusVariant", colors.variant());
         entry.put("statusColorSet", colors.colorSet());
         entry.put("statusKnown", colors.known());
-        entry.put("statusLabel", enumLabel(statusField, status));
+        entry.put("statusLabel", CmsSupport.enumLabel(statusField, status));
         entry.put("reason", reason);
         // A row that never reached a commit (a refused deploy, a failed checkout) stores the
         // branch it was asked for: it reads as that branch, never as its first eight letters.
-        String source = orEmpty(commit);
+        String source = Objects.toString(commit, "");
         boolean isCommit = COMMIT_SHA.matcher(source).matches();
         entry.put("commit", isCommit ? shortSha(source) : "");
         entry.put("ref", isCommit ? "" : source);
@@ -407,9 +402,9 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     private static void putAdminOnlyVars(Map<String, Object> vars, Row instance) {
         Integer instanceId = instance.get(InstanceModel.ID);
         Map<String, Object> settings = ApplicationReleases.storedSettings(instance);
-        vars.put("webhookSecret", orEmpty(settings.get(GitSourceSchema.WEBHOOK_SECRET)));
+        vars.put("webhookSecret", Objects.toString(settings.get(GitSourceSchema.WEBHOOK_SECRET), ""));
         vars.put("webhookAutoDeploy",
-            Boolean.TRUE.equals(settings.get(GitSourceSchema.AUTO_DEPLOY)));
+            GitSourceSchema.autoDeploys(settings));
 
         // AIDEV-NOTE: the git webhook is intercepted by SiteDispatcher BEFORE the zenit
         // conduit chain, so it is deliberately outside the Endpoint framework and has no
@@ -449,10 +444,6 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         }
         long seconds = Math.round(ms / 1000.0);
         return seconds < 60 ? seconds + " s" : (seconds / 60) + " min " + (seconds % 60) + " s";
-    }
-
-    private static String orEmpty(Object value) {
-        return value != null ? String.valueOf(value) : "";
     }
 
 }

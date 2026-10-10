@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.protoblast.common.util.BlastString;
-import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -17,6 +16,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * THE isolation policy every container hohenheim creates is stamped with, applied
@@ -171,15 +172,6 @@ public final class ContainerHardening {
         "SETPCAP", "moving capabilities around is exactly what this policy bounds",
         "NET_BIND_SERVICE", "it grants nothing here: Docker sets"
             + " net.ipv4.ip_unprivileged_port_start=0 in every container");
-
-    /** Fallback pids cap when the setting is unreadable; also the setting's default. */
-    public static final int DEFAULT_PIDS_LIMIT = 512;
-
-    /** Fallback log rotation size in MB when the setting is unreadable; also its default. */
-    public static final int DEFAULT_LOG_MAX_SIZE_MB = 10;
-
-    /** Fallback rotated-log file count when the setting is unreadable; also its default. */
-    public static final int DEFAULT_LOG_MAX_FILES = 3;
 
     /**
      * THE closed set of HostConfig keys a caller may set, each with the reason it is on
@@ -468,9 +460,7 @@ public final class ContainerHardening {
 
     /** @return the configured per-container process cap, never below 1 */
     public static int pidsLimit() {
-        Integer configured = Zenit.SETTINGS_VALUES.getValue(
-            HohenheimSettings.Security.CONTAINER_PIDS_LIMIT);
-        return configured != null && configured > 0 ? configured : DEFAULT_PIDS_LIMIT;
+        return HohenheimSettings.positiveOrDefault(HohenheimSettings.Security.CONTAINER_PIDS_LIMIT);
     }
 
     /**
@@ -514,16 +504,12 @@ public final class ContainerHardening {
 
     /** @return the configured rotation size in MB for one container log file, never below 1 */
     public static int logMaxSizeMb() {
-        Integer configured = Zenit.SETTINGS_VALUES.getValue(
-            HohenheimSettings.Security.CONTAINER_LOG_MAX_SIZE_MB);
-        return configured != null && configured > 0 ? configured : DEFAULT_LOG_MAX_SIZE_MB;
+        return HohenheimSettings.positiveOrDefault(HohenheimSettings.Security.CONTAINER_LOG_MAX_SIZE_MB);
     }
 
     /** @return how many rotated log files one container keeps, never below 1 */
     public static int logMaxFiles() {
-        Integer configured = Zenit.SETTINGS_VALUES.getValue(
-            HohenheimSettings.Security.CONTAINER_LOG_MAX_FILES);
-        return configured != null && configured > 0 ? configured : DEFAULT_LOG_MAX_FILES;
+        return HohenheimSettings.positiveOrDefault(HohenheimSettings.Security.CONTAINER_LOG_MAX_FILES);
     }
 
     /**
@@ -606,7 +592,7 @@ public final class ContainerHardening {
      */
     static void requireVolumeRootSource(@Nullable Object rawSource) {
 
-        String source = rawSource == null ? "" : String.valueOf(rawSource).trim();
+        String source = trimmed(rawSource);
         String root = VolumeBackends.volumeRoot();
 
         boolean contained = source.startsWith(root + "/")
@@ -758,7 +744,7 @@ public final class ContainerHardening {
     static void requireOwnVolumeSource(@Nullable Object rawSource,
                                        OwnerLabels.@Nullable Owner owner) {
 
-        String source = rawSource == null ? "" : String.valueOf(rawSource).trim();
+        String source = trimmed(rawSource);
         Integer instanceId = OwnerLabels.instanceIdOf(owner);
 
         if (instanceId == null) {

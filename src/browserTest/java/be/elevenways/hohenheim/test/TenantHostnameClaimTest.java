@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -64,9 +64,9 @@ class TenantHostnameClaimTest extends HohenheimTestBase {
         siteB = site("claim-site-b");
         int operatorSite = site("claim-site-operator");
         RecordGrants.grant(GrantSubjectType.USER, userA, SiteModel.MODEL_ID, siteA,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, userB, SiteModel.MODEL_ID, siteB,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         // Tenant B holds an apex, the operator holds a hostname of its own and hosts a zone.
         domain(siteB, VICTIM, SiteDomainModel.MATCH_EXACT);

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.security;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.Blast;
@@ -81,8 +82,8 @@ public final class SpamserviceHealth {
             }
         }
         if (notifyOutage) {
-            notify(NotificationEvents.SPAMSERVICE_OUTAGE, Alerts.copy("spamservice_outage_subject"),
-                Alerts.copy("spamservice_outage_body").withArg("minutes", spanMs / 60_000)
+            notify(NotificationEvents.SPAMSERVICE_OUTAGE, HohenheimMicrocopy.ALERT.of("spamservice_outage_subject"),
+                HohenheimMicrocopy.ALERT.of("spamservice_outage_body").withArg("minutes", spanMs / 60_000)
                     .withArg("source", source)
                     .withArg("detail", detail != null ? detail : "-"));
         }
@@ -101,8 +102,9 @@ public final class SpamserviceHealth {
             state.outageNotified = false;
         }
         if (notifyRecovery) {
-            notify(NotificationEvents.SPAMSERVICE_RECOVERED, Alerts.copy("spamservice_recovered_subject"),
-                Alerts.copy("spamservice_recovered_body").withArg("source", source));
+            notify(NotificationEvents.SPAMSERVICE_RECOVERED,
+                HohenheimMicrocopy.ALERT.of("spamservice_recovered_subject"),
+                HohenheimMicrocopy.ALERT.of("spamservice_recovered_body").withArg("source", source));
         }
     }
 

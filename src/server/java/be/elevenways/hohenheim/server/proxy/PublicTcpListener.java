@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.security.IpLiterals;
+import be.elevenways.hohenheim.server.util.Closeables;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Backoff;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -172,12 +173,12 @@ public final class PublicTcpListener implements AutoCloseable {
                 configure(client);
                 connectionAdmitted = connectionSlots.tryAcquire();
                 if (!connectionAdmitted) {
-                    closeQuietly(client);
+                    Closeables.closeQuietly(client);
                     continue;
                 }
                 admitted = pendingPrologues.tryAcquire();
                 if (!admitted) {
-                    closeQuietly(client);
+                    Closeables.closeQuietly(client);
                     connectionSlots.release();
                     continue;
                 }
@@ -188,7 +189,7 @@ public final class PublicTcpListener implements AutoCloseable {
                 admitted = false;
             } catch (IOException | RejectedExecutionException e) {
                 if (client != null) activeSockets.remove(client);
-                closeQuietly(client);
+                Closeables.closeQuietly(client);
                 if (admitted) pendingPrologues.release();
                 if (connectionAdmitted) connectionSlots.release();
             }
@@ -267,8 +268,8 @@ public final class PublicTcpListener implements AutoCloseable {
             activeSockets.remove(client);
             if (backend != null) activeSockets.remove(backend);
             connectionSlots.release();
-            closeQuietly(client);
-            closeQuietly(backend);
+            Closeables.closeQuietly(client);
+            Closeables.closeQuietly(backend);
         }
     }
 
@@ -321,8 +322,8 @@ public final class PublicTcpListener implements AutoCloseable {
             downstream.join();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            closeQuietly(client);
-            closeQuietly(backend);
+            Closeables.closeQuietly(client);
+            Closeables.closeQuietly(backend);
         }
     }
 
@@ -330,8 +331,8 @@ public final class PublicTcpListener implements AutoCloseable {
         try {
             copy(source.getInputStream(), destination);
         } catch (IOException e) {
-            closeQuietly(source);
-            closeQuietly(destination);
+            Closeables.closeQuietly(source);
+            Closeables.closeQuietly(destination);
         }
     }
 
@@ -346,7 +347,7 @@ public final class PublicTcpListener implements AutoCloseable {
             output.flush();
             destination.shutdownOutput();
         } catch (IOException e) {
-            closeQuietly(destination);
+            Closeables.closeQuietly(destination);
         }
     }
 
@@ -367,22 +368,11 @@ public final class PublicTcpListener implements AutoCloseable {
         if (!running && listener == null) return;
         running = false;
         if (listener != null) {
-            try {
-                listener.close();
-            } catch (IOException ignored) {
-            }
+            Closeables.closeQuietly(listener);
             listener = null;
         }
-        for (Socket socket : activeSockets) closeQuietly(socket);
+        for (Socket socket : activeSockets) Closeables.closeQuietly(socket);
         activeSockets.clear();
         connections.shutdownNow();
-    }
-
-    private static void closeQuietly(@Nullable Socket socket) {
-        if (socket == null) return;
-        try {
-            socket.close();
-        } catch (IOException ignored) {
-        }
     }
 }

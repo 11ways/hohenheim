@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server;
 
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.Test;
 
@@ -28,7 +28,7 @@ class HandlerSupportTest {
             .isEqualTo("refused");
 
         // 2. A real refusal keeps the domain's own message.
-        Violations named = Violations.ofForm(Microcopy.of("import_empty").withFilter("scope", "dns_zone"));
+        Violations named = Violations.ofForm(HohenheimMicrocopy.DNS_ZONE.of("import_empty"));
         assertThat(HandlerSupport.violationMessage(named).key())
             .as("step 2: the first violation's own key survives")
             .isEqualTo("import_empty");

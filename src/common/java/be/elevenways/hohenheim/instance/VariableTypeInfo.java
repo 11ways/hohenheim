@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.instance;
 
-import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.orm.field.TypeDefinition;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.WordedKind;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
@@ -11,10 +11,17 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * (VariableTypeHandler) builds the REAL zenit field a value is validated through --
  * typed validation, deliberately not Pterodactyl's rule-strings.
  */
-public interface VariableTypeInfo extends TypeDefinition {
+public interface VariableTypeInfo extends WordedKind {
 
-    /** @return the registry identifier; its string form is the stored column value */
-    @NonNull Identifier typeId();
+    @Override
+    default @NonNull HohenheimMicrocopy labelScope() {
+        return HohenheimMicrocopy.VARIABLE_TYPE;
+    }
+
+    @Override
+    default @NonNull HohenheimMicrocopy descriptionScope() {
+        return HohenheimMicrocopy.VARIABLE_TYPE_DESCRIPTION;
+    }
 
     /**
      * Whether values of this type are secrets: stored ONLY in the encrypted

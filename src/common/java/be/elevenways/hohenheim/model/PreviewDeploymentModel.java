@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.orm.behaviour.SoftDeleteBehaviour;
@@ -42,61 +41,65 @@ public class PreviewDeploymentModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField APPLICATION_ID = SCHEMA.addField(IntegerField.builder().name("application_id")
         .required()
-        .label(HohenheimFormCopy.label("application"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("application"))
         .build());
 
     /** The git ref (branch) this preview builds; user data, never localized. */
     public static final StringField REF = SCHEMA.addField(StringField.builder().name("ref")
         .required()
-        .label(HohenheimFormCopy.label("preview_ref"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("preview_ref"))
         .build());
 
     /** Pull/merge request number when webhook-created; null for manual previews. */
     public static final IntegerField PR_NUMBER = SCHEMA.addField(
-        IntegerField.builder().name("pr_number").visibleIn(EditView.EDIT, EditView.DETAIL).build());
+        IntegerField.builder().name("pr_number").visibleIn(EditView.EDIT, EditView.DETAIL)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("pr_number")).build());
 
     public static final StringField HEAD_SHA = SCHEMA.addField(
-        StringField.builder().name("head_sha").filterable(false).visibleIn(EditView.EDIT, EditView.DETAIL).build());
+        StringField.builder().name("head_sha").filterable(false).visibleIn(EditView.EDIT, EditView.DETAIL)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("head_sha")).build());
 
     /** The generated hostname this preview serves on; derived, never submitted. */
     public static final StringField HOSTNAME = SCHEMA.addField(
-        StringField.builder().name("hostname").visibleIn(EditView.EDIT, EditView.DETAIL).build());
+        StringField.builder().name("hostname").visibleIn(EditView.EDIT, EditView.DETAIL)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("hostname")).build());
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_DEPLOYING, v -> v.displayName("Deploying")
-            .label(statusLabel(STATUS_DEPLOYING)).icon("rotate").color(BadgeVariant.INFO))
+            .label(HohenheimMicrocopy.PREVIEW_STATUS.of(STATUS_DEPLOYING)).icon("rotate").color(BadgeVariant.INFO))
         .value(STATUS_RUNNING, v -> v.displayName("Running")
-            .label(statusLabel(STATUS_RUNNING)).icon("circle-play").color(BadgeVariant.SUCCESS))
+            .label(HohenheimMicrocopy.PREVIEW_STATUS.of(STATUS_RUNNING)).icon("circle-play")
+            .color(BadgeVariant.SUCCESS))
         .value(STATUS_FAILED, v -> v.displayName("Failed")
-            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color(BadgeVariant.DESTRUCTIVE))
+            .label(HohenheimMicrocopy.PREVIEW_STATUS.of(STATUS_FAILED)).icon("circle-xmark")
+            .color(BadgeVariant.DESTRUCTIVE))
         .value(STATUS_EXPIRED, v -> v.displayName("Expired")
-            .label(statusLabel(STATUS_EXPIRED)).icon("hourglass-end").color(BadgeVariant.SECONDARY))
+            .label(HohenheimMicrocopy.PREVIEW_STATUS.of(STATUS_EXPIRED)).icon("hourglass-end")
+            .color(BadgeVariant.SECONDARY))
         .value(STATUS_DESTROYED, v -> v.displayName("Destroyed")
-            .label(statusLabel(STATUS_DESTROYED)).icon("trash").color(BadgeVariant.SECONDARY))
+            .label(HohenheimMicrocopy.PREVIEW_STATUS.of(STATUS_DESTROYED)).icon("trash").color(BadgeVariant.SECONDARY))
         .defaultValue(STATUS_DEPLOYING)
-        .label(HohenheimFormCopy.label("status"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("status"))
         .visibleIn(EditView.EDIT, EditView.DETAIL)
         .build());
 
-    /** The translation token for a preview status; the key IS the stored value. */
-    private static Microcopy statusLabel(String status) {
-        return Microcopy.of(status).withFilter("scope", "preview_status");
-    }
-
     /** Hard end of life; enforcement is the expiry sweep, never advisory. */
     public static final DateTimeField EXPIRES_AT = SCHEMA.addField(
-        DateTimeField.builder().name("expires_at").visibleIn(EditView.EDIT, EditView.DETAIL).build());
+        DateTimeField.builder().name("expires_at").visibleIn(EditView.EDIT, EditView.DETAIL)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("expires_at")).build());
 
     /** The owned instance backing this preview; explicit so destroy needs no scan. */
     public static final IntegerField INSTANCE_ID = SCHEMA.addField(
-        IntegerField.builder().name("instance_id").visibleIn(EditView.EDIT, EditView.DETAIL).build());
+        IntegerField.builder().name("instance_id").visibleIn(EditView.EDIT, EditView.DETAIL)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("instance")).build());
 
     /** The quota ledger bucket this preview is charged against (owner-pack derived). */
     public static final StringField QUOTA_BUCKET = SCHEMA.addField(
         StringField.builder().name("quota_bucket").filterable(false).build());
 
     public static final TextField LAST_ERROR = SCHEMA.addField(
-        TextField.builder().name("last_error").filterable(false).visibleIn(EditView.EDIT, EditView.DETAIL).build());
+        TextField.builder().name("last_error").filterable(false).visibleIn(EditView.EDIT, EditView.DETAIL)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("last_error")).build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

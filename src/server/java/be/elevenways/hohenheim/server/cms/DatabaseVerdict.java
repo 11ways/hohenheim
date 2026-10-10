@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionSeverity;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.StateLineCell;
+import be.elevenways.hohenheim.WordedState;
 import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -42,17 +44,17 @@ record DatabaseVerdict(@NonNull State state, @Nullable Microcopy reason) {
      *
      * AIDEV-NOTE: the three lifecycle members carry the record's own status token, so their words are the
      * {@code database_status} labels the STATUS field already declares; the serving members word themselves in that
-     * same scope. A member without an attention title raises no item of its own: RUNNING serves, and PROVISIONING
-     * is passing, so an app waiting on it keeps its own item (a fold needs a shown root).
+     * same scope. A member declares its attention title and severity together or not at all; one without raises no
+     * item of its own: RUNNING serves, and PROVISIONING is passing, so an app waiting on it keeps its own item (a fold
+     * needs a shown root).
      */
-    enum State {
+    enum State implements WordedState {
 
         /** Its engine runs. */
-        RUNNING("running", BadgeVariant.SUCCESS, "circle-check", true, null, AttentionSeverity.INFO),
+        RUNNING("running", BadgeVariant.SUCCESS, "circle-check", true),
 
         /** Still being set up. */
-        PROVISIONING(DatabaseModel.STATUS_PROVISIONING, BadgeVariant.WARNING, "rotate", false, null,
-            AttentionSeverity.INFO),
+        PROVISIONING(DatabaseModel.STATUS_PROVISIONING, BadgeVariant.WARNING, "rotate", false),
 
         /** Setting it up failed. */
         SETUP_FAILED(DatabaseModel.STATUS_FAILED, BadgeVariant.DESTRUCTIVE, "circle-xmark", false,
@@ -83,10 +85,14 @@ record DatabaseVerdict(@NonNull State state, @Nullable Microcopy reason) {
         private final String icon;
         private final boolean serves;
         private final @Nullable String attentionTitle;
-        private final AttentionSeverity severity;
+        private final @Nullable AttentionSeverity severity;
+
+        State(@NonNull String token, @NonNull BadgeVariant variant, @NonNull String icon, boolean serves) {
+            this(token, variant, icon, serves, null, null);
+        }
 
         State(@NonNull String token, @NonNull BadgeVariant variant, @NonNull String icon, boolean serves,
-              @Nullable String attentionTitle, @NonNull AttentionSeverity severity) {
+              @Nullable String attentionTitle, @Nullable AttentionSeverity severity) {
             this.token = token;
             this.variant = variant;
             this.icon = icon;
@@ -96,13 +102,20 @@ record DatabaseVerdict(@NonNull State state, @Nullable Microcopy reason) {
         }
 
         /** @return the stable token a state cell renders */
-        @NonNull String token() {
+        @Override
+        public @NonNull String token() {
             return this.token;
         }
 
+        @Override
+        public @NonNull BadgeVariant variant() {
+            return this.variant;
+        }
+
         /** @return the state in words ("Not running"); its sentence variant reads "not running" */
-        @NonNull Microcopy label() {
-            return Microcopy.of(this.token).withFilter("scope", "database_status");
+        @Override
+        public @NonNull Microcopy label() {
+            return HohenheimMicrocopy.DATABASE_STATUS.of(this.token);
         }
 
         /** @return whether an app holding its credentials reaches it */
@@ -116,11 +129,11 @@ record DatabaseVerdict(@NonNull State state, @Nullable Microcopy reason) {
          */
         @Nullable Microcopy attentionTitle(@NonNull Object name) {
             return this.attentionTitle == null ? null
-                : Microcopy.of(this.attentionTitle).withFilter("scope", "attention_title").withArg("name", name);
+                : HohenheimMicrocopy.ATTENTION_TITLE.of(this.attentionTitle).withArg("name", name);
         }
 
-        /** @return how loud its attention item is */
-        @NonNull AttentionSeverity severity() {
+        /** @return how loud its attention item is, null when it raises none */
+        @Nullable AttentionSeverity severity() {
             return this.severity;
         }
     }
@@ -145,7 +158,7 @@ record DatabaseVerdict(@NonNull State state, @Nullable Microcopy reason) {
 
     /** @return the verdict as a list cell: the state's badge, and why under it */
     @NonNull StateLineCell cell() {
-        return new StateLineCell(this.state.token(), this.state.variant, this.state.label(), this.reason, null);
+        return StateLineCell.of(this.state, this.reason);
     }
 
     /** @return the verdict as an enum-style badge (the host page's workload rows) */
@@ -166,7 +179,8 @@ record DatabaseVerdict(@NonNull State state, @Nullable Microcopy reason) {
         }
         if (DatabaseModel.STATUS_FAILED.equals(status)) {
             return new DatabaseVerdict(State.SETUP_FAILED, failure == null || failure.isBlank()
-                ? reason("provisioning_failed") : reason("provisioning_failed_reason").withArg("reason", failure));
+                ? HohenheimMicrocopy.ATTENTION_DETAIL.of("provisioning_failed")
+                    : HohenheimMicrocopy.ATTENTION_DETAIL.of("provisioning_failed_reason").withArg("reason", failure));
         }
         if (DatabaseModel.STATUS_DESTROY_FAILED.equals(status)) {
             return new DatabaseVerdict(State.REMOVE_FAILED, failure == null || failure.isBlank() ? null
@@ -183,26 +197,32 @@ record DatabaseVerdict(@NonNull State state, @Nullable Microcopy reason) {
             instance = null;   // a shared record whose engine row is gone serves nothing
         }
         if (instance == null) {
-            return new DatabaseVerdict(State.NOT_RUNNING, reason("database_no_engine"));
+            return new DatabaseVerdict(State.NOT_RUNNING, HohenheimMicrocopy.ATTENTION_DETAIL.of("database_no_engine"));
         }
         // "Gone or stopped", "the host could not be asked" and "the engine failed" are different operator problems;
         // conflating the first two was the C6 status defect.
         if (hostUnanswering(instance)) {
-            return new DatabaseVerdict(State.UNREACHABLE, reason("database_host_unanswering"));
+            return new DatabaseVerdict(State.UNREACHABLE,
+                HohenheimMicrocopy.ATTENTION_DETAIL.of("database_host_unanswering"));
         }
         InstanceStatus stored = InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
         if (stored == null) {
-            return new DatabaseVerdict(State.NOT_RUNNING, reason("database_engine_stopped"));
+            return new DatabaseVerdict(State.NOT_RUNNING,
+                HohenheimMicrocopy.ATTENTION_DETAIL.of("database_engine_stopped"));
         }
         return switch (stored) {
             // The container runs, but the sweep saw the kernel kill the engine inside it: "runs" is exactly what the
             // status alone would wrongly vouch for.
             case STARTING, RUNNING, CAPTURING, RESTORING, MIGRATING ->
                 instance.get(InstanceModel.WORKLOAD_KILLED_AT) != null
-                    ? new DatabaseVerdict(State.OUT_OF_MEMORY, reason("database_engine_killed"))
+                    ? new DatabaseVerdict(State.OUT_OF_MEMORY,
+                        HohenheimMicrocopy.ATTENTION_DETAIL.of("database_engine_killed"))
                     : new DatabaseVerdict(State.RUNNING, null);
-            case ERROR -> new DatabaseVerdict(State.STOPPED_AFTER_ERROR, reason("database_engine_error"));
-            case CREATED, STOPPED -> new DatabaseVerdict(State.NOT_RUNNING, reason("database_engine_stopped"));
+            case ERROR -> new DatabaseVerdict(State.STOPPED_AFTER_ERROR,
+                HohenheimMicrocopy.ATTENTION_DETAIL.of("database_engine_error"));
+            case CREATED,
+                STOPPED -> new DatabaseVerdict(State.NOT_RUNNING,
+                HohenheimMicrocopy.ATTENTION_DETAIL.of("database_engine_stopped"));
         };
     }
 
@@ -227,9 +247,5 @@ record DatabaseVerdict(@NonNull State state, @Nullable Microcopy reason) {
             case ERROR -> true;
             case QUARANTINED, SILENT, NEVER_PROBED, OK -> false;
         };
-    }
-
-    private static @NonNull Microcopy reason(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "attention_detail");
     }
 }

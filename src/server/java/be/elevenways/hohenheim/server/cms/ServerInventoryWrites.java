@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
@@ -52,11 +53,13 @@ final class ServerInventoryWrites {
             for (String field : ServerParts.LOCAL_IMMUTABLE) {
                 if (values.containsKey(field) && !Objects.equals(Texts.trimmedOrNull(values.get(field)),
                         Texts.trimmedOrNull(row.get(field)))) {
-                    throw Violations.ofField(field, values.get(field), CmsSupport.violationText("local_server_immutable"));
+                    throw Violations.ofField(field, values.get(field),
+                        HohenheimMicrocopy.VIOLATIONS.of("local_server_immutable"));
                 }
             }
             if (Texts.trimmedOrNull(values.get(ServerParts.INCUS_TRUST_TOKEN.getName())) != null) {
-                throw Violations.ofField(ServerParts.INCUS_TRUST_TOKEN.getName(), "", CmsSupport.violationText("local_server_immutable"));
+                throw Violations.ofField(ServerParts.INCUS_TRUST_TOKEN.getName(), "",
+                    HohenheimMicrocopy.VIOLATIONS.of("local_server_immutable"));
             }
             Models.get(ServerModel.class).getResolvedDatasource().withTransaction(tx -> {
                 apply(row, values, ServerModel.PUBLIC_IPV4);
@@ -101,7 +104,8 @@ final class ServerInventoryWrites {
         String token = Texts.trimmedOrNull(values.remove(ServerParts.INCUS_TRUST_TOKEN.getName()));
         if (token != null && (!ServerModel.RUNTIME_INCUS.equals(runtime(values, row))
                 || !CmsSupport.textOf(values, row, ServerModel.INCUS_URL).startsWith("https://"))) {
-            throw Violations.ofField(ServerParts.INCUS_TRUST_TOKEN.getName(), "", CmsSupport.violationText("incus_token_needs_https"));
+            throw Violations.ofField(ServerParts.INCUS_TRUST_TOKEN.getName(), "",
+                HohenheimMicrocopy.VIOLATIONS.of("incus_token_needs_https"));
         }
         return token;
     }
@@ -109,20 +113,20 @@ final class ServerInventoryWrites {
     private static void validate(Map<String, Object> values, @Nullable Row row) {
         String name = CmsSupport.textOf(values, row, ServerModel.NAME);
         if (ServerService.LOCAL_HOST_NAME.equals(name)) throw Violations.ofField("name", name,
-            CmsSupport.violationText(row == null ? "local_server_reserved" : "local_server_immutable"));
-        if (name.isEmpty() || !name.matches("[a-z0-9][a-z0-9-]*")) {
-            throw Violations.ofField("name", name, CmsSupport.violationText("name_format"));
+            HohenheimMicrocopy.VIOLATIONS.of(row == null ? "local_server_reserved" : "local_server_immutable"));
+        if (!ServerModel.isValidName(name)) {
+            throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("name_format"));
         }
         String target = CmsSupport.textOf(values, row, ServerModel.SSH_TARGET);
         if (ServerModel.RUNTIME_INCUS.equals(runtime(values, row))) {
             String url = CmsSupport.textOf(values, row, ServerModel.INCUS_URL);
             try { IncusEndpoint.parse(url); } catch (IllegalArgumentException bad) {
-                throw Violations.ofField("incus_url", url, CmsSupport.violationText("incus_url_format"));
+                throw Violations.ofField("incus_url", url, HohenheimMicrocopy.VIOLATIONS.of("incus_url_format"));
             }
             if (target.isEmpty()) return;
         }
         if (target.isEmpty() || !SSH_TARGET.matcher(target).matches()) {
-            throw Violations.ofField("ssh_target", target, CmsSupport.violationText("ssh_target_format"));
+            throw Violations.ofField("ssh_target", target, HohenheimMicrocopy.VIOLATIONS.of("ssh_target_format"));
         }
     }
 

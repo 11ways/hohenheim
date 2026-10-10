@@ -1,8 +1,9 @@
 package be.elevenways.hohenheim.server.application;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ArtifactOperationModel;
 import be.elevenways.hohenheim.model.ArtifactSourceModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
@@ -13,9 +14,11 @@ import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.DeployStartPolicy;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.server.util.Sha256;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
@@ -77,7 +80,7 @@ public final class ArtifactDeploys {
         operation.set(ArtifactOperationModel.SITE_ID, siteId);
         operation.set(ArtifactOperationModel.APPLICATION_ID, applicationId);
         operation.set(ArtifactOperationModel.ARTIFACT_SHA256, digestOf(upload));
-        operation.set(ArtifactOperationModel.STATUS, ArtifactOperationModel.PENDING);
+        operation.set(ArtifactOperationModel.STATUS, ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.PENDING));
         model.save(operation);
         return operation;
     }
@@ -101,7 +104,8 @@ public final class ArtifactDeploys {
                 InstanceOperationLock.Contention.QUEUE, () -> {
             boolean completed = false;
             try {
-                operation.set(ArtifactOperationModel.STATUS, ArtifactOperationModel.RUNNING);
+                operation.set(ArtifactOperationModel.STATUS,
+                    ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.RUNNING));
                 Models.get(ArtifactOperationModel.class).save(operation);
                 Row application = ApplicationReleases.requireApplication(applicationId);
                 // The admission every deploy lane shares; on this background thread its power
@@ -127,31 +131,34 @@ public final class ArtifactDeploys {
                 if (serving == null || release.instanceId() != serving.get(InstanceModel.ID)
                         || !digest.equals(settings.get("commit_sha"))
                         || !requestedFingerprint.equals(settings.get("source_fingerprint"))) {
-                    finish(operation, ArtifactOperationModel.FAILED, "artifact_release_failed");
+                    finish(operation, ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.FAILED),
+                        "artifact_release_failed");
                     return;
                 }
                 operation.set(ArtifactOperationModel.INSTANCE_ID, release.instanceId());
-                operation.set(ArtifactOperationModel.IMAGE_ID, String.valueOf(settings.get("image")));
+                operation.set(ArtifactOperationModel.IMAGE_ID, String.valueOf(settings.get(InstanceKindFields.IMAGE)));
                 Db.currentOrDefault().withTransaction(transaction -> {
                     saveSource(applicationId, digest);
-                    finish(operation, ArtifactOperationModel.SUCCEEDED, null);
+                    finish(operation, ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null);
                 });
                 completed = true;
                 ActivityLog.record(Models.get(InstanceModel.class), applicationId,
                     HohenheimActivityAction.DEPLOYED, trigger.word());
             } catch (IOException invalid) {
-                finish(operation, ArtifactOperationModel.FAILED, "artifact_unreadable");
+                finish(operation, ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.FAILED),
+                    "artifact_unreadable");
             } catch (RuntimeException failed) {
                 // Never persist/log exception text: build and runtime errors can carry secrets.
                 if (!completed) {
-                    finish(operation, ArtifactOperationModel.FAILED, "artifact_release_failed");
+                    finish(operation, ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.FAILED),
+                        "artifact_release_failed");
                 }
             }
         });
     }
 
     public static void handoffFailed(Row operation) {
-        finish(operation, ArtifactOperationModel.FAILED, "artifact_upload_failed");
+        finish(operation, ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), "artifact_upload_failed");
     }
 
     private static void finish(Row operation, String status, @Nullable String error) {
@@ -176,7 +183,7 @@ public final class ArtifactDeploys {
     }
 
     private static Path artifactPath(Path applicationDirectory, String digest) {
-        if (digest == null || !digest.matches("[0-9a-f]{64}")) throw new IllegalArgumentException("Invalid artifact identity");
+        if (!Sha256.isHex(digest)) throw new IllegalArgumentException("Invalid artifact identity");
         return applicationDirectory.resolve("sha256").resolve(digest).resolve("app.jar");
     }
 
@@ -282,7 +289,7 @@ public final class ArtifactDeploys {
                 : new InstanceService().liveStatus(applicationId).state() == ContainerState.RUNNING ? "running" : "stopped");
             result.put("artifact_sha256", digest);
             result.put("instance_id", digest == null ? null : serving.get(InstanceModel.ID));
-            result.put("image_id", digest == null ? null : settings.get("image"));
+            result.put("image_id", digest == null ? null : settings.get(InstanceKindFields.IMAGE));
             result.put("stamps", digest == null ? null : readStamp(artifactPath(directoryFor(applicationId).toPath(), digest)));
             return result;
         });
@@ -290,7 +297,9 @@ public final class ArtifactDeploys {
 
     public static void recoverInterrupted() {
         for (Row operation : Models.get(ArtifactOperationModel.class).find()
-                .where(ArtifactOperationModel.STATUS.in(ArtifactOperationModel.PENDING, ArtifactOperationModel.RUNNING)).all()) {
+                .where(ArtifactOperationModel.STATUS.in(
+                    ArtifactOperationModel.LIFECYCLE.stored(OperationStatus::inFlight)))
+                .all()) {
             Instant written = operation.get(ArtifactOperationModel.UPDATED_AT);
             if (written == null) written = operation.get(ArtifactOperationModel.CREATED_AT);
             if (BootSettle.writtenByThisProcess(written)) continue;
@@ -298,14 +307,16 @@ public final class ArtifactDeploys {
             // Boot settle reclaims a trashed application's scratch too (trashed included).
             Row application = StoredRows.byId(Models.get(InstanceModel.class), applicationId);
             if (application == null) {
-                finish(operation, ArtifactOperationModel.INTERRUPTED, "artifact_interrupted");
+                finish(operation, ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.INTERRUPTED),
+                    "artifact_interrupted");
                 continue;
             }
             BootSettle.underBorrowedHostLease(HostLeases.production(),
                 ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID)), () -> {
                     InstanceOperationLock.production().exclusive(applicationId,
                             InstanceOperationLock.Contention.QUEUE, () -> {
-                        finish(operation, ArtifactOperationModel.INTERRUPTED, "artifact_interrupted");
+                        finish(operation, ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.INTERRUPTED),
+                            "artifact_interrupted");
                         cleanupUploads(directoryFor(applicationId).toPath().resolve("uploads"), BootSettle.processStart());
                     });
                 });
@@ -336,7 +347,7 @@ public final class ArtifactDeploys {
         try {
             return SecureTokens.sha256Hex(artifact);
         } catch (Exception failed) {
-            throw Violations.ofForm(HohenheimViolations.text("artifact_unreadable"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("artifact_unreadable"));
         }
     }
 

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.quota.ChargedDimension;
@@ -15,7 +16,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * The ROOT disk's charge, into the very same owner disk-GB bucket the attached
  * {@code instance_devices} rows use ({@link OwnerBudget#DISK_GB}), booked through
  * {@link ChargedModel#INSTANCES}. Without
- * it {@code diskLimitFor} would ration only the disks an owner attaches and ignore the
+ * it {@code OwnerBudget.DISK_GB} would ration only the disks an owner attaches and ignore the
  * one every workload already has, which is a hole in the cap, not a smaller cap.
  *
  * The doctrine is InstanceCapacity's, verbatim: charge equals cap. The GB charged here
@@ -96,14 +97,14 @@ public final class InstanceRootDiskQuota {
         }
         if (RootDisk.declaredGb(InstanceModel.settingsOf(row)) == null) {
             throw Violations.ofField(RootDisk.SETTING, raw,
-                HohenheimViolations.text("root_disk_invalid"));
+                HohenheimMicrocopy.VIOLATIONS.of("root_disk_invalid"));
         }
         String kind = row.afterWrite(InstanceModel.KIND, stored);
         InstanceKindHandler handler = InstanceKinds.getHandler(kind);
         if (handler == null || handler.getSchema() == null
                 || handler.getSchema().getField(RootDisk.SETTING) == null) {
             throw Violations.ofField(RootDisk.SETTING, raw,
-                HohenheimViolations.text("root_disk_unsupported").withArg("kind", String.valueOf(kind)));
+                HohenheimMicrocopy.VIOLATIONS.of("root_disk_unsupported").withArg("kind", String.valueOf(kind)));
         }
         requireNoShrink(row, stored);
     }
@@ -129,7 +130,7 @@ public final class InstanceRootDiskQuota {
         int after = effectiveGb(row, stored);
         if (after < before) {
             throw Violations.ofField(RootDisk.SETTING, after,
-                HohenheimViolations.text("root_disk_shrink").withArg("current", before));
+                HohenheimMicrocopy.VIOLATIONS.of("root_disk_shrink").withArg("current", before));
         }
     }
 
@@ -143,7 +144,7 @@ public final class InstanceRootDiskQuota {
 
     /**
      * The GB the write will END UP charged: a partial CMS update carries only the changed
-     * keys (the SiteDomainModel.effective idiom), so pricing the staged row alone would
+     * keys (the {@code Row.afterWrite} idiom), so pricing the staged row alone would
      * read a settings-less edit as a cleared root disk and hand the charge back.
      */
     private static int effectiveGb(@NonNull Row row, @Nullable Row stored) {

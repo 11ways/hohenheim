@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.AppUpdateSupport;
@@ -51,7 +53,7 @@ public final class InstanceAppUpdates {
      *         {@code app_update_failed}
      */
     public @NonNull String update(int instanceId) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.CONFIG);
         Resolved resolved = this.instances.resolve(instanceId);
         InstanceOperationGuard.requireOperable(resolved.row());
 
@@ -63,7 +65,7 @@ public final class InstanceAppUpdates {
         if (!(resolved.runtime() instanceof AppUpdateSupport support)) {
             throw HohenheimViolations.instanceRefusal("app_update_unsupported", resolved.row(), null);
         }
-        if (!resolved.runtime().status(resolved.spec().handle()).running()) {
+        if (!resolved.liveStatus().running()) {
             throw HohenheimViolations.instanceRefusal("app_update_requires_running", resolved.row(), null);
         }
 
@@ -112,7 +114,7 @@ public final class InstanceAppUpdates {
             return null;
         }
         String script = template.get(InstanceTemplateModel.UPDATE_SCRIPT);
-        return script == null || script.isBlank() ? null : script;
+        return Texts.blankAsNull(script);
     }
 
     private static @Nullable String templateInstallScript(@NonNull Row instance) {

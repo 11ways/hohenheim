@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.zenit.common.validation.Violations;
@@ -91,7 +92,7 @@ public interface VolumeOperations {
         }
 
         private Violations refuse() {
-            return Violations.ofForm(HohenheimViolations.text("volume_backend_unimplemented")
+            return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("volume_backend_unimplemented")
                 .withArg("backend", this.backend.label()));
         }
 

@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.zenit.auth.CapabilityScopes;
@@ -81,8 +81,8 @@ class EnvironmentApiBaselineBrowserTest extends HohenheimTestBase {
         Models.get(InstanceVariableModel.class).save(seeded);
 
         memberKey = ApiKeyService.create(memberId, PREFIX + "member",
-            List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE),
-                CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.MANAGE)), null).plaintext();
+            List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE),
+                CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.MANAGE)), null).plaintext();
         int admin = Models.get(UserModel.class).find().where(UserModel.EMAIL.eq("test@hohenheim.local")).first()
             .get(UserModel.ID);
         adminKey = ApiKeyService.create(admin, PREFIX + "admin", List.of("hohenheim.*"), null).plaintext();

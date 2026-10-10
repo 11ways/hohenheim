@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
@@ -9,21 +10,12 @@ import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.OnboardingStage;
-import be.elevenways.hohenheim.dns.DelegationVerdict;
-import be.elevenways.hohenheim.model.DnsPeerModel;
-import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.model.DnsZonePeerModel;
-import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
-import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
-import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.files.HohenheimSftp;
-import be.elevenways.hohenheim.server.proxy.ProxyServer;
-import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
@@ -58,11 +50,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.byHost;
-import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 
 /**
  * THE entry point of the dashboard attention items: gates each role's collector on the role
@@ -85,7 +76,6 @@ public final class AttentionCollector {
      * Every attention item points into the OPERATOR panel: this widget is an
      * installation-health surface, so its links keep the panel slug they always had.
      */
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
 
     /** The settings anchor of the group holding the control-plane backup target (the Backups section's database group). */
     static final String CONTROL_PLANE_BACKUP_SECTION =
@@ -167,11 +157,11 @@ public final class AttentionCollector {
      */
     public static void sftpServer(@NonNull List<AttentionItem> items) {
         String failure = HohenheimSftp.failure();
-        if (failure == null || !HohenheimSftp.isEnabled()) {
+        if (failure == null || !HohenheimSettings.isOn(HohenheimSettings.Sftp.ENABLED)) {
             return;
         }
-        items.add(item(AttentionSeverity.WARNING, "folder-tree", copy("sftp_server", "attention_title"),
-            literal(failure), sftpSettingsTarget(), action("act_open_settings")));
+        items.add(item(AttentionSeverity.WARNING, "folder-tree", HohenheimMicrocopy.ATTENTION_TITLE.of("sftp_server"),
+            literal(failure), sftpSettingsTarget(), HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_settings")));
     }
 
     /** @return the settings page opened on the SFTP group, where the operator turns it on or fixes it */
@@ -240,11 +230,11 @@ public final class AttentionCollector {
             countByServer.merge(row.get(ReconcileFindingModel.SERVER_NAME), 1, Integer::sum);
         }
         countByServer.forEach((server, count) -> items.add(item(AttentionSeverity.INFO, "cubes",
-            copy("docker_foreign", "attention_title", "server", server),
-            copy("docker_foreign", "attention_detail",
-                "count", count, "page", ReconcileFindingParts.LABEL),
+            HohenheimMicrocopy.ATTENTION_TITLE.of("docker_foreign").withArg("server", server),
+            HohenheimMicrocopy.ATTENTION_DETAIL.of("docker_foreign").withArg("count", count)
+                .withArg("page", ReconcileFindingParts.LABEL),
             findingsOf(server, FOREIGN_BUCKETS),
-            action("act_review_findings"))));
+            HohenheimMicrocopy.ATTENTION_ACTION.of("act_review_findings"))));
     }
 
     /** How many resource names a findings item spells out before eliding. */
@@ -269,10 +259,10 @@ public final class AttentionCollector {
                 String listed = String.join(", ", names.subList(0, Math.min(names.size(), FINDING_NAME_CAP)))
                     + (names.size() > FINDING_NAME_CAP ? ", ..." : "");
                 items.add(item(AttentionSeverity.WARNING, "cubes",
-                    copy(key, "attention_title", "server", server),
-                    copy(key, "attention_detail", "count", names.size(), "names", listed),
+                    HohenheimMicrocopy.ATTENTION_TITLE.of(key).withArg("server", server),
+                    HohenheimMicrocopy.ATTENTION_DETAIL.of(key).withArg("count", names.size()).withArg("names", listed),
                     findingsOf(server, List.of(bucket)),
-                    action("act_review_findings")));
+                    HohenheimMicrocopy.ATTENTION_ACTION.of("act_review_findings")));
             });
     }
 
@@ -299,7 +289,8 @@ public final class AttentionCollector {
         Condition tree = Condition.all(
             Condition.test(ReconcileFindingModel.SERVER_NAME.getName(), CoreTypes.EQUALS, Operand.of(server)),
             Condition.test(ReconcileFindingModel.BUCKET.getName(), CoreTypes.IN, Operand.of(buckets)));
-        return CmsRoutes.list(ADMIN, "reconcile-findings").with(CmsEndpoints.LIST_QUERY_PARAM, RuleText.print(tree));
+        return CmsRoutes.list(ADMIN, HohenheimSlugs.RECONCILE_FINDINGS)
+            .with(CmsEndpoints.LIST_QUERY_PARAM, RuleText.print(tree));
     }
 
     /**
@@ -312,10 +303,10 @@ public final class AttentionCollector {
     public static void controlPlaneBackupDestination(List<AttentionItem> items) {
         if (ControlPlaneBackups.configuredDestinationName() == null) {
             items.add(item(AttentionSeverity.ERROR, "box-archive",
-                copy("control_plane_backup", "attention_title"),
-                copy("control_plane_backup", "attention_detail"),
+                HohenheimMicrocopy.ATTENTION_TITLE.of("control_plane_backup"),
+                HohenheimMicrocopy.ATTENTION_DETAIL.of("control_plane_backup"),
                 controlPlaneBackupTarget(),
-                action("act_choose_backup_target")).forStage(OnboardingStage.BACKUPS));
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_choose_backup_target")).forStage(OnboardingStage.BACKUPS));
             return;
         }
         controlPlaneBackupFreshness(items);
@@ -357,11 +348,11 @@ public final class AttentionCollector {
         if (successAt == null
                 || successAt.isBefore(Now.instant().minus(CONTROL_PLANE_BACKUP_STALE_AFTER))) {
             items.add(item(AttentionSeverity.ERROR, "box-archive",
-                copy("control_plane_backup_stale", "attention_title"),
-                copy("control_plane_backup_stale", "attention_detail",
-                    "hours", CONTROL_PLANE_BACKUP_STALE_AFTER.toHours()),
+                HohenheimMicrocopy.ATTENTION_TITLE.of("control_plane_backup_stale"),
+                HohenheimMicrocopy.ATTENTION_DETAIL.of("control_plane_backup_stale")
+                    .withArg("hours", CONTROL_PLANE_BACKUP_STALE_AFTER.toHours()),
                 CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG),
-                action("act_open_settings")));
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_settings")));
         }
     }
 
@@ -393,10 +384,10 @@ public final class AttentionCollector {
                 // The isolation sweep cannot check a host whose firewall rules are switched off: that host's item
                 // is the root and this run's failure folds under it.
                 items.add(item(AttentionSeverity.WARNING, "clock",
-                    copy("task_failed", "attention_title", "task", descriptor.label()),
-                    reason != null ? reason : copy("last_run_failed", "attention_detail"),
+                    HohenheimMicrocopy.ATTENTION_TITLE.of("task_failed").withArg("task", descriptor.label()),
+                    reason != null ? reason : HohenheimMicrocopy.ATTENTION_DETAIL.of("last_run_failed"),
                     CmsRoutes.open(ADMIN, TaskAdmin.RUNS_SLUG, run.get(SystemTaskHistoryModel.ID)),
-                    action("act_show_run"))
+                    HohenheimMicrocopy.ATTENTION_ACTION.of("act_show_run"))
                     .causedBy(VerifyWorkloadIsolation.ID.toString().equals(descriptor.typePath())
                         && HohenheimRoles.hostWorkloadsEnabled() ? HostAttention.isolationRootOfSweep() : null));
             }

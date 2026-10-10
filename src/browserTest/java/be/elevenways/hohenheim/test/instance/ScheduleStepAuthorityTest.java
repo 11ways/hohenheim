@@ -1,11 +1,10 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.InstanceScheduleStepParts;
-import be.elevenways.hohenheim.server.cms.ManagePanel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -13,7 +12,6 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -22,17 +20,12 @@ import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.ResourceVerb;
 import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.panel.Panel;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,7 +40,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * The defect pinned here: step create checked only the chosen ACTION's capability, so a delegate
  * holding just {@code power} on an instance could add power steps to a chain they may not shape;
- * creatableBy was not overridden, so the create affordance was offered to them; and an edit could
+ * the create affordance was offered to them; and an edit could
  * repoint a step's schedule_id at ANOTHER schedule, which nothing checked for CONFIG.
  */
 class ScheduleStepAuthorityTest extends HohenheimTestBase {
@@ -70,13 +63,13 @@ class ScheduleStepAuthorityTest extends HohenheimTestBase {
         otherInstanceId = instance(PREFIX + "other");
 
         RecordGrants.grant(GrantSubjectType.USER, powerOnlyId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.POWER, true);
+            HohenheimCapabilities.POWER, true);
         RecordGrants.grant(GrantSubjectType.USER, powerOnlyId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         RecordGrants.grant(GrantSubjectType.USER, ownerId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, ownerId, InstanceModel.MODEL_ID, otherInstanceId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         scheduleId = schedule(instanceId, PREFIX + "nightly");
         otherScheduleId = schedule(otherInstanceId, PREFIX + "other-nightly");
@@ -127,25 +120,6 @@ class ScheduleStepAuthorityTest extends HohenheimTestBase {
         return AccessContext.of(TenantConduits.stubFor(new UserPrincipal(userId, name)));
     }
 
-    /** A carrier whose query string holds {@code ?schedule_id=}, the prefill the Steps tab links with. */
-    private static AccessContext onCreateFormFor(int userId, String name, int forSchedule) {
-        Conduit stub = TenantConduits.stubFor(new UserPrincipal(userId, name));
-        Conduit carrier = (Conduit) Proxy.newProxyInstance(
-            ScheduleStepAuthorityTest.class.getClassLoader(), new Class<?>[] { Conduit.class },
-            (proxy, method, args) -> {
-                if (method.getName().equals("getQueryParam") && args != null && args.length == 1
-                        && "schedule_id".equals(args[0])) {
-                    return String.valueOf(forSchedule);
-                }
-                try {
-                    return method.invoke(stub, args);
-                } catch (InvocationTargetException thrown) {
-                    throw thrown.getCause();
-                }
-            });
-        return AccessContext.of(carrier);
-    }
-
     private static Map<String, Object> stepValues(int forSchedule) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put(RecordScheduleStepModel.SCHEDULE_ID.getName(), forSchedule);
@@ -156,21 +130,18 @@ class ScheduleStepAuthorityTest extends HohenheimTestBase {
 
     @Test
     void shapingTheChainDemandsConfigAndAStepStaysInItsSchedule() {
-        PanelResource<Row> steps = PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleStepParts.SLUG);
-        Panel panel = PanelRegistry.getBySlug(ManagePanel.SLUG);
+        PanelResource<Row> steps = PanelEntryViews.of(HohenheimSlugs.MANAGE, HohenheimSlugs.INSTANCE_SCHEDULE_STEPS);
         AccessContext powerOnly = contextOf(powerOnlyId, "Power Only");
         AccessContext owner = contextOf(ownerId, "Chain Owner");
         long stepsBefore = Models.get(RecordScheduleStepModel.class).find()
             .where(RecordScheduleStepModel.SCHEDULE_ID.eq(scheduleId)).count();
 
         // 1. The create AFFORDANCE: a power-only delegate on the schedule's Steps tab is not
-        //    offered "add step"; the chain's manager is.
-        assertThat(ResourceVerbs.permitsBy(panel, steps, ResourceVerb.CREATE, null,
-            onCreateFormFor(powerOnlyId, "Power Only", scheduleId)))
+        //    offered "add step" under that schedule; the chain's manager is.
+        assertThat(ResourceVerbs.createUnderPermits(steps, scheduleId, powerOnly))
             .as("step 1: a delegate holding only the action's verb is not offered step create")
             .isFalse();
-        assertThat(ResourceVerbs.permitsBy(panel, steps, ResourceVerb.CREATE, null,
-            onCreateFormFor(ownerId, "Chain Owner", scheduleId)))
+        assertThat(ResourceVerbs.createUnderPermits(steps, scheduleId, owner))
             .as("step 1: the manage holder (CONFIG implied) is").isTrue();
 
         // 2. The create GATE: a direct submit by the power-only delegate is refused, although

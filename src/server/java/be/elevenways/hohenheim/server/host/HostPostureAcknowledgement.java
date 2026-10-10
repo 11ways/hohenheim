@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
@@ -55,18 +56,18 @@ public final class HostPostureAcknowledgement {
      */
     public static void record(@NonNull Row server) {
         if (!ServerModel.postureNeedsAcknowledgement(server)) {
-            throw Violations.ofForm(HohenheimViolations.text("posture_not_acknowledgeable")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("posture_not_acknowledgeable")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         if (ServerModel.postureAcknowledged(server)) {
-            throw Violations.ofForm(HohenheimViolations.text("posture_already_acknowledged")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("posture_already_acknowledged")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         Accountability who = Accountability.current();
         String actor = who.actor();
         PrincipalRef principal = who.actorReference();
         if (principal == null || !principal.kind().account() || Accountability.ORIGIN_SYSTEM.equals(who.origin())) {
-            throw Violations.ofForm(HohenheimViolations.text("posture_acknowledgement_needs_actor")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("posture_acknowledgement_needs_actor")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         String label = ActivityText.actorName(principal, actor, who.actorLabel(), who.origin())

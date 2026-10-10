@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.tls;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.async.AsyncFailures;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Backoff;
@@ -43,6 +44,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * Manages Let's Encrypt certificate issuance and renewal via ACME protocol.
@@ -730,9 +733,10 @@ public class AcmeService {
             String niceName = cert.get(CertificateModel.NICE_NAME);
             Alerts.trySend(NotificationEvents.CERT_EXPIRING,
                 Alerts.about(CertificateModel.MODEL_ID, cert.get(CertificateModel.ID)),
-                Alerts.copy("cert_expiring_subject").withArg("name", String.valueOf(niceName))
+                HohenheimMicrocopy.ALERT.of("cert_expiring_subject").withArg("name", String.valueOf(niceName))
                     .withArg("expiry", CertificateExpiry.inSentence(expiresOn)),
-                Alerts.copy("cert_expiring_body").withArg("date", expiresOn.toString().substring(0, 10)));
+                HohenheimMicrocopy.ALERT.of("cert_expiring_body")
+                    .withArg("date", expiresOn.toString().substring(0, 10)));
             cert.set(CertificateModel.EXPIRY_NOTIFIED_AT, now);
             certModel.save(cert);
         }
@@ -828,8 +832,8 @@ public class AcmeService {
         if (errorCount == null || errorCount != 1) return;
         Alerts.trySend(NotificationEvents.CERT_RENEWAL_FAILED,
             Alerts.about(CertificateModel.MODEL_ID, certRow.get(CertificateModel.ID)),
-            Alerts.copy("cert_renewal_failed_subject").withArg("name", String.valueOf(niceName)),
-            Alerts.copy("cert_renewal_failed_body").withArg("reason", message == null ? "-" : message));
+            HohenheimMicrocopy.ALERT.of("cert_renewal_failed_subject").withArg("name", String.valueOf(niceName)),
+            HohenheimMicrocopy.ALERT.of("cert_renewal_failed_body").withArg("reason", message == null ? "-" : message));
     }
 
     /** Reset error/backoff state after a successful issuance or renewal. */
@@ -1157,8 +1161,7 @@ public class AcmeService {
         Account existing = accounts.get(normalizedEmail);
         if (existing != null) return existing;
 
-        boolean staging = Boolean.TRUE.equals(
-            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_STAGING));
+        boolean staging = HohenheimSettings.isOn(HohenheimSettings.Ssl.LETSENCRYPT_STAGING);
 
         String serverUri = directoryUri(staging);
 
@@ -1198,7 +1201,7 @@ public class AcmeService {
             .all();
         for (Row row : accountRows) {
             String rowEmail = row.get(CertificateModel.LETSENCRYPT_EMAIL);
-            String rowKey = rowEmail == null ? "" : rowEmail.trim().toLowerCase(Locale.ROOT);
+            String rowKey = trimmed(rowEmail).toLowerCase(Locale.ROOT);
             if (!rowKey.equals(normalizedEmail)) continue;
 
             String keyPem = row.get(CertificateModel.PRIVATE_KEY_PEM);

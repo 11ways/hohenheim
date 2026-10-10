@@ -185,7 +185,7 @@ column enabled at=4 shown=true hidden=false sortable=false filterable=true copya
 filter name at=0 kind=TEXT facet=false param=filter.name
 filter enabled at=1 kind=BOOLEAN facet=false param=filter.enabled
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:negotiate_transfer_key at=1 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:negotiate_key%252Cscope%3Ddns_peer,body:negotiate_key_confirm%252Cscope%3Ddns_peer,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/negotiate_transfer_key
+row hohenheim:negotiate_transfer_key at=1 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:negotiate_key%252Cscope%3Ddns_peer,body:negotiate_key_confirm%252Cscope%3Ddns_peer,confirm:negotiate_key%252Cscope%3Ddns_peer,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/action/negotiate_transfer_key
 row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm_named%252Cscope%3Ddns_peer,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
 inline name
 tab history at=0 landing=false view=false

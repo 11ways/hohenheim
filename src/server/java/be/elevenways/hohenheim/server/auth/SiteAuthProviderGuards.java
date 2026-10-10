@@ -1,7 +1,8 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.HohenheimCounts;
-import be.elevenways.zenit.common.text.Texts;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -78,7 +79,7 @@ public final class SiteAuthProviderGuards {
         }
         Row firstSite = siteCount > 0 ? sites.first() : null;
         Row provider = firstSite != null ? firstSite.get(SiteModel.AUTH_PROVIDER) : doomedByRule;
-        throw Violations.ofForm(CmsSupport.violationText("auth_provider_in_use")
+        throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("auth_provider_in_use")
             .withArg("name", provider != null
                 ? String.valueOf((Object) provider.get(SiteAuthProviderModel.NAME)) : "")
             .withArg("sites", HohenheimCounts.of("sites", siteCount))
@@ -99,12 +100,18 @@ public final class SiteAuthProviderGuards {
 
     /** @return how many access rules name this provider */
     public static long rulesNaming(@Nullable Integer providerId) {
+        return providerId == null ? 0 : rulesNaming(providerId, providerRules().all());
+    }
+
+    /** @return how many of these access rules are auth-provider rules naming this provider */
+    public static long rulesNaming(@Nullable Integer providerId, @NonNull Iterable<Row> rules) {
         if (providerId == null) {
             return 0;
         }
         long count = 0;
-        for (Row rule : providerRules().all()) {
-            if (providerId.equals(providerIdOf(rule))) {
+        for (Row rule : rules) {
+            if (AccessRuleModel.TYPE_AUTH_PROVIDER.equals(rule.get(AccessRuleModel.TYPE))
+                    && providerId.equals(providerIdOf(rule))) {
                 count++;
             }
         }
@@ -114,18 +121,7 @@ public final class SiteAuthProviderGuards {
     /** @return the provider a rule's data names, or null when absent or unreadable */
     public static @Nullable Integer providerIdOf(@NonNull Row rule) {
         Object raw = AccessRuleModel.dataOf(rule).get(AccessRuleModel.PROVIDER_ID.getName());
-        if (raw instanceof Number number) {
-            return number.intValue();
-        }
-        String text = Texts.trimmedOrNull(raw);
-        if (text == null) {
-            return null;
-        }
-        try {
-            return Integer.parseInt(text);
-        } catch (NumberFormatException notAnId) {
-            return null;
-        }
+        return RawValues.parsedInt(raw);
     }
 
     private static @NonNull QueryBuilder<Row> providerRules() {

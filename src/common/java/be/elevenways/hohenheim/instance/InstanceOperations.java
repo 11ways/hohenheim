@@ -1,13 +1,13 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
@@ -57,7 +57,7 @@ public final class InstanceOperations {
 
     public static final Operation<Row, Void, PowerResult> START = Operation.declare(HohenheimIds.id("start_instance"))
         .happened(OperationSentences.of("start_instance"))
-        .label(label("start", "power_operation", "Start"))
+        .label(HohenheimMicrocopy.POWER_OPERATION.of("start").withFallback("Start"))
         .icon(Icon.of("play"))
         .one(INSTANCE)
         .gate(gate(HohenheimCapabilities.POWER))
@@ -68,7 +68,7 @@ public final class InstanceOperations {
 
     public static final Operation<Row, Void, PowerResult> STOP = Operation.declare(HohenheimIds.id("stop_instance"))
         .happened(OperationSentences.of("stop_instance"))
-        .label(label("stop", "power_operation", "Stop"))
+        .label(HohenheimMicrocopy.POWER_OPERATION.of("stop").withFallback("Stop"))
         .icon(Icon.of("stop"))
         .one(INSTANCE)
         .gate(gate(HohenheimCapabilities.POWER))
@@ -80,7 +80,7 @@ public final class InstanceOperations {
     public static final Operation<Row, Void, PowerResult> RESTART =
         Operation.declare(HohenheimIds.id("restart_instance"))
             .happened(OperationSentences.of("restart_instance"))
-            .label(label("restart", "power_operation", "Restart"))
+            .label(HohenheimMicrocopy.POWER_OPERATION.of("restart").withFallback("Restart"))
             .icon(Icon.of("rotate-right"))
             .one(INSTANCE)
             .gate(gate(HohenheimCapabilities.POWER))
@@ -91,7 +91,7 @@ public final class InstanceOperations {
 
     public static final Operation<Row, Void, Integer> BACKUP = Operation.declare(HohenheimIds.id("backup_instance"))
         .happened(OperationSentences.of("backup_instance"))
-        .label(label("backup", "schedule_action", "Backup"))
+        .label(HohenheimMicrocopy.SCHEDULE_ACTION.of("backup").withFallback("Backup"))
         .icon(Icon.of("box-archive"))
         .one(INSTANCE)
         .gate(gate(HohenheimCapabilities.BACKUPS))
@@ -102,13 +102,13 @@ public final class InstanceOperations {
 
     /** The snapshot's optional note. */
     public static final StringField NOTE = StringField.builder("note")
-        .label(HohenheimFormCopy.label("snapshot_note"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("snapshot_note"))
         .build();
 
     public static final Operation<Row, SnapshotInput, Integer> SNAPSHOT =
         Operation.declare(HohenheimIds.id("snapshot_instance"))
             .happened(OperationSentences.of("snapshot_instance"))
-            .label(label("snapshot", "schedule_action", "Snapshot"))
+            .label(HohenheimMicrocopy.SCHEDULE_ACTION.of("snapshot").withFallback("Snapshot"))
             .icon(Icon.of("camera"))
             .one(INSTANCE)
             .gate(gate(HohenheimCapabilities.SNAPSHOTS))
@@ -125,7 +125,7 @@ public final class InstanceOperations {
 
     /** The console line to send. */
     public static final StringField COMMAND = StringField.builder("command")
-        .label(HohenheimFormCopy.label("console_line"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("console_line"))
         .required()
         .build();
 
@@ -136,7 +136,7 @@ public final class InstanceOperations {
     public static final Operation<Row, ConsoleCommandInput, String> CONSOLE_COMMAND =
         Operation.declare(HohenheimIds.id("console_command_instance"))
             .happened(OperationSentences.of("console_command_instance"))
-            .label(label("console_command", "schedule_action", "Console command"))
+            .label(HohenheimMicrocopy.SCHEDULE_ACTION.of("console_command").withFallback("Console command"))
             .icon(Icon.of("terminal"))
             .one(INSTANCE)
             .gate(gate(HohenheimCapabilities.CONSOLE))
@@ -153,7 +153,7 @@ public final class InstanceOperations {
 
     /** The program the exec tab runs. */
     public static final StringField EXEC_COMMAND = StringField.builder("command")
-        .label(HohenheimFormCopy.label("exec_command"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("exec_command"))
         .required()
         .build();
 
@@ -167,7 +167,7 @@ public final class InstanceOperations {
     public static final Operation<Row, ExecInput, ExecRun> EXEC =
         Operation.declare(HohenheimIds.id("exec_instance"))
             .happened(OperationSentences.of("exec_instance"))
-            .label(label("run", "instance_exec", "Run"))
+            .label(HohenheimMicrocopy.INSTANCE_EXEC.of("run").withFallback("Run"))
             .icon(Icon.of("code"))
             .one(INSTANCE)
             .gate(gate(HohenheimCapabilities.EXEC))
@@ -182,7 +182,7 @@ public final class InstanceOperations {
     public static final Operation<Row, Void, Void> ROLLBACK =
         Operation.declare(HohenheimIds.id("rollback_instance"))
             .happened(OperationSentences.of("rollback_instance"))
-            .label(label("rollback", "instance", "Roll back"))
+            .label(HohenheimMicrocopy.INSTANCE.of("rollback").withFallback("Roll back"))
             .icon(Icon.of("clock-rotate-left"))
             .one(INSTANCE)
             .gate(gate(HohenheimCapabilities.POWER))
@@ -197,7 +197,7 @@ public final class InstanceOperations {
     public static final Operation<Row, Void, Void> INSTALL =
         Operation.declare(HohenheimIds.id("install_instance"))
             .happened(OperationSentences.of("install_instance"))
-            .label(label("install", "instance", "Install"))
+            .label(HohenheimMicrocopy.INSTANCE.of("install").withFallback("Install"))
             .icon(Icon.of("wand-magic-sparkles"))
             .one(INSTANCE)
             .gate(OperationGate.open())
@@ -212,7 +212,7 @@ public final class InstanceOperations {
     public static final Operation<Row, Void, Void> REINSTALL =
         Operation.declare(HohenheimIds.id("reinstall_instance"))
             .happened(OperationSentences.of("reinstall_instance"))
-            .label(label("reinstall", "instance", "Reinstall"))
+            .label(HohenheimMicrocopy.INSTANCE.of("reinstall").withFallback("Reinstall"))
             .icon(Icon.of("rotate"))
             .one(INSTANCE)
             .gate(OperationGate.open())
@@ -227,7 +227,7 @@ public final class InstanceOperations {
     public static final Operation<Row, Void, Integer> CAPTURE_TEMPLATE =
         Operation.declare(HohenheimIds.id("capture_template"))
             .happened(OperationSentences.of("capture_template"))
-            .label(label("capture_template", "instance", "Capture as template"))
+            .label(HohenheimMicrocopy.INSTANCE.of("capture_template").withFallback("Capture as template"))
             .icon(Icon.of("box-archive"))
             .one(INSTANCE)
             .gate(OperationGate.open())
@@ -243,7 +243,7 @@ public final class InstanceOperations {
     public static final Operation<Row, Void, Void> DESTROY_WITH_DATA =
         Operation.declare(HohenheimIds.id("destroy_instance_data"))
             .happened(OperationSentences.of("destroy_instance_data"))
-            .label(label("delete_with_data", "instance", "Delete with data"))
+            .label(HohenheimMicrocopy.INSTANCE.of("delete_with_data").withFallback("Delete with data"))
             .icon(Icon.of("trash-can"))
             .one(INSTANCE)
             .gate(OperationGate.open())
@@ -260,7 +260,7 @@ public final class InstanceOperations {
      */
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_instance"))
         .happened(OperationSentences.of("delete_instance"))
-        .label(Microcopy.of("delete").withFilter("scope", "cms"))
+        .label(CmsMicrocopy.of("delete"))
         .icon(Icon.TRASH)
         .one(INSTANCE)
         .gate(OperationGate.open())
@@ -271,7 +271,7 @@ public final class InstanceOperations {
 
     /** The host a migration moves the workload to. */
     public static final IntegerField TARGET_SERVER = IntegerField.builder("targetServerId")
-        .label(Microcopy.of("host").withFilter("scope", "instance_migrate"))
+        .label(HohenheimMicrocopy.INSTANCE_MIGRATE.of("host"))
         .required()
         .build();
 
@@ -285,7 +285,7 @@ public final class InstanceOperations {
     public static final Operation<Row, MigrateInput, Integer> MIGRATE =
         Operation.declare(HohenheimIds.id("migrate_instance"))
             .happened(OperationSentences.of("migrate_instance"))
-            .label(label("migrate", "instance_migrate", "Migrate"))
+            .label(HohenheimMicrocopy.INSTANCE_MIGRATE.of("migrate").withFallback("Migrate"))
             .icon(Icon.of("truck-fast"))
             .one(INSTANCE)
             .gate(OperationGate.open())
@@ -323,7 +323,7 @@ public final class InstanceOperations {
      */
     public static final Operation<Row, Void, Void> OPEN_SHELL = Operation.declare(HohenheimIds.id("open_shell"))
         .happened(OperationSentences.of("open_shell"))
-        .label(label("shell", "instance", "Shell"))
+        .label(HohenheimMicrocopy.INSTANCE.of("shell").withFallback("Shell"))
         .icon(Icon.of("terminal"))
         .one(INSTANCE)
         .gate(gate(HohenheimCapabilities.SHELL))
@@ -334,7 +334,7 @@ public final class InstanceOperations {
     public static final Operation<Row, Void, Void> OPEN_FRAMEBUFFER =
         Operation.declare(HohenheimIds.id("open_framebuffer"))
             .happened(OperationSentences.of("open_framebuffer"))
-            .label(label("framebuffer", "instance", "Framebuffer"))
+            .label(HohenheimMicrocopy.INSTANCE.of("framebuffer").withFallback("Framebuffer"))
             .icon(Icon.of("display"))
             .one(INSTANCE)
             .gate(gate(HohenheimCapabilities.CONSOLE))
@@ -345,7 +345,7 @@ public final class InstanceOperations {
     public static final Operation<Row, Void, String> APP_UPDATE =
         Operation.declare(HohenheimIds.id("app_update_instance"))
             .happened(OperationSentences.of("app_update_instance"))
-            .label(label("app_update", "schedule_action", "App update"))
+            .label(HohenheimMicrocopy.SCHEDULE_ACTION.of("app_update").withFallback("App update"))
             .icon(Icon.of("arrow-up-from-bracket"))
             .one(INSTANCE)
             .gate(gate(HohenheimCapabilities.CONFIG))
@@ -381,9 +381,5 @@ public final class InstanceOperations {
     private static @NonNull OperationGate gate(@NonNull String capability) {
         return OperationGate.open().subjectCapability(capability)
             .refusing(HohenheimRefusalReason.INSTANCE_NOT_PERMITTED);
-    }
-
-    private static @NonNull Microcopy label(@NonNull String key, @NonNull String scope, @NonNull String fallback) {
-        return Microcopy.of(key).withFilter("scope", scope).withFallback(fallback);
     }
 }

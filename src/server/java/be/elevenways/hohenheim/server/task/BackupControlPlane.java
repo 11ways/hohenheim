@@ -40,8 +40,7 @@ public class BackupControlPlane extends ScheduledTask {
 
     @Override
     public @NonNull Microcopy label() {
-        return Microcopy.of("backup_control_plane").withFilter("scope", HohenheimMicrocopy.SCOPE)
-            .withFilter("target", "task_label");
+        return HohenheimTasks.label(this);
     }
 
     @Override
@@ -67,8 +66,8 @@ public class BackupControlPlane extends ScheduledTask {
         } catch (Exception error) {
             Blast.log("TASK: BackupControlPlane failed:", error.getMessage());
             Alerts.trySend(NotificationEvents.BACKUP_FAILED, Alerts.INSTALLATION,
-                Microcopy.of("control_plane_backup_failed_subject").withFilter("scope", "alert"),
-                Microcopy.of("control_plane_backup_failed_body").withFilter("scope", "alert")
+                HohenheimMicrocopy.ALERT.of("control_plane_backup_failed_subject"),
+                HohenheimMicrocopy.ALERT.of("control_plane_backup_failed_body")
                     .withArg("reason", String.valueOf(error.getMessage())));
             // Rethrow so the task run is recorded as FAILED, not green-with-a-log-line.
             throw error instanceof RuntimeException runtime

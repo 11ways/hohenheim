@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.session.Session;
 import be.elevenways.zenit.common.session.SessionToken;
@@ -70,7 +70,7 @@ class SpamserviceAdminBrowserTest extends HohenheimTestBase {
             .as("the base drained the shared session before this test").isZero();
         // Stashed the way an untabbed full-page request of this session does, never by writing its layout.
         Flash.stash(EndpointConduit.fullPageRequest().withSession(session),
-            Microcopy.of("saved").withFilter("scope", "settings"), FlashLevel.ERROR);
+            HohenheimMicrocopy.SETTINGS.of("saved"), FlashLevel.ERROR);
         Zenit.getSessionStore().save(session);
 
         var response = adminGet("/admin/spamservice");

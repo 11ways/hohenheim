@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
@@ -71,15 +72,15 @@ class CapabilityWalkTest extends HohenheimTestBase {
             // 1. Ungranted: the walk runs (the model HAS a policy) and denies on
             //    the terminal row -- NO_POLICY here means the consumer never
             //    declared its rules, the exact unwired state this test pins.
-            assertThat(ctx.capabilityDecision(SiteModel.MODEL_ID, walkSiteId, HohenheimAccess.MANAGE))
+            assertThat(ctx.capabilityDecision(SiteModel.MODEL_ID, walkSiteId, HohenheimCapabilities.MANAGE))
                 .as("step 1: an ungranted operator must reach the walk's terminal deny row")
                 .isEqualTo(RecordCapabilityDecision.NO_GRANT);
 
             // 2. A record grant flips the decision to GRANT_ALLOWED, and both
             //    policy faces (context and principal-only) agree.
             RecordGrants.grant(GrantSubjectType.USER, walkOperatorId, SiteModel.MODEL_ID, walkSiteId,
-                HohenheimAccess.MANAGE, true);
-            assertThat(ctx.capabilityDecision(SiteModel.MODEL_ID, walkSiteId, HohenheimAccess.MANAGE))
+                HohenheimCapabilities.MANAGE, true);
+            assertThat(ctx.capabilityDecision(SiteModel.MODEL_ID, walkSiteId, HohenheimCapabilities.MANAGE))
                 .as("step 2: a positive record grant must decide GRANT_ALLOWED")
                 .isEqualTo(RecordCapabilityDecision.GRANT_ALLOWED);
             assertThat(HohenheimAccess.canManageSite(ctx, walkSiteId))
@@ -95,7 +96,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
             //    tri-state the deleted wrapper used to swallow (its inherited
             //    decide() mapped every false to abstain).
             GrantService.createDirectGrant(GrantSubjectType.USER, walkOperatorId, "hohenheim.manage.access", false);
-            assertThat(ctx.capabilityDecision(SiteModel.MODEL_ID, walkSiteId, HohenheimAccess.MANAGE))
+            assertThat(ctx.capabilityDecision(SiteModel.MODEL_ID, walkSiteId, HohenheimCapabilities.MANAGE))
                 .as("step 3: an explicit gate denial must decide GATE_DENIED, not fall through to the grant")
                 .isEqualTo(RecordCapabilityDecision.GATE_DENIED);
             assertThat(HohenheimAccess.canManageSite(ctx, walkSiteId))
@@ -107,7 +108,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
 
             // 4. Removing the deny restores the grant decision.
             deleteManageAccessGrants(walkOperatorId);
-            assertThat(ctx.capabilityDecision(SiteModel.MODEL_ID, walkSiteId, HohenheimAccess.MANAGE))
+            assertThat(ctx.capabilityDecision(SiteModel.MODEL_ID, walkSiteId, HohenheimCapabilities.MANAGE))
                 .as("step 4: with the deny gone the record grant decides again")
                 .isEqualTo(RecordCapabilityDecision.GRANT_ALLOWED);
 
@@ -116,12 +117,12 @@ class CapabilityWalkTest extends HohenheimTestBase {
                 .where(UserModel.EMAIL.eq("test@hohenheim.local")).first();
             AccessContext adminCtx = contextFor(
                 new UserPrincipal(admin.get(UserModel.ID), "Test Admin"));
-            assertThat(adminCtx.capabilityDecision(SiteModel.MODEL_ID, walkSiteId, HohenheimAccess.MANAGE))
+            assertThat(adminCtx.capabilityDecision(SiteModel.MODEL_ID, walkSiteId, HohenheimCapabilities.MANAGE))
                 .as("step 5: the admin permission must decide ADMIN_BYPASS")
                 .isEqualTo(RecordCapabilityDecision.ADMIN_BYPASS);
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, walkOperatorId, SiteModel.MODEL_ID, walkSiteId,
-                HohenheimAccess.MANAGE);
+                HohenheimCapabilities.MANAGE);
             deleteManageAccessGrants(walkOperatorId);
         }
     }
@@ -135,7 +136,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
     void realManageScopeMintsForAHolderAndOnlyAHolder() {
         UserPrincipal operator = new UserPrincipal(walkOperatorId, "Walk Operator");
         AccessContext actor = contextFor(operator);
-        String scope = CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE);
+        String scope = CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE);
 
         try {
             // 1. Without a holding, the delegation rule refuses the mint.
@@ -149,7 +150,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
             //    registers manage as delegable, so this is the first mintable cap:
             //    scope in a real install.
             RecordGrants.grant(GrantSubjectType.USER, walkOperatorId, SiteModel.MODEL_ID, walkSiteId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             ApiKeyService.CreatedKey created =
                 ApiKeyService.create(actor, walkOperatorId, "walk-ci", List.of(scope), null);
             assertThat(created.plaintext())
@@ -161,10 +162,10 @@ class CapabilityWalkTest extends HohenheimTestBase {
             ApiKeyPrincipal key = new ApiKeyPrincipal(walkOperatorId, "Walk Operator",
                 1, "walk-ci", List.of(scope));
             assertThat(AccessContext.detached(key)
-                    .hasCapability(SiteModel.MODEL_ID, walkSiteId, HohenheimAccess.MANAGE))
+                    .hasCapability(SiteModel.MODEL_ID, walkSiteId, HohenheimCapabilities.MANAGE))
                 .as("step 3: the minted key must hold manage on the granted site").isTrue();
             assertThat(AccessContext.detached(key)
-                    .hasCapability(SiteModel.MODEL_ID, walkSiteId + 1000, HohenheimAccess.MANAGE))
+                    .hasCapability(SiteModel.MODEL_ID, walkSiteId + 1000, HohenheimCapabilities.MANAGE))
                 .as("step 3: the key must hold nothing on other records").isFalse();
 
             // 4. An UNREGISTERED capability on the site model stays unmintable,
@@ -176,7 +177,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
                 .hasMessageContaining("Unknown capability");
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, walkOperatorId, SiteModel.MODEL_ID, walkSiteId,
-                HohenheimAccess.MANAGE);
+                HohenheimCapabilities.MANAGE);
         }
     }
 
@@ -198,7 +199,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
 
             // 2. A manage grant on one site and no global grant: the computation admits it on BOTH lanes.
             RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, walkSiteId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             assertThat(List.of(contextFor(tenant).hasPermission(HohenheimSources.MANAGE_ACCESS),
                     AccessContext.detached(tenant).hasPermission(HohenheimSources.MANAGE_ACCESS)))
                 .as("step 2: a record-grant holder is eligible on the request and the detached lane alike")
@@ -207,14 +208,14 @@ class CapabilityWalkTest extends HohenheimTestBase {
             // 3. The account's key scoped only to that record capability is not admitted: the computation answers
             //    for the account, and the key's scopes do not cover the permission (review 10 D02).
             ApiKeyPrincipal narrowKey = new ApiKeyPrincipal(tenantId, "Walk Eligible", 7, "walk-narrow",
-                List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE)));
+                List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE)));
             assertThat(List.of(contextFor(narrowKey).hasPermission(HohenheimSources.MANAGE_ACCESS),
                     AccessContext.detached(narrowKey).hasPermission(HohenheimSources.MANAGE_ACCESS)))
                 .as("step 3: a key scoped below the permission is eligible on neither lane")
                 .containsExactly(false, false);
             ApiKeyPrincipal manageKey = new ApiKeyPrincipal(tenantId, "Walk Eligible", 8, "walk-manage",
                 List.of("hohenheim.manage.access",
-                    CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE)));
+                    CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE)));
             assertThat(List.of(contextFor(manageKey).hasPermission(HohenheimSources.MANAGE_ACCESS),
                     AccessContext.detached(manageKey).hasPermission(HohenheimSources.MANAGE_ACCESS)))
                 .as("step 3: a key declaring the permission (and the record capability) is eligible as its account is")
@@ -227,7 +228,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
                 .as("step 4: an explicit deny refuses on both lanes").containsExactly(false, false);
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, walkSiteId,
-                HohenheimAccess.MANAGE);
+                HohenheimCapabilities.MANAGE);
             deleteManageAccessGrants(tenantId);
         }
     }
@@ -251,7 +252,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
         try {
             // 1. Instance VIEW through a record grant, no global grant: the account keeps the intended widening.
             RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
-                HohenheimAccess.VIEW, true);
+                HohenheimCapabilities.VIEW, true);
             assertThat(List.of(contextFor(viewer).hasPermission(HohenheimSources.MANAGE_ACCESS),
                     AccessContext.detached(viewer).hasPermission(HohenheimSources.MANAGE_ACCESS)))
                 .as("step 1: an instance viewer is eligible on the request and the detached lane")
@@ -260,7 +261,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
             // 2. Its key scoped only to instance view is refused the computed permission on both lanes.
             ApiKeyPrincipal viewKey = new ApiKeyPrincipal(viewerId, "Walk Instance Viewer", 9, "walk-view",
                 List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, "view")));
-            assertThat(viewKey.coversCapability(InstanceModel.MODEL_ID, HohenheimAccess.VIEW))
+            assertThat(viewKey.coversCapability(InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW))
                 .as("step 2: the key does cover the instance view it was minted for").isTrue();
             assertThat(List.of(contextFor(viewKey).hasPermission(HohenheimSources.MANAGE_ACCESS),
                     AccessContext.detached(viewKey).hasPermission(HohenheimSources.MANAGE_ACCESS)))
@@ -268,7 +269,7 @@ class CapabilityWalkTest extends HohenheimTestBase {
                 .containsExactly(false, false);
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
-                HohenheimAccess.VIEW);
+                HohenheimCapabilities.VIEW);
             Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId)).delete();
         }
     }

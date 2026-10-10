@@ -1,19 +1,19 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.instance.InstanceAppUpdates;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
-import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateCapture;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
@@ -28,7 +28,6 @@ import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.server.page.CmsActionResultTranslator;
-import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -48,7 +47,7 @@ import java.util.List;
  * outside every operation's {@code applies}, so it is hidden and its invoke reads as missing. Its
  * {@code hiddenWhen}/{@code disabledWhen} are presentation only (stop of a stopped instance is idempotent, start of an
  * instance whose database is not ready, or whose host will refuse it, refuses with the same words). The operator verbs answer to an operator alone
- * through their authorizers (InstanceOperationHandlers.operatorOnly).
+ * through their authorizers (HohenheimAccess.operatorOnly).
  *
  * @author Jelle De Loecker
  * @since 0.1.0
@@ -98,15 +97,15 @@ final class InstanceActions {
      */
     private static @NonNull PanelAction<Row> deployAction(boolean delegated) {
         return PanelAction.<Row, InstanceOperations.PowerResult>places(InstanceOperations.START, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("deployed")
-                    .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
-            .label(Microcopy.of("deploy").withFilter("scope", "instance"))
+                (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE.of("deployed")
+                    .withArg("name", request.subject().get(InstanceModel.NAME))))
+            .label(HohenheimMicrocopy.INSTANCE.of("deploy"))
             .icon(Icon.of("play"))
             .hiddenWhen(row -> !InstanceKinds.isUserDeployable(row.get(InstanceModel.KIND)))
             .disabledWhen((row, access) -> {
                 Integer id = row.get(InstanceModel.ID);
                 Microcopy database = id == null ? null : InstanceDatabaseLinks.notReadyReason(id);
-                return database != null ? database : hostRefusal(row, delegated, access);
+                return database != null ? database : OwnedInstances.placementReasonOf(row, delegated, access);
             })
             .build();
     }
@@ -117,19 +116,15 @@ final class InstanceActions {
      */
     private static @NonNull PanelAction<Row> stopAction() {
         return PanelAction.<Row, InstanceOperations.PowerResult>places(InstanceOperations.STOP, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("stopped_toast")
-                    .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
-            .label(Microcopy.of("stop").withFilter("scope", "instance"))
+                (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE.of("stopped_toast")
+                    .withArg("name", request.subject().get(InstanceModel.NAME))))
+            .label(HohenheimMicrocopy.INSTANCE.of("stop"))
             .icon(Icon.of("stop"))
             .inlineInRow(false)
             .style(ActionStyle.DESTRUCTIVE)
             .hiddenWhen(row -> !InstanceModel.STATUS_RUNNING.equals(row.get(InstanceModel.STATUS)))
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("stop").withFilter("scope", "instance"))
-                .body(Microcopy.of("stop_confirm").withFilter("scope", "instance"))
-                .confirmLabel(Microcopy.of("stop").withFilter("scope", "instance"))
-                .style(ActionStyle.DESTRUCTIVE)
-                .build())
+            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE.of("stop"),
+                HohenheimMicrocopy.INSTANCE.of("stop_confirm"), ActionStyle.DESTRUCTIVE))
             .build();
     }
 
@@ -140,17 +135,14 @@ final class InstanceActions {
      */
     private static @NonNull PanelAction<Row> restartAction(boolean delegated) {
         return PanelAction.<Row, InstanceOperations.PowerResult>places(InstanceOperations.RESTART, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("restarted_toast")
-                    .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
-            .label(Microcopy.of("restart").withFilter("scope", "instance"))
+                (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE.of("restarted_toast")
+                    .withArg("name", request.subject().get(InstanceModel.NAME))))
+            .label(HohenheimMicrocopy.INSTANCE.of("restart"))
             .icon(Icon.of("rotate-right"))
             .inlineInRow(false)
-            .disabledWhen((row, access) -> hostRefusal(row, delegated, access))
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("restart").withFilter("scope", "instance"))
-                .body(Microcopy.of("restart_confirm").withFilter("scope", "instance"))
-                .confirmLabel(Microcopy.of("restart").withFilter("scope", "instance"))
-                .build())
+            .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, delegated, access))
+            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE.of("restart"),
+                HohenheimMicrocopy.INSTANCE.of("restart_confirm"), ActionStyle.DEFAULT))
             .build();
     }
 
@@ -160,35 +152,29 @@ final class InstanceActions {
      */
     private static @NonNull PanelAction<Row> snapshotAction() {
         return PanelAction.<Row, Integer>places(InstanceOperations.SNAPSHOT, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("snapshot_taken")
-                    .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
-            .label(Microcopy.of("snapshot").withFilter("scope", "instance"))
+                (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE.of("snapshot_taken")
+                    .withArg("name", request.subject().get(InstanceModel.NAME))))
+            .label(HohenheimMicrocopy.INSTANCE.of("snapshot"))
             .icon(Icon.of("camera"))
             .inlineOnRecord(false)
             .inlineInRow(false)
             .preset(row -> new InstanceOperations.SnapshotInput(null))
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("snapshot").withFilter("scope", "instance"))
-                .body(Microcopy.of("snapshot_confirm").withFilter("scope", "instance"))
-                .confirmLabel(Microcopy.of("snapshot").withFilter("scope", "instance"))
-                .build())
+            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE.of("snapshot"),
+                HohenheimMicrocopy.INSTANCE.of("snapshot_confirm"), ActionStyle.DEFAULT))
             .build();
     }
 
     /** Export to the configured backup target (refuses, named, when none is set). */
     private static @NonNull PanelAction<Row> backupAction() {
         return PanelAction.<Row, Integer>places(InstanceOperations.BACKUP, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("backup_done")
-                    .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
-            .label(Microcopy.of("backup_now").withFilter("scope", "instance"))
+                (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE.of("backup_done")
+                    .withArg("name", request.subject().get(InstanceModel.NAME))))
+            .label(HohenheimMicrocopy.INSTANCE.of("backup_now"))
             .icon(Icon.of("box-archive"))
             .inlineOnRecord(false)
             .inlineInRow(false)
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("backup_now").withFilter("scope", "instance"))
-                .body(Microcopy.of("backup_confirm").withFilter("scope", "instance"))
-                .confirmLabel(Microcopy.of("backup_now").withFilter("scope", "instance"))
-                .build())
+            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE.of("backup_now"),
+                HohenheimMicrocopy.INSTANCE.of("backup_confirm"), ActionStyle.DEFAULT))
             .build();
     }
 
@@ -198,13 +184,13 @@ final class InstanceActions {
      */
     private static @NonNull PanelAction<Row> checkHostAction() {
         return PanelAction.<Row>link(CHECK_HOST, ActionPlacement.ROW)
-            .label(Microcopy.of("check_host").withFilter("scope", "app_health"))
+            .label(HohenheimMicrocopy.APP_HEALTH.of("check_host"))
             .icon(Icon.of("stethoscope"))
             .inlineOnRecord(false)
             .inlineInRow(false)
             .shownWhen((row, ctx) -> OwnedInstances.mayClearPlacement(ctx) && OwnedInstances.placementRefusal(row) != null)
-            .route((row, request) -> CmsRoutes.subpage(request.panelSlug(), "servers",
-                OwnedInstances.placementHost(row), ServerOverviewState.SLUG))
+            .route((row, request) -> CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.SERVERS,
+                OwnedInstances.placementHost(row), RecordOverview.SLUG))
             .build();
     }
 
@@ -215,11 +201,11 @@ final class InstanceActions {
      */
     private static @NonNull PanelAction<Row> exposeAction() {
         return PanelAction.<Row>link(HohenheimIds.id("expose_instance"), ActionPlacement.ROW)
-            .label(Microcopy.of("expose").withFilter("scope", "instance"))
+            .label(HohenheimMicrocopy.INSTANCE.of("expose"))
             .icon(Icon.of("globe"))
             .inlineOnRecord(false)
             .inlineInRow(false)
-            .description(Microcopy.of("expose_hint").withFilter("scope", "instance"))
+            .description(HohenheimMicrocopy.INSTANCE.of("expose_hint"))
             .shownWhen((row, ctx) -> !InstanceParts.isGenerated(row) && supportsSiteUpstream(row)
                 && HohenheimAccess.isAdmin(ctx))
             // The operator panel: this action is admin-only, a site create being an operator act.
@@ -239,32 +225,14 @@ final class InstanceActions {
     private static @NonNull PanelAction<Row> rollbackAction() {
         return PanelAction.<Row, Void>places(InstanceOperations.ROLLBACK, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.refreshWithToast(
-                    Microcopy.of("rollback_done").withFilter("scope", "instance")
+                    HohenheimMicrocopy.INSTANCE.of("rollback_done")
                         .withArg("name", request.subject().get(InstanceModel.NAME))))
             .inlineInRow(false)
-            .disabledWhen((row, access) -> hostRefusal(row, false, access))
-            .description(Microcopy.of("rollback_hint").withFilter("scope", "instance"))
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("rollback").withFilter("scope", "instance"))
-                .body(Microcopy.of("rollback_confirm").withFilter("scope", "instance"))
-                .confirmLabel(Microcopy.of("rollback").withFilter("scope", "instance"))
-                .style(ActionStyle.DESTRUCTIVE)
-                .build())
+            .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, false, access))
+            .description(HohenheimMicrocopy.INSTANCE.of("rollback_hint"))
+            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE.of("rollback"),
+                HohenheimMicrocopy.INSTANCE.of("rollback_confirm"), ActionStyle.DESTRUCTIVE))
             .build();
-    }
-
-    /**
-     * Why the host will refuse this verb, as a dead button's words: the overview's "cannot start yet" notice and
-     * these buttons read ONE source ({@link OwnedInstances#placementRefusal}). Presentation only, like every
-     * disabledWhen here: a direct POST, the API and a schedule still meet the handler's own refusal, unchanged.
-     *
-     * @param delegated whether the button is drawn on /manage, where the host is operator inventory
-     * @param viewer    who reads the button, which decides whether its words name the fix or the operator
-     */
-    private static @Nullable Microcopy hostRefusal(@NonNull Row row, boolean delegated,
-                                                   @NonNull AccessContext viewer) {
-        Microcopy refusal = OwnedInstances.placementRefusal(row);
-        return refusal == null ? null : OwnedInstances.placementReason(refusal, delegated, viewer);
     }
 
     /** Whether a site's instance upstream could serve this row's kind. */
@@ -277,10 +245,10 @@ final class InstanceActions {
     private static @NonNull PanelAction<Row> installAction() {
         return PanelAction.<Row, Void>places(InstanceOperations.INSTALL, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.refreshWithToast(
-                    Microcopy.of("installed_toast").withFilter("scope", "instance")
+                    HohenheimMicrocopy.INSTANCE.of("installed_toast")
                         .withArg("name", request.subject().get(InstanceModel.NAME))))
             .inlineInRow(false)
-            .disabledWhen((row, access) -> hostRefusal(row, false, access))
+            .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, false, access))
             .build();
     }
 
@@ -293,29 +261,20 @@ final class InstanceActions {
     private static @NonNull PanelAction<Row> reinstallAction() {
         return PanelAction.<Row, Void>places(InstanceOperations.REINSTALL, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.refreshWithToast(
-                    Microcopy.of("reinstalled_toast").withFilter("scope", "instance")
+                    HohenheimMicrocopy.INSTANCE.of("reinstalled_toast")
                         .withArg("name", request.subject().get(InstanceModel.NAME))))
             .inlineOnRecord(false)
             .inlineInRow(false)
-            .disabledWhen((row, access) -> hostRefusal(row, false, access))
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("reinstall").withFilter("scope", "instance"))
-                .body(Microcopy.of("reinstall_confirm").withFilter("scope", "instance"))
-                .confirmLabel(Microcopy.of("reinstall").withFilter("scope", "instance"))
-                .build())
+            .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, false, access))
+            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE.of("reinstall"),
+                HohenheimMicrocopy.INSTANCE.of("reinstall_confirm"), ActionStyle.DEFAULT))
             .dynamicConfirmation(row -> {
                 boolean clears = templateClearsOnReinstall(row);
-                ConfirmationSpec.Builder spec = ConfirmationSpec.builder()
-                    .title(Microcopy.of("reinstall").withFilter("scope", "instance"))
-                    .body(Microcopy.of(clears ? "reinstall_clear_confirm" : "reinstall_confirm")
-                        .withFilter("scope", "instance")
-                        .withArg("name", row.get(InstanceModel.NAME)))
-                    .confirmLabel(Microcopy.of("reinstall").withFilter("scope", "instance"));
-                if (clears) {
-                    spec.style(ActionStyle.DESTRUCTIVE)
-                        .requireTypedConfirmation(String.valueOf((Object) row.get(InstanceModel.NAME)));
-                }
-                return spec.build();
+                ConfirmationSpec spec = Confirmations.of(HohenheimMicrocopy.INSTANCE.of("reinstall"),
+                    HohenheimMicrocopy.INSTANCE.of(clears ? "reinstall_clear_confirm" : "reinstall_confirm")
+                        .withArg("name", row.get(InstanceModel.NAME)),
+                    clears ? ActionStyle.DESTRUCTIVE : ActionStyle.DEFAULT);
+                return clears ? Confirmations.typed(spec, String.valueOf((Object) row.get(InstanceModel.NAME))) : spec;
             })
             .build();
     }
@@ -326,19 +285,17 @@ final class InstanceActions {
      */
     private static @NonNull PanelAction<Row> appUpdateAction(boolean delegated) {
         return PanelAction.<Row, String>places(InstanceOperations.APP_UPDATE, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("app_updated_toast")
-                    .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
-            .label(Microcopy.of("app_update").withFilter("scope", "instance"))
+                (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE
+                    .of("app_updated_toast")
+                    .withArg("name", request.subject().get(InstanceModel.NAME))))
+            .label(HohenheimMicrocopy.INSTANCE.of("app_update"))
             .icon(Icon.of("arrow-up-from-bracket"))
             .inlineOnRecord(false)
             .inlineInRow(false)
             .hiddenWhen(row -> !InstanceAppUpdates.hasUpdateScript(row))
-            .disabledWhen((row, access) -> hostRefusal(row, delegated, access))
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("app_update").withFilter("scope", "instance"))
-                .body(Microcopy.of("app_update_confirm").withFilter("scope", "instance"))
-                .confirmLabel(Microcopy.of("app_update").withFilter("scope", "instance"))
-                .build())
+            .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, delegated, access))
+            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE.of("app_update"),
+                HohenheimMicrocopy.INSTANCE.of("app_update_confirm"), ActionStyle.DEFAULT))
             .build();
     }
 
@@ -349,16 +306,15 @@ final class InstanceActions {
      */
     private static @NonNull PanelAction<Row> consoleCommandAction() {
         return PanelAction.<Row, String>places(InstanceOperations.CONSOLE_COMMAND, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("console_command_sent_toast")
-                    .withFilter("scope", "instance").withArg("name", request.subject().get(InstanceModel.NAME))))
+                (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE
+                    .of("console_command_sent_toast")
+                    .withArg("name", request.subject().get(InstanceModel.NAME))))
             .inlineOnRecord(false)
             .inlineInRow(false)
             .hiddenWhen(row -> !InstanceModel.STATUS_RUNNING.equals(row.get(InstanceModel.STATUS)))
-            .confirmation(ConfirmationSpec.builder()
-                .title(InstanceOperations.CONSOLE_COMMAND.label())
-                .body(Microcopy.of("console_command_confirm").withFilter("scope", "instance"))
-                .confirmLabel(Microcopy.of("send").withFilter("scope", "instance_console"))
-                .build())
+            .confirmation(Confirmations.of(InstanceOperations.CONSOLE_COMMAND.label(),
+                HohenheimMicrocopy.INSTANCE_CONSOLE.of("send"),
+                HohenheimMicrocopy.INSTANCE.of("console_command_confirm"), ActionStyle.DEFAULT))
             .build();
     }
 
@@ -383,10 +339,9 @@ final class InstanceActions {
         // The operator panel: capture is admin-only, and the minted template opens there.
         return CmsSupport.opensWhatItMade(InstanceOperations.CAPTURE_TEMPLATE,
                 (panel, id) -> CmsRoutes.detail(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_TEMPLATES, id).toUrl(),
-                Microcopy.of("capture_template").withFilter("scope", "instance"),
-                Microcopy.of("capture_template_confirm").withFilter("scope", "instance"),
-                Microcopy.of("capture_template").withFilter("scope", "instance"))
-            .description(Microcopy.of("capture_template_hint").withFilter("scope", "instance"))
+                HohenheimMicrocopy.INSTANCE.of("capture_template"),
+                HohenheimMicrocopy.INSTANCE.of("capture_template_confirm"))
+            .description(HohenheimMicrocopy.INSTANCE.of("capture_template_hint"))
             .build();
     }
 
@@ -401,14 +356,14 @@ final class InstanceActions {
      */
     private static @NonNull PanelAction<Row> migrateAction() {
         return PanelAction.<Row>link(HohenheimIds.id("migrate_instance"), ActionPlacement.ROW)
-            .label(Microcopy.of("migrate").withFilter("scope", "instance"))
+            .label(HohenheimMicrocopy.INSTANCE.of("migrate"))
             .icon(Icon.of("truck-fast"))
             .inlineOnRecord(false)
             .inlineInRow(false)
-            .description(Microcopy.of("migrate_hint").withFilter("scope", "instance"))
+            .description(HohenheimMicrocopy.INSTANCE.of("migrate_hint"))
             .shownWhen((row, ctx) -> !InstanceParts.isGenerated(row) && HohenheimAccess.isAdmin(ctx))
-            .route((row, request) -> CmsRoutes.subpage(request.panelSlug(), InstanceParts.SLUG,
-                row.get(InstanceModel.ID), InstanceMigratePage.SLUG))
+            .route((row, request) -> CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.INSTANCES,
+                row.get(InstanceModel.ID), HohenheimSlugs.Tab.MIGRATE))
             .build();
     }
 
@@ -427,27 +382,19 @@ final class InstanceActions {
                     // longer resolves and the toast would never show (F5: "the page just sits there"). Stash the
                     // toast, land on the list.
                     CmsActionResultTranslator.stashSuccess(request.request().conduit(),
-                        Microcopy.of("deleted_with_data_toast").withFilter("scope", "instance")
+                        HohenheimMicrocopy.INSTANCE.of("deleted_with_data_toast")
                             .withArg("name", request.subject().get(InstanceModel.NAME)));
                     return CmsActionResult.redirect(new Uri(
-                        CmsRoutes.list(request.request().panelSlug(), InstanceParts.SLUG).toUrl()));
+                        CmsRoutes.list(request.request().panelSlug(), HohenheimSlugs.INSTANCES).toUrl()));
                 })
             .inlineInRow(false)
             // The record-less fallback the dynamic one refines; a dynamic confirmation without it is refused at
             // registration (WriteAffordanceParityTest).
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("delete_with_data").withFilter("scope", "instance"))
-                .body(Microcopy.of("delete_with_data_confirm").withFilter("scope", "instance"))
-                .confirmLabel(Microcopy.of("delete_with_data").withFilter("scope", "instance"))
-                .style(ActionStyle.DESTRUCTIVE)
-                .build())
-            .dynamicConfirmation(row -> ConfirmationSpec.builder()
-                .title(Microcopy.of("delete_with_data").withFilter("scope", "instance"))
-                .body(withDataBody(row))
-                .confirmLabel(Microcopy.of("delete_with_data").withFilter("scope", "instance"))
-                .style(ActionStyle.DESTRUCTIVE)
-                .requireTypedConfirmation(String.valueOf((Object) row.get(InstanceModel.NAME)))
-                .build())
+            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE.of("delete_with_data"),
+                HohenheimMicrocopy.INSTANCE.of("delete_with_data_confirm"), ActionStyle.DESTRUCTIVE))
+            .dynamicConfirmation(row -> Confirmations.typed(Confirmations.of(
+                    HohenheimMicrocopy.INSTANCE.of("delete_with_data"), withDataBody(row), ActionStyle.DESTRUCTIVE),
+                String.valueOf((Object) row.get(InstanceModel.NAME))))
             .build();
     }
 
@@ -458,9 +405,9 @@ final class InstanceActions {
     private static @NonNull Microcopy withDataBody(@NonNull Row row) {
         String sites = InstanceParts.strandedSites(row);
         Microcopy body = sites == null
-            ? Microcopy.of("delete_with_data_confirm").withFilter("scope", "instance")
-            : Microcopy.of("delete_with_data_confirm_stranding")
-                .withFilter("scope", "instance").withArg("sites", sites);
+            ? HohenheimMicrocopy.INSTANCE.of("delete_with_data_confirm")
+            : HohenheimMicrocopy.INSTANCE.of("delete_with_data_confirm_stranding")
+                .withArg("sites", sites);
         return body.withArg("name", row.get(InstanceModel.NAME));
     }
 }

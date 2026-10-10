@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.test.application;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
+import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
@@ -12,11 +14,15 @@ import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.source.DeployStatuses;
+import be.elevenways.hohenheim.server.source.GiteaProviderKind;
+import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.PlacedActionClicks;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -29,13 +35,21 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.Accountability;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.test.support.OutboundFixture;
+import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -58,6 +72,13 @@ class ApplicationPushPolicyTest {
     private static Integer savedProbeTimeout;
     private static Integer savedProbeInterval;
     private static Integer savedDrain;
+    private static HttpServer forge;
+    private static OutboundFixture outbound;
+
+    /** The head commit the declined push names. */
+    private static final String PUSHED_SHA = "0123456789abcdef0123456789abcdef01234567";
+
+    private static final BlockingQueue<ForgeStatus> FORGE_STATUSES = new LinkedBlockingQueue<>();
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -75,10 +96,18 @@ class ApplicationPushPolicyTest {
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.PROBE_INTERVAL_MS, 50);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Releases.DRAIN_SECONDS, 0);
         Db.run(datasource, HostFixtures::admitLocal);
+        forge = startForge();
+        outbound = OutboundFixture.route("push-policy-forge.example.test", forge.getAddress().getPort());
     }
 
     @AfterAll
     static void tearDown() {
+        if (outbound != null) {
+            outbound.close();
+        }
+        if (forge != null) {
+            forge.stop(0);
+        }
         FakeDockerDaemon.restore();
         if (daemon != null) {
             daemon.close();
@@ -127,7 +156,7 @@ class ApplicationPushPolicyTest {
                 //    refused BY NAME, and nothing is started.
                 int releasesBefore = ApplicationReleases.ownedInstances(applicationId).size();
                 Throwable pushed = catchThrowable(() -> ApplicationDeploys.deploy(
-                    applicationId, "main", DeployTrigger.WEBHOOK));
+                    applicationId, "main", null, DeployTrigger.WEBHOOK));
                 assertThat(pushed)
                     .as("step 3: a push does not start an application someone stopped")
                     .isInstanceOf(Violations.class)
@@ -146,7 +175,7 @@ class ApplicationPushPolicyTest {
                 Row operation = lastOperation(applicationId);
                 assertThat((String) operation.get(BuildOperationModel.STATUS))
                     .as("step 4: recorded as refused, not as a failure and not as a success")
-                    .isEqualTo(BuildOperationModel.STATUS_REFUSED);
+                    .isEqualTo(BuildOperationModel.LIFECYCLE.stored(OperationStatus.REFUSED));
                 assertThat((String) operation.get(BuildOperationModel.SOURCE_REF))
                     .as("step 4: naming the branch the push carried")
                     .isEqualTo("main");
@@ -176,7 +205,7 @@ class ApplicationPushPolicyTest {
                 // 6. FALSIFIED on the STATE, with the trigger held constant: the webhook
                 //    lane is untouched for an application that is running -- the ordinary
                 //    push, which is the whole point of auto-deploy.
-                ApplicationDeploys.deploy(applicationId, "main", DeployTrigger.WEBHOOK);
+                ApplicationDeploys.deploy(applicationId, "main", null, DeployTrigger.WEBHOOK);
                 assertThat((String) ApplicationReleases.ownedServing(applicationId)
                         .get(InstanceModel.STATUS))
                     .as("step 6: a push to a RUNNING application deploys exactly as before")
@@ -184,11 +213,44 @@ class ApplicationPushPolicyTest {
                 assertThat((String) lastOperation(applicationId)
                         .get(BuildOperationModel.STATUS))
                     .as("step 6: and records no second refusal")
-                    .isEqualTo(BuildOperationModel.STATUS_REFUSED);
+                    .isEqualTo(BuildOperationModel.LIFECYCLE.stored(OperationStatus.REFUSED));
                 assertThat(operationsOf(applicationId))
                     .as("step 6: the refusal is the ONLY build operation this journey"
                         + " wrote -- an image-sourced deploy builds nothing")
                     .hasSize(1);
+
+                // 7. The operator stops it again, and its source is bound to a forge that records every commit
+                //    status it is sent.
+                new InstanceService().stop(applicationId);
+                bindToForge(applicationId);
+
+                // 8. A push of PUSHED_SHA is declined, and the forge HEARS it: a failure status on exactly that
+                //    commit saying the deploy was declined. Before, the decline reported a null sha, which reports
+                //    nothing, and the forge's "Deploy queued" stayed pending forever.
+                assertThat(catchThrowable(() -> ApplicationDeploys.deploy(
+                        applicationId, "main", PUSHED_SHA, DeployTrigger.WEBHOOK)))
+                    .as("step 8: the push to the stopped application is declined")
+                    .hasMessageContaining("push_does_not_start_stopped_workload");
+                ForgeStatus reported = FORGE_STATUSES.poll(10, TimeUnit.SECONDS);
+                assertThat(reported)
+                    .as("step 8: the forge received a status for the declined push")
+                    .isNotNull();
+                assertThat(reported.path())
+                    .as("step 8: onto the pushed commit of the bound repository")
+                    .isEqualTo("/api/v1/repos/acme/app/statuses/" + PUSHED_SHA);
+                assertThat(reported.body().get("state"))
+                    .as("step 8: as a failure, the forge's word for a commit that did not deploy")
+                    .isEqualTo("failure");
+                assertThat(String.valueOf(reported.body().get("description")))
+                    .as("step 8: saying it was declined, about this application")
+                    .startsWith("Deploy declined: ")
+                    .contains("push-policy-app");
+                assertThat(reported.body().get("context"))
+                    .as("step 8: under the deploy context")
+                    .isEqualTo(DeployStatuses.CONTEXT_DEPLOY);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("interrupted waiting for the forge status", interrupted);
             } finally {
                 ApplicationReleases.destroyFor(applicationId);
             }
@@ -291,6 +353,43 @@ class ApplicationPushPolicyTest {
     }
 
     // -- fixtures --------------------------------------------------------------
+
+    /** Bind the application's source to a Gitea provider on the fake forge, as {@code acme/app}. */
+    @SuppressWarnings("unchecked")
+    private static void bindToForge(int applicationId) {
+        Row provider = Models.get(GitProviderModel.class).createEmptyRow();
+        provider.set(GitProviderModel.NAME, "push-policy-forge");
+        provider.set(GitProviderModel.KIND, GiteaProviderKind.ID.toString());
+        provider.set(GitProviderModel.BASE_URL, "http://" + outbound.host() + ":" + forge.getAddress().getPort());
+        provider.set(GitProviderModel.ACCESS_TOKEN, "forge-token");
+        Models.get(GitProviderModel.class).save(provider);
+        Row application = Models.get(InstanceModel.class).findById(applicationId);
+        Map<String, Object> settings = new LinkedHashMap<>(
+            (Map<String, Object>) application.get(InstanceModel.SETTINGS));
+        settings.put(GitSourceSchema.PROVIDER_ID, provider.get(GitProviderModel.ID));
+        settings.put(GitSourceSchema.REPOSITORY, "acme/app");
+        application.set(InstanceModel.SETTINGS, settings);
+        Models.get(InstanceModel.class).save(application);
+    }
+
+    /** A Gitea-shaped commit-status endpoint that hands every status it receives to {@link #FORGE_STATUSES}. */
+    @SuppressWarnings("unchecked")
+    private static HttpServer startForge() throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            FORGE_STATUSES.add(new ForgeStatus(exchange.getRequestURI().getRawPath(),
+                (Map<String, Object>) new Dry().parse(body)));
+            exchange.sendResponseHeaders(201, -1);
+            exchange.close();
+        });
+        server.start();
+        return server;
+    }
+
+    /** One commit status the fake forge received. */
+    private record ForgeStatus(String path, Map<String, Object> body) {
+    }
 
     /** A plain container record on the local fake daemon. */
     private static int container(String name) {

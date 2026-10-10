@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -45,7 +45,7 @@ public class ReleasedRouteClaimModel extends Model {
     /** The canonical hostname of {@link #CLAIM_KEY}, for the refusal message and the admin list. */
     public static final StringField HOSTNAME = SCHEMA.addField(
         StringField.builder().name("hostname")
-            .label(HohenheimFormCopy.label("hostname"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("hostname"))
             .build());
 
     /**
@@ -58,13 +58,13 @@ public class ReleasedRouteClaimModel extends Model {
      */
     public static final EnumField MATCH_TYPE = SCHEMA.addField(
         SiteDomainModel.matchTypeField()
-            .label(HohenheimFormCopy.label("match_type"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("match_type"))
             .build());
 
     /** The site that held the claim; kept for the operator's override decision, may be gone. */
     public static final IntegerField FORMER_SITE_ID = SCHEMA.addField(
         IntegerField.builder().name("former_site_id")
-            .label(HohenheimFormCopy.label("former_site"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("former_site"))
             .build());
 
     /**
@@ -74,13 +74,13 @@ public class ReleasedRouteClaimModel extends Model {
      */
     public static final TextField FORMER_SUBJECTS = SCHEMA.addField(
         TextField.builder().name("former_subjects")
-            .label(HohenheimFormCopy.label("former_owner"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("former_owner"))
             .build());
 
     /** When the claim was given up; the quarantine window is measured from here. */
     public static final DateTimeField RELEASED_AT = SCHEMA.addField(
         DateTimeField.builder().name("released_at")
-            .label(HohenheimFormCopy.label("released_at"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("released_at"))
             .build());
 
     static {

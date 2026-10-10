@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimPaths;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.sitetype.FaultedSiteHandler;
@@ -49,19 +49,19 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
 
     public static final EnumField FORWARD_SCHEME = SETTINGS_SCHEMA.addField(
         EnumField.builder("forward_scheme")
-            .value("http", "HTTP", UpstreamCopy.scheme("http"))
-            .value("https", "HTTPS", UpstreamCopy.scheme("https"))
-            .label(HohenheimFormCopy.label("forward_scheme"))
-            .help(HohenheimFormCopy.help("forward_scheme"))
+            .value("http", "HTTP", HohenheimMicrocopy.UPSTREAM_SCHEME.of("http"))
+            .value("https", "HTTPS", HohenheimMicrocopy.UPSTREAM_SCHEME.of("https"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("forward_scheme"))
+            .help(HohenheimMicrocopy.HELP.of("forward_scheme"))
             .build());
 
     public static final StringField FORWARD_HOST = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("forward_host").label(HohenheimFormCopy.label("forward_host"))
-            .help(HohenheimFormCopy.help("forward_host")).build());
+        StringField.builder().name("forward_host").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("forward_host"))
+            .help(HohenheimMicrocopy.HELP.of("forward_host")).build());
 
     public static final IntegerField FORWARD_PORT = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("forward_port").label(HohenheimFormCopy.label("forward_port"))
-            .help(HohenheimFormCopy.help("forward_port")).build());
+        IntegerField.builder().name("forward_port").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("forward_port"))
+            .help(HohenheimMicrocopy.HELP.of("forward_port")).build());
 
     public static final EnumField UPSTREAM_PROTOCOL = SETTINGS_SCHEMA.addField(protocolField());
 
@@ -70,23 +70,23 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
 
     public static final BooleanField WEBSOCKET_UPGRADE = SETTINGS_SCHEMA.addField(
         BooleanField.builder("websocket_upgrade").defaultValue(true)
-            .label(HohenheimFormCopy.label("websocket_upgrade"))
-            .help(HohenheimFormCopy.help("websocket_upgrade")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("websocket_upgrade"))
+            .help(HohenheimMicrocopy.HELP.of("websocket_upgrade")).build());
 
     public static final BooleanField IGNORE_CERTIFICATES = SETTINGS_SCHEMA.addField(
         BooleanField.builder("ignore_certificates").defaultValue(false)
-            .label(HohenheimFormCopy.label("ignore_certificates"))
-            .help(HohenheimFormCopy.help("ignore_certificates")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("ignore_certificates"))
+            .help(HohenheimMicrocopy.HELP.of("ignore_certificates")).build());
 
     public static final BooleanField REWRITE_LOCATION = SETTINGS_SCHEMA.addField(
         BooleanField.builder("rewrite_location").defaultValue(true)
-            .label(HohenheimFormCopy.label("rewrite_location"))
-            .help(HohenheimFormCopy.help("rewrite_location")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("rewrite_location"))
+            .help(HohenheimMicrocopy.HELP.of("rewrite_location")).build());
 
     public static final StringField SOCKET = SETTINGS_SCHEMA.addField(
         PathField.builder("socket").browserSource(HohenheimPaths.SERVER_FILES, PathKind.ANY)
-            .label(HohenheimFormCopy.label("upstream_socket"))
-            .help(HohenheimFormCopy.help("upstream_socket")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("upstream_socket"))
+            .help(HohenheimMicrocopy.HELP.of("upstream_socket")).build());
 
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(UpstreamSettings.delay());
 
@@ -107,16 +107,6 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
 
     @Override
     public String getDisplayName() { return "Address"; }
-
-    @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("address").withFilter("scope", "upstream_kind");
-    }
-
-    @Override
-    public @NonNull Microcopy getDescription() {
-        return Microcopy.of("address").withFilter("scope", "upstream_kind_description");
-    }
 
     @Override
     public Icon getIcon() { return Icon.of("arrow-right"); }
@@ -146,11 +136,12 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
     private static EnumField protocolField() {
         EnumField.Builder builder = EnumField.builder("upstream_protocol");
         for (UpstreamProtocol protocol : UpstreamProtocol.values()) {
-            builder.value(protocol.token(), protocol.title(), UpstreamCopy.protocol(protocol.token()));
+            builder.value(protocol.token(), protocol.title(),
+                HohenheimMicrocopy.UPSTREAM_PROTOCOL.of(protocol.token()));
         }
         return builder
-            .label(HohenheimFormCopy.label("upstream_protocol"))
-            .help(HohenheimFormCopy.help("upstream_protocol"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("upstream_protocol"))
+            .help(HohenheimMicrocopy.HELP.of("upstream_protocol"))
             .build();
     }
 
@@ -159,11 +150,11 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
         String socketSetting = (String) settings.get("socket");
         String socket = socketSetting != null && !socketSetting.isEmpty() ? socketSetting : null;
         String host = (String) settings.get("forward_host");
-        boolean websocketEnabled = !Boolean.FALSE.equals(settings.get("websocket_upgrade"));
-        boolean ignoreCertificates = Boolean.TRUE.equals(settings.get("ignore_certificates"));
+        boolean websocketEnabled = RawValues.isOn(settings, WEBSOCKET_UPGRADE);
+        boolean ignoreCertificates = RawValues.isOn(settings, IGNORE_CERTIFICATES);
         UpstreamProtocol protocol = UpstreamProtocol.fromSetting(settings.get("upstream_protocol"));
         // Default true when absent: sites created before the field existed keep rewriting.
-        boolean rewriteLocation = !Boolean.FALSE.equals(settings.get("rewrite_location"));
+        boolean rewriteLocation = RawValues.isOn(settings, REWRITE_LOCATION);
 
         if (socket == null && (host == null || host.isEmpty())) {
             return (exchange, forwarder) -> {
@@ -181,7 +172,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
         Integer siteId = site.get(SiteModel.ID);
         if (tenantOwned && socket != null) {
             return new FaultedSiteHandler(siteId != null ? siteId : -1,
-                Microcopy.of("tenant_socket").withFilter("scope", "site_fault"));
+                HohenheimMicrocopy.SITE_FAULT.of("tenant_socket"));
         }
 
         // Socket mode takes precedence over url mode (matching the Node implementation). The unix
@@ -211,7 +202,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
             Boolean literalPublic = TenantUpstreams.literalIsPublic(host);
             if (Boolean.FALSE.equals(literalPublic)) {
                 return new FaultedSiteHandler(siteId != null ? siteId : -1,
-                    Microcopy.of("tenant_private_address").withFilter("scope", "site_fault"));
+                    HohenheimMicrocopy.SITE_FAULT.of("tenant_private_address"));
             }
             return new TenantAddressHandler(scheme, host, port, protocol, ignoreCertificates,
                 websocketEnabled, rewriteLocation);

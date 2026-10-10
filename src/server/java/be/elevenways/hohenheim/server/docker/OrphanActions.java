@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.Blast;
@@ -41,7 +41,6 @@ import java.util.Map;
  */
 public final class OrphanActions {
 
-
     private OrphanActions() {
     }
 
@@ -58,16 +57,17 @@ public final class OrphanActions {
         String kind = finding.get(ReconcileFindingModel.KIND);
         String name = finding.get(ReconcileFindingModel.RESOURCE_NAME);
         if (!ReconcileFindingModel.BUCKET_ORPHANED.equals(finding.get(ReconcileFindingModel.BUCKET))) {
-            throw refusal("orphan_not_orphaned", name);
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("orphan_not_orphaned").withArg("name", name));
         }
         if (DockerReconciler.KIND_VOLUME.equals(kind)) {
-            throw refusal("orphan_volume_refused", name);
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("orphan_volume_refused").withArg("name", name));
         }
         // Resolved BEFORE the daemon is touched: an unattributable removal must be
         // refused while it is still a refusal, not discovered after the container is gone.
         Row server = Models.get(ServerModel.class).findByName(serverName);
         if (server == null) {
-            throw refusal("orphan_server_unknown", String.valueOf(serverName));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("orphan_server_unknown")
+                .withArg("name", String.valueOf(serverName)));
         }
 
         DockerClient docker = new ServerService().clientFor(serverName);
@@ -78,7 +78,7 @@ public final class OrphanActions {
             return;
         }
         if (live.bucket() != DockerReconciler.Bucket.ORPHANED) {
-            throw refusal("orphan_reclassified", name);
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("orphan_reclassified").withArg("name", name));
         }
 
         try {
@@ -92,14 +92,16 @@ public final class OrphanActions {
             } else if (DockerReconciler.KIND_NETWORK.equals(kind)) {
                 docker.removeNetwork(name);
             } else {
-                throw refusal("orphan_kind_unknown", name);
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("orphan_kind_unknown").withArg("name", name));
             }
         } catch (DockerClient.ApiException e) {
             if (!e.isNotFound()) {
-                throw refusal("orphan_remove_failed", name + ": " + e.getMessage());
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("orphan_remove_failed")
+                    .withArg("name", name + ": " + e.getMessage()));
             }
         } catch (IOException e) {
-            throw refusal("orphan_remove_failed", name + ": " + e.getMessage());
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("orphan_remove_failed")
+                .withArg("name", name + ": " + e.getMessage()));
         }
         deleteFinding(finding);
         ActivityLog.record(Models.get(ServerModel.class), server.get(ServerModel.ID),
@@ -131,19 +133,16 @@ public final class OrphanActions {
             if (e.isNotFound()) {
                 return null;
             }
-            throw refusal("orphan_remove_failed", name + ": " + e.getMessage());
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("orphan_remove_failed")
+                .withArg("name", name + ": " + e.getMessage()));
         } catch (IOException e) {
-            throw refusal("orphan_remove_failed", name + ": " + e.getMessage());
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("orphan_remove_failed")
+                .withArg("name", name + ": " + e.getMessage()));
         }
     }
 
     private static void deleteFinding(Row finding) {
         Models.get(ReconcileFindingModel.class)
             .delete(finding.get(ReconcileFindingModel.ID));
-    }
-
-    private static Violations refusal(String key, String detail) {
-        return Violations.ofForm(HohenheimViolations.text(key)
-            .withArg("name", detail));
     }
 }

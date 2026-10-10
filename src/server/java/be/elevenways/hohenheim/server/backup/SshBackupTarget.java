@@ -1,10 +1,13 @@
 package be.elevenways.hohenheim.server.backup;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
+import be.elevenways.hohenheim.server.host.HostShell;
+import be.elevenways.hohenheim.server.util.PosixPaths;
+import be.elevenways.hohenheim.server.util.Sha256;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.protoblast.server.process.Termination;
@@ -101,7 +104,8 @@ public final class SshBackupTarget implements BackupTarget {
     private @NonNull Row destination() {
         Row server = Models.get(ServerModel.class).findById(this.serverId);
         if (server == null) {
-            throw Violations.ofForm(HohenheimViolations.text("backup_target_host_missing").withArg("id", this.serverId));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_target_host_missing")
+                .withArg("id", this.serverId));
         }
         HostAdmission.requireBackupDestination(server);
         return server;
@@ -118,8 +122,8 @@ public final class SshBackupTarget implements BackupTarget {
 
     @Override
     public void healthCheck() throws IOException {
-        String probe = quoted(this.basePath + "/.hohenheim-target-probe");
-        run("mkdir -p " + quoted(this.basePath)
+        String probe = HostShell.quote(this.basePath + "/.hohenheim-target-probe");
+        run("mkdir -p " + HostShell.quote(this.basePath)
             + " && touch " + probe + " && rm -f " + probe + " && echo HOHENHEIM_TARGET_OK",
             null, null);
     }
@@ -128,11 +132,11 @@ public final class SshBackupTarget implements BackupTarget {
     public void store(@NonNull String key, @NonNull Path file) throws IOException {
         String committed = remotePath(key);
         String staging = committed + STAGING_SUFFIX;
-        String directory = HostShell.parentOf(committed);
+        String directory = PosixPaths.parentOf(committed);
         try (InputStream in = Files.newInputStream(file)) {
-            run("mkdir -p " + quoted(directory) + " && cat > " + quoted(staging), in, null);
+            run("mkdir -p " + HostShell.quote(directory) + " && cat > " + HostShell.quote(staging), in, null);
         } catch (IOException error) {
-            bestEffort("rm -f " + quoted(staging));
+            bestEffort("rm -f " + HostShell.quote(staging));
             throw error;
         }
         // Commit is a separate exchange: the rename happens only after the stream
@@ -141,10 +145,10 @@ public final class SshBackupTarget implements BackupTarget {
         // remote crash cannot leave the committed name over unwritten blocks. `sync FILE`
         // is coreutils; a sync without it (busybox) falls back to syncing everything.
         try {
-            run(syncOf(staging) + " && mv " + quoted(staging) + " " + quoted(committed)
+            run(syncOf(staging) + " && mv " + HostShell.quote(staging) + " " + HostShell.quote(committed)
                 + " && " + syncOf(directory), null, null);
         } catch (IOException error) {
-            bestEffort("rm -f " + quoted(staging));
+            bestEffort("rm -f " + HostShell.quote(staging));
             throw error;
         }
     }
@@ -152,11 +156,11 @@ public final class SshBackupTarget implements BackupTarget {
     @Override
     public @NonNull String storedSha256(@NonNull String key) throws IOException {
         String output = new String(
-            run("sha256sum -b " + quoted(remotePath(key)), null, null),
+            run("sha256sum -b " + HostShell.quote(remotePath(key)), null, null),
             StandardCharsets.UTF_8).trim();
         int space = output.indexOf(' ');
         String sha = space > 0 ? output.substring(0, space) : output;
-        if (!sha.matches("[0-9a-f]{64}")) {
+        if (!Sha256.isHex(sha)) {
             throw new IOException("Remote sha256sum answered unexpectedly: " + output);
         }
         return sha;
@@ -167,7 +171,7 @@ public final class SshBackupTarget implements BackupTarget {
         Path staging = destination.resolveSibling(destination.getFileName() + ".retrieving");
         try (OutputStream out = Files.newOutputStream(staging,
                 StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-            runStreaming("cat " + quoted(remotePath(key)), null, out);
+            runStreaming("cat " + HostShell.quote(remotePath(key)), null, out);
         } catch (IOException error) {
             Files.deleteIfExists(staging);
             throw error;
@@ -186,7 +190,7 @@ public final class SshBackupTarget implements BackupTarget {
     @Override
     public boolean exists(@NonNull String key) throws IOException {
         String answer = new String(
-            run("test -f " + quoted(remotePath(key)) + " && echo YES || echo NO", null, null),
+            run("test -f " + HostShell.quote(remotePath(key)) + " && echo YES || echo NO", null, null),
             StandardCharsets.UTF_8).trim();
         if (!"YES".equals(answer) && !"NO".equals(answer)) {
             throw new IOException("Remote existence probe answered unexpectedly: " + answer);
@@ -202,7 +206,7 @@ public final class SshBackupTarget implements BackupTarget {
      */
     @Override
     public @NonNull List<String> list(@NonNull String prefix) throws IOException {
-        String base = quoted(this.basePath);
+        String base = HostShell.quote(this.basePath);
         String output = new String(
             run("if [ -d " + base + " ]; then find " + base + " -type f; fi", null, null),
             StandardCharsets.UTF_8);
@@ -223,7 +227,7 @@ public final class SshBackupTarget implements BackupTarget {
     @Override
     public void delete(@NonNull String key) throws IOException {
         String committed = remotePath(key);
-        run("rm -f " + quoted(committed) + " " + quoted(committed + STAGING_SUFFIX), null, null);
+        run("rm -f " + HostShell.quote(committed) + " " + HostShell.quote(committed + STAGING_SUFFIX), null, null);
     }
 
     // -- plumbing -------------------------------------------------------------
@@ -312,11 +316,7 @@ public final class SshBackupTarget implements BackupTarget {
 
     /** A remote command flushing one path to disk, degrading to a whole-system sync. */
     private static @NonNull String syncOf(@NonNull String path) {
-        return "{ sync -- " + quoted(path) + " 2>/dev/null || sync; }";
+        return "{ sync -- " + HostShell.quote(path) + " 2>/dev/null || sync; }";
     }
 
-    /** Single-quote a remote path for the remote shell ('\'' escape for embedded quotes). */
-    private static @NonNull String quoted(@NonNull String path) {
-        return "'" + path.replace("'", "'\\''") + "'";
-    }
-}
+    /** Single-quote a remote path for the remote shell ('\'' escape for embedded quotes). */}

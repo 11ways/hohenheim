@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.InstanceShellHandler;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -54,8 +54,8 @@ class InstanceShellAdmissionTest extends HohenheimTestBase {
             assertThat(ungranted.texts).as("step 1: and the refusal names nothing").isEmpty();
 
             // 2. The same grant on a product-generated instance still never opens its shell.
-            RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, generated, HohenheimAccess.SHELL,
-                true);
+            RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, generated,
+                HohenheimCapabilities.SHELL, true);
             FakeSession onGenerated = open(viewer, generated);
             assertThat(onGenerated.closeReason).as("step 2: a generated instance's shell is refused by policy")
                 .isEqualTo("forbidden");
@@ -65,8 +65,8 @@ class InstanceShellAdmissionTest extends HohenheimTestBase {
 
             // 3. Granted on an authored instance, the viewer is admitted: the shell's own funnel answers (this stopped
             //    workload has no shell to open), by name, in the terminal.
-            RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, authored, HohenheimAccess.SHELL,
-                true);
+            RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, authored,
+                HohenheimCapabilities.SHELL, true);
             FakeSession admitted = open(viewer, authored);
             assertThat(admitted.closeReason).as("step 3: admitted past the socket, to the shell's funnel")
                 .isEqualTo("refused");
@@ -74,9 +74,10 @@ class InstanceShellAdmissionTest extends HohenheimTestBase {
             assertThat(new InstanceShellHandler(admitted, authored).revalidate())
                 .as("step 3: and the admission revalidates").isTrue();
         } finally {
-            RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, authored, HohenheimAccess.SHELL);
+            RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, authored,
+                HohenheimCapabilities.SHELL);
             RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, generated,
-                HohenheimAccess.SHELL);
+                HohenheimCapabilities.SHELL);
             HardDeletes.byId(Models.get(InstanceModel.class), authored);
             // A generated record is its product's to delete: the cleanup runs in that product's scope.
             OwnedInstances.inScopeUnchecked("site", SiteModel.MODEL_ID, 424242,

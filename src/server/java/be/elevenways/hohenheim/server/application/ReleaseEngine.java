@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.application;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -10,6 +12,7 @@ import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.BootSettle;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.build.BuildArtifacts;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -17,6 +20,7 @@ import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostLeases;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
@@ -28,7 +32,6 @@ import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
@@ -51,6 +54,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * The health-gated zero-downtime release engine of the application tier: create candidate,
@@ -84,7 +89,6 @@ import java.util.TreeMap;
  * are pruned down to the serving digest. Application delete destroys all of it (destroyFor).
  */
 public final class ReleaseEngine {
-
 
     /** Keys of {@code adjustPaths}-injected checkout paths: per-slot, never source identity. */
     private static final List<String> VOLATILE_SETTINGS =
@@ -220,23 +224,25 @@ public final class ReleaseEngine {
                 InstanceModel.ROLE_CANDIDATE);
             instanceId = instance.get(InstanceModel.ID);
             transition(stamp(op).set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, instanceId),
-                ReleaseOperationModel.STATUS_DEPLOYING,
+                ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DEPLOYING),
                 "instance " + instanceId + " created");
             InstanceService instances = new InstanceService();
             InstanceStatus status = restoreVolumes == null ? instances.deploy(instanceId)
                 : instances.deployRestored(instanceId, restoreVolumes);
             requireHealthy(status, desired, serverId);
-            transition(op, ReleaseOperationModel.STATUS_SWITCHING, "promoting healthy initial release");
+            transition(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SWITCHING),
+                "promoting healthy initial release");
             new InstanceService().assignRuntimeRole(instanceId, InstanceModel.ROLE_SERVING);
             ApplicationUpstreams.invalidate(applicationId);
-            finish(stamp(op).set(ReleaseOperationModel.IMAGE_ID, str(desired.get("image"))),
-                ReleaseOperationModel.STATUS_SUCCEEDED, null, "deployed");
+            finish(stamp(op).set(ReleaseOperationModel.IMAGE_ID, trimmed(desired.get(InstanceKindFields.IMAGE))),
+                ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null, "deployed");
             return new ApplicationReleases.Release(instanceId, status);
         } catch (RuntimeException e) {
             if (instanceId != null) {
                 destroyCandidateQuietly(instanceId);
             }
-            finish(op, ReleaseOperationModel.STATUS_FAILED, HohenheimViolations.reasonOf(e), "deploy failed");
+            finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), HohenheimViolations.reasonOf(e),
+                "deploy failed");
             throw e;
         }
     }
@@ -264,7 +270,6 @@ public final class ReleaseEngine {
         boolean protecting = oldLive.running() && oldLive.publishedPort() != null
             && !oldLive.workloadDead();
 
-
         Row op = newOperation(ReleaseOperationModel.KIND_RELEASE, applicationId,
             ownerFingerprint, ownerFingerprint);
         Map<String, Object> desired;
@@ -274,7 +279,7 @@ public final class ReleaseEngine {
                 ApplicationReleases.requireApplication(applicationId), sourceSettings);
             desired.put("source_fingerprint", ownerFingerprint);
         } catch (RuntimeException e) {
-            finish(op, ReleaseOperationModel.STATUS_FAILED, HohenheimViolations.reasonOf(e),
+            finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), HohenheimViolations.reasonOf(e),
                 "spec resolution failed");
             if (protecting) {
                 Blast.log("RELEASE: application", applicationId, "release failed before a candidate"
@@ -290,24 +295,22 @@ public final class ReleaseEngine {
             try {
                 requireHealthy(oldLive, desired, serverId);
             } catch (RuntimeException unhealthy) {
-                finish(op, ReleaseOperationModel.STATUS_FAILED, HohenheimViolations.reasonOf(unhealthy),
+                finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), HohenheimViolations
+                    .reasonOf(unhealthy),
                     "existing release failed its health gate");
                 throw unhealthy;
             }
             // The source fingerprint drifted (legacy row, new derivation input) but the
             // SPEC did not: adopt the fingerprint so the fast lane hits from now on.
             Row adopting = reload(servingId);
-            @SuppressWarnings("unchecked")
-            Map<String, Object> persisted = new LinkedHashMap<>(
-                (Map<String, Object>) adopting.get(InstanceModel.SETTINGS));
+            Map<String, Object> persisted = new LinkedHashMap<>(InstanceModel.settingsOf(adopting));
             persisted.put("source_fingerprint", ownerFingerprint);
             adopting.set(InstanceModel.SETTINGS, persisted);
             InstanceModel.saveConfiguration(adopting);
-            finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null,
+            finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null,
                 "spec unchanged; fingerprint adopted without a deploy");
             return new ApplicationReleases.Release(servingId, oldLive);
         }
-
 
         try {
             return gatedSwap(docker, op, applicationId, applicationName, serverId, serving, desired);
@@ -369,26 +372,26 @@ public final class ReleaseEngine {
             Row serving = ApplicationReleases.ownedServing(applicationId);
             Row target = newestRetired(applicationId);
             if (target == null) {
-                throw Violations.ofForm(HohenheimViolations.text("release_no_rollback_target"));
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("release_no_rollback_target"));
             }
             if (serving == null) {
-                throw Violations.ofForm(HohenheimViolations.text("release_no_serving_release"));
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("release_no_serving_release"));
             }
             Map<String, Object> desired = ApplicationReleases.storedSettings(target);
             int serverId = ServerModel.canonicalServerId(target.get(InstanceModel.SERVER_ID));
-            String specFingerprint = str(desired.get("source_fingerprint"));
+            String specFingerprint = trimmed(desired.get("source_fingerprint"));
             String ownerFingerprint =
-                str(ApplicationReleases.storedSettings(serving).get("source_fingerprint"));
+                trimmed(ApplicationReleases.storedSettings(serving).get("source_fingerprint"));
 
             InstanceStatus oldLive =
                 new InstanceService().liveStatus(serving.get(InstanceModel.ID));
             if (!oldLive.running() || oldLive.publishedPort() == null) {
-                throw Violations.ofForm(HohenheimViolations.text("release_no_serving_release"));
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("release_no_serving_release"));
             }
             Row op = newOperation(ReleaseOperationModel.KIND_ROLLBACK, applicationId,
                 ownerFingerprint, specFingerprint);
             step(op, "rolling back to retired instance " + target.get(InstanceModel.ID)
-                + " (image " + str(desired.get("image")) + ")");
+                + " (image " + trimmed(desired.get(InstanceKindFields.IMAGE)) + ")");
             DockerClient docker = serverId == ServerModel.localServerId()
                 ? new DockerClient()
                 : new ServerService().clientFor(ServerModel.nameOf(serverId));
@@ -428,11 +431,12 @@ public final class ReleaseEngine {
                 InstanceModel.ROLE_CANDIDATE);
             candidateId = candidate.get(InstanceModel.ID);
             transition(stamp(op).set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, candidateId),
-                ReleaseOperationModel.STATUS_DEPLOYING,
+                ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DEPLOYING),
                 "candidate instance " + candidateId + " created beside serving instance "
                     + servingId);
             InstanceStatus candidateStatus = instances.deploy(candidateId);
-            transition(op, ReleaseOperationModel.STATUS_PROBING, "probing candidate HTTP health");
+            transition(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.PROBING),
+                "probing candidate HTTP health");
             requireHealthy(candidateStatus, desired, serverId);
             step(op, "health probe passed");
 
@@ -442,8 +446,8 @@ public final class ReleaseEngine {
             // generation swap -- see the class AIDEV-NOTE.
             transition(stamp(op)
                     .set(ReleaseOperationModel.RETIRED_INSTANCE_ID, servingId)
-                    .set(ReleaseOperationModel.IMAGE_ID, str(desired.get("image"))),
-                ReleaseOperationModel.STATUS_SWITCHING, "switching traffic");
+                    .set(ReleaseOperationModel.IMAGE_ID, trimmed(desired.get(InstanceKindFields.IMAGE))),
+                ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SWITCHING), "switching traffic");
             // AIDEV-NOTE: both flips are FENCED SINGLE-COLUMN writes, never Models.save of
             // the Row objects held here. Those objects are stale by construction -- the
             // candidate's was built before its deploy stamped status/fence/fingerprint, and
@@ -460,11 +464,11 @@ public final class ReleaseEngine {
             // retired container until the drain stopped it, which IS the dropped request
             // the gated swap exists to prevent.
             ApplicationUpstreams.invalidate(applicationId);
-            transition(op, ReleaseOperationModel.STATUS_DRAINING,
+            transition(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DRAINING),
                 "instance " + candidateId + " now serving; instance " + servingId
                     + " retained as the rollback target, draining");
             scheduleDrain(applicationId, op.get(ReleaseOperationModel.ID), servingId,
-                str(desired.get("image")), Db.currentOrDefault());
+                trimmed(desired.get(InstanceKindFields.IMAGE)), Db.currentOrDefault());
             return new ApplicationReleases.Release(candidateId, candidateStatus);
         } catch (RuntimeException gateHeld) {
             if (candidateId != null) {
@@ -479,7 +483,8 @@ public final class ReleaseEngine {
                 instances.deploy(servingId);
                 ApplicationUpstreams.invalidate(applicationId);
             }
-            finish(op, ReleaseOperationModel.STATUS_FAILED, HohenheimViolations.reasonOf(gateHeld),
+            finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), HohenheimViolations
+                .reasonOf(gateHeld),
                 "candidate refused: " + HohenheimViolations.reasonOf(gateHeld));
             throw gateHeld;
         }
@@ -534,12 +539,12 @@ public final class ReleaseEngine {
             // the application's lock, QUEUED behind whatever is running, and re-reads its
             // operation under it -- a newer operation may already have completed it.
             try {
-                withScope(datasource, () -> InstanceOperationLock.production().exclusive(
+                HandlerSupport.inScope(datasource, () -> InstanceOperationLock.production().exclusive(
                     applicationId, InstanceOperationLock.Contention.QUEUE,
                     () -> ApplicationReleases.inScopeUnchecked(applicationId, () -> {
                         Row op = Models.get(ReleaseOperationModel.class).findById(opId);
-                        if (op == null || !ReleaseOperationModel.STATUS_DRAINING.equals(
-                                op.get(ReleaseOperationModel.STATUS))) {
+                        if (op == null || !ReleaseOperationModel.LIFECYCLE.is(
+                                op.get(ReleaseOperationModel.STATUS), OperationStatus.DRAINING)) {
                             return;
                         }
                         completeDrain(applicationId, op, retiredId, servingImage,
@@ -563,7 +568,8 @@ public final class ReleaseEngine {
         for (Row op : Models.get(ReleaseOperationModel.class).find()
                 .where(ReleaseOperationModel.FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
                 .where(ReleaseOperationModel.FOR_ID.eq(applicationId))
-                .where(ReleaseOperationModel.STATUS.eq(ReleaseOperationModel.STATUS_DRAINING))
+                .where(ReleaseOperationModel.STATUS.eq(
+                    ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DRAINING)))
                 .orderBy(ReleaseOperationModel.ID, SortOrder.ASC)
                 .all()) {
             Integer retiredId = op.get(ReleaseOperationModel.RETIRED_INSTANCE_ID);
@@ -603,7 +609,7 @@ public final class ReleaseEngine {
         } catch (RuntimeException e) {
             step(op, "WARNING: database link-network sweep failed: " + HohenheimViolations.reasonOf(e));
         }
-        finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null, "release complete");
+        finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null, "release complete");
     }
 
     /** Destroy every retired release of the application EXCEPT the newest (the one retained). */
@@ -658,7 +664,7 @@ public final class ReleaseEngine {
             if (applicationId == null
                     || !InstanceModel.MODEL_ID.toString().equals(
                         op.get(ReleaseOperationModel.FOR_MODEL))) {
-                finish(op, ReleaseOperationModel.STATUS_INTERRUPTED,
+                finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.INTERRUPTED),
                     "interrupted by a controller restart", "boot recovery: unknown owner");
                 continue;
             }
@@ -779,12 +785,12 @@ public final class ReleaseEngine {
         Integer candidateId = op.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID);
         Integer retiredId = op.get(ReleaseOperationModel.RETIRED_INSTANCE_ID);
 
-        if (ReleaseOperationModel.STATUS_DRAINING.equals(status)) {
+        if (ReleaseOperationModel.LIFECYCLE.is(status, OperationStatus.DRAINING)) {
             completeDrain(applicationId, op, retiredId != null ? retiredId : -1,
                 servingImageOf(applicationId), "boot recovery finished the lost drain");
             return;
         }
-        if (ReleaseOperationModel.STATUS_SWITCHING.equals(status) && candidateId != null) {
+        if (ReleaseOperationModel.LIFECYCLE.is(status, OperationStatus.SWITCHING) && candidateId != null) {
             // AIDEV-NOTE: the candidate is read TRASHED INCLUDED (both switching branches):
             // a flip that happened is a fact about the operation even when the candidate was
             // destroyed since, and a trashed candidate read as absent would fall through to
@@ -800,19 +806,19 @@ public final class ReleaseEngine {
                         InstanceModel.ROLE_RETIRED);
                     step(op, "boot recovery completed the half-flipped switch");
                 }
-                transition(op, ReleaseOperationModel.STATUS_DRAINING,
+                transition(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DRAINING),
                     "boot recovery: switch had completed, draining");
                 completeDrain(applicationId, op, retiredId, servingImageOf(applicationId),
                     "boot recovery finished the lost drain");
                 return;
             }
         }
-        if (ReleaseOperationModel.STATUS_SWITCHING.equals(status) && candidateId != null
+        if (ReleaseOperationModel.LIFECYCLE.is(status, OperationStatus.SWITCHING) && candidateId != null
                 && retiredId == null) {
             Row candidate = StoredRows.byId(Models.get(InstanceModel.class), candidateId);
             if (candidate != null && InstanceModel.ROLE_SERVING.equals(
                     candidate.get(InstanceModel.RUNTIME_ROLE))) {
-                finish(op, ReleaseOperationModel.STATUS_SUCCEEDED, null,
+                finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null,
                     "boot recovery: healthy initial release had been promoted");
                 return;
             }
@@ -825,7 +831,7 @@ public final class ReleaseEngine {
             new InstanceService().deploy(retiredId);
             ApplicationUpstreams.invalidate(applicationId);
         }
-        finish(op, ReleaseOperationModel.STATUS_INTERRUPTED,
+        finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.INTERRUPTED),
             "interrupted by a controller restart",
             "boot recovery: candidate destroyed, prior release untouched");
     }
@@ -852,7 +858,7 @@ public final class ReleaseEngine {
     private static @NonNull String servingImageOf(int applicationId) {
         Row serving = ApplicationReleases.ownedServing(applicationId);
         return serving != null
-            ? str(ApplicationReleases.storedSettings(serving).get("image")) : "";
+            ? trimmed(ApplicationReleases.storedSettings(serving).get(InstanceKindFields.IMAGE)) : "";
     }
 
     // -- the health probe -----------------------------------------------------
@@ -861,7 +867,7 @@ public final class ReleaseEngine {
     static void requireHealthy(@NonNull InstanceStatus status,
                                @NonNull Map<String, Object> desired, int serverId) {
         if (!status.running() || status.workloadDead() || status.publishedPort() == null) {
-            throw Violations.ofForm(HohenheimViolations.text("release_no_published_port"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("release_no_published_port"));
         }
         probe(status.publishedPort(), healthPathOf(desired), PublishedPortProbe.forServer(serverId));
     }
@@ -905,7 +911,8 @@ public final class ReleaseEngine {
                 lastFailure = notUp.getMessage() != null ? notUp.getMessage() : "connect failed";
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
-                throw Violations.ofForm(HohenheimViolations.text("release_probe_failed").withArg("reason", "interrupted"));
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("release_probe_failed")
+                    .withArg("reason", "interrupted"));
             }
             try {
                 Thread.sleep(pause);
@@ -914,7 +921,8 @@ public final class ReleaseEngine {
                 break;
             }
         }
-        throw Violations.ofForm(HohenheimViolations.text("release_probe_failed").withArg("reason", lastFailure));
+        throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("release_probe_failed")
+            .withArg("reason", lastFailure));
     }
 
     /**
@@ -922,7 +930,7 @@ public final class ReleaseEngine {
      * defaulting to the root.
      */
     public static @NonNull String healthPathOf(@NonNull Map<String, Object> settings) {
-        String path = str(settings.get("health_path"));
+        String path = trimmed(settings.get("health_path"));
         return path.isEmpty() ? "/" : path;
     }
 
@@ -947,7 +955,7 @@ public final class ReleaseEngine {
     private static @NonNull Row reload(int instanceId) {
         Row fresh = Models.get(InstanceModel.class).findById(instanceId);
         if (fresh == null) {
-            throw Violations.ofForm(HohenheimViolations.text("release_no_serving_release"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("release_no_serving_release"));
         }
         return fresh;
     }
@@ -962,7 +970,7 @@ public final class ReleaseEngine {
             applicationName != null && !applicationName.isBlank() ? applicationName : "application-" + applicationId);
         instance.set(InstanceModel.KIND, ReleaseKind.ID.toString());
         Map<String, Object> persisted = new LinkedHashMap<>(desired);
-        instance.set(InstanceModel.CRASH_POLICY, str(persisted.remove("crash_policy")));
+        instance.set(InstanceModel.CRASH_POLICY, trimmed(persisted.remove("crash_policy")));
         Map<String, String> environment = InstanceVariables.detachEnvironment(persisted);
         instance.set(InstanceModel.SETTINGS, persisted);
         instance.set(InstanceModel.SERVER_ID, serverId);
@@ -1023,7 +1031,7 @@ public final class ReleaseEngine {
         op.set(ReleaseOperationModel.KIND, kind);
         op.set(ReleaseOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
         op.set(ReleaseOperationModel.FOR_ID, applicationId);
-        op.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.STATUS_PENDING);
+        op.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.PENDING));
         op.set(ReleaseOperationModel.OWNER_FINGERPRINT, ownerFingerprint);
         op.set(ReleaseOperationModel.SPEC_FINGERPRINT, specFingerprint);
         op.set(ReleaseOperationModel.STARTED_AT, Now.instant());
@@ -1088,7 +1096,7 @@ public final class ReleaseEngine {
                 (int) (finished.toEpochMilli() - started.toEpochMilli()));
         }
         step(stamp, line);
-        if (ReleaseOperationModel.STATUS_FAILED.equals(status)) {
+        if (ReleaseOperationModel.LIFECYCLE.is(status, OperationStatus.FAILED)) {
             alertFailed(stamp.row(), failureReason);
         }
         prune(stamp.row());
@@ -1105,27 +1113,16 @@ public final class ReleaseEngine {
         String name = owner != null ? owner.get(InstanceModel.NAME) : "#" + ownerId;
         Alerts.trySend(NotificationEvents.DEPLOY_FAILED,
             String.valueOf((Object) op.get(ReleaseOperationModel.FOR_MODEL)) + "#" + ownerId,
-            Microcopy.of("deploy_failed_subject").withFilter("scope", "alert").withArg("name", name),
-            Microcopy.of("deploy_failed_body").withFilter("scope", "alert").withArg("name", name)
+            HohenheimMicrocopy.ALERT.of("deploy_failed_subject").withArg("name", name),
+            HohenheimMicrocopy.ALERT.of("deploy_failed_body").withArg("name", name)
                 .withArg("reason", failureReason == null || failureReason.isBlank() ? "-" : failureReason));
     }
 
     /** Keep the newest N operations per owning record; older rows go. */
     private static void prune(@NonNull Row op) {
-        Integer keep = Zenit.SETTINGS_VALUES.getValue(
-            HohenheimSettings.Releases.HISTORY_PER_RECORD);
-        int limit = keep != null && keep > 0 ? keep : 50;
-        ReleaseOperationModel model = Models.get(ReleaseOperationModel.class);
-        List<Row> stale = model.find()
-            .where(ReleaseOperationModel.FOR_MODEL.eq(op.get(ReleaseOperationModel.FOR_MODEL)))
-            .where(ReleaseOperationModel.FOR_ID.eq(op.get(ReleaseOperationModel.FOR_ID)))
-            .orderBy(ReleaseOperationModel.ID, SortOrder.DESC)
-            .offset(limit)
-            .limit(1000)
-            .all();
-        for (Row old : stale) {
-            model.delete(old.get(ReleaseOperationModel.ID));
-        }
+        Models.get(ReleaseOperationModel.class).pruneHistory(op.get(ReleaseOperationModel.FOR_MODEL),
+            op.get(ReleaseOperationModel.FOR_ID),
+            HohenheimSettings.positiveOrDefault(HohenheimSettings.Releases.HISTORY_PER_RECORD));
     }
 
     /** Spec equality ignoring the source fingerprint (an identity, not a spec input). */
@@ -1136,17 +1133,5 @@ public final class ReleaseEngine {
         a.remove("source_fingerprint");
         b.remove("source_fingerprint");
         return ApplicationReleases.settingsEqual(a, b);
-    }
-
-    private static void withScope(@Nullable Datasource datasource, @NonNull Runnable body) {
-        if (datasource != null) {
-            Db.run(datasource, body);
-        } else {
-            body.run();
-        }
-    }
-
-    private static @NonNull String str(@Nullable Object value) {
-        return value == null ? "" : value.toString().trim();
     }
 }

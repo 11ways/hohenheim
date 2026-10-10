@@ -219,7 +219,7 @@ class WorkspaceIncusLiveTest {
 
             // 6. Checkout and build INSIDE the container, as that uid.
             WorkspaceBuilds.Outcome deployed = new WorkspaceBuilds()
-                .deploy(instanceId, "master", DeployTrigger.MANUAL);
+                .deploy(instanceId, "master", null, DeployTrigger.MANUAL);
             assertThat(deployed.commitSha())
                 .as("step 6: the checkout reports a commit").hasSize(40);
             assertThat(deployed.built())

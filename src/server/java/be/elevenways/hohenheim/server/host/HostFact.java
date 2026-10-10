@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.text.ByteText;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -69,7 +70,7 @@ public enum HostFact {
 
     /** @return the fact's name in words */
     public @NonNull Microcopy label() {
-        return Microcopy.of("fact_" + this.token()).withFilter("scope", "host_check");
+        return HohenheimMicrocopy.HOST_CHECK.of("fact_" + this.token());
     }
 
     /** @return the stored value as a reader reads it */

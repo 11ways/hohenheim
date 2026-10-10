@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.dns.DnsPeerKeyResponse;
@@ -10,6 +11,7 @@ import be.elevenways.hohenheim.server.dns.DnsPeerApi;
 import be.elevenways.hohenheim.server.dns.DnsTsig;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
@@ -23,7 +25,6 @@ import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
-import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -40,9 +41,10 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * Federation peers: other Hohenheim instances (or plain nameservers) this
@@ -71,10 +73,8 @@ public final class DnsPeerParts {
                 .forRow((row, request) -> parts.deleteConfirmationFor(row)))
             .actions(List.of(PanelAction.<Row, CmsActionResult>places(DnsOperations.NEGOTIATE_KEY,
                 ActionPlacement.ROW, (request, result) -> result.value())
-                .confirmation(ConfirmationSpec.builder()
-                    .title(Microcopy.of("negotiate_key").withFilter("scope", "dns_peer"))
-                    .body(Microcopy.of("negotiate_key_confirm").withFilter("scope", "dns_peer"))
-                    .build()).build()))
+                .confirmation(Confirmations.of(HohenheimMicrocopy.DNS_PEER.of("negotiate_key"),
+                    HohenheimMicrocopy.DNS_PEER.of("negotiate_key_confirm"), ActionStyle.DEFAULT)).build()))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions()).build();
     }
 
@@ -105,9 +105,9 @@ public final class DnsPeerParts {
         .build();
 
     public @NonNull Identifier id() { return HohenheimIds.id("dns_peer"); }
-    public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_peer"); }
-    public @NonNull Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "dns_peer"); }
-    public @NonNull String slug() { return "dns-peers"; }
+    public @NonNull Microcopy label() { return HohenheimMicrocopy.DNS_PEER.of("plural"); }
+    public @NonNull Microcopy recordLabel() { return HohenheimMicrocopy.DNS_PEER.of("singular"); }
+    public @NonNull String slug() { return HohenheimSlugs.DNS_PEERS; }
     public @NonNull Model model() { return Models.get(DnsPeerModel.class); }
     public @NonNull FormSpec formSpec() { return this.formSpec; }
     public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
@@ -124,7 +124,7 @@ public final class DnsPeerParts {
      * Demoted out of the sidebar, so this sentence reaches a reader through the panel
      * index and the related-pages menu of the list that names it.
      */
-    public @Nullable Microcopy description() { return CmsSupport.navHint("dns_peer"); }
+    public @Nullable Microcopy description() { return CmsSupport.navHint(HohenheimMicrocopy.DNS_PEER); }
 
     public @NonNull Icon icon() { return Icon.of("handshake"); }
 
@@ -162,7 +162,7 @@ public final class DnsPeerParts {
             // A nameserver peer, or a Hohenheim peer whose credentials were cleared:
             // there is no channel to negotiate over, so say so instead of failing later.
             return CmsActionResult.errorToast(
-                Microcopy.of("negotiate_key_unsupported").withFilter("scope", "dns_peer"));
+                HohenheimMicrocopy.DNS_PEER.of("negotiate_key_unsupported"));
         }
         String localName = DnsFederationKeys.localName();
         String peerName = String.valueOf(peer.get(DnsPeerModel.NAME));
@@ -177,14 +177,14 @@ public final class DnsPeerParts {
         }
         catch (DnsPeerApi.PeerApiException refused) {
             return CmsActionResult.errorToast(
-                Microcopy.of("negotiate_key_failed").withFilter("scope", "dns_peer")
+                HohenheimMicrocopy.DNS_PEER.of("negotiate_key_failed")
                     .withArg("reason", HohenheimViolations.reasonOf(refused)));
         }
         if (!keyName.equals(confirmation.key_name())) {
             // The peer stored the name IT was told; a different one back means the two
             // sides would look each other up under different names and never transfer.
             return CmsActionResult.errorToast(
-                Microcopy.of("negotiate_key_mismatch").withFilter("scope", "dns_peer"));
+                HohenheimMicrocopy.DNS_PEER.of("negotiate_key_mismatch"));
         }
 
         peer.set(DnsPeerModel.TSIG_KEY_NAME, keyName);
@@ -195,15 +195,14 @@ public final class DnsPeerParts {
         String endpoint = endpointOf(confirmation);
         if (endpoint.isEmpty()) {
             return CmsActionResult.refreshWithToast(
-                Microcopy.of("negotiate_key_done").withFilter("scope", "dns_peer")
+                HohenheimMicrocopy.DNS_PEER.of("negotiate_key_done")
                     .withArg("key", keyName));
         }
         // A kept endpoint is the one outcome the operator must act on: the key works, but
         // the peer still pulls from an address that is not the one we announced.
         return CmsActionResult.refreshWithToast(
-            Microcopy.of(Boolean.TRUE.equals(confirmation.transfer_kept())
+            HohenheimMicrocopy.DNS_PEER.of(Boolean.TRUE.equals(confirmation.transfer_kept())
                     ? "negotiate_key_endpoint_kept" : "negotiate_key_done_endpoint")
-                .withFilter("scope", "dns_peer")
                 .withArg("key", keyName)
                 .withArg("endpoint", endpoint));
     }
@@ -218,26 +217,9 @@ public final class DnsPeerParts {
         return port != null ? host.trim() + ":" + port : host.trim();
     }
 
-    /**
-     * A peer that a secondary zone still replicates from is offered DEAD, naming the
-     * zones: without it they decay to {@code error} and stop answering once their SOA
-     * expire window closes. The enforcement for every other writer is
-     * {@code DnsPeerCascades}.
-     */
-    public @Nullable Microcopy deleteUnavailableReason(@NonNull Row record,
-                                                       @NonNull AccessContext accessContext) {
-        String zones = DeleteImpact.join(
-            DeleteImpact.secondaryZonesOfPeer(record.get(DnsPeerModel.ID)));
-        if (!zones.isEmpty()) {
-            return Microcopy.of("delete_in_use").withFilter("scope", "dns_peer")
-                .withArg("zones", zones);
-        }
-        return null;
-    }
-
     /** The record-less dialog says what a peer delete takes: the transfer relationship. */
     public @NonNull ConfirmationSpec deleteConfirmation() {
-        return DeleteConfirmation.body(Microcopy.of("delete_confirm").withFilter("scope", "dns_peer"));
+        return DeleteConfirmation.body(HohenheimMicrocopy.DNS_PEER.of("delete_confirm"));
     }
 
     /**
@@ -247,8 +229,8 @@ public final class DnsPeerParts {
     public @NonNull ConfirmationSpec deleteConfirmationFor(@NonNull Row record) {
         String zones = DeleteImpact.join(
             DeleteImpact.zonesLinkedToPeer(record.get(DnsPeerModel.ID)));
-        Microcopy body = Microcopy.of(zones.isEmpty() ? "delete_confirm_named" : "delete_confirm_linked")
-            .withFilter("scope", "dns_peer")
+        Microcopy body = HohenheimMicrocopy.DNS_PEER
+            .of(zones.isEmpty() ? "delete_confirm_named" : "delete_confirm_linked")
             .withArg("name", String.valueOf((Object) record.get(DnsPeerModel.NAME)));
         if (!zones.isEmpty()) {
             body = body.withArg("zones", zones);
@@ -311,16 +293,16 @@ public final class DnsPeerParts {
     private static void validate(@NonNull Map<String, Object> coerced, @Nullable Row existing) {
         String name = value(coerced, existing, DnsPeerModel.NAME);
         if (name.isEmpty()) {
-            throw Violations.ofField("name", name, CmsSupport.violationText("name_required"));
+            throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("name_required"));
         }
         String algorithm = value(coerced, existing, DnsPeerModel.TSIG_ALGORITHM);
         if (!algorithm.isEmpty() && !DnsTsig.isSupportedAlgorithm(algorithm)) {
             throw Violations.ofField("tsig_algorithm", algorithm,
-                CmsSupport.violationText("dns_tsig_algorithm"));
+                HohenheimMicrocopy.VIOLATIONS.of("dns_tsig_algorithm"));
         }
         Object portValue = coerced.get("transfer_port");
         if (portValue instanceof Integer port && (port < 1 || port > 65535)) {
-            throw Violations.ofField("transfer_port", port, CmsSupport.violationText("dns_port_range"));
+            throw Violations.ofField("transfer_port", port, HohenheimMicrocopy.VIOLATIONS.of("dns_port_range"));
         }
 
         String type = DnsPeerModel.TYPE_HOHENHEIM.equals(value(coerced, existing, DnsPeerModel.PEER_TYPE))
@@ -328,16 +310,16 @@ public final class DnsPeerParts {
         if (DnsPeerModel.TYPE_HOHENHEIM.equals(type)) {
             if (value(coerced, existing, DnsPeerModel.BASE_URL).isEmpty()) {
                 throw Violations.ofField("base_url", "",
-                    CmsSupport.violationText("dns_peer_base_url_required"));
+                    HohenheimMicrocopy.VIOLATIONS.of("dns_peer_base_url_required"));
             }
             if (value(coerced, existing, DnsPeerModel.API_KEY).isEmpty()) {
                 throw Violations.ofField("api_key", "",
-                    CmsSupport.violationText("dns_peer_api_key_required"));
+                    HohenheimMicrocopy.VIOLATIONS.of("dns_peer_api_key_required"));
             }
         }
         else if (value(coerced, existing, DnsPeerModel.TRANSFER_HOST).isEmpty()) {
             throw Violations.ofField("transfer_host", "",
-                CmsSupport.violationText("dns_peer_transfer_host_required"));
+                HohenheimMicrocopy.VIOLATIONS.of("dns_peer_transfer_host_required"));
         }
     }
 
@@ -356,6 +338,6 @@ public final class DnsPeerParts {
             }
         }
         Object stored = existing != null ? existing.get(field.getName()) : null;
-        return stored != null ? String.valueOf(stored).trim() : "";
+        return trimmed(stored);
     }
 }

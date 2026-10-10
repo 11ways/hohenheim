@@ -1,16 +1,15 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
-import be.elevenways.zenit.cms.common.resource.ResourceAuthority;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
@@ -35,7 +34,8 @@ import java.util.Objects;
  * The protected paths' shared parts, and the admin protected-path resource and its /manage twin built from them.
  *
  * AIDEV-NOTE: a protected path is a child of its site, reached through the site's Protected paths tab (the
- * {@link #SLUG} child list) and hidden from the sidebar. The path's canonical spelling, completeness and one row per
+ * {@link HohenheimSlugs#PROTECTED_PATHS} child list) and hidden from the sidebar. The path's canonical spelling,
+ * completeness and one row per
  * (site, path) are the model's write hook ({@link ProtectedPathInvariant}), so both twins write plain rows. There is
  * no quick-add bar: the row is a path PLUS a list pick, and a bar carrying only the path would produce rows the
  * invariant must refuse.
@@ -44,9 +44,6 @@ import java.util.Objects;
  * @since  0.9.0
  */
 public final class ProtectedPathParts {
-
-    /** The entry slug both twins share, which the site's tab and the parent links name. */
-    public static final String SLUG = "protected-paths";
 
     /** The virtual column saying whether the path is really guarded. */
     static final String PROTECTION_COLUMN = "protection";
@@ -58,31 +55,27 @@ public final class ProtectedPathParts {
 
     /** @return the admin protected-path resource */
     public static @NonNull PanelResource<Row> admin() {
-        return entry("protected_path")
+        return entry(HohenheimIds.id("protected_path"))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
     }
 
     /** @return the /manage twin: the protected paths of the sites the caller manages */
     public static @NonNull PanelResource<Row> manage() {
-        return entry("manage_protected_path")
-            .scope(TenantScopes.PROTECTED_PATHS)
-            // NAV-ONLY (zero granted sites hide the empty list); the route itself stays scoped.
-            .hasInScopeRecords(ManagePanel::hasManageScope)
-            // The contributed tabs only: the admin activity and revision history stays off the delegated surface.
-            .tabs(ResourceTabs.<Row>none().withContributions())
+        return ManageTwin.reached(entry(ManageTwin.id("protected_path")), TenantScopes.PROTECTED_PATHS,
+                ResourceTabs.<Row>none().withContributions())
             .build();
     }
 
     /** The identity, list, form, reads, writes, parent and authority both twins share. */
-    private static PanelResource.@NonNull Builder<Row> entry(@NonNull String id) {
+    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
         TableSpec<Row> table = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(ProtectedPathModel.PATH).filterable().copyable().build())
             .column(ColumnSpec.fromField(ProtectedPathModel.ACCESS_LIST_ID)
                 .label(FieldLabels.labelForRelation(ProtectedPathModel.ACCESS_LIST_ID))
                 .relation(RelationPick.of(ProtectedPathModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID).build())
                 .build())
-            .column(ColumnSpec.virtual(PROTECTION_COLUMN, pathText("protection"))
+            .column(ColumnSpec.virtual(PROTECTION_COLUMN, HohenheimMicrocopy.PROTECTED_PATH.of("protection"))
                 .renderer(TableStateTranslator.ENUM_BADGE_RENDERER).build())
             .column(ColumnSpec.fromField(ProtectedPathModel.SITE_ID)
                 .label(FieldLabels.labelForRelation(ProtectedPathModel.SITE_ID))
@@ -97,15 +90,16 @@ public final class ProtectedPathParts {
             // dead end of a pick saying "No results found" with no way forward.
             .add(RelationPick.of(ProtectedPathModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID).build())
             .build();
-        return PanelResource.builder(HohenheimIds.id(id), SLUG, SUBJECT)
-            .label(Microcopy.of("plural").withFilter("scope", "protected_path"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "protected_path"))
+        return PanelResource.builder(id, HohenheimSlugs.PROTECTED_PATHS, SUBJECT)
+            .label(HohenheimMicrocopy.PROTECTED_PATH.of("plural"))
+            .recordLabel(HohenheimMicrocopy.PROTECTED_PATH.of("singular"))
             .icon(Icon.of("lock"))
             .navGroup(HohenheimPanel.NETWORK_GROUP)
             .navOrder(32)
             .showInNav(false)
             .standsUnder(HohenheimSlugs.SITES)
-            .parent(ResourceParent.of(HohenheimSlugs.SITES, ProtectedPathModel.SITE_ID).tab(SLUG))
+            .parent(ResourceParent.of(HohenheimSlugs.SITES, ProtectedPathModel.SITE_ID)
+            .tab(HohenheimSlugs.PROTECTED_PATHS))
             .reads(ResourceReads.rows())
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
                 .search(ProtectedPathModel.PATH)
@@ -114,7 +108,7 @@ public final class ProtectedPathParts {
                 .build())
             .form(ResourceForm.<Row>of(form).build())
             .writes(ResourceMutations.rows().create().update().delete().build())
-            .authority(authority());
+            .authority(SiteParts.childAuthority(ProtectedPathModel.SITE_ID));
     }
 
     /**
@@ -123,25 +117,10 @@ public final class ProtectedPathParts {
      */
     static @NonNull EnumBadgeState protectionBadge(@NonNull Row path) {
         return ProtectedPathInvariant.isOpen(path)
-            ? new EnumBadgeState("open", pathText("open_to_everyone"), null, "lock-open", BadgeVariant.DESTRUCTIVE,
+            ? new EnumBadgeState("open", HohenheimMicrocopy.PROTECTED_PATH.of("open_to_everyone"), null, "lock-open",
+                BadgeVariant.DESTRUCTIVE,
                 null, true)
-            : new EnumBadgeState("protected", pathText("protected"), null, "lock", BadgeVariant.SUCCESS, null, true);
-    }
-
-    private static @NonNull Microcopy pathText(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "protected_path");
-    }
-
-    /**
-     * Writing a protected path demands {@code manage} on the site it guards, as a domain row does; a create under a
-     * site (its tab's add link, the create form, the submit) asks the same of that site.
-     */
-    private static @NonNull ResourceAuthority<Row> authority() {
-        return ResourceAuthority.<Row>builder()
-            .write(null, (path, access) -> HohenheimAccess.reachesRecord(access, SiteModel.MODEL_ID,
-                path.get(ProtectedPathModel.SITE_ID), HohenheimAccess.MANAGE))
-            .createUnder((site, access) -> site instanceof Integer id
-                && HohenheimAccess.reachesRecord(access, SiteModel.MODEL_ID, id, HohenheimAccess.MANAGE))
-            .build();
+            : new EnumBadgeState("protected", HohenheimMicrocopy.PROTECTED_PATH.of("protected"), null, "lock",
+                BadgeVariant.SUCCESS, null, true);
     }
 }

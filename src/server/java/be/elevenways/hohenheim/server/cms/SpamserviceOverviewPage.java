@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -36,8 +38,6 @@ import java.util.Map;
  */
 public final class SpamserviceOverviewPage extends PanelPage {
 
-    public static final String SLUG = "spamservice";
-
     /**
      * One demoted sub-surface: its slug plus the label and hint it already owns, so the
      * front door never spells a second name for a page that has one.
@@ -47,36 +47,36 @@ public final class SpamserviceOverviewPage extends PanelPage {
 
     /** The demoted sub-surfaces, in the order an operator meets them. */
     private static final List<Section> SECTIONS = List.of(
-        new Section(SpamserviceInstallationResource.SLUG,
-            Microcopy.of("installation").withFilter("scope", "spamservice"),
-            Microcopy.of("installation_hint").withFilter("scope", "spamservice"),
+        new Section(HohenheimSlugs.SPAMSERVICE_INSTALLATION,
+            HohenheimMicrocopy.SPAMSERVICE.of("installation"),
+            HohenheimMicrocopy.SPAMSERVICE.of("installation_hint"),
             Icon.of("download")),
-        new Section(SpamserviceClientsResource.SLUG,
-            Microcopy.of("plural").withFilter("scope", "spamservice_client"),
-            CmsSupport.navHint("spamservice_client"), Icon.of("users")),
-        new Section(SpamserviceSamplesResource.SLUG,
-            Microcopy.of("plural").withFilter("scope", "spamservice_sample"),
-            CmsSupport.navHint("spamservice_sample"), Icon.of("file-lines")),
-        new Section(SpamserviceSecurityEventsResource.SLUG,
-            Microcopy.of("plural").withFilter("scope", "spamservice_event"),
-            CmsSupport.navHint("spamservice_event"), Icon.of("shield-halved")),
-        new Section(SpamserviceWordsResource.SLUG,
-            Microcopy.of("plural").withFilter("scope", "spamservice_word"),
-            CmsSupport.navHint("spamservice_word"), Icon.of("book")),
-        new Section(SpamserviceReputationPage.SLUG,
-            Microcopy.of("reputation").withFilter("scope", "spamservice"),
-            Microcopy.of("reputation_hint").withFilter("scope", "spamservice"),
+        new Section(HohenheimSlugs.SPAMSERVICE_CLIENTS,
+            HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("plural"),
+            CmsSupport.navHint(HohenheimMicrocopy.SPAMSERVICE_CLIENT), Icon.of("users")),
+        new Section(HohenheimSlugs.SPAMSERVICE_SAMPLES,
+            HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("plural"),
+            CmsSupport.navHint(HohenheimMicrocopy.SPAMSERVICE_SAMPLE), Icon.of("file-lines")),
+        new Section(HohenheimSlugs.SPAMSERVICE_SECURITY_EVENTS,
+            HohenheimMicrocopy.SPAMSERVICE_EVENT.of("plural"),
+            CmsSupport.navHint(HohenheimMicrocopy.SPAMSERVICE_EVENT), Icon.of("shield-halved")),
+        new Section(HohenheimSlugs.SPAMSERVICE_WORDS,
+            HohenheimMicrocopy.SPAMSERVICE_WORD.of("plural"),
+            CmsSupport.navHint(HohenheimMicrocopy.SPAMSERVICE_WORD), Icon.of("book")),
+        new Section(HohenheimSlugs.SPAMSERVICE_REPUTATION,
+            HohenheimMicrocopy.SPAMSERVICE.of("reputation"),
+            HohenheimMicrocopy.SPAMSERVICE.of("reputation_hint"),
             Icon.of("magnifying-glass")));
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_overview"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("overview").withFilter("scope", "spamservice"); }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.SPAMSERVICE.of("overview"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.SPAMSERVICE; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.SECURITY_GROUP; }
     @Override public int navOrder() { return 30; }
 
     @Override
     public @Nullable Microcopy description() {
-        return Microcopy.of("nav_hint").withFilter("scope", "spamservice");
+        return HohenheimMicrocopy.SPAMSERVICE.of("nav_hint");
     }
     @Override public @NonNull Icon icon() { return Icon.of("shield"); }
 
@@ -86,7 +86,7 @@ public final class SpamserviceOverviewPage extends PanelPage {
         SpamserviceManager manager = SpamserviceManager.get();
         SpamserviceManager.Snapshot snapshot = manager.snapshot();
         Map<String, Object> vars = new LinkedHashMap<>();
-        vars.put("title", Microcopy.of("overview").withFilter("scope", "spamservice")
+        vars.put("title", HohenheimMicrocopy.SPAMSERVICE.of("overview")
             .resolve(conduit.getLocales(), conduit.getMessageResolver()));
         vars.put("runtime", Map.ofEntries(
             Map.entry("configured", snapshot.configured()), Map.entry("enabled", snapshot.enabled()),

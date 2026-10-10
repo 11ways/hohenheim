@@ -1,12 +1,14 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -24,6 +26,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Deployments tab on a stack: deploy history with captured logs. Deploy, stop
@@ -33,10 +36,9 @@ import java.util.Map;
 public final class StackDeploymentsPage implements RecordTab.Rendered<Row> {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("stack_deployments"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("deployments").withFilter("scope", "stack"); }
-    public static final String SLUG = "deployments";
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.STACK.of("deployments"); }
 
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.DEPLOYMENTS; }
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
 
     @Override
@@ -48,16 +50,18 @@ public final class StackDeploymentsPage implements RecordTab.Rendered<Row> {
         for (Row row : Models.get(StackDeploymentModel.class).findByStackId(stackId, 50)) {
             Map<String, Object> entry = new HashMap<>();
             entry.put("id", row.get(StackDeploymentModel.ID));
-            entry.put("statusLabel", scopedLabel(row.get(StackDeploymentModel.STATUS), "stack_deploy_status"));
+            OperationStatus status = StackDeploymentModel.LIFECYCLE.read(row.get(StackDeploymentModel.STATUS));
+            entry.put("statusLabel", status != null ? status.label() : null);
             // AIDEV-NOTE: the same classifier supplies roles, hues and unknown-key honesty on every badge surface.
             WidgetBadge.Colors colors = WidgetBadge.colorsOf(StackDeploymentModel.STATUS,
                 row.get(StackDeploymentModel.STATUS));
             entry.put("statusVariant", colors.variant());
             entry.put("statusColorSet", colors.colorSet());
             entry.put("statusKnown", colors.known());
-            entry.put("reasonLabel", scopedLabel(row.get(StackDeploymentModel.REASON), "stack_deploy_reason"));
+            entry.put("reasonLabel",
+                scopedLabel(row.get(StackDeploymentModel.REASON), HohenheimMicrocopy.STACK_DEPLOY_REASON));
             entry.put("duration", durationLabel(row.get(StackDeploymentModel.DURATION_MS)));
-            entry.put("error", orEmpty(row.get(StackDeploymentModel.ERROR)));
+            entry.put("error", Objects.toString(row.get(StackDeploymentModel.ERROR), ""));
             Instant startedAt = row.get(StackDeploymentModel.STARTED_AT);
             entry.put("startedAtIso", startedAt != null ? startedAt.toString() : "");
             String log = row.get(StackDeploymentModel.LOG);
@@ -71,21 +75,16 @@ public final class StackDeploymentsPage implements RecordTab.Rendered<Row> {
         vars.put("stackName", stack.get(StackModel.NAME));
         vars.put("deployments", deployments);
         vars.put("head", recordHead(conduit));
-        vars.put("timeWording", RelativeTimeWording.resolve(
-            conduit.getLocales(), conduit.getMessageResolver()));
+        vars.put("timeWording", CmsSupport.timeWording(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.STACK_DEPLOYMENTS, vars);
     }
 
-    private static String orEmpty(@Nullable Object value) {
-        return value != null ? String.valueOf(value) : "";
-    }
-
     /** Known status/reason tokens localize; null renders empty. */
-    private static @Nullable Microcopy scopedLabel(@Nullable Object value, @NonNull String scope) {
+    private static @Nullable Microcopy scopedLabel(@Nullable Object value, @NonNull HohenheimMicrocopy scope) {
         if (value == null || String.valueOf(value).isBlank()) {
             return null;
         }
-        return Microcopy.of(String.valueOf(value)).withFilter("scope", scope);
+        return scope.of(String.valueOf(value));
     }
 
     private static String durationLabel(@Nullable Object durationMs) {

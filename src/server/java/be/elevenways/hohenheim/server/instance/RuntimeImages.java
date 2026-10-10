@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -84,14 +85,14 @@ public final class RuntimeImages {
 
         if (imageId == null) {
             throw Violations.ofField(InstanceModel.RUNTIME_IMAGE_ID.getName(), null,
-                HohenheimViolations.text("runtime_image_required"));
+                HohenheimMicrocopy.VIOLATIONS.of("runtime_image_required"));
         }
 
         Row image = Models.get(RuntimeImageModel.class).findById(imageId);
 
         if (image == null || !Boolean.TRUE.equals(image.get(RuntimeImageModel.ENABLED))) {
             throw Violations.ofField(InstanceModel.RUNTIME_IMAGE_ID.getName(), imageId,
-                HohenheimViolations.text("runtime_image_unknown")
+                HohenheimMicrocopy.VIOLATIONS.of("runtime_image_unknown")
                     .withArg("id", String.valueOf(imageId)));
         }
 
@@ -112,7 +113,7 @@ public final class RuntimeImages {
             : image.get(RuntimeImageModel.DOCKER_IMAGE);
 
         if (reference == null || reference.isBlank()) {
-            throw Violations.ofForm(HohenheimViolations.text("runtime_image_no_variant")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("runtime_image_no_variant")
                 .withArg("name", String.valueOf((Object) image.get(RuntimeImageModel.NAME)))
                 .withArg("runtime", runtime));
         }
@@ -164,7 +165,7 @@ public final class RuntimeImages {
                     java.util.Map.of(), null, null, BuildQuota.fromSettings()));
 
             if (!result.succeeded()) {
-                throw Violations.ofForm(HohenheimViolations.text("runtime_image_build_failed")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("runtime_image_build_failed")
                     .withArg("name", String.valueOf((Object) image.get(RuntimeImageModel.NAME)))
                     .withArg("reason", String.valueOf(result.failureReason())));
             }
@@ -198,7 +199,8 @@ public final class RuntimeImages {
         Row server = Models.get(ServerModel.class).findByName(serverName);
 
         if (server == null) {
-            throw Violations.ofForm(HohenheimViolations.text("volume_host_unknown").withArg("name", serverName));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("volume_host_unknown")
+                .withArg("name", serverName));
         }
 
         HostShell shell = HostShell.forServer(server);
@@ -214,7 +216,9 @@ public final class RuntimeImages {
             "- converting it there");
 
         if (!shell.run("command -v docker >/dev/null 2>&1").ok()) {
-            throw Violations.ofForm(refusal("runtime_image_no_builder", image, serverName));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("runtime_image_no_builder")
+                .withArg("name", String.valueOf((Object) image.get(RuntimeImageModel.NAME)))
+                .withArg("host", serverName));
         }
 
         String dockerReference = referenceFor(image, ServerModel.RUNTIME_DOCKER);
@@ -244,7 +248,7 @@ public final class RuntimeImages {
             HostShell.Result imported = shell.run(script, HOST_TIMEOUT_SECONDS);
 
             if (!imported.ok()) {
-                throw Violations.ofForm(HohenheimViolations.text("runtime_image_import_failed")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("runtime_image_import_failed")
                     .withArg("name", description)
                     .withArg("reason", imported.text()));
             }
@@ -278,13 +282,6 @@ public final class RuntimeImages {
         return script.toString();
     }
 
-    private static @NonNull Microcopy refusal(@NonNull String key, @NonNull Row image,
-                                              @NonNull String serverName) {
-        return HohenheimViolations.text(key)
-            .withArg("name", String.valueOf((Object) image.get(RuntimeImageModel.NAME)))
-            .withArg("host", serverName);
-    }
-
     // -- the packaged build context -------------------------------------------
 
     /** Packaged runtime changes must invalidate an otherwise unchanged artifact release. */
@@ -313,7 +310,7 @@ public final class RuntimeImages {
     public static @NonNull Path materializeArtifactContext(@NonNull Row image,
                                                            @NonNull Path artifact) {
         if (!Boolean.TRUE.equals(image.get(RuntimeImageModel.ENABLED))) {
-            throw Violations.ofForm(HohenheimViolations.text("runtime_image_unknown")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("runtime_image_unknown")
                 .withArg("id", String.valueOf(idOf(image))));
         }
         referenceFor(image, ServerModel.RUNTIME_DOCKER);
@@ -455,7 +452,7 @@ public final class RuntimeImages {
 
     private static @NonNull Microcopy contextMissing(@NonNull Row image,
                                                      @NonNull String reason) {
-        return HohenheimViolations.text("runtime_image_context_missing")
+        return HohenheimMicrocopy.VIOLATIONS.of("runtime_image_context_missing")
             .withArg("name", String.valueOf((Object) image.get(RuntimeImageModel.NAME)))
             .withArg("reason", reason);
     }

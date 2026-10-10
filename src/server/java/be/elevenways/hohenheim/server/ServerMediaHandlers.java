@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.instance.InstallMediaLive;
 import be.elevenways.hohenheim.model.InstallMediaFetchModel;
@@ -30,6 +32,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * Install media on an Incus host: URL fetch (a background job, see InstallMediaFetches), upload
@@ -89,7 +93,8 @@ final class ServerMediaHandlers {
             }
             // The activity row ("media_fetched") is written by the job when the medium reads
             // back on the host, never for a fetch that is merely accepted.
-            HohenheimFlash.success(conduit, mediaMessage("media_fetch_started", name));
+            HohenheimFlash.success(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("media_fetch_started")
+                .withArg("name", name));
             return HandlerSupport.redirect(tab);
         });
 
@@ -104,7 +109,7 @@ final class ServerMediaHandlers {
             // would buffer the whole image first, which is the thing this lane exists
             // to avoid. It rides the query string instead.
             String name = conduit.getQueryParam("name");
-            name = name == null ? "" : name.trim();
+            name = trimmed(name);
             if (!(conduit instanceof HttpConduit http)) {
                 conduit.notFound();
                 return null;
@@ -113,12 +118,14 @@ final class ServerMediaHandlers {
             try {
                 temp = Files.createTempFile("hohenheim-media-upload-", ".iso");
             } catch (IOException e) {
-                return uploadFailure(conduit, mediaMessage("upload_failed", name));
+                return uploadFailure(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("upload_failed")
+                    .withArg("name", name));
             }
             try {
                 long size = http.streamBodyTo(temp, InstallMedia.MAX_ISO_BYTES);
                 if (size == 0) {
-                    return uploadFailure(conduit, mediaMessage("upload_empty", name));
+                    return uploadFailure(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("upload_empty")
+                        .withArg("name", name));
                 }
                 media.importFrom(server, name, temp);
             } catch (Violations refused) {
@@ -126,7 +133,8 @@ final class ServerMediaHandlers {
             } catch (IOException | RuntimeException e) {
                 Blast.log("MEDIA: upload of", name, "to",
                     server.get(ServerModel.NAME), "failed -", e.getMessage());
-                return uploadFailure(conduit, mediaMessage("upload_failed", name));
+                return uploadFailure(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("upload_failed")
+                    .withArg("name", name));
             } finally {
                 try {
                     Files.deleteIfExists(temp);
@@ -137,7 +145,7 @@ final class ServerMediaHandlers {
                 }
             }
             ActivityLog.record(Models.get(ServerModel.class), serverId, HohenheimActivityAction.MEDIA_UPLOADED, name);
-            HohenheimFlash.success(conduit, mediaMessage("media_uploaded", name));
+            HohenheimFlash.success(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("media_uploaded").withArg("name", name));
             // The uploader reloads the tab itself, so the answer is a bare status rather
             // than a redirect: there is no form post to send back.
             conduit.setResponseStatus(200);
@@ -161,7 +169,7 @@ final class ServerMediaHandlers {
                 return HandlerSupport.redirect(tab);
             }
             ActivityLog.record(Models.get(ServerModel.class), serverId, HohenheimActivityAction.MEDIA_DELETED, name);
-            HohenheimFlash.success(conduit, mediaMessage("media_deleted", name));
+            HohenheimFlash.success(conduit, HohenheimMicrocopy.SERVER_MEDIA.of("media_deleted").withArg("name", name));
             return HandlerSupport.redirect(tab);
         });
     }
@@ -181,11 +189,7 @@ final class ServerMediaHandlers {
     }
 
     private static @NonNull RouteTarget mediaTab(@NonNull Integer serverId) {
-        return CmsRoutes.subpage(HandlerSupport.ADMIN, "servers", serverId,
-            ServerMediaTab.SLUG);
-    }
-
-    private static Microcopy mediaMessage(String key, String name) {
-        return Microcopy.of(key).withFilter("scope", "server_media").withArg("name", name);
+        return CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.SERVERS, serverId,
+            HohenheimSlugs.Tab.INSTALL_MEDIA);
     }
 }

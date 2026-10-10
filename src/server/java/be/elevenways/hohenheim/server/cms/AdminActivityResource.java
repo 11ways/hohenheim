@@ -66,7 +66,7 @@ public final class AdminActivityResource {
      */
     private static final TableSpec<Row> TABLE = ActivityAdmin.table().toBuilder()
         .filter(ActivityAdmin.subjectFilter(APP_FILTER, InstanceModel.MODEL_ID,
-            Microcopy.of("app_filter").withFilter("scope", HohenheimMicrocopy.SCOPE)))
+            HohenheimMicrocopy.HOHENHEIM.of("app_filter")))
         .filter(FilterSpec.leaf(ActivityModel.RECORD_ID, CoreTypes.CONTAINS).build())
         .filter(FilterSpec.leaf(ActivityModel.ORIGIN, CoreTypes.CONTAINS).build())
         .build();
@@ -81,14 +81,14 @@ public final class AdminActivityResource {
      */
     public static @NonNull PanelResource<Row> admin() {
         return ActivityAdmin.builder(NavGroup.SYSTEM, 90)
-            .description(CmsSupport.navHint(HohenheimMicrocopy.SCOPE))
+            .description(CmsSupport.navHint(HohenheimMicrocopy.HOHENHEIM))
             .reads(ActivityAdmin.reads(AdminActivityResource::cell))
             .list(ActivityAdmin.list(TABLE)
                 .chrome(CmsSupport.WIDE_LIST.withFiltersOpen(true))
                 .defaultFilter(ActivityAdmin.defaultFilter().with(ActivityModel.ORIGIN.getName(),
                         HIDE_BACKGROUND_EXPRESSION),
                     filter -> ActivityModel.ORIGIN.getName().equals(filter)
-                        ? Microcopy.of("people_only").withFilter("scope", HohenheimMicrocopy.SCOPE)
+                        ? HohenheimMicrocopy.HOHENHEIM.of("people_only")
                         : ActivityAdmin.defaultFilterChip(filter))
                 .build())
             .build();

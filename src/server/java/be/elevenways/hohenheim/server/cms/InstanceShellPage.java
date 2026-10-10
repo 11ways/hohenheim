@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.HohenheimEndpoints;
@@ -31,8 +33,6 @@ import java.util.Map;
  */
 public final class InstanceShellPage implements ConsoleModes.Mode {
 
-    public static final String SLUG = "shell";
-
     private final @NonNull ConsoleModes modes;
 
     InstanceShellPage(@NonNull ConsoleModes modes) {
@@ -40,8 +40,8 @@ public final class InstanceShellPage implements ConsoleModes.Mode {
     }
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_shell"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("shell").withFilter("scope", "instance"); }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE.of("shell"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.SHELL; }
     @Override public @NonNull Icon icon() { return Icon.of("terminal"); }
 
     /** A mode of the Console tab, reached through its mode switch. */
@@ -49,7 +49,7 @@ public final class InstanceShellPage implements ConsoleModes.Mode {
 
     @Override
     public @NonNull Microcopy hint() {
-        return Microcopy.of("shell").withFilter("scope", "console_mode");
+        return HohenheimMicrocopy.CONSOLE_MODE.of("shell");
     }
 
     /**

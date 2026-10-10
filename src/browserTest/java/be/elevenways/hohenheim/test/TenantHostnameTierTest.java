@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -82,7 +82,7 @@ class TenantHostnameTierTest extends HohenheimTestBase {
         tenantSession = session.token();
 
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, ownSiteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
     }
 
     private static Row site(Model model, String name, String slug) {

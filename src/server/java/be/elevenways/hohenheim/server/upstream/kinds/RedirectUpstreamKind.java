@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.server.proxy.RequestPath;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
@@ -29,22 +28,23 @@ public class RedirectUpstreamKind implements UpstreamKindHandler {
     public static final Schema SETTINGS_SCHEMA = new Schema();
 
     public static final StringField TARGET_URL = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("target_url").label(HohenheimFormCopy.label("target_url"))
-            .help(HohenheimFormCopy.help("target_url")).build());
+        StringField.builder().name("target_url").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("target_url"))
+            .help(HohenheimMicrocopy.HELP.of("target_url")).build());
 
     public static final EnumField HTTP_STATUS = SETTINGS_SCHEMA.addField(
         EnumField.builder("http_status")
-            .value("301", "301 Permanent", UpstreamCopy.redirectStatus("301"))
-            .value("302", "302 Found", UpstreamCopy.redirectStatus("302"))
-            .value("307", "307 Temporary Redirect", UpstreamCopy.redirectStatus("307"))
-            .value("308", "308 Permanent Redirect", UpstreamCopy.redirectStatus("308"))
-            .label(HohenheimFormCopy.label("redirect_status"))
-            .help(HohenheimFormCopy.help("redirect_status"))
+            .value("301", "301 Permanent", HohenheimMicrocopy.REDIRECT_STATUS.of("301"))
+            .value("302", "302 Found", HohenheimMicrocopy.REDIRECT_STATUS.of("302"))
+            .value("307", "307 Temporary Redirect", HohenheimMicrocopy.REDIRECT_STATUS.of("307"))
+            .value("308", "308 Permanent Redirect", HohenheimMicrocopy.REDIRECT_STATUS.of("308"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("redirect_status"))
+            .help(HohenheimMicrocopy.HELP.of("redirect_status"))
             .build());
 
     public static final BooleanField PRESERVE_PATH = SETTINGS_SCHEMA.addField(
         BooleanField.builder("preserve_path").defaultValue(false)
-            .label(HohenheimFormCopy.label("preserve_path")).help(HohenheimFormCopy.help("preserve_path")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("preserve_path"))
+            .help(HohenheimMicrocopy.HELP.of("preserve_path")).build());
 
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(UpstreamSettings.delay());
 
@@ -62,16 +62,6 @@ public class RedirectUpstreamKind implements UpstreamKindHandler {
 
     @Override
     public String getDisplayName() { return "Redirect"; }
-
-    @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("redirect").withFilter("scope", "upstream_kind");
-    }
-
-    @Override
-    public @NonNull Microcopy getDescription() {
-        return Microcopy.of("redirect").withFilter("scope", "upstream_kind_description");
-    }
 
     @Override
     public Icon getIcon() { return Icon.of("up-right-from-square"); }

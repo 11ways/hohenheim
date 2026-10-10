@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.hohenheim.source.GitSourceSchema;
@@ -10,6 +11,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Map;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * THE reading of a git source's declared build detail -- {@code build_directory},
@@ -54,7 +57,7 @@ public final class SourceBuildDetail {
         }
         if (resolved == null || !resolved.startsWith(root)) {
             throw Violations.ofField(GitSourceSchema.BUILD_DIRECTORY, declared,
-                HohenheimViolations.text("source_build_directory_invalid"));
+                HohenheimMicrocopy.VIOLATIONS.of("source_build_directory_invalid"));
         }
         return resolved.toString();
     }
@@ -89,7 +92,7 @@ public final class SourceBuildDetail {
 
     private static @Nullable String declaredDirectory(@NonNull Map<String, Object> settings) {
         Object declared = settings.get(GitSourceSchema.BUILD_DIRECTORY);
-        String text = declared == null ? "" : declared.toString().trim();
+        String text = trimmed(declared);
         return text.isEmpty() || text.equals(".") ? null : text;
     }
 }

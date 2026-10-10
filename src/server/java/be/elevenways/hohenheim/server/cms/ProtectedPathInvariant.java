@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.proxy.AccessRuleTree;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -84,7 +86,7 @@ public final class ProtectedPathInvariant {
                 // access list, and a stored null would silently guard NOTHING here.
                 if (canonical == null) {
                     throw Violations.ofField(ProtectedPathModel.PATH.getName(), raw,
-                        CmsSupport.violationText("protected_path_required"));
+                        HohenheimMicrocopy.VIOLATIONS.of("protected_path_required"));
                 }
                 if (!Objects.equals(raw, canonical)) {
                     row.set(ProtectedPathModel.PATH, canonical);
@@ -97,29 +99,27 @@ public final class ProtectedPathInvariant {
     /** Site and list required, and the (site, path) pair unclaimed. */
     private static void refuseIncompleteOrDuplicate(@NonNull Row row) {
         Model model = Models.get(ProtectedPathModel.class);
-        Row stored = row.has(ProtectedPathModel.ID.getName())
-            && row.get(ProtectedPathModel.ID) != null
-            ? model.findById(row.get(ProtectedPathModel.ID)) : null;
+        Row stored = StoredRows.of(model, row);
 
         Object siteIdValue = row.afterWrite(ProtectedPathModel.SITE_ID, stored);
         if (!(siteIdValue instanceof Integer siteId)) {
             throw Violations.ofField(ProtectedPathModel.SITE_ID.getName(), siteIdValue,
-                CmsSupport.violationText("site_required"));
+                HohenheimMicrocopy.VIOLATIONS.of("site_required"));
         }
         Object listId = row.afterWrite(ProtectedPathModel.ACCESS_LIST_ID, stored);
         if (!(listId instanceof Integer list)) {
             throw Violations.ofField(ProtectedPathModel.ACCESS_LIST_ID.getName(), listId,
-                CmsSupport.violationText("access_list_required"));
+                HohenheimMicrocopy.VIOLATIONS.of("access_list_required"));
         }
         // Only a NEW pointer is judged: a stored path already on an open list keeps serving (J2).
         if (row.changes(ProtectedPathModel.ACCESS_LIST_ID, stored) && admitsEveryone(list, null, rulesOf(list))) {
             throw Violations.ofField(ProtectedPathModel.ACCESS_LIST_ID.getName(), listId,
-                CmsSupport.violationText("access_list_admits_everyone").withArg("list", listName(list)));
+                HohenheimMicrocopy.VIOLATIONS.of("access_list_admits_everyone").withArg("list", listName(list)));
         }
         Object path = row.afterWrite(ProtectedPathModel.PATH, stored);
         if (path == null || String.valueOf(path).isBlank()) {
             throw Violations.ofField(ProtectedPathModel.PATH.getName(), path,
-                CmsSupport.violationText("protected_path_required"));
+                HohenheimMicrocopy.VIOLATIONS.of("protected_path_required"));
         }
         Object ownId = stored != null ? stored.get(ProtectedPathModel.ID) : null;
         for (Row candidate : model.find()
@@ -127,7 +127,7 @@ public final class ProtectedPathInvariant {
                 .and(ProtectedPathModel.PATH.eq(String.valueOf(path))).all()) {
             if (!Objects.equals(candidate.get(ProtectedPathModel.ID), ownId)) {
                 throw Violations.ofField(ProtectedPathModel.PATH.getName(), path,
-                    CmsSupport.violationText("protected_path_taken"));
+                    HohenheimMicrocopy.VIOLATIONS.of("protected_path_taken"));
             }
         }
     }
@@ -136,7 +136,7 @@ public final class ProtectedPathInvariant {
     private static void refuseOpeningRuleSave(@NonNull Row rule) {
         Model rules = Models.get(AccessRuleModel.class);
         Object id = rule.get(AccessRuleModel.ID);
-        Row stored = id != null ? rules.findById(id) : null;
+        Row stored = StoredRows.of(rules, rule);
         if (!(rule.afterWrite(AccessRuleModel.ACCESS_LIST_ID, stored) instanceof Integer listId)) {
             return;
         }
@@ -197,7 +197,7 @@ public final class ProtectedPathInvariant {
         if (path == null) {
             return;
         }
-        throw Violations.ofForm(CmsSupport.violationText("access_list_would_open")
+        throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("access_list_would_open")
             .withArg("list", listName(listId))
             .withArg("path", String.valueOf((Object) path.get(ProtectedPathModel.PATH))));
     }

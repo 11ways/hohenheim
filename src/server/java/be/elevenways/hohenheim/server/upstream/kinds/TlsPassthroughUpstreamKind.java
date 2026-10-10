@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughProvider;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughTarget;
 import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
@@ -28,39 +28,33 @@ public final class TlsPassthroughUpstreamKind implements TlsPassthroughProvider 
 
     public static final StringField FORWARD_HOST = SETTINGS_SCHEMA.addField(
         StringField.builder().name("forward_host").required()
-            .label(HohenheimFormCopy.label("tls_forward_host"))
-            .help(HohenheimFormCopy.help("tls_forward_host"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("tls_forward_host"))
+            .help(HohenheimMicrocopy.HELP.of("tls_forward_host"))
             .build());
 
     public static final IntegerField FORWARD_PORT = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("forward_port").defaultValue(443).required()
             .validator(Range.of(1, 65535))
-            .label(HohenheimFormCopy.label("forward_port"))
-            .help(HohenheimFormCopy.help("tls_forward_port"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("forward_port"))
+            .help(HohenheimMicrocopy.HELP.of("tls_forward_port"))
             .build());
 
     public static final BooleanField PROXY_PROTOCOL_V2 = SETTINGS_SCHEMA.addField(
         BooleanField.builder("proxy_protocol_v2").defaultValue(false)
-            .label(HohenheimFormCopy.label("proxy_protocol_v2"))
-            .help(HohenheimFormCopy.help("proxy_protocol_v2"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("proxy_protocol_v2"))
+            .help(HohenheimMicrocopy.HELP.of("proxy_protocol_v2"))
             .build());
 
     public static final IntegerField CONNECT_TIMEOUT = SETTINGS_SCHEMA.addField(
         IntegerField.builder().name("connect_timeout").defaultValue(10).required().suffix("s")
             .validator(Range.of(1, 300))
-            .label(HohenheimFormCopy.label("connect_timeout"))
-            .help(HohenheimFormCopy.help("connect_timeout"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("connect_timeout"))
+            .help(HohenheimMicrocopy.HELP.of("connect_timeout"))
             .build());
 
     @Override public Identifier typeId() { return ID; }
     @Override public String getDisplayName() { return "TLS passthrough"; }
 
-    @Override public @NonNull Microcopy getLabel() {
-        return Microcopy.of("tls_passthrough").withFilter("scope", "upstream_kind");
-    }
-    @Override public @NonNull Microcopy getDescription() {
-        return Microcopy.of("tls_passthrough").withFilter("scope", "upstream_kind_description");
-    }
     @Override public Icon getIcon() { return Icon.of("shuffle"); }
     @Override public BadgeColor color() { return ColorHue.CYAN; }
     @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
@@ -92,6 +86,6 @@ public final class TlsPassthroughUpstreamKind implements TlsPassthroughProvider 
             throw new IllegalArgumentException("a tenant-owned site may only pass TLS through to a public address");
         }
         return new TlsPassthroughTarget(host, port,
-            Boolean.TRUE.equals(settings.get("proxy_protocol_v2")), timeoutSeconds * 1000, publicOnly);
+            RawValues.isOn(settings, PROXY_PROTOCOL_V2), timeoutSeconds * 1000, publicOnly);
     }
 }

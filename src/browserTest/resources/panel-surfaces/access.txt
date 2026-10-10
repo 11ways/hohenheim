@@ -271,7 +271,7 @@ column former_site at=2 shown=true hidden=false sortable=false filterable=false 
 column former_owner at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column released_at at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 filter hostname at=0 kind=TEXT facet=false param=filter.hostname
-row hohenheim:lift_quarantine at=0 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:lift%252Cscope%3Dreleased_claim,body:lift_confirm%252Cscope%3Dreleased_claim,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Daccess-surfaces-released.access.test,input:false target=/{panel}/{entry}/{record}/action/lift_quarantine
+row hohenheim:lift_quarantine at=0 verb=invoke band=destructive style=DEFAULT disabled= confirm=style:DESTRUCTIVE,title:lift%252Cscope%3Dreleased_claim,body:lift_confirm%252Cscope%3Dreleased_claim,confirm:lift%252Cscope%3Dreleased_claim,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:%3Daccess-surfaces-released.access.test,input:false target=/{panel}/{entry}/{record}/action/lift_quarantine
 tab history at=0 landing=false view=false
 control EDIT%20hostname at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 control EDIT%20former_site_id at=1 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.site,rules:,siblings:,resolver:,clearable:true,creatable:false

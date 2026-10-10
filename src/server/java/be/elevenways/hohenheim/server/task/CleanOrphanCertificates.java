@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.task;
 
-import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -40,8 +39,7 @@ public class CleanOrphanCertificates extends ScheduledTask {
 
     @Override
     public @NonNull Microcopy label() {
-        return Microcopy.of("clean_orphan_certificates").withFilter("scope", HohenheimMicrocopy.SCOPE)
-            .withFilter("target", "task_label");
+        return HohenheimTasks.label(this);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.preview;
 
 import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -21,7 +22,6 @@ import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.preview.PreviewDomains;
-import be.elevenways.hohenheim.server.preview.PreviewQuota;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -203,7 +203,7 @@ class PreviewDeploymentLiveTest {
         // step rather than an async side effect of proxy start. It runs FIRST and
         // SYNCHRONOUSLY: both deploys take the same host lease, and the ordering is what
         // the old awaitInitialDeployFinished() bought by waiting on a race.
-        ApplicationDeploys.deploy(applicationId, "main", DeployTrigger.MANUAL);
+        ApplicationDeploys.deploy(applicationId, "main", null, DeployTrigger.MANUAL);
 
         // 1. CREATE: build the feature ref through the sandbox and deploy it.
         Row preview = PreviewDeployments.deploy(applicationId, "feature-x", null, 41,
@@ -275,7 +275,7 @@ class PreviewDeploymentLiveTest {
         // 5. The quota charge is real and owner-bucketed.
         String bucket = preview.get(PreviewDeploymentModel.QUOTA_BUCKET);
         assertThat(bucket).startsWith("hohenheim:previews:");
-        assertThat(PreviewQuota.usedBy(bucket.substring("hohenheim:previews:".length())))
+        assertThat(OwnerBudget.PREVIEWS.usedBy(bucket.substring("hohenheim:previews:".length())))
             .as("step 5: the owner's preview slot is spent").isEqualTo(1);
 
         // 6. EXPIRY: re-arm the deploy-armed one-shot at a reached deadline (the
@@ -300,7 +300,7 @@ class PreviewDeploymentLiveTest {
             .as("step 6: the generated hostname row is gone").isNull();
         assertThat(generatedDnsOf(previewId))
             .as("step 6: no generated DNS row survives").isEmpty();
-        assertThat(PreviewQuota.usedBy(bucket.substring("hohenheim:previews:".length())))
+        assertThat(OwnerBudget.PREVIEWS.usedBy(bucket.substring("hohenheim:previews:".length())))
             .as("step 6: the quota slot is released").isZero();
         assertThat(imagePresent(docker, String.valueOf(stored.get("image"))))
             .as("step 6: the preview's OWN build artifact was reclaimed at the daemon")

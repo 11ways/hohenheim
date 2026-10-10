@@ -1,8 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
@@ -36,15 +39,14 @@ import java.util.Map;
 public final class ManageDatabaseCredentialsPage implements RecordTab.Rendered<Row> {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("database_credentials"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("credentials").withFilter("scope", "database"); }
-    @Override public @NonNull String slug() { return "credentials"; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.DATABASE.of("credentials"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.CREDENTIALS; }
     @Override public @NonNull Icon icon() { return Icon.of("key"); }
 
     @Override
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
-        Integer id = record.get(DatabaseModel.ID);
-        return id != null && HohenheimAccess.hasDatabaseCapability(accessContext, id,
-            HohenheimAccess.CREDENTIALS);
+        return HohenheimAccess.hasDatabaseCapability(accessContext, record.get(DatabaseModel.ID),
+            HohenheimCapabilities.CREDENTIALS);
     }
 
     @Override

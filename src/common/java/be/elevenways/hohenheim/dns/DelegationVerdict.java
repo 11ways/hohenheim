@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.dns;
 
 import be.elevenways.hohenheim.AttentionSeverity;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.ui.BadgeColor;
@@ -93,7 +94,7 @@ public enum DelegationVerdict {
     }
 
     public @NonNull Microcopy label() {
-        return Microcopy.of(this.token).withFilter("scope", "dns_delegation");
+        return HohenheimMicrocopy.DNS_DELEGATION.of(this.token);
     }
 
     /** The member behind a stored token, or null for anything this build does not declare. */

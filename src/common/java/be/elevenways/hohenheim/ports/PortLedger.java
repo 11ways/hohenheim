@@ -24,6 +24,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import static be.elevenways.hohenheim.RawValues.trimmed;
+
 /**
  * THE single port authority: every persisted host-port claim goes through here, one row
  * per (server, bind address, port, protocol) in {@code port_allocations}, refused by the
@@ -604,9 +606,5 @@ public final class PortLedger {
 
     private static @NonNull String canonicalProtocolOf(@NonNull String claimKey) {
         return claimKey.substring(claimKey.lastIndexOf('|') + 1);
-    }
-
-    private static @NonNull String trimmed(@Nullable Object value) {
-        return value != null ? String.valueOf(value).trim() : "";
     }
 }

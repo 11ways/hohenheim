@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.auth.types;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.auth.SiteAuthContext;
 import be.elevenways.hohenheim.server.auth.SiteAuthGate;
@@ -19,6 +19,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * HTTP Basic Auth provider backed by an operator-editable username to argon2-hash map.
@@ -47,10 +48,10 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
         // string-map values per key) and a blank submit restores the stored hash, so a
         // password is write-only and the argon2 hash never leaves the server.
         CONFIG_SCHEMA.addField(StringMapField.builder(CREDENTIALS)
-            .label(HohenheimFormCopy.label(CREDENTIALS))
-            .help(HohenheimFormCopy.help(CREDENTIALS))
-            .keyLabel(HohenheimFormCopy.label("username"))
-            .valueLabel(HohenheimFormCopy.label("password"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of(CREDENTIALS))
+            .help(HohenheimMicrocopy.HELP.of(CREDENTIALS))
+            .keyLabel(HohenheimMicrocopy.HOHENHEIM_FIELD.of("username"))
+            .valueLabel(HohenheimMicrocopy.HOHENHEIM_FIELD.of("password"))
             .secret()
             .build());
     }
@@ -108,11 +109,11 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
         Object rawSubmitted = submitted != null ? submitted.get(CREDENTIALS) : null;
         if (rawSubmitted instanceof Map<?, ?> map) {
             for (Map.Entry<?, ?> entry : map.entrySet()) {
-                String username = str(entry.getKey());
+                String username = Objects.toString(entry.getKey(), null);
                 if (username == null || username.isBlank()) {
                     continue;
                 }
-                String password = str(entry.getValue());
+                String password = Objects.toString(entry.getValue(), null);
                 if (password == null || password.isBlank()) {
                     out.put(username, stored.getOrDefault(username, ""));
                 } else {
@@ -161,8 +162,8 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
         Object raw = config.get(CREDENTIALS);
         if (raw instanceof Map<?, ?> map) {
             for (Map.Entry<?, ?> entry : map.entrySet()) {
-                String username = str(entry.getKey());
-                String password = str(entry.getValue());
+                String username = Objects.toString(entry.getKey(), null);
+                String password = Objects.toString(entry.getValue(), null);
                 if (username != null && password != null) {
                     result.put(username, password);
                 }
@@ -170,8 +171,8 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
         } else if (raw instanceof List<?> list) {
             for (Object item : list) {
                 if (item instanceof Map<?, ?> cred) {
-                    String username = str(cred.get(USERNAME));
-                    String password = str(cred.get(PASSWORD_HASH));
+                    String username = Objects.toString(cred.get(USERNAME), null);
+                    String password = Objects.toString(cred.get(PASSWORD_HASH), null);
                     if (username != null && password != null) {
                         result.put(username, password);
                     }
@@ -179,10 +180,6 @@ public class BasicAuthProviderType implements SiteAuthProviderTypeHandler {
             }
         }
         return result;
-    }
-
-    static @Nullable String str(@Nullable Object value) {
-        return value == null ? null : String.valueOf(value);
     }
 
     /**

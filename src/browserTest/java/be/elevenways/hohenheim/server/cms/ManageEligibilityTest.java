@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.model.AccessListModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -43,18 +43,18 @@ class ManageEligibilityTest extends HohenheimTestBase {
 
             // 2. A manage grant on one access list, and nothing else, admits the tenant.
             RecordGrants.grant(GrantSubjectType.USER, tenantId, AccessListModel.MODEL_ID, listId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             assertThat(ManagePanel.eligible(tenant(tenantId)))
                 .as("step 2: a tenant managing only an access list is eligible").isTrue();
 
             // 3. Revoked, the tenant is refused again.
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, AccessListModel.MODEL_ID, listId,
-                HohenheimAccess.MANAGE);
+                HohenheimCapabilities.MANAGE);
             assertThat(ManagePanel.eligible(tenant(tenantId)))
                 .as("step 3: the revoked grant admits nothing").isFalse();
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, AccessListModel.MODEL_ID, listId,
-                HohenheimAccess.MANAGE);
+                HohenheimCapabilities.MANAGE);
             HardDeletes.byId(lists, listId);
         }
     }

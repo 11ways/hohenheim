@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionSubject;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
@@ -23,10 +25,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
-import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
-import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 
 /**
  * The instance tier's attention items: crashes, backups, disk pressure and failed application deploys.
@@ -43,8 +44,6 @@ import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
  * @since 0.1.0
  */
 public final class InstanceAttention {
-
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
 
     /** Above this fraction of an ENFORCED root-disk ceiling an instance needs attention. */
     private static final double DISK_HIGH = 0.85;
@@ -72,8 +71,10 @@ public final class InstanceAttention {
      * AIDEV-NOTE: the crashed workload is the ROOT of what its sites' visitors get: each such site's verdict names the
      * workload as its cause ({@link AppHealth}), so the dashboard folds their "error page" items under this one, which
      * says how many sites it keeps from their visitors and keeps the workload's own action.
-     * Its own root, where it has one ({@link WorkloadErrors#rootOf}: the database whose old engine it is, the host that
-     * refused its start), holds it in turn, so a whole chain reads as that one item.
+     * Its own root, where it has one (its verdict's cause half, {@link AppHealth#instanceReading}: the host that refuses
+     * its start now, the database whose old engine it is), holds it in turn, so a whole chain reads as that one item.
+     * DD10c: a failed start on a host that is not admitted read as its own red item beside the host's; the host is the
+     * root, and the failure stays in the app's Recent.
      *
      * @param sitesHeld what each record keeps from visitors ({@link AppHealth#sitesHeldBack}), read once for the tier
      */
@@ -86,17 +87,18 @@ public final class InstanceAttention {
             items.add(item(AttentionSeverity.ERROR, "box",
                 WorkloadErrors.stoppageOf(instance).title(instance.get(InstanceModel.NAME)),
                 reading.worded(),
-                InstanceParts.recordRoute(ADMIN, instance, InstanceConsolePage.SLUG),
-                action("act_open_console"))
+                InstanceParts.recordRoute(ADMIN, instance, HohenheimSlugs.Tab.CONSOLE),
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_console"))
                 .about(subject, sitesHeldText(sitesHeld.get(subject)))
-                .causedBy(WorkloadErrors.rootOf(instance))
+                .causedBy(AppHealth.instanceReading(instance, false, null).cause())
                 .withNote(reading.technical()));
         }
     }
 
     /** @return "Visitors of its site get an error page", null when the workload keeps no site from its visitors */
     static @Nullable Microcopy sitesHeldText(@Nullable Integer sites) {
-        return sites == null || sites == 0 ? null : copy("sites_held_back", "attention_detail", "count", sites);
+        return sites == null || sites == 0 ? null : HohenheimMicrocopy.ATTENTION_DETAIL.of("sites_held_back")
+            .withArg("count", sites);
     }
 
     /**
@@ -118,11 +120,11 @@ public final class InstanceAttention {
                 continue;
             }
             items.add(item(AttentionSeverity.ERROR, "box-archive",
-                copy("instance_backup", "attention_title",
-                    "name", instance.get(InstanceModel.NAME)),
+                HohenheimMicrocopy.ATTENTION_TITLE.of("instance_backup")
+                    .withArg("name", instance.get(InstanceModel.NAME)),
                 literal(latest.get(InstanceBackupModel.ERROR)),
-                InstanceParts.recordRoute(ADMIN, instance, InstanceParts.BACKUPS_TAB),
-                action("act_open_backups")));
+                InstanceParts.recordRoute(ADMIN, instance, HohenheimSlugs.Tab.BACKUPS),
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_backups")));
         }
     }
 
@@ -158,11 +160,11 @@ public final class InstanceAttention {
                 .first();
             if (newestComplete == null) {
                 items.add(item(AttentionSeverity.WARNING, "box-archive",
-                    copy("instance_backup_never", "attention_title",
-                        "name", instance.get(InstanceModel.NAME)),
-                    copy("instance_backup_never", "attention_detail"),
-                    InstanceParts.recordRoute(ADMIN, instance, InstanceParts.BACKUPS_TAB),
-                    action("act_open_backups")));
+                    HohenheimMicrocopy.ATTENTION_TITLE.of("instance_backup_never")
+                        .withArg("name", instance.get(InstanceModel.NAME)),
+                    HohenheimMicrocopy.ATTENTION_DETAIL.of("instance_backup_never"),
+                    InstanceParts.recordRoute(ADMIN, instance, HohenheimSlugs.Tab.BACKUPS),
+                    HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_backups")));
                 continue;
             }
             Instant completedAt = newestComplete.get(InstanceBackupModel.CREATED_AT);
@@ -170,11 +172,11 @@ public final class InstanceAttention {
                 long age = completedAt == null
                     ? -1 : Duration.between(completedAt, Now.instant()).toDays();
                 items.add(item(AttentionSeverity.WARNING, "box-archive",
-                    copy("instance_backup_stale", "attention_title",
-                        "name", instance.get(InstanceModel.NAME)),
-                    copy("instance_backup_stale", "attention_detail", "days", age),
-                    InstanceParts.recordRoute(ADMIN, instance, InstanceParts.BACKUPS_TAB),
-                    action("act_open_backups")));
+                    HohenheimMicrocopy.ATTENTION_TITLE.of("instance_backup_stale")
+                        .withArg("name", instance.get(InstanceModel.NAME)),
+                    HohenheimMicrocopy.ATTENTION_DETAIL.of("instance_backup_stale").withArg("days", age),
+                    InstanceParts.recordRoute(ADMIN, instance, HohenheimSlugs.Tab.BACKUPS),
+                    HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_backups")));
             }
         }
     }
@@ -203,13 +205,13 @@ public final class InstanceAttention {
             }
             items.add(item(fraction >= DISK_CRITICAL ? AttentionSeverity.ERROR : AttentionSeverity.WARNING,
                 "hard-drive",
-                copy("instance_disk", "attention_title",
-                    "name", instance.get(InstanceModel.NAME)),
-                copy("instance_disk", "attention_detail",
-                    "percent", Math.round(fraction * 100),
-                    "limit", Math.round(limit / (1024.0 * 1024 * 1024))),
+                HohenheimMicrocopy.ATTENTION_TITLE.of("instance_disk")
+                    .withArg("name", instance.get(InstanceModel.NAME)),
+                HohenheimMicrocopy.ATTENTION_DETAIL.of("instance_disk").withArg("percent", Math.round(fraction * 100))
+                    .withArg("limit", Math.round(limit / (1024.0 * 1024 * 1024))),
                 InstanceParts.recordRoute(ADMIN, instance, null),
-                action("act_open_app", "name", instance.get(InstanceModel.NAME))));
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_app")
+                    .withArg("name", instance.get(InstanceModel.NAME))));
         }
     }
 
@@ -248,15 +250,15 @@ public final class InstanceAttention {
                 continue;
             }
             Row operation = latest.get(0);
-            if (ReleaseOperationModel.STATUS_FAILED.equals(
-                    operation.get(ReleaseOperationModel.STATUS))) {
+            if (ReleaseOperationModel.LIFECYCLE.is(
+                    operation.get(ReleaseOperationModel.STATUS), OperationStatus.FAILED)) {
                 AttentionSubject subject = AttentionSubject.instance(applicationId);
                 items.add(item(AttentionSeverity.ERROR, "rocket",
                     AppHealth.Stoppage.DEPLOY_FAILED.title(application.get(InstanceModel.NAME)),
                     literal(operation.get(ReleaseOperationModel.FAILURE_REASON)),
-                    CmsRoutes.subpage(ADMIN, InstanceParts.SLUG, applicationId,
-                        InstanceDeploymentsPage.SLUG),
-                    action("act_see_deploy"))
+                    CmsRoutes.subpage(ADMIN, HohenheimSlugs.INSTANCES, applicationId,
+                        HohenheimSlugs.Tab.DEPLOYMENTS),
+                    HohenheimMicrocopy.ATTENTION_ACTION.of("act_see_deploy"))
                     .about(subject, sitesHeldText(sitesHeld.get(subject))));
             }
         }

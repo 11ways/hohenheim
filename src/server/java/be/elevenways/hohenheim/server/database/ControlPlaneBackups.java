@@ -6,8 +6,8 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
+import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -24,8 +24,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -61,9 +59,6 @@ public final class ControlPlaneBackups {
 
     /** Subdirectory of the backup path archives are BUILT in before upload, never kept. */
     public static final String STAGING_SUBDIRECTORY = "control-plane-staging";
-
-    private static final DateTimeFormatter STAMP =
-        DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
 
     private ControlPlaneBackups() {}
 
@@ -105,7 +100,7 @@ public final class ControlPlaneBackups {
         target.healthCheck();
 
         Files.createDirectories(stagingDirectory);
-        String fileName = "control-plane-" + STAMP.format(Now.instant()) + ".zrec";
+        String fileName = "control-plane-" + UtcStamp.now() + ".zrec";
         Path staged = stagingDirectory.resolve(fileName);
         String key = KEY_PREFIX + fileName;
 

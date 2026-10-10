@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -50,7 +50,7 @@ class TenantSiteColumnsTest extends HohenheimTestBase {
         ownSite = site("site-columns-own");
         foreignSite = site("site-columns-foreign");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, ownSite,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
     }
 
     private static int site(String slug) {

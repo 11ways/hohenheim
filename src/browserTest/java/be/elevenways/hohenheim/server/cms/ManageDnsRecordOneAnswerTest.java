@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
@@ -74,13 +75,13 @@ class ManageDnsRecordOneAnswerTest extends HohenheimTestBase {
         assertThat(unhosted.message())
             .as("step 3: an unhosted name reads exactly like a name someone else owns")
             .isEqualTo(hosted.message())
-            .isEqualTo(CmsSupport.violationText("tenant_record_not_authorized"));
+            .isEqualTo(HohenheimMicrocopy.VIOLATIONS.of("tenant_record_not_authorized"));
 
         // 4. Counterfactual: the operator, who can list every zone anyway, keeps the precise
         //    sentence -- so the tenant's answer is a decision, not a lost message.
         assertThat(refusal(operator, "www.one-answer-nowhere.invalid").message())
             .as("step 4: the operator is told no hosted zone contains the name")
-            .isEqualTo(CmsSupport.violationText("tenant_record_no_zone"));
+            .isEqualTo(HohenheimMicrocopy.VIOLATIONS.of("tenant_record_no_zone"));
     }
 
     /** Submit a create as {@code principal} and return the first refusal it raised. */

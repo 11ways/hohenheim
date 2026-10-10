@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.tls;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -56,8 +57,13 @@ public final class ForceSslLatch {
         });
         SiteDomainModel.SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
-            if (row != null && armed(row) && CertificateCoverage.covers(CertificateCoverage.workingNames(),
-                    exactHostname(row))) {
+            if (row == null) {
+                return;
+            }
+            // A create that does not carry the latch reads the model's default: armed.
+            Row stored = StoredRows.of(Models.get(SiteDomainModel.class), row);
+            if (Boolean.TRUE.equals(row.afterWrite(SiteDomainModel.FORCE_SSL_AUTO, stored))
+                    && CertificateCoverage.covers(CertificateCoverage.workingNames(), exactHostname(row, stored))) {
                 row.set(SiteDomainModel.FORCE_SSL, true);
                 row.set(SiteDomainModel.FORCE_SSL_AUTO, false);
             }
@@ -81,7 +87,7 @@ public final class ForceSslLatch {
         SiteDomainModel domains = Models.get(SiteDomainModel.class);
         int forced = 0;
         for (Row domain : domains.find().where(SiteDomainModel.FORCE_SSL_AUTO.eq(true)).all()) {
-            String hostname = exactHostname(domain);
+            String hostname = exactHostname(domain, null);
             if (!CertificateCoverage.covers(names, hostname)) {
                 continue;
             }
@@ -94,16 +100,13 @@ public final class ForceSslLatch {
         return forced;
     }
 
-    private static boolean armed(@NonNull Row row) {
-        Object armed = SiteDomainModel.effective(row, SiteDomainModel.FORCE_SSL_AUTO);
-        // A create that does not carry the column gets the model's default: armed.
-        return armed == null ? !row.has(SiteDomainModel.ID.getName()) : Boolean.TRUE.equals(armed);
-    }
-
-    /** @return the row's hostname when it routes as an exact name, else null (a pattern has no one certificate) */
-    private static @Nullable String exactHostname(@NonNull Row row) {
-        String hostname = (String) SiteDomainModel.effective(row, SiteDomainModel.HOSTNAME);
-        String matchType = (String) SiteDomainModel.effective(row, SiteDomainModel.MATCH_TYPE);
+    /**
+     * @param stored the persisted row of a pending write, null on a create or when {@code row} is itself stored
+     * @return the row's hostname when it routes as an exact name, else null (a pattern has no one certificate)
+     */
+    private static @Nullable String exactHostname(@NonNull Row row, @Nullable Row stored) {
+        String hostname = row.afterWrite(SiteDomainModel.HOSTNAME, stored);
+        String matchType = row.afterWrite(SiteDomainModel.MATCH_TYPE, stored);
         return SiteDomainModel.MATCH_EXACT.equals(SiteDomainModel.effectiveMatchType(hostname, matchType))
             ? hostname : null;
     }

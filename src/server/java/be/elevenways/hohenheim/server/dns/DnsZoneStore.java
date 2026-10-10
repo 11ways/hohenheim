@@ -27,6 +27,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -330,12 +331,12 @@ public final class DnsZoneStore {
         String originString = zone.get(DnsZoneModel.ORIGIN);
         Name origin = Name.fromString(originString + ".");
 
-        int serial = valueOr(zone.get(DnsZoneModel.SERIAL), 1);
+        int serial = Objects.requireNonNullElse(zone.get(DnsZoneModel.SERIAL), 1);
         int defaultTtl = DnsZoneModel.defaultTtlOf(zone);
-        int negativeTtl = valueOr(zone.get(DnsZoneModel.NEGATIVE_TTL), 300);
-        int refresh = valueOr(zone.get(DnsZoneModel.SOA_REFRESH), 7200);
-        int retry = valueOr(zone.get(DnsZoneModel.SOA_RETRY), 3600);
-        int expire = valueOr(zone.get(DnsZoneModel.SOA_EXPIRE), 1209600);
+        int negativeTtl = Objects.requireNonNullElse(zone.get(DnsZoneModel.NEGATIVE_TTL), 300);
+        int refresh = Objects.requireNonNullElse(zone.get(DnsZoneModel.SOA_REFRESH), 7200);
+        int retry = Objects.requireNonNullElse(zone.get(DnsZoneModel.SOA_RETRY), 3600);
+        int expire = Objects.requireNonNullElse(zone.get(DnsZoneModel.SOA_EXPIRE), 1209600);
 
         Name primaryNs = absoluteName(zone.get(DnsZoneModel.SOA_PRIMARY_NS), origin);
         Name contact = contactName(zone.get(DnsZoneModel.SOA_CONTACT), originString);
@@ -352,7 +353,7 @@ public final class DnsZoneStore {
                 String type = row.get(DnsRecordModel.TYPE);
                 long ttl = DnsRecordCodec.resolveTtl(row.get(DnsRecordModel.TTL), defaultTtl);
                 Record record = DnsRecordCodec.toRecord(origin, owner, type, ttl,
-                    valueOr(row.get(DnsRecordModel.VALUE), ""),
+                    Objects.requireNonNullElse(row.get(DnsRecordModel.VALUE), ""),
                     DnsRecordModel.priorityOf(row),
                     DnsRecordModel.weightOf(row),
                     DnsRecordModel.portOf(row));
@@ -475,13 +476,5 @@ public final class DnsZoneStore {
             contact = local + "." + contact.substring(at + 1);
         }
         return Name.fromString(Hostnames.stripTrailingDots(contact) + ".");
-    }
-
-    private static int valueOr(@Nullable Integer value, int fallback) {
-        return value != null ? value : fallback;
-    }
-
-    private static @NonNull String valueOr(@Nullable String value, @NonNull String fallback) {
-        return value != null ? value : fallback;
     }
 }

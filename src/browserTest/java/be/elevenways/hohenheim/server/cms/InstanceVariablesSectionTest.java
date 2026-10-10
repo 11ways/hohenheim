@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -73,8 +73,8 @@ class InstanceVariablesSectionTest extends HohenheimTestBase {
         variable(null, environment(), "ENVIRONMENT_KEY", InstanceVariableModel.KIND_PLAIN, "environment-value");
 
         int viewerId = ApiSupport.user(PREFIX + "viewer@hohenheim.local", "Variables Viewer");
-        RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, ownInstance, HohenheimAccess.VIEW,
-            true);
+        RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, ownInstance,
+            HohenheimCapabilities.VIEW, true);
         viewer = new UserPrincipal(viewerId, "Variables Viewer");
     }
 
@@ -126,7 +126,7 @@ class InstanceVariablesSectionTest extends HohenheimTestBase {
 
     private static ChildListSectionState section(String panel, Principal principal) {
         EndpointConduit conduit = conduit(panel, principal, String.valueOf(ownInstance));
-        conduit.setParameter(CmsEndpoints.SUBPAGE_PARAM, InstanceProvisioningPage.SLUG);
+        conduit.setParameter(CmsEndpoints.SUBPAGE_PARAM, HohenheimSlugs.Tab.PROVISIONING);
         ActionResult<?> result = CmsEndpoints.RECORD_SUBPAGE.handle(conduit);
         assertThat(result).as(panel + ": the Provisioning tab renders").isInstanceOf(RenderTemplateResult.class);
         @SuppressWarnings("unchecked")

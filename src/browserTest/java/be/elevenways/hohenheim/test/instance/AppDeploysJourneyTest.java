@@ -1,11 +1,12 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.model.OperationStatus;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.WebhookDeliveryModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
-import be.elevenways.hohenheim.server.cms.InstanceDeploymentsPage;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.source.WebhookOutcome;
@@ -69,10 +70,14 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         int kept = release("kept", KEPT_SHA, InstanceModel.ROLE_RETIRED);
         int replaced = release("replaced", REPLACED_SHA, null);
 
-        operation(ReleaseOperationModel.STATUS_SUCCEEDED, replaced, null, Instant.parse("2026-09-01T08:00:00Z"));
-        operation(ReleaseOperationModel.STATUS_SUCCEEDED, kept, null, Instant.parse("2026-09-01T09:00:00Z"));
-        operation(ReleaseOperationModel.STATUS_SUCCEEDED, live, null, Instant.parse("2026-09-01T10:00:00Z"));
-        operation(ReleaseOperationModel.STATUS_FAILED, null, "Did not answer on port 3000 within 60 s",
+        operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), replaced, null, Instant
+            .parse("2026-09-01T08:00:00Z"));
+        operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), kept, null, Instant
+            .parse("2026-09-01T09:00:00Z"));
+        operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), live, null, Instant
+            .parse("2026-09-01T10:00:00Z"));
+        operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), null,
+            "Did not answer on port 3000 within 60 s",
             Instant.parse("2026-09-01T11:00:00Z"));
 
         preview("feature/checkout", 42, PreviewDeploymentModel.STATUS_RUNNING);
@@ -157,7 +162,7 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
     }
 
     private static String pageUrl() {
-        return "/admin/instances/" + applicationId + "/page/" + InstanceDeploymentsPage.SLUG;
+        return "/admin/instances/" + applicationId + "/page/" + HohenheimSlugs.Tab.DEPLOYMENTS;
     }
 
     @Test
@@ -167,7 +172,7 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         assertThat(page.statusCode()).as("step 1: the Deploys tab renders").isEqualTo(200);
         String body = page.body();
         int overview = body.indexOf("/page/overview\"");
-        int deploys = body.indexOf("/page/" + InstanceDeploymentsPage.SLUG + "\"");
+        int deploys = body.indexOf("/page/" + HohenheimSlugs.Tab.DEPLOYMENTS + "\"");
         int console = body.indexOf("/page/console\"");
         assertThat(overview).as("step 1: the strip links the overview").isGreaterThan(0);
         assertThat(deploys).as("step 1: Deploys follows the overview").isGreaterThan(overview);

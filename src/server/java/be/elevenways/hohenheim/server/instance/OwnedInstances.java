@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -257,21 +258,31 @@ public final class OwnedInstances {
     }
 
     /**
-     * The words of a placement refusal for its reader: the gate's own on the operator surface, and on a surface where
-     * hosts are operator inventory a host-free sentence that names the fix to whoever may clear it (the operator, who
-     * may run Check and admit) and the operator to everyone else.
+     * Why this instance's host refuses its next start, in its reader's words: the app verdict's detail and every power
+     * button's disabled reason.
      *
      * @param delegated whether the reader is on a surface where hosts are operator inventory (the tenant panel)
      * @param viewer    who reads it, null when nobody can be named (which reads as a tenant)
-     * @return the refusal as the reader may see it
+     * @return the refusal as the reader may see it, null when the host takes the instance
      */
-    public static @NonNull Microcopy placementReason(@NonNull Microcopy refusal, boolean delegated,
-                                                     @Nullable AccessContext viewer) {
+    public static @Nullable Microcopy placementReasonOf(@NonNull Row instance, boolean delegated,
+                                                        @Nullable AccessContext viewer) {
+        Microcopy refusal = placementRefusal(instance);
+        return refusal == null ? null : placementReason(refusal, delegated, viewer);
+    }
+
+    /**
+     * The words of a placement refusal for its reader: the gate's own on the operator surface, and on a surface where
+     * hosts are operator inventory a host-free sentence that names the fix to whoever may clear it (the operator, who
+     * may run Check and admit) and the operator to everyone else.
+     */
+    private static @NonNull Microcopy placementReason(@NonNull Microcopy refusal, boolean delegated,
+                                                      @Nullable AccessContext viewer) {
         if (!delegated) {
             return refusal;
         }
-        return Microcopy.of(viewer != null && mayClearPlacement(viewer) ? "deploy_blocked_operator"
-            : "deploy_blocked_delegated").withFilter("scope", "instance_overview");
+        return HohenheimMicrocopy.INSTANCE_OVERVIEW.of(viewer != null && mayClearPlacement(viewer)
+            ? "deploy_blocked_operator" : "deploy_blocked_delegated");
     }
 
     /** Whether this viewer may clear a placement refusal: run Check and admit on the host, an operator act. */

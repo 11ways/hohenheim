@@ -1,12 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceChildDeletes;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
@@ -39,9 +39,6 @@ import java.util.Map;
  */
 public final class InstanceFileParts {
 
-    /** The entry's slug, which the Provisioning tab links into when its panel registers it. */
-    public static final String SLUG = "instance-files";
-
     private InstanceFileParts() {
     }
 
@@ -62,16 +59,17 @@ public final class InstanceFileParts {
             .column(ColumnSpec.fromField(InstanceFileModel.GENERATED_BY).build())
             .column(ColumnSpec.fromField(InstanceFileModel.INSTANCE_ID).relation(instance).build())
             .build();
-        return PanelResource.builder(HohenheimIds.id("instance_file"), SLUG,
+        return PanelResource.builder(HohenheimIds.id("instance_file"), HohenheimSlugs.INSTANCE_FILES,
                 SubjectType.record(InstanceFileModel.MODEL_ID))
-            .label(Microcopy.of("plural").withFilter("scope", "instance_file"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "instance_file"))
+            .label(HohenheimMicrocopy.INSTANCE_FILE.of("plural"))
+            .recordLabel(HohenheimMicrocopy.INSTANCE_FILE.of("singular"))
             .icon(Icon.of("file-code"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(19)
             .showInNav(false)
             .standsUnder(HohenheimSlugs.INSTANCES)
-            .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceFileModel.INSTANCE_ID).tab("provisioning"))
+            .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceFileModel.INSTANCE_ID)
+            .tab(HohenheimSlugs.Tab.PROVISIONING))
             .reads(ResourceReads.rows())
             .form(ResourceForm.<Row>of(form)
                 // The Provisioning tab links here with ?instance_id= so the pick arrives preselected.

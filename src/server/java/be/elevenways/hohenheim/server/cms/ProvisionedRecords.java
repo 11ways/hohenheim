@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
@@ -23,7 +24,7 @@ import java.util.function.IntConsumer;
  * @author Jelle De Loecker
  * @since 0.1.0
  */
-final class ProvisionedRecords {
+public final class ProvisionedRecords {
 
     /**
      * The columns one record type keeps its identity, its two ceilings and its outcome in.
@@ -31,7 +32,7 @@ final class ProvisionedRecords {
      * @author Jelle De Loecker
      * @since 0.1.0
      */
-    record Columns(@NonNull Field<Integer, ?> id,
+    public record Columns(@NonNull Field<Integer, ?> id,
                    @NonNull Field<Integer, ?> memoryMb,
                    @NonNull Field<Double, ?> cpus,
                    @NonNull Field<String, ?> status,
@@ -45,7 +46,7 @@ final class ProvisionedRecords {
      * @since 0.1.0
      */
     @FunctionalInterface
-    interface Reservation {
+    public interface Reservation {
 
         /** @throws Violations quota, capacity, fence or attribution refusals, unwrapped */
         void reserve(@NonNull Row existing, @NonNull ResourceLimits limits) throws Exception;
@@ -97,7 +98,7 @@ final class ProvisionedRecords {
     }
 
     /** Whether this write carries a non-null value for either ceiling. */
-    static boolean carriesCeiling(@NonNull Map<String, Object> coerced, @NonNull Columns columns) {
+    public static boolean carriesCeiling(@NonNull Map<String, Object> coerced, @NonNull Columns columns) {
         return coerced.get(columns.memoryMb().getName()) != null || coerced.get(columns.cpus().getName()) != null;
     }
 
@@ -114,9 +115,9 @@ final class ProvisionedRecords {
      *
      * @param redeploy recreates the container of the record with this id, in the background
      */
-    static void resize(@NonNull Model model, @NonNull Row existing, @NonNull Map<String, Object> coerced,
-                       @NonNull Columns columns, @NonNull Reservation reservation,
-                       @NonNull IntConsumer redeploy) {
+    public static void resize(@NonNull Model model, @NonNull Row existing, @NonNull Map<String, Object> coerced,
+                              @NonNull Columns columns, @NonNull Reservation reservation,
+                              @NonNull IntConsumer redeploy) {
         ResourceLimits limits = requested(coerced, existing, columns);
         if (Objects.equals(limits.memoryMb(), existing.get(columns.memoryMb()))
                 && Objects.equals(limits.cpus(), existing.get(columns.cpus()))) {
@@ -124,7 +125,7 @@ final class ProvisionedRecords {
         }
         Integer recordId = existing.get(columns.id());
         if (recordId == null) {
-            throw Violations.ofForm(CmsSupport.violationText("database_resize_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("database_resize_failed")
                 .withArg("reason", "the record carries no id"));
         }
         try {
@@ -148,12 +149,7 @@ final class ProvisionedRecords {
     private static @NonNull Violations resizeFailed(@NonNull Exception failure) {
         String detail = WithheldFailure.operatorDetail(failure);
         return detail == null
-            ? Violations.ofForm(CmsSupport.violationText("database_resize_failed_tenant"))
-            : Violations.ofForm(CmsSupport.violationText("database_resize_failed").withArg("reason", detail));
-    }
-
-    /** @return {@code value} trimmed, or {@code ""} for null */
-    static @NonNull String trimmed(@Nullable Object value) {
-        return value != null ? String.valueOf(value).trim() : "";
+            ? Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("database_resize_failed_tenant"))
+            : Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("database_resize_failed").withArg("reason", detail));
     }
 }

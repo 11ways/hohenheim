@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.AuthEndpoints;
 import be.elevenways.zenit.auth.cms.GrantsEditField;
@@ -141,7 +142,7 @@ class SitesManageAllTest extends HohenheimTestBase {
 
             // 1a. BY-ID: the walk decides on the type-level row, not on a grant.
             assertThat(ctx.capabilityDecision(SiteModel.MODEL_ID, alphaSiteId,
-                    HohenheimAccess.MANAGE))
+                    HohenheimCapabilities.MANAGE))
                 .as("step 1a: the type-level row decides a site the holder was never granted")
                 .isEqualTo(RecordCapabilityDecision.TYPE_LEVEL);
             assertThat(HohenheimAccess.canManageSite(holderContext(), betaSiteId))
@@ -152,7 +153,7 @@ class SitesManageAllTest extends HohenheimTestBase {
             //     This is the half a by-id-only test cannot see: under a naive wiring it
             //     answers matchNone() and empties every list.
             assertThat(HohenheimAccess.capabilityScope(holderContext(), SiteModel.MODEL_ID,
-                    HohenheimAccess.MANAGE).isAll())
+                    HohenheimCapabilities.MANAGE).isAll())
                 .as("step 1b: the set-wise face must say ALL, never an empty id set")
                 .isTrue();
             assertThat(HohenheimAccess.managedSiteScope(holderContext(),
@@ -195,11 +196,11 @@ class SitesManageAllTest extends HohenheimTestBase {
             GrantService.createDirectGrant(GrantSubjectType.USER, holderId, MANAGE_ACCESS, false);
 
             assertThat(holderContext().capabilityDecision(SiteModel.MODEL_ID, alphaSiteId,
-                    HohenheimAccess.MANAGE))
+                    HohenheimCapabilities.MANAGE))
                 .as("step 2: an explicit gate denial must beat the type-level row")
                 .isEqualTo(RecordCapabilityDecision.GATE_DENIED);
             assertThat(HohenheimAccess.capabilityScope(holderContext(), SiteModel.MODEL_ID,
-                    HohenheimAccess.MANAGE).isNone())
+                    HohenheimCapabilities.MANAGE).isNone())
                 .as("step 2: and it must collapse the SET-WISE answer too, never leave it ALL")
                 .isTrue();
             assertThat(HohenheimAccess.managedSiteScope(holderContext(),
@@ -222,32 +223,32 @@ class SitesManageAllTest extends HohenheimTestBase {
             //    hohenheim.admin.access would have handed over with it.
             AccessContext scoped = holderContext();
             assertThat(HohenheimAccess.capabilityScope(scoped, InstanceModel.MODEL_ID,
-                    HohenheimAccess.VIEW).isNone())
+                    HohenheimCapabilities.VIEW).isNone())
                 .as("step 3: no instance is reachable")
                 .isTrue();
             assertThat(HohenheimAccess.capabilityScope(scoped, DatabaseModel.MODEL_ID,
-                    HohenheimAccess.VIEW).isNone())
+                    HohenheimCapabilities.VIEW).isNone())
                 .as("step 3: no managed database is reachable")
                 .isTrue();
             assertThat(HohenheimAccess.capabilityScope(scoped, DnsRecordModel.MODEL_ID,
-                    HohenheimAccess.VIEW).isNone())
+                    HohenheimCapabilities.VIEW).isNone())
                 .as("step 3: no DNS record grant is conferred")
                 .isTrue();
             assertThat(HohenheimAccess.capabilityScope(scoped, CertificateModel.MODEL_ID,
-                    HohenheimAccess.VIEW).isNone())
+                    HohenheimCapabilities.VIEW).isNone())
                 .as("step 3: no certificate is reachable")
                 .isTrue();
             // The two capabilities this permission exists INSTEAD of admin access for.
             assertThat(HohenheimAccess.hasInstanceCapability(scoped, instanceId,
-                    HohenheimAccess.EXEC))
+                    HohenheimCapabilities.EXEC))
                 .as("step 3: exec on an instance stays admin-only")
                 .isFalse();
             assertThat(HohenheimAccess.hasInstanceCapability(scoped, instanceId,
-                    HohenheimAccess.IMAGE_ANY))
+                    HohenheimCapabilities.IMAGE_ANY))
                 .as("step 3: and so does running an arbitrary image")
                 .isFalse();
             assertThat(HohenheimAccess.hasDatabaseCapability(scoped, databaseId,
-                    HohenheimAccess.CREDENTIALS))
+                    HohenheimCapabilities.CREDENTIALS))
                 .as("step 3: and a managed database's credentials")
                 .isFalse();
             // The STATUS comes first on both: a 403 page contains no record name either,
@@ -309,13 +310,13 @@ class SitesManageAllTest extends HohenheimTestBase {
             GrantService.createDirectGrant(GrantSubjectType.USER, holderId, MANAGE_ACCESS, true);
             AccessContext everySite = holderContext();
             assertThat(everySite.capabilityDecision(SiteModel.MODEL_ID, alphaSiteId,
-                    HohenheimAccess.MANAGE))
+                    HohenheimCapabilities.MANAGE))
                 .as("step 5: the holder's authority over the site is REAL and unchanged")
                 .isEqualTo(RecordCapabilityDecision.TYPE_LEVEL);
             assertThatThrownBy(() -> GrantAdministration.requireAuthorizedRecordDiff(
                     everySite, SiteModel.MODEL_ID, alphaSiteId, "access",
                     List.of(new GrantAdministration.RecordGrantChange(
-                        GrantSubjectType.USER, peerId, HohenheimAccess.MANAGE, true))))
+                        GrantSubjectType.USER, peerId, HohenheimCapabilities.MANAGE, true))))
                 .as("step 5: but blanket authority over sites is not authority to hand one out")
                 .isInstanceOf(Violations.class)
                 .satisfies(refused -> assertThat(refusalTargets((Violations) refused))
@@ -335,19 +336,19 @@ class SitesManageAllTest extends HohenheimTestBase {
             //    is the delegation this lane exists for and it is untouched.
             Integer ownerId = ApiSupport.user("manage-all-owner@hohenheim.local", "Site Owner");
             RecordGrants.grant(GrantSubjectType.USER, ownerId, SiteModel.MODEL_ID, alphaSiteId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             AccessContext owner = TestAccessContexts.contextFor(
                 new UserPrincipal(ownerId, "Site Owner"));
             assertThat(GrantAdministration.requireAuthorizedRecordDiff(
                     owner, SiteModel.MODEL_ID, alphaSiteId, "access",
                     List.of(new GrantAdministration.RecordGrantChange(
-                        GrantSubjectType.USER, peerId, HohenheimAccess.MANAGE, true))))
+                        GrantSubjectType.USER, peerId, HohenheimCapabilities.MANAGE, true))))
                 .as("step 6: a record-level manage holder may still delegate on its own site")
                 .hasSize(1);
             assertThatThrownBy(() -> GrantAdministration.requireAuthorizedRecordDiff(
                     owner, SiteModel.MODEL_ID, betaSiteId, "access",
                     List.of(new GrantAdministration.RecordGrantChange(
-                        GrantSubjectType.USER, peerId, HohenheimAccess.MANAGE, true))))
+                        GrantSubjectType.USER, peerId, HohenheimCapabilities.MANAGE, true))))
                 .as("step 6: and only there -- the boundary is still per record")
                 .isInstanceOf(Violations.class);
         } finally {

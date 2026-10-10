@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.source.GithubProviderKind;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -24,7 +25,6 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
-import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.hohenheim.server.instance.variable.StringVariableType;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
@@ -213,7 +213,7 @@ class InlineCellIsolationTest extends HohenheimTestBase {
 
     private static List<Target> declaredTargets() {
         List<Target> targets = new ArrayList<>();
-        for (String slug : List.of("admin", ManagePanel.SLUG)) {
+        for (String slug : List.of("admin", HohenheimSlugs.MANAGE)) {
             Panel panel = PanelRegistry.getBySlug(slug);
             assertThat(panel).as("the '" + slug + "' panel is registered").isNotNull();
             for (PanelEntry entry : panel.entries()) {

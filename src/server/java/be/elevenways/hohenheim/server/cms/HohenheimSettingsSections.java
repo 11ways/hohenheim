@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
@@ -28,27 +29,27 @@ import java.util.function.Function;
  */
 public enum HohenheimSettingsSections {
 
-    GENERAL("general", Microcopy.of("section_general").withFilter("scope", "settings_section"),
+    GENERAL("general", HohenheimMicrocopy.SETTINGS_SECTION.of("section_general"),
         HohenheimSettings.Roles.GROUP, HohenheimSettings.Storage.GROUP, HohenheimSettings.Logging.GROUP,
         HohenheimSettings.Process.GROUP),
-    HTTPS("https", Microcopy.of("section_https").withFilter("scope", "settings_section"), HohenheimSettings.Ssl.GROUP),
-    BACKUPS("backups", Microcopy.of("section_backups").withFilter("scope", "settings_section"),
+    HTTPS("https", HohenheimMicrocopy.SETTINGS_SECTION.of("section_https"), HohenheimSettings.Ssl.GROUP),
+    BACKUPS("backups", HohenheimMicrocopy.SETTINGS_SECTION.of("section_backups"),
         HohenheimSettings.Database.GROUP, HohenheimSettings.Backup.GROUP),
     NOTIFICATIONS(label -> SettingsPage.frameworkGroup(CommsSettingsLabels.MOUNT_KEY, label, CommsSettings.ROOT),
-        "notifications", Microcopy.of("section_notifications").withFilter("scope", "settings_section")),
-    APPS("apps", Microcopy.of("section_apps").withFilter("scope", "settings_section"),
+        "notifications", HohenheimMicrocopy.SETTINGS_SECTION.of("section_notifications")),
+    APPS("apps", HohenheimMicrocopy.SETTINGS_SECTION.of("section_apps"),
         HohenheimSettings.Instances.GROUP, HohenheimSettings.Builds.GROUP, HohenheimSettings.Releases.GROUP,
         HohenheimSettings.Previews.GROUP, HohenheimSettings.Files.GROUP, HohenheimSettings.Sftp.GROUP,
         HohenheimSettings.Stacks.GROUP,
         HohenheimSettings.Quota.GROUP),
-    HOSTS("hosts", Microcopy.of("section_hosts").withFilter("scope", "settings_section"),
+    HOSTS("hosts", HohenheimMicrocopy.SETTINGS_SECTION.of("section_hosts"),
         HohenheimSettings.Hosts.GROUP, HohenheimSettings.Capacity.GROUP, HohenheimSettings.Incus.GROUP),
-    DNS("dns", Microcopy.of("section_dns").withFilter("scope", "settings_section"), HohenheimSettings.Dns.GROUP),
-    BLOCKING("blocking", Microcopy.of("section_blocking").withFilter("scope", "settings_section"),
+    DNS("dns", HohenheimMicrocopy.SETTINGS_SECTION.of("section_dns"), HohenheimSettings.Dns.GROUP),
+    BLOCKING("blocking", HohenheimMicrocopy.SETTINGS_SECTION.of("section_blocking"),
         HohenheimSettings.Security.GROUP),
     ABUSE(label -> new SettingsPage.Mount("spamservice", label, new SpamserviceSettingsBackend()), "abuse",
-        Microcopy.of("section_abuse").withFilter("scope", "settings_section")),
-    PROXY("proxy", Microcopy.of("section_proxy").withFilter("scope", "settings_section"),
+        HohenheimMicrocopy.SETTINGS_SECTION.of("section_abuse")),
+    PROXY("proxy", HohenheimMicrocopy.SETTINGS_SECTION.of("section_proxy"),
         HohenheimSettings.Proxy.GROUP, HohenheimSettings.ProxyAuth.GROUP,
         HohenheimSettings.AuthProteus.GROUP);
 

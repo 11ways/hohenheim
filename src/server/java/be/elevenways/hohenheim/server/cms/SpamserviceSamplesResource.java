@@ -1,8 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.spamservice.client.SampleSummary;
@@ -39,6 +40,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -53,18 +55,25 @@ public final class SpamserviceSamplesResource {
     private static final OperationCommand COMMAND = OperationCommand.perSubject().onDatasource("default")
         .execution(CommandExecution.OUTSIDE_TRANSACTION);
 
-    public static final String SLUG = "spamservice-samples";
     static final Identifier ID = HohenheimIds.id("spamservice_sample");
     static final SubjectType<SampleSummary> SAMPLE = SubjectType.of(ID, SampleSummary.class, SampleSummary::id);
 
-    private static final UuidField CLIENT_ID = UuidField.builder("client_id").label(words("client")).build();
-    private static final StringField IP = StringField.builder("ip").label(words("ip")).build();
-    private static final BooleanField SPAM = BooleanField.builder("spam").label(words("spam")).build();
-    private static final IntegerField SCORE = IntegerField.builder("score").label(words("score")).build();
-    private static final BooleanField CONFIRMED = BooleanField.builder("confirmed").label(words("confirmed")).build();
-    private static final StringField FLAGS = StringField.builder("flags").label(words("flags")).build();
-    private static final StringField LANGUAGES = StringField.builder("languages").label(words("languages")).build();
-    private static final DateTimeField CREATED_AT = DateTimeField.builder("created_at").label(words("created_at"))
+    private static final UuidField CLIENT_ID = UuidField.builder("client_id")
+        .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("client")).build();
+    private static final StringField IP = StringField.builder("ip")
+        .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("ip")).build();
+    private static final BooleanField SPAM = BooleanField.builder("spam")
+        .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("spam")).build();
+    private static final IntegerField SCORE = IntegerField.builder("score")
+        .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("score")).build();
+    private static final BooleanField CONFIRMED = BooleanField.builder("confirmed")
+        .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("confirmed")).build();
+    private static final StringField FLAGS = StringField.builder("flags")
+        .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("flags")).build();
+    private static final StringField LANGUAGES = StringField.builder("languages")
+        .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("languages")).build();
+    private static final DateTimeField CREATED_AT = DateTimeField.builder("created_at")
+        .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("created_at"))
         .build();
 
     /** The fields the management API answers for one sample summary. */
@@ -74,7 +83,7 @@ public final class SpamserviceSamplesResource {
     public static final Operation<SampleSummary, Void, Void> MARK_SPAM = Operation.declare(
             HohenheimIds.id("spamservice_mark_spam"))
         .happened(OperationSentences.of("spamservice_mark_spam"))
-        .label(words("mark_spam"))
+        .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("mark_spam"))
         .icon(Icon.of("triangle-exclamation"))
         .one(SAMPLE)
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
@@ -84,7 +93,7 @@ public final class SpamserviceSamplesResource {
     public static final Operation<SampleSummary, Void, Void> MARK_HAM = Operation.declare(
             HohenheimIds.id("spamservice_mark_ham"))
         .happened(OperationSentences.of("spamservice_mark_ham"))
-        .label(words("mark_ham"))
+        .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("mark_ham"))
         .icon(Icon.of("check"))
         .one(SAMPLE)
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
@@ -95,7 +104,7 @@ public final class SpamserviceSamplesResource {
     public static final Operation<SampleSummary, Void, String> RESCORE = Operation.declare(
             HohenheimIds.id("spamservice_rescore"))
         .happened(OperationSentences.of("spamservice_rescore"))
-        .label(words("rescore"))
+        .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("rescore"))
         .icon(Icon.of("rotate"))
         .one(SAMPLE)
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
@@ -136,18 +145,17 @@ public final class SpamserviceSamplesResource {
             .filter(FilterSpec.leaf(CONFIRMED, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE).build())
             .filter(FilterSpec.leaf(IP, CoreTypes.CONTAINS).build())
             .defaultSort(SortSpec.desc("created_at")).build();
-        return PanelResource.builder(ID, SLUG, SAMPLE)
-            .label(words("plural"))
-            .recordLabel(words("singular"))
+        return PanelResource.builder(ID, HohenheimSlugs.SPAMSERVICE_SAMPLES, SAMPLE)
+            .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("plural"))
+            .recordLabel(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("singular"))
             .navGroup(HohenheimPanel.SECURITY_GROUP)
             .navOrder(20)
             .showInNav(false)
-            .standsUnder(SpamserviceOverviewPage.SLUG)
+            .standsUnder(HohenheimSlugs.SPAMSERVICE)
             .icon(Icon.of("file-lines"))
             .reads(ResourceReads.<SampleSummary>typed(SampleSummary::id)
                 .load((key, access) -> load(clients, key))
                 .values(SpamserviceSamplesResource::values)
-                .cells(SpamserviceSamplesResource::cell)
                 .build()
                 // Without this the analysis tab is headed by the sample's UUID.
                 .title(SampleSummary::ip))
@@ -159,7 +167,7 @@ public final class SpamserviceSamplesResource {
                         SpamserviceRemoteStore.textFilter(applied, "ip"))))
                 .chrome(ListChrome.MINIMAL)
                 .notice(SpamserviceRemoteStore.notice(ID, clients))
-                .rowLinkToTab(SpamserviceSampleAnalysisPage.SLUG)
+                .rowLinkToTab(HohenheimSlugs.Tab.ANALYSIS)
                 .build())
             .form(ResourceForm.<SampleSummary>of(FormSpec.builder()
                 .add(CLIENT_ID).add(IP).add(SPAM).add(SCORE).add(CONFIRMED).add(FLAGS).add(LANGUAGES).add(CREATED_AT)
@@ -167,19 +175,22 @@ public final class SpamserviceSamplesResource {
             .tabs(ResourceTabs.of(List.of(new SpamserviceSampleAnalysisPage(clients))))
             .actions(List.of(
                 PanelAction.<SampleSummary, Void>places(MARK_SPAM, ActionPlacement.ROW,
-                        (request, result) -> CmsActionResult.refreshWithToast(words("marked_spam")))
-                    .label(words("mark_spam"))
+                        (request, result) -> CmsActionResult.refreshWithToast(
+                            HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("marked_spam")))
+                    .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("mark_spam"))
                     .icon(Icon.of("triangle-exclamation"))
                     .build(),
                 PanelAction.<SampleSummary, Void>places(MARK_HAM, ActionPlacement.ROW,
-                        (request, result) -> CmsActionResult.refreshWithToast(words("marked_ham")))
-                    .label(words("mark_ham"))
+                        (request, result) -> CmsActionResult.refreshWithToast(
+                            HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("marked_ham")))
+                    .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("mark_ham"))
                     .icon(Icon.of("check"))
                     .build(),
                 PanelAction.<SampleSummary, String>places(RESCORE, ActionPlacement.ROW,
-                        (request, result) -> CmsActionResult.refreshWithToast(words("rescored")
-                            .withArg("score", result.value())))
-                    .label(words("rescore"))
+                        (request, result) -> CmsActionResult.refreshWithToast(
+                            HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("rescored")
+                                .withArg("score", result.value())))
+                    .label(HohenheimMicrocopy.SPAMSERVICE_SAMPLE.of("rescore"))
                     .icon(Icon.of("rotate"))
                     .hiddenWhen(SampleSummary::confirmed)
                     .build()))
@@ -199,27 +210,9 @@ public final class SpamserviceSamplesResource {
 
     private static @NonNull Map<String, Object> values(@NonNull SampleSummary row) {
         return Map.of("client_id", SpamserviceRemoteStore.uuidOrBlank(row.clientId()),
-            "ip", SpamserviceRemoteStore.orBlank(row.ip()), "spam", row.spam(), "score", row.score(),
-            "confirmed", row.confirmed(), "flags", SpamserviceRemoteStore.orBlank(row.flags()),
-            "languages", SpamserviceRemoteStore.orBlank(row.languages()),
-            "created_at", SpamserviceRemoteStore.orBlank(row.createdAt()));
-    }
-
-    private static @Nullable Object cell(@NonNull SampleSummary row, @NonNull ColumnSpec column) {
-        return switch (column.name()) {
-            case "client_id" -> row.clientId();
-            case "ip" -> row.ip();
-            case "spam" -> row.spam();
-            case "score" -> row.score();
-            case "confirmed" -> row.confirmed();
-            case "flags" -> row.flags();
-            case "languages" -> row.languages();
-            case "created_at" -> row.createdAt();
-            default -> null;
-        };
-    }
-
-    private static @NonNull Microcopy words(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "spamservice_sample");
+            "ip", Objects.requireNonNullElse(row.ip(), ""), "spam", row.spam(), "score", row.score(),
+            "confirmed", row.confirmed(), "flags", Objects.requireNonNullElse(row.flags(), ""),
+            "languages", Objects.requireNonNullElse(row.languages(), ""),
+            "created_at", Objects.requireNonNullElse(row.createdAt(), ""));
     }
 }

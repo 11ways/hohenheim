@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
+import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.zenit.common.Zenit;
@@ -130,15 +131,16 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .contains("data-cms-record-health=\"attention\"")
                 .contains("Not running");
             assertThat(stopped).as("step 1: and not a host problem")
-                .doesNotContain("cannot start yet");
+                .doesNotContain("Cannot start yet");
 
-            // 2. Block its host: the verdict names the workload and says it cannot start, with the host's reason.
+            // 2. Block its host: the verdict says it cannot start, with the host's reason (the heading names it).
             Row server = servers.findById(serverId);
             server.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
             servers.save(server);
             String blocked = adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview").body();
             assertThat(blocked).as("step 2: the verdict says it cannot start")
-                .contains("app-journey-workload cannot start yet");
+                .contains("Cannot start yet")
+                .doesNotContain("app-journey-workload cannot start yet");
 
             // 3. Its fix is the host's page, where Check and admit lives.
             assertThat(blocked).as("step 3: the fix leads to the host")
@@ -475,13 +477,18 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
         int id = instance.get(InstanceModel.ID);
         try {
             // 1. Never started and never checked: the Details card says so in words, not "Created" beside "Never
-            //    checked against the host".
+            //    checked against the host"; its Status is the band's verdict (DD10c), never the stored token's label.
             Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(id))
                 .assign(InstanceModel.STATUS, InstanceModel.STATUS_CREATED)
                 .assign(InstanceModel.STATUS_OBSERVED_AT, null).bypassBehaviours().updateAll();
             String created = adminGet("/admin/instances/" + id + "/page/overview").body();
+            int status = created.indexOf("widget-facts-term\">Status</dt>");
+            String verdict = AppHealth.instances(false).read(Models.get(InstanceModel.class).findById(id),
+                TenantConduits.operator()).headline().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver());
+            assertThat(created.substring(status, created.indexOf("</dd>", status)))
+                .as("step 1: the Status reads the band's verdict").contains(verdict)
+                .doesNotContain("Not started yet");
             assertThat(created).as("step 1: a workload never started reads so, and when it was last checked")
-                .contains("Not started yet")
                 .contains("Last checked")
                 .contains("Not yet")
                 .doesNotContain("Status confirmed")

@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
@@ -189,7 +190,7 @@ class InstanceBackupsTest {
                 .updateAll();
             int viewerId = ApiSupport.user("viewer@backup-gate.test", "Viewer");
             RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
-                HohenheimAccess.VIEW, true);
+                HohenheimCapabilities.VIEW, true);
             UserPrincipal viewer = new UserPrincipal(viewerId, "Viewer");
 
             // 1. The tenant with only `view` asks for a backup: refused with the SAME
@@ -240,7 +241,7 @@ class InstanceBackupsTest {
 
             int managerId = ApiSupport.user("manager@backup-restore.test", "Manager");
             RecordGrants.grant(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID, instanceId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             UserPrincipal manager = new UserPrincipal(managerId, "Manager");
 
             long instancesBefore = Models.get(InstanceModel.class).find().count();

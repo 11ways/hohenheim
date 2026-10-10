@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.AttentionSeverity;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -375,8 +376,8 @@ class AdminPagesTest extends HohenheimTestBase {
             .contains("data-action-id=\"" + CertificateOperations.REQUEST.id() + "\"");
 
         // A wildcard with HTTP validation is refused before the CA is contacted, the input redrawn.
-        String wildcardRefusal = ApiSupport.shippedText(Microcopy.of("wildcard_requires_dns")
-            .withFilter("scope", "certificate_request_error"));
+        String wildcardRefusal = ApiSupport.shippedText(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR
+            .of("wildcard_requires_dns"));
         var response = adminPostForm(ApiSupport.requestCertificateTarget(),
             "nice_name=wildcard&domains=*.example.test&challenge_type=http&dns_publisher=manual&"
                 + ApiSupport.invokeTransport());
@@ -587,8 +588,8 @@ class AdminPagesTest extends HohenheimTestBase {
                 + "&nice_name=reissue-me-cert&challenge_type=dns&dns_publisher=manual&" + ApiSupport.invokeTransport());
             assertThat(manual.statusCode()).as("step 2: refused as input, redrawn").isEqualTo(422);
             assertThat(manual.body()).as("step 2: naming why")
-                .contains(ApiSupport.shippedText(Microcopy.of("reissue_manual_unsupported")
-                    .withFilter("scope", "certificate_request_error")));
+                .contains(ApiSupport.shippedText(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR
+                    .of("reissue_manual_unsupported")));
 
             // 3. A row with no ACME order to repeat is refused outright, and nothing is written back to it.
             var refused = adminPostForm(reissueTarget(uploaded), "domains=uploaded.example.test&challenge_type=http&"
@@ -761,9 +762,9 @@ class AdminPagesTest extends HohenheimTestBase {
             // Coverage column: the covered hostname links its cert, the bare one shows None.
             navigateToApp("/admin/sites/" + siteId + "/page/domains");
             waitForHydration();
-            assertThat(page.locator("[data-cert-status='active'] a[href='/admin/certificates/"
+            assertThat(page.locator("[data-state='active'] a[href='/admin/certificates/"
                 + cert.get(CertificateModel.ID) + "']").count()).isEqualTo(1);
-            assertThat(page.locator("[data-cert-status='none']").count()).isEqualTo(1);
+            assertThat(page.locator("[data-state='none']").count()).isEqualTo(1);
 
             // The section's add link creates under this site, which the CREATE form preselects.
             assertThat(page.locator("[data-cms-child-create='domains']").getAttribute("href"))

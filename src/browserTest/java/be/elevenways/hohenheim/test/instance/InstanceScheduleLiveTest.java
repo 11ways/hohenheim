@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -236,9 +236,9 @@ class InstanceScheduleLiveTest {
             RecordSchedules recordSchedules = new RecordSchedules(datasource);
 
             RecordGrants.grant(GrantSubjectType.USER, (int) tenantId, InstanceModel.MODEL_ID, id,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             RecordGrants.grant(GrantSubjectType.USER, (int) tenantId, InstanceModel.MODEL_ID, id,
-                HohenheimAccess.BACKUPS, true);
+                HohenheimCapabilities.BACKUPS, true);
 
             try {
                 // 1. Deploy and reach a live console-capable workload.
@@ -281,7 +281,7 @@ class InstanceScheduleLiveTest {
                 // 4. REVOKE the manage grant. The stored schedule must stop working:
                 //    no console line, no restart -- host state, not a log line.
                 RecordGrants.revoke(GrantSubjectType.USER, (int) tenantId, InstanceModel.MODEL_ID, id,
-                    HohenheimAccess.MANAGE);
+                    HohenheimCapabilities.MANAGE);
                 String beforeRevoked = containerId(docker, handle);
 
                 Row revokedRun = recordSchedules.runNow(chainId);

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstallMediaFetchState;
 import be.elevenways.hohenheim.model.InstallMediaFetchModel;
@@ -114,18 +115,20 @@ public final class InstallMediaFetches {
             for (Row row : active) {
                 if (Integer.valueOf(serverId).equals(row.get(InstallMediaFetchModel.SERVER_ID))
                         && name.equals(row.get(InstallMediaFetchModel.NAME))) {
-                    throw running(name);
+                    throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("media_fetch_running")
+                        .withArg("media", name));
                 }
             }
             if (active.size() >= MAX_ACTIVE) {
-                throw Violations.ofForm(HohenheimViolations.text("media_fetch_busy")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("media_fetch_busy")
                     .withArg("count", String.valueOf(MAX_ACTIVE)));
             }
             // Another controller running this name holds its lease even when its row is not
             // visible here yet: the lease, not this process's row list, is the arbiter.
             lease = leases().tryAcquire(leaseKey(serverId, name));
             if (lease == null) {
-                throw running(name);
+                throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("media_fetch_running")
+                    .withArg("media", name));
             }
             try {
                 // An earlier ending of the same name is superseded by this attempt.
@@ -343,10 +346,6 @@ public final class InstallMediaFetches {
 
     private static @NonNull Leases leases() {
         return Leases.of(Models.get(InstallMediaFetchModel.class).getResolvedDatasource());
-    }
-
-    private static @NonNull Violations running(@NonNull String name) {
-        return Violations.ofField("name", name, HohenheimViolations.text("media_fetch_running").withArg("media", name));
     }
 
     private static @NonNull List<String> activeTokens() {

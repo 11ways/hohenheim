@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionItem;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.OnboardingStage;
 import be.elevenways.hohenheim.server.database.ControlPlaneBackups;
@@ -22,6 +23,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
+
 /**
  * Builds the dashboard readiness checklist, one step per {@link OnboardingStage}: enrol a host, let it run apps,
  * choose where backups go, put the first app online.
@@ -41,8 +44,6 @@ import java.util.List;
  * @since  0.5.0
  */
 public final class OnboardingCollector {
-
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
 
     private OnboardingCollector() {
     }
@@ -141,18 +142,22 @@ public final class OnboardingCollector {
      */
     private static OnboardingStep hostEnrolled(List<Row> servers) {
         if (servers.isEmpty()) {
-            return new OnboardingStep(OnboardingStage.HOST, OnboardingState.TODO, "server", copy("checklist_host"),
-                copy("checklist_host_detail"), listTarget("servers"));
+            return new OnboardingStep(OnboardingStage.HOST, OnboardingState.TODO, "server",
+                HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_host"),
+                HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_host_detail"),
+                    listTarget(HohenheimSlugs.SERVERS));
         }
         Row first = servers.get(0);
         EnumField.EnumValue runtime = ServerModel.RUNTIME.getValues().get(first.get(ServerModel.RUNTIME));
-        return new OnboardingStep(OnboardingStage.HOST, OnboardingState.DONE, "server", copy("checklist_host"),
-            copy(servers.size() > 1 ? "checklist_host_enrolled_more" : "checklist_host_enrolled")
+        return new OnboardingStep(OnboardingStage.HOST, OnboardingState.DONE, "server",
+            HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_host"),
+            HohenheimMicrocopy.ONBOARDING_CHECKLIST.of(servers.size() > 1 ? "checklist_host_enrolled_more"
+                : "checklist_host_enrolled")
                 .withArg("name", String.valueOf((Object) first.get(ServerModel.NAME)))
                 .withArg("runtime", runtime != null ? FieldLabels.labelFor(runtime)
                     : Microcopy.literal(String.valueOf((Object) first.get(ServerModel.RUNTIME))))
                 .withArg("more", servers.size() - 1),
-            listTarget("servers"));
+            listTarget(HohenheimSlugs.SERVERS));
     }
 
     /**
@@ -165,12 +170,12 @@ public final class OnboardingCollector {
             placeable ? OnboardingState.DONE : OnboardingState.BLOCKED,
             // The step's SUBJECT, never its state -- the template picks the state marker.
             "shield-halved",
-            copy("checklist_admit"),
+            HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_admit"),
             // The gate's OWN words when it refuses -- the operator reads the same sentence the
             // deploy would have produced, which is what makes this a route to the fix.
-            placeable ? copy("checklist_admit_done")
-                : refusal != null ? refusal : copy("checklist_admit_detail"),
-            listTarget("servers"));
+            placeable ? HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_admit_done")
+                : refusal != null ? refusal : HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_admit_detail"),
+            listTarget(HohenheimSlugs.SERVERS));
     }
 
     /**
@@ -184,9 +189,10 @@ public final class OnboardingCollector {
             OnboardingStage.BACKUPS,
             destination != null ? OnboardingState.DONE : OnboardingState.TODO,
             "box-archive",
-            copy("checklist_backups"),
-            destination != null ? copy("checklist_backups_done").withArg("target", destination)
-                : copy("checklist_backups_detail"),
+            HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_backups"),
+            destination != null ? HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_backups_done")
+                .withArg("target", destination)
+                : HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_backups_detail"),
             AttentionCollector.controlPlaneBackupTarget());
     }
 
@@ -204,18 +210,14 @@ public final class OnboardingCollector {
             OnboardingStage.FIRST_APP,
             online ? OnboardingState.DONE : OnboardingState.TODO,
             "rocket",
-            copy("checklist_put_online"),
-            copy("checklist_put_online_detail"),
-            listTarget(PutOnlinePage.SLUG));
+            HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_put_online"),
+            HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_put_online_detail"),
+            listTarget(HohenheimSlugs.PUT_ONLINE));
     }
 
     /** @return why the first host takes no new apps, in its verdict's words; null when it says no reason */
     private static @Nullable Microcopy firstReason(List<HostVerdict> verdicts) {
         return verdicts.isEmpty() ? null : verdicts.get(0).reason();
-    }
-
-    private static Microcopy copy(String key) {
-        return Microcopy.of(key).withFilter("scope", "onboarding_checklist");
     }
 
     private static RouteTarget listTarget(String slug) {

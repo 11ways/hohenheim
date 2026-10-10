@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -26,6 +27,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
+
 /**
  * The stack, stack service and stack file entries, stored before they move off the legacy ValidatedRowResource base
  * onto shared parts and compared exactly after it.
@@ -38,10 +41,9 @@ import java.util.List;
 class StackSurfacesBrowserTest extends HohenheimTestBase {
 
     private static final String PREFIX = "batch7-surf-";
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
-    private static final String STACKS = StackParts.SLUG;
-    private static final String SERVICES = StackParts.SERVICES_SLUG;
-    private static final String FILES = StackParts.FILES_SLUG;
+    private static final String STACKS = HohenheimSlugs.STACKS;
+    private static final String SERVICES = HohenheimSlugs.STACK_SERVICES;
+    private static final String FILES = HohenheimSlugs.STACK_FILES;
 
     private static String activeStackId;
     private static String inactiveStackId;
@@ -135,7 +137,7 @@ class StackSurfacesBrowserTest extends HohenheimTestBase {
         Model deployments = Models.get(StackDeploymentModel.class);
         Row row = deployments.createEmptyRow();
         row.set(StackDeploymentModel.STACK_ID, stack);
-        row.set(StackDeploymentModel.STATUS, StackDeploymentModel.STATUS_SUCCESS);
+        row.set(StackDeploymentModel.STATUS, StackDeploymentModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
         row.set(StackDeploymentModel.REASON, "manual");
         row.set(StackDeploymentModel.SPEC, "{}");
         deployments.save(row);

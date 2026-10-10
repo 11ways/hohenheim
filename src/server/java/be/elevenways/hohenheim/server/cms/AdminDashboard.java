@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -42,24 +43,23 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
+
 /**
  * The /admin landing dashboard (board Main): the readiness checklist until the first app is online, what needs
  * attention, the count tiles, the apps and the most recent activity-log entries.
  */
 public final class AdminDashboard extends PanelDashboard {
 
-    /** The dashboard is the OPERATOR surface; every tile links into the admin panel. */
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
-
     @Override public @NonNull Identifier id() { return HohenheimIds.id("dashboard"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("dashboard").withFilter("scope", "admin"); }
-    @Override public @NonNull String slug() { return "dashboard"; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.ADMIN.of("dashboard"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.DASHBOARD; }
     @Override public @NonNull Icon icon() { return Icon.LAYOUT_DASH; }
     @Override public int navOrder() { return 1; }
 
     @Override
     public @Nullable Microcopy description() {
-        return Microcopy.of("nav_hint").withFilter("scope", "admin");
+        return HohenheimMicrocopy.ADMIN.of("nav_hint");
     }
     /** The board's primary way onward, offered where the instance tier can put something online. */
     @Override
@@ -76,9 +76,10 @@ public final class AdminDashboard extends PanelDashboard {
         if (!HohenheimRoles.enabled(Role.INSTANCES) || !offered) {
             return List.of();
         }
-        return List.of(new LinkActionState(HohenheimIds.id("dashboard_put_online"), PutOnline.copy("put_online"),
+        return List.of(new LinkActionState(HohenheimIds.id("dashboard_put_online"),
+            HohenheimMicrocopy.PUT_ONLINE.of("put_online"),
             Icon.of("rocket"), ActionStyle.PRIMARY,
-            new Uri(CmsRoutes.list(request.panelSlug(), PutOnlinePage.SLUG).toUrl()), false, null));
+            new Uri(CmsRoutes.list(request.panelSlug(), HohenheimSlugs.PUT_ONLINE).toUrl()), false, null));
     }
 
     /** Role-gated bands: a tile must not link to a resource this install has no route for. */
@@ -107,8 +108,8 @@ public final class AdminDashboard extends PanelDashboard {
             // certificate or a stopped backup must never hide just because no app exists yet.
             List<WidgetInstance> lead = new ArrayList<>(2);
             lead.add(new WidgetInstance(HohenheimWidgets.ONBOARDING.id(), Map.of()).withData(Map.of(
-                "putOnline", CmsRoutes.list(ADMIN, PutOnlinePage.SLUG),
-                "pointAddress", CmsRoutes.list(ADMIN, PutOnlinePage.SLUG)
+                "putOnline", CmsRoutes.list(ADMIN, HohenheimSlugs.PUT_ONLINE),
+                "pointAddress", CmsRoutes.list(ADMIN, HohenheimSlugs.PUT_ONLINE)
                     .withFragment(PutOnlinePage.ADDRESSES_ANCHOR))));
             if (checklist != null) {
                 lead.add(checklist);
@@ -146,7 +147,7 @@ public final class AdminDashboard extends PanelDashboard {
         // The board's lower half: the apps, read from the one App directory, beside what happened lately.
         widgets.add(section(columns(List.of(
             new WidgetInstance(HohenheimWidgets.APPS.id(), Map.of()).withData(
-                appsBand(Microcopy.of("apps").withFilter("scope", "dashboard"), apps, accessContext)),
+                appsBand(HohenheimMicrocopy.DASHBOARD.of("apps"), apps, accessContext)),
             new WidgetInstance(SectionWidget.ID, Map.of(), new WidgetTree(recentActivity(accessContext)))),
             ColumnSplit.LEAD)));
         return new WidgetTree(widgets);
@@ -166,7 +167,7 @@ public final class AdminDashboard extends PanelDashboard {
         for (AppDirectory.App app : apps) {
             String detail = app.addressText() == null || app.addressText().isBlank()
                 ? app.kind() : app.kind() + " · " + app.addressText();
-            boolean httpsIsTheCause = app.https() != null && CertCoverage.ERROR.key().equals(app.https().status());
+            boolean httpsIsTheCause = app.https() != null && app.https().is(CertCoverage.ERROR);
             boolean verdict = app.count() == AppDirectory.Count.PROBLEM && !httpsIsTheCause;
             summaries.add(new AppSummary(app.name(), detail, app.target().toUrl(), verdict ? null : app.https(),
                 HealthCellState.of(app.health(), access), verdict));
@@ -209,7 +210,7 @@ public final class AdminDashboard extends PanelDashboard {
         }
 
         band.add(new WidgetInstance(RecordsWidget.ID, Map.of(
-            "title", HohenheimWidgetCopy.localized("recent_activity", "dashboard"),
+            "title", HohenheimWidgetCopy.localized(HohenheimMicrocopy.DASHBOARD.of("recent_activity")),
             "source", CmsSupport.ACTIVITY_SOURCE,
             "rules", AdminActivityResource.recentActions(),
             "sort", "created_at",

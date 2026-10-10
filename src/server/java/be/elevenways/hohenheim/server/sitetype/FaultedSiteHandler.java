@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import io.undertow.server.HttpServerExchange;
@@ -29,7 +30,7 @@ public final class FaultedSiteHandler implements SiteRequestHandler {
     public void handleRequest(HttpServerExchange exchange, UpstreamForwarder forwarder) {
         exchange.setStatusCode(503);
         exchange.getResponseSender().send(HohenheimViolations.textOf(
-            Microcopy.of("site_misconfigured").withFilter("scope", "site_fault").withArg("reason", reason)));
+            HohenheimMicrocopy.SITE_FAULT.of("site_misconfigured").withArg("reason", reason)));
     }
 
     @Override

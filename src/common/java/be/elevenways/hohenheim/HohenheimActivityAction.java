@@ -129,7 +129,7 @@ public enum HohenheimActivityAction implements ActivityAction {
     }
 
     static {
-        ActivityActions.register(HohenheimMicrocopy.SCOPE, values());
+        ActivityActions.register(HohenheimMicrocopy.HOHENHEIM.scope(), values());
         // Each member's spelling before ids, a legacy key of the activity registry alone.
         for (HohenheimActivityAction action : values()) {
             ActivityActions.legacyKey(action.value, action);

@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.model.OperationStatus;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -47,29 +50,30 @@ class WorkspaceDeploysTabTest extends HohenheimTestBase {
             "branch", "main"));
 
         operation(sourcedWorkspaceId,
-            BuildOperationModel.STATUS_SUCCEEDED,
+            BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED),
             "cafebabecafebabecafebabecafebabecafebabe",
             null,
             "[hohenheim] deploying main\n"
                 + "Cloning into '/home/site/app'...\n"
                 + "added 214 packages in 9s\n");
-        operation(sourcedWorkspaceId, BuildOperationModel.STATUS_FAILED, "main",
+        operation(sourcedWorkspaceId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), "main",
             "The workspace build command failed: npm ERR! missing script: build",
             "[hohenheim] deploying main\nnpm ERR! missing script: build\n");
 
         readingWorkspaceId = workspace("deploys-tab-reading", imageId, Map.of(
             "repository_url", "https://git.example.test/team/site.git",
             "branch", "hohenheim-rewrite"));
-        operation(readingWorkspaceId, BuildOperationModel.STATUS_SUCCEEDED,
+        operation(readingWorkspaceId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED),
             "e590c03e1f2a3b4c5d6e7f8091a2b3c4d5e6f708", null, "[hohenheim] deploying hohenheim-rewrite\n");
-        operation(readingWorkspaceId, BuildOperationModel.STATUS_FAILED, "hohenheim-rewrite",
+        operation(readingWorkspaceId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), "hohenheim-rewrite",
             HohenheimViolations.reasonOf(Violations.ofForm(
-                HohenheimViolations.text("source_checkout_failed").withArg("reason", "Remote branch not found"))),
+                HohenheimMicrocopy.VIOLATIONS.of("source_checkout_failed")
+                    .withArg("reason", "Remote branch not found"))),
             "[hohenheim] deploying hohenheim-rewrite\nfatal: Remote branch hohenheim-rewrite not found\n");
         // Two rows stored before reasons were sentences, in Violations' debug rendering, as Starfleet holds them.
-        operation(readingWorkspaceId, BuildOperationModel.STATUS_FAILED, "hohenheim-rewrite",
+        operation(readingWorkspaceId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), "hohenheim-rewrite",
             "1 violation(s):  -> host_posture_refuses {name=local}", "[hohenheim] deploying hohenheim-rewrite\n");
-        operation(readingWorkspaceId, BuildOperationModel.STATUS_FAILED, "hohenheim",
+        operation(readingWorkspaceId, BuildOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), "hohenheim",
             "1 violation(s):  -> workspace_build_failed {reason=npm error code ERESOLVE, could not resolve}",
             "[hohenheim] deploying hohenheim\n");
     }
@@ -129,7 +133,7 @@ class WorkspaceDeploysTabTest extends HohenheimTestBase {
     @Test
     void aStoredRefusalIsItsSentence() {
         String reason = HohenheimViolations.reasonOf(Violations.ofForm(
-            HohenheimViolations.text("workspace_build_failed").withArg("code", 1)));
+            HohenheimMicrocopy.VIOLATIONS.of("workspace_build_failed").withArg("code", 1)));
         assertThat(reason)
             .as("the build refusal names the exit code and points at the log, without the output")
             .isEqualTo("The build command stopped with exit code 1; its output is in the build log.");
@@ -203,7 +207,7 @@ class WorkspaceDeploysTabTest extends HohenheimTestBase {
             .isEqualTo(404);
         assertThat(adminGet("/admin/instances/" + bareWorkspaceId).body())
             .withFailMessage("step 6: and the tab strip still offers the slug")
-            .doesNotContain("/page/" + InstanceDeploymentsPage.SLUG);
+            .doesNotContain("/page/" + HohenheimSlugs.Tab.DEPLOYMENTS);
     }
 
     /** The tab is offered from the record's own tab strip, not only reachable by URL. */
@@ -211,13 +215,13 @@ class WorkspaceDeploysTabTest extends HohenheimTestBase {
     void theTabIsOfferedOnTheRecordItself() throws Exception {
         assertThat(adminGet("/admin/instances/" + sourcedWorkspaceId).body())
             .withFailMessage("the Deploys tab is reachable only by typing its URL")
-            .contains("/page/" + InstanceDeploymentsPage.SLUG);
+            .contains("/page/" + HohenheimSlugs.Tab.DEPLOYMENTS);
     }
 
     // -- fixtures ---------------------------------------------------------------
 
     private static String url(int instanceId) {
-        return "/admin/instances/" + instanceId + "/page/" + InstanceDeploymentsPage.SLUG;
+        return "/admin/instances/" + instanceId + "/page/" + HohenheimSlugs.Tab.DEPLOYMENTS;
     }
 
     private static int runtimeImage() {

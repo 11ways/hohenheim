@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -36,11 +36,11 @@ public class ProjectModel extends Model {
     /** Never localized: a project name is user data, like instance and server names. */
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .required()
-        .label(HohenheimFormCopy.label("project_name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("project_name"))
         .build());
 
     public static final TextField DESCRIPTION = SCHEMA.addField(TextField.builder().name("description")
-        .label(HohenheimFormCopy.label("project_description"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("project_description"))
         .build());
 
     /**

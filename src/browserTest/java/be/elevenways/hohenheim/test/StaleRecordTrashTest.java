@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -71,7 +71,7 @@ class StaleRecordTrashTest {
                 //    anchor that the guard is alive and would judge a whole-row save.
                 int userId = ApiSupport.user(PREFIX + "user@stale.test", "Stale User");
                 RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
-                    HohenheimAccess.MANAGE, true);
+                    HohenheimCapabilities.MANAGE, true);
                 Throwable moved = catchThrowable(() -> {
                     Row move = instances.findById(instanceId);
                     move.set(InstanceModel.ENVIRONMENT_ID, staging);

@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -29,7 +29,6 @@ import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.test.network.PrivateNetns;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -186,7 +185,7 @@ class InstanceShellLiveTest {
 
                 int userId = ApiSupport.user("shell-live@hohenheim.test");
                 RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, id,
-                    HohenheimAccess.SHELL, true);
+                    HohenheimCapabilities.SHELL, true);
                 Principal tenant = new UserPrincipal((long) userId, "Shell Live Tenant");
 
                 StringBuilder output = new StringBuilder();
@@ -350,7 +349,7 @@ class InstanceShellLiveTest {
 
                 int userId = ApiSupport.user("shell-fallback@hohenheim.test");
                 RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, id,
-                    HohenheimAccess.SHELL, true);
+                    HohenheimCapabilities.SHELL, true);
                 Principal tenant = new UserPrincipal((long) userId, "Fallback Tenant");
 
                 // 1. COUNTERFACTUAL at the driver: the daemon ACCEPTS an exec for an
@@ -517,15 +516,6 @@ class InstanceShellLiveTest {
         @Override public @NonNull Identifier typeId() { return ID; }
 
         @Override public @NonNull String getDisplayName() { return "Live shell workload"; }
-
-        @Override public @NonNull Microcopy getLabel() {
-            return Microcopy.of("live_shell_workload").withFilter("scope", "instance_kind");
-        }
-
-        @Override public @NonNull Microcopy getDescription() {
-            return Microcopy.of("live_shell_workload")
-                .withFilter("scope", "instance_kind_description");
-        }
 
         @Override public Icon getIcon() { return Icon.of("flask"); }
 

@@ -8,7 +8,6 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.RunningProcess;
 import be.elevenways.protoblast.server.process.Subprocess;
-import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -113,12 +112,6 @@ public final class SshAuthWatcher {
         this.pause = pause;
     }
 
-    /** Whether an operator asked for SSH watching at all. */
-    public static boolean isConfigured() {
-        return Boolean.TRUE.equals(
-            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.SSH_WATCH_ENABLED));
-    }
-
     /**
      * Start the supervising thread; idempotent, so a repeated boot does not fork a second
      * journalctl.
@@ -153,7 +146,9 @@ public final class SshAuthWatcher {
                            long signals) {}
 
     public @NonNull Snapshot snapshot() {
-        return new Snapshot(isConfigured(), this.running, this.lastError, this.signals.get());
+        return new Snapshot(
+            HohenheimSettings.isOn(HohenheimSettings.Security.SSH_WATCH_ENABLED), this.running, this.lastError,
+            this.signals.get());
     }
 
     /** Test seam: the number of recognized lines that reached the scorer. */

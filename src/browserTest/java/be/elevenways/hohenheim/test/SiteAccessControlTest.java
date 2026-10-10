@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.RecordGrantModel;
@@ -156,9 +157,9 @@ class SiteAccessControlTest extends HohenheimTestBase {
         //    panel views proven in step 7+, and the INSTANCE grant is what the deploy
         //    verb answers to now (MANAGE implies POWER on the record).
         RecordGrants.grant(GrantSubjectType.USER, limitedUserId, SiteModel.MODEL_ID, siteAId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, limitedUserId, InstanceModel.MODEL_ID,
-            instanceAId, HohenheimAccess.MANAGE, true);
+            instanceAId, HohenheimCapabilities.MANAGE, true);
 
         // 5. Instance A passes authorization: no git source configured, so the handler
         //    falls through to its redirect -- the point is it no longer 403s. This is also
@@ -206,7 +207,7 @@ class SiteAccessControlTest extends HohenheimTestBase {
         // 10. A grant cannot be planted on a trashed site either -- the SAME liveness
         //     definition guards the write path.
         assertThatThrownBy(() -> RecordGrants.grant(GrantSubjectType.USER, limitedUserId, SiteModel.MODEL_ID,
-                siteAId, HohenheimAccess.MANAGE, true))
+                siteAId, HohenheimCapabilities.MANAGE, true))
             .describedAs("step 10: a trashed site is not a grant target")
             .isInstanceOf(IllegalArgumentException.class);
 
@@ -224,7 +225,7 @@ class SiteAccessControlTest extends HohenheimTestBase {
         // 12. The site is grantable again now that it is live, so the refusal was about
         //     liveness and not about the site being permanently poisoned.
         assertThat(RecordGrants.grant(GrantSubjectType.USER, limitedUserId, SiteModel.MODEL_ID, siteAId,
-            HohenheimAccess.MANAGE, true).get(RecordGrantModel.VALUE))
+            HohenheimCapabilities.MANAGE, true).get(RecordGrantModel.VALUE))
             .describedAs("step 12: a live site accepts a grant again")
             .isTrue();
         assertThat(HohenheimAccess.canManageSite(principal, siteAId))

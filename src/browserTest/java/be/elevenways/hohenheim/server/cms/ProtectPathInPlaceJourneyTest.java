@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.site.ProtectPath;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -103,7 +104,7 @@ class ProtectPathInPlaceJourneyTest extends HohenheimTestBase {
         int tenantId = ApiSupport.user("protect-tenant-" + suffix + "@hohenheim.local", "Protect Tenant");
         int outsiderId = ApiSupport.user("protect-outsider-" + suffix + "@hohenheim.local", "Protect Outsider");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, tenantSite.get(SiteModel.ID),
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         AccessContext tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(tenantId, "Protect Tenant")));
         AccessContext outsider = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(outsiderId, "Protect Outsider")));
@@ -111,10 +112,11 @@ class ProtectPathInPlaceJourneyTest extends HohenheimTestBase {
         tenantForm.put(ProtectPath.NETWORKS.getName(), List.of("198.51.100.0/24"));
         Row protectedByTenant = protect(tenantSite, tenantForm, tenant);
         Integer tenantList = protectedByTenant.get(ProtectedPathModel.ACCESS_LIST_ID);
-        assertThat(HohenheimAccess.reachesRecord(tenant, AccessListModel.MODEL_ID, tenantList, HohenheimAccess.MANAGE))
+        assertThat(HohenheimAccess.reachesRecord(tenant, AccessListModel.MODEL_ID, tenantList,
+            HohenheimCapabilities.MANAGE))
             .as("step 5: the tenant manages the list it created").isTrue();
         assertThat(HohenheimAccess.reachesRecord(outsider, AccessListModel.MODEL_ID, tenantList,
-                HohenheimAccess.MANAGE))
+                HohenheimCapabilities.MANAGE))
             .as("step 5: another tenant does not").isFalse();
         assertThat(HohenheimAccess.manageSubjectsOf(AccessListModel.MODEL_ID, list.get(AccessListModel.ID)))
             .as("step 5: an operator's list stays operator-owned (no grant planted)").isEmpty();

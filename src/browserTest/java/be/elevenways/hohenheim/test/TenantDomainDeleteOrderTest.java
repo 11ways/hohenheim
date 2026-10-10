@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
@@ -48,7 +48,7 @@ class TenantDomainDeleteOrderTest extends HohenheimTestBase {
         int tenantId = ApiSupport.user("delete-order-tenant@hohenheim.local", "Delete Order Tenant");
         UserPrincipal tenant = new UserPrincipal(tenantId, "Delete Order Tenant");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, own.get(SiteModel.ID),
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         try {
             // 1. The tenant deletes the victim's live domain row straight at the model: refused.
             Violations refused = catchThrowableOfType(() -> TenantConduits.as(tenant, () ->
@@ -70,7 +70,7 @@ class TenantDomainDeleteOrderTest extends HohenheimTestBase {
                 .as("step 3: an authorized delete ledgers the released claim").isEqualTo(1);
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, own.get(SiteModel.ID),
-                HohenheimAccess.MANAGE);
+                HohenheimCapabilities.MANAGE);
             domains.find().where(SiteDomainModel.ID.eq(domainId)).delete();
             HardDeletes.row(sites, victim);
             HardDeletes.row(sites, own);

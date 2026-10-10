@@ -1,10 +1,12 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -26,7 +28,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.MANAGE;
+import static be.elevenways.hohenheim.HohenheimCapabilities.MANAGE;
 
 /**
  * The set-wise face of the capability walk (tri-state scopes, their request memo and the scope
@@ -235,15 +237,7 @@ final class CapabilityScopes {
             return ctx.capabilityScope(model, capability);
         }
 
-        Map<String, RecordCapabilityScope> cache = conduit.getAttribute(CAPABILITY_SCOPES);
-        if (cache == null) {
-            cache = new HashMap<>();
-            try {
-                conduit.setAttribute(CAPABILITY_SCOPES, cache);
-            } catch (UnsupportedOperationException attributeless) {
-                // A conduit without attribute storage just pays the walk each call.
-            }
-        }
+        Map<String, RecordCapabilityScope> cache = CmsSupport.memo(conduit, CAPABILITY_SCOPES, HashMap::new);
 
         RecordCapabilityScope cached = cache.get(key);
         if (cached != null) {
@@ -304,7 +298,7 @@ final class CapabilityScopes {
     }
 
     /**
-     * Every site id the context holds {@link HohenheimAccess#MANAGE} on.
+     * Every site id the context holds {@link HohenheimCapabilities#MANAGE} on.
      *
      * @throws IllegalStateException on an every-site scope; see {@link #grantedRecordIds}
      */
@@ -367,7 +361,7 @@ final class CapabilityScopes {
     }
 
     /**
-     * Every site id the principal holds {@link HohenheimAccess#MANAGE} on, for conduit-less
+     * Every site id the principal holds {@link HohenheimCapabilities#MANAGE} on, for conduit-less
      * contexts.
      *
      * @throws IllegalStateException on an every-site scope; ask

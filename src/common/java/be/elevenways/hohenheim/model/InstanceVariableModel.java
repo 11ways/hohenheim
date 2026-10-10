@@ -1,14 +1,14 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.VariableKind;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.ui.ColorHue;
@@ -48,24 +48,25 @@ public class InstanceVariableModel extends Model {
     /** The owning environment (environments.id) when this is an environment-scoped value. */
     public static final IntegerField ENVIRONMENT_ID = SCHEMA.addField(
         IntegerField.builder().name("environment_id")
-            .label(HohenheimFormCopy.label("environment"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("environment"))
             .build());
 
     public static final StringField KEY = SCHEMA.addField(StringField.builder().name("key")
         .required()
-        .label(HohenheimFormCopy.label("variable_key"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_key"))
         .build());
 
     public static final EnumField KIND = SCHEMA.addField(EnumField.builder("kind")
         .value(KIND_PLAIN, v -> v.displayName("Plain")
-            .label(Microcopy.of("plain").withFilter("scope", "variable_kind")).color(ColorHue.GRAY))
+            .label(HohenheimMicrocopy.VARIABLE_KIND.of("plain")).color(ColorHue.GRAY))
         .value(KIND_SECRET, v -> v.displayName("Secret").icon("key")
-            .label(Microcopy.of("secret").withFilter("scope", "variable_kind")).color(ColorHue.ORANGE))
+            .label(HohenheimMicrocopy.VARIABLE_KIND.of("secret")).color(ColorHue.ORANGE))
         .defaultValue(KIND_PLAIN)
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_kind"))
         .build());
 
     public static final TextField PLAIN_VALUE = SCHEMA.addField(TextField.builder().name("plain_value")
-        .label(HohenheimFormCopy.label("variable_value"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_value"))
         .build());
 
     // secret() masks it on every form surface and keeps it out of derived surfaces;
@@ -76,7 +77,7 @@ public class InstanceVariableModel extends Model {
     public static final TextField SECRET_VALUE = SCHEMA.addField(TextField.builder().name("secret_value")
         .secret()
         .encrypted()
-        .label(HohenheimFormCopy.label("variable_secret_value"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_secret_value"))
         .build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
@@ -93,21 +94,22 @@ public class InstanceVariableModel extends Model {
             if (row == null) {
                 return;
             }
-            Object kindValue = effective(row, KIND.getName());
+            Row stored = StoredRows.of(Models.get(InstanceVariableModel.class), row);
+            Object kindValue = row.afterWrite(KIND, stored);
             VariableKind kind = VariableKind.parse(kindValue);
             if (kind == null) {
                 throw Violations.ofField(KIND.getName(), kindValue,
-                    HohenheimViolations.text("variable_kind_unknown").withArg("kind", kindValue));
+                    HohenheimMicrocopy.VIOLATIONS.of("variable_kind_unknown").withArg("kind", kindValue));
             }
             boolean secret = kind.isSecret();
             String wrongCarrier = secret ? PLAIN_VALUE.getName() : SECRET_VALUE.getName();
             Object stray = row.has(wrongCarrier) ? row.get(wrongCarrier) : null;
             if (stray != null && !String.valueOf(stray).isEmpty()) {
                 throw Violations.ofField(wrongCarrier, null,
-                    HohenheimViolations.text("variable_wrong_carrier")
+                    HohenheimMicrocopy.VIOLATIONS.of("variable_wrong_carrier")
                         .withArg("kind", secret ? KIND_SECRET : KIND_PLAIN));
             }
-            Object secretValue = secret ? effective(row, SECRET_VALUE.getName()) : null;
+            Object secretValue = secret ? row.afterWrite(SECRET_VALUE, stored) : null;
             if (secret && (secretValue == null || secretValue.toString().isEmpty())) {
                 throw Violations.ofField(SECRET_VALUE.getName(), null,
                     ValidationMicrocopy.of(Required.DEFAULT_MESSAGE_KEY).withArg("field", SECRET_VALUE.getLabel()));
@@ -128,27 +130,14 @@ public class InstanceVariableModel extends Model {
                 // stored (already-validated) owner untouched.
                 return;
             }
-            Object instance = effective(row, INSTANCE_ID.getName());
-            Object environment = effective(row, ENVIRONMENT_ID.getName());
+            Row stored = StoredRows.of(Models.get(InstanceVariableModel.class), row);
+            Object instance = row.afterWrite(INSTANCE_ID, stored);
+            Object environment = row.afterWrite(ENVIRONMENT_ID, stored);
             if ((instance == null) == (environment == null)) {
                 throw Violations.ofField(ENVIRONMENT_ID.getName(), environment,
-                    HohenheimViolations.text("variable_one_owner"));
+                    HohenheimMicrocopy.VIOLATIONS.of("variable_one_owner"));
             }
         });
-    }
-
-    /** The staged value when carried, else the stored one (partial updates carry only changes). */
-    private static Object effective(Row row, String name) {
-        if (row.has(name)) {
-            return row.get(name);
-        }
-        Object id = row.has(ID.getName()) ? row.get(ID.getName()) : null;
-        if (id == null) {
-            return null;
-        }
-        Row stored = be.elevenways.zenit.common.orm.model.Models.get(InstanceVariableModel.class)
-            .findById(id);
-        return stored != null ? stored.get(name) : null;
     }
 
     /** All variables of one instance, stable key order. */

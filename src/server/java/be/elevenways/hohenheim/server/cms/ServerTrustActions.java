@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HostTrustLane;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -20,7 +21,6 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
-import static be.elevenways.hohenheim.server.cms.ServerWords.serverCopy;
 
 /**
  * The host trust ceremony's one lane table and its scan/confirm/repin/rotate operation placements.
@@ -65,59 +65,70 @@ final class ServerTrustActions {
     private static List<PanelAction<Row>> declarePlaced() {
         List<PanelAction<Row>> actions = new ArrayList<>();
         for (TrustLane lane : TRUST_LANES) {
-            actions.add(ServerLifecycleActions.place("scan_" + lane.id(), serverCopy(lane.copy().scan()), row -> {
+            ConfirmationSpec confirm = Confirmations.of(HohenheimMicrocopy.SERVER.of(lane.copy().confirm()),
+                HohenheimMicrocopy.SERVER.of(lane.copy().confirm() + "_generic"), ActionStyle.DEFAULT);
+            ConfirmationSpec repin = Confirmations.of(HohenheimMicrocopy.SERVER.of(lane.copy().repin()),
+                HohenheimMicrocopy.SERVER.of(lane.copy().repin() + "_generic"), ActionStyle.DESTRUCTIVE);
+            ConfirmationSpec rotate = Confirmations.of(HohenheimMicrocopy.SERVER.of(lane.copy().rotate()),
+                HohenheimMicrocopy.SERVER.of(lane.copy().rotate() + "_generic"), ActionStyle.DESTRUCTIVE);
+            actions.add(ServerLifecycleActions.place("scan_" + lane.id(),
+                HohenheimMicrocopy.SERVER.of(lane.copy().scan()), row -> {
                 ensureLaneIdentity(row, lane);
                 HostKeys.ScanResult result = lane.scan().apply(row);
                 if (result.outcome() == HostKeys.ScanOutcome.MISMATCH) {
                     // AIDEV-NOTE: success refreshes only; a Violations refusal is the loud error half of quarantine.
-                    throw Violations.ofForm(CmsSupport.violationText(lane.copy().mismatch())
+                    throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of(lane.copy().mismatch())
                         .withArg("name", String.valueOf((Object) row.get(ServerModel.NAME)))
                         .withArg("pinned", String.valueOf(result.previous())).withArg("offered", result.fingerprint()));
                 }
-                return serverCopy(result.outcome() == HostKeys.ScanOutcome.PINNED
+                return HohenheimMicrocopy.SERVER.of(result.outcome() == HostKeys.ScanOutcome.PINNED
                     ? lane.copy().pinnedToast() : lane.copy().unchangedToast()).withArg("fingerprint", result.fingerprint());
-            }, lane.applies()).description(serverCopy(lane.copy().scan() + "_hint"))
+            }, lane.applies()).description(HohenheimMicrocopy.SERVER.of(lane.copy().scan() + "_hint"))
                 .icon(Icon.of("fingerprint")).inlineInRow(false).build());
-            actions.add(ServerLifecycleActions.place("confirm_" + lane.id(), serverCopy(lane.copy().confirm()), row -> {
+            actions.add(ServerLifecycleActions.place("confirm_" + lane.id(),
+                HohenheimMicrocopy.SERVER.of(lane.copy().confirm()), row -> {
                 lane.confirm().accept(row);
-                return serverCopy(lane.copy().confirmedToast()).withArg("name", row.get(ServerModel.NAME));
+                return HohenheimMicrocopy.SERVER.of(lane.copy().confirmedToast())
+                    .withArg("name", row.get(ServerModel.NAME));
             }, row -> lane.applies().test(row) && lane.slot().isPinned(row)
                 && !Boolean.TRUE.equals(row.get(lane.slot().verified())))
-                .description(serverCopy(lane.copy().confirm() + "_hint")).icon(Icon.of("shield-halved"))
-                .inlineInRow(false).confirmation(ConfirmationSpec.builder().title(serverCopy(lane.copy().confirm()))
-                    .body(serverCopy(lane.copy().confirm() + "_generic")).build())
-                .dynamicConfirmation(row -> ConfirmationSpec.builder().title(serverCopy(lane.copy().confirm()))
-                    .body(serverCopy(lane.copy().confirm() + "_body").withArg("name", row.get(ServerModel.NAME))
-                        .withArg("fingerprint", row.get(lane.slot().fingerprint())))
-                    .requireTypedConfirmation(row.get(lane.slot().fingerprint())).build()).build());
-            actions.add(ServerLifecycleActions.place("repin_" + lane.id(), serverCopy(lane.copy().repin()), row -> {
+                .description(HohenheimMicrocopy.SERVER.of(lane.copy().confirm() + "_hint"))
+                .icon(Icon.of("shield-halved"))
+                .inlineInRow(false)
+                .confirmation(confirm)
+                .dynamicConfirmation(row -> Confirmations.typed(confirm.withBody(HohenheimMicrocopy.SERVER
+                    .of(lane.copy().confirm() + "_body").withArg("name", row.get(ServerModel.NAME))
+                    .withArg("fingerprint", row.get(lane.slot().fingerprint()))), row.get(lane.slot().fingerprint())))
+                .build());
+            actions.add(ServerLifecycleActions.place("repin_" + lane.id(),
+                HohenheimMicrocopy.SERVER.of(lane.copy().repin()), row -> {
                 lane.repin().accept(row);
-                return serverCopy(lane.copy().repinnedToast()).withArg("fingerprint", row.get(lane.slot().fingerprint()));
+                return HohenheimMicrocopy.SERVER.of(lane.copy().repinnedToast())
+                    .withArg("fingerprint", row.get(lane.slot().fingerprint()));
             }, row -> lane.applies().test(row) && !lane.slot().offeredOf(row).isBlank())
-                .description(serverCopy(lane.copy().repin() + "_hint")).icon(Icon.of("triangle-exclamation"))
-                .style(ActionStyle.DESTRUCTIVE).inlineInRow(false).confirmation(ConfirmationSpec.builder()
-                    .title(serverCopy(lane.copy().repin())).body(serverCopy(lane.copy().repin() + "_generic"))
-                    .style(ActionStyle.DESTRUCTIVE).build())
+                .description(HohenheimMicrocopy.SERVER.of(lane.copy().repin() + "_hint"))
+                .icon(Icon.of("triangle-exclamation"))
+                .style(ActionStyle.DESTRUCTIVE).inlineInRow(false).confirmation(repin)
                 .dynamicConfirmation(row -> {
                     String offered = lane.slot().offeredOf(row);
-                    ConfirmationSpec.Builder confirmation = ConfirmationSpec.builder()
-                        .title(serverCopy(lane.copy().repin())).style(ActionStyle.DESTRUCTIVE);
-                    if (offered.isBlank()) return confirmation.body(serverCopy(lane.copy().repin() + "_generic")).build();
+                    if (offered.isBlank()) return repin;
                     String fingerprint = lane.digest().apply(offered);
-                    return confirmation.body(serverCopy(lane.copy().repin() + "_body")
-                        .withArg("name", row.get(ServerModel.NAME)).withArg("pinned", row.get(lane.slot().fingerprint()))
-                        .withArg("offered", fingerprint)).requireTypedConfirmation(fingerprint).build();
+                    return Confirmations.typed(repin.withBody(HohenheimMicrocopy.SERVER
+                        .of(lane.copy().repin() + "_body").withArg("name", row.get(ServerModel.NAME))
+                        .withArg("pinned", row.get(lane.slot().fingerprint())).withArg("offered", fingerprint)),
+                        fingerprint);
                 }).build());
-            actions.add(ServerLifecycleActions.place("rotate_" + lane.id(), serverCopy(lane.copy().rotate()), row -> {
+            actions.add(ServerLifecycleActions.place("rotate_" + lane.id(),
+                HohenheimMicrocopy.SERVER.of(lane.copy().rotate()), row -> {
                 lane.rotate().accept(row);
-                return serverCopy(lane.copy().rotatedToast()).withArg("name", row.get(ServerModel.NAME));
-            }, lane.applies()).description(serverCopy(lane.copy().rotate() + "_hint"))
+                return HohenheimMicrocopy.SERVER.of(lane.copy().rotatedToast())
+                    .withArg("name", row.get(ServerModel.NAME));
+            }, lane.applies()).description(HohenheimMicrocopy.SERVER.of(lane.copy().rotate() + "_hint"))
                 .icon(Icon.of("key")).style(ActionStyle.DESTRUCTIVE).inlineInRow(false)
-                .confirmation(ConfirmationSpec.builder().title(serverCopy(lane.copy().rotate()))
-                    .body(serverCopy(lane.copy().rotate() + "_generic")).style(ActionStyle.DESTRUCTIVE).build())
-                .dynamicConfirmation(row -> ConfirmationSpec.builder().title(serverCopy(lane.copy().rotate()))
-                    .body(serverCopy(lane.copy().rotate() + "_body").withArg("name", row.get(ServerModel.NAME)))
-                    .style(ActionStyle.DESTRUCTIVE).requireTypedConfirmation(row.get(ServerModel.NAME)).build()).build());
+                .confirmation(rotate)
+                .dynamicConfirmation(row -> Confirmations.typed(rotate.withBody(HohenheimMicrocopy.SERVER
+                    .of(lane.copy().rotate() + "_body").withArg("name", row.get(ServerModel.NAME))),
+                    row.get(ServerModel.NAME))).build());
         }
         return List.copyOf(actions);
     }

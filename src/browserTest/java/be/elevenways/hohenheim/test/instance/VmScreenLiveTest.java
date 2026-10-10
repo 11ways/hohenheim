@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -55,7 +55,7 @@ class VmScreenLiveTest extends HohenheimTestBase {
         int instanceId = vmRecord("vm-screen-probe", hostId);
         String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
         RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.CONSOLE, true);
+            HohenheimCapabilities.CONSOLE, true);
         InstanceService service = new InstanceService();
         RecordingScreenSocket viewer = null;
         try {
@@ -77,7 +77,7 @@ class VmScreenLiveTest extends HohenheimTestBase {
 
             // 3. Revoked, the next revalidation refuses the tenant, which zenit answers with a 1008 close.
             RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
-                HohenheimAccess.CONSOLE);
+                HohenheimCapabilities.CONSOLE);
             assertThat(viewer.handler().revalidate()).as("step 3: a revoked tenant is refused").isFalse();
         } finally {
             if (viewer != null) {
@@ -90,7 +90,7 @@ class VmScreenLiveTest extends HohenheimTestBase {
             }
             remote.forceDelete(handle);
             RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, instanceId,
-                HohenheimAccess.CONSOLE);
+                HohenheimCapabilities.CONSOLE);
             HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
             Models.get(UserModel.class).delete(userId);
             try {

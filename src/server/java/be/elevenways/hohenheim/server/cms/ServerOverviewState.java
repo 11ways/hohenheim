@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HostTrustLane;
 import be.elevenways.hohenheim.WorkloadTier;
 import be.elevenways.hohenheim.HohenheimWidgets;
@@ -66,6 +68,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 
@@ -86,8 +89,6 @@ import java.util.function.UnaryOperator;
  */
 public final class ServerOverviewState {
 
-    public static final String SLUG = "overview";
-
     private ServerOverviewState() {}
 
     public static @NonNull WidgetTree widgets(@NonNull Row server, @NonNull AccessContext accessContext) {
@@ -103,34 +104,37 @@ public final class ServerOverviewState {
         // action band below, as the resource's own confirmed row action.
         Instant quarantinedAt = server.get(ServerModel.QUARANTINED_AT);
         if (quarantinedAt != null) {
-            String reason = blankable(server.get(ServerModel.QUARANTINE_REASON));
+            String reason = Objects.toString(server.get(ServerModel.QUARANTINE_REASON), "");
             String body = reason.isBlank()
-                ? text("quarantine_clears_by_repin", locales, resolver)
-                : reason + " " + text("quarantine_clears_by_repin", locales, resolver);
+                ? HohenheimMicrocopy.SERVER_OVERVIEW.of("quarantine_clears_by_repin").resolve(locales, resolver)
+                : reason + " " + HohenheimMicrocopy.SERVER_OVERVIEW.of("quarantine_clears_by_repin")
+                    .resolve(locales, resolver);
             bands.add(band(new WidgetTree(List.of(
                 alert(AlertVariant.DESTRUCTIVE,
-                    NoticeData.of(text("quarantined_title", locales, resolver), body))))));
+                    NoticeData.of(HohenheimMicrocopy.SERVER_OVERVIEW.of("quarantined_title")
+                        .resolve(locales, resolver), body))))));
         }
 
         HostVerdict verdict = HostVerdict.of(server);
         List<WidgetInstance> state = new ArrayList<>();
         state.add(new WidgetInstance(StatusWidget.ID,
-            Map.of("label", HohenheimWidgetCopy.localized("state", "server_overview")))
+            Map.of("label", HohenheimWidgetCopy.localized(HohenheimMicrocopy.SERVER_OVERVIEW.of("state"))))
             .withData(stateBadges(server, verdict, locales, resolver)));
         state.add(new WidgetInstance(HohenheimWidgets.HOST_STATE.id(), Map.of())
             .withData(ServerParts.statusCellOf(server)));
         // Why a host takes no new apps, in the words the Hosts list and the attention band use (one verdict).
-        if (verdict.standing().raisesAttention() && verdict.reason() != null) {
+        if (verdict.standing().severity() != null && verdict.reason() != null) {
             state.add(alert(AlertVariant.WARNING, NoticeData.of(verdict.standing().label().resolve(locales, resolver),
                 verdict.reason().resolve(locales, resolver))));
         }
 
         // The last failure in words (its kind's label, "Docker not found"), the transport's own text after it as the
         // technical line: DEP10's host read "Last error" over raw ssh English.
-        String lastError = blankable(server.get(ServerModel.LAST_ERROR));
+        String lastError = Objects.toString(server.get(ServerModel.LAST_ERROR), "");
         if (!lastError.isBlank()) {
-            String kind = blankable(server.get(ServerModel.LAST_ERROR_KIND));
-            String title = kind.isBlank() ? text("last_error", locales, resolver)
+            String kind = Objects.toString(server.get(ServerModel.LAST_ERROR_KIND), "");
+            String title = kind.isBlank() ? HohenheimMicrocopy.SERVER_OVERVIEW.of("last_error")
+                .resolve(locales, resolver)
                 : HostProbe.FailureKind.labelOf(kind).resolve(locales, resolver);
             state.add(alert(AlertVariant.DESTRUCTIVE,
                 NoticeData.of(title, WorkloadErrors.technically(lastError).resolve(locales, resolver))));
@@ -142,7 +146,7 @@ public final class ServerOverviewState {
         VolumeBackend volumeBackend = ServerModel.volumeBackendOf(server);
         state.add(new WidgetInstance(FactListWidget.ID, Map.of())
             .withData(List.of(WidgetFact.badge(
-                text("volume_backend", locales, resolver),
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend").resolve(locales, resolver),
                 WidgetBadge.of(volumeBackend.label().resolve(locales, resolver),
                     volumeBackend.color(), volumeBackend.icon())))));
         if (!volumeBackend.supportsQuota() && volumeBackend.filesystemEnforcesQuota()) {
@@ -150,26 +154,25 @@ public final class ServerOverviewState {
             // Telling the operator to mount something else here would be a lie in the
             // other direction -- they already mounted a quota-capable filesystem.
             state.add(alert(AlertVariant.WARNING, NoticeData.of(
-                text("volume_backend_unsupported_title", locales, resolver),
-                Microcopy.of("volume_backend_unsupported_body")
-                    .withFilter("scope", "server_overview")
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_unsupported_title").resolve(locales, resolver),
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_unsupported_body")
                     .withArg("backend", volumeBackend.label())
                     .resolve(locales, resolver))));
         } else if (!volumeBackend.supportsQuota()) {
             state.add(alert(AlertVariant.WARNING, NoticeData.of(
-                text("volume_backend_none_title", locales, resolver),
-                text("volume_backend_none_body", locales, resolver))));
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_none_title").resolve(locales, resolver),
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_none_body").resolve(locales, resolver))));
         } else if (!volumeBackend.supportsSnapshot()) {
             state.add(alert(AlertVariant.WARNING, NoticeData.of(
-                text("volume_backend_no_snapshot_title", locales, resolver),
-                text("volume_backend_no_snapshot_body", locales, resolver))));
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_no_snapshot_title").resolve(locales, resolver),
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_no_snapshot_body").resolve(locales, resolver))));
         }
 
         PostureAcknowledgementView acknowledgement = acknowledgementViewOf(server);
         if (acknowledgement.needed()) {
             state.add(new WidgetInstance(FactListWidget.ID, Map.of())
                 .withData(List.of(WidgetFact.badge(
-                    text("acknowledgement", locales, resolver),
+                    HohenheimMicrocopy.SERVER_OVERVIEW.of("acknowledgement").resolve(locales, resolver),
                     acknowledgementBadge(acknowledgement, locales, resolver)))));
         }
 
@@ -188,7 +191,7 @@ public final class ServerOverviewState {
         HostCapacityView capacity = capacityOf(server, serverId);
         List<WidgetInstance> capacityBand = new ArrayList<>();
         capacityBand.add(new WidgetInstance(UsageBarWidget.ID,
-                Map.of("label", HohenheimWidgetCopy.localized("capacity", "server_overview")))
+                Map.of("label", HohenheimWidgetCopy.localized(HohenheimMicrocopy.SERVER_OVERVIEW.of("capacity"))))
             .withData(capacityUsage(capacity, locales, resolver)));
         // Without a usable reading there is nothing booked against a budget to list: no empty "Nothing to show".
         if (capacity.measured()) {
@@ -209,7 +212,7 @@ public final class ServerOverviewState {
         // `zenit.activity` source is gated on ADMIN_ACCESS and would render empty.
         bands.add(band(new WidgetTree(List.of(
             new WidgetInstance(RecordsWidget.ID, Map.of(
-                "title", HohenheimWidgetCopy.localized("recent_activity", "server_overview"),
+                "title", HohenheimWidgetCopy.localized(HohenheimMicrocopy.SERVER_OVERVIEW.of("recent_activity")),
                 "source", CmsSupport.ACTIVITY_SOURCE,
                 "rules", AdminActivityResource.peopleOnlyFor(Models.get(ServerModel.class), serverId),
                 "sort", ActivityModel.CREATED_AT.getName(),
@@ -249,14 +252,16 @@ public final class ServerOverviewState {
             @NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
         if (acknowledgement.current()) {
             // Who accepted it; the warning's version is the record's bookkeeping, never words.
-            return WidgetBadge.of(Microcopy.of("ack_current").withFilter("scope", "server_overview")
+            return WidgetBadge.of(HohenheimMicrocopy.SERVER_OVERVIEW.of("ack_current")
                 .withArg("actor", acknowledgement.actorLabel())
                 .resolve(locales, resolver), BadgeVariant.SUCCESS, null);
         }
         if (acknowledgement.stale()) {
-            return WidgetBadge.of(text("ack_stale", locales, resolver), BadgeVariant.DESTRUCTIVE, null);
+            return WidgetBadge.of(HohenheimMicrocopy.SERVER_OVERVIEW.of("ack_stale")
+                .resolve(locales, resolver), BadgeVariant.DESTRUCTIVE, null);
         }
-        return WidgetBadge.of(text("ack_missing", locales, resolver), BadgeVariant.DESTRUCTIVE, null);
+        return WidgetBadge.of(HohenheimMicrocopy.SERVER_OVERVIEW.of("ack_missing")
+            .resolve(locales, resolver), BadgeVariant.DESTRUCTIVE, null);
     }
 
     // -- trust ---------------------------------------------------------------------
@@ -369,7 +374,7 @@ public final class ServerOverviewState {
 
     /** @return the how-to-fix sentence of one declared check */
     static @NonNull Microcopy fixCopy(@NonNull String checkName) {
-        return Microcopy.of("fix_" + checkName).withFilter("scope", "server_overview");
+        return HohenheimMicrocopy.SERVER_OVERVIEW.of("fix_" + checkName);
     }
 
     /** Every stored check with its own status/required/timestamp and what it found in words. */
@@ -435,11 +440,11 @@ public final class ServerOverviewState {
         if (!capacity.measured()) {
             // The reason carries when it was last measured: the unmeasured bar has no time slot of its own.
             String reason = capacity.stale() && capacity.measuredAtIso() != null
-                ? Microcopy.of("evidence_stale").withFilter("scope", "server_overview")
+                ? HohenheimMicrocopy.SERVER_OVERVIEW.of("evidence_stale")
                     .withArg("ago", RelativeTime.ago(Instant.parse(capacity.measuredAtIso()),
-                        resolver == null ? null : RelativeTimeWording.resolve(locales, resolver)))
+                        RelativeTimeWording.resolve(locales, resolver)))
                     .resolve(locales, resolver)
-                : text("unmeasured_body", locales, resolver);
+                : HohenheimMicrocopy.SERVER_OVERVIEW.of("unmeasured_body").resolve(locales, resolver);
             return UsageData.unmeasured(reason);
         }
         return UsageData.measured(capacity.bookedMb(), capacity.budgetMb(),
@@ -455,9 +460,11 @@ public final class ServerOverviewState {
         if (!capacity.measured()) {
             return facts;
         }
-        facts.add(WidgetFact.of(text("booked", locales, resolver), ServerParts.sizeOfMegabytes(capacity.bookedMb())));
-        facts.add(WidgetFact.of(text("budget", locales, resolver), ServerParts.sizeOfMegabytes(capacity.budgetMb())));
-        facts.add(WidgetFact.of(text("bookable", locales, resolver),
+        facts.add(WidgetFact.of(HohenheimMicrocopy.SERVER_OVERVIEW.of("booked")
+            .resolve(locales, resolver), ServerParts.sizeOfMegabytes(capacity.bookedMb())));
+        facts.add(WidgetFact.of(HohenheimMicrocopy.SERVER_OVERVIEW.of("budget")
+            .resolve(locales, resolver), ServerParts.sizeOfMegabytes(capacity.budgetMb())));
+        facts.add(WidgetFact.of(HohenheimMicrocopy.SERVER_OVERVIEW.of("bookable").resolve(locales, resolver),
             ServerParts.sizeOfMegabytes(capacity.bookableMb())));
         return facts;
     }
@@ -513,7 +520,7 @@ public final class ServerOverviewState {
                 WorkloadTier.STACK,
                 badgeOf(StackModel.STATUS, stack.get(StackModel.STATUS)),
                 null,
-                CmsRoutes.detail(panel, "stacks", stack.get(StackModel.ID))));
+                CmsRoutes.detail(panel, HohenheimSlugs.STACKS, stack.get(StackModel.ID))));
         }
         for (Row database : databases) {
             Row instance = owned.get(ownerKey(DatabaseModel.MODEL_ID, database.get(DatabaseModel.ID)));
@@ -524,7 +531,7 @@ public final class ServerOverviewState {
                 DatabaseVerdict.ofDatabase(database).badge(),
                 // A shared database books nothing of its own: its engine does.
                 instance == null ? null : instance.get(InstanceModel.CAPACITY_MB),
-                CmsRoutes.detail(panel, "databases", database.get(DatabaseModel.ID))));
+                CmsRoutes.detail(panel, HohenheimSlugs.DATABASES, database.get(DatabaseModel.ID))));
         }
         for (Row engine : engines) {
             Row instance = owned.get(ownerKey(DatabaseEngineModel.MODEL_ID, engine.get(DatabaseEngineModel.ID)));
@@ -533,7 +540,7 @@ public final class ServerOverviewState {
                 WorkloadTier.DATABASE_ENGINE,
                 DatabaseVerdict.ofEngine(engine).badge(),
                 instance == null ? null : instance.get(InstanceModel.CAPACITY_MB),
-                CmsRoutes.detail(panel, DatabaseParts.ENGINES_SLUG,
+                CmsRoutes.detail(panel, HohenheimSlugs.DATABASE_ENGINES,
                     engine.get(DatabaseEngineModel.ID))));
         }
         return workloads;
@@ -560,14 +567,5 @@ public final class ServerOverviewState {
     private static @NonNull WidgetInstance band(@NonNull WidgetTree children) {
         return new WidgetInstance(SectionWidget.ID,
             Map.of("css_class", "hh-overview-band"), children);
-    }
-
-    private static @NonNull String text(@NonNull String key, @NonNull LocaleChain locales,
-                                        @Nullable MessageResolver resolver) {
-        return Microcopy.of(key).withFilter("scope", "server_overview").resolve(locales, resolver);
-    }
-
-    private static @NonNull String blankable(@Nullable String value) {
-        return value != null ? value : "";
     }
 }

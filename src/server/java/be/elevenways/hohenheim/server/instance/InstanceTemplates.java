@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -53,7 +54,7 @@ public final class InstanceTemplates {
             return;
         }
         if (template.get(InstanceTemplateModel.APPROVED_AT) == null) {
-            throw Violations.ofForm(HohenheimViolations.text("template_not_approved")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("template_not_approved")
                 .withArg("name", String.valueOf((Object) template.get(InstanceTemplateModel.NAME))));
         }
     }
@@ -88,7 +89,7 @@ public final class InstanceTemplates {
             boolean required = Boolean.TRUE.equals(
                 declared.get(InstanceTemplateVariableModel.REQUIRED));
             builder.add(handler.buildField(key, label, required,
-                InstanceVariables.settingsOf(declared)));
+                RawValues.map(declared.get(InstanceTemplateVariableModel.SETTINGS))));
         }
         return builder.build();
     }
@@ -217,7 +218,7 @@ public final class InstanceTemplates {
                        @Nullable Integer projectId, @Nullable Integer environmentId, @NonNull OwnerFields fields,
                        @NonNull IntFunction<Map<String, Object>> variableValues, @Nullable AccessContext ctx) {
         if (ctx != null && !HohenheimAccess.canCreateInstances(ctx)) {
-            throw Violations.ofForm(HohenheimViolations.text("instance_create_not_permitted"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_create_not_permitted"));
         }
         requireSelectable(template, ctx);
 
@@ -272,9 +273,10 @@ public final class InstanceTemplates {
                                                          @Nullable Integer environmentId,
                                                          @NonNull OwnerFields fields) {
         return projectId != null
-            ? Violations.ofField(fields.project(), projectId, HohenheimViolations.text("project_member_required"))
+            ? Violations.ofField(fields.project(), projectId,
+                HohenheimMicrocopy.VIOLATIONS.of("project_member_required"))
             : Violations.ofField(fields.environment(), environmentId,
-                HohenheimViolations.text("project_member_required"));
+                HohenheimMicrocopy.VIOLATIONS.of("project_member_required"));
     }
 
     private int createRecord(@NonNull Row template, @NonNull String name,
@@ -282,7 +284,7 @@ public final class InstanceTemplates {
                              @NonNull IntFunction<Map<String, Object>> variableValues,
                              @Nullable AccessContext ctx) {
         if (name.isBlank()) {
-            throw Violations.ofField("name", name, HohenheimViolations.text("name_required"));
+            throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("name_required"));
         }
         // Placement is runtime-aware: the template's kind names the daemon flavour it
         // needs, and only hosts declaring that runtime qualify.
@@ -412,7 +414,7 @@ public final class InstanceTemplates {
 
             if (kindHandler == null || !kindHandler.supportsVolumes()) {
                 throw Violations.ofField(InstanceTemplateVolumeModel.NAME.getName(), name,
-                    HohenheimViolations.text("template_volume_kind_unsupported").withArg("name", name));
+                    HohenheimMicrocopy.VIOLATIONS.of("template_volume_kind_unsupported").withArg("name", name));
             }
 
             InstanceVolumes.requirePlainName(name);
@@ -426,7 +428,7 @@ public final class InstanceTemplates {
             if (containerPath == null || containerPath.isBlank()) {
                 throw Violations.ofField(
                     InstanceTemplateVolumeModel.CONTAINER_PATH.getName(), containerPath,
-                    HohenheimViolations.text("template_volume_container_path_required")
+                    HohenheimMicrocopy.VIOLATIONS.of("template_volume_container_path_required")
                         .withArg("name", name));
             }
 
@@ -435,7 +437,7 @@ public final class InstanceTemplates {
             if (quota != null && quota <= 0) {
                 throw Violations.ofField(
                     InstanceTemplateVolumeModel.QUOTA_BYTES.getName(), quota,
-                    HohenheimViolations.text("volume_quota_invalid"));
+                    HohenheimMicrocopy.VIOLATIONS.of("volume_quota_invalid"));
             }
 
             // AIDEV-NOTE: the collision the mount map cannot see. It is keyed by the volume
@@ -445,7 +447,7 @@ public final class InstanceTemplates {
             // create would report success, so the duplicate is refused by name.
             if (paths.containsKey(name)) {
                 throw Violations.ofField(InstanceTemplateVolumeModel.NAME.getName(), name,
-                    HohenheimViolations.text("template_volume_name_taken").withArg("name", name));
+                    HohenheimMicrocopy.VIOLATIONS.of("template_volume_name_taken").withArg("name", name));
             }
 
             InstanceVolumes.addMount(paths, name, containerPath);

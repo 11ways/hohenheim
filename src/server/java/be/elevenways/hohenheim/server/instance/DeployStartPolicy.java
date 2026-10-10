@@ -82,7 +82,6 @@ public final class DeployStartPolicy {
         if (trigger.startsStoppedWorkload() || !stopped) {
             return null;
         }
-        return HohenheimViolations.text("push_does_not_start_stopped_workload")
-            .withArg("name", String.valueOf((Object) named.get(InstanceModel.NAME)));
+        return HohenheimViolations.instanceRefusalText("push_does_not_start_stopped_workload", named, null);
     }
 }

@@ -1,11 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceChildDeletes;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
@@ -33,16 +33,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class InstanceQuotaParts {
 
-    /** The entry's slug, which the instance list names as a related page. */
-    public static final String SLUG = "instance-quotas";
-
     private InstanceQuotaParts() {
     }
 
     /** @return the operator's quota overrides */
     public static @NonNull PanelResource<Row> admin() {
         // AIDEV-NOTE: every override column the reserve hooks read must be ON this form. M073 added max_disk_gb and
-        // max_nics and InstanceDeviceQuota.diskLimitFor/nicLimitFor consult them, but they were absent here for a
+        // max_nics and OwnerBudget.DISK_GB/NICS.limitFor consult them, but they were absent here for a
         // wave: the columns existed, were enforced, carried form copy, and could not be set by anyone. Adding a cap
         // column without adding it here is the silent-success shape.
         FormSpec form = FormSpec.builder()
@@ -63,13 +60,13 @@ public final class InstanceQuotaParts {
             .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_SITES).build())
             .column(ColumnSpec.fromField(InstanceQuotaModel.MAX_DATABASES).build())
             .build();
-        return PanelResource.builder(HohenheimIds.id("instance_quota"), SLUG,
+        return PanelResource.builder(HohenheimIds.id("instance_quota"), HohenheimSlugs.INSTANCE_QUOTAS,
                 SubjectType.record(InstanceQuotaModel.MODEL_ID))
-            .label(Microcopy.of("plural").withFilter("scope", "instance_quota"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "instance_quota"))
+            .label(HohenheimMicrocopy.INSTANCE_QUOTA.of("plural"))
+            .recordLabel(HohenheimMicrocopy.INSTANCE_QUOTA.of("singular"))
             // Demoted out of the sidebar, so this sentence reaches a reader through the panel index and the
             // related-pages menu of the list that names it.
-            .description(CmsSupport.navHint("instance_quota"))
+            .description(CmsSupport.navHint(HohenheimMicrocopy.INSTANCE_QUOTA))
             .icon(Icon.of("gauge"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(16)

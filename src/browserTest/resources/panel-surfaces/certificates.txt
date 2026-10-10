@@ -2,19 +2,20 @@ case admin.certificates.operator admin certificates operator v2
 admission - verdict=admitted
 verb CREATE
 chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
-column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=domain_names_text relation=false
-column domain_names_text at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column provider at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column state at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column status at=4 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column renewal_error at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column challenge_type at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column dns_publisher at=7 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column issued_on at=8 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column expires_on at=9 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
-column next_attempt_at at=10 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column error_count at=11 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=12 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
+column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=other_names relation=false
+column other_names at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column domain_names_text at=2 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column provider at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column state at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column renewal_error at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column challenge_type at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column dns_publisher at=8 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column issued_on at=9 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column expires_on at=10 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
+column next_attempt_at at=11 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column error_count at=12 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=13 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
 filter nice_name at=0 kind=TEXT facet=false param=filter.nice_name
 filter provider at=1 kind=SELECT facet=true param=filter.provider
 filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_text
@@ -39,19 +40,20 @@ verb CREATE
 verb UPDATE
 verb DELETE
 chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
-column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=domain_names_text relation=false
-column domain_names_text at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column provider at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column state at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column status at=4 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column renewal_error at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column challenge_type at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column dns_publisher at=7 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column issued_on at=8 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column expires_on at=9 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
-column next_attempt_at at=10 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column error_count at=11 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=12 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
+column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=other_names relation=false
+column other_names at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column domain_names_text at=2 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column provider at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column state at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column renewal_error at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column challenge_type at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column dns_publisher at=8 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column issued_on at=9 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column expires_on at=10 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
+column next_attempt_at at=11 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column error_count at=12 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=13 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
 filter nice_name at=0 kind=TEXT facet=false param=filter.nice_name
 filter provider at=1 kind=SELECT facet=true param=filter.provider
 filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_text
@@ -100,19 +102,20 @@ verb CREATE
 verb UPDATE
 verb DELETE
 chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
-column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=domain_names_text relation=false
-column domain_names_text at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column provider at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column state at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column status at=4 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column renewal_error at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column challenge_type at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column dns_publisher at=7 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column issued_on at=8 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column expires_on at=9 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
-column next_attempt_at at=10 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column error_count at=11 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=12 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
+column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=other_names relation=false
+column other_names at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column domain_names_text at=2 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column provider at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column state at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column renewal_error at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column challenge_type at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column dns_publisher at=8 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column issued_on at=9 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column expires_on at=10 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
+column next_attempt_at at=11 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column error_count at=12 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=13 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
 filter nice_name at=0 kind=TEXT facet=false param=filter.nice_name
 filter provider at=1 kind=SELECT facet=true param=filter.provider
 filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_text
@@ -159,19 +162,20 @@ case admin.certificates.operator.selection admin certificates operator v2
 admission - verdict=admitted
 verb CREATE
 chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
-column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=domain_names_text relation=false
-column domain_names_text at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column provider at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column state at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column status at=4 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column renewal_error at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column challenge_type at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column dns_publisher at=7 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column issued_on at=8 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column expires_on at=9 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
-column next_attempt_at at=10 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column error_count at=11 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=12 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
+column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=other_names relation=false
+column other_names at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column domain_names_text at=2 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column provider at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column state at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column renewal_error at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column challenge_type at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column dns_publisher at=8 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column issued_on at=9 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column expires_on at=10 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
+column next_attempt_at at=11 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column error_count at=12 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=13 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
 filter nice_name at=0 kind=TEXT facet=false param=filter.nice_name
 filter provider at=1 kind=SELECT facet=true param=filter.provider
 filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_text
@@ -191,19 +195,20 @@ admission - verdict=admitted
 record - found=false
 verb CREATE
 chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
-column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=domain_names_text relation=false
-column domain_names_text at=1 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column provider at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
-column state at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column status at=4 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column renewal_error at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column challenge_type at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
-column dns_publisher at=7 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column issued_on at=8 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column expires_on at=9 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
-column next_attempt_at at=10 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
-column error_count at=11 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column created_at at=12 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
+column nice_name at=0 shown=true hidden=false sortable=false filterable=true copyable=false subtext=other_names relation=false
+column other_names at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column domain_names_text at=2 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column provider at=3 shown=true hidden=false sortable=false filterable=true copyable=false subtext= relation=false
+column state at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=5 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column renewal_error at=6 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column challenge_type at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
+column dns_publisher at=8 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column issued_on at=9 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column expires_on at=10 shown=true hidden=false sortable=true filterable=true copyable=false subtext= relation=false
+column next_attempt_at at=11 shown=false hidden=true sortable=true filterable=false copyable=false subtext= relation=false
+column error_count at=12 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column created_at at=13 shown=false hidden=true sortable=true filterable=true copyable=false subtext= relation=false
 filter nice_name at=0 kind=TEXT facet=false param=filter.nice_name
 filter provider at=1 kind=SELECT facet=true param=filter.provider
 filter domain_names_text at=2 kind=TEXT facet=false param=filter.domain_names_text
@@ -221,24 +226,26 @@ control CREATE%20private_key_pem at=2 kind=zenitforms:control/text input=multili
 case manage.certificates.tenant manage certificates tenant v2
 admission - verdict=admitted
 chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
-column nice_name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=domain_names_text relation=false
-column domain_names_text at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column state at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column status at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column renewal_error at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column expires_on at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column nice_name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=other_names relation=false
+column other_names at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column domain_names_text at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column state at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column renewal_error at=5 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column expires_on at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 tab access at=0 landing=false view=false
 
 case manage.certificates.tenant.custom manage certificates tenant v2
 admission - verdict=admitted
 record - found=true
 chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
-column nice_name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=domain_names_text relation=false
-column domain_names_text at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column state at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column status at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column renewal_error at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column expires_on at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column nice_name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=other_names relation=false
+column other_names at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column domain_names_text at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column state at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column renewal_error at=5 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column expires_on at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 tab access at=0 landing=false view=false
 control EDIT%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 control EDIT%20domain_names_text at=1 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
@@ -250,24 +257,26 @@ case manage.certificates.tenant.foreign manage certificates tenant v2
 admission - verdict=admitted
 record - found=false
 chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
-column nice_name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=domain_names_text relation=false
-column domain_names_text at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column state at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column status at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column renewal_error at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column expires_on at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column nice_name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=other_names relation=false
+column other_names at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column domain_names_text at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column state at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column renewal_error at=5 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column expires_on at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 tab access at=0 landing=false view=false
 
 case manage.certificates.operator.custom manage certificates operator v2
 admission - verdict=admitted
 record - found=true
 chrome - views=false advanced=false search=true columns=true rail=false selection=false export=false trash=false tree=false searchable=true
-column nice_name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=domain_names_text relation=false
-column domain_names_text at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column state at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column status at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column renewal_error at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column expires_on at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column nice_name at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext=other_names relation=false
+column other_names at=1 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column domain_names_text at=2 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column state at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column status at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column renewal_error at=5 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column expires_on at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 tab access at=0 landing=false view=false
 control EDIT%20nice_name at=0 kind=zenitforms:control/string input=text required=false readonly=true options= binding=
 control EDIT%20domain_names_text at=1 kind=zenitforms:control/string input=text required=false readonly=true options= binding=

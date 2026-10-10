@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
@@ -52,23 +54,20 @@ import java.util.Map;
  */
 public final class InstanceFromTemplatePage extends PanelPage {
 
-    /** The page's slug; the template catalogs' create links lead here. */
-    public static final String SLUG = "instances-from-template";
-
     /** The wizard: the create operation over the template its request selects. */
     public static final PanelAction<Row> CREATE = PanelAction.<Row, Integer>places(
             InstanceTemplateOperations.CREATE_INSTANCE_FROM_TEMPLATE, ActionPlacement.PAGE,
             (request, result) -> CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
-                HohenheimSlugs.INSTANCES, result.value(), InstanceOverview.SLUG).toUrl())))
-        .confirmation(ConfirmationSpec.generic(Microcopy.of("create").withFilter("scope", "instance_from_template"),
+                HohenheimSlugs.INSTANCES, result.value(), RecordOverview.SLUG).toUrl())))
+        .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("create"),
             false))
         .selectedBy(HohenheimParams.FROM_TEMPLATE_TEMPLATE.getName())
         .fixed((template, request) -> fixed(request.access()))
         .build();
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instances_from_template"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("create_instance").withFilter("scope", "instance_template"); }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE_TEMPLATE.of("create_instance"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.INSTANCES_FROM_TEMPLATE; }
     @Override public @NonNull Icon icon() { return Icon.of("plus"); }
     @Override public boolean showInNav() { return false; }
     @Override public @NonNull String standsUnder() { return HohenheimSlugs.INSTANCE_TEMPLATES; }
@@ -77,7 +76,7 @@ public final class InstanceFromTemplatePage extends PanelPage {
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", Microcopy.of("create_instance").withFilter("scope", "instance_template")
+        vars.put("title", HohenheimMicrocopy.INSTANCE_TEMPLATE.of("create_instance")
             .resolve(request.conduit().getLocales(), request.conduit().getMessageResolver()));
         PageActions.Opened opened = PageActions.open(request, this, CREATE.id());
         if (opened instanceof PageActions.Form form) {
@@ -89,7 +88,7 @@ public final class InstanceFromTemplatePage extends PanelPage {
             vars.put("approved", template.get(InstanceTemplateModel.APPROVED_AT) != null);
             vars.put("hasInstall", InstanceTemplates.hasInstallStep(template));
         } else {
-            vars.put("choices", choices(request, SLUG));
+            vars.put("choices", choices(request, HohenheimSlugs.INSTANCES_FROM_TEMPLATE));
         }
         vars.put("cancelTarget", CmsRoutes.list(request.panelSlug(), HohenheimSlugs.INSTANCE_TEMPLATES));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_FROM_TEMPLATE, vars);

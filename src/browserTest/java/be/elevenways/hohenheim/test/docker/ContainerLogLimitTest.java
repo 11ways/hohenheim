@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.HohenheimSettings.Security;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
@@ -79,8 +79,8 @@ class ContainerLogLimitTest {
             docker.createContainer("log-cap-probe-zero", spec(), DockerContainerKind.HARDENING);
             assertThat(transport.lastCreateBody)
                 .as("step 3: 0 or less is the DEFAULT, never 'no limit'")
-                .contains("\"max-size\":\"" + ContainerHardening.DEFAULT_LOG_MAX_SIZE_MB + "m\"")
-                .contains("\"max-file\":\"" + ContainerHardening.DEFAULT_LOG_MAX_FILES + "\"");
+                .contains("\"max-size\":\"" + Security.CONTAINER_LOG_MAX_SIZE_MB.getDefaultValue() + "m\"")
+                .contains("\"max-file\":\"" + Security.CONTAINER_LOG_MAX_FILES.getDefaultValue() + "\"");
 
             // 4. And a caller cannot hand the unbounded default back: LogConfig is owned by
             //    the policy, so a spec carrying one is REFUSED rather than overwritten --
@@ -100,10 +100,10 @@ class ContainerLogLimitTest {
         } finally {
             Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Security.CONTAINER_LOG_MAX_SIZE_MB,
-                previousSize == null ? ContainerHardening.DEFAULT_LOG_MAX_SIZE_MB : previousSize);
+                previousSize == null ? Security.CONTAINER_LOG_MAX_SIZE_MB.getDefaultValue() : previousSize);
             Zenit.SETTINGS_VALUES.setValue(
                 HohenheimSettings.Security.CONTAINER_LOG_MAX_FILES,
-                previousFiles == null ? ContainerHardening.DEFAULT_LOG_MAX_FILES : previousFiles);
+                previousFiles == null ? Security.CONTAINER_LOG_MAX_FILES.getDefaultValue() : previousFiles);
         }
     }
 

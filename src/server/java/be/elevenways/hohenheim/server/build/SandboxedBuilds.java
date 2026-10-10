@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.build;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
@@ -89,9 +90,9 @@ public final class SandboxedBuilds {
             artifact = outcome.artifact();
             if (!outcome.succeeded()) {
                 String status = switch (outcome.ending()) {
-                    case TIMED_OUT -> BuildOperationModel.STATUS_TIMED_OUT;
-                    case DISK_EXCEEDED -> BuildOperationModel.STATUS_QUOTA_EXCEEDED;
-                    case EXITED -> BuildOperationModel.STATUS_FAILED;
+                    case TIMED_OUT -> BuildOperationModel.LIFECYCLE.stored(OperationStatus.TIMED_OUT);
+                    case DISK_EXCEEDED -> BuildOperationModel.LIFECYCLE.stored(OperationStatus.QUOTA_EXCEEDED);
+                    case EXITED -> BuildOperationModel.LIFECYCLE.stored(OperationStatus.FAILED);
                 };
                 return finish(buildId, request, status, null, outcome.exitCode(),
                     reasonOf(outcome), log, outcome.peakDiskBytes(), 0, startedAt);
@@ -103,7 +104,7 @@ public final class SandboxedBuilds {
             // history still names, minus anything a container holds.
             BuildArtifacts.pruneSuperseded(this.docker, request.forModel().toString(),
                 request.forId(), loaded.imageId());
-            return finish(buildId, request, BuildOperationModel.STATUS_SUCCEEDED,
+            return finish(buildId, request, BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED),
                 loaded.imageId(), 0, null, log, outcome.peakDiskBytes(), loaded.bytes(),
                 startedAt);
         } catch (IOException refused) {
@@ -112,12 +113,13 @@ public final class SandboxedBuilds {
             // A refused detection still records what the detector SAW -- "why was this
             // refused" must never be log archaeology.
             recordDetection(buildId, builder);
-            return finish(buildId, request, BuildOperationModel.STATUS_REFUSED, null, -1,
+            return finish(buildId, request, BuildOperationModel.LIFECYCLE.stored(OperationStatus.REFUSED), null, -1,
                 reason, log, 0, 0, startedAt);
         } catch (RuntimeException unexpected) {
             String reason = HohenheimViolations.reasonOf(unexpected);
             log.line("[hohenheim] build aborted: " + reason);
-            finish(buildId, request, BuildOperationModel.STATUS_FAILED, null, -1, reason, log,
+            finish(buildId, request, BuildOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), null, -1, reason,
+                log,
                 0, 0, startedAt);
             throw unexpected;
         } finally {
@@ -148,7 +150,7 @@ public final class SandboxedBuilds {
         row.set(BuildOperationModel.BUILDER_KIND, request.builderKind());
         row.set(BuildOperationModel.FOR_MODEL, request.forModel().toString());
         row.set(BuildOperationModel.FOR_ID, request.forId());
-        row.set(BuildOperationModel.STATUS, BuildOperationModel.STATUS_RUNNING);
+        row.set(BuildOperationModel.STATUS, BuildOperationModel.LIFECYCLE.stored(OperationStatus.RUNNING));
         row.set(BuildOperationModel.SOURCE_REF, request.sourceRef());
         row.set(BuildOperationModel.TAG, request.tag());
         row.set(BuildOperationModel.CPU_LIMIT, quota.cpus());
@@ -186,7 +188,7 @@ public final class SandboxedBuilds {
                 .write();
             prune(model, request);
         }
-        boolean succeeded = BuildOperationModel.STATUS_SUCCEEDED.equals(status);
+        boolean succeeded = BuildOperationModel.LIFECYCLE.is(status, OperationStatus.SUCCEEDED);
         if (!succeeded) {
             Blast.log("BUILD:", buildId, "for", request.forModel() + " #" + request.forId(),
                 "ended", status, "-", reason != null ? reason : "exit " + exitCode);

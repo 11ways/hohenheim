@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -9,7 +10,6 @@ import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.incus.ControllerPresence;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
-import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
 import be.elevenways.hohenheim.server.instance.SystemContainerKind;
 import be.elevenways.hohenheim.server.instance.VmKind;
 import be.elevenways.hohenheim.server.instance.RootDisk;
@@ -51,7 +51,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class RootDiskSizeTest extends HohenheimTestBase {
 
     private static final String PREFIX = "rootdisk-";
-    private static final String DISK_BUCKET = InstanceDeviceQuota.diskBucketOf("");
+    private static final String DISK_BUCKET = OwnerBudget.DISK_GB.bucketOf("");
 
     private Integer previousDiskCap;
 

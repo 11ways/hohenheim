@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimPickRules;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -17,6 +20,7 @@ import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.InstanceDeclarations;
@@ -25,7 +29,6 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.server.instance.InstanceResize;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -67,7 +70,6 @@ import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -104,12 +106,6 @@ import java.util.Objects;
  */
 public final class InstanceParts {
 
-    /** This entry's slug on both panels. */
-    public static final String SLUG = HohenheimSlugs.INSTANCES;
-
-    /** The Backups tab's slug, which the artifact and schedule resources name as their parent's tab. */
-    public static final String BACKUPS_TAB = "backups";
-
     /** The artifact sections' stored-failure column, drawn only in the Backups tab. */
     private static final String FAILURE_COLUMN = "failure";
 
@@ -125,11 +121,11 @@ public final class InstanceParts {
     /** @return the operator's instance resource: every live instance, the full form, the verified destroy */
     public static @NonNull PanelResource<Row> admin() {
         TableSpec<Row> table = adminTable();
-        return entry("instance")
+        return entry(HohenheimIds.id("instance"))
             // Reached through the Apps list, whose toolbar links this list (HohenheimPanel's sidebar note); its pages
             // mark Apps in the sidebar.
             .showInNav(false)
-            .standsUnder(AppParts.SLUG)
+            .standsUnder(HohenheimSlugs.APPS)
             .health(AppHealth.instances(false))
             // Soft-deleted rows are invisible (the model's soft-delete behaviour hides them from every default find);
             // everything else is LISTED, generated rows included -- with a "Managed by" column instead of a hole in
@@ -158,9 +154,9 @@ public final class InstanceParts {
             .deleteConfirmation(deleteConfirmation())
             .authority(authority())
             .actions(InstanceActions.placedOperator())
-            // AIDEV-NOTE: no contributions, on purpose (decided 2026-10-03): the tab set is DECLARED, so zenit-auth's
-            // contributed access tab does not appear on a live product surface as a side effect of this conversion.
-            // Whether contributed access tabs belong on Hohenheim entities is an open product question.
+            // AIDEV-NOTE: the declared tabs take no contributions, but zenit-auth's record access page rides every
+            // entry over a grantable model (RecordAccessPage.ridesEveryEntry), so the instance page shows an Access
+            // tab anyway; InstanceSurfacesBrowserTest pins it on both record cases.
             .tabs(ResourceTabs.of(adminTabs()).withHistory().historyInStrip())
             // The instance tier's sibling catalogs, demoted out of the sidebar: where backups are written, who may
             // run how many instances, which public names route to which workload, and the build/release history.
@@ -168,11 +164,11 @@ public final class InstanceParts {
             // AIDEV-NOTE: these are peers, not verbs, so they are DECLARED as related pages and rendered in the list
             // toolbar's one quiet overflow; each entry keeps the TARGET peer's own label, icon and description.
             .relatedPages(
-                RelatedPage.toPeer(BackupTargetParts.SLUG),
-                RelatedPage.toPeer(InstanceQuotaParts.SLUG),
-                RelatedPage.toPeer(GameDomainResource.SLUG),
-                RelatedPage.toPeer(OperationHistoryParts.BUILDS),
-                RelatedPage.toPeer(OperationHistoryParts.RELEASES))
+                RelatedPage.toPeer(HohenheimSlugs.BACKUP_TARGETS),
+                RelatedPage.toPeer(HohenheimSlugs.INSTANCE_QUOTAS),
+                RelatedPage.toPeer(HohenheimSlugs.GAME_DOMAINS),
+                RelatedPage.toPeer(HohenheimSlugs.BUILDS),
+                RelatedPage.toPeer(HohenheimSlugs.RELEASES))
             .build();
     }
 
@@ -181,23 +177,18 @@ public final class InstanceParts {
      *         crash policy; no create, and the verified destroy, live for a holder of {@code destroy}
      */
     public static @NonNull PanelResource<Row> manage() {
-        return entry("manage_instance")
-            // Reached from the Apps list's toolbar (ManagePanel's sidebar note); its pages mark Apps in the sidebar.
-            .showInNav(false)
-            .standsUnder(AppParts.SLUG)
+        // Reached from the Apps list's toolbar (ManagePanel's sidebar note); its pages mark Apps in the sidebar. Admins
+        // see every live instance; everyone else only the ones the walk confirms view on, which is what makes an
+        // unowned id read as MISSING rather than forbidden. Generated (product-tier-owned) instances stay off the
+        // delegated surface too: their one UI is the owning record's own page. The operator tabs a delegate needs,
+        // declared like the admin set (no contributions). No related pages: the operator entry names sibling peers of
+        // the ADMIN panel, which this panel does not register.
+        return ManageTwin.reached(entry(ManageTwin.id("instance")), TenantScopes.INSTANCES,
+                ResourceTabs.of(manageTabs()))
+            .standsUnder(HohenheimSlugs.APPS)
             .health(AppHealth.instances(true))
-            // Admins see every live instance; everyone else only the ones the walk confirms view on, which is what
-            // makes an unowned id read as MISSING rather than forbidden. Generated (product-tier-owned) instances stay
-            // off the delegated surface too: their one UI is the owning record's own page.
-            .scope(TenantScopes.INSTANCES)
             // The host is operator inventory: never a rule, sort, search or value of this list.
             .withholds(HostFields.of(InstanceModel.MODEL_ID))
-            // NAV-ONLY (zero granted instances hide the empty list); the route stays scoped.
-            //
-            // AIDEV-NOTE: reachesAny, not "ids.isEmpty()" -- the walk's whole-model rows (the admin bypass here) cover
-            // records that carry no grant, so an id set answers "nothing" for a subject who reaches everything.
-            .hasInScopeRecords(access -> HohenheimAccess.reachesAny(access, InstanceModel.MODEL_ID,
-                HohenheimAccess.VIEW))
             .reads(ResourceReads.rows())
             // Not the admin fleet list's views and rule builder: a tenant sees their instances through two columns.
             .list(ResourceList.rows(TableSpec.<Row>builder()
@@ -223,18 +214,14 @@ public final class InstanceParts {
             .authority(authority())
             // Power and the two artifact actions, placed operations gated by the record capability.
             .actions(InstanceActions.placedDelegated())
-            // The operator tabs a delegate needs, declared like the admin set (no contributions); never the admin
-            // history. No related pages: the operator entry names sibling peers of the ADMIN panel, which this panel
-            // does not register.
-            .tabs(ResourceTabs.of(manageTabs()))
             .build();
     }
 
     /** The identity, nav placement and labels both twins share. */
-    private static PanelResource.@NonNull Builder<Row> entry(@NonNull String id) {
-        return PanelResource.builder(HohenheimIds.id(id), SLUG, InstanceOperations.INSTANCE)
-            .label(Microcopy.of("plural").withFilter("scope", "instance"))
-            .description(Microcopy.of("nav_hint").withFilter("scope", "instance"))
+    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
+        return PanelResource.builder(id, HohenheimSlugs.INSTANCES, InstanceOperations.INSTANCE)
+            .label(HohenheimMicrocopy.INSTANCE.of("plural"))
+            .description(HohenheimMicrocopy.INSTANCE.of("nav_hint"))
             .icon(Icon.of("cube"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(30);
@@ -252,16 +239,16 @@ public final class InstanceParts {
      */
     private static ResourceForm.@NonNull Builder<Row> form(@NonNull FormSpec spec) {
         return ResourceForm.<Row>of(spec)
-            .landingTab(InstanceOverview.SLUG)
+            .landingTab(RecordOverview.SLUG)
             // The board's word for the form tab: what the app is set to, beside what it is doing (the overview).
-            .tabLabel(AppOverview.copy("configuration"))
+            .tabLabel(HohenheimMicrocopy.APP_OVERVIEW.of("configuration"))
             .lead((instance, access) -> instance.get(InstanceModel.ID) == null ? null
                 : new RecordLead(AppOverview.instanceLead(instance, access.conduit()), null))
             .inlineEditable(InstanceModel.NAME, InstanceModel.CRASH_POLICY)
             // Saving a new memory or CPU ceiling RECREATES the workload's container, so it is briefly down; on the
             // create form there is nothing to recreate.
             .notice((instance, access) -> instance.get(InstanceModel.ID) == null ? null
-                : Microcopy.of("resize_notice").withFilter("scope", "instance"));
+                : HohenheimMicrocopy.INSTANCE.of("resize_notice"));
     }
 
     /**
@@ -278,7 +265,7 @@ public final class InstanceParts {
         return ResourceAuthority.<Row>builder()
             .update(null, (instance, access) -> !isGenerated(instance)
                 && HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID, instance.get(InstanceModel.ID),
-                    HohenheimAccess.CONFIG))
+                    HohenheimCapabilities.CONFIG))
             .build();
     }
 
@@ -336,8 +323,8 @@ public final class InstanceParts {
         return FormSpec.builder()
             // AIDEV-NOTE: a form page falls back to the RESOURCE label for its heading, and this label is the PLURAL
             // the nav needs; createTitle/editTitle are the seam that gives the screen an honest singular heading.
-            .createTitle(Microcopy.of("create_title").withFilter("scope", "instance"))
-            .editTitle(Microcopy.of("edit_title").withFilter("scope", "instance"))
+            .createTitle(HohenheimMicrocopy.INSTANCE.of("create_title"))
+            .editTitle(HohenheimMicrocopy.INSTANCE.of("edit_title"))
             // AIDEV-NOTE: the kind entry offers only what a human may author (the generated kinds are refused by
             // OwnedInstances anyway). Supplied, never a resolved list: registry entries arrive via BlastAutoLoadInit
             // after class-load, and a Supplied source still resolves on the context-free coercion path, which is what
@@ -407,7 +394,7 @@ public final class InstanceParts {
             // Who runs this record: blank for an authored row, the owning product record (linked) for a generated
             // one -- the honesty column that lets generated rows appear here without becoming a second UI.
             .column(ColumnSpec.virtual(MANAGED_BY_COLUMN,
-                    Microcopy.of("managed_by").withFilter("scope", "instance"))
+                    HohenheimMicrocopy.INSTANCE.of("managed_by"))
                 .renderer(HohenheimTemplateIds.CELL_MANAGED_BY).build())
             .column(ColumnSpec.fromField(InstanceModel.CREATED_AT).filterable().hidden().build())
             .filter(FilterSpec.leaf(InstanceModel.NAME, CoreTypes.CONTAINS)
@@ -493,25 +480,26 @@ public final class InstanceParts {
      * delegate reads that it failed.
      */
     private static @NonNull ChildList<Row> backupsTab() {
-        return ChildList.<Row>sections(BACKUPS_TAB, Microcopy.of("backups").withFilter("scope", "instance"),
-                InstanceBackupParts.SLUG, InstanceSnapshotParts.SLUG, InstanceScheduleParts.SLUG)
+        return ChildList.<Row>sections(HohenheimSlugs.Tab.BACKUPS, HohenheimMicrocopy.INSTANCE.of("backups"),
+                HohenheimSlugs.INSTANCE_BACKUPS, HohenheimSlugs.INSTANCE_SNAPSHOTS, HohenheimSlugs.INSTANCE_SCHEDULES)
             .icon(Icon.of("box-archive"))
-            .hide(InstanceBackupParts.SLUG, InstanceBackupModel.INSTANCE_ID.getName())
-            .hide(InstanceSnapshotParts.SLUG, InstanceSnapshotModel.INSTANCE_ID.getName())
-            .hide(InstanceScheduleParts.SLUG, RecordScheduleModel.RECORD_ID.getName())
+            .hide(HohenheimSlugs.INSTANCE_BACKUPS, InstanceBackupModel.INSTANCE_ID.getName())
+            .hide(HohenheimSlugs.INSTANCE_SNAPSHOTS, InstanceSnapshotModel.INSTANCE_ID.getName())
+            .hide(HohenheimSlugs.INSTANCE_SCHEDULES, RecordScheduleModel.RECORD_ID.getName())
             // An empty section offers its making action instead of a dead end ("No backups yet" with Back up now).
-            .parentActions(InstanceBackupParts.SLUG, InstanceOperations.BACKUP.id())
-            .parentActions(InstanceSnapshotParts.SLUG, InstanceOperations.SNAPSHOT.id())
-            .column(InstanceBackupParts.SLUG, SubjectType.record(InstanceBackupModel.MODEL_ID), failureColumn(),
+            .parentActions(HohenheimSlugs.INSTANCE_BACKUPS, InstanceOperations.BACKUP.id())
+            .parentActions(HohenheimSlugs.INSTANCE_SNAPSHOTS, InstanceOperations.SNAPSHOT.id())
+            .column(HohenheimSlugs.INSTANCE_BACKUPS, SubjectType.record(InstanceBackupModel.MODEL_ID), failureColumn(),
                 (backup, request) -> WithheldFailure.of(request.conduit()).shown(backup.get(InstanceBackupModel.ERROR)))
-            .column(InstanceSnapshotParts.SLUG, SubjectType.record(InstanceSnapshotModel.MODEL_ID), failureColumn(),
+            .column(HohenheimSlugs.INSTANCE_SNAPSHOTS, SubjectType.record(InstanceSnapshotModel.MODEL_ID),
+            failureColumn(),
                 (snapshot, request) -> WithheldFailure.of(request.conduit())
                     .shown(snapshot.get(InstanceSnapshotModel.ERROR)));
     }
 
     /** The column an artifact's stored failure reads in, blank while it has none. */
     private static @NonNull ColumnSpec failureColumn() {
-        return ColumnSpec.virtual(FAILURE_COLUMN, Microcopy.of("failure").withFilter("scope", "instance_artifacts"))
+        return ColumnSpec.virtual(FAILURE_COLUMN, HohenheimMicrocopy.INSTANCE_ARTIFACTS.of("failure"))
             .build();
     }
 
@@ -580,10 +568,8 @@ public final class InstanceParts {
     }
 
     /** The submitted per-kind settings, which price the workload; a SchemaField answers Object. */
-    @SuppressWarnings("unchecked")
     private static @NonNull Map<String, Object> submittedSettings(@NonNull Map<String, Object> values) {
-        return values.get(InstanceModel.SETTINGS.getName()) instanceof Map<?, ?> settings
-            ? (Map<String, Object>) settings : Map.of();
+        return RawValues.map(values.get(InstanceModel.SETTINGS.getName()));
     }
 
     /**
@@ -616,8 +602,8 @@ public final class InstanceParts {
     private static @NonNull ConfirmationSpec deleteBody(@Nullable Row instance) {
         String sites = instance == null ? null : strandedSites(instance);
         return DeleteConfirmation.body(sites == null
-            ? Microcopy.of("delete_confirm").withFilter("scope", "instance")
-            : Microcopy.of("delete_confirm_stranding").withFilter("scope", "instance").withArg("sites", sites));
+            ? HohenheimMicrocopy.INSTANCE.of("delete_confirm")
+            : HohenheimMicrocopy.INSTANCE.of("delete_confirm_stranding").withArg("sites", sites));
     }
 
     /**
@@ -653,11 +639,12 @@ public final class InstanceParts {
                                             @Nullable String subpage) {
         Integer id = instance.get(InstanceModel.ID);
         if (!ReleaseKind.ID.toString().equals(instance.get(InstanceModel.KIND))) {
-            return CmsRoutes.subpage(panel, SLUG, id, subpage == null ? InstanceOverview.SLUG : subpage);
+            return CmsRoutes.subpage(panel, HohenheimSlugs.INSTANCES, id, subpage == null ? RecordOverview.SLUG
+                : subpage);
         }
         int application = ApplicationReleases.linkOwnerOf(instance);
-        return id == null || application == id ? CmsRoutes.list(panel, SLUG)
-            : CmsRoutes.subpage(panel, SLUG, application, InstanceDeploymentsPage.SLUG);
+        return id == null || application == id ? CmsRoutes.list(panel, HohenheimSlugs.INSTANCES)
+            : CmsRoutes.subpage(panel, HohenheimSlugs.INSTANCES, application, HohenheimSlugs.Tab.DEPLOYMENTS);
     }
 
     /**
@@ -678,7 +665,7 @@ public final class InstanceParts {
         Row owner = ownerModel != null ? ownerModel.findById(ownerId) : null;
         if (ownerModel == null || owner == null) {
             // The owner is gone (or unknown): state the raw attribution instead of a link.
-            return new ManagedByCell(null, Microcopy.of("managed_by").withFilter("scope", "instance"),
+            return new ManagedByCell(null, HohenheimMicrocopy.INSTANCE.of("managed_by"),
                 modelId + " #" + ownerId, null);
         }
         Panel admin = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
@@ -688,7 +675,7 @@ public final class InstanceParts {
         String name = ownerModel.getDisplayTitle(owner);
         return new ManagedByCell(
             ownerEntry != null ? ownerEntry.icon().name() : null,
-            ownerEntry != null ? ownerEntry.label() : Microcopy.of("managed_by").withFilter("scope", "instance"),
+            ownerEntry != null ? ownerEntry.label() : HohenheimMicrocopy.INSTANCE.of("managed_by"),
             name != null ? name : modelId + " #" + ownerId,
             url);
     }

@@ -1,12 +1,13 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVolumeModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates.VolumeDeclaration;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -18,6 +19,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * Authoring invariants for template declarations, enforced by model saves on every writer.
@@ -45,25 +48,23 @@ public final class TemplateDeclarationGuards {
 
     private static void variable(@NonNull Row row) {
         Integer id = row.get(InstanceTemplateVariableModel.ID);
-        Row stored = id == null ? null : Models.get(InstanceTemplateVariableModel.class).findById(id);
-        Integer template = row.has(InstanceTemplateVariableModel.TEMPLATE_ID.getName())
-            ? row.get(InstanceTemplateVariableModel.TEMPLATE_ID)
-            : stored == null ? null : stored.get(InstanceTemplateVariableModel.TEMPLATE_ID);
-        String key = row.has(InstanceTemplateVariableModel.KEY.getName()) ? row.get(InstanceTemplateVariableModel.KEY)
-            : stored == null ? null : stored.get(InstanceTemplateVariableModel.KEY);
+        Row stored = StoredRows.of(Models.get(InstanceTemplateVariableModel.class), row);
+        Integer template = row.afterWrite(InstanceTemplateVariableModel.TEMPLATE_ID, stored);
+        String key = row.afterWrite(InstanceTemplateVariableModel.KEY, stored);
         if (template == null || key == null) return;
         for (Row sibling : Models.get(InstanceTemplateVariableModel.class).find()
                 .where(InstanceTemplateVariableModel.TEMPLATE_ID.eq(template))
                 .where(InstanceTemplateVariableModel.KEY.eq(key)).all()) {
             if (!Objects.equals(id, sibling.get(InstanceTemplateVariableModel.ID))) {
-                throw Violations.ofField("key", key, HohenheimViolations.text("variable_key_taken").withArg("key", key));
+                throw Violations.ofField("key", key, HohenheimMicrocopy.VIOLATIONS.of("variable_key_taken")
+                    .withArg("key", key));
             }
         }
     }
 
     private static void volume(@NonNull Row row) {
         Integer id = row.get(InstanceTemplateVolumeModel.ID);
-        Row stored = id == null ? null : Models.get(InstanceTemplateVolumeModel.class).findById(id);
+        Row stored = StoredRows.of(Models.get(InstanceTemplateVolumeModel.class), row);
         Row draft = new Row(stored == null ? row : stored);
         if (row.has(InstanceTemplateVolumeModel.TEMPLATE_ID.getName())) draft.set(InstanceTemplateVolumeModel.TEMPLATE_ID,
             row.get(InstanceTemplateVolumeModel.TEMPLATE_ID));
@@ -76,9 +77,11 @@ public final class TemplateDeclarationGuards {
         if (row.has(InstanceTemplateVolumeModel.EXCLUSIVE.getName())) draft.set(InstanceTemplateVolumeModel.EXCLUSIVE,
             row.get(InstanceTemplateVolumeModel.EXCLUSIVE));
         Integer templateId = draft.get(InstanceTemplateVolumeModel.TEMPLATE_ID);
-        if (templateId == null) throw HohenheimViolations.ofField("template_id", null, "template_required");
+        if (templateId == null) throw Violations.ofField("template_id", null,
+                HohenheimMicrocopy.VIOLATIONS.of("template_required"));
         Row template = Models.get(InstanceTemplateModel.class).findById(templateId);
-        if (template == null) throw HohenheimViolations.ofField("template_id", templateId, "template_missing");
+        if (template == null) throw Violations.ofField("template_id", templateId,
+                HohenheimMicrocopy.VIOLATIONS.of("template_missing"));
         List<VolumeDeclaration> declared = new ArrayList<>();
         declared.add(VolumeDeclaration.of(draft));
         for (Row sibling : Models.get(InstanceTemplateVolumeModel.class).findByTemplateId(templateId)) {
@@ -89,34 +92,33 @@ public final class TemplateDeclarationGuards {
 
     private static void database(@NonNull Row row) {
         Integer id = row.get(InstanceTemplateDatabaseModel.ID);
-        Row stored = id == null ? null : Models.get(InstanceTemplateDatabaseModel.class).findById(id);
-        Integer templateId = row.has(InstanceTemplateDatabaseModel.TEMPLATE_ID.getName())
-            ? row.get(InstanceTemplateDatabaseModel.TEMPLATE_ID)
-            : stored == null ? null : stored.get(InstanceTemplateDatabaseModel.TEMPLATE_ID);
-        if (templateId == null) throw HohenheimViolations.ofField("template_id", null, "template_required");
+        Row stored = StoredRows.of(Models.get(InstanceTemplateDatabaseModel.class), row);
+        Integer templateId = row.afterWrite(InstanceTemplateDatabaseModel.TEMPLATE_ID, stored);
+        if (templateId == null) throw Violations.ofField("template_id", null,
+                HohenheimMicrocopy.VIOLATIONS.of("template_required"));
         Row template = Models.get(InstanceTemplateModel.class).findById(templateId);
-        if (template == null) throw HohenheimViolations.ofField("template_id", templateId, "template_missing");
+        if (template == null) throw Violations.ofField("template_id", templateId,
+                HohenheimMicrocopy.VIOLATIONS.of("template_missing"));
         String kind = template.get(InstanceTemplateModel.KIND);
         InstanceKindHandler handler = InstanceKinds.getHandler(kind);
         if (handler == null || !handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER)) {
             throw Violations.ofField("template_id", templateId,
-                HohenheimViolations.text("instance_kind_no_injection").withArg("kind", String.valueOf(kind)));
+                HohenheimMicrocopy.VIOLATIONS.of("instance_kind_no_injection").withArg("kind", String.valueOf(kind)));
         }
-        String engine = row.has(InstanceTemplateDatabaseModel.ENGINE.getName()) ? row.get(InstanceTemplateDatabaseModel.ENGINE)
-            : stored == null ? null : stored.get(InstanceTemplateDatabaseModel.ENGINE);
+        String engine = row.afterWrite(InstanceTemplateDatabaseModel.ENGINE, stored);
         if (engine == null) engine = "";
         if (ManagedDatabase.Engine.forToken(engine) == null) throw Violations.ofField("engine", engine,
-            HohenheimViolations.text("unknown_engine").withArg("engine", engine));
-        String rawPrefix = row.has(InstanceTemplateDatabaseModel.ENV_PREFIX.getName())
-            ? row.get(InstanceTemplateDatabaseModel.ENV_PREFIX) : stored == null ? null : stored.get(InstanceTemplateDatabaseModel.ENV_PREFIX);
-        String prefix = rawPrefix == null ? "" : rawPrefix.trim().toUpperCase(Locale.ROOT);
-        if (!prefix.matches(InstanceDatabaseModel.PREFIX_PATTERN)) throw HohenheimViolations.ofField("env_prefix", prefix, "prefix_format");
+            HohenheimMicrocopy.VIOLATIONS.of("unknown_engine").withArg("engine", engine));
+        String rawPrefix = row.afterWrite(InstanceTemplateDatabaseModel.ENV_PREFIX, stored);
+        String prefix = trimmed(rawPrefix).toUpperCase(Locale.ROOT);
+        if (!prefix.matches(InstanceDatabaseModel.PREFIX_PATTERN)) throw Violations.ofField("env_prefix", prefix,
+                HohenheimMicrocopy.VIOLATIONS.of("prefix_format"));
         for (Row sibling : Models.get(InstanceTemplateDatabaseModel.class).findByTemplateId(templateId)) {
             String other = sibling.get(InstanceTemplateDatabaseModel.ENV_PREFIX);
             if (!Objects.equals(id, sibling.get(InstanceTemplateDatabaseModel.ID))
                     && other != null && other.equalsIgnoreCase(prefix)) {
                 throw Violations.ofField("env_prefix", prefix,
-                    HohenheimViolations.text("template_database_prefix_taken").withArg("prefix", prefix));
+                    HohenheimMicrocopy.VIOLATIONS.of("template_database_prefix_taken").withArg("prefix", prefix));
             }
         }
         if (row.has(InstanceTemplateDatabaseModel.ENV_PREFIX.getName())) row.set(InstanceTemplateDatabaseModel.ENV_PREFIX, prefix);

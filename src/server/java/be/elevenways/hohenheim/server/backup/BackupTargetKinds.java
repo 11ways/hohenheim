@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.backup;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.backup.BackupTargetRegistry;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -59,7 +61,7 @@ public final class BackupTargetKinds {
         Row row = targetId == null ? null
             : Models.get(BackupTargetModel.class).findById(targetId);
         if (row == null) {
-            throw Violations.ofForm(HohenheimViolations.text("backup_target_missing"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_target_missing"));
         }
         return targetOf(row);
     }
@@ -69,23 +71,17 @@ public final class BackupTargetKinds {
         BackupTargetKindHandler handler = getHandler(row.get(BackupTargetModel.KIND));
         if (handler == null) {
             throw Violations.ofField("kind", row.get(BackupTargetModel.KIND),
-                HohenheimViolations.text("backup_target_kind_unknown")
+                HohenheimMicrocopy.VIOLATIONS.of("backup_target_kind_unknown")
                     .withArg("kind", String.valueOf((Object) row.get(BackupTargetModel.KIND))));
         }
-        Map<String, Object> settings = row.get(BackupTargetModel.SETTINGS) instanceof Map<?, ?> map
-            ? castSettings(map) : Map.of();
+        Map<String, Object> settings = RawValues.map(row.get(BackupTargetModel.SETTINGS));
         try {
             return handler.targetFor(settings);
         } catch (IOException bad) {
-            throw Violations.ofForm(HohenheimViolations.text("backup_target_invalid")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_target_invalid")
                 .withArg("name", String.valueOf((Object) row.get(BackupTargetModel.NAME)))
                 .withArg("reason", HohenheimViolations.reasonOf(bad)));
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> castSettings(Map<?, ?> map) {
-        return (Map<String, Object>) map;
     }
 
 }

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.zenit.common.text.Texts;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -7,12 +9,11 @@ import be.elevenways.hohenheim.server.Secrets;
 import be.elevenways.hohenheim.server.auth.GrantSubjects;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
-import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -26,6 +27,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
 import java.util.Set;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * THE tenant database-allocation funnel: one derivation for the stored name, the
@@ -61,7 +64,7 @@ public final class TenantDatabases {
      * transactional instance quota the engine is charged to and placement.
      */
     public static final Permission DATABASES_CREATE = Permission.declare("hohenheim.databases.create",
-        Microcopy.of("hohenheim_databases_create").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
+        HohenheimMicrocopy.PERMISSION.of("hohenheim_databases_create"), Permission.Delegation.DELEGABLE);
 
     /** Docker's object-name ceiling, minus room for the owner prefix and the volume suffix. */
     private static final int MAX_LABEL_LENGTH = 32;
@@ -122,7 +125,7 @@ public final class TenantDatabases {
      * NOTHING behind -- no record, no instance row, no reservation, and no pool thread
      * racing a row that was rolled back.
      *
-     * @throws Violations {@code databases_not_permitted}, {@code name_format},
+     * @throws Violations {@code databases_not_permitted}, {@code database_name_invalid},
      *         {@code unknown_engine}, {@code database_name_taken}, or any placement /
      *         quota / capacity refusal raised by the engine-row reservation
      */
@@ -144,16 +147,13 @@ public final class TenantDatabases {
                                         @Nullable Object rawEngine, @Nullable String image,
                                         @Nullable Integer requestedServerId) {
         if (!canAllocate(ctx)) {
-            throw Violations.ofForm(CmsSupport.violationText("databases_not_permitted"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("databases_not_permitted"));
         }
 
-        String label = BlastString.lower(rawName == null ? "" : String.valueOf(rawName).trim());
-        if (!label.matches("[a-z0-9][a-z0-9-]*") || label.length() > MAX_LABEL_LENGTH) {
-            throw Violations.ofField(DatabaseModel.NAME.getName(), label,
-                CmsSupport.violationText("name_format"));
-        }
+        String label = BlastString.lower(trimmed(rawName));
+        DatabaseModel.requireValidName(DatabaseModel.NAME.getName(), label, MAX_LABEL_LENGTH);
         String engineToken = BlastString.lower(
-            rawEngine == null ? "" : String.valueOf(rawEngine).trim());
+            trimmed(rawEngine));
         ManagedDatabase.Engine engine = engineOf(engineToken);
 
         String storedName = storedNameFor(ctx, label);
@@ -164,7 +164,7 @@ public final class TenantDatabases {
         InstanceKindHandler kind = InstanceKinds.getHandler(DatabaseContainerKind.ID.toString());
         String resolvedImage = image == null || image.isBlank() ? engine.defaultImage : image;
         Map<String, Object> placementSettings = Map.of("engine", engine.token(),
-            "image", resolvedImage);
+            InstanceKindFields.IMAGE, resolvedImage);
         int serverId = InstancePlacement.forActor(ctx, requestedServerId,
             InstancePlacement.Workload.of(kind, placementSettings));
 
@@ -178,7 +178,7 @@ public final class TenantDatabases {
             // re-credentialed the first tenant and reached both databases (2026-09-02).
             // The stored name is unique per owner and DatabaseService refuses a taken
             // logical name or user on the engine, so both are unique by construction.
-            engine, image == null || image.isBlank() ? null : image, userNameFor(storedName),
+            engine, Texts.blankAsNull(image), userNameFor(storedName),
             Secrets.generatePassword(), sqlIdentifier(storedName), false,
             ServerModel.nameOf(serverId), ResourceLimits.none(),
             DatabaseModel.STATUS_PROVISIONING));
@@ -233,7 +233,7 @@ public final class TenantDatabases {
         ManagedDatabase.Engine engine = ManagedDatabase.Engine.forToken(token);
         if (engine == null) {
             throw Violations.ofField(DatabaseModel.ENGINE.getName(), token,
-                CmsSupport.violationText("unknown_engine").withArg("engine", token));
+                HohenheimMicrocopy.VIOLATIONS.of("unknown_engine").withArg("engine", token));
         }
         return engine;
     }

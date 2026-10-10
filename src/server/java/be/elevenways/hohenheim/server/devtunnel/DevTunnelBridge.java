@@ -1,15 +1,13 @@
 package be.elevenways.hohenheim.server.devtunnel;
 
+import be.elevenways.hohenheim.server.util.Closeables;
 import be.elevenways.hohenheim.server.util.LoopbackPeers;
+import be.elevenways.hohenheim.server.util.SameUidListener;
 import be.elevenways.protoblast.common.Blast;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.channels.Channel;
-import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BinaryOperator;
 
 /**
@@ -29,12 +27,8 @@ import java.util.function.BinaryOperator;
  */
 final class DevTunnelBridge {
 
-    private final ServerSocketChannel server;
-    private final int port;
     private final DevTunnelServerHandler handler;
-    private final AtomicBoolean closed = new AtomicBoolean(false);
-    private final BinaryOperator<Integer> peerOwner;
-    private final @Nullable Integer selfUid;
+    private final SameUidListener listener;
 
     DevTunnelBridge(DevTunnelServerHandler handler) throws IOException {
         this(handler, LoopbackPeers::ownerOf, LoopbackPeers.selfUid());
@@ -48,63 +42,25 @@ final class DevTunnelBridge {
     DevTunnelBridge(DevTunnelServerHandler handler, BinaryOperator<Integer> peerOwner,
                     @Nullable Integer selfUid) throws IOException {
         this.handler = handler;
-        this.peerOwner = peerOwner;
-        this.selfUid = selfUid;
-        this.server = ServerSocketChannel.open();
-        this.server.bind(new InetSocketAddress("127.0.0.1", 0));
-        this.port = ((InetSocketAddress) this.server.getLocalAddress()).getPort();
-        Thread.ofVirtual().name("dev-tunnel-bridge-" + port).start(this::acceptLoop);
+        this.listener = new SameUidListener("dev-tunnel-bridge-", "DevTunnelBridge (the dev tunnel)", peerOwner,
+            selfUid, this::openStream);
     }
 
     int getPort() {
-        return port;
+        return listener.port();
     }
 
-    private void acceptLoop() {
-        while (!closed.get()) {
-            SocketChannel tcp;
-            try {
-                tcp = server.accept();
-            } catch (IOException e) {
-                if (!closed.get()) {
-                    Blast.log("DevTunnelBridge accept failed:", e.getMessage());
-                }
-                return;
-            }
-            // The kernel-table read happens off the accept loop, so one slow read never
-            // holds the next connection.
-            Thread.ofVirtual().start(() -> {
-                if (!admits(tcp)) {
-                    closeQuietly(tcp);
-                    return;
-                }
-                try {
-                    handler.openStream(tcp);
-                } catch (RuntimeException e) {
-                    Blast.log("DevTunnelBridge could not open a tunnel stream:", e.getMessage());
-                    closeQuietly(tcp);
-                }
-            });
+    private void openStream(SocketChannel tcp) {
+        try {
+            handler.openStream(tcp);
+        } catch (RuntimeException e) {
+            Blast.log("DevTunnelBridge could not open a tunnel stream:", e.getMessage());
+            Closeables.closeQuietly(tcp);
         }
-    }
-
-    /** Whether the connecting socket belongs to this process's own uid. */
-    private boolean admits(SocketChannel tcp) {
-        return LoopbackPeers.admits(tcp, this.port, this.peerOwner, this.selfUid, "DevTunnelBridge (the dev tunnel)");
     }
 
     /** Stop accepting; in-flight streams are torn down by the handler. */
     void close() {
-        if (closed.compareAndSet(false, true)) {
-            closeQuietly(server);
-        }
-    }
-
-    private static void closeQuietly(Channel ch) {
-        try {
-            ch.close();
-        } catch (IOException ignored) {
-            // best effort
-        }
+        listener.close();
     }
 }

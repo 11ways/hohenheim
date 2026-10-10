@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -53,7 +54,7 @@ public enum ReadinessKind {
     }
 
     public @NonNull Microcopy label() {
-        return Microcopy.of(this.token).withFilter("scope", "readiness_kind");
+        return HohenheimMicrocopy.READINESS_KIND.of(this.token);
     }
 
     /**

@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.cms.AuthProviderParts;
@@ -34,6 +35,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
+import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
+
 /**
  * The access entries of the Hohenheim legacy-admin remainder (batch 1a: access lists, protected paths, auth providers,
  * released claims), admin and tenant twins, stored before they move onto shared parts and compared exactly after it.
@@ -42,17 +46,10 @@ import java.util.Set;
  * AccessListResource, ManageAccessListResource, ProtectedPathResource, ManageProtectedPathResource,
  * AuthProviderResource and ReleasedClaimResource. A failing comparison is a changed surface, never a file to refresh;
  * an accepted difference is declared as a move or a twin table entry.
- *
- * AIDEV-NOTE: intended difference, protection that guards (W1b, 2026-10-05): every protected-path list case carries
- * the added {@code column protection} (Protected / Open to everyone) before the site column, and the operator's
- * access-list pick on a protected path offers inline create ({@code creatable:true}; the tenant twin stays false).
- * Only those facts were re-recorded; the fixture list carries one rule, as a protected path's list must.
  */
 class AccessSurfacesBrowserTest extends HohenheimTestBase {
 
     private static final String PREFIX = "access-surfaces-";
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
-    private static final String MANAGE = HohenheimSlugs.MANAGE;
     private static final String LISTS = HohenheimSlugs.ACCESS_LISTS;
     private static final String PATHS = "protected-paths";
     private static final String PROVIDERS = "auth-providers";
@@ -85,9 +82,10 @@ class AccessSurfacesBrowserTest extends HohenheimTestBase {
         usedProviderId = String.valueOf(used);
         site(PREFIX + "gated", used);
         claimId = String.valueOf(claim(PREFIX + "released.access.test"));
-        RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, site, HohenheimAccess.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, site, HohenheimCapabilities.MANAGE,
+            true);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, AccessListModel.MODEL_ID, tenantList,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         operator = TenantConduits.operator();
         tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(tenantId, "Access Surfaces Tenant")));
         tenantEmpty = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(emptyId, "Access Surfaces Empty")));
@@ -98,7 +96,7 @@ class AccessSurfacesBrowserTest extends HohenheimTestBase {
     static void cleanUp() {
         HardDeletes.byId(Models.get(ProtectedPathModel.class), Integer.parseInt(pathId));
         RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, Integer.parseInt(siteId),
-            HohenheimAccess.MANAGE);
+            HohenheimCapabilities.MANAGE);
         for (Row site : Models.get(SiteModel.class).find().withTrashed()
                 .where(SiteModel.NAME.startsWith(PREFIX)).all()) {
             HardDeletes.byId(Models.get(SiteModel.class), site.get(SiteModel.ID));
@@ -107,7 +105,7 @@ class AccessSurfacesBrowserTest extends HohenheimTestBase {
         HardDeletes.byId(Models.get(SiteAuthProviderModel.class), Integer.parseInt(freeProviderId));
         HardDeletes.byId(Models.get(SiteAuthProviderModel.class), Integer.parseInt(usedProviderId));
         RecordGrants.revoke(GrantSubjectType.USER, tenantId, AccessListModel.MODEL_ID, Integer.parseInt(tenantListId),
-            HohenheimAccess.MANAGE);
+            HohenheimCapabilities.MANAGE);
         HardDeletes.byId(Models.get(AccessListModel.class), Integer.parseInt(tenantListId));
         HardDeletes.byId(Models.get(AccessListModel.class), Integer.parseInt(sharedListId));
     }

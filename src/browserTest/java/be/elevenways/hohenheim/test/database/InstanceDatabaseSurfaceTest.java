@@ -8,14 +8,12 @@ import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
-import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
-import be.elevenways.hohenheim.server.cms.InstanceDatabasesPage;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.host.HostPreflight;
@@ -126,12 +124,12 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
     @Test
     void anAttachmentIsNamedByBothSidesAndTheDatabaseDeleteIsDeadWithTheDetachPage()
             throws Exception {
-        var attachments = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
+        var attachments = PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_DATABASES);
         Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
         Row link = Models.get(InstanceDatabaseModel.class).findById(linkId);
         Row database = Models.get(DatabaseModel.class).findById(databaseId);
         String tabUrl = CmsRoutes.subpage("admin", "instances", instanceId,
-            InstanceDatabasesPage.SLUG).toUrl();
+            HohenheimSlugs.Tab.DATABASES).toUrl();
 
         // 1. The record is titled by both sides, never by its env prefix.
         assertThat(attachments.recordTitle(link))
@@ -141,7 +139,7 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
             .doesNotStartWith("DB");
 
         // 2. Its delete dialog names both sides and the injected family it takes away.
-        ConfirmationSpec confirmation = CmsSupport.rowEntry(admin, InstanceAttachmentParts.DATABASES)
+        ConfirmationSpec confirmation = CmsSupport.rowEntry(admin, HohenheimSlugs.INSTANCE_DATABASES)
             .deleteConfirmation()
             .forRow(link, new PanelRequest(admin, TenantConduits.stubFor(null), AccessContext.anonymous(), null));
         Microcopy body = confirmation.body();

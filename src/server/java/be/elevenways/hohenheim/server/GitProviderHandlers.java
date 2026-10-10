@@ -14,6 +14,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.RawValues.trimmed;
+
 /**
  * Git provider browsing: the repository and branch listings behind the admin pickers and
  * automation, read-only against the provider and answered as typed DataPages.
@@ -75,7 +77,7 @@ final class GitProviderHandlers {
     /** The optional search text, trimmed and lower-cased; "" when absent. */
     private static @NonNull String searchText(@NonNull Conduit conduit) {
         String value = conduit.getQueryParam(HohenheimEndpoints.PROVIDER_TEXT.getName());
-        return value == null ? "" : BlastString.lower(value.trim());
+        return BlastString.lower(trimmed(value));
     }
 
     /**

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -9,7 +10,6 @@ import be.elevenways.hohenheim.server.cms.AccessListParts;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
-import be.elevenways.hohenheim.server.quota.SiteQuota;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -55,7 +55,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 class SoftDeleteJourneyTest {
 
     private static final String PREFIX = "softdel-";
-    private static final String SITE_BUCKET = SiteQuota.bucketKeyOf("");
+    private static final String SITE_BUCKET = OwnerBudget.SITES.bucketOf("");
 
     private static SqlDatasource datasource;
 

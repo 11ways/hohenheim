@@ -35,7 +35,6 @@ public class GiteaProviderClient extends ApiProviderClient {
 
     private final @NonNull String webBase;
     private final @NonNull String apiBase;
-    private final @Nullable String accessToken;
 
     /**
      * @param baseUrl the installation's web base; REQUIRED (see
@@ -43,11 +42,10 @@ public class GiteaProviderClient extends ApiProviderClient {
      */
     GiteaProviderClient(@NonNull String baseUrl, @Nullable String accessToken,
                         @NonNull OutboundUrlGuard guard) {
-        super(guard);
+        super(guard, accessToken);
         String base = trimSlash(baseUrl.trim());
         this.webBase = base;
         this.apiBase = base + "/api/v1";
-        this.accessToken = blankToNull(accessToken);
     }
 
     @Override
@@ -96,13 +94,6 @@ public class GiteaProviderClient extends ApiProviderClient {
             case FAILURE -> "failure";
         };
         postStatus(this.apiBase + "/repos/" + repoPath(repository) + "/statuses/" + commitSha, requireToken(), stateToken, context, description, targetUrl);
-    }
-
-    private @NonNull String requireToken() throws IOException {
-        if (this.accessToken == null) {
-            throw new IOException("Provider has no access token configured");
-        }
-        return this.accessToken;
     }
 
     /** {@code owner/repo}, refusing nesting and every path trick. */

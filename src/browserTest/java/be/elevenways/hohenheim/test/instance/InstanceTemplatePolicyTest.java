@@ -4,10 +4,12 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.server.instance.variable.StringVariableType;
+import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.InstanceImagePolicy;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
@@ -37,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
@@ -92,6 +95,76 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
     }
 
     // -- fixtures -------------------------------------------------------------
+
+    /** A direct or partial model save of a template's contents meets the same rules the forms do. */
+    @Test
+    void directAndPartialModelSavesShareTheTemplateAuthoringRules() {
+        Row template = Models.get(InstanceTemplateModel.class).createEmptyRow();
+        template.set(InstanceTemplateModel.NAME, PREFIX + "authoring");
+        template.set(InstanceTemplateModel.KIND, "hohenheim:application");
+        template.set(InstanceTemplateModel.SETTINGS, Map.of("image", "alpine", "tag", "latest"));
+        Models.get(InstanceTemplateModel.class).save(template);
+        int owner = template.get(InstanceTemplateModel.ID);
+        Row variable = Models.get(InstanceTemplateVariableModel.class).createEmptyRow();
+        variable.set(InstanceTemplateVariableModel.TEMPLATE_ID, owner);
+        variable.set(InstanceTemplateVariableModel.KEY, "AUTHORING_KEY");
+        variable.set(InstanceTemplateVariableModel.LABEL, "Authoring variable");
+        variable.set(InstanceTemplateVariableModel.TYPE, StringVariableType.ID.toString());
+        Models.get(InstanceTemplateVariableModel.class).save(variable);
+
+        // 1. A direct file save canonicalizes the staged path, as the form does.
+        Model files = Models.get(InstanceTemplateFileModel.class);
+        Row file = files.createEmptyRow();
+        file.set(InstanceTemplateFileModel.TEMPLATE_ID, owner);
+        file.set(InstanceTemplateFileModel.CONTAINER_PATH, " /etc/authoring/native.conf ");
+        file.set(InstanceTemplateFileModel.CONTENT, "verbatim body\n");
+        file.set(InstanceTemplateFileModel.MODE, "0640");
+        files.save(file);
+        assertThat(files.findById(file.get(InstanceTemplateFileModel.ID)).get(InstanceTemplateFileModel.CONTAINER_PATH))
+            .as("step 1: a direct save canonicalizes the path").isEqualTo("/etc/authoring/native.conf");
+
+        // 2. A one-column mode edit meets the mode rule, and its refusal moves nothing.
+        Row mode = files.createEmptyRow();
+        mode.set(InstanceTemplateFileModel.ID, file.get(InstanceTemplateFileModel.ID));
+        mode.set(InstanceTemplateFileModel.MODE, "0899");
+        assertThatThrownBy(() -> files.save(mode)).as("step 2: a partial mode edit is validated")
+            .isInstanceOf(Violations.class).hasMessageContaining("file_mode_format");
+        assertThat(files.findById(file.get(InstanceTemplateFileModel.ID)).get(InstanceTemplateFileModel.CONTENT))
+            .as("step 2: the refused edit keeps the file body").isEqualTo("verbatim body\n");
+
+        // 3. An absolute path that climbs is refused on the model lane too.
+        Row path = files.createEmptyRow();
+        path.set(InstanceTemplateFileModel.ID, file.get(InstanceTemplateFileModel.ID));
+        path.set(InstanceTemplateFileModel.CONTAINER_PATH, "/etc/../escape");
+        assertThatThrownBy(() -> files.save(path)).as("step 3: a climbing path is refused")
+            .isInstanceOf(Violations.class).hasMessageContaining("file_path_absolute");
+
+        // 4. A variable key is unique per template on the model, not only in the list writer.
+        Row duplicate = Models.get(InstanceTemplateVariableModel.class).createEmptyRow();
+        duplicate.set(InstanceTemplateVariableModel.TEMPLATE_ID, owner);
+        duplicate.set(InstanceTemplateVariableModel.KEY, "AUTHORING_KEY");
+        assertThatThrownBy(() -> Models.get(InstanceTemplateVariableModel.class).save(duplicate))
+            .as("step 4: a second variable of one key is refused")
+            .isInstanceOf(Violations.class).hasMessageContaining("variable_key_taken");
+
+        // 5. A database prefix is normalized on a direct save, and a case-folded collision is refused.
+        Model databases = Models.get(InstanceTemplateDatabaseModel.class);
+        Row database = databases.createEmptyRow();
+        database.set(InstanceTemplateDatabaseModel.TEMPLATE_ID, owner);
+        database.set(InstanceTemplateDatabaseModel.ENGINE, "postgres");
+        database.set(InstanceTemplateDatabaseModel.ENV_PREFIX, " authoring_db ");
+        databases.save(database);
+        assertThat(databases.findById(database.get(InstanceTemplateDatabaseModel.ID))
+                .get(InstanceTemplateDatabaseModel.ENV_PREFIX))
+            .as("step 5: the prefix is trimmed and upper-cased").isEqualTo("AUTHORING_DB");
+        Row collision = databases.createEmptyRow();
+        collision.set(InstanceTemplateDatabaseModel.TEMPLATE_ID, owner);
+        collision.set(InstanceTemplateDatabaseModel.ENGINE, "postgres");
+        collision.set(InstanceTemplateDatabaseModel.ENV_PREFIX, "Authoring_Db");
+        assertThatThrownBy(() -> databases.save(collision)).as("step 5: a case-folded prefix collision is refused")
+            .isInstanceOf(Violations.class).hasMessageContaining("template_database_prefix_taken");
+        databases.delete(database.get(InstanceTemplateDatabaseModel.ID));
+    }
 
     /**
      * A readiness line beside a kind that ignores it used to be DEAD DATA: the column
@@ -487,7 +560,7 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
         // the step-4 rename below is refused by the tenant-write rule -- correctly,
         // but for a reason that has nothing to do with the image policy under test.
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, created[0],
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         // 3. An UNAPPROVED template is not an image source for a tenant: pointing
         //    template_id at it does not launder the image in.
@@ -525,7 +598,7 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
         // 5. image_any ON THE RECORD is the sanctioned override: with the grant the
         //    same update passes.
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, created[0],
-            HohenheimAccess.IMAGE_ANY, true);
+            HohenheimCapabilities.IMAGE_ANY, true);
         TenantConduits.as(tenantPrincipal, () -> {
             Row row = instances.findById(created[0]);
             row.set(InstanceModel.SETTINGS, imageChanged("busybox"));
@@ -568,7 +641,7 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
             created[0] = row.get(InstanceModel.ID);
         });
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, created[0],
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         // 2. THE DEFECT: the tenant flips settings.privileged. The image policy judges
         //    image/tag/image_origin and nothing else, so before the per-key freeze existed

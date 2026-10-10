@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.auth.SiteAuthProviderTypeRegistry;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -26,23 +26,23 @@ public class SiteAuthProviderModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
-        .label(HohenheimFormCopy.label("auth_provider_name"))
-        .help(HohenheimFormCopy.help("auth_provider_name")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("auth_provider_name"))
+        .help(HohenheimMicrocopy.HELP.of("auth_provider_name")).build());
 
     // RegistryMemberField: values come from SiteAuthProviderTypeRegistry at runtime.
     public static final EnumField PROVIDER_TYPE = SCHEMA.addField(
         RegistryMemberField.builder("provider_type")
             .registry(SiteAuthProviderTypeRegistry.REGISTRY)
-            .label(HohenheimFormCopy.label("auth_provider_type"))
-            .help(HohenheimFormCopy.help("auth_provider_type"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("auth_provider_type"))
+            .help(HohenheimMicrocopy.HELP.of("auth_provider_type"))
             .build());
 
     // Polymorphic config: schema resolved dynamically from provider_type.
     public static final SchemaField CONFIG = SCHEMA.addField(
         SchemaField.builder("config")
             .schemaFrom("provider_type")
-            .label(HohenheimFormCopy.label("auth_provider_config"))
-            .help(HohenheimFormCopy.help("auth_provider_config"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("auth_provider_config"))
+            .help(HohenheimMicrocopy.HELP.of("auth_provider_config"))
             .build());
 
     // Provider-agnostic required permission for claims-based providers (null = hohenheim.site.<slug> of the gated site).
@@ -51,8 +51,8 @@ public class SiteAuthProviderModel extends Model {
     public static final StringField REQUIRED_PERMISSION = SCHEMA.addField(
         PermissionField.builder("required_permission")
             .suggestionSource(PROTEUS_SUGGESTION_SOURCE)
-            .label(HohenheimFormCopy.label("required_permission"))
-            .help(HohenheimFormCopy.help("required_permission")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("required_permission"))
+            .help(HohenheimMicrocopy.HELP.of("required_permission")).build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

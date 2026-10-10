@@ -73,8 +73,8 @@ public final class WorkloadNetworkPolicy {
     private static volatile @Nullable WorkloadNetworkPolicy override;
 
     /** The fleet-wide enforcement switch; per-host CAPABILITY is the preflight's job. */
-    private static final BooleanSupplier ENABLED_SETTING = () -> Boolean.TRUE.equals(
-        Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NFTABLES_ENABLED));
+    private static final BooleanSupplier ENABLED_SETTING =
+        () -> HohenheimSettings.isOn(HohenheimSettings.Security.NFTABLES_ENABLED);
 
     private static final WorkloadNetworkPolicy PRODUCTION = new WorkloadNetworkPolicy(
         new NftRunner.Sudo(), ENABLED_SETTING);

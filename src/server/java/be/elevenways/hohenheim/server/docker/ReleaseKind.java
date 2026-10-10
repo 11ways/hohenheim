@@ -1,9 +1,9 @@
 package be.elevenways.hohenheim.server.docker;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.instance.ConsoleKind;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
@@ -12,9 +12,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.util.EnvVars;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DoubleField;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -31,6 +29,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * The instance kind a Docker SITE's running release lowers onto: an operator-authored,
@@ -60,9 +60,7 @@ public final class ReleaseKind implements InstanceKindHandler {
     /** Same measured profile as every other container authority (see DockerContainerKind). */
     public static final ContainerHardening.Profile HARDENING = ContainerHardening.SERVICE;
 
-    public static final StringField IMAGE = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("image").label(HohenheimFormCopy.label("image"))
-            .help(HohenheimFormCopy.help("image")).build());
+    public static final StringField IMAGE = SETTINGS_SCHEMA.addField(InstanceKindFields.image());
 
     /**
      * The content-addressed ID of the build ApplicationReleases last ran (git-sourced
@@ -95,32 +93,27 @@ public final class ReleaseKind implements InstanceKindHandler {
         StringField.builder().name("health_path").filterable(false).build());
 
     public static final StringField TAG = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("tag").label(HohenheimFormCopy.label("image_tag"))
-            .help(HohenheimFormCopy.help("image_tag")).build());
+        StringField.builder().name("tag").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("image_tag"))
+            .help(HohenheimMicrocopy.HELP.of("image_tag")).build());
 
     public static final StringField COMMAND = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("command").label(HohenheimFormCopy.label("container_command"))
-            .help(HohenheimFormCopy.help("container_command")).build());
+        StringField.builder().name("command").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_command"))
+            .help(HohenheimMicrocopy.HELP.of("container_command")).build());
 
     public static final StringField WORKDIR = SETTINGS_SCHEMA.addField(
         PathField.builder().name("workdir")
-            .label(HohenheimFormCopy.label("workdir")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("workdir")).build());
 
     /** The application's declared console, copied per release by ApplicationReleases. */
-    public static final EnumField CONSOLE_KIND = SETTINGS_SCHEMA.addField(
-        ConsoleKind.fieldBuilder(ConsoleKind.SETTING)
-            .label(HohenheimFormCopy.label("console_kind"))
-            .help(HohenheimFormCopy.help("console_kind")).build());
+    public static final EnumField CONSOLE_KIND = SETTINGS_SCHEMA.addField(InstanceKindFields.consoleKind());
 
     public static final IntegerField CONTAINER_PORT = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("container_port").label(HohenheimFormCopy.label("container_port"))
-            .help(HohenheimFormCopy.help("container_port")).build());
+        IntegerField.builder().name("container_port").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_port"))
+            .help(HohenheimMicrocopy.HELP.of("container_port")).build());
 
     // secret(): redacted on derived surfaces (revisions, activity), like every env map.
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
-        StringMapField.builder("environment_variables")
-            .label(HohenheimFormCopy.label("environment_variables"))
-            .help(HohenheimFormCopy.help("environment_variables")).secret().build());
+        InstanceKindFields.environmentVariables());
 
     // The APPLICATION's volume directories: host path -> container path, resolved by
     // ApplicationReleases.desiredSettings off the APPLICATION id and written onto every
@@ -129,16 +122,12 @@ public final class ReleaseKind implements InstanceKindHandler {
     // deriving is exactly what made a gated swap mount an empty volume.
     public static final StringMapField VOLUME_MOUNTS = SETTINGS_SCHEMA.addField(
         StringMapField.builder(ApplicationReleases.VOLUME_MOUNTS)
-            .label(HohenheimFormCopy.label("volumes"))
-            .help(HohenheimFormCopy.help("volumes")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("volumes"))
+            .help(HohenheimMicrocopy.HELP.of("volumes")).build());
 
-    public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("memory_limit_mb").label(HohenheimFormCopy.label("memory_limit"))
-            .help(HohenheimFormCopy.help("memory_limit")).build());
+    public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
 
-    public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(
-        DoubleField.builder().name("cpu_limit").label(HohenheimFormCopy.label("cpu_limit"))
-            .help(HohenheimFormCopy.help("cpu_limit")).build());
+    public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(InstanceKindFields.cpuLimit());
 
     // A release is GENERATED per deploy: what a reader wants is what it runs, and the four
     // provenance handles the release engine stamped are evidence, not input. They stay in
@@ -158,16 +147,6 @@ public final class ReleaseKind implements InstanceKindHandler {
     public @NonNull String getDisplayName() { return "Release"; }
 
     @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("release").withFilter("scope", "instance_kind");
-    }
-
-    @Override
-    public @NonNull Microcopy getDescription() {
-        return Microcopy.of("release").withFilter("scope", "instance_kind_description");
-    }
-
-    @Override
     public Icon getIcon() { return Icon.of("globe"); }
 
     @Override
@@ -185,8 +164,7 @@ public final class ReleaseKind implements InstanceKindHandler {
 
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
-        return new DockerInstanceRuntime(new ServerService().clientFor(serverName),
-            WorkloadNetworkPolicy.forServer(serverName), NetworkPosture.PRIVATE, Egress.OPEN);
+        return DockerInstanceRuntime.onServer(serverName, Egress.OPEN);
     }
 
     @Override
@@ -210,7 +188,7 @@ public final class ReleaseKind implements InstanceKindHandler {
             : null;
 
         return ContainerSettings.spec(instanceId, settings, defaultFootprintMb(settings), HARDENING)
-            .workdir(str(settings.get("workdir")))
+            .workdir(trimmed(settings.get("workdir")))
             .binds(binds)
             .publication(publication)
             .build();
@@ -224,9 +202,5 @@ public final class ReleaseKind implements InstanceKindHandler {
     @Override
     public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
         return 512;
-    }
-
-    private static String str(Object value) {
-        return value == null ? "" : value.toString().trim();
     }
 }

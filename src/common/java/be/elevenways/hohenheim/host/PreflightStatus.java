@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -41,7 +42,7 @@ public enum PreflightStatus {
 
     /** @return this verdict in words ("Passed", "Advice", "Failed"), as the host page's badge reads it */
     public @NonNull Microcopy label() {
-        return Microcopy.of("verdict_" + this.token).withFilter("scope", "host_check");
+        return HohenheimMicrocopy.HOST_CHECK.of("verdict_" + this.token);
     }
 
     /** Whether this verdict is the clean one -- the only member for which it is true. */

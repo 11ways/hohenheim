@@ -75,7 +75,7 @@ public final class HohenheimFormSections {
      * @param entryNames the fields it claims, in render order
      */
     public static @NonNull FormSection collapsed(@NonNull String id, @NonNull List<String> entryNames) {
-        return new FormSection(id, HohenheimFormCopy.section(id), null, null, true, entryNames);
+        return new FormSection(id, HohenheimMicrocopy.FORM_SECTION.of(id), null, null, true, entryNames);
     }
 
     /**
@@ -86,13 +86,13 @@ public final class HohenheimFormSections {
      * @param entryNames the fields it claims, in render order
      */
     public static @NonNull FormSection open(@NonNull String id, @NonNull List<String> entryNames) {
-        return new FormSection(id, HohenheimFormCopy.section(id), null, null, false, entryNames);
+        return new FormSection(id, HohenheimMicrocopy.FORM_SECTION.of(id), null, null, false, entryNames);
     }
 
     /** An open section with a line under its label saying when its values take effect. */
     public static @NonNull FormSection open(@NonNull String id, @NonNull Microcopy description,
                                             @NonNull List<String> entryNames) {
-        return new FormSection(id, HohenheimFormCopy.section(id), description, null, false, entryNames);
+        return new FormSection(id, HohenheimMicrocopy.FORM_SECTION.of(id), description, null, false, entryNames);
     }
 
     /** @return one list, so a section can name a shared group plus its own members */

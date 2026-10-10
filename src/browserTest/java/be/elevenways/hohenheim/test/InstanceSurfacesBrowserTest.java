@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -26,6 +26,9 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
+import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
+
 /**
  * The instance entry of stage 5 B14, admin and tenant twin, stored before its verbs and parts move and compared
  * exactly after it.
@@ -34,34 +37,17 @@ import java.util.Map;
  * instance whose install failed, so the install, reinstall, expose, migrate and delete-with-data verbs all show. The
  * accepted difference is the moved invokes' route; a failing comparison is a changed surface, never a file to refresh.
  *
- * AIDEV-NOTE: intended difference, Access tab added (Jelle 2026-10-03): the stored set carries one added
- * {@code tab access} fact per record case, re-recorded beside the legacy capture, because zenit-auth's record access
- * page rides every parts entry over a grantable model (RecordTab#ridesEveryEntry). Every other fact is the legacy
- * capture as stored.
+ * AIDEV-NOTE: the failed-install fixture sits on a host that is not admitted, so start, restart, install and reinstall
+ * carry {@code disabled=host_not_admitted} (the tenant's start {@code deploy_blocked_delegated}), the overview notice's
+ * own reason. The fixture's MANAGE grant implies {@code destroy}, so the tenant's record case offers the verified
+ * destroy ({@code verb DELETE} and the delete row) as the operator's does.
  *
- * AIDEV-NOTE: intended difference, host-bound verbs offered dead (W1b, 2026-10-05): the failed-install fixture sits on
- * a host that is not admitted, so start, restart, install and reinstall carry {@code disabled=host_not_admitted} (the
- * tenant's start {@code deploy_blocked_delegated}), the overview notice's own reason. Only those five facts were
- * re-recorded.
- *
- * AIDEV-NOTE: intended difference, app health (W3a, 2026-10-05): the admin list gains the framework health column
- * ({@code column health}, every later column one place on), and a workload its host refuses offers the
- * {@code instance_check_host} link to that host, the health band's fix. Only those facts changed.
- *
- * AIDEV-NOTE: intended difference, the board's tab set (W3b, 2026-10-05): the console's modes (shell, the one-off
- * command, a VM's screen) follow the Console tab as routed pages out of the strip, snapshots and schedules became
- * sections of the Backups tab (their own tabs are gone), and the housekeeping tabs follow Backups. Only the
- * {@code tab} facts were re-recorded, each case's from its capture; no verb, column or filter fact moved.
- *
- * AIDEV-NOTE: intended difference, the tenant's delete door (D7f, 2026-10-08): the /manage twin offers the verified
- * destroy to a holder of {@code destroy}, which the fixture's MANAGE grant implies, so the tenant's record case gains
- * {@code verb DELETE} and the delete row, hand-written as the operator's own delete row. Nothing else moved.
+ * AIDEV-NOTE: a picker's binding digest hashes its resolver's DRY-serialized configuration, so a change to how
+ * protoblast's DRY writes a type name moves the host, runtime-image, repository and branch resolver digests.
  */
 class InstanceSurfacesBrowserTest extends HohenheimTestBase {
 
     private static final String PREFIX = "b14-instances-";
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
-    private static final String MANAGE = HohenheimSlugs.MANAGE;
     private static final String INSTANCES = HohenheimSlugs.INSTANCES;
 
     private static String instanceId;
@@ -79,7 +65,7 @@ class InstanceSurfacesBrowserTest extends HohenheimTestBase {
         int instance = instance(PREFIX + "instance", template);
         instanceId = String.valueOf(instance);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instance,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         operator = access(operatorPrincipal());
         tenant = access(new UserPrincipal(tenantId, "B14 Instance Tenant"));
     }

@@ -5,7 +5,8 @@ import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -70,13 +71,13 @@ class InstanceApiTest extends HohenheimTestBase {
         keyAdmin = ApiKeyService.create(adminId, PREFIX + "admin", List.of("hohenheim.*"), null)
             .plaintext();
         keyTenant = ApiKeyService.create(tenantId, PREFIX + "tenant",
-            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.VIEW)), null)
+            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW)), null)
             .plaintext();
         // The key never GRANTS anything; it only narrows its owner. This one leaves the
         // destroy verb inside the narrowing so the GRANT is what the last journey moves.
         keyTenantDestroy = ApiKeyService.create(tenantId, PREFIX + "tenant-destroy",
-            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.VIEW),
-                CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.DESTROY)), null)
+            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW),
+                CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.DESTROY)), null)
             .plaintext();
         // The admin's OWN key narrowed to an unrelated vocabulary: no admin permission
         // survives the narrowing, so the create door must be shut for it.
@@ -128,7 +129,7 @@ class InstanceApiTest extends HohenheimTestBase {
     private static int viewOnlyInstance(String name) {
         int id = instance(name);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, id,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         return id;
     }
 
@@ -186,6 +187,9 @@ class InstanceApiTest extends HohenheimTestBase {
         assertThat(String.valueOf(row.get(InstanceModel.SETTINGS)))
             .as("step 1: the RETIRED poll_interval is still accepted and stored, never refused")
             .contains("poll_interval=60");
+        assertThat(GitSourceSchema.autoDeploys(InstanceModel.settingsOf(row)))
+            .as("step 1: a source created without auto_deploy deploys on push, as one made through the form does")
+            .isTrue();
         assertThat((Object) row.get(InstanceModel.SERVER_ID))
             .as("step 1: an operator's explicit host is honoured verbatim").isEqualTo(hostId);
         assertThat((Object) row.get(InstanceModel.TEMPLATE_ID))
@@ -373,7 +377,7 @@ class InstanceApiTest extends HohenheimTestBase {
         // 3. The grant lands: the reason is gone, and the delete the panel now offers LIVE
         //    is the one that runs.
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, viewOnlyId,
-            HohenheimAccess.DESTROY, true);
+            HohenheimCapabilities.DESTROY, true);
         // A FRESH context, because the reason resolver reads the request memo and a grant
         // written inside a request is deliberately not seen by that request's render.
         AccessContext granted = AccessContext.of(TenantConduits.stubFor(

@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
@@ -34,12 +36,9 @@ import java.util.Map;
  */
 public final class StackServicesPage implements RecordTab.Rendered<Row> {
 
-    /** The stack's front door: a stack without services runs nothing, so this is where creation lands. */
-    public static final String SLUG = "services";
-
     @Override public @NonNull Identifier id() { return HohenheimIds.id("stack_services"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("services").withFilter("scope", "stack"); }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.STACK.of("services"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.SERVICES; }
     @Override public @NonNull Icon icon() { return Icon.of("cubes"); }
 
     @Override
@@ -62,9 +61,9 @@ public final class StackServicesPage implements RecordTab.Rendered<Row> {
             entry.put("enabled", Boolean.TRUE.equals(service.get(StackServiceModel.ENABLED)));
             String state = liveStates.getOrDefault(name, "missing");
             entry.put("state", state);
-            entry.put("stateLabel", stateLabel(state));
+            entry.put("stateLabel", HohenheimMicrocopy.STACK_STATE.of(state));
             entry.put("stateVariant", stateVariant(state));
-            entry.put("editTarget", CmsRoutes.detail(panel, StackParts.SERVICES_SLUG, serviceId));
+            entry.put("editTarget", CmsRoutes.detail(panel, HohenheimSlugs.STACK_SERVICES, serviceId));
 
             StringBuilder ports = new StringBuilder();
             for (Row port : service.getRecords(StackServiceModel.PORTS)) {
@@ -82,7 +81,7 @@ public final class StackServicesPage implements RecordTab.Rendered<Row> {
                 Map<String, Object> fileEntry = new HashMap<>();
                 fileEntry.put("id", file.get(StackFileModel.ID));
                 fileEntry.put("path", file.get(StackFileModel.CONTAINER_PATH));
-                fileEntry.put("editTarget", CmsRoutes.detail(panel, StackParts.FILES_SLUG,
+                fileEntry.put("editTarget", CmsRoutes.detail(panel, HohenheimSlugs.STACK_FILES,
                     file.get(StackFileModel.ID)));
                 files.add(fileEntry);
             }
@@ -91,7 +90,7 @@ public final class StackServicesPage implements RecordTab.Rendered<Row> {
             // CmsRoutes.create returns the RouteTarget interface (no with(...)).
             entry.put("addFileTarget", CmsEndpoints.CREATE_FORM
                 .with(CmsEndpoints.PANEL_PARAM, panel)
-                .with(CmsEndpoints.RESOURCE_PARAM, StackParts.FILES_SLUG)
+                .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.STACK_FILES)
                 .with(HohenheimParams.STACK_SERVICE_ID_PREFILL, serviceId));
 
             services.add(entry);
@@ -104,21 +103,16 @@ public final class StackServicesPage implements RecordTab.Rendered<Row> {
         vars.put("services", services);
         vars.put("addServiceTarget", CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, StackParts.SERVICES_SLUG)
+            .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.STACK_SERVICES)
             .with(HohenheimParams.STACK_ID_PREFILL, stackId));
         // The front door of a FAILED stack states the reason and links the row that
         // carries it: a status badge alone sent the operator hunting through tabs.
         String failure = StackFailures.reasonOf(stack);
         vars.put("failureReason", failure != null ? failure : "");
         vars.put("deploymentsTarget", failure != null
-            ? CmsRoutes.subpage(panel, StackParts.SLUG, stackId, StackDeploymentsPage.SLUG) : null);
+            ? CmsRoutes.subpage(panel, HohenheimSlugs.STACKS, stackId, HohenheimSlugs.Tab.DEPLOYMENTS) : null);
         vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.STACK_SERVICES, vars);
-    }
-
-    /** Container states are a closed vocabulary, so they localize as scoped microcopy. */
-    static Microcopy stateLabel(String state) {
-        return Microcopy.of(state).withFilter("scope", "stack_state");
     }
 
     /**

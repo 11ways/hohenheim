@@ -1,12 +1,13 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.hohenheim.source.GitProviderOperations.ConnectionTest;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.PanelAction;
@@ -68,7 +69,7 @@ public final class GitProviderParts {
             .column(ColumnSpec.fromField(GitProviderModel.SHARED).filterable().build())
             .column(ColumnSpec.fromField(GitProviderModel.CREATED_AT).build())
             .build();
-        return entry("git_provider", table, form, GitProviderParts::operatorWords)
+        return entry(HohenheimIds.id("git_provider"), table, form, GitProviderParts::operatorWords)
             .writes(ResourceMutations.rows().create().update().delete().build())
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
@@ -89,16 +90,13 @@ public final class GitProviderParts {
             .column(ColumnSpec.fromField(GitProviderModel.KIND).filterable().build())
             .column(ColumnSpec.fromField(GitProviderModel.BASE_URL).copyable().build())
             .build();
-        return entry("manage_git_provider", table, form, GitProviderParts::tenantWords)
-            // Reached from the Apps list's toolbar (ManagePanel's sidebar note).
-            .showInNav(false)
-            .standsUnder(AppParts.SLUG)
-            // Admins see every provider; everyone else only the ones the walk confirms manage on, so an unowned id
-            // reads as MISSING (zenit-cms 404s an out-of-scope load) rather than forbidden.
-            .scope(TenantScopes.MANAGED_GIT_PROVIDERS)
-            // NAV-ONLY (zero granted providers hide the empty list); the route stays scoped.
-            .hasInScopeRecords(access -> HohenheimAccess.reachesAny(access, GitProviderModel.MODEL_ID,
-                HohenheimAccess.MANAGE))
+        // Reached from the Apps list's toolbar (ManagePanel's sidebar note). Admins see every provider; everyone else
+        // only the ones the walk confirms manage on, so an unowned id reads as MISSING (zenit-cms 404s an out-of-scope
+        // load) rather than forbidden. The contributed tabs only (the generic access matrix, which gates itself per
+        // record).
+        return ManageTwin.reached(entry(ManageTwin.id("git_provider"), table, form, GitProviderParts::tenantWords),
+                TenantScopes.MANAGED_GIT_PROVIDERS, ResourceTabs.<Row>none().withContributions())
+            .standsUnder(HohenheimSlugs.APPS)
             .writes(ResourceMutations.rows().create().update().delete()
                 .beforeSave(save -> {
                     if (save.isCreate()) {
@@ -115,20 +113,17 @@ public final class GitProviderParts {
                     }
                 })
                 .build())
-            // The contributed tabs only (the generic access matrix, which gates itself per record): the admin
-            // activity and revision history stays off the delegated surface, which also 404s its routes.
-            .tabs(ResourceTabs.<Row>none().withContributions())
             .build();
     }
 
     /** The entry, list, reads, inline cell and connection test both twins share. */
-    private static PanelResource.@NonNull Builder<Row> entry(@NonNull String id, @NonNull TableSpec<Row> table,
+    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id, @NonNull TableSpec<Row> table,
                                                              @NonNull FormSpec form,
                                                              @NonNull Function<ConnectionTest, CmsActionResult> words) {
-        return PanelResource.builder(HohenheimIds.id(id), HohenheimSlugs.GIT_PROVIDERS, GitProviderOperations.PROVIDER)
-            .label(Microcopy.of("plural").withFilter("scope", "git_provider"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "git_provider"))
-            .description(Microcopy.of("nav_hint").withFilter("scope", "git_provider"))
+        return PanelResource.builder(id, HohenheimSlugs.GIT_PROVIDERS, GitProviderOperations.PROVIDER)
+            .label(HohenheimMicrocopy.GIT_PROVIDER.of("plural"))
+            .recordLabel(HohenheimMicrocopy.GIT_PROVIDER.of("singular"))
+            .description(HohenheimMicrocopy.GIT_PROVIDER.of("nav_hint"))
             .icon(Icon.of("code-branch"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(70)
@@ -142,7 +137,7 @@ public final class GitProviderParts {
             .form(ResourceForm.<Row>of(form).inlineEditable(GitProviderModel.NAME).build())
             .actions(List.of(PanelAction.<Row, ConnectionTest>places(GitProviderOperations.TEST_CONNECTION,
                     ActionPlacement.ROW, (request, result) -> words.apply(result.value()))
-                .label(Microcopy.of("test_connection").withFilter("scope", "git_provider"))
+                .label(HohenheimMicrocopy.GIT_PROVIDER.of("test_connection"))
                 .icon(Icon.of("plug-circle-check"))
                 .build()));
     }
@@ -150,7 +145,7 @@ public final class GitProviderParts {
     /** The operator chose the URL and owns the network it probes, so a failure names the client's own reason. */
     static @NonNull CmsActionResult operatorWords(@NonNull ConnectionTest test) {
         if (test.failure() != null) {
-            return CmsActionResult.errorToast(Microcopy.of("test_failed").withFilter("scope", "git_provider")
+            return CmsActionResult.errorToast(HohenheimMicrocopy.GIT_PROVIDER.of("test_failed")
                 .withArg("reason", test.failure()));
         }
         return passed(test);
@@ -165,13 +160,13 @@ public final class GitProviderParts {
      */
     static @NonNull CmsActionResult tenantWords(@NonNull ConnectionTest test) {
         if (test.failure() != null) {
-            return CmsActionResult.errorToast(Microcopy.of("test_failed_generic").withFilter("scope", "git_provider"));
+            return CmsActionResult.errorToast(HohenheimMicrocopy.GIT_PROVIDER.of("test_failed_generic"));
         }
         return passed(test);
     }
 
     private static @NonNull CmsActionResult passed(@NonNull ConnectionTest test) {
-        return CmsActionResult.toast(Microcopy.of("test_ok").withFilter("scope", "git_provider")
+        return CmsActionResult.toast(HohenheimMicrocopy.GIT_PROVIDER.of("test_ok")
             .withArg("count", test.repositories()));
     }
 
@@ -190,7 +185,7 @@ public final class GitProviderParts {
         String name = GitProviderModel.SHARED.getName();
         if (coerced.containsKey(name) && Boolean.TRUE.equals(coerced.get(name))
                 != Boolean.TRUE.equals(GitProviderModel.SHARED.getDefaultValue())) {
-            throw Violations.ofField(name, coerced.get(name), CmsSupport.violationText("tenant_field_frozen"));
+            throw Violations.ofField(name, coerced.get(name), HohenheimMicrocopy.VIOLATIONS.of("tenant_field_frozen"));
         }
     }
 }

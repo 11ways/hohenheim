@@ -1,47 +1,18 @@
-{#- Steps tab on a schedule: the ordered chain plus its recent runs with per-step
-    verdicts, linking into the (nav-hidden) step resource forms. -#}
+{#- Steps tab on a schedule: the framework's child list section over the ordered chain, then its recent runs with
+    per-step verdicts. -#}
 {% declare title: String %}
-{% declare scheduleId: Integer %}
-{% declare scheduleName: String %}
-{% declare steps: List %}
+{% declare sections: List<ChildListSectionState> %}
+{% declare panelSlug: String %}
 {% declare runs: List<ScheduleRunView> %}
-{% declare addStepTarget: RouteTarget = null %}
-{% declare canEdit: Boolean = true %}
 {% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-list-page">
     {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
-    <div class="hh-tab-tools">
-        {% if canEdit %}<pl-button variant="primary" use:Zenit.route={% addStepTarget %} id="add-step-link">{{ t("add", scope: "schedule_step") }}</pl-button>{% /if %}
-    </div>
-
-    {% if steps %}
-    <pl-table>
-        <pl-table-header><pl-table-row>
-            <pl-table-head>{{ t("order", scope: "schedule_step") }}</pl-table-head>
-            <pl-table-head>{{ t("action", scope: "schedule_step") }}</pl-table-head>
-            <pl-table-head>{{ t("offset", scope: "schedule_step") }}</pl-table-head>
-            <pl-table-head>{{ t("on_failure", scope: "schedule_step") }}</pl-table-head>
-        </pl-table-row></pl-table-header>
-        <pl-table-body>
-            {% each steps as index, step %}
-            <pl-table-row>
-                <pl-table-cell>{{ step.get("position") }}</pl-table-cell>
-                <pl-table-cell>{% if canEdit %}<a use:Zenit.route={% step.get("editTarget") %}>{{ step.get("action") }}</a>{% else %}{{ step.get("action") }}{% /if %}</pl-table-cell>
-                <pl-table-cell>{{ step.get("offsetSeconds") }}s</pl-table-cell>
-                <pl-table-cell><pl-badge variant={% "secondary" %}>{{ step.get("failurePolicy") }}</pl-badge></pl-table-cell>
-            </pl-table-row>
-            {% /each %}
-        </pl-table-body>
-    </pl-table>
-    {% else %}
-    <pl-empty-state icon="list-ol">
-        <pl-empty-state-title>{{ t("empty", scope: "schedule_step") }}</pl-empty-state-title>
-        <pl-empty-state-description>{{ t("empty_description", scope: "schedule_step") }}</pl-empty-state-description>
-    </pl-empty-state>
-    {% /if %}
+    {% each sections as section key section.resourceSlug %}
+    {% render "zenitcms:child-list-section" var:section=section var:panelSlug=panelSlug %}
+    {% /each %}
 
     <h2>{{ t("recent_runs", scope: "instance_schedule") }}</h2>
     {% if runs %}
@@ -54,7 +25,7 @@
         <pl-table-body>
             {% each runs as index, run %}
             <pl-table-row>
-                <pl-table-cell>{{ run.startedAt }}</pl-table-cell>
+                <pl-table-cell>{% render "zenitcms:cell/datetime" var:value=run.startedAt %}</pl-table-cell>
                 {#- The verdict badge is ScheduleRunStatuses' declared state: this template
                     does not classify a status, so "running" is not red and "completed with
                     failures" is not indistinguishable from an outright failure. -#}

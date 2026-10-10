@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.dns;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
@@ -63,7 +64,7 @@ public final class DnsPeerCascades {
         }
         Row first = secondaries.first();
         Row peer = first.get(DnsZoneModel.PRIMARY_PEER);
-        throw Violations.ofForm(CmsSupport.violationText("dns_peer_in_use")
+        throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("dns_peer_in_use")
             .withArg("name", peer != null ? String.valueOf((Object) peer.get(DnsPeerModel.NAME)) : "")
             .withArg("zone", String.valueOf((Object) first.get(DnsZoneModel.ORIGIN)))
             .withArg("count", count));

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
@@ -9,7 +10,7 @@ import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.InstanceChildDeletes;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -41,6 +42,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
+import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
+
 /**
  * The instance child entries of stage 5 B14 (backups, quotas, config files, schedules, their steps and runs), admin
  * and tenant twins, stored before they move onto shared parts and compared exactly after it.
@@ -53,8 +57,6 @@ import java.util.Map;
 class InstanceChildSurfacesBrowserTest extends HohenheimTestBase {
 
     private static final String PREFIX = "b14-surfaces-";
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
-    private static final String MANAGE = HohenheimSlugs.MANAGE;
     private static final String BACKUPS = "instance-backups";
     private static final String QUOTAS = "instance-quotas";
     private static final String FILES = "instance-files";
@@ -83,11 +85,11 @@ class InstanceChildSurfacesBrowserTest extends HohenheimTestBase {
         int instance = instance(PREFIX + "instance");
         instanceId = String.valueOf(instance);
         RecordGrants.grant(GrantSubjectType.USER, backupsUser, InstanceModel.MODEL_ID, instance,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         RecordGrants.grant(GrantSubjectType.USER, backupsUser, InstanceModel.MODEL_ID, instance,
-            HohenheimAccess.BACKUPS, true);
+            HohenheimCapabilities.BACKUPS, true);
         RecordGrants.grant(GrantSubjectType.USER, schedulesUser, InstanceModel.MODEL_ID, instance,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         int target = target(PREFIX + "target");
         targetId = String.valueOf(target);
@@ -147,11 +149,12 @@ class InstanceChildSurfacesBrowserTest extends HohenheimTestBase {
         stored.get(BACKUPS).check(capture(SurfaceCase.of(ADMIN, BACKUPS, "operator", operator)
             .selecting(List.of(completeBackupId, failedBackupId), "sel")));
 
-        // 3. The parent prefills the create forms carry from their tabs.
+        // 3. The parent prefills the create forms carry from their tabs: the files' own parameter, the steps' child
+        //    list create under the schedule.
         stored.get(FILES).check(capture(SurfaceCase.of(ADMIN, FILES, "operator", operator).named(ADMIN + "." + FILES
             + ".operator.prefill").withParameter(HohenheimParams.INSTANCE_ID_PREFILL.getName(), instanceId)));
         stored.get(STEPS).check(capture(SurfaceCase.of(ADMIN, STEPS, "operator", operator).named(ADMIN + "." + STEPS
-            + ".operator.prefill").withParameter(HohenheimParams.SCHEDULE_ID_PREFILL.getName(), scheduleId)));
+            + ".operator.prefill").withParameter(CmsEndpoints.PARENT_PARAM.getName(), scheduleId)));
 
         // 4. The /manage twins for the tenants holding their capability on the instance.
         stored.get(BACKUPS).check(capture(SurfaceCase.of(MANAGE, BACKUPS, "tenant-backups", tenantBackups)));
@@ -201,7 +204,6 @@ class InstanceChildSurfacesBrowserTest extends HohenheimTestBase {
             .key(QUOTAS, "quota", quotaId)
             .key(FILES, "file", fileId)
             .key(SCHEDULES, "schedule", scheduleId)
-            .key(HohenheimParams.SCHEDULE_ID_PREFILL.getName(), "schedule", scheduleId)
             .key(STEPS, "step", stepId)
             .key(RUNS, "run", runId));
     }

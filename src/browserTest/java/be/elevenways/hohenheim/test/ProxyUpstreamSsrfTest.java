@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -68,7 +68,7 @@ class ProxyUpstreamSsrfTest extends HohenheimTestBase {
         TenantConduits.as(adminPrincipal, () -> siteModel.save(tenantSite));
         tenantSiteId = tenantSite.get(SiteModel.ID);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, tenantSiteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
     }
 
     private static Row proxySite(Model model, String name, String slug, String forwardHost) {
@@ -157,7 +157,7 @@ class ProxyUpstreamSsrfTest extends HohenheimTestBase {
         //    judgement never runs on the operator's choice (it used to refuse the rename).
         int operatorSiteId = operatorMetadataProxy(model, "Delegated LAN Proxy", "delegated-lan");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, operatorSiteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         assertThatCode(() -> TenantConduits.as(tenantPrincipal, () -> {
             Row row = model.findById(operatorSiteId);
             row.set(SiteModel.DESCRIPTION, "delegated LAN proxy");

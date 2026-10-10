@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.security.ReputationScore;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -32,7 +34,6 @@ import java.util.function.Supplier;
 /** Strict reputation diagnostic with Hohenheim's weighted policy explanation. */
 public final class SpamserviceReputationPage extends PanelPage {
 
-    public static final String SLUG = "spamservice-reputation";
     private final Supplier<SpamserviceClient> clientSupplier;
 
     public SpamserviceReputationPage() {
@@ -44,13 +45,13 @@ public final class SpamserviceReputationPage extends PanelPage {
     }
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_reputation"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("reputation").withFilter("scope", "spamservice"); }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.SPAMSERVICE.of("reputation"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.SPAMSERVICE_REPUTATION; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.SECURITY_GROUP; }
     @Override public int navOrder() { return 70; }
 
     @Override public boolean showInNav() { return false; }
-    @Override public @NonNull String standsUnder() { return SpamserviceOverviewPage.SLUG; }
+    @Override public @NonNull String standsUnder() { return HohenheimSlugs.SPAMSERVICE; }
     @Override public @NonNull Icon icon() { return Icon.of("magnifying-glass"); }
 
     @Override
@@ -58,9 +59,9 @@ public final class SpamserviceReputationPage extends PanelPage {
         Conduit conduit = request.conduit();
         String ip = Texts.trimmedOrNull(conduit.getQueryParam("ip"));
         Map<String, Object> vars = new LinkedHashMap<>();
-        vars.put("title", Microcopy.of("reputation").withFilter("scope", "spamservice")
+        vars.put("title", HohenheimMicrocopy.SPAMSERVICE.of("reputation")
             .resolve(conduit.getLocales(), conduit.getMessageResolver()));
-        vars.put("pageTarget", CmsRoutes.list(HohenheimSlugs.ADMIN, SLUG));
+        vars.put("pageTarget", CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.SPAMSERVICE_REPUTATION));
         vars.put("ip", ip != null ? ip : "");
         vars.put("error", "");
         vars.put("result", Map.of());
@@ -76,7 +77,8 @@ public final class SpamserviceReputationPage extends PanelPage {
         if (ip != null) {
             SpamserviceClient client = this.clientSupplier.get();
             if (client == null) {
-                vars.put("error", resolve(conduit, "disconnected"));
+                vars.put("error", HohenheimMicrocopy.SPAMSERVICE.of("disconnected")
+                    .resolve(conduit.getLocales(), conduit.getMessageResolver()));
             } else {
                 try {
                     ReputationDiagnostic diagnostic = client.diagnoseReputation(ip);
@@ -129,10 +131,9 @@ public final class SpamserviceReputationPage extends PanelPage {
         }).toList();
     }
 
-    @SuppressWarnings("unchecked")
     private static Map<String, Object> categoryMap(Map<String, Object> values) {
         Object categories = values.get("categories");
-        return categories instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+        return RawValues.map(categories);
     }
 
     private static long count(Object value) {
@@ -145,10 +146,5 @@ public final class SpamserviceReputationPage extends PanelPage {
         Map<String, Long> result = new LinkedHashMap<>();
         values.forEach((category, value) -> result.put(category, count(value)));
         return result;
-    }
-
-    private static String resolve(Conduit conduit, String key) {
-        return Microcopy.of(key).withFilter("scope", "spamservice")
-            .resolve(conduit.getLocales(), conduit.getMessageResolver());
     }
 }

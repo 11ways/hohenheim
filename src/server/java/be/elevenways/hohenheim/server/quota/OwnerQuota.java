@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.quota;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -126,7 +127,7 @@ public final class OwnerQuota {
         try {
             Quotas.reserve(bucket, amount, limit == null ? Long.MAX_VALUE : limit);
         } catch (QuotaExceeded full) {
-            throw Violations.ofForm(HohenheimViolations.text(violationKey)
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of(violationKey)
                 .withArg("used", full.getUsed())
                 .withArg("limit", full.getLimit()));
         }

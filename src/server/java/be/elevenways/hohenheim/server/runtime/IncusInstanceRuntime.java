@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.runtime;
 
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.incus.ControllerPresence;
 import be.elevenways.hohenheim.server.incus.IncusClient;

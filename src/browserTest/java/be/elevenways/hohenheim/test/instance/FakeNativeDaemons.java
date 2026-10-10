@@ -26,7 +26,6 @@ import be.elevenways.hohenheim.server.runtime.WorkloadAttribution.WorkloadClaim;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.field.StringField;
@@ -605,16 +604,6 @@ final class FakeNativeDaemons {
         public @NonNull String getDisplayName() { return "Fake native"; }
 
         @Override
-        public @NonNull Microcopy getLabel() {
-            return Microcopy.of("fake_native").withFilter("scope", "instance_kind");
-        }
-
-        @Override
-        public @NonNull Microcopy getDescription() {
-        return Microcopy.of("fake_native").withFilter("scope", "instance_kind_description");
-    }
-
-        @Override
         public Icon getIcon() { return Icon.of("flask"); }
 
         @Override
@@ -675,14 +664,6 @@ final class FakeNativeDaemons {
 
         @Override
         public @NonNull String getDisplayName() { return "Fake volume snapshot"; }
-
-        @Override
-        public @NonNull Microcopy getLabel() {
-            return Microcopy.of("fake_volume_snapshot").withFilter("scope", "instance_kind");
-        }
-
-        @Override
-        public @NonNull Microcopy getDescription() { return Microcopy.of("fake_volume_snapshot").withFilter("scope", "instance_kind_description"); }
 
         @Override
         public Icon getIcon() { return Icon.of("flask"); }
@@ -921,14 +902,6 @@ final class FakeNativeDaemons {
 
         @Override
         public @NonNull String getDisplayName() { return "Fake volume-only"; }
-
-        @Override
-        public @NonNull Microcopy getLabel() {
-            return Microcopy.of("fake_volume_only").withFilter("scope", "instance_kind");
-        }
-
-        @Override
-        public @NonNull Microcopy getDescription() { return Microcopy.of("fake_volume_only").withFilter("scope", "instance_kind_description"); }
 
         @Override
         public Icon getIcon() { return Icon.of("flask"); }

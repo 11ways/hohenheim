@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.ui.BadgeColor;
@@ -125,7 +126,7 @@ public enum VolumeBackend {
     }
 
     public @NonNull Microcopy label() {
-        return Microcopy.of(this.token).withFilter("scope", "volume_backend");
+        return HohenheimMicrocopy.VOLUME_BACKEND.of(this.token);
     }
 
     /**

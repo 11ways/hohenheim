@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.application;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
@@ -29,7 +30,7 @@ final class ReleaseSettling {
             .orderBy(ReleaseOperationModel.ID, SortOrder.DESC)
             .first();
         return latest != null
-            && ReleaseOperationModel.STATUS_SUCCEEDED.equals(latest.get(ReleaseOperationModel.STATUS))
+            && ReleaseOperationModel.LIFECYCLE.is(latest.get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED)
             && InstanceOperationLock.production().runIfIdle(applicationId, () -> { });
     }
 }

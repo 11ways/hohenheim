@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -14,7 +14,6 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.TextField;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
-import be.elevenways.zenit.common.validation.Violations;
 
 /**
  * A RUNNING database engine process on one host that serves many managed databases
@@ -35,48 +34,41 @@ public class DatabaseEngineModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
-        .label(HohenheimFormCopy.label("name"))
-        .help(HohenheimFormCopy.help("database_engine_name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
+        .help(HohenheimMicrocopy.HELP.of("database_engine_name"))
         .build());
     public static final EnumField ENGINE = SCHEMA.addField(DatabaseModel.engineFieldBuilder("engine")
-        .label(HohenheimFormCopy.label("engine"))
-        .help(HohenheimFormCopy.help("engine"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("engine"))
+        .help(HohenheimMicrocopy.HELP.of("engine"))
         .build());
     public static final StringField IMAGE = SCHEMA.addField(StringField.builder().name("image")
-        .label(HohenheimFormCopy.label("image"))
-        .help(HohenheimFormCopy.help("image"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("image"))
+        .help(HohenheimMicrocopy.HELP.of("image"))
         .build());
     /** The host the engine container runs on: a {@code servers.id} FK, never a name. */
     public static final IntegerField SERVER_ID = SCHEMA.addField(IntegerField.builder().name("server_id")
-        .label(HohenheimFormCopy.label("server"))
-        .help(HohenheimFormCopy.help("server"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("server"))
+        .help(HohenheimMicrocopy.HELP.of("server"))
         .build());
     public static final StringField ROOT_USER = SCHEMA.addField(StringField.builder().name("root_user")
-        .label(HohenheimFormCopy.label("root_user"))
-        .help(HohenheimFormCopy.help("database_engine_root_user"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("root_user"))
+        .help(HohenheimMicrocopy.HELP.of("database_engine_root_user"))
         .build());
     public static final StringField ROOT_PASSWORD = SCHEMA.addField(StringField.builder()
         .name("root_password")
         .secret()
         .encrypted()
-        .label(HohenheimFormCopy.label("root_password"))
-        .help(HohenheimFormCopy.help("database_engine_root_password"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("root_password"))
+        .help(HohenheimMicrocopy.HELP.of("database_engine_root_password"))
         .build());
-    public static final IntegerField MEMORY_LIMIT_MB = SCHEMA.addField(IntegerField.builder()
-        .name("memory_limit_mb")
-        .label(HohenheimFormCopy.label("memory_limit"))
-        .help(HohenheimFormCopy.help("memory_limit"))
-        .build());
-    public static final DoubleField CPU_LIMIT = SCHEMA.addField(DoubleField.builder().name("cpu_limit")
-        .label(HohenheimFormCopy.label("cpu_limit"))
-        .help(HohenheimFormCopy.help("cpu_limit"))
-        .build());
+    public static final IntegerField MEMORY_LIMIT_MB = SCHEMA.addField(InstanceKindFields.memoryLimit());
+    public static final DoubleField CPU_LIMIT = SCHEMA.addField(InstanceKindFields.cpuLimit());
     public static final EnumField STATUS = SCHEMA.addField(
-        DatabaseModel.statusFieldBuilder("status").build());
+        DatabaseModel.statusFieldBuilder("status").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("status")).build());
     public static final TextField FAILURE_REASON = SCHEMA.addField(TextField.builder()
         .name("failure_reason")
-        .label(HohenheimFormCopy.label("failure_reason"))
-        .help(HohenheimFormCopy.help("database_failure_reason"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("failure_reason"))
+        .help(HohenheimMicrocopy.HELP.of("database_failure_reason"))
         .filterable(false)
         .build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
@@ -90,9 +82,8 @@ public class DatabaseEngineModel extends Model {
                 return;
             }
             Object name = row.get(NAME.getName());
-            if (name != null && !DatabaseModel.isValidName(String.valueOf(name))) {
-                throw Violations.ofField(NAME.getName(), name,
-                    HohenheimViolations.text("database_name_invalid"));
+            if (name != null) {
+                DatabaseModel.requireValidName(NAME.getName(), name);
             }
         });
         SCHEMA.addBeforeValidateHook(context -> {

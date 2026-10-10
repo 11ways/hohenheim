@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.task;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.server.notification.Alerts;
@@ -82,7 +83,8 @@ public final class IsolationFindings {
             this.escalations.add(subject + ": " + line);
         }
         if (!detail.isEmpty()) {
-            this.said.add(words("not_repaired").withArg("subject", subject).withArg("count", detail.size()));
+            this.said.add(HohenheimMicrocopy.ISOLATION_FINDING.of("not_repaired").withArg("subject", subject)
+                .withArg("count", detail.size()));
         }
     }
 
@@ -101,27 +103,24 @@ public final class IsolationFindings {
         this.unconfirmed.add(detail.isEmpty()
             ? subject + ": isolation UNCONFIRMED"
             : subject + ": isolation UNCONFIRMED: " + String.join("; ", detail));
-        this.said.add(why == null ? words("unconfirmed").withArg("subject", subject)
-            : words("unconfirmed_because").withArg("subject", subject).withArg("reason", why));
+        this.said.add(why == null ? HohenheimMicrocopy.ISOLATION_FINDING.of("unconfirmed").withArg("subject", subject)
+            : HohenheimMicrocopy.ISOLATION_FINDING.of("unconfirmed_because").withArg("subject", subject)
+                .withArg("reason", why));
     }
 
     /** @return why a host cannot be checked: per-workload enforcement is switched off over this many networks */
     public static @NonNull Microcopy enforcementOff(int networks) {
-        return words("enforcement_off").withArg("count", networks);
+        return HohenheimMicrocopy.ISOLATION_FINDING.of("enforcement_off").withArg("count", networks);
     }
 
     /** @return why a host cannot be checked: its container daemon cannot be reached */
     public static @NonNull Microcopy daemonUnreachable() {
-        return words("daemon_unreachable");
+        return HohenheimMicrocopy.ISOLATION_FINDING.of("daemon_unreachable");
     }
 
     /** @return why a host cannot be checked: nothing reads the firewall of the machine its daemon runs on */
     public static @NonNull Microcopy noFirewallLane() {
-        return words("no_firewall_lane");
-    }
-
-    private static @NonNull Microcopy words(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "isolation_finding");
+        return HohenheimMicrocopy.ISOLATION_FINDING.of("no_firewall_lane");
     }
 
     /**
@@ -151,7 +150,8 @@ public final class IsolationFindings {
             this.escalations.add(server + ": " + line);
         }
         if (!cut.isEmpty()) {
-            this.said.add(words("cut_off").withArg("subject", server).withArg("count", cut.size()));
+            this.said.add(HohenheimMicrocopy.ISOLATION_FINDING.of("cut_off").withArg("subject", server)
+                .withArg("count", cut.size()));
         }
         this.escalated(server, errors);
     }
@@ -192,7 +192,7 @@ public final class IsolationFindings {
         }
 
         if (!this.escalations.isEmpty()) {
-            alert(Microcopy.of("isolation_contained_subject").withFilter("scope", "alert")
+            alert(HohenheimMicrocopy.ALERT.of("isolation_contained_subject")
                     .withArg("sweep", this.sweep).withArg("count", this.escalations.size()),
                 String.join("\n", this.escalations));
         }
@@ -200,7 +200,7 @@ public final class IsolationFindings {
         String signature = String.join("\n", this.unconfirmed);
         if (!this.unconfirmed.isEmpty()
                 && !signature.equals(LAST_UNCONFIRMED.get(this.sweep))) {
-            alert(Microcopy.of("isolation_unconfirmed_subject").withFilter("scope", "alert")
+            alert(HohenheimMicrocopy.ALERT.of("isolation_unconfirmed_subject")
                     .withArg("sweep", this.sweep).withArg("count", this.unconfirmed.size()),
                 signature);
         }
@@ -223,7 +223,8 @@ public final class IsolationFindings {
     private void alert(@NonNull Microcopy subject, @NonNull String detail) {
         // The sweep's sentences are the words; the raw lines (their UNCONFIRMED token) stay the detail after them.
         Alerts.trySend(NotificationEvents.WORKLOAD_ISOLATION, "isolation#" + this.sweep, subject,
-            Alerts.copy("isolation_body").withArg("said", List.copyOf(this.said)).withArg("detail", detail));
+            HohenheimMicrocopy.ALERT.of("isolation_body").withArg("said", List.copyOf(this.said))
+                .withArg("detail", detail));
     }
 
     /**

@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -51,15 +51,15 @@ public class InstanceQuotaModel extends Model {
      */
     public static final StringField SUBJECTS = SCHEMA.addField(
         StringField.builder().name("subjects")
-            .label(HohenheimFormCopy.label("quota_subjects"))
-            .help(HohenheimFormCopy.help("quota_subjects"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("quota_subjects"))
+            .help(HohenheimMicrocopy.HELP.of("quota_subjects"))
             .build());
 
     /** The override cap; 0 refuses every new instance for this owner, null = no override. */
     public static final IntegerField MAX_INSTANCES = SCHEMA.addField(
         IntegerField.builder().name("max_instances")
-            .label(HohenheimFormCopy.label("max_instances"))
-            .help(HohenheimFormCopy.help("max_instances"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("max_instances"))
+            .help(HohenheimMicrocopy.HELP.of("max_instances"))
             .build());
 
     /**
@@ -68,36 +68,36 @@ public class InstanceQuotaModel extends Model {
      */
     public static final IntegerField MAX_MEMORY_MB = SCHEMA.addField(
         IntegerField.builder().name("max_memory_mb")
-            .label(HohenheimFormCopy.label("max_memory_mb"))
-            .help(HohenheimFormCopy.help("max_memory_mb"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("max_memory_mb"))
+            .help(HohenheimMicrocopy.HELP.of("max_memory_mb"))
             .build());
 
     /** Attached-disk cap in GB (sum over the owner's device rows); same 0/null semantics. */
     public static final IntegerField MAX_DISK_GB = SCHEMA.addField(
         IntegerField.builder().name("max_disk_gb")
-            .label(HohenheimFormCopy.label("max_disk_gb"))
-            .help(HohenheimFormCopy.help("max_disk_gb"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("max_disk_gb"))
+            .help(HohenheimMicrocopy.HELP.of("max_disk_gb"))
             .build());
 
     /** Extra-NIC cap (count over the owner's device rows); same 0/null semantics. */
     public static final IntegerField MAX_NICS = SCHEMA.addField(
         IntegerField.builder().name("max_nics")
-            .label(HohenheimFormCopy.label("max_nics"))
-            .help(HohenheimFormCopy.help("max_nics"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("max_nics"))
+            .help(HohenheimMicrocopy.HELP.of("max_nics"))
             .build());
 
     /** Live-site cap (count over the owner's non-trashed sites); same 0/null semantics. */
     public static final IntegerField MAX_SITES = SCHEMA.addField(
         IntegerField.builder().name("max_sites")
-            .label(HohenheimFormCopy.label("max_sites"))
-            .help(HohenheimFormCopy.help("max_sites"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("max_sites"))
+            .help(HohenheimMicrocopy.HELP.of("max_sites"))
             .build());
 
     /** Managed-database cap (count over the owner's database records); same 0/null semantics. */
     public static final IntegerField MAX_DATABASES = SCHEMA.addField(
         IntegerField.builder().name("max_databases")
-            .label(HohenheimFormCopy.label("max_databases"))
-            .help(HohenheimFormCopy.help("max_databases"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("max_databases"))
+            .help(HohenheimMicrocopy.HELP.of("max_databases"))
             .build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
@@ -120,7 +120,7 @@ public class InstanceQuotaModel extends Model {
                 Object value = row.get(cap.getName());
                 if (value instanceof Integer max && max < 0) {
                     throw Violations.ofField(cap.getName(), max,
-                        HohenheimViolations.text("quota_negative"));
+                        HohenheimMicrocopy.VIOLATIONS.of("quota_negative"));
                 }
             }
         });

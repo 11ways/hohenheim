@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.task;
 
-import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -37,8 +36,7 @@ public class ReclaimDockerImages extends ScheduledTask {
 
     @Override
     public @NonNull Microcopy label() {
-        return Microcopy.of("reclaim_docker_images").withFilter("scope", HohenheimMicrocopy.SCOPE)
-            .withFilter("target", "task_label");
+        return HohenheimTasks.label(this);
     }
 
     @Override
@@ -62,12 +60,13 @@ public class ReclaimDockerImages extends ScheduledTask {
 
     @Override
     public void executor(TaskContext ctx) {
-        if (!Boolean.TRUE.equals(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Stacks.RECLAIM_IMAGES))) {
+        if (!HohenheimSettings.isOn(HohenheimSettings.Stacks.RECLAIM_IMAGES)) {
             return;
         }
 
         Map<String, DockerReclaim.Outcome> outcomes =
-            StackRuntime.get().reclaimImages(minimumAge(), includeUnattributed());
+            StackRuntime.get().reclaimImages(minimumAge(),
+                HohenheimSettings.isOn(HohenheimSettings.Stacks.RECLAIM_UNTRACKED));
         for (Map.Entry<String, DockerReclaim.Outcome> entry : outcomes.entrySet()) {
             DockerReclaim.Outcome outcome = entry.getValue();
             if (outcome.removed() > 0 || outcome.skipped() > 0) {
@@ -75,12 +74,6 @@ public class ReclaimDockerImages extends ScheduledTask {
                     "images,", outcome.megabytes(), "MiB, skipped", outcome.skipped());
             }
         }
-    }
-
-    /** Whether unattributable (reference-less) images are swept too; off by default. */
-    public static boolean includeUnattributed() {
-        return Boolean.TRUE.equals(
-            Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Stacks.RECLAIM_UNTRACKED));
     }
 
     /** The configured age guard, never below the floor: zero would race a live deploy. */

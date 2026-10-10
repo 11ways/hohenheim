@@ -1,7 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.MigrationTargetView;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -13,7 +16,6 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
-import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.render.action.PageFormState;
@@ -44,39 +46,33 @@ import java.util.Map;
  */
 public final class InstanceMigratePage implements RecordTab.Rendered<Row> {
 
-    public static final String SLUG = "migrate";
-
     /** The migrate operation over this tab's own record, its destination carried hidden per row. */
     private static final PanelAction<Row> MIGRATE = PanelAction.<Row, Integer>places(InstanceOperations.MIGRATE,
             ActionPlacement.PAGE, (request, result) -> CmsActionResult.refreshWithToast(
-                Microcopy.of("migrated_toast").withFilter("scope", "instance")
+                HohenheimMicrocopy.INSTANCE.of("migrated_toast")
                     .withArg("name", request.subject().get(InstanceModel.NAME))
                     .withArg("host", ServerModel.nameOf(result.value()))))
-        .confirmation(ConfirmationSpec.builder()
-            .title(Microcopy.of("migrate").withFilter("scope", "instance_migrate"))
-            .body(Microcopy.of("cold_note").withFilter("scope", "instance_migrate"))
-            .confirmLabel(Microcopy.of("migrate_here").withFilter("scope", "instance_migrate"))
-            .style(ActionStyle.DESTRUCTIVE)
-            .build())
+        .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE_MIGRATE.of("migrate"),
+            HohenheimMicrocopy.INSTANCE_MIGRATE.of("migrate_here"), HohenheimMicrocopy.INSTANCE_MIGRATE.of("cold_note"),
+            ActionStyle.DESTRUCTIVE))
         // The destination is the row's own; the dialog names it beside the source, so a move is confirmed for
         // exactly the two hosts it involves.
-        .confirmationBody((instance, input) -> Microcopy.of("migrate_confirm")
-            .withFilter("scope", "instance_migrate")
+        .confirmationBody((instance, input) -> HohenheimMicrocopy.INSTANCE_MIGRATE.of("migrate_confirm")
             .withArg("name", instance.get(InstanceModel.NAME))
-            .withArg("from", sourceHost(instance))
+            .withArg("from", ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID)))
             .withArg("to", ServerModel.nameOf(destination(input))))
         .transport(InstanceOperations.TARGET_SERVER.getName())
         .selectedByRoute(instance -> String.valueOf((Object) instance.get(InstanceModel.ID)))
         .build();
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_migrate"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("migrate").withFilter("scope", "instance"); }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE.of("migrate"); }
     /**
      * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
      * menu so the visible strip stays the handful of tabs an operator opens daily.
      */
     @Override public boolean secondaryTab() { return true; }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.MIGRATE; }
     @Override public @NonNull Icon icon() { return Icon.of("truck-fast"); }
 
     /**
@@ -103,10 +99,10 @@ public final class InstanceMigratePage implements RecordTab.Rendered<Row> {
         boolean operable = InstanceModel.isOperable(instance);
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", CmsSupport.pageTitle(conduit, "instance_migrate", name));
+        vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.INSTANCE_MIGRATE, name));
         vars.put("instanceName", name);
         vars.put("instanceId", instanceId);
-        vars.put("sourceHost", sourceHost(instance));
+        vars.put("sourceHost", ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID)));
         vars.put("operable", operable);
         vars.put("status", instance.get(InstanceModel.STATUS));
         vars.put("targets", this.targetsFor(request, instance, operable));
@@ -143,14 +139,10 @@ public final class InstanceMigratePage implements RecordTab.Rendered<Row> {
         return opened instanceof PageActions.Form form ? form.state() : null;
     }
 
-    private static @NonNull String sourceHost(@NonNull Row instance) {
-        return ServerModel.nameOf(ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)));
-    }
-
     /** @return the destination the form opens with, -1 when it names none */
     private static int destination(@NonNull Map<String, Object> input) {
         Object value = input.get(InstanceOperations.TARGET_SERVER.getName());
-        return value instanceof Number number ? number.intValue() : -1;
+        return RawValues.intOr(value, -1);
     }
 
 }

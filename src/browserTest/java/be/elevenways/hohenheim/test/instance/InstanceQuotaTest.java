@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -37,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class InstanceQuotaTest extends HohenheimTestBase {
 
-    private static final String OPERATOR_BUCKET = InstanceQuota.bucketKeyOf("");
+    private static final String OPERATOR_BUCKET = OwnerBudget.INSTANCES.bucketOf("");
     private static final String NAME_PREFIX = "quota-race-";
 
     private static HostFixtures.LocalHostState localBefore;

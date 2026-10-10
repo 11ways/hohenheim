@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -30,16 +30,17 @@ public class ProtectedPathModel extends Model {
     public static final Schema SCHEMA = new Schema();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
-    public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id").build());
+    public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("site")).build());
     public static final StringField PATH = SCHEMA.addField(StringField.builder().name("path")
-        .label(HohenheimFormCopy.label("path_prefix"))
-        .help(HohenheimFormCopy.help("protected_path_prefix"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("path_prefix"))
+        .help(HohenheimMicrocopy.HELP.of("protected_path_prefix"))
         .placeholder("/private")
         .build());
     public static final IntegerField ACCESS_LIST_ID = SCHEMA.addField(IntegerField.builder()
         .name("access_list_id")
-        .label(HohenheimFormCopy.label("access_list"))
-        .help(HohenheimFormCopy.help("protected_path_access_list"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("access_list"))
+        .help(HohenheimMicrocopy.HELP.of("protected_path_access_list"))
         .build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

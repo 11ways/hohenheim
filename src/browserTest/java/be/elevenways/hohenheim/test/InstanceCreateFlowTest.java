@@ -2,12 +2,12 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.zenit.cms.server.panel.PartsWrites;
-import be.elevenways.hohenheim.server.cms.InstanceParts;
 import com.microsoft.playwright.Locator;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
+import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -331,8 +331,8 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
             .as("step 4: the visible field persisted").isEqualTo("npm run dev");
         assertThat(String.valueOf(settings.get("shallow_clone")))
             .as("step 4: a folded boolean kept its declared default").isEqualTo("true");
-        assertThat(String.valueOf(settings.get("auto_deploy")))
-            .as("step 4: and so did the other one").isEqualTo("true");
+        assertThat(GitSourceSchema.autoDeploys(settings))
+            .as("step 4: and a new source deploys on push, auto-deploy's declared default").isTrue();
 
         // 5. A value typed INSIDE a fold persists like any other. Hand-posted, and on the
         //    kind whose create needs no runtime image: what is under test is the fold, and
@@ -356,6 +356,36 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
             .as("step 6: the section holding the refusal is open").isEqualTo("false");
         assertThat(sectionOpenState(refused.body(), "ports"))
             .as("step 6: and the one that holds none stays folded").isEqualTo("true");
+    }
+
+    /** A source stored before new sources deployed on push keeps auto-deploy off through an unrelated edit-save. */
+    @Test
+    void aStoredSourceKeepsAutoDeployOffThroughAnEditSave() {
+        // 1. A git source as M011 leaves one stored before DD11h: auto_deploy an explicit false (proven on the
+        //    legacy shape by GitSourceAutoDeployMigrationTest).
+        Map<String, Object> stored = new LinkedHashMap<>();
+        stored.put(GitSourceSchema.REPOSITORY_URL, "https://git.example.test/acme/cf-stored-source.git");
+        stored.put(GitSourceSchema.BRANCH, "main");
+        stored.put("container_port", 3000);
+        stored.put(GitSourceSchema.AUTO_DEPLOY, false);
+        Row app = Models.get(InstanceModel.class).createEmptyRow();
+        app.set(InstanceModel.NAME, "cf-stored-source");
+        app.set(InstanceModel.KIND, "hohenheim:application");
+        app.set(InstanceModel.SERVER_ID, dockerHostId);
+        app.set(InstanceModel.SETTINGS, stored);
+        app.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+        Models.get(InstanceModel.class).save(app);
+
+        // 2. Its Configuration (the record's form) saves an unrelated change.
+        navigateToApp("/admin/instances/" + app.get(InstanceModel.ID));
+        waitForHydration();
+        type("input[name='settings.build_command']", "npm run build");
+        page.evaluate("document.querySelector('form.cms-form-layout').requestSubmit()");
+        page.waitForCondition(() -> "npm run build".equals(settingsOf("cf-stored-source").get("build_command")));
+
+        // 3. The form seeded the stored false, not the new default, so the save kept the source off.
+        assertThat(GitSourceSchema.autoDeploys(settingsOf("cf-stored-source")))
+            .as("step 3: an edit-save keeps a stored source's auto-deploy off").isFalse();
     }
 
     /**
@@ -530,7 +560,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
             // 2. And the refusal is PATHED ONTO THE HOST ENTRY, which is what puts the
             //    sentence beside the empty pick instead of in the form's generic error box.
             Throwable refused = catchThrowable(() -> PartsWrites.persistRow(
-                PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG),
+                PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES),
                 Map.of("name", "cf-nowhere-direct", "kind", "hohenheim:docker_container"),
                 adminAccessContext()));
             assertThat(refused).as("step 2: the persist lane refuses").isInstanceOf(Violations.class);

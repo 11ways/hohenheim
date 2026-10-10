@@ -4,13 +4,12 @@ import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.panel.PartsForms;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.test.PanelEntryViews;
-import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
@@ -24,7 +23,7 @@ import be.elevenways.hohenheim.server.instance.InstanceTemplateCapture;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.DeviceAttachSupport;
 import be.elevenways.hohenheim.server.runtime.Egress;
-import be.elevenways.hohenheim.server.runtime.ImageOrigin;
+import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.ImagePublishSupport;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
@@ -36,7 +35,6 @@ import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -333,7 +331,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         //    UNIFORM refusal (media provenance is arbitrary bootable code), and no
         //    second row appears.
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.CONFIG, true);
+            HohenheimCapabilities.CONFIG, true);
         Throwable refused = catchThrowableInTenantScope(() ->
             devices.attachCdrom(instanceId, PREFIX + "tenant-cd", "win-iso"));
         assertThat(refused)
@@ -381,7 +379,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
     @Test
     void theTenantDeviceFormNeitherOffersNorAcceptsCdrom() {
         int instanceId = mediaCapableInstance("media-surf-form");
-        PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceAttachmentParts.DEVICES);
+        PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, HohenheimSlugs.INSTANCE_DEVICES);
 
         Map<String, Object> submitted = new LinkedHashMap<>();
         submitted.put("instance_id", instanceId);
@@ -426,7 +424,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         // 2. A tenant-originated call is refused with the tier's uniform refusal.
         stampStatus(instanceId, InstanceModel.STATUS_STOPPED);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         Throwable refused = catchThrowableInTenantScope(() ->
             new InstanceTemplateCapture().capture(instanceId));
         assertThat(refused)
@@ -852,15 +850,6 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         @Override public @NonNull Identifier typeId() { return ID; }
 
         @Override public @NonNull String getDisplayName() { return "Fake media-capable"; }
-
-        @Override
-        public @NonNull Microcopy getLabel() {
-            return Microcopy.of("fake_media_capable").withFilter("scope", "instance_kind");
-        }
-
-        @Override public @NonNull Microcopy getDescription() {
-        return Microcopy.of("fake_media_capable").withFilter("scope", "instance_kind_description");
-    }
 
         @Override public Icon getIcon() { return Icon.of("flask"); }
 

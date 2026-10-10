@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -648,7 +649,7 @@ class RuntimeCascadeTest {
     private static void deployment(int stackId) {
         Row row = Models.get(StackDeploymentModel.class).createEmptyRow();
         row.set(StackDeploymentModel.STACK_ID, stackId);
-        row.set(StackDeploymentModel.STATUS, StackDeploymentModel.STATUS_SUCCESS);
+        row.set(StackDeploymentModel.STATUS, StackDeploymentModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
         Models.get(StackDeploymentModel.class).save(row);
     }
 

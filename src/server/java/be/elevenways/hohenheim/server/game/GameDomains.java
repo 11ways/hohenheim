@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.game;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -13,6 +14,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ControllerScope;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.dns.DnsNames;
@@ -153,9 +155,7 @@ public final class GameDomains {
             if (row == null) {
                 return;
             }
-            Object id = row.get(ServerModel.ID.getName());
-            Row stored = id instanceof Integer serverId
-                ? Models.get(ServerModel.class).findById(serverId) : null;
+            Row stored = StoredRows.of(Models.get(ServerModel.class), row);
             boolean changed = row.changes(ServerModel.PUBLIC_IPV4, stored)
                 || row.changes(ServerModel.PUBLIC_IPV6, stored);
             if (changed) {
@@ -206,7 +206,7 @@ public final class GameDomains {
     public static @NonNull Row applyAuthorized(@NonNull AccessContext ctx, @NonNull Row row) {
         GameDomainModel model = Models.get(GameDomainModel.class);
         Integer id = row.get(GameDomainModel.ID);
-        Row stored = id != null ? model.findById(id) : null;
+        Row stored = StoredRows.of(model, row);
 
         int siteDomainId = requireInt(row.afterWrite(GameDomainModel.SITE_DOMAIN_ID, stored),
             "site_domain_id");
@@ -221,13 +221,13 @@ public final class GameDomains {
 
         if (backendId == proxyId) {
             throw Violations.ofField("proxy_instance_id", proxyId,
-                CmsSupport.violationText("game_domain_same_instance"));
+                HohenheimMicrocopy.VIOLATIONS.of("game_domain_same_instance"));
         }
         // Docker networks are per-host: a proxy cannot reach a backend on another server.
         if (ServerModel.canonicalServerId(backend.get(InstanceModel.SERVER_ID))
                 != ServerModel.canonicalServerId(proxy.get(InstanceModel.SERVER_ID))) {
             throw Violations.ofField("backend_instance_id", backendId,
-                CmsSupport.violationText("game_domain_cross_host"));
+                HohenheimMicrocopy.VIOLATIONS.of("game_domain_cross_host"));
         }
         // Named duplicate refusal before the unique index turns it into an anonymous one.
         Row duplicate = model.find()
@@ -236,7 +236,7 @@ public final class GameDomains {
             .first();
         if (duplicate != null && !Objects.equals(duplicate.get(GameDomainModel.ID), id)) {
             throw Violations.ofField("site_domain_id", siteDomainId,
-                CmsSupport.violationText("game_domain_duplicate"));
+                HohenheimMicrocopy.VIOLATIONS.of("game_domain_duplicate"));
         }
 
         requireAuthority(ctx, domain, backendId, proxyId);
@@ -310,11 +310,13 @@ public final class GameDomains {
                 ? Models.get(SiteDomainModel.class).findById(domainId) : null;
             Integer siteId = domain != null ? domain.get(SiteDomainModel.SITE_ID) : null;
             allowed = (siteId != null && HohenheimAccess.canManageSite(ctx, siteId))
-                || canManage(ctx, mapping.get(GameDomainModel.BACKEND_INSTANCE_ID))
-                || canManage(ctx, mapping.get(GameDomainModel.PROXY_INSTANCE_ID));
+                || HohenheimAccess.hasInstanceCapability(ctx, mapping.get(GameDomainModel.BACKEND_INSTANCE_ID),
+                    HohenheimCapabilities.CONFIG)
+                || HohenheimAccess.hasInstanceCapability(ctx, mapping.get(GameDomainModel.PROXY_INSTANCE_ID),
+                    HohenheimCapabilities.CONFIG);
         }
         if (!allowed) {
-            throw Violations.ofForm(CmsSupport.violationText("game_domain_authority_none"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("game_domain_authority_none"));
         }
         deleteMapping(mapping, false);
     }
@@ -451,7 +453,7 @@ public final class GameDomains {
                     // Never adopt a hand-authored row; requireGeneratedPathFree refuses
                     // this at mapping-write time, so reaching it here means the operator
                     // authored the file AFTER mappings existed -- still never overwrite.
-                    throw Violations.ofForm(CmsSupport.violationText("game_file_conflict")
+                    throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("game_file_conflict")
                         .withArg("path", VelocityConfigs.CONFIG_PATH));
                 }
                 String content = VelocityConfigs.render(proxyBindPort(proxyId), entries);
@@ -472,7 +474,7 @@ public final class GameDomains {
         } catch (Violations refused) {
             throw refused;
         } catch (Exception e) {
-            throw Violations.ofForm(CmsSupport.violationText("game_materialize_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("game_materialize_failed")
                 .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
 
@@ -489,7 +491,7 @@ public final class GameDomains {
             new InstanceService().restageConfigFiles(instanceId);
         } catch (IOException | RuntimeException e) {
             if (!tolerateDaemonFailure) {
-                throw Violations.ofForm(CmsSupport.violationText("game_push_failed")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("game_push_failed")
                     .withArg("reason", HohenheimViolations.reasonOf(e)));
             }
             Blast.log("GAME: could not push config files into instance", instanceId,
@@ -655,7 +657,7 @@ public final class GameDomains {
         } catch (Violations refused) {
             throw refused;
         } catch (Exception e) {
-            throw Violations.ofForm(CmsSupport.violationText("game_materialize_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("game_materialize_failed")
                 .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
         bumpZones(touchedZones);
@@ -692,8 +694,8 @@ public final class GameDomains {
         InstanceService service = new InstanceService();
         InstanceService.Resolved proxy = service.resolve(proxyId);
         InstanceService.Resolved backend = service.resolve(backendId);
-        ContainerState proxyState = proxy.runtime().status(proxy.spec().handle()).state();
-        ContainerState backendState = backend.runtime().status(backend.spec().handle()).state();
+        ContainerState proxyState = proxy.liveStatus().state();
+        ContainerState backendState = backend.liveStatus().state();
         if (proxyState == ContainerState.UNREACHABLE || backendState == ContainerState.UNREACHABLE) {
             Blast.log("GAME: daemon unreachable; link network for mapping pair", proxyId,
                 "->", backendId, "will be enforced at the next deploy");
@@ -714,7 +716,7 @@ public final class GameDomains {
                 links.connectToLinkNetwork(handle, backend.spec().handle(), List.of());
             }
         } catch (IOException e) {
-            throw Violations.ofForm(CmsSupport.violationText("game_link_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("game_link_failed")
                 .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
         // AIDEV-NOTE: connecting a RUNNING container to another network makes Docker
@@ -726,7 +728,7 @@ public final class GameDomains {
 
     /** Re-observe the proxy's published port after a link change and refresh the ledger. */
     private static void refreshProxyPort(InstanceService.Resolved proxy, int proxyId) {
-        var status = proxy.runtime().status(proxy.spec().handle());
+        var status = proxy.liveStatus();
         Integer fresh = status.publishedPort();
         if (!status.running() || fresh == null) {
             return;
@@ -790,21 +792,16 @@ public final class GameDomains {
         Integer siteId = domain.get(SiteDomainModel.SITE_ID);
         if (siteId == null || !HohenheimAccess.canManageSite(ctx, siteId)) {
             throw Violations.ofField("site_domain_id", domain.get(SiteDomainModel.ID),
-                CmsSupport.violationText("game_domain_authority_domain"));
+                HohenheimMicrocopy.VIOLATIONS.of("game_domain_authority_domain"));
         }
     }
 
     private static void requireInstanceAuthority(@NonNull AccessContext ctx, int instanceId,
                                                  @NonNull String fieldName) {
-        if (!HohenheimAccess.hasInstanceCapability(ctx, instanceId, HohenheimAccess.CONFIG)) {
+        if (!HohenheimAccess.hasInstanceCapability(ctx, instanceId, HohenheimCapabilities.CONFIG)) {
             throw Violations.ofField(fieldName, instanceId,
-                CmsSupport.violationText("game_domain_authority_instance"));
+                HohenheimMicrocopy.VIOLATIONS.of("game_domain_authority_instance"));
         }
-    }
-
-    private static boolean canManage(@NonNull AccessContext ctx, @Nullable Integer instanceId) {
-        return instanceId != null
-            && HohenheimAccess.hasInstanceCapability(ctx, instanceId, HohenheimAccess.CONFIG);
     }
 
     // -- helpers --------------------------------------------------------------
@@ -832,8 +829,7 @@ public final class GameDomains {
         if (resolved.runtime() instanceof LinkNetworkSupport links) {
             return links;
         }
-        throw Violations.ofForm(CmsSupport.violationText("game_link_unsupported")
-            .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
+        throw HohenheimViolations.instanceRefusal("game_link_unsupported", resolved.row(), null);
     }
 
     private static InstanceService.Resolved tryResolve(
@@ -933,7 +929,7 @@ public final class GameDomains {
             .first();
         if (existing != null && !SOURCE.equals(existing.get(InstanceFileModel.GENERATED_BY))) {
             throw Violations.ofField("proxy_instance_id", proxyId,
-                CmsSupport.violationText("game_file_conflict")
+                HohenheimMicrocopy.VIOLATIONS.of("game_file_conflict")
                     .withArg("path", VelocityConfigs.CONFIG_PATH));
         }
     }
@@ -942,12 +938,12 @@ public final class GameDomains {
         Row domain = Models.get(SiteDomainModel.class).findById(siteDomainId);
         if (domain == null) {
             throw Violations.ofField("site_domain_id", siteDomainId,
-                CmsSupport.violationText("game_domain_missing"));
+                HohenheimMicrocopy.VIOLATIONS.of("game_domain_missing"));
         }
         Object matchType = domain.get(SiteDomainModel.MATCH_TYPE);
         if (matchType != null && !SiteDomainModel.MATCH_EXACT.equals(matchType)) {
             throw Violations.ofField("site_domain_id", siteDomainId,
-                CmsSupport.violationText("game_domain_match_type"));
+                HohenheimMicrocopy.VIOLATIONS.of("game_domain_match_type"));
         }
         return domain;
     }
@@ -958,7 +954,7 @@ public final class GameDomains {
             .first();
         if (instance == null) {
             throw Violations.ofField(fieldName, instanceId,
-                CmsSupport.violationText("game_instance_missing"));
+                HohenheimMicrocopy.VIOLATIONS.of("game_instance_missing"));
         }
         return instance;
     }
@@ -968,7 +964,7 @@ public final class GameDomains {
             return number.intValue();
         }
         throw Violations.ofField(fieldName, value,
-            CmsSupport.violationText("game_domain_field_required"));
+            HohenheimMicrocopy.VIOLATIONS.of("game_domain_field_required"));
     }
 
     /**

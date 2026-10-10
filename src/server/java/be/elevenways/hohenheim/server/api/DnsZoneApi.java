@@ -1,14 +1,15 @@
 package be.elevenways.hohenheim.server.api;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.cms.DnsRecordParts;
 import be.elevenways.hohenheim.server.cms.DnsZoneParts;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DnsZoneFiles;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -69,7 +70,7 @@ public final class DnsZoneApi {
                 return null;
             }
             Panel panel = ApiConduits.adminPanel();
-            PanelResource<Row> zones = ApiConduits.rowEntry(conduit, panel, DnsZoneParts.SLUG);
+            PanelResource<Row> zones = ApiConduits.rowEntry(conduit, panel, HohenheimSlugs.DNS_ZONES);
             if (zones == null) {
                 return null;
             }
@@ -97,7 +98,7 @@ public final class DnsZoneApi {
                 return null;
             }
             Panel panel = ApiConduits.adminPanel();
-            if (ApiConduits.rowEntry(conduit, panel, DnsZoneParts.SLUG) == null) {
+            if (ApiConduits.rowEntry(conduit, panel, HohenheimSlugs.DNS_ZONES) == null) {
                 return null;
             }
             Row zone = zoneOf(conduit);
@@ -115,7 +116,7 @@ public final class DnsZoneApi {
             String text = ApiConduits.formValue(conduit, "zone_text");
             if (text.isBlank()) {
                 return ApiConduits.refusal(conduit, Violations.ofField("zone_text", "",
-                    Microcopy.of("import_empty").withFilter("scope", "dns_zone")));
+                    HohenheimMicrocopy.DNS_ZONE.of("import_empty")));
             }
             try {
                 DnsZoneFiles.ImportResult result = DnsZoneFiles.importText(zone, text,
@@ -136,7 +137,7 @@ public final class DnsZoneApi {
                 return ApiConduits.refusal(conduit, refused);
             } catch (IOException unparseable) {
                 return ApiConduits.refusal(conduit, Violations.ofField("zone_text", "",
-                    Microcopy.of("import_failed").withFilter("scope", "dns_zone")
+                    HohenheimMicrocopy.DNS_ZONE.of("import_failed")
                         .withArg("reason", String.valueOf(unparseable.getMessage()))));
             }
         });
@@ -156,10 +157,10 @@ public final class DnsZoneApi {
         entry.put("role", DnsZoneModel.roleOf(zone));
         entry.put("enabled", Boolean.TRUE.equals(zone.get(DnsZoneModel.ENABLED)));
         entry.put("serial", zone.get(DnsZoneModel.SERIAL));
-        entry.put("soa_primary_ns", stringOrEmpty(zone.get(DnsZoneModel.SOA_PRIMARY_NS)));
-        entry.put("soa_contact", stringOrEmpty(zone.get(DnsZoneModel.SOA_CONTACT)));
+        entry.put("soa_primary_ns", Objects.toString(zone.get(DnsZoneModel.SOA_PRIMARY_NS), ""));
+        entry.put("soa_contact", Objects.toString(zone.get(DnsZoneModel.SOA_CONTACT), ""));
         entry.put("default_ttl", DnsZoneModel.defaultTtlOf(zone));
-        entry.put("delegation_status", stringOrEmpty(zone.get(DnsZoneModel.DELEGATION_STATUS)));
+        entry.put("delegation_status", Objects.toString(zone.get(DnsZoneModel.DELEGATION_STATUS), ""));
         entry.put("nameservers", apexNameservers(zoneId));
         entry.put("record_count", Models.get(DnsRecordModel.class).find()
             .where(DnsRecordModel.ZONE_ID.eq(zoneId)).count());
@@ -178,9 +179,5 @@ public final class DnsZoneApi {
             names.add(row.get(DnsRecordModel.VALUE));
         }
         return names;
-    }
-
-    private static @NonNull String stringOrEmpty(@Nullable Object value) {
-        return value == null ? "" : String.valueOf(value);
     }
 }

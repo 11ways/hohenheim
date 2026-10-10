@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -39,7 +39,8 @@ public class InstanceTemplateDatabaseModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
     public static final IntegerField TEMPLATE_ID = SCHEMA.addField(
-        IntegerField.builder().name("template_id").build());
+        IntegerField.builder().name("template_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("template")).build());
 
     /** The owning template, declared so its delete takes the declarations along (InstanceCatalogGuards). */
     public static final BelongsTo<InstanceTemplateModel> TEMPLATE = SCHEMA.addRelation(
@@ -52,8 +53,8 @@ public class InstanceTemplateDatabaseModel extends Model {
     /** The engine token, the SAME vocabulary {@link DatabaseModel#ENGINE} stores. */
     public static final EnumField ENGINE = SCHEMA.addField(
         DatabaseModel.engineFieldBuilder("engine")
-            .label(HohenheimFormCopy.label("engine"))
-            .help(HohenheimFormCopy.help("template_database_engine"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("engine"))
+            .help(HohenheimMicrocopy.HELP.of("template_database_engine"))
             .build());
 
     /** The injected variable family the created attachment carries. */
@@ -61,16 +62,16 @@ public class InstanceTemplateDatabaseModel extends Model {
         StringField.builder().name("env_prefix")
             .required()
             .validator(Regex.of("^" + InstanceDatabaseModel.PREFIX_PATTERN + "$",
-                HohenheimViolations.text("prefix_format")))
-            .label(HohenheimFormCopy.label("env_prefix"))
-            .help(HohenheimFormCopy.help("template_database_prefix"))
+                HohenheimMicrocopy.VIOLATIONS.of("prefix_format")))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("env_prefix"))
+            .help(HohenheimMicrocopy.HELP.of("template_database_prefix"))
             .build());
 
     /** Engine image override; blank = the engine's default image. */
     public static final StringField IMAGE = SCHEMA.addField(
         StringField.builder().name("image")
-            .label(HohenheimFormCopy.label("image"))
-            .help(HohenheimFormCopy.help("template_database_image"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("image"))
+            .help(HohenheimMicrocopy.HELP.of("template_database_image"))
             .build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(

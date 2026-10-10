@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.devtunnel.DevLease;
@@ -30,13 +32,13 @@ import java.util.Map;
 public final class SiteDevSessionsPage implements RecordTab.Rendered<Row> {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("site_dev_sessions"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("dev_sessions").withFilter("scope", "site"); }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.SITE.of("dev_sessions"); }
     /**
      * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
      * menu so the visible strip stays the handful of tabs an operator opens daily.
      */
     @Override public boolean secondaryTab() { return true; }
-    @Override public @NonNull String slug() { return "dev-sessions"; }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.DEV_SESSIONS; }
     @Override public @NonNull Icon icon() { return Icon.of("flask"); }
 
     @Override
@@ -60,7 +62,7 @@ public final class SiteDevSessionsPage implements RecordTab.Rendered<Row> {
         }
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", CmsSupport.pageTitle(conduit, "dev_sessions",
+        vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.DEV_SESSIONS,
             site.get(SiteModel.NAME)));
         vars.put("siteName", site.get(SiteModel.NAME));
         vars.put("sessions", sessions);

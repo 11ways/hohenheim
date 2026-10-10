@@ -1,13 +1,12 @@
 package be.elevenways.hohenheim.server.api;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
 import be.elevenways.hohenheim.HohenheimViolations;
-import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
-import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.cms.common.panel.Panel;
@@ -165,8 +164,8 @@ public final class ApiConduits {
                 case OPERATION_UNAVAILABLE -> refusal(conduit, Violations.ofForm(refusal.shown()));
                 case IN_PROGRESS -> {
                     if (instance == null) throw refusal;
-                    yield refusal(conduit, Violations.ofForm(HohenheimViolations.text("instance_operation_in_progress")
-                        .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))));
+                    yield refusal(conduit,
+                        HohenheimViolations.instanceRefusal("instance_operation_in_progress", instance, null));
                 }
                 case BAD_REQUEST, METHOD_NOT_ALLOWED, LOGIN_REQUIRED, INTERACTIVE_LOGIN_REQUIRED, RATE_LIMITED,
                      CSRF_ORIGIN, CSRF_TOKEN_MISSING, CSRF_TOKEN_INVALID, STALE, RETRY_MISMATCH, INVALID,
@@ -200,12 +199,12 @@ public final class ApiConduits {
      * @throws IllegalStateException when the admin panel was never registered
      */
     public static @NonNull Panel adminPanel() {
-        return registeredPanel(HohenheimPanel.SLUG);
+        return registeredPanel(HohenheimSlugs.ADMIN);
     }
 
     /** The {@link #adminPanel()} twin for the tenant resources, which resolve their parents in the operator panel. */
     public static @NonNull Panel managePanel() {
-        return registeredPanel(ManagePanel.SLUG);
+        return registeredPanel(HohenheimSlugs.MANAGE);
     }
 
     /**
@@ -237,10 +236,6 @@ public final class ApiConduits {
 
     public static @NonNull ActionResult<Object> json(@NonNull Map<String, Object> body) {
         return HandlerSupport.json(body);
-    }
-
-    public static @NonNull Microcopy violationText(@NonNull String key) {
-        return HohenheimViolations.text(key);
     }
 
     /** One submitted form value as a string, first-of-list folded, empty when absent. */

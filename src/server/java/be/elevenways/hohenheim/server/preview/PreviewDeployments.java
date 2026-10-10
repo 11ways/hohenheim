@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.preview;
 
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -12,7 +14,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.preview.PreviewOperations;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.build.BuildQuota;
 import be.elevenways.hohenheim.server.build.BuildRequest;
 import be.elevenways.hohenheim.server.build.SandboxedBuilds;
@@ -22,27 +24,27 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ConvergenceLocks;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.game.GameDomains;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.instance.PlaintextEnvironments;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
-import be.elevenways.hohenheim.server.proxy.ProxyServer;
+import be.elevenways.hohenheim.server.proxy.ProxyReloadHooks;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.source.DeployStatuses;
 import be.elevenways.hohenheim.server.source.SiteSources;
 import be.elevenways.hohenheim.server.source.GitProviderClient;
 import be.elevenways.hohenheim.server.source.GitCheckout;
 import be.elevenways.hohenheim.server.util.EnvVars;
+import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
-import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
-import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
@@ -62,6 +64,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * The preview-deployment lifecycle: create/refresh one git ref OF AN APPLICATION, serve it
@@ -108,7 +112,7 @@ public final class PreviewDeployments {
             Blast.log("PREVIEW: deploy of application", applicationId, "ref", ref, "failed -",
                 e.getMessage());
             if (e instanceof Violations && sha != null && !sha.isBlank()) {
-                reportRefusal(applicationId, sha, reasonOf(e));
+                reportRefusal(applicationId, sha, HohenheimViolations.reasonOf(e));
             }
         }
     }
@@ -139,7 +143,6 @@ public final class PreviewDeployments {
         synchronized (lockFor(applicationId, ref)) {
             preview = claimLocked(applicationId, ref, prNumber);
         }
-        Datasource datasource = Db.currentOrDefault();
         String pinnedSha = sha;
         int previewId = preview.get(PreviewDeploymentModel.ID);
         // The build runs with SYSTEM authority whoever queued it: a preview is the application
@@ -147,20 +150,13 @@ public final class PreviewDeployments {
         // the instance it writes is operator-shaped -- no tenant could author it field by field.
         // It stays the queuer's ACTION (runAsSystem keeps the carried caller's attribution): a
         // click is a person's, a verified webhook's queue is already the system's.
-        JobRunner.startVirtualThread(() -> ExecutionIdentity.runAsSystem("preview-deploy", () -> {
-            Runnable build = () -> {
-                try {
-                    deployClaimed(previewId, pinnedSha, trigger);
-                } catch (Exception e) {
-                    // The row already records status failed + last_error.
-                    Blast.log("PREVIEW: queued deploy of application", applicationId, "ref", ref,
-                        "failed -", e.getMessage());
-                }
-            };
-            if (datasource != null) {
-                Db.run(datasource, build);
-            } else {
-                build.run();
+        HandlerSupport.inBackground(() -> ExecutionIdentity.runAsSystem("preview-deploy", () -> {
+            try {
+                deployClaimed(previewId, pinnedSha, trigger);
+            } catch (Exception e) {
+                // The row already records status failed + last_error.
+                Blast.log("PREVIEW: queued deploy of application", applicationId, "ref", ref,
+                    "failed -", e.getMessage());
             }
         }));
         return preview;
@@ -212,12 +208,12 @@ public final class PreviewDeployments {
         Row application = ApplicationReleases.requireApplication(applicationId);
         if (!SiteSources.hasRepository(ApplicationReleases.storedSettings(application))) {
             throw Violations.ofField("application_id", applicationId,
-                HohenheimViolations.text("preview_unsupported_type"));
+                HohenheimMicrocopy.VIOLATIONS.of("preview_unsupported_type"));
         }
-        String baseDomain = str(Zenit.SETTINGS_VALUES.getValue(
+        String baseDomain = trimmed(Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Previews.BASE_DOMAIN));
         if (baseDomain.isEmpty()) {
-            throw Violations.ofForm(HohenheimViolations.text("preview_no_base_domain"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("preview_no_base_domain"));
         }
         // A preview is built from the APPLICATION but must be REACHABLE, and a hostname
         // only routes when it sits in some site's domain table. Refusing here beats
@@ -225,7 +221,7 @@ public final class PreviewDeployments {
         Row site = exposingSite(applicationId);
         if (site == null) {
             throw Violations.ofField("application_id", applicationId,
-                HohenheimViolations.text("preview_no_exposing_site"));
+                HohenheimMicrocopy.VIOLATIONS.of("preview_no_exposing_site"));
         }
         PreviewDeploymentModel model = Models.get(PreviewDeploymentModel.class);
         Row preview = model.find()
@@ -235,8 +231,8 @@ public final class PreviewDeployments {
         // AIDEV-NOTE: an existing preview keeps the hostname it was minted with, whatever slug fold minted it: a
         // redeploy recomputing it would move a live preview's hostname, its generated domain row and its DNS rows
         // under whoever is reviewing it. Only a new preview derives one.
-        String stored = preview == null ? "" : str(preview.get(PreviewDeploymentModel.HOSTNAME));
-        String hostname = stored.isEmpty() ? hostnameFor(str(site.get(SiteModel.SLUG)), ref, baseDomain) : stored;
+        String stored = preview == null ? "" : trimmed(preview.get(PreviewDeploymentModel.HOSTNAME));
+        String hostname = stored.isEmpty() ? hostnameFor(trimmed(site.get(SiteModel.SLUG)), ref, baseDomain) : stored;
         if (preview == null) {
             // The quota hook charges the application's owner bucket on this save and refuses
             // over-cap creates atomically -- no separate count-then-create window.
@@ -274,7 +270,7 @@ public final class PreviewDeployments {
         // One settings map now: the application carries BOTH the source and the spec.
         Map<String, Object> siteSettings = ApplicationReleases.storedSettings(application);
         Map<String, Object> sourceSettings = siteSettings;
-        String hostname = str(preview.get(PreviewDeploymentModel.HOSTNAME));
+        String hostname = trimmed(preview.get(PreviewDeploymentModel.HOSTNAME));
         int previewId = preview.get(PreviewDeploymentModel.ID);
 
         try {
@@ -296,13 +292,13 @@ public final class PreviewDeployments {
                 .run(new BuildRequest(PreviewDeploymentModel.MODEL_ID, previewId,
                     BuildOperationModel.kindOrDefault(siteSettings.get("builder")),
                     checkout.toPath(),
-                    str(siteSettings.get("dockerfile")).isEmpty()
-                        ? null : str(siteSettings.get("dockerfile")),
+                    trimmed(siteSettings.get("dockerfile")).isEmpty()
+                        ? null : trimmed(siteSettings.get("dockerfile")),
                     ControllerScope.handle(ControllerScope.KIND_PREVIEW, previewId) + ":latest",
                     EnvVars.toMap(siteSettings.get("build_arguments")),
                     commitSha, null, BuildQuota.fromSettings()));
             if (!build.succeeded() || build.imageId() == null) {
-                throw Violations.ofForm(HohenheimViolations.text("preview_build_failed")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("preview_build_failed")
                     .withArg("reason", build.failureReason() != null
                         ? build.failureReason() : build.status()));
             }
@@ -313,7 +309,7 @@ public final class PreviewDeployments {
             InstanceStatus status = converge(preview, site, desired, hostname, trigger);
             Integer port = status.publishedPort();
             if (port == null) {
-                throw Violations.ofForm(HohenheimViolations.text("preview_no_published_port"));
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("preview_no_published_port"));
             }
             ReleaseEngine.probe(port, ReleaseEngine.healthPathOf(siteSettings));
 
@@ -321,17 +317,17 @@ public final class PreviewDeployments {
             preview.set(PreviewDeploymentModel.STATUS, PreviewDeploymentModel.STATUS_RUNNING);
             preview.set(PreviewDeploymentModel.HEAD_SHA, sha);
             model.save(preview);
-            reloadProxy();
+            ProxyReloadHooks.reload();
             DeployStatuses.report(sourceSettings, sha, GitProviderClient.StatusState.SUCCESS,
                 DeployStatuses.CONTEXT_PREVIEW, "Preview ready", "https://" + hostname + "/");
             Blast.log("PREVIEW:", hostname, "ready (application", applicationId + ", ref", ref + ")");
             return preview;
         } catch (Exception failed) {
             preview.set(PreviewDeploymentModel.STATUS, PreviewDeploymentModel.STATUS_FAILED);
-            preview.set(PreviewDeploymentModel.LAST_ERROR, reasonOf(failed));
+            preview.set(PreviewDeploymentModel.LAST_ERROR, HohenheimViolations.reasonOf(failed));
             model.save(preview);
             DeployStatuses.report(sourceSettings, sha, GitProviderClient.StatusState.FAILURE,
-                DeployStatuses.CONTEXT_PREVIEW, "Preview failed: " + reasonOf(failed), null);
+                DeployStatuses.CONTEXT_PREVIEW, "Preview failed: " + HohenheimViolations.reasonOf(failed), null);
             throw failed;
         }
     }
@@ -389,8 +385,8 @@ public final class PreviewDeployments {
         if (keyed == null) {
             return;
         }
-        int applicationId = intOf(keyed.get(PreviewDeploymentModel.APPLICATION_ID));
-        synchronized (lockFor(applicationId, str(keyed.get(PreviewDeploymentModel.REF)))) {
+        int applicationId = RawValues.intOr(keyed.get(PreviewDeploymentModel.APPLICATION_ID), -1);
+        synchronized (lockFor(applicationId, trimmed(keyed.get(PreviewDeploymentModel.REF)))) {
             // AIDEV-NOTE: the row the teardown acts on is read UNDER the lock. It used to be
             // the one read above, before the lock: a PR closed while its first build ran
             // waited here holding a row with no instance_id, then -- once the build had
@@ -416,7 +412,7 @@ public final class PreviewDeployments {
                 preview.set(PreviewDeploymentModel.STATUS,
                     PreviewDeploymentModel.STATUS_FAILED);
                 preview.set(PreviewDeploymentModel.LAST_ERROR,
-                    "teardown failed: " + reasonOf(failed));
+                    "teardown failed: " + HohenheimViolations.reasonOf(failed));
                 model.save(preview);
                 if (failed instanceof RuntimeException runtime) {
                     throw runtime;
@@ -450,7 +446,7 @@ public final class PreviewDeployments {
             // run_write_fenced -- benign: the record and its history are gone.
             new RecordSchedules(Datasources.getDefault())
                 .deleteForRecord(PreviewDeploymentModel.MODEL_ID, previewId);
-            reloadProxy();
+            ProxyReloadHooks.reload();
             Blast.log("PREVIEW:", preview.get(PreviewDeploymentModel.HOSTNAME),
                 "reclaimed (" + reason + ")");
         }
@@ -565,30 +561,23 @@ public final class PreviewDeployments {
             @NonNull Map<String, Object> sourceSettings,
             @NonNull String imageDigest, @NonNull String commitSha) {
         Map<String, Object> desired = new LinkedHashMap<>();
-        desired.put("image", imageDigest);
+        desired.put(InstanceKindFields.IMAGE, imageDigest);
         desired.put("built_image_id", imageDigest);
         desired.put("commit_sha", commitSha);
         Object port = siteSettings.get("container_port");
         if (port instanceof Number number && number.intValue() > 0) {
             desired.put("container_port", number.intValue());
         }
-        String healthPath = str(siteSettings.get("health_path"));
+        String healthPath = trimmed(siteSettings.get("health_path"));
         if (!healthPath.isEmpty()) {
             desired.put("health_path", healthPath);
         }
         Map<String, String> env = EnvVars.toMap(
-            sourceSettings.get("preview_environment_variables"));
+            sourceSettings.get(GitSourceSchema.PREVIEW_ENVIRONMENT_VARIABLES));
         if (!env.isEmpty()) {
-            desired.put("environment_variables", env);
+            desired.put(InstanceKindFields.ENVIRONMENT_VARIABLES, env);
         }
-        Object memory = siteSettings.get("memory_limit_mb");
-        if (memory instanceof Number number && number.intValue() > 0) {
-            desired.put("memory_limit_mb", number.intValue());
-        }
-        Object cpu = siteSettings.get("cpu_limit");
-        if (cpu instanceof Number number && number.doubleValue() > 0) {
-            desired.put("cpu_limit", number.doubleValue());
-        }
+        ResourceLimits.carry(siteSettings, desired);
         return desired;
     }
 
@@ -660,7 +649,7 @@ public final class PreviewDeployments {
         List<Row> owned = generatedDomainsOf(previewId);
         Row keep = null;
         for (Row row : owned) {
-            if (hostname.equalsIgnoreCase(str(row.get(SiteDomainModel.HOSTNAME)))
+            if (hostname.equalsIgnoreCase(trimmed(row.get(SiteDomainModel.HOSTNAME)))
                     && keep == null) {
                 keep = row;
             } else {
@@ -687,8 +676,8 @@ public final class PreviewDeployments {
         List<Row> owned = generatedDnsOf(previewId);
         Row zone = GameDomains.zoneFor(hostname);
         Row server = Models.get(ServerModel.class).findById(ServerModel.localServerId());
-        String v4 = server != null ? str(server.get(ServerModel.PUBLIC_IPV4)) : "";
-        String v6 = server != null ? str(server.get(ServerModel.PUBLIC_IPV6)) : "";
+        String v4 = server != null ? trimmed(server.get(ServerModel.PUBLIC_IPV4)) : "";
+        String v6 = server != null ? trimmed(server.get(ServerModel.PUBLIC_IPV6)) : "";
         Set<Integer> touchedZones = new LinkedHashSet<>();
         for (Row row : owned) {
             touchedZones.add(row.get(DnsRecordModel.ZONE_ID));
@@ -803,17 +792,8 @@ public final class PreviewDeployments {
     }
 
     private static @NonNull Instant expiry() {
-        Integer minutes = Zenit.SETTINGS_VALUES.getValue(
-            HohenheimSettings.Previews.LIFETIME_MINUTES);
-        long effective = minutes != null && minutes > 0 ? minutes : 1440;
-        return Now.instant().plusSeconds(effective * 60);
-    }
-
-    private static void reloadProxy() {
-        ProxyServer proxy = ServerMain.getProxyServer();
-        if (proxy != null) {
-            proxy.reload();
-        }
+        return Now.instant().plusSeconds(
+            HohenheimSettings.positiveOrDefault(HohenheimSettings.Previews.LIFETIME_MINUTES) * 60L);
     }
 
     private interface ScopedWork {
@@ -834,21 +814,4 @@ public final class PreviewDeployments {
         return ConvergenceLocks.forPreview(applicationId, ref);
     }
 
-
-    @SuppressWarnings("unchecked")
-    private static @NonNull Map<String, Object> castMap(@Nullable Object value) {
-        return value instanceof Map<?, ?> ? (Map<String, Object>) value : Map.of();
-    }
-
-    private static int intOf(@Nullable Object value) {
-        return value instanceof Number number ? number.intValue() : -1;
-    }
-
-    private static @NonNull String reasonOf(@NonNull Throwable e) {
-        return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-    }
-
-    private static @NonNull String str(@Nullable Object value) {
-        return value == null ? "" : value.toString().trim();
-    }
 }

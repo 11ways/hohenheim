@@ -22,13 +22,13 @@ import be.elevenways.hohenheim.server.cms.AccessListParts;
 import be.elevenways.hohenheim.server.cms.AuthProviderParts;
 import be.elevenways.hohenheim.server.cms.CertificateParts;
 import be.elevenways.hohenheim.server.cms.EnvironmentParts;
+import be.elevenways.hohenheim.server.cms.DnsOperations;
 import be.elevenways.hohenheim.server.cms.DnsPeerParts;
 import be.elevenways.hohenheim.server.cms.DnsRecordParts;
 import be.elevenways.hohenheim.server.cms.DnsZoneParts;
 import be.elevenways.hohenheim.server.cms.ManageDnsRecordParts;
 import be.elevenways.hohenheim.server.cms.NotificationChannelParts;
 import be.elevenways.hohenheim.server.cms.ServerParts;
-import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
@@ -42,6 +42,7 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import org.junit.jupiter.api.BeforeAll;
@@ -341,13 +342,14 @@ class DeleteConfirmationTest {
     @Test
     void theCrossReferenceDialogsNameTheirZonesSitesAndEnvironments() {
         Db.run(datasource, () -> {
-            AccessContext operator = AccessContext.of(TenantConduits.stubFor(null));
+            // The peer delete is admin-gated, so its offer is asked as the test admin.
+            AccessContext operator = TenantConduits.operator();
             DnsPeerParts peers = new DnsPeerParts();
 
             // 1. A peer nothing links to: the dialog names it and says nothing notifies it.
             int peerId = peer("ns2");
             Row peer = Models.get(DnsPeerModel.class).findById(peerId);
-            assertThat(peers.deleteUnavailableReason(peer, operator))
+            assertThat(deleteUnavailable(DnsOperations.DELETE_PEER, peer, operator))
                 .as("step 1: an unreferenced peer is deletable").isNull();
             ConfirmationSpec lonely = peers.deleteConfirmationFor(peer);
             assertThat(lonely.body().key()).as("step 1: the named wording").isEqualTo("delete_confirm_named");
@@ -373,7 +375,7 @@ class DeleteConfirmationTest {
             replica.set(DnsZoneModel.ROLE, DnsZoneModel.ROLE_SECONDARY);
             replica.set(DnsZoneModel.PRIMARY_PEER_ID, peerId);
             Models.get(DnsZoneModel.class).save(replica);
-            Microcopy replicated = peers.deleteUnavailableReason(peer, operator);
+            Microcopy replicated = deleteUnavailable(DnsOperations.DELETE_PEER, peer, operator);
             assertThat(replicated).as("step 3: a peer a secondary replicates from is dead").isNotNull();
             assertThat(replicated.key()).isEqualTo("delete_in_use");
             assertThat(String.valueOf(replicated.args().get("zones")))
@@ -384,14 +386,14 @@ class DeleteConfirmationTest {
             AccessContext admin = TenantConduits.operator();
             int providerId = authProvider("Office SSO");
             Row provider = Models.get(SiteAuthProviderModel.class).findById(providerId);
-            assertThat(deleteUnavailable(provider, admin))
+            assertThat(deleteUnavailable(AuthProviderParts.DELETE, provider, admin))
                 .as("step 4: an unreferenced provider is deletable").isNull();
             assertThat(AuthProviderParts.admin().deleteConfirmation().fallback().body().filters().get("scope"))
                 .as("step 4: the provider dialog is its own, not the generic").isEqualTo("auth_provider");
             Row intranet = Models.get(SiteModel.class).findById(site("intranet", null));
             intranet.set(SiteModel.AUTH_PROVIDER_ID, providerId);
             Models.get(SiteModel.class).save(intranet);
-            Microcopy gating = deleteUnavailable(provider, admin);
+            Microcopy gating = deleteUnavailable(AuthProviderParts.DELETE, provider, admin);
             assertThat(gating).as("step 4: a provider gating a site is dead").isNotNull();
             assertThat(gating.key()).isEqualTo("delete_in_use");
             assertThat(String.valueOf(gating.args().get("sites")))
@@ -401,10 +403,10 @@ class DeleteConfirmationTest {
             //    with the rules-only wording, since there is no site to name.
             intranet.set(SiteModel.DELETED_AT, Now.instant());
             Models.get(SiteModel.class).save(intranet);
-            assertThat(deleteUnavailable(provider, admin))
+            assertThat(deleteUnavailable(AuthProviderParts.DELETE, provider, admin))
                 .as("step 5: a trashed site releases the provider").isNull();
             providerRule(accessList("Staff"), providerId);
-            Microcopy ruled = deleteUnavailable(provider, admin);
+            Microcopy ruled = deleteUnavailable(AuthProviderParts.DELETE, provider, admin);
             assertThat(ruled).as("step 5: a rule naming the provider keeps it dead").isNotNull();
             assertThat(ruled.key()).isEqualTo("delete_in_use_rules");
             assertThat(ruled.args().get("rules")).as("step 5: counting the rules").isEqualTo(1L);
@@ -590,9 +592,9 @@ class DeleteConfirmationTest {
             TenantConduits.stubFor(null), AccessContext.anonymous(), null);
     }
 
-    /** @return the words the auth-provider delete is offered dead with, null when it is live */
-    private static Microcopy deleteUnavailable(Row provider, AccessContext access) {
-        OperationPipeline.Offer offer = OperationPipeline.offer(AuthProviderParts.DELETE, access, provider);
+    /** @return the words a delete is offered dead with, null when it is live */
+    private static Microcopy deleteUnavailable(Operation<Row, ?, ?> delete, Row record, AccessContext access) {
+        OperationPipeline.Offer offer = OperationPipeline.offer(delete, access, record);
         return offer instanceof OperationPipeline.Offer.Unavailable dead ? dead.reason() : null;
     }
 }

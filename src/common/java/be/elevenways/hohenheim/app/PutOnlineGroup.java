@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.app;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -36,10 +37,10 @@ public enum PutOnlineGroup {
     /** @return the group's heading */
     public @NonNull Microcopy label() {
         return switch (this) {
-            case TEMPLATE -> Microcopy.of("group_templates").withFilter("scope", "put_online");
-            case OWN_CODE -> Microcopy.of("group_code").withFilter("scope", "put_online");
-            case MACHINE -> Microcopy.of("group_machine").withFilter("scope", "put_online");
-            case ADDRESS -> Microcopy.of("group_addresses").withFilter("scope", "put_online");
+            case TEMPLATE -> HohenheimMicrocopy.PUT_ONLINE.of("group_templates");
+            case OWN_CODE -> HohenheimMicrocopy.PUT_ONLINE.of("group_code");
+            case MACHINE -> HohenheimMicrocopy.PUT_ONLINE.of("group_machine");
+            case ADDRESS -> HohenheimMicrocopy.PUT_ONLINE.of("group_addresses");
         };
     }
 }

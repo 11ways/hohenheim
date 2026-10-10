@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -11,6 +12,7 @@ import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ApplicationUpstreams;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
@@ -203,7 +205,7 @@ public final class InstanceService {
     public static void requireDeployAdmitted(int instanceId) {
         // The ONE power gate: a tenant-originated call must hold power; operator and system
         // work (crash restarts, schedule chains, installs) runs outside a request and passes.
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.POWER);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.POWER);
         // Every lane assembles its environment through DatabaseEnvInjection, which
         // fail-softs: a database that is still provisioning (or failed) would drop its
         // whole variable family and the workload would boot without credentials looking
@@ -221,13 +223,13 @@ public final class InstanceService {
         // before any driver work, so every existing power surface deploys an application
         // with nothing wired at the call site.
         if (releaseManaged(instanceId)) {
-            return ApplicationDeploys.deploy(instanceId, null, trigger).status();
+            return ApplicationDeploys.deploy(instanceId, null, null, trigger).status();
         }
         // The workspace's own fold, on exactly the same terms: WorkspaceBuilds stays THE
         // mechanism and brings the workload up through deployWorkload below, so this is a
         // branch and never a second deploy path.
         if (WorkspaceBuilds.deploysSource(liveRow(instanceId))) {
-            return new WorkspaceBuilds(this).deploy(instanceId, null, trigger).status();
+            return new WorkspaceBuilds(this).deploy(instanceId, null, null, trigger).status();
         }
         return deployWorkloadNow(instanceId, trigger, null);
     }
@@ -240,7 +242,7 @@ public final class InstanceService {
     /** Restore into the created, stopped workload inside the ordinary fenced deployment. */
     public @NonNull InstanceStatus deployRestored(int instanceId,
                                                   @NonNull RestoreVolumes restoreVolumes) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONFIG);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.CONFIG);
         return operation(instanceId,
             () -> deployWorkloadNow(instanceId, DeployTrigger.SYSTEM, restoreVolumes));
     }
@@ -270,7 +272,7 @@ public final class InstanceService {
     private @NonNull InstanceStatus deployWorkloadNow(int instanceId,
                                                       @NonNull DeployTrigger trigger,
                                                       @Nullable RestoreVolumes restoreVolumes) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.POWER);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.POWER);
         Resolved resolved = resolve(instanceId);
         // The trigger policy for every kind that owns a container directly -- a preview
         // refreshed by a push is the lane that reaches here on a third party's trigger.
@@ -418,7 +420,7 @@ public final class InstanceService {
 
     /** {@link #stop}'s body; the operation lock is the wrapper's job. */
     private void stopNow(int instanceId) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.POWER);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.POWER);
         if (releaseManaged(instanceId)) {
             ApplicationReleases.stopFor(instanceId);
             return;
@@ -596,7 +598,7 @@ public final class InstanceService {
     public void assignRuntimeRole(int instanceId, @NonNull String role) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         if (row == null) {
-            throw Violations.ofForm(HohenheimViolations.text("instance_not_found")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_not_found")
                 .withArg("id", instanceId));
         }
         int serverId = ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID));
@@ -617,7 +619,7 @@ public final class InstanceService {
             return serving != null ? serving : new InstanceStatus(ContainerState.ABSENT, null);
         }
         Resolved resolved = resolve(instanceId);
-        return resolved.runtime().status(resolved.spec().handle());
+        return resolved.liveStatus();
     }
 
     /** Whether this record's kind deploys through the release engine instead of a driver. */
@@ -730,8 +732,7 @@ public final class InstanceService {
             return;
         }
         if (!(resolved.runtime() instanceof FileStagingSupport staging)) {
-            throw Violations.ofForm(HohenheimViolations.text("files_unsupported")
-                .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
+            throw HohenheimViolations.instanceRefusal("files_unsupported", resolved.row(), null);
         }
         List<FileStagingSupport.StagedFile> staged = new ArrayList<>();
         for (Row file : files) {
@@ -754,7 +755,7 @@ public final class InstanceService {
      */
     public void restageConfigFiles(int instanceId) throws IOException {
         Resolved resolved = resolve(instanceId);
-        ContainerState state = resolved.runtime().status(resolved.spec().handle()).state();
+        ContainerState state = resolved.liveStatus().state();
         if (state == ContainerState.ABSENT) {
             return;
         }
@@ -775,7 +776,13 @@ public final class InstanceService {
                            @NonNull InstanceRuntime runtime,
                            @NonNull InstanceSpec spec, int serverId,
                            @NonNull Map<String, String> variables,
-                           @NonNull Map<String, Object> settings) {}
+                           @NonNull Map<String, Object> settings) {
+
+        /** @return the daemon's status of this workload, read now; never throws */
+        public @NonNull InstanceStatus liveStatus() {
+            return this.runtime.status(this.spec.handle());
+        }
+    }
 
     // -- interrupted capture/restore recovery ---------------------------------------
 
@@ -871,7 +878,7 @@ public final class InstanceService {
         if (capturing) {
             InstanceStatus live;
             try {
-                live = resolved.runtime().status(resolved.spec().handle());
+                live = resolved.liveStatus();
             } catch (RuntimeException unreachable) {
                 return false;   // refusing to answer is not evidence; defer
             }
@@ -911,7 +918,7 @@ public final class InstanceService {
      *         container is verifiably gone, so a failed destroy never takes the data with it
      */
     public @NonNull List<String> destroyWithData(int instanceId) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.DESTROY);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.DESTROY);
         return operation(instanceId, () -> destroyWithDataNow(instanceId), true);
     }
 
@@ -920,11 +927,10 @@ public final class InstanceService {
         // Trashed included: removing a destroyed record's data is this verb's whole point.
         Row row = StoredRows.byId(Models.get(InstanceModel.class), instanceId);
         if (row == null) {
-            throw Violations.ofForm(HohenheimViolations.text("instance_not_found")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_not_found")
                 .withArg("id", instanceId));
         }
-        String serverName = ServerModel.nameOf(
-            ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID)));
+        String serverName = ServerModel.canonicalNameOf(row.get(InstanceModel.SERVER_ID));
         // AIDEV-NOTE: an ALREADY destroyed record still has its data, and that is the whole
         // reason an ordinary destroy keeps it. "I deleted the workspace last week, now
         // remove its files" has to work, so the container teardown is conditional and the
@@ -990,7 +996,7 @@ public final class InstanceService {
      * nothing recording why) or grow a schedule to press it. stop() is idempotent when
      * the workload is already stopped and deploy() is create-plus-start, so the pair IS
      * the restart -- but the pair belongs to the service every surface funnels through.
-     * Both halves ask {@link HohenheimAccess#POWER} themselves; this method deliberately
+     * Both halves ask {@link HohenheimCapabilities#POWER} themselves; this method deliberately
      * adds no gate of its own, so a restart can never be a wider door than a stop.
      */
     public void restart(int instanceId) {
@@ -1037,13 +1043,13 @@ public final class InstanceService {
     public Resolved resolve(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         if (row == null) {
-            throw Violations.ofForm(HohenheimViolations.text("instance_not_found")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_not_found")
                 .withArg("id", instanceId));
         }
         InstanceKindHandler handler = InstanceKinds.handlerOf(row);
         if (handler == null) {
             throw Violations.ofField("kind", row.get(InstanceModel.KIND),
-                HohenheimViolations.text("instance_kind_unknown")
+                HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown")
                     .withArg("kind", String.valueOf((Object) row.get(InstanceModel.KIND))));
         }
         Map<String, Object> settings = InstanceModel.settingsOf(row);
@@ -1060,7 +1066,7 @@ public final class InstanceService {
         settings = instanceVariables.applyToSettings(settings, declared, derived);
         InstanceSpec spec = handler.specFor(instanceId, settings);
         if (spec.image().isBlank() && !handler.allowsBlankImage(settings)) {
-            throw Violations.ofField("settings.image", "", HohenheimViolations.text("instance_image_required"));
+            throw Violations.ofField("settings.image", "", HohenheimMicrocopy.VIOLATIONS.of("instance_image_required"));
         }
         // The record's pinned resolved image identity rides the spec: a driver that
         // resolves by fingerprint recreates an ABSENT workload from the pin, never by
@@ -1110,7 +1116,7 @@ public final class InstanceService {
         } catch (Violations alreadyNamed) {
             throw alreadyNamed;
         } catch (RuntimeException unaddressable) {
-            throw Violations.ofForm(HohenheimViolations.text("instance_host_unreachable")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_host_unreachable")
                 .withArg("name", serverName)
                 .withArg("reason", HohenheimViolations.reasonOf(unaddressable)));
         }

@@ -13,8 +13,8 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.source.TestSources;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.DomainParts;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
@@ -239,7 +239,7 @@ class ManagePanelTest extends HohenheimTestBase {
     void delegatedSurfaceStaysSafeAndReturnsToManage() throws Exception {
         // The operator manages site A, the grant the Access tab journey hands out.
         RecordGrants.grant(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteAId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         HttpResponse<String> form = operatorGet("/manage/sites/" + siteAId);
         assertThat(form.statusCode()).isEqualTo(200);
         assertThat(form.body())
@@ -277,7 +277,7 @@ class ManagePanelTest extends HohenheimTestBase {
         // /manage takes an instance grant, exactly like production delegation does.
         // (Revoked again below, so the rest of this test sees the site grant alone.)
         RecordGrants.grant(GrantSubjectType.USER, operatorId, InstanceModel.MODEL_ID, appAId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         try {
         HttpResponse<String> delegated = operatorGet(
             "/manage/instances/" + appAId + "/page/deployments");
@@ -315,7 +315,7 @@ class ManagePanelTest extends HohenheimTestBase {
             .isEqualTo("/admin/instances/" + appAId + "/page/deployments");
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, operatorId, InstanceModel.MODEL_ID,
-                appAId, HohenheimAccess.MANAGE);
+                appAId, HohenheimCapabilities.MANAGE);
         }
 
         HttpResponse<String> subpage = operatorGet("/manage/sites/" + siteAId + "/page/domains");
@@ -368,7 +368,7 @@ class ManagePanelTest extends HohenheimTestBase {
     @Test
     void aTenantReachesOnlyItsOwnSitesDomainsOnEveryManageSurface() throws Exception {
         RecordGrants.grant(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteAId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         String foreignHost = "foreign-" + managedHost;
         Row foreign = Models.get(SiteDomainModel.class).createEmptyRow();
         foreign.set(SiteDomainModel.SITE_ID, siteBId);
@@ -380,7 +380,8 @@ class ManagePanelTest extends HohenheimTestBase {
             TenantConduits.stubFor(new UserPrincipal(operatorId, "Site Operator")));
         Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
         @SuppressWarnings("unchecked")
-        PanelResource<Row> domains = (PanelResource<Row>) Objects.requireNonNull(manage.entryBySlug(DomainParts.SLUG));
+        PanelResource<Row> domains = (PanelResource<Row>) Objects.requireNonNull(manage
+            .entryBySlug(HohenheimSlugs.DOMAINS));
 
         // 1. The list shows site A's domain and never site B's.
         HttpResponse<String> list = operatorGet("/manage/domains");
@@ -480,25 +481,26 @@ class ManagePanelTest extends HohenheimTestBase {
 
         GrantService.createDirectGrant(GrantSubjectType.USER, operatorId, "group.manage-operators", true);
         RecordGrants.grant(GrantSubjectType.GROUP, groupId, SiteModel.MODEL_ID, siteBId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         assertOperatorReachesThePanel("a group's record grant opens the panel");
         assertThat(operatorGet("/manage/sites").body()).contains("Manage Site B");
 
         RecordGrants.grant(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteBId,
-            HohenheimAccess.MANAGE, false);
+            HohenheimCapabilities.MANAGE, false);
         assertThat(operatorGet("/manage").statusCode()).isEqualTo(403);
         assertThat(HohenheimAccess.managedSiteIds(new UserPrincipal(operatorId, "Site Operator")))
             .isEmpty();
 
-        RecordGrants.revoke(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteBId, HohenheimAccess.MANAGE);
+        RecordGrants.revoke(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteBId,
+            HohenheimCapabilities.MANAGE);
         assertOperatorReachesThePanel("lifting the negative grant restores the group's access");
-        RecordGrants.revoke(GrantSubjectType.GROUP, groupId, SiteModel.MODEL_ID, siteBId, HohenheimAccess.MANAGE);
+        RecordGrants.revoke(GrantSubjectType.GROUP, groupId, SiteModel.MODEL_ID, siteBId, HohenheimCapabilities.MANAGE);
         assertThat(operatorGet("/manage").statusCode()).isEqualTo(403);
 
         // An explicit global deny beats a record grant, while its absence falls back.
         RecordGrants.grant(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteAId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         GrantService.createDirectGrant(GrantSubjectType.USER, operatorId, "hohenheim.manage.access", false);
 
         assertThat(operatorGet("/manage").statusCode()).isEqualTo(403);
@@ -515,7 +517,8 @@ class ManagePanelTest extends HohenheimTestBase {
             }
         }
         assertOperatorReachesThePanel("without the global deny the record grant counts again");
-        RecordGrants.revoke(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteAId, HohenheimAccess.MANAGE);
+        RecordGrants.revoke(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteAId,
+            HohenheimCapabilities.MANAGE);
     }
 
     /**
@@ -620,7 +623,7 @@ class ManagePanelTest extends HohenheimTestBase {
         TestSession session = sessionFor(tenantId);
 
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteAId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         try {
             RecordGrantFinds.Result finds = RecordGrantFinds.during(() ->
                 assertThat(get("/manage/sites", session.token()).statusCode()).isEqualTo(200));
@@ -670,7 +673,7 @@ class ManagePanelTest extends HohenheimTestBase {
                 .isBetween(1, 15);
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteAId,
-                HohenheimAccess.MANAGE);
+                HohenheimCapabilities.MANAGE);
         }
     }
 
@@ -738,9 +741,9 @@ class ManagePanelTest extends HohenheimTestBase {
         domainModel.save(innocentDomain);
 
         RecordGrants.grant(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, stagedId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, innocentId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         try {
             // 1. The enable operation refuses to seize the victim's hostname. Switching is a
@@ -809,9 +812,9 @@ class ManagePanelTest extends HohenheimTestBase {
                 .isEqualTo(true);
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, stagedId,
-                HohenheimAccess.MANAGE);
+                HohenheimCapabilities.MANAGE);
             RecordGrants.revoke(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, innocentId,
-                HohenheimAccess.MANAGE);
+                HohenheimCapabilities.MANAGE);
             HardDeletes.row(siteModel, staged);
             HardDeletes.row(siteModel, innocent);
             HardDeletes.row(siteModel, victim);

@@ -1,14 +1,14 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.ui.BadgeVariant;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * A managed multi-container Docker stack: one private policied bridge network, named volumes,
@@ -45,60 +45,67 @@ public class StackModel extends Model {
 
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .required()
-        .label(HohenheimFormCopy.label("name"))
-        .help(HohenheimFormCopy.help("stack_name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
+        .help(HohenheimMicrocopy.HELP.of("stack_name"))
         .build());
+
+    /** A stack, service or volume name becomes a Docker network, container and volume name segment: one DNS label. */
+    public static final int MAX_NAME_LENGTH = 63;
+
+    /** @return whether a stack, service or named-volume name has the {@link LowercaseNames} shape and fits a label */
+    public static boolean isValidName(@Nullable String name) {
+        return LowercaseNames.isValid(name, MAX_NAME_LENGTH);
+    }
 
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled")
         .defaultValue(true)
-        .label(HohenheimFormCopy.label("enabled"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("enabled"))
         .build());
 
     /** The host this stack deploys to: a {@code servers.id} FK, never a name string. */
     public static final IntegerField SERVER_ID = SCHEMA.addField(IntegerField.builder().name("server_id")
-        .label(HohenheimFormCopy.label("server"))
-        .help(HohenheimFormCopy.help("server"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("server"))
+        .help(HohenheimMicrocopy.HELP.of("server"))
         .build());
 
     public static final StringField REGISTRY_SERVER = SCHEMA.addField(StringField.builder().name("registry_server")
-        .label(HohenheimFormCopy.label("registry_server"))
-        .help(HohenheimFormCopy.help("registry_server"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("registry_server"))
+        .help(HohenheimMicrocopy.HELP.of("registry_server"))
         .build());
 
     public static final StringField REGISTRY_USER = SCHEMA.addField(StringField.builder().name("registry_user")
-        .label(HohenheimFormCopy.label("registry_user"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("registry_user"))
         .build());
 
     public static final StringField REGISTRY_PASSWORD = SCHEMA.addField(StringField.builder().name("registry_password")
         .secret()
         .encrypted()
-        .label(HohenheimFormCopy.label("registry_password"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("registry_password"))
         .build());
 
     public static final TextField DESCRIPTION = SCHEMA.addField(TextField.builder().name("description")
-        .label(HohenheimFormCopy.label("description"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("description"))
         .build());
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_INACTIVE, v -> v.displayName("Inactive")
-            .label(statusLabel(STATUS_INACTIVE)).icon("circle-pause").color(BadgeVariant.SECONDARY))
+            .label(HohenheimMicrocopy.STACK_STATUS.of(STATUS_INACTIVE)).icon("circle-pause")
+            .color(BadgeVariant.SECONDARY))
         .value(STATUS_DEPLOYING, v -> v.displayName("Deploying")
-            .label(statusLabel(STATUS_DEPLOYING)).icon("rotate").color(BadgeVariant.WARNING))
+            .label(HohenheimMicrocopy.STACK_STATUS.of(STATUS_DEPLOYING)).icon("rotate").color(BadgeVariant.WARNING))
         .value(STATUS_ACTIVE, v -> v.displayName("Active")
-            .label(statusLabel(STATUS_ACTIVE)).icon("circle-check").color(BadgeVariant.SUCCESS))
+            .label(HohenheimMicrocopy.STACK_STATUS.of(STATUS_ACTIVE)).icon("circle-check").color(BadgeVariant.SUCCESS))
         .value(STATUS_DEGRADED, v -> v.displayName("Degraded")
-            .label(statusLabel(STATUS_DEGRADED)).icon("triangle-exclamation").color(BadgeVariant.WARNING))
+            .label(HohenheimMicrocopy.STACK_STATUS.of(STATUS_DEGRADED)).icon("triangle-exclamation")
+            .color(BadgeVariant.WARNING))
         .value(STATUS_FAILED, v -> v.displayName("Failed")
-            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color(BadgeVariant.DESTRUCTIVE))
+            .label(HohenheimMicrocopy.STACK_STATUS.of(STATUS_FAILED)).icon("circle-xmark")
+            .color(BadgeVariant.DESTRUCTIVE))
         .value(STATUS_STOPPED, v -> v.displayName("Stopped")
-            .label(statusLabel(STATUS_STOPPED)).icon("circle-stop").color(BadgeVariant.SECONDARY))
+            .label(HohenheimMicrocopy.STACK_STATUS.of(STATUS_STOPPED)).icon("circle-stop")
+            .color(BadgeVariant.SECONDARY))
         .defaultValue(STATUS_INACTIVE)
         .build());
-
-    /** The translation token for a stack status; the key IS the stored value. */
-    private static Microcopy statusLabel(String status) {
-        return Microcopy.of(status).withFilter("scope", "stack_status");
-    }
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

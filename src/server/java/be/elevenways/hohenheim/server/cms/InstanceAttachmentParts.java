@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.DeviceType;
@@ -11,13 +13,14 @@ import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.HohenheimRoles;
+import be.elevenways.hohenheim.server.HohenheimRoles.Role;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.instance.InstanceAttachmentOperationHandlers;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -74,9 +77,6 @@ import java.util.Objects;
  */
 public final class InstanceAttachmentParts {
 
-    public static final String DEVICES = "instance-devices";
-    public static final String DATABASES = "instance-databases";
-
     /** Devices attached to an instance; the /manage scope narrows this same base per principal. */
     public static final RowScope DEVICE_ROWS = RowScope.within(() -> InstanceDeviceModel.INSTANCE_ID.isNotNull());
 
@@ -84,6 +84,14 @@ public final class InstanceAttachmentParts {
     public static final RowScope DATABASE_ROWS = RowScope.within(() -> InstanceDatabaseModel.INSTANCE_ID.isNotNull());
 
     private InstanceAttachmentParts() {
+    }
+
+    /**
+     * Whether this boot serves database attachments: they join an instance to a managed database, so both tiers must
+     * run; a template's declared databases follow the same answer.
+     */
+    public static boolean databasesServed() {
+        return HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES);
     }
 
     // -- devices -----------------------------------------------------------------------------------------------------
@@ -115,9 +123,8 @@ public final class InstanceAttachmentParts {
             .add(InstanceDeviceModel.NAME)
             .add(InstanceDeviceModel.SIZE_GB)
             .build();
-        return devices(HohenheimIds.id("manage_instance_device"), form)
-            .scope(TenantScopes.INSTANCE_DEVICES)
-            .tabs(ResourceTabs.<Row>none().withContributions())
+        return ManageTwin.reached(devices(ManageTwin.id("instance_device"), form), TenantScopes.INSTANCE_DEVICES,
+                ResourceTabs.<Row>none().withContributions())
             .build();
     }
 
@@ -130,15 +137,16 @@ public final class InstanceAttachmentParts {
             .column(ColumnSpec.fromField(InstanceDeviceModel.SOURCE_MEDIA).build())
             .column(ColumnSpec.fromField(InstanceDeviceModel.CREATED_AT).build())
             .build();
-        return PanelResource.builder(id, DEVICES, InstanceAttachmentOperations.DEVICE)
-            .label(Microcopy.of("plural").withFilter("scope", "instance_device"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "instance_device"))
+        return PanelResource.builder(id, HohenheimSlugs.INSTANCE_DEVICES, InstanceAttachmentOperations.DEVICE)
+            .label(HohenheimMicrocopy.INSTANCE_DEVICE.of("plural"))
+            .recordLabel(HohenheimMicrocopy.INSTANCE_DEVICE.of("singular"))
             .icon(Icon.of("hard-drive"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(19)
             .showInNav(false)
             .standsUnder(HohenheimSlugs.INSTANCES)
-            .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceDeviceModel.INSTANCE_ID).tab("devices"))
+            .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceDeviceModel.INSTANCE_ID)
+            .tab(HohenheimSlugs.Tab.DEVICES))
             .reads(ResourceReads.rows())
             .form(ResourceForm.<Row>of(form).createDefaults(request -> {
                 Map<String, Object> values = instancePrefilled(form, request);
@@ -164,13 +172,8 @@ public final class InstanceAttachmentParts {
                 .ownsWriteEnvelope(ResourceVerb.CREATE, ResourceVerb.UPDATE, ResourceVerb.DELETE)
                 .build())
             // Detach DELETES the backing volume at the daemon, so the confirmation says that in so many words.
-            .deleteConfirmation(DeleteConfirmation.of(ConfirmationSpec.builder()
-                .title(Microcopy.of("confirm_title").withFilter("scope", "cms"))
-                .body(Microcopy.of("detach_confirm").withFilter("scope", "instance_device"))
-                .confirmLabel(Microcopy.of("detach").withFilter("scope", "instance_device"))
-                .cancelLabel(Microcopy.of("cancel").withFilter("scope", "cms"))
-                .style(ActionStyle.DESTRUCTIVE)
-                .build()))
+            .deleteConfirmation(DeleteConfirmation.of(Confirmations.of(HohenheimMicrocopy.INSTANCE_DEVICE.of("detach"),
+                HohenheimMicrocopy.INSTANCE_DEVICE.of("detach_confirm"), ActionStyle.DESTRUCTIVE)))
             // AIDEV-NOTE: the SAME capability InstanceDevices asks as the first statement of every mutator, asked
             // earlier so the surface stops offering what the funnel will refuse. Read stays WIDER on purpose: seeing
             // that a disk exists on an instance you may view is not authority to change it.
@@ -226,7 +229,7 @@ public final class InstanceAttachmentParts {
         if (created == null) {
             // attachDisk/attachNic write the row before the daemon call and delete it again on a daemon refusal; a
             // missing row here means the refusal lane ran without throwing, the silent success this must never be.
-            throw Violations.ofForm(CmsSupport.violationText("device_attach_incomplete"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("device_attach_incomplete"));
         }
         return created.get(InstanceDeviceModel.ID);
     }
@@ -247,12 +250,14 @@ public final class InstanceAttachmentParts {
         String type = existing.get(InstanceDeviceModel.TYPE);
         Object submittedName = CmsSupport.valueOf(values, existing, InstanceDeviceModel.NAME);
         if (!String.valueOf(name).equals(String.valueOf(submittedName))) {
-            throw Violations.ofField("name", submittedName, CmsSupport.violationText("device_rename_unsupported"));
+            throw Violations.ofField("name", submittedName,
+                HohenheimMicrocopy.VIOLATIONS.of("device_rename_unsupported"));
         }
         Object submittedType = CmsSupport.valueOf(values, existing, InstanceDeviceModel.TYPE);
         if (!String.valueOf(type).equals(String.valueOf(submittedType)) || instanceId != requireInstance(
                 CmsSupport.valueOf(values, existing, InstanceDeviceModel.INSTANCE_ID))) {
-            throw Violations.ofField("type", submittedType, CmsSupport.violationText("device_retype_unsupported"));
+            throw Violations.ofField("type", submittedType,
+                HohenheimMicrocopy.VIOLATIONS.of("device_retype_unsupported"));
         }
         String storedMedia = existing.get(InstanceDeviceModel.SOURCE_MEDIA);
         Object submittedMedia = values.get(InstanceDeviceModel.SOURCE_MEDIA.getName());
@@ -261,10 +266,10 @@ public final class InstanceAttachmentParts {
             // Swapping media is detach-and-attach at the daemon; an in-place edit would report success while the old
             // ISO stayed in the drive until the next deploy.
             throw Violations.ofField("source_media", submittedMedia,
-                CmsSupport.violationText("device_media_change_unsupported"));
+                HohenheimMicrocopy.VIOLATIONS.of("device_media_change_unsupported"));
         }
         if (DeviceType.parse(type) != DeviceType.DISK) {
-            throw Violations.ofForm(CmsSupport.violationText("device_resize_not_a_disk"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("device_resize_not_a_disk"));
         }
         new InstanceDevices().resizeDisk(instanceId, name, sizeOf(values, existing));
         ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DEVICE_RESIZED, null);
@@ -272,10 +277,10 @@ public final class InstanceAttachmentParts {
     }
 
     private static int requireInstance(@Nullable Object value) {
-        int instanceId = parseId(value);
+        int instanceId = RawValues.intOr(value, -1);
         if (instanceId <= 0 || Models.get(InstanceModel.class).find()
                 .where(InstanceModel.ID.eq(instanceId)).count() == 0) {
-            throw Violations.ofField("instance_id", value, CmsSupport.violationText("unknown_instance"));
+            throw Violations.ofField("instance_id", value, HohenheimMicrocopy.VIOLATIONS.of("unknown_instance"));
         }
         return instanceId;
     }
@@ -287,7 +292,7 @@ public final class InstanceAttachmentParts {
             return number.intValue();
         }
         // The model's own beforeValidate owns the refusal identity of a malformed size; 0 reaches it.
-        Integer parsed = CmsSupport.parsedInt(size);
+        Integer parsed = RawValues.parsedInt(size);
         return parsed != null ? parsed : 0;
     }
 
@@ -303,9 +308,8 @@ public final class InstanceAttachmentParts {
 
     /** @return the tenant's attachments: those of instances it may view; the contributed tabs only */
     public static @NonNull PanelResource<Row> databasesManage() {
-        return databases(HohenheimIds.id("manage_instance_database"))
-            .scope(TenantScopes.INSTANCE_DATABASES)
-            .tabs(ResourceTabs.<Row>none().withContributions())
+        return ManageTwin.reached(databases(ManageTwin.id("instance_database")), TenantScopes.INSTANCE_DATABASES,
+                ResourceTabs.<Row>none().withContributions())
             .build();
     }
 
@@ -323,15 +327,16 @@ public final class InstanceAttachmentParts {
             .column(ColumnSpec.fromField(InstanceDatabaseModel.ENV_PREFIX).copyable().build())
             .column(ColumnSpec.fromField(InstanceDatabaseModel.CREATED_AT).build())
             .build();
-        return PanelResource.builder(id, DATABASES, InstanceAttachmentOperations.DATABASE_LINK)
-            .label(Microcopy.of("plural").withFilter("scope", "instance_database"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "instance_database"))
+        return PanelResource.builder(id, HohenheimSlugs.INSTANCE_DATABASES, InstanceAttachmentOperations.DATABASE_LINK)
+            .label(HohenheimMicrocopy.INSTANCE_DATABASE.of("plural"))
+            .recordLabel(HohenheimMicrocopy.INSTANCE_DATABASE.of("singular"))
             .icon(Icon.of("database"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(21)
             .showInNav(false)
             .standsUnder(HohenheimSlugs.INSTANCES)
-            .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceDatabaseModel.INSTANCE_ID).tab("databases"))
+            .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceDatabaseModel.INSTANCE_ID)
+            .tab(HohenheimSlugs.Tab.DATABASES))
             .reads(ResourceReads.rows().title(InstanceAttachmentParts::linkTitle))
             .form(ResourceForm.<Row>of(form)
                 .createDefaults(request -> {
@@ -375,8 +380,7 @@ public final class InstanceAttachmentParts {
         if (database == null || instance == null) {
             return null;
         }
-        return CmsSupport.resolvedTextOrDefault(Microcopy.of("record_title")
-            .withFilter("scope", "instance_database")
+        return CmsSupport.resolvedTextOrDefault(HohenheimMicrocopy.INSTANCE_DATABASE.of("record_title")
             .withArg("database", database)
             .withArg("instance", instance));
     }
@@ -388,8 +392,7 @@ public final class InstanceAttachmentParts {
         if (database == null || instance == null) {
             return DeleteConfirmation.<Row>defaults().fallback();
         }
-        return DeleteConfirmation.body(Microcopy.of("delete_confirm")
-            .withFilter("scope", "instance_database")
+        return DeleteConfirmation.body(HohenheimMicrocopy.INSTANCE_DATABASE.of("delete_confirm")
             .withArg("database", database)
             .withArg("instance", instance)
             .withArg("prefix", DatabaseEnvInjection.normalizedPrefix(link.get(InstanceDatabaseModel.ENV_PREFIX))));
@@ -406,37 +409,37 @@ public final class InstanceAttachmentParts {
         Row link = save.row();
         Integer instanceId = link.get(InstanceDatabaseModel.INSTANCE_ID);
         if (instanceId == null) {
-            throw Violations.ofField("instance_id", null, CmsSupport.violationText("instance_required"));
+            throw Violations.ofField("instance_id", null, HohenheimMicrocopy.VIOLATIONS.of("instance_required"));
         }
         Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
         if (TenantWrites.isTenantOriginated()) {
             if (databaseId == null) {
-                throw Violations.ofField("database_id", null, CmsSupport.violationText("database_required"));
+                throw Violations.ofField("database_id", null, HohenheimMicrocopy.VIOLATIONS.of("database_required"));
             }
             TenantWrites.requireInstanceLinkAuthority(instanceId, databaseId);
         }
         Row instance = Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId)).first();
         if (instance == null) {
-            throw Violations.ofField("instance_id", instanceId, CmsSupport.violationText("instance_missing"));
+            throw Violations.ofField("instance_id", instanceId, HohenheimMicrocopy.VIOLATIONS.of("instance_missing"));
         }
         String kind = instance.get(InstanceModel.KIND);
         InstanceKindHandler handler = InstanceKinds.getHandler(kind);
         if (handler == null || !handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER)) {
             throw Violations.ofField("instance_id", instanceId,
-                CmsSupport.violationText("instance_kind_no_injection").withArg("kind", String.valueOf(kind)));
+                HohenheimMicrocopy.VIOLATIONS.of("instance_kind_no_injection").withArg("kind", String.valueOf(kind)));
         }
         if (databaseId == null) {
-            throw Violations.ofField("database_id", null, CmsSupport.violationText("database_required"));
+            throw Violations.ofField("database_id", null, HohenheimMicrocopy.VIOLATIONS.of("database_required"));
         }
         Row database = Models.get(DatabaseModel.class).find().where(DatabaseModel.ID.eq(databaseId)).first();
         if (database == null) {
-            throw Violations.ofField("database_id", databaseId, CmsSupport.violationText("database_missing"));
+            throw Violations.ofField("database_id", databaseId, HohenheimMicrocopy.VIOLATIONS.of("database_missing"));
         }
         int databaseServer = ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID));
         int instanceServer = ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
         if (databaseServer != instanceServer) {
             throw Violations.ofField("database_id", databaseId,
-                CmsSupport.violationText("database_instance_server_mismatch")
+                HohenheimMicrocopy.VIOLATIONS.of("database_instance_server_mismatch")
                     .withArg("name", database.get(DatabaseModel.NAME))
                     .withArg("server", ServerModel.nameOf(databaseServer))
                     .withArg("instance_server", ServerModel.nameOf(instanceServer)));
@@ -444,7 +447,7 @@ public final class InstanceAttachmentParts {
         String stored = link.get(InstanceDatabaseModel.ENV_PREFIX);
         String prefix = stored == null || stored.isEmpty() ? InstanceDatabaseModel.DEFAULT_PREFIX : stored;
         if (!prefix.matches(InstanceDatabaseModel.PREFIX_PATTERN)) {
-            throw Violations.ofField("env_prefix", prefix, CmsSupport.violationText("prefix_format"));
+            throw Violations.ofField("env_prefix", prefix, HohenheimMicrocopy.VIOLATIONS.of("prefix_format"));
         }
         Integer id = link.get(InstanceDatabaseModel.ID);
         for (Row other : Models.get(InstanceDatabaseModel.class).findByInstanceId(instanceId)) {
@@ -453,12 +456,13 @@ public final class InstanceAttachmentParts {
             }
             if (databaseId.equals(other.get(InstanceDatabaseModel.DATABASE_ID))) {
                 throw Violations.ofField("database_id", databaseId,
-                    CmsSupport.violationText("database_already_attached"));
+                    HohenheimMicrocopy.VIOLATIONS.of("database_already_attached"));
             }
             String otherPrefix = DatabaseEnvInjection.normalizedPrefix(other.get(InstanceDatabaseModel.ENV_PREFIX));
             if (otherPrefix.equalsIgnoreCase(prefix)) {
                 throw Violations.ofField("env_prefix", prefix,
-                    CmsSupport.violationText("prefix_taken").withArg("prefix", prefix.toUpperCase(Locale.ROOT)));
+                    HohenheimMicrocopy.VIOLATIONS.of("prefix_taken")
+                        .withArg("prefix", prefix.toUpperCase(Locale.ROOT)));
             }
         }
     }
@@ -474,11 +478,6 @@ public final class InstanceAttachmentParts {
             values.put("instance_id", instanceId);
         }
         return Map.copyOf(values);
-    }
-
-    private static int parseId(@Nullable Object value) {
-        Integer parsed = CmsSupport.parsedInt(value);
-        return parsed != null ? parsed : -1;
     }
 
 }

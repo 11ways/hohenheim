@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.application;
 
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -17,7 +17,9 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.InstanceDatabaseNetworks;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
+import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -47,6 +49,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * The wiring between the APPLICATION record and the canonical runtime-resource contract:
@@ -151,7 +155,7 @@ public final class ApplicationReleases {
         imported.remove("build_context");
         imported.remove("artifact_path");
         imported.remove("tag");
-        imported.put("image", verifiedImageId);
+        imported.put(InstanceKindFields.IMAGE, verifiedImageId);
         int serverId = ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID));
         try {
             return inScope(applicationId, () -> {
@@ -190,8 +194,8 @@ public final class ApplicationReleases {
                 // A build context WITHOUT a commit identity has no source fingerprint a
                 // reload can trust (the content can change under the same path), so it
                 // always resolves the spec.
-                boolean fingerprintable = str(settings.get("build_context")).isEmpty()
-                    || !str(settings.get("commit_sha")).isEmpty();
+                boolean fingerprintable = trimmed(settings.get("build_context")).isEmpty()
+                    || !trimmed(settings.get("commit_sha")).isEmpty();
 
                 // Unchanged source reuses its immutable release without resolving a new
                 // spec or rebuilding. A stopped workload restarts from that same image.
@@ -427,14 +431,14 @@ public final class ApplicationReleases {
             inherit(settings, "container_port", image.get(RuntimeImageModel.DEFAULT_PORT));
             inherit(settings, "workdir", image.get(RuntimeImageModel.WORKDIR));
         }
-        settings.put("command_template", str(settings.get("command")));
+        settings.put("command_template", trimmed(settings.get("command")));
         InstanceVariables variables = new InstanceVariables();
         return variables.applyToSettings(settings, variables.valuesFor(applicationId),
             DatabaseEnvInjection.envForInstance(applicationId, null));
     }
 
     private static void inherit(Map<String, Object> settings, String key, Object fallback) {
-        if (str(settings.get(key)).isEmpty() && fallback != null) {
+        if (trimmed(settings.get(key)).isEmpty() && fallback != null) {
             settings.put(key, fallback);
         }
     }
@@ -458,24 +462,25 @@ public final class ApplicationReleases {
         int applicationId = application.get(InstanceModel.ID);
         Map<String, Object> desired = new LinkedHashMap<>();
 
-        String buildContext = str(settings.get("build_context"));
-        String artifactPath = str(settings.get("artifact_path"));
+        String buildContext = trimmed(settings.get("build_context"));
+        String artifactPath = trimmed(settings.get("artifact_path"));
         if (!buildContext.isEmpty() || !artifactPath.isEmpty()) {
             String tag = ControllerScope.handle(ControllerScope.KIND_INSTANCE, applicationId)
                 + ":latest";
             Path artifactContext = artifactPath.isEmpty() ? null
                 : RuntimeImages.materializeArtifactContext(RuntimeImages.requireFor(application),
                     Path.of(artifactPath));
+            String serverName = ServerModel.canonicalNameOf(application.get(InstanceModel.SERVER_ID));
             SandboxedBuilds.Result build;
             try {
-                build = new SandboxedBuilds(docker, serverNameOf(application)).run(new BuildRequest(
+                build = new SandboxedBuilds(docker, serverName).run(new BuildRequest(
                     InstanceModel.MODEL_ID, applicationId,
                     BuildOperationModel.kindOrDefault(settings.get("builder")),
                     artifactContext != null ? artifactContext : Path.of(buildContext),
-                    str(settings.get("dockerfile")), tag,
+                    trimmed(settings.get("dockerfile")), tag,
                     // The build sees build arguments, never the workload's secret environment.
                     EnvVars.toMap(settings.get("build_arguments")),
-                    str(settings.get("commit_sha")), null, buildQuotaFor(settings)));
+                    trimmed(settings.get("commit_sha")), null, buildQuotaFor(settings)));
             } finally {
                 if (artifactContext != null) {
                     RuntimeImages.deleteArtifactContext(artifactContext);
@@ -483,44 +488,44 @@ public final class ApplicationReleases {
             }
             if (!build.succeeded() || build.imageId() == null) {
                 throw Violations.ofField("settings.image", tag,
-                    HohenheimViolations.text("application_image_build_failed")
+                    HohenheimMicrocopy.VIOLATIONS.of("application_image_build_failed")
                         .withArg("reason", build.failureReason() != null
                             ? build.failureReason() : build.status()));
             }
-            desired.put("image", build.imageId());
+            desired.put(InstanceKindFields.IMAGE, build.imageId());
             desired.put("built_image_id", build.imageId());
-            desired.put("commit_sha", str(settings.get("commit_sha")));
+            desired.put("commit_sha", trimmed(settings.get("commit_sha")));
             if (!artifactPath.isEmpty()) {
                 desired.put("artifact_path", artifactPath);
             }
         } else {
-            String image = str(settings.get("image"));
-            String tag = str(settings.get("tag"));
+            String image = trimmed(settings.get(InstanceKindFields.IMAGE));
+            String tag = trimmed(settings.get("tag"));
             String ref = tag.isEmpty() || image.contains(":") ? image : image + ":" + tag;
             if (ref.isEmpty()) {
-                throw Violations.ofForm(HohenheimViolations.text("application_never_built")
-                    .withArg("name", str(application.get(InstanceModel.NAME))));
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("application_never_built")
+                    .withArg("name", trimmed(application.get(InstanceModel.NAME))));
             }
             // Pin the mutable reference to the content-addressed digest it resolves to
             // RIGHT NOW (pulling once when absent). A retag at the daemon or the registry
             // surfaces as a CHANGED spec (a deliberate release), never as a silent
             // difference between what the record says and what runs.
             if (!ref.startsWith("sha256:")) {
-                desired.put("image", resolveImageDigest(docker, ref));
+                desired.put(InstanceKindFields.IMAGE, resolveImageDigest(docker, ref));
                 desired.put("image_ref", ref);
             } else {
-                desired.put("image", image);
+                desired.put(InstanceKindFields.IMAGE, image);
                 if (!tag.isEmpty()) {
                     desired.put("tag", tag);
                 }
             }
         }
 
-        String command = str(settings.getOrDefault("command_template", settings.get("command")));
+        String command = trimmed(settings.getOrDefault("command_template", settings.get("command")));
         if (!command.isEmpty()) {
             desired.put("command", command);
         }
-        String workdir = str(settings.get("workdir"));
+        String workdir = trimmed(settings.get("workdir"));
         if (!workdir.isEmpty()) {
             desired.put("workdir", workdir);
         }
@@ -535,34 +540,27 @@ public final class ApplicationReleases {
         if (console != ConsoleKind.PLAIN) {
             desired.put(ConsoleKind.SETTING, console.token());
         }
-        String healthPath = str(settings.get("health_path"));
+        String healthPath = trimmed(settings.get("health_path"));
         if (!healthPath.isEmpty()) {
             desired.put("health_path", healthPath);
         }
 
         // Already resolved, using InstanceVariables' shared precedence, before fingerprinting.
-        Map<String, String> env = EnvVars.toMap(settings.get("environment_variables"));
+        Map<String, String> env = EnvVars.toMap(settings.get(InstanceKindFields.ENVIRONMENT_VARIABLES));
         if (!env.isEmpty()) {
-            desired.put("environment_variables", env);
+            desired.put(InstanceKindFields.ENVIRONMENT_VARIABLES, env);
         }
 
         // The APPLICATION's volume directories, mounted into every release it generates.
         // Resolved here (host directories created, quotas applied) and stored on the
         // release, so a rollback re-mounts exactly what it stored.
         Map<String, String> mounts = InstanceVolumes.mountsFor(applicationId,
-            serverNameOf(application));
+            ServerModel.canonicalNameOf(application.get(InstanceModel.SERVER_ID)));
         if (!mounts.isEmpty()) {
             desired.put(VOLUME_MOUNTS, mounts);
         }
 
-        Object memory = settings.get("memory_limit_mb");
-        if (memory instanceof Number number && number.intValue() > 0) {
-            desired.put("memory_limit_mb", number.intValue());
-        }
-        Object cpu = settings.get("cpu_limit");
-        if (cpu instanceof Number number && number.doubleValue() > 0) {
-            desired.put("cpu_limit", number.doubleValue());
-        }
+        ResourceLimits.carry(settings, desired);
         desired.put("crash_policy", settings.getOrDefault("crash_policy", InstanceModel.CRASH_DEFAULT));
         return desired;
     }
@@ -629,9 +627,9 @@ public final class ApplicationReleases {
                     .valuesFor(instance.get(InstanceModel.ID));
                 if (!snapshot.isEmpty()) {
                     Map<String, String> env = new LinkedHashMap<>(
-                        EnvVars.toMap(cast.get("environment_variables")));
+                        EnvVars.toMap(cast.get(InstanceKindFields.ENVIRONMENT_VARIABLES)));
                     env.putAll(snapshot);
-                    cast.put("environment_variables", env);
+                    cast.put(InstanceKindFields.ENVIRONMENT_VARIABLES, env);
                 }
             }
             return cast;
@@ -690,7 +688,7 @@ public final class ApplicationReleases {
             }
         } catch (IOException unavailable) {
             throw Violations.ofField("settings.image", ref,
-                HohenheimViolations.text("application_image_unresolvable")
+                HohenheimMicrocopy.VIOLATIONS.of("application_image_unresolvable")
                     .withArg("reason", unavailable.getMessage() != null
                         ? unavailable.getMessage() : "daemon unreachable"));
         }
@@ -705,19 +703,11 @@ public final class ApplicationReleases {
         Row application = Models.get(InstanceModel.class).findById(applicationId);
         if (application == null
                 || !InstanceKinds.isReleaseManaged(application.get(InstanceModel.KIND))) {
-            throw Violations.ofForm(HohenheimViolations.text("application_not_found").withArg("id", applicationId));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("application_not_found")
+                .withArg("id", applicationId));
         }
         return application;
     }
 
-    /** The inventoried server name an application record resolves to. */
-    public static @NonNull String serverNameOf(@NonNull Row application) {
-        return ServerModel.nameOf(
-            ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID)));
-    }
 
-
-    private static @NonNull String str(@Nullable Object value) {
-        return value == null ? "" : value.toString().trim();
-    }
 }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
@@ -39,7 +40,7 @@ public final class DatabaseEngineGuards {
             if (hosted.isEmpty()) {
                 return;
             }
-            throw Violations.ofForm(CmsSupport.violationText("database_engine_in_use")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("database_engine_in_use")
                 .withArg("name", "")
                 .withArg("databases", DatabaseEngines.names(hosted)));
         });
@@ -59,15 +60,15 @@ public final class DatabaseEngineGuards {
             if (shared && bound == null) {
                 throw Violations.ofField(DatabaseModel.PLACEMENT.getName(),
                     DatabaseModel.PLACEMENT_SHARED,
-                    CmsSupport.violationText("database_shared_without_engine"));
+                    HohenheimMicrocopy.VIOLATIONS.of("database_shared_without_engine"));
             }
             if (!shared && bound != null) {
                 throw Violations.ofField(DatabaseModel.ENGINE_ID.getName(), bound,
-                    CmsSupport.violationText("database_engine_on_dedicated"));
+                    HohenheimMicrocopy.VIOLATIONS.of("database_engine_on_dedicated"));
             }
             if (shared && Boolean.TRUE.equals(row.get(DatabaseModel.EPHEMERAL))) {
                 throw Violations.ofField(DatabaseModel.EPHEMERAL.getName(), true,
-                    CmsSupport.violationText("database_ephemeral_shared"));
+                    HohenheimMicrocopy.VIOLATIONS.of("database_ephemeral_shared"));
             }
         });
         DatabaseModel.SCHEMA.addBeforeValidateHook(context -> {
@@ -80,19 +81,19 @@ public final class DatabaseEngineGuards {
                 : Models.get(DatabaseEngineModel.class).findById(engineId);
             if (engine == null) {
                 throw Violations.ofField(DatabaseModel.ENGINE_ID.getName(), engineId,
-                    CmsSupport.violationText("database_engine_kind_mismatch")
+                    HohenheimMicrocopy.VIOLATIONS.of("database_engine_kind_mismatch")
                         .withArg("engine", String.valueOf((Object) row.get(DatabaseModel.ENGINE))));
             }
             Object kind = row.get(DatabaseModel.ENGINE);
             if (kind != null && !kind.equals(engine.get(DatabaseEngineModel.ENGINE))) {
                 throw Violations.ofField(DatabaseModel.ENGINE_ID.getName(), engineId,
-                    CmsSupport.violationText("database_engine_kind_mismatch")
+                    HohenheimMicrocopy.VIOLATIONS.of("database_engine_kind_mismatch")
                         .withArg("engine", String.valueOf(kind)));
             }
             Object server = row.get(DatabaseModel.SERVER_ID);
             if (server != null && !server.equals(engine.get(DatabaseEngineModel.SERVER_ID))) {
                 throw Violations.ofField(DatabaseModel.ENGINE_ID.getName(), engineId,
-                    CmsSupport.violationText("database_engine_host_mismatch")
+                    HohenheimMicrocopy.VIOLATIONS.of("database_engine_host_mismatch")
                         .withArg("name", String.valueOf((Object) engine.get(DatabaseEngineModel.NAME)))
                         .withArg("server", String.valueOf(engine.get(DatabaseEngineModel.SERVER_ID)))
                         .withArg("database_server", String.valueOf(server)));

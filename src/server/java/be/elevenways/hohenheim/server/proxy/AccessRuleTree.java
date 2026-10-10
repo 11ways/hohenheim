@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.auth.SiteAuthDecision;
 import be.elevenways.hohenheim.model.AccessListModel;
@@ -316,8 +317,7 @@ public final class AccessRuleTree {
             }
             case AccessRuleModel.TYPE_AUTH_PROVIDER -> {
                 facts.blocking = true;
-                Integer providerId = data.get(AccessRuleModel.PROVIDER_ID.getName())
-                    instanceof Number number ? number.intValue() : null;
+                Integer providerId = RawValues.parsedInt(data.get(AccessRuleModel.PROVIDER_ID.getName()));
                 SiteAuthGate gate = providerId == null ? null : context.gateFor(providerId,
                     Texts.trimmedOrNull(data.get(
                         AccessRuleModel.PROVIDER_REQUIRED_PERMISSION.getName())));

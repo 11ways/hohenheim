@@ -1,9 +1,8 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -37,16 +36,17 @@ public class AccessListModel extends Model {
      * without one titles itself after the model and its id on every surface that names it.
      */
     public static final StringField NAME = SCHEMA.addField(
-        StringField.builder().name("name").required().build());
+        StringField.builder().name("name").required()
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name")).build());
     public static final EnumField SATISFY = SCHEMA.addField(EnumField.builder("satisfy")
         .value(SATISFY_ANY, v -> v.displayName("Any")
-            .label(Microcopy.of("any").withFilter("scope", "access_satisfy"))
+            .label(HohenheimMicrocopy.ACCESS_SATISFY.of("any"))
             .icon("check").color(ColorHue.BLUE))
         .value(SATISFY_ALL, v -> v.displayName("All")
-            .label(Microcopy.of("all").withFilter("scope", "access_satisfy"))
+            .label(HohenheimMicrocopy.ACCESS_SATISFY.of("all"))
             .icon("list-check").color(ColorHue.ORANGE))
         .defaultValue(SATISFY_ANY)
-        .label(HohenheimFormCopy.label("satisfy"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("satisfy"))
         .build());
     /**
      * Offered to every principal's pickers, not only to the subjects holding a manage
@@ -56,8 +56,8 @@ public class AccessListModel extends Model {
      */
     public static final BooleanField SHARED = SCHEMA.addField(BooleanField.builder("shared")
         .defaultValue(false)
-        .label(HohenheimFormCopy.label("access_list_shared"))
-        .help(HohenheimFormCopy.help("access_list_shared"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("access_list_shared"))
+        .help(HohenheimMicrocopy.HELP.of("access_list_shared"))
         .build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
@@ -81,7 +81,7 @@ public class AccessListModel extends Model {
             // has exactly one declaring home (the SATISFY EnumField above).
             if (!SATISFY.isValidValue(satisfy)) {
                 throw Violations.ofField(SATISFY.getName(), satisfy,
-                    HohenheimViolations.text("access_satisfy_invalid"));
+                    HohenheimMicrocopy.VIOLATIONS.of("access_satisfy_invalid"));
             }
         });
     }

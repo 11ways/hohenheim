@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -9,7 +9,6 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.orm.query.SortOrder;
-import be.elevenways.zenit.common.ui.BadgeVariant;
 
 import java.util.List;
 
@@ -23,9 +22,9 @@ public class StackDeploymentModel extends Model {
     public static final Identifier MODEL_ID = HohenheimIds.id("stack_deployment");
     public static final Schema SCHEMA = new Schema();
 
-    public static final String STATUS_RUNNING = "running";
-    public static final String STATUS_SUCCESS = "success";
-    public static final String STATUS_FAILED = "failed";
+    /** The statuses a deploy attempt stores in {@link #STATUS}; a success stays stored as "success". */
+    public static final OperationLifecycle LIFECYCLE = OperationLifecycle.of(OperationStatus.RUNNING,
+        OperationStatus.SUCCEEDED, OperationStatus.FAILED).storing(OperationStatus.SUCCEEDED, "success");
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField STACK_ID = SCHEMA.addField(IntegerField.builder().name("stack_id").build());
@@ -38,19 +37,7 @@ public class StackDeploymentModel extends Model {
             .remoteKey(StackModel.ID)
             .build());
 
-    public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
-        .value(STATUS_RUNNING, v -> v.displayName("Running")
-            .label(statusLabel(STATUS_RUNNING)).icon("rotate").color(BadgeVariant.WARNING))
-        .value(STATUS_SUCCESS, v -> v.displayName("Success")
-            .label(statusLabel(STATUS_SUCCESS)).icon("circle-check").color(BadgeVariant.SUCCESS))
-        .value(STATUS_FAILED, v -> v.displayName("Failed")
-            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color(BadgeVariant.DESTRUCTIVE))
-        .build());
-
-    /** The translation token for a stack deployment status; the key IS the stored value. */
-    private static Microcopy statusLabel(String status) {
-        return Microcopy.of(status).withFilter("scope", "stack_deploy_status");
-    }
+    public static final EnumField STATUS = SCHEMA.addField(LIFECYCLE.field("status"));
 
     public static final StringField REASON = SCHEMA.addField(StringField.builder().name("reason").build());
     public static final TextField ERROR = SCHEMA.addField(TextField.builder().name("error").build());
@@ -69,15 +56,24 @@ public class StackDeploymentModel extends Model {
 
     /** Newest-first deployment history of a stack. */
     public List<Row> findByStackId(int stackId, int limit) {
-        return find().where(STACK_ID.eq(stackId)).orderBy(ID, SortOrder.DESC).limit(limit).all();
+        return this.history(stackId).limit(limit).all();
+    }
+
+    /** Keep the newest {@code keep} deployments of one stack and delete the rest. */
+    public void pruneHistory(int stackId, int keep) {
+        Retention.keepNewest(this, this.history(stackId), ID, keep);
+    }
+
+    /** One stack's deployments, newest first. */
+    private QueryBuilder<Row> history(int stackId) {
+        return find().where(STACK_ID.eq(stackId)).orderBy(ID, SortOrder.DESC);
     }
 
     /** The newest successful deployment carrying a spec snapshot, or null. */
     public Row findLatestSuccessful(int stackId) {
-        return find().where(STACK_ID.eq(stackId))
-            .where(STATUS.eq(STATUS_SUCCESS))
+        return this.history(stackId)
+            .where(STATUS.eq(LIFECYCLE.stored(OperationStatus.SUCCEEDED)))
             .where(SPEC.isNotNull())
-            .orderBy(ID, SortOrder.DESC)
             .first();
     }
 

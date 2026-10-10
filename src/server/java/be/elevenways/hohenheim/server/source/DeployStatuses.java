@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.thread.JobRunner;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -23,30 +23,43 @@ public final class DeployStatuses {
     private DeployStatuses() {
     }
 
-    /** Report asynchronously on a virtual thread; never throws. */
+    /** Report a failed deploy of {@code commitSha} under {@link #CONTEXT_DEPLOY}; a null sha reports nothing. */
+    public static void deployFailed(@NonNull Map<String, Object> sourceSettings, @Nullable String commitSha,
+                                    @Nullable String reason) {
+        report(sourceSettings, commitSha, GitProviderClient.StatusState.FAILURE, CONTEXT_DEPLOY,
+            "Deploy failed: " + reason, null);
+    }
+
+    /** Report a push the trigger policy declined to deploy onto {@code commitSha}; a null sha reports nothing. */
+    public static void deployDeclined(@NonNull Map<String, Object> sourceSettings, @Nullable String commitSha,
+                                      @NonNull String reason) {
+        report(sourceSettings, commitSha, GitProviderClient.StatusState.FAILURE, CONTEXT_DEPLOY,
+            "Deploy declined: " + reason, null);
+    }
+
+    /**
+     * Report asynchronously on a virtual thread; never throws.
+     *
+     * AIDEV-NOTE: the hop carries the caller's datasource ({@link HandlerSupport#inBackground}): the provider row is
+     * read over there, and a bare virtual thread read it from the default binding instead of the caller's scope.
+     */
     public static void report(@NonNull Map<String, Object> sourceSettings,
                               @Nullable String commitSha,
                               GitProviderClient.@NonNull StatusState state,
                               @NonNull String context, @NonNull String description,
                               @Nullable String targetUrl) {
-        Integer providerId = GitProviders.providerIdOf(sourceSettings);
-        String repository = str(sourceSettings.get("repository"));
-        if (providerId == null || repository.isEmpty()
-                || commitSha == null || commitSha.isBlank()) {
+        GitProviders.Binding binding = GitProviders.bindingOf(sourceSettings);
+        if (binding == null || commitSha == null || commitSha.isBlank()) {
             return;
         }
-        JobRunner.startVirtualThread(() -> {
+        HandlerSupport.inBackground(() -> {
             try {
-                GitProviders.clientFor(providerId).reportStatus(repository, commitSha,
+                GitProviders.clientFor(binding.providerId()).reportStatus(binding.repository(), commitSha,
                     state, context, description, targetUrl);
             } catch (Exception e) {
                 Blast.log("GIT: status report (" + context + ", " + state + ") for",
-                    repository + "@" + commitSha, "failed -", e.getMessage());
+                    binding.repository() + "@" + commitSha, "failed -", e.getMessage());
             }
         });
-    }
-
-    private static @NonNull String str(@Nullable Object value) {
-        return value == null ? "" : value.toString().trim();
     }
 }

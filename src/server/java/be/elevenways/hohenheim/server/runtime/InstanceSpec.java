@@ -1,6 +1,11 @@
 package be.elevenways.hohenheim.server.runtime;
 
+import be.elevenways.zenit.common.text.Texts;
+import be.elevenways.hohenheim.instance.ImageOrigin;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
+import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -165,6 +170,18 @@ public record InstanceSpec(@NonNull String handle,
         return new Builder(handle, image, limits, hardening, ownerLabels);
     }
 
+    /**
+     * The builder of an instance's workload: its controller handle, the limits its settings book and its owner labels;
+     * the kind still declares the image and the hardening.
+     */
+    public static @NonNull Builder forInstance(int instanceId, @NonNull String image,
+                                               @NonNull Map<String, Object> settings, int defaultFootprintMb,
+                                               ContainerHardening.@NonNull Profile hardening) {
+        return builder(ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId), image,
+            ResourceLimits.fromSettings(settings, defaultFootprintMb), hardening,
+            OwnerLabels.of(InstanceModel.MODEL_ID, instanceId));
+    }
+
     /** Names every optional component of a spec; see {@link #builder}. */
     public static final class Builder {
 
@@ -210,7 +227,7 @@ public record InstanceSpec(@NonNull String handle,
         }
 
         public @NonNull Builder workdir(@Nullable String workdir) {
-            this.workdir = workdir == null || workdir.isBlank() ? null : workdir;
+            this.workdir = Texts.blankAsNull(workdir);
             return this;
         }
 

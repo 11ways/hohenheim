@@ -1,8 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentityKey;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.spamservice.client.CreatedClientKey;
@@ -10,8 +11,8 @@ import be.elevenways.spamservice.client.ManagedClientKey;
 import be.elevenways.spamservice.client.PageResult;
 import be.elevenways.spamservice.client.SpamserviceClient;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
-import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
@@ -70,11 +71,6 @@ public final class SpamserviceClientKeysResource {
     private static final OperationCommand COMMAND = OperationCommand.perSubject().onDatasource("default")
         .execution(CommandExecution.OUTSIDE_TRANSACTION);
 
-    public static final String SLUG = "spamservice-keys";
-
-    /** The client's tab the keys list on. */
-    static final String TAB = "keys";
-
     static final Identifier ID = HohenheimIds.id("spamservice_key");
 
     /** A key is addressed as {@code <client id>~<key id>}: the management API reads keys per client only. */
@@ -82,19 +78,19 @@ public final class SpamserviceClientKeysResource {
         SpamserviceClientKeysResource::keyOf);
 
     private static final UuidField CLIENT_ID = UuidField.builder("client_id").required()
-        .label(words("client")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("client")).build();
     private static final StringField NAME = StringField.builder("name").required()
-        .label(words("name")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("name")).build();
     private static final StringField RAW_KEY = StringField.builder("key").visibleIn(EditView.CREATE)
         .secret()
-        .label(words("raw_key"))
-        .help(words("raw_key_help")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("raw_key"))
+        .help(HohenheimMicrocopy.SPAMSERVICE_KEY.of("raw_key_help")).build();
     private static final BooleanField ACTIVE = BooleanField.builder("active").defaultValue(true)
-        .label(words("active")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("active")).build();
     private static final DateTimeField LAST_USED = DateTimeField.builder("last_used")
-        .label(words("last_used")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("last_used")).build();
     private static final DateTimeField CREATED_AT = DateTimeField.builder("created_at")
-        .label(words("created_at")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("created_at")).build();
 
     /** The fields the management API answers for one key; the raw key is never among them. */
     private static final List<Field<?, ?>> FIELDS = List.of(CLIENT_ID, NAME, ACTIVE, LAST_USED, CREATED_AT);
@@ -125,7 +121,7 @@ public final class SpamserviceClientKeysResource {
     public static final Operation<Void, KeyInput, SecretResult<String>> CREATE = Operation.declare(
             HohenheimIds.id("spamservice_key_create"))
         .happened(OperationSentences.of("spamservice_key_create"))
-        .label(words("create_key"))
+        .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("create_key"))
         .noSubject()
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .input(OperationInput.of(FORM, KeyInput.class, values -> new KeyInput(values.get("client_id"),
@@ -141,7 +137,7 @@ public final class SpamserviceClientKeysResource {
     public static final Operation<ManagedClientKey, Void, Void> ENABLE = Operation.declare(
             HohenheimIds.id("spamservice_key_enable"))
         .happened(OperationSentences.of("spamservice_key_enable"))
-        .label(words("enable"))
+        .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("enable"))
         .icon(Icon.of("check"))
         .one(KEY)
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
@@ -151,7 +147,7 @@ public final class SpamserviceClientKeysResource {
     public static final Operation<ManagedClientKey, Void, Void> REVOKE = Operation.declare(
             HohenheimIds.id("spamservice_key_revoke"))
         .happened(OperationSentences.of("spamservice_key_revoke"))
-        .label(words("revoke"))
+        .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("revoke"))
         .icon(Icon.of("xmark"))
         .one(KEY)
         .gate(OperationGate.permission(HohenheimPanel.ACCESS))
@@ -192,20 +188,19 @@ public final class SpamserviceClientKeysResource {
             .column(ColumnSpec.fromField(LAST_USED).build())
             .column(ColumnSpec.fromField(CREATED_AT).build())
             .build();
-        return PanelResource.builder(ID, SLUG, KEY)
-            .label(words("plural"))
-            .recordLabel(words("singular"))
+        return PanelResource.builder(ID, HohenheimSlugs.SPAMSERVICE_KEYS, KEY)
+            .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("plural"))
+            .recordLabel(HohenheimMicrocopy.SPAMSERVICE_KEY.of("singular"))
             .navGroup(HohenheimPanel.SECURITY_GROUP)
             .navOrder(40)
             .showInNav(false)
-            .standsUnder(SpamserviceClientsResource.SLUG)
+            .standsUnder(HohenheimSlugs.SPAMSERVICE_CLIENTS)
             .icon(Icon.of("key"))
-            .parent(ResourceParent.<ManagedClientKey>of(SpamserviceClientsResource.SLUG, ManagedClientKey::clientId)
-                .tab(TAB))
+            .parent(ResourceParent.<ManagedClientKey>of(HohenheimSlugs.SPAMSERVICE_CLIENTS, ManagedClientKey::clientId)
+                .tab(HohenheimSlugs.Tab.KEYS))
             .reads(ResourceReads.<ManagedClientKey>typed(SpamserviceClientKeysResource::keyOf)
                 .load((key, access) -> load(clients, key))
                 .values(SpamserviceClientKeysResource::values)
-                .cells(SpamserviceClientKeysResource::cell)
                 .build()
                 .title(ManagedClientKey::name))
             // Outside a client the list asks the service nothing, as the unscoped list always did.
@@ -233,19 +228,20 @@ public final class SpamserviceClientKeysResource {
                 .build())
             .actions(List.of(
                 PanelAction.<ManagedClientKey, Void>places(ENABLE, ActionPlacement.ROW,
-                        (request, result) -> CmsActionResult.refreshWithToast(words("key_enabled")))
-                    .label(words("enable"))
+                        (request, result) -> CmsActionResult.refreshWithToast(
+                            HohenheimMicrocopy.SPAMSERVICE_KEY.of("key_enabled")))
+                    .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("enable"))
                     .icon(Icon.of("check"))
                     .hiddenWhen(ManagedClientKey::active)
                     .build(),
                 PanelAction.<ManagedClientKey, Void>places(REVOKE, ActionPlacement.ROW,
-                        (request, result) -> CmsActionResult.refreshWithToast(words("key_revoked")))
-                    .label(words("revoke"))
+                        (request, result) -> CmsActionResult.refreshWithToast(
+                            HohenheimMicrocopy.SPAMSERVICE_KEY.of("key_revoked")))
+                    .label(HohenheimMicrocopy.SPAMSERVICE_KEY.of("revoke"))
                     .icon(Icon.of("xmark"))
                     .hiddenWhen(key -> !key.active())
-                    .confirmation(ConfirmationSpec.builder()
-                        .title(words("revoke"))
-                        .body(words("revoke_confirm")).build())
+                    .confirmation(Confirmations.of(HohenheimMicrocopy.SPAMSERVICE_KEY.of("revoke"),
+                        HohenheimMicrocopy.SPAMSERVICE_KEY.of("revoke_confirm"), ActionStyle.DEFAULT))
                     .build()))
             .build();
     }
@@ -332,21 +328,7 @@ public final class SpamserviceClientKeysResource {
 
     private static @NonNull Map<String, Object> values(@NonNull ManagedClientKey row) {
         return Map.of("client_id", UUID.fromString(row.clientId()), "name", row.name(), "key", "",
-            "active", row.active(), "last_used", SpamserviceRemoteStore.orBlank(row.lastUsed()),
-            "created_at", SpamserviceRemoteStore.orBlank(row.createdAt()));
-    }
-
-    private static @Nullable Object cell(@NonNull ManagedClientKey row, @NonNull ColumnSpec column) {
-        return switch (column.name()) {
-            case "name" -> row.name();
-            case "active" -> row.active();
-            case "last_used" -> row.lastUsed();
-            case "created_at" -> row.createdAt();
-            default -> null;
-        };
-    }
-
-    private static @NonNull Microcopy words(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "spamservice_key");
+            "active", row.active(), "last_used", Objects.requireNonNullElse(row.lastUsed(), ""),
+            "created_at", Objects.requireNonNullElse(row.createdAt(), ""));
     }
 }

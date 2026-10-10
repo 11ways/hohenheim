@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -42,7 +43,7 @@ class ConvertedEntryAccessTabTest extends HohenheimTestBase {
             HttpResponse<String> saved = adminPostForm(
                 "/admin/certificates/invoke/zenit.save_record_sharing?ids=" + certificateId,
                 "_tab=access&_confirmed=1&access.0.type=user&access.0.id=" + tenantId
-                    + "&access.0.caps.0.key=" + HohenheimAccess.VIEW + "&access.0.caps.0.value=allow");
+                    + "&access.0.caps.0.key=" + HohenheimCapabilities.VIEW + "&access.0.caps.0.value=allow");
             assertThat(saved.statusCode()).as("step 2: the share saves").isIn(302, 303);
             assertThat(tenantReaches(tenantId, certificateId))
                 .as("step 2: the shared certificate is the tenant's to view").isTrue();
@@ -52,7 +53,7 @@ class ConvertedEntryAccessTabTest extends HohenheimTestBase {
                 .as("step 3: the grant is a subject row of the tab").contains("data-subject=\"user:" + tenantId + "\"");
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, CertificateModel.MODEL_ID, certificateId,
-                HohenheimAccess.VIEW);
+                HohenheimCapabilities.VIEW);
             HardDeletes.byId(Models.get(CertificateModel.class), certificateId);
         }
     }
@@ -60,7 +61,8 @@ class ConvertedEntryAccessTabTest extends HohenheimTestBase {
     private static boolean tenantReaches(int tenantId, int certificateId) {
         AccessContext tenant = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(tenantId, "Converted Access Tenant")));
-        return HohenheimAccess.reachesRecord(tenant, CertificateModel.MODEL_ID, certificateId, HohenheimAccess.VIEW);
+        return HohenheimAccess.reachesRecord(tenant, CertificateModel.MODEL_ID, certificateId,
+            HohenheimCapabilities.VIEW);
     }
 
     /** A custom certificate, the CertificateSurfacesBrowserTest fixture's shape. */

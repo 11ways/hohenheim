@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.server.GrantService;
@@ -40,17 +40,17 @@ class DnsEditGrantReadWireTest extends HohenheimTestBase {
         int editable = DnsFixtures.record(zone, "editable", DnsRecordModel.TYPE_A, "192.0.2.41");
         int hidden = DnsFixtures.record(zone, "hidden", DnsRecordModel.TYPE_A, "192.0.2.42");
         KnownCapability currentView = Objects.requireNonNull(
-            KnownCapabilities.get(DnsRecordModel.MODEL_ID, HohenheimAccess.VIEW));
+            KnownCapabilities.get(DnsRecordModel.MODEL_ID, HohenheimCapabilities.VIEW));
         try {
             // 1. Admit the account to the delegated surface, with exactly one record grant: EDIT, never VIEW.
             // No site or hostname authority is granted, so the source cannot admit this record by another path.
             GrantService.createDirectGrant(GrantSubjectType.USER, account, HohenheimSources.MANAGE_ACCESS.value(), true);
             RecordGrants.grant(GrantSubjectType.USER, account, DnsRecordModel.MODEL_ID, editable,
-                HohenheimAccess.EDIT, true);
+                HohenheimCapabilities.EDIT, true);
             TestSession caller = sessionFor(account);
             String query = Zenit.DRY.stringify(RecordSourceQuery.matchAll());
             assertThat(currentView.impliedBy()).as("step 1: current VIEW is implied by EDIT")
-                .containsExactly(HohenheimAccess.EDIT);
+                .containsExactly(HohenheimCapabilities.EDIT);
 
             // 2. Replay the parent declaration of a0217c80 through the canonical test replacement seam. Its only
             // change was adding VIEW.impliedBy(EDIT); keep every other vocabulary fact and the HTTP transport fixed.
@@ -94,7 +94,7 @@ class DnsEditGrantReadWireTest extends HohenheimTestBase {
             assertThat(httpGet(SOURCE + "/item/" + hidden, caller.token()).statusCode())
                 .as("step 4: an ungranted sibling stays hidden").isEqualTo(404);
             RecordGrants.revoke(GrantSubjectType.USER, account, DnsRecordModel.MODEL_ID, editable,
-                HohenheimAccess.EDIT);
+                HohenheimCapabilities.EDIT);
             HttpResponse<String> revoked = httpPostDry(SOURCE + "/query", query, caller.token(), caller.csrf());
             assertThat(Zenit.DRY.fromJson(revoked.body(), DataPage.class).items())
                 .as("step 4: revocation empties the current query").isEmpty();

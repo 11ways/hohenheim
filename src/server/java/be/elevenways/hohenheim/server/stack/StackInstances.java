@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
+import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.LinkNetworkSupport;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
@@ -30,6 +31,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * The wiring between the STACK tier and the canonical runtime-resource contract: every
@@ -313,8 +316,8 @@ public final class StackInstances {
             return;
         }
         Map<String, Object> settings = settingsOf(row);
-        String handle = str(settings.get(StackServiceKind.STACK_NETWORK.getName()));
-        String alias = str(settings.get(StackServiceKind.SERVICE_NAME.getName()));
+        String handle = trimmed(settings.get(StackServiceKind.STACK_NETWORK.getName()));
+        String alias = trimmed(settings.get(StackServiceKind.SERVICE_NAME.getName()));
         Object stackId = settings.get(StackServiceKind.STACK_ID.getName());
         if (handle.isEmpty() || alias.isEmpty() || !(stackId instanceof Number number)) {
             throw new IOException("Instance " + instanceId + " is a stack service but its"
@@ -341,8 +344,7 @@ public final class StackInstances {
 
     /** A driver over one host, used for the network half (no instance record involved). */
     static @NonNull DockerInstanceRuntime runtimeFor(@NonNull String serverName) {
-        return new DockerInstanceRuntime(new ServerService().clientFor(serverName),
-            WorkloadNetworkPolicy.forServer(serverName));
+        return DockerInstanceRuntime.onServer(serverName, Egress.OPEN);
     }
 
     // -- volumes ---------------------------------------------------------------
@@ -578,9 +580,5 @@ public final class StackInstances {
             return cast;
         }
         return Map.of();
-    }
-
-    private static @NonNull String str(@Nullable Object value) {
-        return value == null ? "" : value.toString().trim();
     }
 }

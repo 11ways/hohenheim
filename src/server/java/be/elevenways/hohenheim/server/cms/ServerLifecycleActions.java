@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -34,8 +35,6 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import static be.elevenways.hohenheim.server.cms.ServerWords.hostCopy;
-import static be.elevenways.hohenheim.server.cms.ServerWords.serverCopy;
 
 /**
  * The host lifecycle operations and their one placement: acknowledgement, probes, admission and fleet decisions.
@@ -57,70 +56,78 @@ final class ServerLifecycleActions {
     static @NonNull List<PanelAction<Row>> placed() { return PLACED; }
 
     private static List<PanelAction<Row>> declarePlaced() {
+        ConfirmationSpec acknowledge = Confirmations.of(HohenheimMicrocopy.SERVER.of("acknowledge"),
+            HohenheimMicrocopy.SERVER.of("acknowledge_generic"), ActionStyle.DESTRUCTIVE);
         return List.of(
-            place("acknowledge_posture", serverCopy("acknowledge"), row -> {
+            place("acknowledge_posture", HohenheimMicrocopy.SERVER.of("acknowledge"), row -> {
                 HostPostureAcknowledgement.record(row);
-                return serverCopy("posture_acknowledged").withArg("name", row.get(ServerModel.NAME));
+                return HohenheimMicrocopy.SERVER.of("posture_acknowledged").withArg("name", row.get(ServerModel.NAME));
             }, row -> ServerModel.postureNeedsAcknowledgement(row) && !ServerModel.postureAcknowledged(row))
-                .description(serverCopy("acknowledge_hint")).icon(Icon.of("triangle-exclamation"))
+                .description(HohenheimMicrocopy.SERVER.of("acknowledge_hint")).icon(Icon.of("triangle-exclamation"))
                 .style(ActionStyle.DESTRUCTIVE)
-                .confirmation(ConfirmationSpec.builder().title(serverCopy("acknowledge"))
-                    .body(serverCopy("acknowledge_generic")).style(ActionStyle.DESTRUCTIVE).build())
-                .dynamicConfirmation(row -> ConfirmationSpec.builder().title(serverCopy("acknowledge"))
-                    .body(serverCopy("acknowledge_body").withArg("name", row.get(ServerModel.NAME)))
-                    .style(ActionStyle.DESTRUCTIVE).requireTypedConfirmation(row.get(ServerModel.NAME)).build()).build(),
-            place("probe_server", serverCopy("probe_now"), row -> {
+                .confirmation(acknowledge)
+                .dynamicConfirmation(row -> Confirmations.typed(acknowledge.withBody(HohenheimMicrocopy.SERVER
+                    .of("acknowledge_body").withArg("name", row.get(ServerModel.NAME))), row.get(ServerModel.NAME)))
+                .build(),
+            place("probe_server", HohenheimMicrocopy.SERVER.of("probe_now"), row -> {
                 String name = row.get(ServerModel.NAME);
                 String label = ServerModel.isIncus(row) ? "Incus" : "Docker";
                 ServerService.Summary summary = new ServerService().probeAndStore(name);
-                if (summary == null || !summary.reachable()) throw Violations.ofForm(CmsSupport.violationText("host_probe_failed")
-                    .withArg("name", name).withArg("kind", summary != null && summary.errorKind() != null
+                if (summary == null || !summary.reachable()) throw Violations.ofForm(
+                    HohenheimMicrocopy.VIOLATIONS.of("host_probe_failed").withArg("name", name)
+                    .withArg("kind", summary != null && summary.errorKind() != null
                         ? HostProbe.FailureKind.labelOf(summary.errorKind()) : HostProbe.FailureKind.UNREACHABLE.label()));
-                return serverCopy("host_probe_ok").withArg("name", name).withArg("summary", formatSummary(summary, label));
+                return HohenheimMicrocopy.SERVER.of("host_probe_ok").withArg("name", name)
+                    .withArg("summary", formatSummary(summary, label));
             // Check again is the host page's one verb (board Host-Admit): it measures everything a probe does and the
             // hourly sweep keeps the contact and the memory reading fresh, so the bare probe waits in the More menu.
-            }, row -> true).description(serverCopy("probe_now_hint")).icon(Icon.of("heart-pulse")).inlineInRow(false)
+            }, row -> true).description(HohenheimMicrocopy.SERVER.of("probe_now_hint")).icon(Icon.of("heart-pulse"))
+                .inlineInRow(false)
                 .inlineOnRecord(false).build(),
-            place("check_host", serverCopy("check_and_admit"), ServerLifecycleActions::checkHost, row -> true)
-                .dynamicLabel(row -> serverCopy(awaitsAdmission(row) ? "check_and_admit" : "check_again"))
-                .description(serverCopy("check_and_admit_hint"))
+            place("check_host", HohenheimMicrocopy.SERVER.of("check_and_admit"), ServerLifecycleActions::checkHost,
+                row -> true)
+                .dynamicLabel(row -> HohenheimMicrocopy.SERVER.of(awaitsAdmission(row) ? "check_and_admit"
+                    : "check_again"))
+                .description(HohenheimMicrocopy.SERVER.of("check_and_admit_hint"))
                 // The first inline verb leads by position, not by a filled style (InstanceActions' deploy note).
                 .icon(Icon.of("stethoscope")).build(),
-            place("cordon_server", serverCopy("cordon"), row -> {
+            place("cordon_server", HohenheimMicrocopy.SERVER.of("cordon"), row -> {
                 setAdmission(row, ServerModel.ADMISSION_CORDONED, "cordon");
-                return serverCopy("host_cordoned").withArg("name", row.get(ServerModel.NAME));
+                return HohenheimMicrocopy.SERVER.of("host_cordoned").withArg("name", row.get(ServerModel.NAME));
             }, row -> ServerModel.ADMISSION_ADMITTED.equals(row.get(ServerModel.ADMISSION)))
                 .icon(Icon.of("circle-pause")).style(ActionStyle.DESTRUCTIVE)
-                .confirmation(ConfirmationSpec.builder().title(serverCopy("cordon")).body(serverCopy("cordon_confirm"))
-                    .confirmLabel(serverCopy("cordon")).style(ActionStyle.DESTRUCTIVE).build()).build(),
-            place("drain_server", serverCopy("drain"), row -> {
+                .confirmation(Confirmations.of(HohenheimMicrocopy.SERVER.of("cordon"),
+                    HohenheimMicrocopy.SERVER.of("cordon_confirm"), ActionStyle.DESTRUCTIVE)).build(),
+            place("drain_server", HohenheimMicrocopy.SERVER.of("drain"), row -> {
                 // AIDEV-NOTE: fenced updateAll writes fire no hook; InstanceMigrations records the moves explicitly.
                 InstanceMigrations.DrainReport report = new InstanceMigrations().drain(row.get(ServerModel.ID));
-                if (report.complete()) return serverCopy("host_drained").withArg("name", row.get(ServerModel.NAME))
+                if (report.complete()) return HohenheimMicrocopy.SERVER.of("host_drained")
+                    .withArg("name", row.get(ServerModel.NAME))
                     .withArg("moved", report.moved().size());
-                return serverCopy("host_drain_partial").withArg("name", row.get(ServerModel.NAME))
+                return HohenheimMicrocopy.SERVER.of("host_drain_partial").withArg("name", row.get(ServerModel.NAME))
                     .withArg("moved", report.moved().size()).withArg("refused", report.refused().size())
                     .withArg("held", report.refused().stream().map(InstanceMigrations.DrainEntry::name)
                         .collect(Collectors.joining(", ")));
             }, row -> ServerModel.ADMISSION_CORDONED.equals(row.get(ServerModel.ADMISSION)))
                 .icon(Icon.of("truck-arrow-right")).style(ActionStyle.DESTRUCTIVE)
-                .confirmation(ConfirmationSpec.builder().title(serverCopy("drain")).body(serverCopy("drain_confirm"))
-                    .style(ActionStyle.DESTRUCTIVE).build()).build(),
-            place("uncordon_server", serverCopy("uncordon"), row -> {
+                .confirmation(Confirmations.of(HohenheimMicrocopy.SERVER.of("drain"),
+                    HohenheimMicrocopy.SERVER.of("drain_confirm"), ActionStyle.DESTRUCTIVE)).build(),
+            place("uncordon_server", HohenheimMicrocopy.SERVER.of("uncordon"), row -> {
                 HostAdmission.requireAdmittable(row);
                 setAdmission(row, ServerModel.ADMISSION_ADMITTED, "uncordon");
-                return serverCopy("host_admitted").withArg("name", row.get(ServerModel.NAME));
+                return HohenheimMicrocopy.SERVER.of("host_admitted").withArg("name", row.get(ServerModel.NAME));
             }, row -> ServerModel.ADMISSION_CORDONED.equals(row.get(ServerModel.ADMISSION)))
                 .icon(Icon.of("circle-play")).build(),
-            place("reap_controller_objects", serverCopy("reap_controller_objects"), row -> {
+            place("reap_controller_objects", HohenheimMicrocopy.SERVER.of("reap_controller_objects"), row -> {
                 IncusReaper.Reaped[] reaped = new IncusReaper.Reaped[1];
                 ActivityLog.withAction(ZenitActivityAction.DELETE, "reap_controller_objects",
                     () -> reaped[0] = ReapIncusControllers.reapIncludingUnstamped(row));
-                return serverCopy("controller_objects_reaped").withArg("name", row.get(ServerModel.NAME))
+                return HohenheimMicrocopy.SERVER.of("controller_objects_reaped")
+                    .withArg("name", row.get(ServerModel.NAME))
                     .withArg("removed", reaped[0].removed().size()).withArg("refused", reaped[0].refused().size());
             }, ServerModel::isIncus).icon(Icon.of("broom")).style(ActionStyle.DESTRUCTIVE)
-                .confirmation(ConfirmationSpec.builder().title(serverCopy("reap_controller_objects"))
-                    .body(serverCopy("reap_controller_objects_confirm")).style(ActionStyle.DESTRUCTIVE).build()).build());
+                .confirmation(Confirmations.of(HohenheimMicrocopy.SERVER.of("reap_controller_objects"),
+                    HohenheimMicrocopy.SERVER.of("reap_controller_objects_confirm"), ActionStyle.DESTRUCTIVE)).build());
     }
 
     static PanelAction.OperationBuilder<Row, Microcopy> place(String id, Microcopy label,
@@ -155,18 +162,18 @@ final class ServerLifecycleActions {
             .map(check -> HostPreflight.checkLabel(check.name()))
             .toList();
         if (!awaitsAdmission(row)) {
-            return failed.isEmpty() ? serverCopy("host_checked").withArg("name", name)
-                : serverCopy("host_checked_failing").withArg("name", name).withArg("checks", failed);
+            return failed.isEmpty() ? HohenheimMicrocopy.SERVER.of("host_checked").withArg("name", name)
+                : HohenheimMicrocopy.SERVER.of("host_checked_failing").withArg("name", name).withArg("checks", failed);
         }
         if (!failed.isEmpty() || !report[0].passed()) {
-            throw Violations.ofForm(CmsSupport.violationText("host_check_failed").withArg("name", name)
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_check_failed").withArg("name", name)
                 .withArg("checks", failed.isEmpty() ? (Object) "-" : failed));
         }
         // Admission reads what preflight just stored, never the subject loaded before it ran.
         Row stored = Models.get(ServerModel.class).findById(row.get(ServerModel.ID));
         HostAdmission.requireAdmittable(stored);
         setAdmission(stored, ServerModel.ADMISSION_ADMITTED, "admit");
-        return serverCopy("host_checked_admitted").withArg("name", name);
+        return HohenheimMicrocopy.SERVER.of("host_checked_admitted").withArg("name", name);
     }
 
     /** @return whether the host is neither admitted nor cordoned: checking it may admit it */
@@ -182,17 +189,18 @@ final class ServerLifecycleActions {
         });
     }
 
-    private static String formatSummary(ServerService.Summary summary, String label) {
+    private static Microcopy formatSummary(ServerService.Summary summary, String label) {
         String docker = summary.daemonVersion().isBlank() ? label : label + " " + summary.daemonVersion();
         String platform = summary.osType();
         if (!summary.architecture().isBlank()) platform = platform.isBlank() ? summary.architecture() : platform + "/" + summary.architecture();
         String os = summary.operatingSystem().isBlank() ? platform : summary.operatingSystem();
         if (!platform.isBlank() && !os.equals(platform)) os += " (" + platform + ")";
-        if (os.isBlank()) os = hostCopy(serverCopy("host_unknown_platform"));
         double memory = Math.round(summary.memoryBytes() / 1_073_741_824.0 * 10) / 10.0;
-        return hostCopy(serverCopy("host_summary").withArg("docker", docker).withArg("os", os)
+        return HohenheimMicrocopy.SERVER.of("host_summary").withArg("docker", docker)
+            .withArg("os", os.isBlank() ? HohenheimMicrocopy.SERVER.of("host_unknown_platform") : os)
             .withArg("cpus", String.valueOf(summary.cpus())).withArg("memory", String.valueOf(memory))
             .withArg("running", String.valueOf(summary.containersRunning()))
-            .withArg("total", String.valueOf(summary.containersTotal())).withArg("images", String.valueOf(summary.images())));
+            .withArg("total", String.valueOf(summary.containersTotal()))
+            .withArg("images", String.valueOf(summary.images()));
     }
 }

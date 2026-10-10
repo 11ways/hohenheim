@@ -1,12 +1,14 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
+import be.elevenways.hohenheim.model.GroupedCounts;
 import be.elevenways.hohenheim.server.dns.DelegationCheck;
 import be.elevenways.hohenheim.server.dns.DnsDelegationHealth;
 import be.elevenways.hohenheim.server.dns.DnsNames;
@@ -15,17 +17,16 @@ import be.elevenways.hohenheim.server.dns.DnsSecondaryFreshness;
 import be.elevenways.hohenheim.server.dns.DnsZoneSnapshot;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.SystemDelegationLookup;
+import be.elevenways.zenit.common.validation.validator.Email;
+import be.elevenways.zenit.common.validation.ValidationContext;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
-import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
-import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.cms.common.panel.NavGroup;
+import be.elevenways.zenit.cms.common.resource.ChildList;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.QuickCreateSpec;
 import be.elevenways.zenit.cms.common.resource.RelatedPage;
@@ -36,12 +37,10 @@ import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
-import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.cms.common.schema.TableView;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.cms.common.resource.ResourceFieldBinding;
 import be.elevenways.zenit.common.edit.FieldAccess;
@@ -55,7 +54,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.aggregate.Aggregate;
 import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
@@ -70,6 +68,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.RawValues.trimmed;
+
 /**
  * Hosted authoritative DNS zones. The serial is framework-managed: every
  * zone or record mutation bumps it and swaps the serving snapshot.
@@ -79,36 +79,18 @@ public final class DnsZoneParts {
     public static @NonNull PanelResource<Row> admin() {
         DnsOperations.init();
         DnsZoneParts parts = new DnsZoneParts();
-        return PanelResource.builder(parts.id(), SLUG, DnsOperations.ZONE)
-            .label(parts.label()).recordLabel(parts.recordLabel()).description(parts.description())
-            .icon(parts.icon()).navGroup(parts.navGroup()).navOrder(parts.navOrder())
+        return PanelResource.builder(HohenheimIds.id("dns_zone"), HohenheimSlugs.DNS_ZONES, DnsOperations.ZONE)
+            .label(HohenheimMicrocopy.DNS_ZONE.of("plural")).recordLabel(HohenheimMicrocopy.DNS_ZONE.of("singular"))
+            .description(HohenheimMicrocopy.DNS_ZONE.of("nav_hint"))
+            .icon(Icon.of("sitemap")).navGroup(HohenheimPanel.NETWORK_GROUP).navOrder(10)
             .reads(ResourceReads.rows().mapCells(parts::cellValue)
-                .mapValues((row, values) -> parts.valuesFromRow(row))
-                .pageBatch((rows, access) -> {
-                    Map<Integer, Long> records = countRecordsPerZone(rows);
-                    Map<Integer, int[]> secondaries = countSecondariesPerZone(rows);
-                    Conduit conduit = access.conduit();
-                    if (conduit != null) {
-                        conduit.setAttribute(RECORD_COUNTS, records);
-                        conduit.setAttribute(SECONDARY_COUNTS, secondaries);
-                    }
-                    return (row, column) -> {
-                        if ("record_count".equals(column.name())
-                                && !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(row))) {
-                            return records.getOrDefault(row.get(DnsZoneModel.ID), 0L);
-                        }
-                        if ("secondaries".equals(column.name())) {
-                            return secondarySummary(row, secondaries.get(row.get(DnsZoneModel.ID)));
-                        }
-                        return parts.cellValue(row, column);
-                    };
-                }))
+                .mapValues((row, values) -> parts.valuesFromRow(row)))
             .list(ResourceList.rows(parts.tableSpec()).chrome(ListChrome.MINIMAL).facets().ruleFilters()
                 .search(parts.searchFields().toArray(Field<?, ?>[]::new))
                 .computed(parts.tableSpec().column("secondaries"), (row, request) -> secondarySummary(row))
                 .computed(parts.tableSpec().column("record_count"), (row, request) -> recordCount(row))
-                .rowLink((row, request) -> CmsRoutes.subpage(request.panelSlug(), SLUG,
-                    row.get(DnsZoneModel.ID), DnsZoneRecordsPage.SLUG)).build())
+                .rowLink((row, request) -> CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.DNS_ZONES,
+                    row.get(DnsZoneModel.ID), HohenheimSlugs.Tab.RECORDS)).build())
             .form(ResourceForm.<Row>of(parts.formSpec()).bindings(parts.fieldBindings())
                 .quickCreate(parts.quickCreate()).build())
             .writes(ResourceMutations.rows().create(call -> parts.persistRow(call.values(), call.access()))
@@ -117,16 +99,28 @@ public final class DnsZoneParts {
             .deleteConfirmation(DeleteConfirmation.<Row>of(parts.deleteConfirmation())
                 .forRow((row, request) -> parts.deleteConfirmationFor(row)))
             .actions(List.of(PanelAction.<Row>link(HohenheimIds.id("dns_records"), ActionPlacement.ROW)
-                .label(Microcopy.of("records").withFilter("scope", "dns_zone"))
-                .description(Microcopy.of("records_hint").withFilter("scope", "dns_zone"))
+                .label(HohenheimMicrocopy.DNS_ZONE.of("records"))
+                .description(HohenheimMicrocopy.DNS_ZONE.of("records_hint"))
                 .icon(Icon.of("list-ul")).inlineInRow(false)
-                .route((row, request) -> CmsRoutes.subpage(request.panelSlug(), SLUG,
-                    row.get(DnsZoneModel.ID), DnsZoneRecordsPage.SLUG)).build(),
+                .route((row, request) -> CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.DNS_ZONES,
+                    row.get(DnsZoneModel.ID), HohenheimSlugs.Tab.RECORDS)).build(),
                 PanelAction.<Row, CmsActionResult>places(DnsOperations.CHECK_HEALTH, ActionPlacement.ROW,
                     (request, result) -> result.value()).build()))
             .tabs(ResourceTabs.<Row>of(List.of(new DnsZoneRecordsPage(), new DnsZoneFilePage(),
-                new DnsZoneSecondariesPage())).withHistory().withContributions())
+                secondariesTab())).withHistory().withContributions())
             .relatedPages(parts.relatedPages().toArray(RelatedPage[]::new)).build();
+    }
+
+    /**
+     * The Secondaries tab: the framework's child list over the zone-peer entry, narrowed to the zone. A secondary zone
+     * has none: its authority lives on its own primary.
+     */
+    private static @NonNull ChildList<Row> secondariesTab() {
+        return ChildList.<Row>of(HohenheimSlugs.DNS_ZONE_PEERS)
+            .label(HohenheimMicrocopy.DNS_ZONE.of("secondaries"))
+            .icon(Icon.of("handshake"))
+            .hide(HohenheimSlugs.DNS_ZONE_PEERS, DnsZonePeerModel.ZONE_ID.getName())
+            .visibleWhen((zone, access) -> !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone)));
     }
 
     /** One week: the ceiling for cache TTLs. */
@@ -196,24 +190,15 @@ public final class DnsZoneParts {
         // The outbound half of replication: TRANSFER_STATUS answers only for a zone this
         // instance PULLS, so a primary's column was blank and its replication state was
         // readable nowhere on the list. This one is its mirror image, per role.
-        .column(ColumnSpec.virtual("secondaries", Microcopy.of("secondaries")
-            .withFilter("scope", "dns_zone")).build())
+        .column(ColumnSpec.virtual("secondaries", HohenheimMicrocopy.DNS_ZONE.of("secondaries")).build())
         .column(ColumnSpec.fromField(DnsZoneModel.DELEGATION_STATUS).build())
-        .column(ColumnSpec.virtual("record_count", Microcopy.of("record_count")
-            .withFilter("scope", "dns_zone")).build())
+        .column(ColumnSpec.virtual("record_count", HohenheimMicrocopy.DNS_ZONE.of("record_count")).build())
         .filter(FilterSpec.leaf(DnsZoneModel.ORIGIN, CoreTypes.CONTAINS)
             .label(FieldLabels.labelFor(DnsZoneModel.ORIGIN)).build())
         .filter(FilterSpec.leaf(DnsZoneModel.ENABLED, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE)
             .label(FieldLabels.labelFor(DnsZoneModel.ENABLED)).build())
         .build();
 
-    /** The panel slug, referenced by the record resource's zone-scoped preset. */
-    public static final String SLUG = HohenheimSlugs.DNS_ZONES;
-
-    public @NonNull Identifier id() { return HohenheimIds.id("dns_zone"); }
-    public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_zone"); }
-    public @NonNull Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "dns_zone"); }
-    public @NonNull String slug() { return SLUG; }
     public @NonNull Model model() { return Models.get(DnsZoneModel.class); }
     public @NonNull FormSpec formSpec() { return this.formSpec; }
     public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
@@ -242,19 +227,6 @@ public final class DnsZoneParts {
         return QuickCreateSpec.of(DnsZoneModel.ORIGIN.getName());
     }
 
-    public @NonNull NavGroup navGroup() { return HohenheimPanel.NETWORK_GROUP; }
-    public int navOrder() { return 10; }
-
-    public @Nullable Microcopy description() {
-        return Microcopy.of("nav_hint").withFilter("scope", "dns_zone");
-    }
-    public @NonNull Icon icon() { return Icon.of("sitemap"); }
-
-    /** The zone list opens the records workspace; the standard edit action still opens zone settings. */
-    public @NonNull String rowUrl(@NonNull Row row) {
-        return recordsUrl(row);
-    }
-
     /**
      * The on-demand run of what the two DNS health tasks do on their schedule: the
      * delegation check against the parent and one SOA probe per linked secondary.
@@ -271,96 +243,38 @@ public final class DnsZoneParts {
         }
         if (report == null) {
             return CmsActionResult.errorToast(
-                Microcopy.of("check_health_unserved").withFilter("scope", "dns_zone"));
+                HohenheimMicrocopy.DNS_ZONE.of("check_health_unserved"));
         }
         return CmsActionResult.refreshWithToast(
-            Microcopy.of("check_health_done").withFilter("scope", "dns_zone")
+            HohenheimMicrocopy.DNS_ZONE.of("check_health_done")
                 .withArg("verdict", report.verdict().label())
                 .withArg("secondaries", probed.size())
                 .withArg("behind", behind));
     }
 
-    private static @NonNull String recordsUrl(@NonNull Row row) {
-        // rowUrl is a String-typed boundary, so the typed
-        // target is rendered here rather than concatenated.
-        return CmsRoutes.subpage(HohenheimSlugs.ADMIN, SLUG, row.get(DnsZoneModel.ID),
-            DnsZoneRecordsPage.SLUG).toUrl();
-    }
-
     /**
-     * Request-scoped memo of the record counts of the zones on the page being rendered.
+     * Zone id to stored record count, one grouped aggregate per request.
      *
-     * AIDEV-NOTE: {@code cellValue} takes no context, so the counts are computed where a
-     * context DOES exist ({@link #listRows}) and read back through the framework's own
-     * request scope ({@code RouteScope.currentConduit}) -- never a field on the resource,
-     * which one Panel instance shares across every concurrent request.
+     * AIDEV-NOTE: the list cell and each row's delete dialog read this one memo, so a page costs one aggregate, never a
+     * COUNT per row.
      */
     private static final IdentifierKey<Map<Integer, Long>> RECORD_COUNTS =
         IdentifierKey.of("hohenheim", "dns_zone_record_counts");
 
-    /** The same memo for the outbound secondary links of the zones on the page. */
-    private static final IdentifierKey<Map<Integer, int[]>> SECONDARY_COUNTS =
+    /** Zone id to its linked secondaries, one grouped aggregate per request. */
+    private static final IdentifierKey<Map<Integer, Long>> SECONDARY_COUNTS =
         IdentifierKey.of("hohenheim", "dns_zone_secondary_counts");
 
-    /**
-     * The page's rows, with every zone's record count resolved in ONE grouped aggregate.
-     *
-     * AIDEV-NOTE: this replaced a per-row {@code COUNT(*)} inside {@code cellValue} -- 25
-     * extra statements on a default page, and the column is on by default. The count query
-     * is keyed on exactly the ids this page loaded, so it does not grow with the table.
-     */
-    /** @return zone id -> stored record count, for exactly the zones handed in */
-    private static @NonNull Map<Integer, Long> countRecordsPerZone(@NonNull List<Row> zones) {
-        Map<Integer, Long> counts = new HashMap<>();
-        List<Integer> ids = new ArrayList<>();
-        for (Row zone : zones) {
-            Integer id = zone.get(DnsZoneModel.ID);
-            if (id != null) {
-                ids.add(id);
-                counts.put(id, 0L);
-            }
-        }
-        if (ids.isEmpty()) {
-            return counts;
-        }
-        for (Row group : Models.get(DnsRecordModel.class).find()
-                .where(DnsRecordModel.ZONE_ID.in(ids))
-                .groupBy(DnsRecordModel.ZONE_ID)
-                .aggregateAll(Aggregate.count().as("record_count"))) {
-            Object zoneId = group.get(DnsRecordModel.ZONE_ID.getName());
-            Object counted = group.get("record_count");
-            if (zoneId instanceof Number id && counted instanceof Number number) {
-                counts.put(id.intValue(), number.longValue());
-            }
-        }
-        return counts;
+    /** Zone id to its linked secondaries currently serving our serial, one grouped aggregate per request. */
+    private static final IdentifierKey<Map<Integer, Long>> CURRENT_SECONDARY_COUNTS =
+        IdentifierKey.of("hohenheim", "dns_zone_current_secondary_counts");
+
+    private static @NonNull Map<Integer, Long> recordCounts() {
+        return GroupedCounts.of(Models.get(DnsRecordModel.class).find(), DnsRecordModel.ZONE_ID);
     }
 
-    /** @return zone id -> {linked secondaries, of which currently serving our serial} */
-    private static @NonNull Map<Integer, int[]> countSecondariesPerZone(@NonNull List<Row> zones) {
-        Map<Integer, int[]> counts = new HashMap<>();
-        List<Integer> ids = new ArrayList<>();
-        for (Row zone : zones) {
-            Integer id = zone.get(DnsZoneModel.ID);
-            if (id != null && !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
-                ids.add(id);
-                counts.put(id, new int[] {0, 0});
-            }
-        }
-        if (ids.isEmpty()) {
-            return counts;
-        }
-        for (Row link : Models.get(DnsZonePeerModel.class).find()
-                .where(DnsZonePeerModel.ZONE_ID.in(ids)).all()) {
-            int[] tally = counts.get(link.get(DnsZonePeerModel.ZONE_ID));
-            if (tally != null) {
-                tally[0]++;
-                if (isCurrent(link)) {
-                    tally[1]++;
-                }
-            }
-        }
-        return counts;
+    private static @NonNull Map<Integer, Long> secondaryCounts() {
+        return GroupedCounts.of(Models.get(DnsZonePeerModel.class).find(), DnsZonePeerModel.ZONE_ID);
     }
 
     /**
@@ -368,9 +282,10 @@ public final class DnsZoneParts {
      * nobody has probed yet is not counted as healthy (fail closed -- an unprobed
      * secondary is exactly the one that silently stopped pulling).
      */
-    private static boolean isCurrent(@NonNull Row link) {
-        return link.get(DnsZonePeerModel.PROBED_AT) != null
-            && link.get(DnsZonePeerModel.BEHIND_SINCE) == null;
+    private static @NonNull Map<Integer, Long> currentSecondaryCounts() {
+        return GroupedCounts.of(Models.get(DnsZonePeerModel.class).find()
+            .where(DnsZonePeerModel.PROBED_AT.isNotNull()).where(DnsZonePeerModel.BEHIND_SINCE.isNull()),
+            DnsZonePeerModel.ZONE_ID);
     }
 
     /**
@@ -379,24 +294,19 @@ public final class DnsZoneParts {
      * @return the summary, or null on a secondary (its inbound status column answers instead)
      */
     private static @Nullable Object secondarySummary(@NonNull Row zone) {
-        Conduit conduit = RouteScope.currentConduit();
-        Map<Integer, int[]> counted = conduit == null ? null : conduit.getAttribute(SECONDARY_COUNTS);
-        if (counted == null || !counted.containsKey(zone.get(DnsZoneModel.ID))) {
-            counted = countSecondariesPerZone(List.of(zone));
-        }
-        return secondarySummary(zone, counted.get(zone.get(DnsZoneModel.ID)));
-    }
-
-    private static @Nullable Object secondarySummary(@NonNull Row zone, @Nullable int[] tally) {
         if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
             return null;
         }
-        if (tally == null || tally[0] == 0) {
-            return Microcopy.of("secondaries_none").withFilter("scope", "dns_zone");
+        Integer id = zone.get(DnsZoneModel.ID);
+        long total = CmsSupport.memo(SECONDARY_COUNTS, DnsZoneParts::secondaryCounts).getOrDefault(id, 0L);
+        if (total == 0) {
+            return HohenheimMicrocopy.DNS_ZONE.of("secondaries_none");
         }
-        return Microcopy.of("secondaries_current").withFilter("scope", "dns_zone")
-            .withArg("current", tally[1])
-            .withArg("total", tally[0]);
+        long current = CmsSupport.memo(CURRENT_SECONDARY_COUNTS, DnsZoneParts::currentSecondaryCounts)
+            .getOrDefault(id, 0L);
+        return HohenheimMicrocopy.DNS_ZONE.of("secondaries_current")
+            .withArg("current", Math.toIntExact(current))
+            .withArg("total", Math.toIntExact(total));
     }
 
     /**
@@ -437,12 +347,6 @@ public final class DnsZoneParts {
             && DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(row))) {
             return null;
         }
-        if ("secondaries".equals(column.name())) {
-            return secondarySummary(row);
-        }
-        if ("record_count".equals(column.name())) {
-            return recordCount(row);
-        }
         return row.get(column.name());
     }
 
@@ -459,7 +363,7 @@ public final class DnsZoneParts {
         if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
             return servedRecordCount(zone);
         }
-        return recordCount(zone.get(DnsZoneModel.ID));
+        return CmsSupport.memo(RECORD_COUNTS, DnsZoneParts::recordCounts).getOrDefault(zone.get(DnsZoneModel.ID), 0L);
     }
 
     /**
@@ -477,19 +381,6 @@ public final class DnsZoneParts {
         return snapshot.allRecordsExceptSoa().size();
     }
 
-    /** @return the zone's stored record count, off the page memo when this row is on it */
-    private static long recordCount(@Nullable Integer zoneId) {
-        Conduit conduit = RouteScope.currentConduit();
-        Map<Integer, Long> counted = conduit == null ? null : conduit.getAttribute(RECORD_COUNTS);
-        if (counted != null && counted.containsKey(zoneId)) {
-            return counted.get(zoneId);
-        }
-        // A row outside the memoized page (a detail render, a conduit-less caller).
-        return Models.get(DnsRecordModel.class).find()
-            .where(DnsRecordModel.ZONE_ID.eq(zoneId))
-            .count();
-    }
-
     /**
      * The detail column read by a human: one LINE per finding, each named by the verdict's
      * own {@link DelegationVerdict#label()} rather than by its stored token.
@@ -503,8 +394,8 @@ public final class DnsZoneParts {
      * AIDEV-NOTE: safe to substitute because the entry is READONLY on every surface that
      * offers it (see {@link #fieldBindings}), so this value is never submitted back; and a
      * line whose token this build does not declare is passed through verbatim rather than
-     * dropped. The locale comes off the request scope, the same seam {@link #recordCount}
-     * documents -- {@code valuesFromRow} takes no context.
+     * dropped. The locale comes off the request scope ({@code RouteScope.currentConduit}): {@code valuesFromRow} takes
+     * no context.
      */
     public @NonNull Map<String, Object> valuesFromRow(@NonNull Row row) {
         Map<String, Object> values = new HashMap<>(DnsRowWrites.values(this.model(), this.formSpec(), row));
@@ -544,7 +435,7 @@ public final class DnsZoneParts {
     /** Peer choices for the primary-peer select, with a leading "none" option. */
     static @NonNull List<FieldOption<Integer>> peerOptions() {
         List<FieldOption<Integer>> options = new ArrayList<>();
-        options.add(FieldOption.of(null, Microcopy.of("peer_none").withFilter("scope", "dns_peer")));
+        options.add(FieldOption.of(null, HohenheimMicrocopy.DNS_PEER.of("peer_none")));
         for (Row peer : Models.get(DnsPeerModel.class).find().all()) {
             options.add(FieldOption.of(peer.get(DnsPeerModel.ID),
                 String.valueOf(peer.get(DnsPeerModel.NAME))));
@@ -611,7 +502,7 @@ public final class DnsZoneParts {
      */
     public @NonNull ConfirmationSpec deleteConfirmation() {
         return deleteConfirmation(
-            Microcopy.of("delete_confirm").withFilter("scope", "dns_zone"), null);
+            HohenheimMicrocopy.DNS_ZONE.of("delete_confirm"), null);
     }
 
     /**
@@ -635,7 +526,7 @@ public final class DnsZoneParts {
             ? (dependents.isEmpty() ? "delete_confirm_admin" : "delete_confirm_admin_dependents")
             : (dependents.isEmpty() ? "delete_confirm_named" : "delete_confirm_dependents");
 
-        Microcopy body = Microcopy.of(key).withFilter("scope", "dns_zone")
+        Microcopy body = HohenheimMicrocopy.DNS_ZONE.of(key)
             .withArg("origin", origin == null ? "" : origin)
             .withArg("records", records);
         if (!dependents.isEmpty()) {
@@ -647,19 +538,10 @@ public final class DnsZoneParts {
         return deleteConfirmation(body, origin);
     }
 
-    /** The generic delete dialog with a zone-specific body, typed-confirmation gated. */
+    /** The framework's delete dialog with a zone-specific body, typed-confirmation gated on the origin. */
     private static @NonNull ConfirmationSpec deleteConfirmation(@NonNull Microcopy body,
                                                                 @Nullable String origin) {
-        ConfirmationSpec.Builder builder = ConfirmationSpec.builder()
-            .title(Microcopy.of("confirm_title").withFilter("scope", "cms"))
-            .body(body)
-            .confirmLabel(Microcopy.of("delete").withFilter("scope", "cms"))
-            .cancelLabel(Microcopy.of("cancel").withFilter("scope", "cms"))
-            .style(ActionStyle.DESTRUCTIVE);
-        if (origin != null && !origin.isEmpty()) {
-            builder.requireTypedConfirmation(origin);
-        }
-        return builder.build();
+        return Confirmations.typed(DeleteConfirmation.body(body), origin);
     }
 
     /**
@@ -680,14 +562,14 @@ public final class DnsZoneParts {
             String rawOrigin = originValue != null ? String.valueOf(originValue) : "";
             String origin = DnsNames.normalizeOrigin(rawOrigin);
             if (origin == null) {
-                throw Violations.ofField("origin", rawOrigin, CmsSupport.violationText("dns_origin_format"));
+                throw Violations.ofField("origin", rawOrigin, HohenheimMicrocopy.VIOLATIONS.of("dns_origin_format"));
             }
             coerced.put(DnsZoneModel.ORIGIN.getName(), origin);
 
             Row duplicate = model.find().where(DnsZoneModel.ORIGIN.eq(origin)).first();
             if (duplicate != null
                 && (existing == null || !duplicate.get(DnsZoneModel.ID).equals(existing.get(DnsZoneModel.ID)))) {
-                throw Violations.ofField("origin", origin, CmsSupport.violationText("dns_origin_taken"));
+                throw Violations.ofField("origin", origin, HohenheimMicrocopy.VIOLATIONS.of("dns_origin_taken"));
             }
         }
 
@@ -697,17 +579,19 @@ public final class DnsZoneParts {
                 nsValue != null ? String.valueOf(nsValue).trim().toLowerCase(Locale.ROOT) : "");
             if (!primaryNs.isEmpty() && DnsNames.normalizeOrigin(primaryNs) == null) {
                 throw Violations.ofField("soa_primary_ns", primaryNs,
-                    CmsSupport.violationText("dns_target_format"));
+                    HohenheimMicrocopy.VIOLATIONS.of("dns_target_format"));
             }
             coerced.put(DnsZoneModel.SOA_PRIMARY_NS.getName(), primaryNs);
         }
 
         if (creating || coerced.containsKey(DnsZoneModel.SOA_CONTACT.getName())) {
             Object contactValue = coerced.get(DnsZoneModel.SOA_CONTACT.getName());
-            String contact = contactValue != null ? String.valueOf(contactValue).trim() : "";
-            if (!contact.isEmpty() && !contact.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            String contact = trimmed(contactValue);
+            // A contact's domain may be written fully qualified ("hostmaster@example.com."); the shape is zenit's.
+            if (!Email.instance().validate(Hostnames.stripTrailingDots(contact), ValidationContext.of("soa_contact"))
+                    .isValid()) {
                 throw Violations.ofField("soa_contact", contact,
-                    CmsSupport.violationText("dns_contact_format"));
+                    HohenheimMicrocopy.VIOLATIONS.of("dns_contact_format"));
             }
             coerced.put(DnsZoneModel.SOA_CONTACT.getName(), contact);
         }
@@ -726,7 +610,7 @@ public final class DnsZoneParts {
             return;
         }
         if (!(value instanceof Integer seconds) || seconds < 0 || seconds > max) {
-            throw Violations.ofField(field, value, CmsSupport.violationText(violationKey));
+            throw Violations.ofField(field, value, HohenheimMicrocopy.VIOLATIONS.of(violationKey));
         }
     }
 
@@ -734,7 +618,7 @@ public final class DnsZoneParts {
      * The federation peers these zones transfer with, demoted out of the sidebar.
      */
     public @NonNull List<RelatedPage> relatedPages() {
-        return List.of(RelatedPage.toPeer("dns-peers"));
+        return List.of(RelatedPage.toPeer(HohenheimSlugs.DNS_PEERS));
     }
 
 }

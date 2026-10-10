@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
@@ -417,18 +418,17 @@ public final class IncusPreflight {
         try {
             Map<String, Object> server = client.server();
             Map<String, Object> environment =
-                server.get("environment") instanceof Map<?, ?> map
-                    ? castMap(map) : Map.of();
-            facts.put(HostFact.INCUS_VERSION.token(), stringOf(environment.get("server_version")));
-            facts.put(HostFact.API_VERSION.token(), stringOf(server.get("api_version")));
-            facts.put(HostFact.KERNEL_VERSION.token(), stringOf(environment.get("kernel_version")));
-            facts.put(HostFact.OS.token(), stringOf(environment.get("os_name")));
-            facts.put(HostFact.OS_TYPE.token(), BlastString.lower(stringOf(environment.get("kernel"))));
-            facts.put(HostFact.ARCHITECTURE.token(), stringOf(environment.get("kernel_architecture")));
-            facts.put(HostFact.SERVER_NAME.token(), stringOf(environment.get("server_name")));
-            facts.put(HostFact.PROJECT.token(), stringOf(environment.get("project")));
-            facts.put(HostFact.DRIVER.token(), stringOf(environment.get("driver")));
-            facts.put(HostFact.AUTH.token(), stringOf(server.get("auth")));
+                RawValues.map(server.get("environment"));
+            facts.put(HostFact.INCUS_VERSION.token(), Objects.toString(environment.get("server_version"), ""));
+            facts.put(HostFact.API_VERSION.token(), Objects.toString(server.get("api_version"), ""));
+            facts.put(HostFact.KERNEL_VERSION.token(), Objects.toString(environment.get("kernel_version"), ""));
+            facts.put(HostFact.OS.token(), Objects.toString(environment.get("os_name"), ""));
+            facts.put(HostFact.OS_TYPE.token(), BlastString.lower(Objects.toString(environment.get("kernel"), "")));
+            facts.put(HostFact.ARCHITECTURE.token(), Objects.toString(environment.get("kernel_architecture"), ""));
+            facts.put(HostFact.SERVER_NAME.token(), Objects.toString(environment.get("server_name"), ""));
+            facts.put(HostFact.PROJECT.token(), Objects.toString(environment.get("project"), ""));
+            facts.put(HostFact.DRIVER.token(), Objects.toString(environment.get("driver"), ""));
+            facts.put(HostFact.AUTH.token(), Objects.toString(server.get("auth"), ""));
             recordResources(client, facts, checks);
             checks.add(HostPreflight.Check.of("daemon", HostPreflight.STATUS_PASS, true,
                 PreflightFinding.INCUS_REACHABLE.with("version", facts.get(HostFact.INCUS_VERSION.token()),
@@ -487,7 +487,7 @@ public final class IncusPreflight {
      */
     private static void checkTrusted(Map<String, Object> server,
                                      List<HostPreflight.Check> checks) {
-        String auth = stringOf(server.get("auth"));
+        String auth = Objects.toString(server.get("auth"), "");
         checks.add(HostPreflight.Check.of("trusted",
             "trusted".equals(auth) ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL,
             true, "trusted".equals(auth) ? PreflightFinding.TRUSTED.with()
@@ -497,7 +497,7 @@ public final class IncusPreflight {
     /** System containers need the lxc driver; a qemu-only daemon cannot run this tier. */
     private static void checkDriver(Map<String, Object> facts,
                                     List<HostPreflight.Check> checks) {
-        String driver = stringOf(facts.get("driver"));
+        String driver = Objects.toString(facts.get("driver"), "");
         boolean lxc = ("|" + driver.replace(" ", "") + "|").contains("|lxc|");
         checks.add(HostPreflight.Check.of("driver_lxc",
             lxc ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL, true,
@@ -513,7 +513,7 @@ public final class IncusPreflight {
             for (Map<String, Object> pool : pools) {
                 described.add(pool.get("name") + "(" + pool.get("driver") + ","
                     + pool.get("status") + ")");
-                created |= "Created".equalsIgnoreCase(stringOf(pool.get("status")));
+                created |= "Created".equalsIgnoreCase(Objects.toString(pool.get("status"), ""));
             }
             facts.put(HostFact.STORAGE_POOLS.token(), String.join(" ", described));
             checks.add(HostPreflight.Check.of("storage_pool",
@@ -534,7 +534,7 @@ public final class IncusPreflight {
             for (Map<String, Object> network : networks) {
                 if (Boolean.TRUE.equals(network.get("managed"))
                         && "bridge".equals(network.get("type"))) {
-                    managed = stringOf(network.get("name"));
+                    managed = Objects.toString(network.get("name"), "");
                     break;
                 }
             }
@@ -580,14 +580,5 @@ public final class IncusPreflight {
             checks.add(HostPreflight.Check.of("network_acl", HostPreflight.STATUS_FAIL, true,
                 PreflightFinding.ACL_REFUSED.with("error", error.getMessage())));
         }
-    }
-
-    private static String stringOf(Object value) {
-        return value != null ? String.valueOf(value) : "";
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> castMap(Map<?, ?> map) {
-        return (Map<String, Object>) map;
     }
 }

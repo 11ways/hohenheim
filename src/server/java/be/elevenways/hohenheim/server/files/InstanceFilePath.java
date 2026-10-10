@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.files;
 
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.server.util.PosixPaths;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.content.FilePaths;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -50,13 +51,13 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
     public static @NonNull InstanceFilePath parse(@NonNull Collection<String> volumeRoots,
                                                   @NonNull String submitted) {
         if (submitted.isEmpty() || submitted.length() > MAX_LENGTH || submitted.charAt(0) != '/') {
-            throw refused();
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
         }
         // Control characters (NUL included) never appear in a path we author, and a NUL
         // is how a C-level consumer downstream can be made to see a shorter string.
         for (int i = 0; i < submitted.length(); i++) {
             if (submitted.charAt(i) < 0x20 || submitted.charAt(i) == 0x7F) {
-                throw refused();
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
             }
         }
 
@@ -69,15 +70,15 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
             rebuilt.append('/').append(segment);
         }
         if (!rebuilt.toString().equals(submitted)) {
-            throw refused();
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
         }
 
         String root = rootFor(volumeRoots, submitted);
         if (root == null) {
-            throw refused();
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
         }
         if (segments.size() - segmentsOf(root).size() > MAX_DEPTH) {
-            throw refused();
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
         }
         return new InstanceFilePath(root, submitted);
     }
@@ -115,7 +116,7 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
     private static @NonNull List<String> segmentsOf(@NonNull String path) {
         List<String> segments = FilePaths.segments(path);
         if (segments == null) {
-            throw refused();
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
         }
         return segments;
     }
@@ -127,8 +128,7 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
 
     /** The last segment; the volume root's own basename for a root path. */
     public @NonNull String name() {
-        int slash = this.absolute.lastIndexOf('/');
-        return slash < 0 ? this.absolute : this.absolute.substring(slash + 1);
+        return PosixPaths.nameOf(this.absolute);
     }
 
     /**
@@ -138,9 +138,7 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
         if (this.isVolumeRoot()) {
             return null;
         }
-        int slash = this.absolute.lastIndexOf('/');
-        String parent = slash <= 0 ? "/" : this.absolute.substring(0, slash);
-        return new InstanceFilePath(this.volumeRoot, parent);
+        return new InstanceFilePath(this.volumeRoot, PosixPaths.parentOf(this.absolute));
     }
 
     /**
@@ -160,10 +158,5 @@ public record InstanceFilePath(@NonNull String volumeRoot, @NonNull String absol
                                            @NonNull String name) {
         String base = this.absolute.endsWith("/") ? this.absolute : this.absolute + "/";
         return parse(volumeRoots, base + name);
-    }
-
-    /** THE one refusal: identical for every rejected shape, so it names no structure. */
-    public static @NonNull Violations refused() {
-        return Violations.ofForm(HohenheimViolations.text("files_path_refused"));
     }
 }

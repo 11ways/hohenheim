@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.tls;
 
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
@@ -19,6 +20,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.RawValues.trimmed;
+
 /**
  * THE answer to "may this caller obtain a certificate for these names".
  *
@@ -34,7 +37,7 @@ import java.util.Map;
  * delete). This half binds EVERYONE, admins included; there is no legitimate reason to hold
  * a certificate for a name this installation cannot serve.
  *
- * AUTHORITY -- the caller must hold {@link HohenheimAccess#MANAGE} on the site of every
+ * AUTHORITY -- the caller must hold {@link HohenheimCapabilities#MANAGE} on the site of every
  * row that DECIDES the name ({@link HostnameAuthority.Snapshot#deciding}: the most specific
  * covering tier, exactly as routing resolves it, so an operator's catch-all wildcard never
  * outvotes a tenant's own exact row), with the installation-wide admin permission as the
@@ -202,7 +205,7 @@ public final class CertificateAuthority {
         Map<String, Integer> declaring = new LinkedHashMap<>();
 
         for (String raw : hostnames) {
-            String hostname = BlastString.lower(raw != null ? raw.trim() : "");
+            String hostname = BlastString.lower(trimmed(raw));
             List<Row> covering = snapshot.covering(hostname);
 
             if (covering.isEmpty()) {

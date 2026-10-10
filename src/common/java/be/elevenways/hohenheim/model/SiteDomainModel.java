@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -12,7 +11,6 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import java.util.List;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -47,13 +45,13 @@ public class SiteDomainModel extends Model {
     public static EnumField.Builder matchTypeField() {
         return EnumField.builder("match_type")
             .value(MATCH_EXACT, v -> v.displayName("Exact")
-                .label(Microcopy.of("exact").withFilter("scope", "domain_match"))
+                .label(HohenheimMicrocopy.DOMAIN_MATCH.of("exact"))
                 .icon("check").color(ColorHue.GREEN))
             .value(MATCH_WILDCARD, v -> v.displayName("Wildcard")
-                .label(Microcopy.of("wildcard").withFilter("scope", "domain_match"))
+                .label(HohenheimMicrocopy.DOMAIN_MATCH.of("wildcard"))
                 .icon("sitemap").color(ColorHue.ORANGE))
             .value(MATCH_REGEX, v -> v.displayName("Regex")
-                .label(Microcopy.of("regex").withFilter("scope", "domain_match"))
+                .label(HohenheimMicrocopy.DOMAIN_MATCH.of("regex"))
                 .icon("code").color(ColorHue.PURPLE));
     }
 
@@ -134,12 +132,14 @@ public class SiteDomainModel extends Model {
             default -> Hostnames.isValidLabelSequence(hostname);
         };
         if (!valid) {
-            throw HohenheimViolations.ofField(HOSTNAME.getName(), hostname, "hostname_invalid");
+            throw Violations.ofField(HOSTNAME.getName(), hostname,
+                HohenheimMicrocopy.VIOLATIONS.of("hostname_invalid"));
         }
     }
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
-    public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id").build());
+    public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("site")).build());
 
     /**
      * The owning site, declared so a query can ask about it (a correlated EXISTS) rather
@@ -154,28 +154,28 @@ public class SiteDomainModel extends Model {
             .build());
 
     public static final StringField HOSTNAME = SCHEMA.addField(StringField.builder().name("hostname")
-        .label(HohenheimFormCopy.label("hostname"))
-        .help(HohenheimFormCopy.help("hostname"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("hostname"))
+        .help(HohenheimMicrocopy.HELP.of("hostname"))
         .placeholder("example.com")
         .build());
     public static final EnumField MATCH_TYPE = SCHEMA.addField(matchTypeField()
         .defaultValue(MATCH_EXACT)
-        .label(HohenheimFormCopy.label("match_type"))
-        .help(HohenheimFormCopy.help("match_type"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("match_type"))
+        .help(HohenheimMicrocopy.HELP.of("match_type"))
         .build());
     public static final StringField LISTEN_ON = SCHEMA.addField(StringField.builder().name("listen_on")
-        .label(HohenheimFormCopy.label("listen_on"))
-        .help(HohenheimFormCopy.help("listen_on"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("listen_on"))
+        .help(HohenheimMicrocopy.HELP.of("listen_on"))
         .build());
     public static final StringField PATH = SCHEMA.addField(StringField.builder().name("path")
-        .label(HohenheimFormCopy.label("path_prefix"))
-        .help(HohenheimFormCopy.help("path_prefix"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("path_prefix"))
+        .help(HohenheimMicrocopy.HELP.of("path_prefix"))
         .placeholder("/")
         .build());
     public static final BooleanField STRIP_PATH = SCHEMA.addField(BooleanField.builder("strip_path")
         .defaultValue(false)
-        .label(HohenheimFormCopy.label("strip_path"))
-        .help(HohenheimFormCopy.help("strip_path"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("strip_path"))
+        .help(HohenheimMicrocopy.HELP.of("strip_path"))
         .build());
     /**
      * Whether plain HTTP is refused for this hostname (a redirect while HTTPS terminates, a 503 while it does not).
@@ -186,8 +186,8 @@ public class SiteDomainModel extends Model {
      */
     public static final BooleanField FORCE_SSL = SCHEMA.addField(BooleanField.builder("force_ssl")
         .defaultValue(false)
-        .label(HohenheimFormCopy.label("force_ssl"))
-        .help(HohenheimFormCopy.help("force_ssl"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("force_ssl"))
+        .help(HohenheimMicrocopy.HELP.of("force_ssl"))
         .build());
 
     /**
@@ -201,8 +201,8 @@ public class SiteDomainModel extends Model {
         .filterable(false)
         .build());
     public static final IntegerField CERTIFICATE_ID = SCHEMA.addField(IntegerField.builder().name("certificate_id")
-        .label(HohenheimFormCopy.label("certificate"))
-        .help(HohenheimFormCopy.help("certificate"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("certificate"))
+        .help(HohenheimMicrocopy.HELP.of("certificate"))
         .build());
 
     /**
@@ -217,27 +217,27 @@ public class SiteDomainModel extends Model {
             .build());
     public static final BooleanField HSTS_ENABLED = SCHEMA.addField(BooleanField.builder("hsts_enabled")
         .defaultValue(false)
-        .label(HohenheimFormCopy.label("hsts_enabled"))
-        .help(HohenheimFormCopy.help("hsts_enabled"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("hsts_enabled"))
+        .help(HohenheimMicrocopy.HELP.of("hsts_enabled"))
         .build());
     public static final BooleanField HSTS_SUBDOMAINS = SCHEMA.addField(BooleanField.builder("hsts_subdomains")
         .defaultValue(false)
-        .label(HohenheimFormCopy.label("hsts_subdomains"))
-        .help(HohenheimFormCopy.help("hsts_subdomains"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("hsts_subdomains"))
+        .help(HohenheimMicrocopy.HELP.of("hsts_subdomains"))
         .build());
     // Ordered header-name -> value maps (empty value = delete the header on forward).
     public static final StringMapField CUSTOM_HEADERS = SCHEMA.addField(StringMapField.builder("custom_headers")
-        .label(HohenheimFormCopy.label("custom_headers"))
-        .help(HohenheimFormCopy.help("custom_headers"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("custom_headers"))
+        .help(HohenheimMicrocopy.HELP.of("custom_headers"))
         .build());
     public static final StringMapField RESPONSE_HEADERS = SCHEMA.addField(StringMapField.builder("response_headers")
-        .label(HohenheimFormCopy.label("response_headers"))
-        .help(HohenheimFormCopy.help("response_headers"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("response_headers"))
+        .help(HohenheimMicrocopy.HELP.of("response_headers"))
         .build());
     public static final BooleanField EXCLUDE_FROM_LETSENCRYPT = SCHEMA.addField(BooleanField.builder("exclude_from_letsencrypt")
         .defaultValue(false)
-        .label(HohenheimFormCopy.label("exclude_from_letsencrypt"))
-        .help(HohenheimFormCopy.help("exclude_from_letsencrypt"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("exclude_from_letsencrypt"))
+        .help(HohenheimMicrocopy.HELP.of("exclude_from_letsencrypt"))
         .build());
     /**
      * The canonical route tuple this row claims while its site is LIVE, or null when it
@@ -293,8 +293,9 @@ public class SiteDomainModel extends Model {
         SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
             if (row == null) return;
-            String hostname = (String) effective(row, HOSTNAME);
-            String matchType = (String) effective(row, MATCH_TYPE);
+            Row stored = StoredRows.of(Models.get(SiteDomainModel.class), row);
+            String hostname = row.afterWrite(HOSTNAME, stored);
+            String matchType = row.afterWrite(MATCH_TYPE, stored);
             if (hostname != null) {
                 String canonical = canonicalHostname(hostname, matchType);
                 row.set(HOSTNAME, canonical);
@@ -310,15 +311,14 @@ public class SiteDomainModel extends Model {
                 // takeover. One write here makes every raw reader correct by construction.
                 row.set(MATCH_TYPE, effectiveMatchType(canonical, matchType));
             }
-            disarmOnExplicitChoice(row);
-            Integer siteId = (Integer) effective(row, SITE_ID);
-            Row site = StoredRows.byId(Models.get(SiteModel.class), siteId);
+            disarmOnExplicitChoice(row, stored);
+            Row site = StoredRows.byId(Models.get(SiteModel.class), row.afterWrite(SITE_ID, stored));
             if (site == null || !SiteModel.UPSTREAM_TLS_PASSTHROUGH
                     .equals(site.get(SiteModel.UPSTREAM_KIND))) return;
             row.set(FORCE_SSL, false);
             row.set(FORCE_SSL_AUTO, false);
             row.set(EXCLUDE_FROM_LETSENCRYPT, true);
-            validateTlsPassthroughValues(row);
+            validateTlsPassthroughValues(row, stored);
         });
     }
 
@@ -326,13 +326,11 @@ public class SiteDomainModel extends Model {
      * Disarms the {@link #FORCE_SSL_AUTO} latch when a write states force_ssl itself: switched on at create, or
      * changed on an update. A create carrying the default off keeps the latch armed.
      */
-    private static void disarmOnExplicitChoice(@NonNull Row row) {
+    private static void disarmOnExplicitChoice(@NonNull Row row, @Nullable Row stored) {
         if (!row.has(FORCE_SSL.getName())) {
             return;
         }
         Object staged = row.get(FORCE_SSL.getName());
-        Row stored = row.has(ID.getName()) && row.get(ID) != null
-            ? Models.get(SiteDomainModel.class).findById(row.get(ID)) : null;
         boolean explicit = stored == null
             ? Boolean.TRUE.equals(staged)
             : Boolean.TRUE.equals(staged) != Boolean.TRUE.equals(stored.get(FORCE_SSL));
@@ -341,40 +339,35 @@ public class SiteDomainModel extends Model {
         }
     }
 
-    /** Enforces the model-level invariants of an encrypted, pre-HTTP route. */
-    public static void validateTlsPassthroughValues(Row row) {
-        String path = (String) effective(row, PATH);
-        if (path != null && !path.isBlank() && !"/".equals(path.trim())) {
-            throw HohenheimViolations.ofField("path", path, "tls_passthrough_no_path");
-        }
-        if (Boolean.TRUE.equals(effective(row, STRIP_PATH))) {
-            throw HohenheimViolations.ofField("strip_path", true, "tls_passthrough_no_http_options");
-        }
-        Object certificateId = effective(row, CERTIFICATE_ID);
-        if (certificateId != null) {
-            throw HohenheimViolations.ofField("certificate_id", certificateId, "tls_passthrough_backend_certificate");
-        }
-        if (Boolean.TRUE.equals(effective(row, HSTS_ENABLED))
-                || Boolean.TRUE.equals(effective(row, HSTS_SUBDOMAINS))) {
-            throw HohenheimViolations.ofField("hsts_enabled", effective(row, HSTS_ENABLED),
-                "tls_passthrough_no_http_options");
-        }
-        if (hasValues(effective(row, CUSTOM_HEADERS)) || hasValues(effective(row, RESPONSE_HEADERS))) {
-            throw HohenheimViolations.ofField("custom_headers", effective(row, CUSTOM_HEADERS),
-                "tls_passthrough_no_http_options");
-        }
-    }
-
     /**
-     * The value a partial write will END UP with: the staged value when the write carries
-     * the field, else the stored one. Every invariant over a domain row must read through
-     * this, because a CMS update stages only the changed columns.
+     * Enforces the model-level invariants of an encrypted, pre-HTTP route.
+     *
+     * @param stored the persisted row of a pending write, null on a create or when {@code row} is itself stored
      */
-    public static Object effective(Row row, Field<?, ?> field) {
-        if (row.has(field.getName())) return row.get(field.getName());
-        if (!row.has(ID.getName())) return null;
-        Row stored = Models.get(SiteDomainModel.class).findById(row.get(ID));
-        return stored != null ? stored.get(field.getName()) : null;
+    public static void validateTlsPassthroughValues(@NonNull Row row, @Nullable Row stored) {
+        String path = row.afterWrite(PATH, stored);
+        if (path != null && !path.isBlank() && !"/".equals(path.trim())) {
+            throw Violations.ofField("path", path, HohenheimMicrocopy.VIOLATIONS.of("tls_passthrough_no_path"));
+        }
+        if (Boolean.TRUE.equals(row.afterWrite(STRIP_PATH, stored))) {
+            throw Violations.ofField("strip_path", true,
+                HohenheimMicrocopy.VIOLATIONS.of("tls_passthrough_no_http_options"));
+        }
+        Object certificateId = row.afterWrite(CERTIFICATE_ID, stored);
+        if (certificateId != null) {
+            throw Violations.ofField("certificate_id", certificateId,
+                HohenheimMicrocopy.VIOLATIONS.of("tls_passthrough_backend_certificate"));
+        }
+        Object hsts = row.afterWrite(HSTS_ENABLED, stored);
+        if (Boolean.TRUE.equals(hsts) || Boolean.TRUE.equals(row.afterWrite(HSTS_SUBDOMAINS, stored))) {
+            throw Violations.ofField("hsts_enabled", hsts,
+                HohenheimMicrocopy.VIOLATIONS.of("tls_passthrough_no_http_options"));
+        }
+        Object customHeaders = row.afterWrite(CUSTOM_HEADERS, stored);
+        if (hasValues(customHeaders) || hasValues(row.afterWrite(RESPONSE_HEADERS, stored))) {
+            throw Violations.ofField("custom_headers", customHeaders,
+                HohenheimMicrocopy.VIOLATIONS.of("tls_passthrough_no_http_options"));
+        }
     }
 
     private static boolean hasValues(Object value) {

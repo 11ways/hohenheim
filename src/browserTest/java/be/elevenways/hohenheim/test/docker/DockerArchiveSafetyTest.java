@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -242,5 +243,27 @@ class DockerArchiveSafetyTest {
         Throwable timedOut = catchThrowable(() -> slow.roundTrip(request, 700));
         assertThat(timedOut).as("step 2: a killed exchange is a timeout, not a short answer")
             .isInstanceOf(IOException.class).hasMessageContaining("timed out");
+    }
+
+    @Test
+    void anExtractedFileKeepsItsArchivedPermissionBits(@TempDir Path tmp) throws IOException {
+        // 1. A tree with an executable script and a group-readable secret, archived by the writer.
+        Path tree = Files.createDirectory(tmp.resolve("tree"));
+        Path script = Files.writeString(tree.resolve("build.sh"), "#!/bin/sh\n");
+        Files.setPosixFilePermissions(script, PosixFilePermissions.fromString("rwxr-xr-x"));
+        Path secret = Files.writeString(tree.resolve("secret.env"), "TOKEN=1\n");
+        Files.setPosixFilePermissions(secret, PosixFilePermissions.fromString("rw-r-----"));
+        ByteArrayOutputStream archive = new ByteArrayOutputStream();
+        Tar.Writer writer = new Tar.Writer(archive);
+        writer.add(tree, "tree");
+        writer.finish();
+
+        // 2. Extraction gives every file the bits its entry carried, owner to others in order.
+        Path root = Files.createDirectory(tmp.resolve("extracted"));
+        Tar.extractTo(new ByteArrayInputStream(archive.toByteArray()), root);
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(root.resolve("tree/build.sh"))))
+            .as("step 2: the script stays executable as archived").isEqualTo("rwxr-xr-x");
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(root.resolve("tree/secret.env"))))
+            .as("step 2: the secret stays closed to others as archived").isEqualTo("rw-r-----");
     }
 }

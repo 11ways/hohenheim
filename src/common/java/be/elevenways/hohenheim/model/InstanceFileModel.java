@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -28,24 +28,25 @@ public class InstanceFileModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
     public static final IntegerField INSTANCE_ID = SCHEMA.addField(
-        IntegerField.builder().name("instance_id").build());
+        IntegerField.builder().name("instance_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("instance")).build());
 
     public static final StringField CONTAINER_PATH = SCHEMA.addField(StringField.builder().name("container_path")
         .required()
-        .label(HohenheimFormCopy.label("container_path"))
-        .help(HohenheimFormCopy.help("file_container_path"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_path"))
+        .help(HohenheimMicrocopy.HELP.of("file_container_path"))
         .build());
 
     public static final TextField CONTENT = SCHEMA.addField(TextField.builder().name("content")
         .encrypted()
-        .label(HohenheimFormCopy.label("file_content"))
-        .help(HohenheimFormCopy.help("template_file_content"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("file_content"))
+        .help(HohenheimMicrocopy.HELP.of("template_file_content"))
         .build());
 
     public static final StringField MODE = SCHEMA.addField(StringField.builder().name("mode")
         .defaultValue("0644")
-        .label(HohenheimFormCopy.label("file_mode"))
-        .help(HohenheimFormCopy.help("file_mode"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("file_mode"))
+        .help(HohenheimMicrocopy.HELP.of("file_mode"))
         .build());
 
     /**
@@ -55,7 +56,7 @@ public class InstanceFileModel extends Model {
      */
     public static final StringField GENERATED_BY = SCHEMA.addField(
         StringField.builder().name("generated_by").filterable(false)
-            .label(HohenheimFormCopy.label("generated_by"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("generated_by"))
             .build());
 
     /** Model id of the record that authorized this row. */

@@ -1,14 +1,17 @@
 package be.elevenways.hohenheim.source;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.orm.field.*;
 import be.elevenways.zenit.common.orm.field.attributes.FieldAttributes;
 import be.elevenways.zenit.common.orm.model.Schema;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Map;
 
 /**
  * THE git-source vocabulary, contributed INTO a host schema rather than owning one.
@@ -53,7 +56,32 @@ public final class GitSourceSchema {
     public static final List<String> PREVIEWS = List.of(
         PREVIEWS_ENABLED, PREVIEW_BRANCHES, PREVIEW_ENVIRONMENT_VARIABLES);
 
+    /** The branch a source without a declared one builds. */
+    public static final String DEFAULT_BRANCH = "main";
+
+    /**
+     * What auto_deploy is until a source stores it: on, as the form's declared default and as every reader's answer.
+     *
+     * AIDEV-NOTE: ONE value on purpose. The edit form seeds a stored map's missing keys from the declared default, so
+     * a declared true beside an absent-reads-off read showed sources that never stored the flag as auto-deploying and
+     * turned it on with the next unrelated save (DD11f). It is true since DD11h (Jelle: new sources deploy on push);
+     * M011's "keep every stored git source's auto-deploy off" stored an explicit false on every source written while
+     * absent still read off, so flipping this changed no existing source.
+     */
+    private static final boolean AUTO_DEPLOY_DEFAULT = true;
+
     private GitSourceSchema() {}
+
+    /** @return whether a push to the source's branch deploys it */
+    public static boolean autoDeploys(@Nullable Map<String, ?> settings) {
+        return RawValues.isOn(settings, AUTO_DEPLOY, AUTO_DEPLOY_DEFAULT);
+    }
+
+    /** @return the source's declared branch trimmed, {@link #DEFAULT_BRANCH} when it declares none */
+    public static @NonNull String declaredBranch(@NonNull Map<String, ?> settings) {
+        String branch = RawValues.trimmed(settings.get(BRANCH));
+        return branch.isEmpty() ? DEFAULT_BRANCH : branch;
+    }
 
     /**
      * Add the git-source fields to a kind's settings schema, the preview lane included.
@@ -82,8 +110,8 @@ public final class GitSourceSchema {
         // value from the form: a stored URL rendered as a mask, and a refused submit threw
         // the just-typed URL away instead of showing it beside its violation.
         schema.addField(StringField.builder().name(REPOSITORY_URL)
-            .label(HohenheimFormCopy.label("repository_url"))
-            .help(HohenheimFormCopy.help("repository_url")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("repository_url"))
+            .help(HohenheimMicrocopy.HELP.of("repository_url")).build());
 
         // Provider binding: when set, the clone URL derives from the provider + repository
         // and per-operation credentials are minted by GitProviders (never embedded in the
@@ -91,32 +119,32 @@ public final class GitSourceSchema {
         // picker entries (GitPickerFormEntries): provider select, then a repository picker
         // following it, then a branch picker following both.
         schema.addField(GitProviderRefField.builder(PROVIDER_ID)
-            .label(HohenheimFormCopy.label("git_provider"))
-            .help(HohenheimFormCopy.help("git_provider")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("git_provider"))
+            .help(HohenheimMicrocopy.HELP.of("git_provider")).build());
 
         schema.addField(GitRepositoryField.builder(REPOSITORY)
-            .label(HohenheimFormCopy.label("repository"))
-            .help(HohenheimFormCopy.help("repository")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("repository"))
+            .help(HohenheimMicrocopy.HELP.of("repository")).build());
 
         schema.addField(GitBranchField.builder(BRANCH)
-            .label(HohenheimFormCopy.label("branch"))
-            .help(HohenheimFormCopy.help("branch")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("branch"))
+            .help(HohenheimMicrocopy.HELP.of("branch")).build());
 
         schema.addField(StringField.builder().name(BUILD_COMMAND)
-            .label(HohenheimFormCopy.label("build_command"))
-            .help(HohenheimFormCopy.help("build_command")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("build_command"))
+            .help(HohenheimMicrocopy.HELP.of("build_command")).build());
 
         schema.addField(PathField.builder().name(BUILD_DIRECTORY)
-            .label(HohenheimFormCopy.label("build_directory"))
-            .help(HohenheimFormCopy.help("build_directory")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("build_directory"))
+            .help(HohenheimMicrocopy.HELP.of("build_directory")).build());
 
         schema.addField(IntegerField.builder().name(BUILD_TIMEOUT).suffix("s")
-            .label(HohenheimFormCopy.label("build_timeout"))
-            .help(HohenheimFormCopy.help("build_timeout")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("build_timeout"))
+            .help(HohenheimMicrocopy.HELP.of("build_timeout")).build());
 
-        schema.addField(BooleanField.builder(AUTO_DEPLOY).defaultValue(true)
-            .label(HohenheimFormCopy.label("auto_deploy"))
-            .help(HohenheimFormCopy.help("auto_deploy")).build());
+        schema.addField(BooleanField.builder(AUTO_DEPLOY).defaultValue(AUTO_DEPLOY_DEFAULT)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("auto_deploy"))
+            .help(HohenheimMicrocopy.HELP.of("auto_deploy")).build());
 
         // AIDEV-NOTE: RETIRED. Nothing ever polled a repository: a new revision arrives by
         // the webhook (auto_deploy + webhook_secret), and inventing a poller was decided
@@ -125,32 +153,32 @@ public final class GitSourceSchema {
         // is closed-world: an undeclared key would become an unknown_field refusal). It is
         // visible in NO edit view, so no form offers a setting that does nothing.
         schema.addField(IntegerField.builder().name(POLL_INTERVAL).suffix("s")
-            .label(HohenheimFormCopy.label("poll_interval"))
-            .help(HohenheimFormCopy.help("poll_interval"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("poll_interval"))
+            .help(HohenheimMicrocopy.HELP.of("poll_interval"))
             .attribute(FieldAttributes.VISIBLE_IN, EnumSet.noneOf(EditView.class)).build());
 
         schema.addField(StringField.builder().name(WEBHOOK_SECRET).secret()
-            .label(HohenheimFormCopy.label("webhook_secret"))
-            .help(HohenheimFormCopy.help("webhook_secret")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("webhook_secret"))
+            .help(HohenheimMicrocopy.HELP.of("webhook_secret")).build());
 
         schema.addField(BooleanField.builder(SHALLOW_CLONE).defaultValue(true)
-            .label(HohenheimFormCopy.label("shallow_clone"))
-            .help(HohenheimFormCopy.help("shallow_clone")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("shallow_clone"))
+            .help(HohenheimMicrocopy.HELP.of("shallow_clone")).build());
 
         schema.addField(BooleanField.builder(SUBMODULES).defaultValue(false)
-            .label(HohenheimFormCopy.label("submodules"))
-            .help(HohenheimFormCopy.help("submodules")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("submodules"))
+            .help(HohenheimMicrocopy.HELP.of("submodules")).build());
 
         // Build-only environment variables as an ordered name -> value map.
         // secret(): redacted on derived surfaces.
         schema.addField(StringMapField.builder(BUILD_ENVIRONMENT_VARIABLES)
-            .label(HohenheimFormCopy.label("build_environment_variables"))
-            .help(HohenheimFormCopy.help("build_environment_variables")).secret().build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("build_environment_variables"))
+            .help(HohenheimMicrocopy.HELP.of("build_environment_variables")).secret().build());
 
         /* Opt-in: pull-request webhook events create/update/destroy preview deployments. */
         schema.addField(previewLane(BooleanField.builder(PREVIEWS_ENABLED).defaultValue(false)
-            .label(HohenheimFormCopy.label("previews_enabled"))
-            .help(HohenheimFormCopy.help("previews_enabled")), offersPreviews).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("previews_enabled"))
+            .help(HohenheimMicrocopy.HELP.of("previews_enabled")), offersPreviews).build());
 
         // Per-BRANCH previews are opt-in PER PATTERN, never on by default: a default that
         // mints a preview per pushed branch is a build + container + hostname the owner
@@ -159,16 +187,16 @@ public final class GitSourceSchema {
         // DID opt into. Empty list = pull-request previews only.
         schema.addField(previewLane(ListField.builder(StringField.builder().name("pattern").build())
             .name(PREVIEW_BRANCHES)
-            .label(HohenheimFormCopy.label("preview_branches"))
-            .help(HohenheimFormCopy.help("preview_branches")), offersPreviews).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("preview_branches"))
+            .help(HohenheimMicrocopy.HELP.of("preview_branches")), offersPreviews).build());
 
         // The ONLY runtime environment a preview receives. Previews deliberately inherit
         // NOTHING from the production runtime: not environment_variables, not injected
         // database credentials, not volumes -- a preview builds arbitrary branch code and
         // must never see production secrets or data by default.
         schema.addField(previewLane(StringMapField.builder(PREVIEW_ENVIRONMENT_VARIABLES)
-            .label(HohenheimFormCopy.label("preview_environment_variables"))
-            .help(HohenheimFormCopy.help("preview_environment_variables")).secret(), offersPreviews).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("preview_environment_variables"))
+            .help(HohenheimMicrocopy.HELP.of("preview_environment_variables")).secret(), offersPreviews).build());
 
         return schema;
     }

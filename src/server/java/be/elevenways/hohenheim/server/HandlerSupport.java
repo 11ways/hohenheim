@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.server;
 
-import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.JobRunner;
-import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -23,6 +23,8 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.RawValues.trimmed;
+
 /**
  * The plumbing every host-declared handler class shares: redirects, downloads, form
  * reading, untyped JSON, refusal text, background hand-off and the Fetch-Metadata
@@ -34,15 +36,6 @@ import java.util.Map;
  * a new handler in any package reaches for.
  */
 public final class HandlerSupport {
-
-    /**
-     * Every redirect below lands on the OPERATOR panel: these are the installation
-     * administration lanes (certificates, DNS zones, databases).
-     */
-    public static final String ADMIN = HohenheimSlugs.ADMIN;
-
-    /** The delegated panel's slug, for the handlers that serve both lanes. */
-    public static final String MANAGE = HohenheimSlugs.MANAGE;
 
     private HandlerSupport() {
     }
@@ -62,16 +55,13 @@ public final class HandlerSupport {
         if (value instanceof List<?> list) {
             value = list.isEmpty() ? null : list.get(0);
         }
-        return value == null ? "" : String.valueOf(value).trim();
+        return trimmed(value);
     }
 
     /** One raw submit value as an Integer, or null when absent, blank or unparseable. */
     public static @Nullable Integer submittedInteger(@NonNull Map<String, Object> values,
                                                      @NonNull String name) {
-        PrimitiveCoercion.Result<Integer> parsed = PrimitiveCoercion.toInteger(
-            submittedString(values, name), PrimitiveCoercion.NumberRule.EXACT_VALUE,
-            PrimitiveCoercion.TextRule.TRIMMED_BLANK_IS_NULL);
-        return parsed.ok() ? parsed.value() : null;
+        return RawValues.parsedInt(submittedString(values, name));
     }
 
     /** One raw submit value as a positive id, or 0 when absent, unparseable or not positive. */
@@ -161,7 +151,7 @@ public final class HandlerSupport {
      */
     public static @NonNull Microcopy violationMessage(@NonNull Violations violations) {
         return violations.all().isEmpty()
-            ? HohenheimViolations.text("refused")
+            ? HohenheimMicrocopy.VIOLATIONS.of("refused")
             : violations.all().get(0).message();
     }
 
@@ -182,5 +172,25 @@ public final class HandlerSupport {
     public static void inBackground(@NonNull Runnable work) {
         Datasource datasource = Db.currentOrDefault();
         JobRunner.startVirtualThread(() -> Db.run(datasource, work));
+    }
+
+    /** {@link #inBackground} for fire-and-forget work: a refusal is logged under {@code what}, never thrown. */
+    public static void inBackgroundLogged(@NonNull String what, @NonNull Runnable work) {
+        inBackground(() -> {
+            try {
+                work.run();
+            } catch (RuntimeException refused) {
+                Blast.log(what, "refused -", refused.getMessage());
+            }
+        });
+    }
+
+    /** Runs {@code body} under {@code datasource}, or under the current scope when it is null. */
+    public static void inScope(@Nullable Datasource datasource, @NonNull Runnable body) {
+        if (datasource == null) {
+            body.run();
+        } else {
+            Db.run(datasource, body);
+        }
     }
 }

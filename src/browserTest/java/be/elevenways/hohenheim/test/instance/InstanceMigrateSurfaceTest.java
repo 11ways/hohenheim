@@ -1,10 +1,11 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -18,7 +19,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.text.HtmlEscape;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
@@ -94,7 +94,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
 
         tenantId = ApiSupport.user("migrate-tenant@hohenheim.local", "Migrate Tenant");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         TestSession session = sessionFor(tenantId);
         tenantSession = session.token();
@@ -303,7 +303,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
             .noneMatch(id -> id.contains("migrate"));
         assertThat(InstanceParts.manage().tabs().declared().stream().map(RecordTab::slug))
             .withFailMessage("step 2: the /manage instance entry declares the migrate tab")
-            .doesNotContain(InstanceMigratePage.SLUG);
+            .doesNotContain(HohenheimSlugs.Tab.MIGRATE);
 
         // 3. Nothing on the tenant's own record page points at the migrate page.
         HttpResponse<String> record = httpGet("/manage/instances/" + instanceId, tenantSession);
@@ -382,13 +382,13 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
     private static void assertRedrawnMigrateForm(HttpResponse<String> response, String step) {
         assertThat(response.body()).as(step + ": the migrate form is redrawn, still on its tab")
             .contains("name=\"" + CmsEndpoints.TAB_PARAM.getName() + "\"")
-            .contains("value=\"" + InstanceMigratePage.SLUG + "\"")
+            .contains("value=\"" + HohenheimSlugs.Tab.MIGRATE + "\"")
             .contains("name=\"" + InstanceOperations.TARGET_SERVER.getName() + "\"");
     }
 
     /** @return a refusal key's shipped English text for this name, as the page escapes it */
     private static String refusalText(String key, String name) {
-        return HtmlEscape.text(HohenheimViolations.text(key).withArg("name", name)
+        return HtmlEscape.text(HohenheimMicrocopy.VIOLATIONS.of(key).withArg("name", name)
             .resolve(LocaleChain.ofTags("en"), new ShippedCatalogs()));
     }
 
@@ -397,7 +397,7 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
         String path = CmsRoutes.invoke(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES,
                 InstanceOperations.MIGRATE.id())
             .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(instanceId)).toUrl();
-        return adminPostForm(path, ApiSupport.form(CmsEndpoints.TAB_PARAM.getName(), InstanceMigratePage.SLUG,
+        return adminPostForm(path, ApiSupport.form(CmsEndpoints.TAB_PARAM.getName(), HohenheimSlugs.Tab.MIGRATE,
             InstanceOperations.TARGET_SERVER.getName(), String.valueOf(target),
             CmsEndpoints.INVOCATION_PARAM.getName(), UUID.randomUUID().toString(),
             CmsConfirmation.FIELD, CmsConfirmation.PLAIN_PROOF));

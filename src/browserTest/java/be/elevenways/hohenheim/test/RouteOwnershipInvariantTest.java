@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.ReleasedClaimParts;
 import be.elevenways.hohenheim.server.proxy.ReleasedClaims;
@@ -532,7 +533,7 @@ class RouteOwnershipInvariantTest extends HohenheimTestBase {
     /** Give an EXISTING tenant subject manage on another site -- the same owner, twice. */
     private static void grantManage(Row site, int userId) {
         RecordGrants.grant(GrantSubjectType.USER, userId, SiteModel.MODEL_ID, site.get(SiteModel.ID),
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
     }
 
     /** The active quarantine row for a hostname's exact-match, path-less, all-interfaces route. */

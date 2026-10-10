@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ArtifactOperationModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
@@ -12,7 +13,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.ApiWire.Caller;
@@ -45,9 +46,8 @@ import static be.elevenways.hohenheim.test.ApiSupport.form;
  * The site, PaaS operation, project and environment routes of {@code /api/v1}: every route's success reply and its
  * main refusal, compared byte for byte to the java-rewrite capture through {@link ApiWire}.
  *
- * AIDEV-NOTE: intended difference (W1a, 2026-10-05): a domain added without force_ssl answers
- * {@code "force_ssl":false}, because a new address is forced once its certificate works (ForceSslLatch), not before;
- * the shape is unchanged and that one value is re-recorded.
+ * AIDEV-NOTE: a domain added without force_ssl answers {@code "force_ssl":false}: a new address is forced once its
+ * certificate works (ForceSslLatch), not before.
  *
  * AIDEV-NOTE: the class runs on a database of its own, copied from the migrated template, so every id is the same
  * on every run; the fixtures are created in one fixed order and every instant they carry is {@link #T0} or
@@ -119,9 +119,9 @@ class ApiWireSitesTest extends HohenheimTestBase {
         bravoDomainId = domain(bravoSiteId, "bravo.wire.test");
         domain(lockedSiteId, "localhost");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, alphaSiteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, staticSiteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         alphaReleaseId = releaseOperation(alphaApplicationId, "wire-release-log-of-alpha");
         bravoReleaseId = releaseOperation(bravoApplicationId, "wire-release-log-of-bravo");
@@ -145,8 +145,8 @@ class ApiWireSitesTest extends HohenheimTestBase {
         admin = new Caller.Key(ApiKeyService.create(operatorId, "wire-sites-admin", List.of("hohenheim.*"), null)
             .plaintext());
         tenant = new Caller.Key(ApiKeyService.create(tenantId, "wire-sites-tenant",
-            List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE),
-                CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.MANAGE)), null).plaintext());
+            List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE),
+                CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.MANAGE)), null).plaintext());
         tenantSession = new Caller.Session(sessionCookieHeader(sessionFor(tenantId).token()));
     }
 
@@ -311,7 +311,7 @@ class ApiWireSitesTest extends HohenheimTestBase {
         op.set(ReleaseOperationModel.KIND, ReleaseOperationModel.KIND_RELEASE);
         op.set(ReleaseOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
         op.set(ReleaseOperationModel.FOR_ID, applicationId);
-        op.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.STATUS_SUCCEEDED);
+        op.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
         op.set(ReleaseOperationModel.IMAGE_ID, "sha256:wire-release");
         op.set(ReleaseOperationModel.STEP_LOG, stepLog);
         op.set(ReleaseOperationModel.STARTED_AT, T0);
@@ -327,7 +327,7 @@ class ApiWireSitesTest extends HohenheimTestBase {
         op.set(BuildOperationModel.BUILDER_KIND, BuildOperationModel.KIND_DOCKERFILE);
         op.set(BuildOperationModel.FOR_MODEL, SiteModel.MODEL_ID.toString());
         op.set(BuildOperationModel.FOR_ID, siteId);
-        op.set(BuildOperationModel.STATUS, BuildOperationModel.STATUS_SUCCEEDED);
+        op.set(BuildOperationModel.STATUS, BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
         op.set(BuildOperationModel.SOURCE_REF, "main");
         op.set(BuildOperationModel.IMAGE_ID, "sha256:wire-build");
         op.set(BuildOperationModel.EXIT_CODE, 0);
@@ -344,7 +344,7 @@ class ApiWireSitesTest extends HohenheimTestBase {
         Row op = Models.get(ArtifactOperationModel.class).createEmptyRow();
         op.set(ArtifactOperationModel.SITE_ID, siteId);
         op.set(ArtifactOperationModel.APPLICATION_ID, applicationId);
-        op.set(ArtifactOperationModel.STATUS, ArtifactOperationModel.SUCCEEDED);
+        op.set(ArtifactOperationModel.STATUS, ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
         op.set(ArtifactOperationModel.ARTIFACT_SHA256,
             "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08");
         op.set(ArtifactOperationModel.IMAGE_ID, "sha256:wire-artifact");
@@ -387,11 +387,11 @@ class ApiWireSitesTest extends HohenheimTestBase {
         Models.get(InstanceModel.class).save(application);
         ApplicationReleases.converge(applicationId, Map.of());
         Poll.until("the v2 release settles after its drain window", Duration.ofSeconds(15), Duration.ofMillis(50),
-            () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(Models.get(ReleaseOperationModel.class).find()
+            () -> ReleaseOperationModel.LIFECYCLE.is(Models.get(ReleaseOperationModel.class).find()
                 .where(ReleaseOperationModel.FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
                 .where(ReleaseOperationModel.FOR_ID.eq(applicationId))
                 .orderBy(ReleaseOperationModel.ID, SortOrder.DESC)
-                .first().get(ReleaseOperationModel.STATUS)));
+                .first().get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED));
         return siteId;
     }
 }

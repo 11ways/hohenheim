@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
 import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
-import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -11,6 +10,7 @@ import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.cms.DnsRecordParts;
@@ -161,23 +161,23 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
 
         // The viewer holds the READ half everywhere it exists as a verb.
         RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         RecordGrants.grant(GrantSubjectType.USER, viewerId, DatabaseModel.MODEL_ID, databaseId,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         RecordGrants.grant(GrantSubjectType.USER, viewerId, DnsRecordModel.MODEL_ID, recordId,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
 
         // The holder carries exactly what each funnel demands.
         RecordGrants.grant(GrantSubjectType.USER, holderId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.CONFIG, true);
+            HohenheimCapabilities.CONFIG, true);
         RecordGrants.grant(GrantSubjectType.USER, holderId, DatabaseModel.MODEL_ID, databaseId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, holderId, DnsRecordModel.MODEL_ID, recordId,
-            HohenheimAccess.EDIT, true);
+            HohenheimCapabilities.EDIT, true);
         RecordGrants.grant(GrantSubjectType.USER, holderId, DnsRecordModel.MODEL_ID, foreignTypeRecordId,
-            HohenheimAccess.EDIT, true);
+            HohenheimCapabilities.EDIT, true);
         RecordGrants.grant(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, siteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
     }
 
     private static int dnsRecord(String name, String type, String value) {
@@ -242,7 +242,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     @Test
     void theInstanceEditorFollowsConfig() {
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
-        var resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG);
+        var resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES);
         Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
 
         assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, instance, viewer()))
@@ -274,7 +274,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     @Test
     void theAttachmentAffordancesFollowBothSides() {
         Row link = Models.get(InstanceDatabaseModel.class).findById(linkId);
-        var resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
+        var resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_DATABASES);
         Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
 
         assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, link, viewer()))
@@ -290,7 +290,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         // the exact laundering the two-sided funnel rule exists to refuse. revoke,
         // never grant(false): a planted deny is sticky and would outlive the finally.
         RecordGrants.revoke(GrantSubjectType.USER, holderId, DatabaseModel.MODEL_ID, databaseId,
-            HohenheimAccess.MANAGE);
+            HohenheimCapabilities.MANAGE);
         try {
             assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, link, holder()))
                 .as("instance config alone does not earn the attachment editor").isFalse();
@@ -298,7 +298,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
                 .as("nor the detach button").isFalse();
         } finally {
             RecordGrants.grant(GrantSubjectType.USER, holderId, DatabaseModel.MODEL_ID, databaseId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
         }
     }
 
@@ -390,7 +390,8 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
     void aDomainCreateUnderAnUnreachableSiteOpensAsUnderNone() {
         int own = passthroughSite("own");
         int foreign = passthroughSite("foreign");
-        RecordGrants.grant(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, own, HohenheimAccess.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, own, HohenheimCapabilities.MANAGE,
+            true);
         try {
             Map<String, Object> none = createDefaults(holder(), HohenheimSlugs.MANAGE, null);
 
@@ -410,7 +411,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
                 .as("step 3: the operator's create under that site reads it")
                 .containsEntry(SiteDomainModel.EXCLUDE_FROM_LETSENCRYPT.getName(), true);
         } finally {
-            RecordGrants.revoke(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, own, HohenheimAccess.MANAGE);
+            RecordGrants.revoke(GrantSubjectType.USER, holderId, SiteModel.MODEL_ID, own, HohenheimCapabilities.MANAGE);
             HardDeletes.byId(Models.get(SiteModel.class), own);
             HardDeletes.byId(Models.get(SiteModel.class), foreign);
         }
@@ -421,7 +422,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
         EndpointConduit conduit = new EndpointConduit()
             .withAttribute(ConduitAttributes.PRINCIPAL, ctx.principal())
             .setParameter(CmsEndpoints.PANEL_PARAM, panel)
-            .setParameter(CmsEndpoints.RESOURCE_PARAM, DomainParts.SLUG);
+            .setParameter(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.DOMAINS);
         if (parent != null) {
             conduit.setQueryParam(CmsEndpoints.PARENT_PARAM.getName(), String.valueOf(parent));
         }
@@ -497,7 +498,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             extra.add(dnsRecord("budget-" + i, DnsRecordModel.TYPE_A, "192.0.2." + (20 + i)));
         }
         RecordGrants.grant(GrantSubjectType.USER, viewerId, DnsRecordModel.MODEL_ID, recordId,
-            HohenheimAccess.DYNDNS, true);
+            HohenheimCapabilities.DYNDNS, true);
         try {
             var resource = DnsRecordParts.admin();
             List<BiPredicate<Row, AccessContext>> predicates = resource.actions().stream()
@@ -533,7 +534,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
                 .isBetween(1, 4);
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, viewerId, DnsRecordModel.MODEL_ID, recordId,
-                HohenheimAccess.DYNDNS);
+                HohenheimCapabilities.DYNDNS);
             for (Integer id : extra) {
                 records.delete(id);
             }
@@ -546,7 +547,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
      */
     @Test
     void theAttachmentAffordanceStaysInsideTheGrantQueryBudget() {
-        var resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DATABASES);
+        var resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_DATABASES);
         Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
         Row link = Models.get(InstanceDatabaseModel.class).findById(linkId);
 
@@ -622,9 +623,9 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
             extra.add(instanceRow(PREFIX + "budget-" + i));
         }
         RecordGrants.grant(GrantSubjectType.USER, holderId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.POWER, true);
+            HohenheimCapabilities.POWER, true);
         try {
-            var resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG);
+            var resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES);
 
             List<Row> rows = new ArrayList<>();
             rows.add(instances.findById(instanceId));
@@ -661,7 +662,7 @@ class WriteAffordanceParityTest extends HohenheimTestBase {
                 .isBetween(1, 10);
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, holderId, InstanceModel.MODEL_ID,
-                instanceId, HohenheimAccess.POWER);
+                instanceId, HohenheimCapabilities.POWER);
             for (Integer id : extra) {
                 HardDeletes.byId(instances, id);
             }

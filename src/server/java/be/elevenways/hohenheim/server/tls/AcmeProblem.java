@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.tls;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -56,6 +57,6 @@ public enum AcmeProblem {
             case REJECTED_IDENTIFIER -> "acme_rejected_identifier";
             case OTHER -> "acme_other";
         };
-        return Microcopy.of(key).withFilter("scope", "certificate_request_error");
+        return HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of(key);
     }
 }

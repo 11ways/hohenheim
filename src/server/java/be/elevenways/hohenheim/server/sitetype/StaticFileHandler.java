@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.sitetype;
 
+import be.elevenways.hohenheim.server.util.Closeables;
 import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.hohenheim.server.sitetype.SiteRequestHandler;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
@@ -121,14 +122,14 @@ public class StaticFileHandler implements SiteRequestHandler {
             exchange.getResponseSender().transferFrom(owned, new IoCallback() {
                 @Override
                 public void onComplete(HttpServerExchange exchange, Sender sender) {
-                    closeQuietly(owned);
+                    Closeables.closeQuietly(owned);
                     IoCallback.END_EXCHANGE.onComplete(exchange, sender);
                 }
 
                 @Override
                 public void onException(HttpServerExchange exchange, Sender sender,
                                         IOException exception) {
-                    closeQuietly(owned);
+                    Closeables.closeQuietly(owned);
                     IoCallback.END_EXCHANGE.onException(exchange, sender, exception);
                 }
             });
@@ -140,7 +141,7 @@ public class StaticFileHandler implements SiteRequestHandler {
                 exchange.getResponseSender().send("Read error");
             }
         } finally {
-            if (channel != null) closeQuietly(channel);
+            if (channel != null) Closeables.closeQuietly(channel);
         }
     }
 
@@ -198,10 +199,6 @@ public class StaticFileHandler implements SiteRequestHandler {
             exchange.setStatusCode(500);
             exchange.getResponseSender().send("Error listing directory");
         }
-    }
-
-    private static void closeQuietly(FileChannel channel) {
-        try { channel.close(); } catch (IOException ignored) {}
     }
 
     /**

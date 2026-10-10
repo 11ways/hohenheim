@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
@@ -23,7 +24,7 @@ final class DnsOperationHandlers {
             .authorize((row, input, access) -> TenantWrites.mayAuthorRecord(access, row) ? null : concealed())
             .handle(call -> { new DnsRecordParts().deleteRow(call.subject(), call.subjectAccess()); return 1; });
         OperationHandlers.attach(DnsOperations.DELETE_PEER).authorize(admin())
-            .availability((row, access) -> new DnsPeerParts().deleteUnavailableReason(row, access))
+            .availability((row, access) -> DeleteImpact.dnsPeerInUse(row))
             .handle(call -> { Models.get(DnsPeerModel.class).delete(call.subject()); return 1; });
         OperationHandlers.attach(DnsOperations.CHECK_HEALTH).authorize(admin())
             .applies(row -> !DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(row)))
@@ -52,7 +53,7 @@ final class DnsOperationHandlers {
     }
     private static <I> Authorizer<Row, I> dynamic() {
         return (row, input, access) -> HohenheimAccess.reachesRecord(access, DnsRecordModel.MODEL_ID,
-            row.get(DnsRecordModel.ID), HohenheimAccess.DYNDNS) ? null : concealed();
+            row.get(DnsRecordModel.ID), HohenheimCapabilities.DYNDNS) ? null : concealed();
     }
     private static DomainRefusal concealed() {
         return new DomainRefusal(ZenitRefusalReason.NOT_FOUND, "the DNS subject is not reachable");

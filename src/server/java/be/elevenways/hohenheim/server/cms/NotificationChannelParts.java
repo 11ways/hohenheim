@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -53,6 +55,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
+import static be.elevenways.hohenheim.RawValues.trimmed;
+
 /**
  * The webhook notification channels' parts (Slack, Discord, generic JSON) and their test send.
  *
@@ -65,9 +69,6 @@ import java.util.Objects;
  */
 public final class NotificationChannelParts {
 
-    /** The notification channel entry's slug, which the panel's clusters name. */
-    public static final String SLUG = "notifications";
-
     /** The virtual column holding the subscribed events, and the name's subtext. */
     static final String EVENTS_COLUMN = "events";
 
@@ -76,7 +77,7 @@ public final class NotificationChannelParts {
     /** Sends a test message through one channel; the outcome says whether it was delivered or only handed off. */
     public static final Operation<Row, Void, NotifyOutcome> TEST = Operation.declare(HohenheimIds.id("test_channel"))
         .happened(OperationSentences.of("test_channel"))
-        .label(Microcopy.of("test").withFilter("scope", "notification_channel"))
+        .label(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("test"))
         .icon(Icon.of("paper-plane"))
         .one(SUBJECT)
         .gate(OperationGate.open())
@@ -92,9 +93,9 @@ public final class NotificationChannelParts {
             // other alert.
             LocaleChain locales = LocaleChain.of(RouteLocales.get().getDefaultLocale());
             NotifyOutcome outcome = Alerts.testChannelOutcome(row,
-                Microcopy.of("test_subject").withFilter("scope", "notification_channel")
+                HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("test_subject")
                     .resolve(locales, Zenit.getMessageResolver()),
-                Microcopy.of("test_body").withFilter("scope", "notification_channel")
+                HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("test_body")
                     .resolve(locales, Zenit.getMessageResolver()));
             ActivityLog.record(Models.get(NotificationChannelModel.class), row.get(NotificationChannelModel.ID),
                 HohenheimActivityAction.TESTED, row.get(NotificationChannelModel.NAME));
@@ -112,7 +113,7 @@ public final class NotificationChannelParts {
         TableSpec<Row> table = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(NotificationChannelModel.NAME).filterable().subtext(EVENTS_COLUMN).build())
             .column(ColumnSpec.virtual(EVENTS_COLUMN,
-                Microcopy.of("events").withFilter("scope", "notification_channel")).hidden().build())
+                HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("events")).hidden().build())
             .column(ColumnSpec.fromField(NotificationChannelModel.FORMAT).filterable().build())
             .column(ColumnSpec.fromField(NotificationChannelModel.CREATED_AT).build())
             .filter(FilterSpec.leaf(NotificationChannelModel.NAME, CoreTypes.CONTAINS)
@@ -137,10 +138,10 @@ public final class NotificationChannelParts {
                     .toList()))
                 .build())
             .build();
-        return PanelResource.builder(HohenheimIds.id("notification_channel"), SLUG, SUBJECT)
-            .label(Microcopy.of("plural").withFilter("scope", "notification_channel"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "notification_channel"))
-            .description(Microcopy.of("nav_hint").withFilter("scope", "notification_channel"))
+        return PanelResource.builder(HohenheimIds.id("notification_channel"), HohenheimSlugs.NOTIFICATIONS, SUBJECT)
+            .label(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("plural"))
+            .recordLabel(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("singular"))
+            .description(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("nav_hint"))
             .icon(Icon.of("bell"))
             // System, between the activity log (90) and the settings editor (95): where this installation talks
             // about ITSELF; the channels carry alerts, not traffic.
@@ -161,10 +162,10 @@ public final class NotificationChannelParts {
                 .build())
             // A channel's delete has one consequence and it is silent: its events stop being delivered.
             .deleteConfirmation(DeleteConfirmation.of(DeleteConfirmation.body(
-                Microcopy.of("delete_confirm").withFilter("scope", "notification_channel"))))
+                HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("delete_confirm"))))
             .actions(List.of(PanelAction.<Row, NotifyOutcome>places(TEST, ActionPlacement.ROW,
                     (request, result) -> testWords(Objects.requireNonNull(result.value(), "a test answers")))
-                .label(Microcopy.of("test").withFilter("scope", "notification_channel"))
+                .label(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("test"))
                 .icon(Icon.of("paper-plane"))
                 .build()))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
@@ -196,16 +197,16 @@ public final class NotificationChannelParts {
         Row row = save.row();
         row.set(NotificationChannelModel.KIND, NotificationChannelModel.KIND_WEBHOOK);
         Object urlValue = row.get(NotificationChannelModel.URL);
-        String url = urlValue != null ? String.valueOf(urlValue).trim() : "";
+        String url = trimmed(urlValue);
         // A BLANK url is the field's own Required validator to refuse; a format rule for an empty box only ever told
         // the operator the wrong thing.
         if (!url.isEmpty() && !(url.startsWith("http://") || url.startsWith("https://"))) {
-            throw Violations.ofField("url", null, CmsSupport.violationText("url_scheme"));
+            throw Violations.ofField("url", null, HohenheimMicrocopy.VIOLATIONS.of("url_scheme"));
         }
         if (save.values().get(NotificationChannelModel.EVENTS.getName()) instanceof List<?> events) {
             for (Object event : events) {
                 if (!NotificationEvents.isKnown(String.valueOf(event))) {
-                    throw Violations.ofField("events", event, CmsSupport.violationText("unknown_event")
+                    throw Violations.ofField("events", event, HohenheimMicrocopy.VIOLATIONS.of("unknown_event")
                         .withArg("event", String.valueOf(event))
                         .withArg("valid", String.join(", ", NotificationEvents.ALL)));
                 }
@@ -216,9 +217,9 @@ public final class NotificationChannelParts {
     private static @NonNull CmsActionResult testWords(@NonNull NotifyOutcome outcome) {
         return outcome.sent()
             ? CmsActionResult.refreshWithToast(testSucceeded(outcome))
-            : CmsActionResult.errorToast(Microcopy.of("test_failed").withFilter("scope", "notification_channel")
+            : CmsActionResult.errorToast(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("test_failed")
                 .withArg("reason", outcome.reasonOr(
-                    Microcopy.of("test_failed_unknown").withFilter("scope", "notification_channel"))));
+                    HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("test_failed_unknown"))));
     }
 
     /**
@@ -229,7 +230,6 @@ public final class NotificationChannelParts {
      * no transport for it.
      */
     static @NonNull Microcopy testSucceeded(@NonNull NotifyOutcome outcome) {
-        return Microcopy.of(outcome.delivered() ? "test_ok" : "test_accepted")
-            .withFilter("scope", "notification_channel");
+        return HohenheimMicrocopy.NOTIFICATION_CHANNEL.of(outcome.delivered() ? "test_ok" : "test_accepted");
     }
 }

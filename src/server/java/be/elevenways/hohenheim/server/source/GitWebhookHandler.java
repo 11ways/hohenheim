@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.preview.PreviewBranches;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
@@ -12,16 +14,15 @@ import be.elevenways.hohenheim.server.instance.WorkspaceBuilds;
 import be.elevenways.hohenheim.server.instance.WorkspaceKind;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.source.GitRefNames;
+import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.dry.Dry;
-import be.elevenways.protoblast.common.thread.JobRunner;
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.http.RateLimiter;
 import be.elevenways.zenit.common.routing.RateLimitPolicy;
 import be.elevenways.zenit.server.http.ExchangeRateLimits;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.datasource.Datasource;
-import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -42,6 +43,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * Handles git webhook requests on the proxy port; intercepted by SiteDispatcher before
@@ -252,7 +255,7 @@ public class GitWebhookHandler {
         Map<String, Object> sourceSettings = application == null ? null
             : ApplicationReleases.storedSettings(application);
         String webhookSecret = sourceSettings != null
-            ? str(sourceSettings.get("webhook_secret")) : "";
+            ? trimmed(sourceSettings.get(GitSourceSchema.WEBHOOK_SECRET)) : "";
 
         if (webhookSecret.isEmpty() || !validateSignature(exchange, body, webhookSecret)) {
             refuse(exchange);
@@ -307,11 +310,8 @@ public class GitWebhookHandler {
         int applicationId = application.get(InstanceModel.ID);
 
         // Branch selection: a push to another branch is not this application's source.
-        String configuredBranch = str(sourceSettings.getOrDefault("branch", "main"));
-        if (configuredBranch.isEmpty()) {
-            configuredBranch = "main";
-        }
-        String pushedRef = payload instanceof Map<?, ?> map ? str(map.get("ref")) : "";
+        String configuredBranch = GitSourceSchema.declaredBranch(sourceSettings);
+        String pushedRef = payload instanceof Map<?, ?> map ? trimmed(map.get("ref")) : "";
         // AIDEV-NOTE: a MISSING ref means this is not a push payload at all, and it must
         // never fall through to a production deploy. Every provider's push payload
         // carries `ref` (GitHub/Gitea `refs/heads/x`, GitLab Push Hook the same), so the
@@ -361,17 +361,16 @@ public class GitWebhookHandler {
         // PRODUCTION branch never gets one (its environment IS production), so a
         // pattern covering it changes nothing -- decided with the lane, 2026-08-10.
         if (!production && !branch.isEmpty()
-                && Boolean.TRUE.equals(sourceSettings.get("previews_enabled"))
+                && RawValues.isOn(sourceSettings, GitSourceSchema.PREVIEWS_ENABLED, false)
                 && PreviewBranches.matches(
                     PreviewBranches.patternsOf(
-                        sourceSettings.get("preview_branches")), branch)) {
-            String pushedSha = payload instanceof Map<?, ?> map ? str(map.get("after")) : "";
-            Datasource datasource = Db.currentOrDefault();
-            JobRunner.startVirtualThread(() -> withScope(datasource, () ->
+                        sourceSettings.get(GitSourceSchema.PREVIEW_BRANCHES)), branch)) {
+            String pushedSha = pushedShaOf(payload);
+            HandlerSupport.inBackground(() ->
                 PreviewDeployments
                     .deployQuietly(applicationId, branch,
-                        pushedSha.isEmpty() ? null : pushedSha, null,
-                        DeployTrigger.WEBHOOK)));
+                        pushedSha, null,
+                        DeployTrigger.WEBHOOK));
             ActivityLog.record(Models.get(InstanceModel.class), applicationId,
                 HohenheimActivityAction.PREVIEW_TRIGGERED, "webhook:" + branch);
             WebhookDeliveries.stampAction(claimed, WebhookOutcome.PREVIEW_QUEUED);
@@ -385,7 +384,7 @@ public class GitWebhookHandler {
             return;
         }
 
-        if (!Boolean.TRUE.equals(sourceSettings.get("auto_deploy"))) {
+        if (!GitSourceSchema.autoDeploys(sourceSettings)) {
             WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_AUTO_DEPLOY);
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"auto_deploy disabled\"}");
             return;
@@ -393,27 +392,24 @@ public class GitWebhookHandler {
 
         // The pushed head gets a PENDING status right away; the deploy's own completion
         // reports the outcome onto the sha it actually checked out.
-        String pushedSha = payload instanceof Map<?, ?> map ? str(map.get("after")) : "";
-        DeployStatuses.report(sourceSettings, pushedSha.isEmpty() ? null : pushedSha,
+        String pushedSha = pushedShaOf(payload);
+        DeployStatuses.report(sourceSettings, pushedSha,
             GitProviderClient.StatusState.PENDING, DeployStatuses.CONTEXT_DEPLOY,
             "Deploy queued", null);
         // The build takes minutes; the provider expects an answer in seconds.
-        Datasource deployDatasource = Db.currentOrDefault();
         String deployBranch = configuredBranch;
         // Which deploy verb depends on WHAT the record is: an application converges a
         // release, a workspace checks out and builds inside its own container. The branch
         // is on the KIND, not on a name -- a third source-driven kind wires itself here.
         boolean workspace = WorkspaceKind.ID.toString()
             .equals(application.get(InstanceModel.KIND));
-        JobRunner.startVirtualThread(() -> withScope(deployDatasource, () -> {
+        HandlerSupport.inBackgroundLogged("WEBHOOK: deploy of instance " + applicationId, () -> {
             if (workspace) {
-                new WorkspaceBuilds().deployQuietly(applicationId, deployBranch,
-                    DeployTrigger.WEBHOOK);
+                new WorkspaceBuilds().deploy(applicationId, deployBranch, pushedSha, DeployTrigger.WEBHOOK);
             } else {
-                ApplicationDeploys.deployQuietly(applicationId, deployBranch,
-                    DeployTrigger.WEBHOOK);
+                ApplicationDeploys.deploy(applicationId, deployBranch, pushedSha, DeployTrigger.WEBHOOK);
             }
-        }));
+        });
         WebhookDeliveries.stampAction(claimed, WebhookOutcome.DEPLOY_QUEUED);
         Blast.log("GIT WEBHOOK: deploy queued for application",
             application.get(InstanceModel.NAME), "(id:", applicationId + ")");
@@ -446,6 +442,11 @@ public class GitWebhookHandler {
             ? application : null;
     }
 
+    /** The head commit a push payload names under {@code after}, or null when it names none. */
+    private static @Nullable String pushedShaOf(@Nullable Object payload) {
+        return payload instanceof Map<?, ?> map ? Texts.trimmedOrNull(map.get("after")) : null;
+    }
+
     /** All three providers zero out {@code after} on a ref delete; GitHub/Gitea also flag it. */
     private static boolean isDeletedPush(@Nullable Object payload) {
         if (!(payload instanceof Map<?, ?> map)) {
@@ -454,7 +455,7 @@ public class GitWebhookHandler {
         if (Boolean.TRUE.equals(map.get("deleted"))) {
             return true;
         }
-        String after = str(map.get("after"));
+        String after = trimmed(map.get("after"));
         return !after.isEmpty() && after.chars().allMatch(c -> c == '0');
     }
 
@@ -467,10 +468,9 @@ public class GitWebhookHandler {
 
     private static void queuePreviewTeardown(int applicationId, @NonNull String ref,
                                              @NonNull String reason) {
-        Datasource datasource = Db.currentOrDefault();
-        JobRunner.startVirtualThread(() -> withScope(datasource, () ->
+        HandlerSupport.inBackground(() ->
             PreviewDeployments
-                .destroyForRefQuietly(applicationId, ref, reason)));
+                .destroyForRefQuietly(applicationId, ref, reason));
     }
 
     // -- pull request -> preview ----------------------------------------------
@@ -479,7 +479,7 @@ public class GitWebhookHandler {
                                           Row application,
                                           Map<String, Object> sourceSettings, Object payload,
                                           @Nullable String event) {
-        if (!Boolean.TRUE.equals(sourceSettings.get("previews_enabled"))) {
+        if (!RawValues.isOn(sourceSettings, GitSourceSchema.PREVIEWS_ENABLED, false)) {
             WebhookDeliveries.stampAction(claimed, WebhookOutcome.IGNORED_PREVIEWS_DISABLED);
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"previews disabled\"}");
             return;
@@ -499,23 +499,22 @@ public class GitWebhookHandler {
             sendJson(exchange, 200, "{\"status\":\"ignored\",\"reason\":\"invalid ref\"}");
             return;
         }
-        Datasource datasource = Db.currentOrDefault();
         switch (previewEvent.intent()) {
             case DEPLOY -> {
                 // The build takes minutes; the provider expects an answer in seconds.
-                JobRunner.startVirtualThread(() -> withScope(datasource, () ->
+                HandlerSupport.inBackground(() ->
                     PreviewDeployments
                         .deployQuietly(applicationId, ref, previewEvent.sha(),
-                            previewEvent.number(), DeployTrigger.WEBHOOK)));
+                            previewEvent.number(), DeployTrigger.WEBHOOK));
                 WebhookDeliveries.stampAction(claimed, WebhookOutcome.PREVIEW_QUEUED);
                 ActivityLog.record(Models.get(InstanceModel.class), applicationId,
                     HohenheimActivityAction.PREVIEW_TRIGGERED, "webhook:" + ref);
                 sendJson(exchange, 200, "{\"status\":\"preview_queued\"}");
             }
             case TEARDOWN -> {
-                JobRunner.startVirtualThread(() -> withScope(datasource, () ->
+                HandlerSupport.inBackground(() ->
                     PreviewDeployments
-                        .destroyForRefQuietly(applicationId, ref, "pr_closed")));
+                        .destroyForRefQuietly(applicationId, ref, "pr_closed"));
                 WebhookDeliveries.stampAction(claimed, WebhookOutcome.PREVIEW_TEARDOWN_QUEUED);
                 sendJson(exchange, 200, "{\"status\":\"preview_teardown_queued\"}");
             }
@@ -562,7 +561,7 @@ public class GitWebhookHandler {
                 || !(pr.get("head") instanceof Map<?, ?> head)) {
             return null;
         }
-        String ref = str(head.get("ref"));
+        String ref = trimmed(head.get("ref"));
         if (ref.isEmpty()) {
             return null;
         }
@@ -572,13 +571,13 @@ public class GitWebhookHandler {
         // the GitHub-compatible X-GitHub-Event header it also sends, so without the second
         // spelling a new commit on a Gitea pull request answered 200 and rebuilt nothing:
         // the preview stayed pinned at the sha it was opened with.
-        PreviewIntent intent = switch (str(map.get("action"))) {
+        PreviewIntent intent = switch (trimmed(map.get("action"))) {
             case "opened", "reopened", "synchronize", "synchronized" -> PreviewIntent.DEPLOY;
             case "closed" -> PreviewIntent.TEARDOWN;
             default -> PreviewIntent.IGNORE;
         };
-        return new PreviewEvent(intent, ref, str(head.get("sha")),
-            pr.get("number") instanceof Number number ? number.intValue() : null);
+        return new PreviewEvent(intent, ref, trimmed(head.get("sha")),
+            RawValues.parsedInt(pr.get("number")));
     }
 
     /**
@@ -595,21 +594,21 @@ public class GitWebhookHandler {
         if (!(map.get("object_attributes") instanceof Map<?, ?> attributes)) {
             return null;
         }
-        String ref = str(attributes.get("source_branch"));
+        String ref = trimmed(attributes.get("source_branch"));
         if (ref.isEmpty()) {
             return null;
         }
-        PreviewIntent intent = switch (str(attributes.get("action"))) {
+        PreviewIntent intent = switch (trimmed(attributes.get("action"))) {
             case "open", "reopen" -> PreviewIntent.DEPLOY;
-            case "update" -> str(attributes.get("oldrev")).isEmpty()
+            case "update" -> trimmed(attributes.get("oldrev")).isEmpty()
                 ? PreviewIntent.IGNORE : PreviewIntent.DEPLOY;
             case "close", "merge" -> PreviewIntent.TEARDOWN;
             default -> PreviewIntent.IGNORE;
         };
         String sha = attributes.get("last_commit") instanceof Map<?, ?> commit
-            ? str(commit.get("id")) : "";
+            ? trimmed(commit.get("id")) : "";
         return new PreviewEvent(intent, ref, sha,
-            attributes.get("iid") instanceof Number number ? number.intValue() : null);
+            RawValues.parsedInt(attributes.get("iid")));
     }
 
     // -- verification and parsing ---------------------------------------------
@@ -715,11 +714,11 @@ public class GitWebhookHandler {
 
     /** The repository the application is bound to: the provider binding, else the URL's path. */
     static @Nullable String boundRepositoryOf(@NonNull Map<String, Object> sourceSettings) {
-        String repository = str(sourceSettings.get("repository"));
+        String repository = trimmed(sourceSettings.get(GitSourceSchema.REPOSITORY));
         if (!repository.isEmpty()) {
             return repository;
         }
-        String url = str(sourceSettings.get("repository_url"));
+        String url = trimmed(sourceSettings.get(GitSourceSchema.REPOSITORY_URL));
         int schemeEnd = url.indexOf("://");
         if (schemeEnd < 0) {
             return null;
@@ -735,19 +734,6 @@ public class GitWebhookHandler {
         return repoPath.isEmpty() ? null : repoPath;
     }
 
-    @SuppressWarnings("unchecked")
-    private static @Nullable Map<String, Object> castSettings(@Nullable Object value) {
-        return value instanceof Map<?, ?> ? (Map<String, Object>) value : null;
-    }
-
-    private static void withScope(@Nullable Datasource datasource, @NonNull Runnable body) {
-        if (datasource != null) {
-            Db.run(datasource, body);
-        } else {
-            body.run();
-        }
-    }
-
     private static void refuse(HttpServerExchange exchange) {
         sendJson(exchange, 404, REFUSAL_BODY);
     }
@@ -756,9 +742,5 @@ public class GitWebhookHandler {
         exchange.setStatusCode(status);
         exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "application/json");
         exchange.getResponseSender().send(json);
-    }
-
-    private static @NonNull String str(@Nullable Object value) {
-        return value == null ? "" : value.toString().trim();
     }
 }

@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -219,7 +219,7 @@ class InstanceReinstallTest extends HohenheimTestBase {
         //    needs -- still does not buy the WIPE. The split is the whole point: this is
         //    the assertion that separates "gated" from "gated by the right verb".
         RecordGrants.grant(GrantSubjectType.USER, configOnlyUserId, InstanceModel.MODEL_ID,
-            instanceId, HohenheimAccess.CONFIG, true);
+            instanceId, HohenheimCapabilities.CONFIG, true);
         Throwable configOnly = catchThrowable(() -> TenantConduits.as(configOnlyPrincipal,
             () -> new InstanceInstalls().reinstall(instanceId)));
         assertThat(Map.of(
@@ -236,7 +236,7 @@ class InstanceReinstallTest extends HohenheimTestBase {
         // 3. The POSITIVE anchor: with DESTROY added the very same call goes through, so
         //    steps 1 and 2 cannot be passing because the call was broken for other reasons.
         RecordGrants.grant(GrantSubjectType.USER, configOnlyUserId, InstanceModel.MODEL_ID,
-            instanceId, HohenheimAccess.DESTROY, true);
+            instanceId, HohenheimCapabilities.DESTROY, true);
         TenantConduits.as(configOnlyPrincipal,
             () -> new InstanceInstalls().reinstall(instanceId));
         assertThat(Map.of(

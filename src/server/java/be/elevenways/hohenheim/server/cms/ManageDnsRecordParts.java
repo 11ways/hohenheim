@@ -1,9 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
-import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.dns.DnsNames;
@@ -54,8 +54,9 @@ public final class ManageDnsRecordParts {
 
     public static @NonNull PanelResource<Row> manage() {
         ManageDnsRecordParts parts = new ManageDnsRecordParts();
-        return DnsRecordParts.entry(parts.id()).showInNav(true).navOrder(35).description(parts.description())
-            .scope(TenantScopes.DNS_RECORDS).hasInScopeRecords(parts::hasInScopeRecords)
+        return ManageTwin.listed(DnsRecordParts.entry(parts.id()), TenantScopes.DNS_RECORDS,
+                ResourceTabs.<Row>none().withContributions(), parts::hasInScopeRecords)
+            .navOrder(35).description(parts.description())
             .reads(ResourceReads.rows().mapCells(parts::cellValue)
                 .mapValues((row, values) -> parts.valuesFromRow(row)))
             .list(ResourceList.rows(parts.tableSpec()).chrome(CmsSupport.FILTERABLE_LIST).facets().ruleFilters()
@@ -67,7 +68,7 @@ public final class ManageDnsRecordParts {
             .writes(ResourceMutations.rows().create(call -> parts.persistRow(call.values(), call.access()))
                 .update(call -> { parts.updateRow(call.record(), call.values(), call.access()); return null; })
                 .delete(DnsOperations.DELETE_RECORD).build())
-            .tabs(ResourceTabs.<Row>none().withContributions()).build();
+            .build();
     }
 
     /** The tenant surface carries no zone peer (zones are admin-only), so its records stand on their own. */
@@ -89,8 +90,8 @@ public final class ManageDnsRecordParts {
      */
     private static final StringField ABSOLUTE_NAME = StringField.builder()
         .name(DnsRecordModel.NAME.getName())
-        .label(HohenheimFormCopy.label("record_name"))
-        .help(HohenheimFormCopy.help("manage_record_name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("record_name"))
+        .help(HohenheimMicrocopy.HELP.of("manage_record_name"))
         .build();
 
     private final FormSpec manageFormSpec = FormSpec.builder()
@@ -109,12 +110,12 @@ public final class ManageDnsRecordParts {
         .column(ColumnSpec.fromField(DnsRecordModel.ENABLED).build())
         .build();
 
-    public @NonNull Identifier id() { return HohenheimIds.id("manage_dns_record"); }
+    public @NonNull Identifier id() { return ManageTwin.id("dns_record"); }
     public @NonNull FormSpec formSpec() { return this.manageFormSpec; }
     public @NonNull TableSpec<Row> tableSpec() { return this.manageTableSpec; }
 
     public @Nullable Microcopy description() {
-        return CmsSupport.navHint("dns_record");
+        return CmsSupport.navHint(HohenheimMicrocopy.DNS_RECORD);
     }
     /** Admins see every record; everyone else only the names they answer for. */
     /**
@@ -252,14 +253,14 @@ public final class ManageDnsRecordParts {
         ZoneMatch match = hostingZone(fqdn);
         if (match == null) {
             throw Violations.ofField(DnsRecordModel.NAME.getName(), fqdn,
-                CmsSupport.violationText(operator ? "tenant_record_no_zone"
+                HohenheimMicrocopy.VIOLATIONS.of(operator ? "tenant_record_no_zone"
                     : "tenant_record_not_authorized"));
         }
         Integer zoneId = match.zone().get(DnsZoneModel.ID);
         if (existing != null && !zoneId.equals(existing.get(DnsRecordModel.ZONE_ID))) {
             boolean authorable = HostnameAuthority.canManage(accessContext, fqdn);
             throw Violations.ofField(DnsRecordModel.NAME.getName(), fqdn,
-                CmsSupport.violationText(authorable ? "tenant_zone_frozen"
+                HohenheimMicrocopy.VIOLATIONS.of(authorable ? "tenant_zone_frozen"
                     : "tenant_record_not_authorized"));
         }
 
@@ -291,6 +292,6 @@ public final class ManageDnsRecordParts {
      */
     public boolean hasInScopeRecords(@NonNull AccessContext access) {
         return HohenheimAccess.managesAnySite(access)
-            || HohenheimAccess.reachesAny(access, DnsRecordModel.MODEL_ID, HohenheimAccess.VIEW);
+            || HohenheimAccess.reachesAny(access, DnsRecordModel.MODEL_ID, HohenheimCapabilities.VIEW);
     }
 }

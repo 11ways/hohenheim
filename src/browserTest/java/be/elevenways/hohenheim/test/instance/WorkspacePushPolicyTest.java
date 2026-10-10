@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -77,7 +78,7 @@ class WorkspacePushPolicyTest {
             // 1. A MANUAL deploy of a workspace that has never run brings it up and
             //    deploys its source -- the behaviour the trigger policy must not break.
             WorkspaceBuilds.Outcome manual =
-                new WorkspaceBuilds(service).deploy(id, null, DeployTrigger.MANUAL);
+                new WorkspaceBuilds(service).deploy(id, null, null, DeployTrigger.MANUAL);
             assertThat(manual.commitSha())
                 .as("step 1: a manual deploy checks the source out")
                 .isEqualTo(FakeWorkspaceDaemon.COMMIT);
@@ -94,7 +95,7 @@ class WorkspacePushPolicyTest {
             // 3. THE DEFECT: someone else pushes. The deploy is refused BY NAME, and the
             //    refusal says what was decided rather than blaming a failure.
             Throwable pushed = catchThrowable(() -> new WorkspaceBuilds(service)
-                .deploy(id, null, DeployTrigger.WEBHOOK));
+                .deploy(id, null, null, DeployTrigger.WEBHOOK));
             assertThat(pushed)
                 .as("step 3: a push does not start a workspace someone stopped")
                 .isInstanceOf(Violations.class)
@@ -110,7 +111,7 @@ class WorkspacePushPolicyTest {
             Row operation = lastOperation(id);
             assertThat((String) operation.get(BuildOperationModel.STATUS))
                 .as("step 4: recorded as refused, not as a failure and not as a success")
-                .isEqualTo(BuildOperationModel.STATUS_REFUSED);
+                .isEqualTo(BuildOperationModel.LIFECYCLE.stored(OperationStatus.REFUSED));
             assertThat((String) operation.get(BuildOperationModel.FAILURE_REASON))
                 .as("step 4: carrying the decision in words a user can act on, not a"
                     + " violation key")
@@ -124,24 +125,24 @@ class WorkspacePushPolicyTest {
             // 5. FALSIFIED on the TRIGGER, with the state held constant: the identical
             //    call from a person, against the same stopped workspace, starts it.
             WorkspaceBuilds.Outcome byHand =
-                new WorkspaceBuilds(service).deploy(id, null, DeployTrigger.MANUAL);
+                new WorkspaceBuilds(service).deploy(id, null, null, DeployTrigger.MANUAL);
             assertThat(byHand.status().running())
                 .as("step 5: a manual deploy of the same stopped workspace starts it")
                 .isTrue();
             assertThat((String) lastOperation(id).get(BuildOperationModel.STATUS))
                 .as("step 5: and records an ordinary success")
-                .isEqualTo(BuildOperationModel.STATUS_SUCCEEDED);
+                .isEqualTo(BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
 
             // 6. FALSIFIED on the STATE, with the trigger held constant: the webhook lane
             //    is untouched for a workspace that is running -- the ordinary push.
             WorkspaceBuilds.Outcome push = new WorkspaceBuilds(service)
-                .deploy(id, null, DeployTrigger.WEBHOOK);
+                .deploy(id, null, null, DeployTrigger.WEBHOOK);
             assertThat(push.commitSha())
                 .as("step 6: a push to a RUNNING workspace deploys exactly as before")
                 .isEqualTo(FakeWorkspaceDaemon.COMMIT);
             assertThat((String) lastOperation(id).get(BuildOperationModel.STATUS))
                 .as("step 6: and succeeds")
-                .isEqualTo(BuildOperationModel.STATUS_SUCCEEDED);
+                .isEqualTo(BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
         });
     }
 
@@ -156,12 +157,12 @@ class WorkspacePushPolicyTest {
             int id = workspace("push-unreachable");
 
             // 1. Bring it up by hand first, so the record is an ordinary running one.
-            new WorkspaceBuilds(service).deploy(id, null, DeployTrigger.MANUAL);
+            new WorkspaceBuilds(service).deploy(id, null, null, DeployTrigger.MANUAL);
 
             // 2. The host becomes unaddressable. A push arrives.
             daemon.setUnreachable(true);
             Throwable pushed = catchThrowable(() -> new WorkspaceBuilds(service)
-                .deploy(id, null, DeployTrigger.WEBHOOK));
+                .deploy(id, null, null, DeployTrigger.WEBHOOK));
 
             // 3. It must NOT be told "you stopped this workspace": an unreachable daemon
             //    is not evidence that anybody stopped anything.
@@ -176,7 +177,7 @@ class WorkspacePushPolicyTest {
             //    status is reserved for a decision, never for a broken host.
             assertThat((String) lastOperation(id).get(BuildOperationModel.STATUS))
                 .as("step 4: an unreachable host records a failure, not a refusal")
-                .isEqualTo(BuildOperationModel.STATUS_FAILED);
+                .isEqualTo(BuildOperationModel.LIFECYCLE.stored(OperationStatus.FAILED));
 
             daemon.setUnreachable(false);
         });

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -225,6 +226,6 @@ final class PutOnlineHandlers {
     }
 
     private static @NonNull Microcopy message(@NonNull String key) {
-        return PutOnline.copy("outcome_" + key);
+        return HohenheimMicrocopy.PUT_ONLINE.of("outcome_" + key);
     }
 }

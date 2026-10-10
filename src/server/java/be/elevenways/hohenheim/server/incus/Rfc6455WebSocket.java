@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.hohenheim.server.util.Closeables;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -118,11 +119,7 @@ final class Rfc6455WebSocket implements IncusWebSocket {
     public void close() {
         if (this.closed.compareAndSet(false, true)) {
             trySendFrame(0x8, new byte[] {0x03, (byte) 0xE8});   // 1000 normal closure
-            try {
-                this.channel.close();
-            } catch (IOException ignored) {
-                // the stream is gone either way
-            }
+            Closeables.closeQuietly(this.channel);
         }
     }
 

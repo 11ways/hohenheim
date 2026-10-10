@@ -9,7 +9,6 @@ import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.io.DurableFiles;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -941,8 +940,7 @@ public class ManagedDatabase {
 
     /** The declared transfer bound on any single dump, enforced ON the stream by the client. */
     private static long maxDumpBytes() {
-        Integer megabytes = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.MAX_DUMP_MB);
-        return (megabytes == null || megabytes <= 0 ? 2048L : megabytes.longValue()) * 1024 * 1024;
+        return HohenheimSettings.positiveMbAsBytes(HohenheimSettings.Database.MAX_DUMP_MB);
     }
 
     /** The cap refusal, translated to name the setting an operator would raise. */

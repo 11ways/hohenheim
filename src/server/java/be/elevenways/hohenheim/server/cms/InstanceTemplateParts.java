@@ -2,20 +2,21 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
-import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.resource.ChildList;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RelatedPage;
@@ -41,6 +42,7 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Predicate;
 
@@ -68,7 +70,7 @@ public final class InstanceTemplateParts {
     public static @NonNull PanelResource<Row> admin() {
         return base(HohenheimIds.id("instance_template"))
             .navOrder(60)
-            .description(Microcopy.of("nav_hint").withFilter("scope", "instance_template"))
+            .description(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("nav_hint"))
             .form(ResourceForm.<Row>of(adminForm())
                 // The metadata an operator corrects while reading the list. READINESS_KIND is not here: the model
                 // refuses a readiness line beside a kind that never reads it, and one inline cell commits ONE column.
@@ -84,23 +86,39 @@ public final class InstanceTemplateParts {
             .writes(ResourceMutations.rows().create().update().delete().build())
             .actions(List.of(createInstance(HohenheimIds.id("template_create_instance"), null), export(),
                 approve(), unapprove()))
-            .tabs(ResourceTabs.<Row>of(List.of(new TemplateContentsPage())).withHistory().withContributions())
+            .tabs(ResourceTabs.<Row>of(List.of(contentsTab())).withHistory().withContributions())
             .relatedPages(RelatedPage.toPeer(HohenheimSlugs.INSTANCE_TEMPLATES_IMPORT))
             .build();
     }
 
+    /**
+     * The Contents tab: the framework's child list with a section per declaration kind (variables, config files, the
+     * managed databases where this boot serves them, volumes), each narrowed to the template.
+     */
+    private static @NonNull ChildList<Row> contentsTab() {
+        List<String> sections = new ArrayList<>(List.of(HohenheimSlugs.INSTANCE_TEMPLATE_VARIABLES,
+            HohenheimSlugs.INSTANCE_TEMPLATE_FILES));
+        if (InstanceAttachmentParts.databasesServed()) {
+            sections.add(HohenheimSlugs.INSTANCE_TEMPLATE_DATABASES);
+        }
+        sections.add(HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES);
+        ChildList<Row> tab = ChildList.<Row>sections(HohenheimSlugs.Tab.CONTENTS,
+                HohenheimMicrocopy.INSTANCE_TEMPLATE.of("contents"), sections.toArray(String[]::new))
+            .icon(Icon.of("list-check"));
+        for (String section : sections) {
+            tab.hide(section, TemplateChildParts.OWNER_COLUMN);
+        }
+        return tab;
+    }
+
     /** The tenant's catalog: approved templates only (operators see every one), to pick from and nothing more. */
     public static @NonNull PanelResource<Row> manage() {
-        return base(HohenheimIds.id("manage_instance_template"))
+        // Reached through Put something online and the Apps list's toolbar (ManagePanel's sidebar note).
+        return ManageTwin.reached(base(ManageTwin.id("instance_template")), TenantScopes.INSTANCE_TEMPLATES,
+                ResourceTabs.none())
             .navOrder(60)
-            // Reached through Put something online and the Apps list's toolbar (ManagePanel's sidebar note).
-            .showInNav(false)
-            .standsUnder(AppParts.SLUG)
-            .description(Microcopy.of("nav_hint").withFilter("scope", "instance_template"))
-            .scope(TenantScopes.INSTANCE_TEMPLATES)
-            // NAV-ONLY: the catalog exists to start a create, so it stays out of the nav for a tenant who may not
-            // create, and out of an install with nothing approved; the route itself stays scoped.
-            .hasInScopeRecords(InstanceTemplateParts::offersTenantCatalog)
+            .standsUnder(HohenheimSlugs.APPS)
+            .description(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("nav_hint"))
             .form(ResourceForm.<Row>of(FormSpec.builder()
                 .add(InstanceTemplateModel.NAME)
                 .add(InstanceTemplateModel.DESCRIPTION)
@@ -114,7 +132,7 @@ public final class InstanceTemplateParts {
                 .chrome(ListChrome.MINIMAL)
                 .search(InstanceTemplateModel.NAME, InstanceTemplateModel.DESCRIPTION)
                 .build())
-            .actions(List.of(createInstance(HohenheimIds.id("manage_template_create_instance"),
+            .actions(List.of(createInstance(ManageTwin.id("template_create_instance"),
                 HohenheimAccess::canCreateInstances)))
             .build();
     }
@@ -123,8 +141,8 @@ public final class InstanceTemplateParts {
     private static PanelResource.@NonNull Builder<Row> base(@NonNull Identifier id) {
         return PanelResource.builder(id, HohenheimSlugs.INSTANCE_TEMPLATES,
                 SubjectType.record(InstanceTemplateModel.MODEL_ID))
-            .label(Microcopy.of("plural").withFilter("scope", "instance_template"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "instance_template"))
+            .label(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("plural"))
+            .recordLabel(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("singular"))
             .icon(Icon.of("clone"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .reads(ResourceReads.rows());
@@ -179,10 +197,10 @@ public final class InstanceTemplateParts {
     private static @NonNull PanelAction<Row> createInstance(@NonNull Identifier id,
                                                             @Nullable Predicate<AccessContext> shown) {
         PanelAction.LinkBuilder<Row> link = PanelAction.<Row>link(id, ActionPlacement.ROW)
-            .label(Microcopy.of("create_instance").withFilter("scope", "instance_template"))
+            .label(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("create_instance"))
             .icon(Icon.of("plus"))
             .inlineInRow(true)
-            .route((template, request) -> CmsRoutes.list(request.panelSlug(), PutOnlinePage.SLUG)
+            .route((template, request) -> CmsRoutes.list(request.panelSlug(), HohenheimSlugs.PUT_ONLINE)
                 .with(HohenheimParams.FROM_TEMPLATE_TEMPLATE, template.get(InstanceTemplateModel.ID)));
         if (shown != null) {
             link.shownWhen((template, access) -> shown.test(access));
@@ -192,7 +210,7 @@ public final class InstanceTemplateParts {
 
     private static @NonNull PanelAction<Row> export() {
         return PanelAction.<Row>link(HohenheimIds.id("export_template"), ActionPlacement.ROW)
-            .label(Microcopy.of("export").withFilter("scope", "instance_template"))
+            .label(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("export"))
             .icon(Icon.of("download"))
             .inlineInRow(false)
             .route((template, request) -> HohenheimEndpoints.INSTANCE_TEMPLATES_EXPORT
@@ -202,29 +220,23 @@ public final class InstanceTemplateParts {
 
     private static @NonNull PanelAction<Row> approve() {
         return PanelAction.<Row, Void>places(InstanceTemplateOperations.APPROVE_TEMPLATE, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("approved_toast")
-                    .withFilter("scope", "instance_template")
+                (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_TEMPLATE
+                    .of("approved_toast")
                     .withArg("name", request.subject().get(InstanceTemplateModel.NAME))))
             .inlineInRow(false)
-            .confirmation(confirmation("approve", "approve_confirm"))
+            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("approve"),
+                HohenheimMicrocopy.INSTANCE_TEMPLATE.of("approve_confirm"), ActionStyle.DEFAULT))
             .build();
     }
 
     private static @NonNull PanelAction<Row> unapprove() {
         return PanelAction.<Row, Void>places(InstanceTemplateOperations.UNAPPROVE_TEMPLATE, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("unapproved_toast")
-                    .withFilter("scope", "instance_template")
+                (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_TEMPLATE
+                    .of("unapproved_toast")
                     .withArg("name", request.subject().get(InstanceTemplateModel.NAME))))
             .inlineInRow(false)
-            .confirmation(confirmation("unapprove", "unapprove_confirm"))
-            .build();
-    }
-
-    private static @NonNull ConfirmationSpec confirmation(@NonNull String verb, @NonNull String body) {
-        return ConfirmationSpec.builder()
-            .title(Microcopy.of(verb).withFilter("scope", "instance_template"))
-            .body(Microcopy.of(body).withFilter("scope", "instance_template"))
-            .confirmLabel(Microcopy.of(verb).withFilter("scope", "instance_template"))
+            .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("unapprove"),
+                HohenheimMicrocopy.INSTANCE_TEMPLATE.of("unapprove_confirm"), ActionStyle.DEFAULT))
             .build();
     }
 

@@ -8,7 +8,6 @@ import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.common.ZenitModule;
@@ -34,7 +33,7 @@ public final class HohenheimSources implements ZenitModule {
      * common-registered sources can declare it without a server import.
      */
     public static final Permission ADMIN_ACCESS = Permission.declare("hohenheim.admin.access",
-        Microcopy.of("hohenheim_admin_access").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
+        HohenheimMicrocopy.PERMISSION.of("hohenheim_admin_access"), Permission.Delegation.DELEGABLE);
 
     /**
      * Editing the installation's operator-trusted settings: the Proteus login ({@code hohenheim.auth_proteus}, whose
@@ -46,7 +45,7 @@ public final class HohenheimSources implements ZenitModule {
      * and is therefore unaffected. The same tier as quirkyquarters' qq.admin.system.
      */
     public static final Permission ADMIN_SYSTEM = Permission.declare("hohenheim.admin.system",
-        Microcopy.of("hohenheim_admin_system").withFilter("scope", "permission"), Permission.Delegation.NOT_DELEGABLE);
+        HohenheimMicrocopy.PERMISSION.of("hohenheim_admin_system"), Permission.Delegation.NOT_DELEGABLE);
 
     /**
      * The delegated /manage eligibility gate, kept as a common constant for the same
@@ -55,7 +54,7 @@ public final class HohenheimSources implements ZenitModule {
      * aliases this so the two faces can never spell it differently.
      */
     public static final Permission MANAGE_ACCESS = Permission.declareComputed("hohenheim.manage.access",
-        Microcopy.of("hohenheim_manage_access").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
+        HohenheimMicrocopy.PERMISSION.of("hohenheim_manage_access"), Permission.Delegation.DELEGABLE);
 
     /**
      * Managing a host's install media: publishing ISOs onto its storage and removing
@@ -70,7 +69,7 @@ public final class HohenheimSources implements ZenitModule {
      * grant and is therefore unaffected.
      */
     public static final Permission MEDIA_MANAGE = Permission.declare("hohenheim.media.manage",
-        Microcopy.of("hohenheim_media_manage").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
+        HohenheimMicrocopy.PERMISSION.of("hohenheim_media_manage"), Permission.Delegation.DELEGABLE);
 
     public static final Identifier SPAMSERVICE_SYSTEM_USERS =
         HohenheimIds.id("spamservice_system_users");

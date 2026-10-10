@@ -46,7 +46,7 @@ class InstanceOverviewTest extends HohenheimTestBase {
     }
 
     /** The health verdict's headline for a workload its host refuses (AppHealth), which identifies the band. */
-    private static final String BLOCKER_TITLE = "overview-instance cannot start yet";
+    private static final String BLOCKER_TITLE = "Cannot start yet";
 
     private int instance() {
         if (instanceId != null) {

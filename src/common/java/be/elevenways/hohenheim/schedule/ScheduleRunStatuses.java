@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.schedule;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.render.table.EnumBadgeState;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -77,6 +78,6 @@ public final class ScheduleRunStatuses {
 
     /** The translation token for a status; the key IS the stored value. */
     private static @NonNull Microcopy label(@NonNull RunStatus status) {
-        return Microcopy.of(status.storageKey()).withFilter("scope", "schedule_run_status");
+        return HohenheimMicrocopy.SCHEDULE_RUN_STATUS.of(status.storageKey());
     }
 }

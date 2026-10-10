@@ -1,11 +1,11 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceLogModel;
+import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
-import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -75,11 +75,7 @@ final class InstanceConsoleLogs {
                     this.rowId = row.get(InstanceLogModel.ID);
                 };
                 try {
-                    if (datasource != null) {
-                        Db.run(datasource, write);
-                    } else {
-                        write.run();
-                    }
+                    HandlerSupport.inScope(datasource, write);
                 } catch (RuntimeException failed) {
                     // A console must keep streaming when its history cannot be written --
                     // but it must say so rather than quietly losing the episode.

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.hohenheim.server.util.Closeables;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
@@ -32,11 +33,7 @@ final class UnixIncusTransport extends StreamIncusTransport {
         try {
             channel.connect(UnixDomainSocketAddress.of(this.socketPath));
         } catch (IOException e) {
-            try {
-                channel.close();
-            } catch (IOException ignored) {
-                // already failing
-            }
+            Closeables.closeQuietly(channel);
             throw e;
         }
         InputStream in = Channels.newInputStream(channel);

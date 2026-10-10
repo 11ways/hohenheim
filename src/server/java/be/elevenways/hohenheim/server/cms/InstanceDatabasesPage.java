@@ -1,12 +1,15 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.database.DatabaseEnvInjection;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
@@ -45,12 +48,10 @@ import java.util.Map;
  */
 public final class InstanceDatabasesPage implements RecordTab.Rendered<Row> {
 
-    public static final String SLUG = "databases";
-
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_databases"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_database"); }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE_DATABASE.of("plural"); }
     @Override public boolean secondaryTab() { return true; }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.DATABASES; }
     @Override public @NonNull Icon icon() { return Icon.of("database"); }
 
     /**
@@ -86,22 +87,22 @@ public final class InstanceDatabasesPage implements RecordTab.Rendered<Row> {
                 .resolve(conduit.getLocales(), conduit.getMessageResolver()) : "");
             entry.put("prefix", DatabaseEnvInjection.normalizedPrefix(
                 link.get(InstanceDatabaseModel.ENV_PREFIX)));
-            entry.put("editTarget", CmsRoutes.detail(panel, "instance-databases",
+            entry.put("editTarget", CmsRoutes.detail(panel, HohenheimSlugs.INSTANCE_DATABASES,
                 link.get(InstanceDatabaseModel.ID)));
             entry.put("databaseTarget", database != null
-                ? CmsRoutes.detail(panel, "databases", database.get(DatabaseModel.ID)) : null);
+                ? CmsRoutes.detail(panel, HohenheimSlugs.DATABASES, database.get(DatabaseModel.ID)) : null);
             attachments.add(entry);
         }
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", CmsSupport.pageTitle(conduit, "instance_database",
+        vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.INSTANCE_DATABASE,
             instance.get(InstanceModel.NAME)));
         vars.put("instanceId", instanceId);
         vars.put("instanceName", instance.get(InstanceModel.NAME));
         vars.put("attachments", attachments);
         boolean canEdit = HohenheimAccess.isAdmin(accessContext)
             || HohenheimAccess.hasInstanceCapability(
-                accessContext, instanceId, HohenheimAccess.CONFIG);
+                accessContext, instanceId, HohenheimCapabilities.CONFIG);
         // Gated on the SAME boolean the template's {% if %} uses: a declared template
         // variable is serialized into the hydration payload whether or not any element
         // renders it (the InstanceDevicesPage lesson).
@@ -115,7 +116,7 @@ public final class InstanceDatabasesPage implements RecordTab.Rendered<Row> {
                                                      @NonNull Integer instanceId) {
         return CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, "instance-databases")
+            .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.INSTANCE_DATABASES)
             .with(HohenheimParams.INSTANCE_ID_PREFILL, instanceId);
     }
 }

@@ -1,10 +1,13 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
@@ -63,8 +66,8 @@ public final class AccessListParts {
         // rules and when it was made stay in the picker.
         TableSpec<Row> table = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(AccessListModel.NAME).filterable().build())
-            .column(ColumnSpec.virtual(LETS_IN_COLUMN, listText("lets_in_column")).build())
-            .column(ColumnSpec.virtual(PROTECTS_COLUMN, listText("protects_column")).build())
+            .column(ColumnSpec.virtual(LETS_IN_COLUMN, HohenheimMicrocopy.ACCESS_LIST.of("lets_in_column")).build())
+            .column(ColumnSpec.virtual(PROTECTS_COLUMN, HohenheimMicrocopy.ACCESS_LIST.of("protects_column")).build())
             .column(ColumnSpec.fromField(AccessListModel.SHARED).filterable().build())
             .column(ColumnSpec.fromField(AccessListModel.SATISFY).filterable().hidden().build())
             .column(ColumnSpec.fromField(AccessListModel.CREATED_AT).hidden().build())
@@ -82,7 +85,7 @@ public final class AccessListParts {
             // writer (the GitProviderParts shape).
             .add(AccessListModel.SHARED)
             .build();
-        return entry("access_list", table, form, list -> list
+        return entry(HohenheimIds.id("access_list"), table, form, list -> list
                 .computed(Objects.requireNonNull(table.column(LETS_IN_COLUMN)),
                     (row, request) -> AccessRuleSummaries.letsInOf(row.get(AccessListModel.ID)))
                 .computed(Objects.requireNonNull(table.column(PROTECTS_COLUMN)),
@@ -102,10 +105,18 @@ public final class AccessListParts {
             .add(AccessListModel.NAME)
             .add(AccessListModel.SATISFY)
             .build();
-        return entry("manage_access_list", table, form, list -> list)
-            // Admins see every list; everyone else only the ones the walk confirms manage on, so an unowned id reads
-            // as MISSING (zenit-cms 404s an out-of-scope load).
-            .scope(TenantScopes.MANAGED_ACCESS_LISTS)
+        // A Domains cluster member. Admins see every list; everyone else only the ones the walk confirms manage on, so
+        // an unowned id reads as MISSING (zenit-cms 404s an out-of-scope load). The Rules tab plus the CONTRIBUTED tabs
+        // (the generic access matrix, so an owner can delegate its list from /manage).
+        //
+        // AIDEV-NOTE: shown while the tenant holds a list or manages a site, the only place a list it makes can guard
+        // (a site's list, a protected path). Without the probe until DD6, a tenant of instances alone read an empty
+        // "Access lists" tab in the Domains cluster, and a list it made there could guard nothing.
+        return ManageTwin.listed(entry(ManageTwin.id("access_list"), table, form, list -> list),
+                TenantScopes.MANAGED_ACCESS_LISTS,
+                ResourceTabs.<Row>of(List.of(new AccessListRulesPage())).withContributions(),
+                access -> HohenheimAccess.managesAnySite(access)
+                    || HohenheimAccess.reachesAny(access, AccessListModel.MODEL_ID, HohenheimCapabilities.MANAGE))
             .writes(ResourceMutations.rows().create().update().delete()
                 // The grant IS the ownership, the GitProviderParts.manage() shape: an operator create plants nothing
                 // (an empty subject set IS operator ownership), and THE planting loop also drops the scope memo the
@@ -117,20 +128,17 @@ public final class AccessListParts {
                     }
                 })
                 .build())
-            // The Rules tab plus the CONTRIBUTED tabs (the generic access matrix, so an owner can delegate its list
-            // from /manage); the admin activity and revision history stays off the delegated surface.
-            .tabs(ResourceTabs.<Row>of(List.of(new AccessListRulesPage())).withContributions())
             .build();
     }
 
     /** The identity, nav placement, reads, list chrome, form part and delete dialog both twins share. */
-    private static PanelResource.@NonNull Builder<Row> entry(@NonNull String id, @NonNull TableSpec<Row> table,
+    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id, @NonNull TableSpec<Row> table,
                                                              @NonNull FormSpec form,
                                                              @NonNull UnaryOperator<ResourceList.Builder<Row>> cells) {
-        return PanelResource.builder(HohenheimIds.id(id), HohenheimSlugs.ACCESS_LISTS, SUBJECT)
-            .label(Microcopy.of("plural").withFilter("scope", "access_list"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "access_list"))
-            .description(Microcopy.of("nav_hint").withFilter("scope", "access_list"))
+        return PanelResource.builder(id, HohenheimSlugs.ACCESS_LISTS, SUBJECT)
+            .label(HohenheimMicrocopy.ACCESS_LIST.of("plural"))
+            .recordLabel(HohenheimMicrocopy.ACCESS_LIST.of("singular"))
+            .description(HohenheimMicrocopy.ACCESS_LIST.of("nav_hint"))
             .icon(Icon.of("shield-halved"))
             .navGroup(HohenheimPanel.NETWORK_GROUP)
             .navOrder(30)
@@ -151,11 +159,8 @@ public final class AccessListParts {
     /** How many places a list gates, in words; "nothing yet" for a list no site or path names. */
     private static @NonNull Microcopy protectsCount(@Nullable Integer listId) {
         int uses = DeleteImpact.usesOfAccessList(listId).size();
-        return uses == 0 ? listText("protects_nothing") : listText("protects_count").withArg("count", uses);
-    }
-
-    static @NonNull Microcopy listText(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "access_list");
+        return uses == 0 ? HohenheimMicrocopy.ACCESS_LIST.of("protects_nothing")
+            : HohenheimMicrocopy.ACCESS_LIST.of("protects_count").withArg("count", uses);
     }
 
     /**
@@ -170,13 +175,12 @@ public final class AccessListParts {
      */
     private static @NonNull ConfirmationSpec deleteBody(@Nullable Row list) {
         if (list == null) {
-            return DeleteConfirmation.body(Microcopy.of("delete_confirm").withFilter("scope", "access_list"));
+            return DeleteConfirmation.body(HohenheimMicrocopy.ACCESS_LIST.of("delete_confirm"));
         }
         Integer id = list.get(AccessListModel.ID);
         String gated = DeleteImpact.join(DeleteImpact.gatedByAccessList(id));
-        Microcopy body = Microcopy
+        Microcopy body = HohenheimMicrocopy.ACCESS_LIST
             .of(gated.isEmpty() ? "delete_confirm_named" : "delete_confirm_gating")
-            .withFilter("scope", "access_list")
             .withArg("name", String.valueOf((Object) list.get(AccessListModel.NAME)))
             .withArg("rules", DeleteImpact.rulesOfAccessList(id));
         if (!gated.isEmpty()) {

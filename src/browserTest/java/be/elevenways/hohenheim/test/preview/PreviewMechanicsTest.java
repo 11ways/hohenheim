@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.preview;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -15,14 +16,13 @@ import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.source.TestSources;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.preview.PreviewDomains;
-import be.elevenways.hohenheim.server.preview.PreviewQuota;
 import be.elevenways.hohenheim.server.quota.OwnerQuota;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
@@ -170,7 +170,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             OwnerQuota.currentOwnerPack(InstanceModel.MODEL_ID, applicationId), "the application's owner is readable");
         Integer savedCap = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Previews.MAX_PER_OWNER);
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Previews.MAX_PER_OWNER,
-            Math.toIntExact(PreviewQuota.usedBy(owner) + 2));
+            Math.toIntExact(OwnerBudget.PREVIEWS.usedBy(owner) + 2));
         try {
             // 1. A live preview of a ref with a g-breve and an s-comma, minted under the 2026-09 fold, which dropped
             //    both letters, with its generated domain row and DNS row.
@@ -318,7 +318,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             OwnerQuota.currentOwnerPack(InstanceModel.MODEL_ID, applicationId),
             "the application's owner is readable");
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Previews.MAX_PER_OWNER,
-            Math.toIntExact(PreviewQuota.usedBy(owner) + 1));
+            Math.toIntExact(OwnerBudget.PREVIEWS.usedBy(owner) + 1));
         try {
             // 1. The next preview of this owner fits.
             Row first = newPreviewRow("quota-a", "prev-mech--quota-a.preview.test", null);
@@ -454,7 +454,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             //    the preview's own quota charge follows the APPLICATION.
             int owner = ApiSupport.user("preview-owner@test");
             RecordGrants.grant(GrantSubjectType.USER, owner, SiteModel.MODEL_ID, siteId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
 
             // 2. A preview mints its hostname through the ordinary domain write pipeline.
             Row preview = newPreviewRow("quarantine-ref", hostname, null);
@@ -492,7 +492,7 @@ class PreviewMechanicsTest extends HohenheimTestBase {
             raider.set(SiteModel.ENABLED, true);
             sites.save(raider);
             RecordGrants.grant(GrantSubjectType.USER, ApiSupport.user("preview-raider@test"), SiteModel.MODEL_ID,
-                raider.get(SiteModel.ID), HohenheimAccess.MANAGE, true);
+                raider.get(SiteModel.ID), HohenheimCapabilities.MANAGE, true);
             Row seize = domains.createEmptyRow();
             seize.set(SiteDomainModel.SITE_ID, raider.get(SiteModel.ID));
             seize.set(SiteDomainModel.HOSTNAME, hostname);

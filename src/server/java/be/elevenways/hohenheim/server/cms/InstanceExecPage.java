@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.InstanceOperations;
@@ -12,8 +13,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionRequest;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
-import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -41,17 +42,13 @@ import java.util.Map;
  */
 public final class InstanceExecPage implements ConsoleModes.Mode {
 
-    public static final String SLUG = "exec";
-
     /** The exec operation over this tab's own record. */
     private static final PanelAction<Row> EXEC = PanelAction.<Row, ExecRun>places(InstanceOperations.EXEC,
             ActionPlacement.PAGE, InstanceExecPage::ran)
         // The form's title and submit: the card the tab always drew, its description the one line of context.
-        .confirmation(ConfirmationSpec.builder()
-            .title(Microcopy.of("title").withFilter("scope", "instance_exec"))
-            .body(Microcopy.of("description").withFilter("scope", "instance_exec"))
-            .confirmLabel(Microcopy.of("run").withFilter("scope", "instance_exec"))
-            .build())
+        .confirmation(Confirmations.of(HohenheimMicrocopy.INSTANCE_EXEC.of("title"),
+            HohenheimMicrocopy.INSTANCE_EXEC.of("run"), HohenheimMicrocopy.INSTANCE_EXEC.of("description"),
+            ActionStyle.DEFAULT))
         .selectedByRoute(instance -> String.valueOf((Object) instance.get(InstanceModel.ID)))
         .build();
 
@@ -62,8 +59,8 @@ public final class InstanceExecPage implements ConsoleModes.Mode {
     }
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_exec"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("exec").withFilter("scope", "instance"); }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE.of("exec"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.EXEC; }
     @Override public @NonNull Icon icon() { return Icon.of("code"); }
 
     /** A mode of the Console tab, reached through its mode switch. */
@@ -71,7 +68,7 @@ public final class InstanceExecPage implements ConsoleModes.Mode {
 
     @Override
     public @NonNull Microcopy hint() {
-        return Microcopy.of("command").withFilter("scope", "console_mode");
+        return HohenheimMicrocopy.CONSOLE_MODE.of("command");
     }
 
     /** Hide AND enforce (an unoffered slug 404s): exactly where the exec operation is offered on this record. */
@@ -110,7 +107,7 @@ public final class InstanceExecPage implements ConsoleModes.Mode {
         ExecRun run = result.value();
         InstanceExecResults.stash(request.request().conduit(), instanceId, run.exitCode(), run.output());
         return CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
-            HohenheimSlugs.INSTANCES, instanceId, SLUG).toUrl()));
+            HohenheimSlugs.INSTANCES, instanceId, HohenheimSlugs.Tab.EXEC).toUrl()));
     }
 
 }

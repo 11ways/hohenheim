@@ -25,16 +25,14 @@ public class GitlabProviderClient extends ApiProviderClient {
 
     private final @NonNull String webBase;
     private final @NonNull String apiBase;
-    private final @Nullable String accessToken;
 
     GitlabProviderClient(@Nullable String baseUrl, @Nullable String accessToken,
                          @NonNull OutboundUrlGuard guard) {
-        super(guard);
+        super(guard, accessToken);
         String base = baseUrl == null || baseUrl.isBlank()
             ? "https://gitlab.com" : trimSlash(baseUrl.trim());
         this.webBase = base;
         this.apiBase = base + "/api/v4";
-        this.accessToken = blankToNull(accessToken);
     }
 
     @Override
@@ -86,13 +84,6 @@ public class GitlabProviderClient extends ApiProviderClient {
         };
         postStatus(this.apiBase + "/projects/" + projectPath(repository)
             + "/statuses/" + commitSha, requireToken(), stateToken, context, description, targetUrl);
-    }
-
-    private @NonNull String requireToken() throws IOException {
-        if (this.accessToken == null) {
-            throw new IOException("Provider has no access token configured");
-        }
-        return this.accessToken;
     }
 
     /**

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
@@ -18,8 +20,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.Map;
 import java.util.Objects;
 
-import static be.elevenways.hohenheim.server.cms.ServerWords.hostCopy;
-import static be.elevenways.hohenheim.server.cms.ServerWords.serverCopy;
 
 /**
  * The second phase of enrolling a host: minting its client identities, pinning its Incus certificate
@@ -151,7 +151,7 @@ public final class HostEnrolment {
                     // HostPins already quarantined the host; enrolling a credential on a
                     // daemon whose certificate contradicts the pin would defeat the ceremony.
                     return failed(serverId, HostProbe.FailureKind.HOST_KEY_CHANGED,
-                        CmsSupport.violationText("incus_cert_mismatch")
+                        HohenheimMicrocopy.VIOLATIONS.of("incus_cert_mismatch")
                             .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME)))
                             .withArg("pinned", String.valueOf(scan.previous()))
                             .withArg("offered", scan.fingerprint()));
@@ -182,19 +182,21 @@ public final class HostEnrolment {
      * AIDEV-NOTE: written directly rather than through HostProbe.recordFailure, which alerts the
      * notification channels on the transition: the operator who pasted the target is looking at
      * the result right now (a warning toast plus the Overview), and a fresh host that never
-     * answered did not "stop answering".
+     * answered did not "stop answering". The row keeps HostProbe's shape all the same: the typed kind,
+     * which the Overview words in its reader's locale, and the refusal as stored technical text
+     * ({@link HohenheimViolations#textOf}); the worded sentence is the returned toast's alone.
      */
     private static @NonNull Outcome failed(@NonNull Object serverId, HostProbe.@NonNull FailureKind kind,
                                            @NonNull Microcopy reason) {
         ServerModel servers = Models.get(ServerModel.class);
         Row server = servers.findById(serverId);
         String name = server != null ? String.valueOf((Object) server.get(ServerModel.NAME)) : "?";
-        Microcopy failure = serverCopy("enrolment_incomplete")
+        Microcopy failure = HohenheimMicrocopy.SERVER.of("enrolment_incomplete")
             .withArg("name", name)
             .withArg("reason", reason);
         if (server != null) {
             server.set(ServerModel.LAST_ERROR_KIND, kind.token);
-            server.set(ServerModel.LAST_ERROR, hostCopy(failure));
+            server.set(ServerModel.LAST_ERROR, HohenheimViolations.textOf(reason));
             servers.save(server);
         }
         Blast.slog("hohenheim.host.enrolment_incomplete",

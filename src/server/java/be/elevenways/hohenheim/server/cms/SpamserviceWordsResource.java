@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.spamservice.client.SpamWordEntry;
 import be.elevenways.spamservice.client.SpamWordInput;
@@ -26,8 +28,11 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * Remote Spamservice spam-word dictionary CRUD, a store entry over the management API.
@@ -39,18 +44,17 @@ import java.util.function.Supplier;
  */
 public final class SpamserviceWordsResource {
 
-    public static final String SLUG = "spamservice-words";
     static final Identifier ID = HohenheimIds.id("spamservice_word");
     static final SubjectType<SpamWordEntry> WORD_ENTRY = SubjectType.of(ID, SpamWordEntry.class, SpamWordEntry::id);
 
     private static final StringField WORD = StringField.builder("word").required()
-        .label(Microcopy.of("word").withFilter("scope", "spamservice_word")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_WORD.of("word")).build();
     private static final IntegerField SCORE = IntegerField.builder("score").required()
-        .label(Microcopy.of("score").withFilter("scope", "spamservice_word")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_WORD.of("score")).build();
     private static final StringField LANGUAGE = StringField.builder("language")
-        .label(Microcopy.of("language").withFilter("scope", "spamservice_word")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_WORD.of("language")).build();
     private static final BooleanField LEET = BooleanField.builder("leet").defaultValue(false)
-        .label(Microcopy.of("leet").withFilter("scope", "spamservice_word")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_WORD.of("leet")).build();
 
     /** The fields the management API answers for one spam word. */
     private static final List<Field<?, ?>> FIELDS = List.of(WORD, SCORE, LANGUAGE, LEET);
@@ -68,13 +72,13 @@ public final class SpamserviceWordsResource {
         TableSpec<SpamWordEntry> table = TableSpec.<SpamWordEntry>builder()
             .column(ColumnSpec.fromField(WORD).build()).column(ColumnSpec.fromField(SCORE).build())
             .column(ColumnSpec.fromField(LANGUAGE).build()).column(ColumnSpec.fromField(LEET).build()).build();
-        return PanelResource.builder(ID, SLUG, WORD_ENTRY)
-            .label(Microcopy.of("plural").withFilter("scope", "spamservice_word"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "spamservice_word"))
+        return PanelResource.builder(ID, HohenheimSlugs.SPAMSERVICE_WORDS, WORD_ENTRY)
+            .label(HohenheimMicrocopy.SPAMSERVICE_WORD.of("plural"))
+            .recordLabel(HohenheimMicrocopy.SPAMSERVICE_WORD.of("singular"))
             .navGroup(HohenheimPanel.SECURITY_GROUP)
             .navOrder(60)
             .showInNav(false)
-            .standsUnder(SpamserviceOverviewPage.SLUG)
+            .standsUnder(HohenheimSlugs.SPAMSERVICE)
             .icon(Icon.of("book"))
             .reads(ResourceReads.<SpamWordEntry>typed(SpamWordEntry::id)
                 .load((key, access) -> {
@@ -82,7 +86,6 @@ public final class SpamserviceWordsResource {
                     return id == null ? null : SpamserviceRemoteStore.require(clients).spamWord(id.toString());
                 })
                 .values(SpamserviceWordsResource::values)
-                .cells(SpamserviceWordsResource::cell)
                 .build()
                 .title(SpamWordEntry::word))
             .list(ResourceList.store(table, SpamserviceRemoteStore.pages(ID, clients, FIELDS, List.of("word"),
@@ -105,17 +108,7 @@ public final class SpamserviceWordsResource {
 
     private static @NonNull Map<String, Object> values(@NonNull SpamWordEntry row) {
         return Map.of("word", row.word(), "score", row.score(), "language",
-            SpamserviceRemoteStore.orBlank(row.language()), "leet", row.leet());
-    }
-
-    private static @Nullable Object cell(@NonNull SpamWordEntry row, @NonNull ColumnSpec column) {
-        return switch (column.name()) {
-            case "word" -> row.word();
-            case "score" -> row.score();
-            case "language" -> row.language();
-            case "leet" -> row.leet();
-            default -> null;
-        };
+            Objects.requireNonNullElse(row.language(), ""), "leet", row.leet());
     }
 
     /**
@@ -133,9 +126,9 @@ public final class SpamserviceWordsResource {
         Object score = values.getOrDefault("score", stored == null ? null : stored.score());
         Object rawLanguage = values.getOrDefault("language", stored == null ? null : stored.language());
         Object leet = values.getOrDefault("leet", stored == null ? null : stored.leet());
-        String language = rawLanguage != null ? String.valueOf(rawLanguage).trim() : "";
+        String language = trimmed(rawLanguage);
         return new SpamWordInput(word,
-            score instanceof Number number ? number.intValue() : 0,
+            RawValues.intOr(score, 0),
             language.isEmpty() ? null : language, Boolean.TRUE.equals(leet));
     }
 }

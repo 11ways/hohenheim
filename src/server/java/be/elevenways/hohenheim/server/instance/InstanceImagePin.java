@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -40,8 +41,8 @@ public final class InstanceImagePin {
             Object settings = row.afterWrite(InstanceModel.SETTINGS, stored);
             Object storedSettings = stored.get(InstanceModel.SETTINGS);
             boolean unchanged = Objects.equals(kind, stored.get(InstanceModel.KIND))
-                && Objects.equals(InstanceImagePolicy.settingText(settings, "image"),
-                    InstanceImagePolicy.settingText(storedSettings, "image"))
+                && Objects.equals(InstanceImagePolicy.settingText(settings, InstanceKindFields.IMAGE),
+                    InstanceImagePolicy.settingText(storedSettings, InstanceKindFields.IMAGE))
                 && Objects.equals(InstanceImagePolicy.settingText(settings, "tag"),
                     InstanceImagePolicy.settingText(storedSettings, "tag"));
             if (!unchanged) {

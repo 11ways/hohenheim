@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.host.VolumeBackend;
@@ -178,7 +179,7 @@ public final class VolumeBackends {
             return;
         }
 
-        throw Violations.ofForm(HohenheimViolations.text("host_no_volume_quota")
+        throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_no_volume_quota")
             .withArg("name", serverName)
             .withArg("kind", kindLabel)
             .withArg("backend", backend.label()));

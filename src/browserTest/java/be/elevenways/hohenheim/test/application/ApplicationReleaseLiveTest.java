@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.application;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
@@ -8,7 +9,6 @@ import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.InstanceUpstreamHandler;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
@@ -191,8 +191,8 @@ class ApplicationReleaseLiveTest {
                 .isEqualTo(digestA);
             Row swapOp = latestOp(applicationId);
             await("step 3: the release operation completes after drain",
-                12_000, () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
-                    reload(swapOp).get(ReleaseOperationModel.STATUS)));
+                12_000, () -> ReleaseOperationModel.LIFECYCLE.is(
+                    reload(swapOp).get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED));
             String steps = reload(swapOp).get(ReleaseOperationModel.STEP_LOG);
             assertThat(steps).as("step 3: every phase is visible on the durable record")
                 .contains("candidate instance").contains("probing")
@@ -218,8 +218,8 @@ class ApplicationReleaseLiveTest {
             //    rollback target; the ORIGINAL v1 instance (older retired) is destroyed
             //    at the daemon -- retention is exactly one release deep.
             await("step 5: the rollback operation completes after drain",
-                12_000, () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
-                    reload(rollbackOp).get(ReleaseOperationModel.STATUS)));
+                12_000, () -> ReleaseOperationModel.LIFECYCLE.is(
+                    reload(rollbackOp).get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED));
             Row original = StoredRows.byId(Models.get(InstanceModel.class), firstInstanceId);
             assertThat((Object) original.get(InstanceModel.DELETED_AT))
                 .as("step 5: the older retired release was reclaimed (record)").isNotNull();
@@ -326,7 +326,7 @@ class ApplicationReleaseLiveTest {
             Row op = latestOp(applicationId);
             assertThat(op.get(ReleaseOperationModel.STATUS))
                 .as("step 4: the operation is FAILED, never silently forgotten")
-                .isEqualTo(ReleaseOperationModel.STATUS_FAILED);
+                .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED));
             assertThat((String) op.get(ReleaseOperationModel.FAILURE_REASON))
                 .as("step 4: the failure names the probe")
                 .contains("release_probe_failed");
@@ -408,8 +408,8 @@ class ApplicationReleaseLiveTest {
                 .isEqualTo(serving1.get(InstanceModel.ID));
             Row swapOp = latestOp(applicationId);
             await("step 2: the swap completes after drain", 12_000,
-                () -> ReleaseOperationModel.STATUS_SUCCEEDED.equals(
-                    reload(swapOp).get(ReleaseOperationModel.STATUS)));
+                () -> ReleaseOperationModel.LIFECYCLE.is(
+                    reload(swapOp).get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED));
 
             // 3. Move the tag onto an UNRELATED decoy, then delete it outright. Any
             //    rollback that consulted the tag would now deploy the decoy or die.
@@ -479,7 +479,7 @@ class ApplicationReleaseLiveTest {
                 .as("step 1: the superseded release is still draining (running)").isTrue();
             Row op = latestOp(applicationId);
             assertThat(op.get(ReleaseOperationModel.STATUS))
-                .isEqualTo(ReleaseOperationModel.STATUS_DRAINING);
+                .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DRAINING));
 
             // 2. A fabricated pre-switch operation with a live candidate (the shape a
             //    crash during probing leaves).
@@ -500,7 +500,7 @@ class ApplicationReleaseLiveTest {
             staleOp.set(ReleaseOperationModel.KIND, ReleaseOperationModel.KIND_RELEASE);
             staleOp.set(ReleaseOperationModel.FOR_MODEL, OWNER_MODEL);
             staleOp.set(ReleaseOperationModel.FOR_ID, applicationId);
-            staleOp.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.STATUS_PROBING);
+            staleOp.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.PROBING));
             staleOp.set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, candidateId[0]);
             staleOp.set(ReleaseOperationModel.STARTED_AT, Now.instant());
             Models.get(ReleaseOperationModel.class).save(staleOp);
@@ -512,13 +512,13 @@ class ApplicationReleaseLiveTest {
                 .as("step 3: recovery stopped the draining release at the daemon").isFalse();
             assertThat(reload(op).get(ReleaseOperationModel.STATUS))
                 .as("step 3: the lost drain finishes as SUCCEEDED (the switch had happened)")
-                .isEqualTo(ReleaseOperationModel.STATUS_SUCCEEDED);
+                .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
             assertThat((String) reload(op).get(ReleaseOperationModel.STEP_LOG))
                 .contains("boot recovery finished the lost drain");
 
             assertThat(reload(staleOp).get(ReleaseOperationModel.STATUS))
                 .as("step 3: the pre-switch operation is INTERRUPTED, visibly")
-                .isEqualTo(ReleaseOperationModel.STATUS_INTERRUPTED);
+                .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.INTERRUPTED));
             Row deadCandidate = StoredRows.byId(Models.get(InstanceModel.class), candidateId[0]);
             assertThat((Object) deadCandidate.get(InstanceModel.DELETED_AT))
                 .as("step 3: the orphaned candidate's record died").isNotNull();

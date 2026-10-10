@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.app.UsageLine;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
@@ -48,7 +49,7 @@ final class TenantUsage {
             if (shown == null || !HohenheimRoles.enabled(shown.role())) {
                 continue;
             }
-            Microcopy label = Microcopy.of(shown.key()).withFilter("scope", "tenant_usage");
+            Microcopy label = HohenheimMicrocopy.TENANT_USAGE.of(shown.key());
             Integer limit = budget.limitFor(pack);
             if (limit == null) {
                 if (shown.uncapped()) {

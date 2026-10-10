@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.hohenheim.server.util.Closeables;
+import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import javax.net.ssl.KeyManager;
@@ -15,8 +17,6 @@ import java.net.Socket;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.KeyStore;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateEncodingException;
@@ -42,15 +42,8 @@ final class IncusTls {
     /** SHA-256 of a certificate's DER encoding, lowercase hex -- what `incus info` prints. */
     static @NonNull String fingerprintOf(@NonNull X509Certificate certificate) {
         try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                .digest(certificate.getEncoded());
-            StringBuilder hex = new StringBuilder(64);
-            for (byte b : digest) {
-                hex.append(Character.forDigit((b >> 4) & 0xF, 16))
-                    .append(Character.forDigit(b & 0xF, 16));
-            }
-            return hex.toString();
-        } catch (NoSuchAlgorithmException | CertificateEncodingException e) {
+            return SecureTokens.sha256Hex(certificate.getEncoded());
+        } catch (CertificateEncodingException e) {
             throw new IllegalStateException("cannot fingerprint a certificate", e);
         }
     }
@@ -169,11 +162,8 @@ final class IncusTls {
             }
         };
         SSLSocket socket = handshake(host, port, null, captureAll, connectTimeoutMs);
-        try {
-            socket.close();
-        } catch (IOException ignored) {
-            // the capture already happened during the handshake
-        }
+        // The capture already happened during the handshake.
+        Closeables.closeQuietly(socket);
         if (captured[0] == null) {
             throw new IOException("the TLS handshake completed without a server certificate");
         }
@@ -204,11 +194,7 @@ final class IncusTls {
             socket.setSoTimeout(0);
             return socket;
         } catch (IOException e) {
-            try {
-                plain.close();
-            } catch (IOException ignored) {
-                // already failing
-            }
+            Closeables.closeQuietly(plain);
             throw e;
         }
     }

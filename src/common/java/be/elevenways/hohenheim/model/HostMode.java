@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.ui.BadgeColor;
@@ -74,7 +75,7 @@ public enum HostMode {
 
     /** The translatable label, keyed by the token under the {@code host_mode} scope. */
     public @NonNull Microcopy label() {
-        return Microcopy.of(this.token).withFilter("scope", "host_mode");
+        return HohenheimMicrocopy.HOST_MODE.of(this.token);
     }
 
     /** The member a stored token names, or null for a null, blank or unknown token. */

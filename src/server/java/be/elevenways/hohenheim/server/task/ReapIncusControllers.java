@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.task;
 
-import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -70,8 +69,7 @@ public class ReapIncusControllers extends ScheduledTask {
 
     @Override
     public @NonNull Microcopy label() {
-        return Microcopy.of("reap_incus_controllers").withFilter("scope", HohenheimMicrocopy.SCOPE)
-            .withFilter("target", "task_label");
+        return HohenheimTasks.label(this);
     }
 
     @Override
@@ -235,8 +233,7 @@ public class ReapIncusControllers extends ScheduledTask {
 
     /** Whether an automatic sweep may remove anything at all. */
     public static boolean reapingEnabled() {
-        return Boolean.TRUE.equals(Zenit.SETTINGS_VALUES.getValue(
-            HohenheimSettings.Incus.REAP_DEPARTED_CONTROLLERS))
+        return HohenheimSettings.isOn(HohenheimSettings.Incus.REAP_DEPARTED_CONTROLLERS)
             && !graceDuration().isZero();
     }
 

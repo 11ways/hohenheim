@@ -26,7 +26,7 @@ import java.util.Locale;
 public final class DnsFederationKeys {
 
     /** The only algorithm negotiation mints; the column still accepts the others by hand. */
-    public static final String ALGORITHM = "hmac-sha256";
+    public static final String ALGORITHM = DnsTsig.Algorithm.HMAC_SHA256.key();
 
     private DnsFederationKeys() {}
 

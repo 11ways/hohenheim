@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.server.source;
 
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.GitProviderModel;
+import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.UrlPolicy;
 import be.elevenways.zenit.common.validation.Violations;
@@ -15,6 +17,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * The one construction funnel of provider clients, and the derivation of the per-clone
@@ -54,8 +59,8 @@ public final class GitProviders {
     public static @NonNull GitProviderClient clientFor(int providerId) {
         Row provider = Models.get(GitProviderModel.class).findById(providerId);
         if (provider == null) {
-            throw Violations.ofField("provider_id", providerId,
-                HohenheimViolations.text("git_provider_unknown"));
+            throw Violations.ofField(GitSourceSchema.PROVIDER_ID, providerId,
+                HohenheimMicrocopy.VIOLATIONS.of("git_provider_unknown"));
         }
         return clientFor(provider);
     }
@@ -89,7 +94,7 @@ public final class GitProviders {
         GitProviderKind kind = GitProviderKinds.getHandler(kindToken);
         if (kind == null) {
             throw Violations.ofField(GitProviderModel.KIND.getName(), kindToken,
-                HohenheimViolations.text("git_provider_kind_unavailable")
+                HohenheimMicrocopy.VIOLATIONS.of("git_provider_kind_unavailable")
                     .withArg("kind", String.valueOf(kindToken)));
         }
         return kind;
@@ -101,27 +106,20 @@ public final class GitProviders {
      */
     private static @Nullable String validatedBaseUrl(@NonNull GitProviderKind kind,
                                                      @Nullable String baseUrl) {
-        String trimmed = baseUrl == null ? "" : baseUrl.trim();
+        String trimmed = trimmed(baseUrl);
         if (trimmed.isEmpty()) {
             if (kind.requiresBaseUrl()) {
                 throw Violations.ofField(GitProviderModel.BASE_URL.getName(), baseUrl,
-                    HohenheimViolations.text("git_provider_base_url_required"));
+                    HohenheimMicrocopy.VIOLATIONS.of("git_provider_base_url_required"));
             }
             return null;
         }
         String problem = BASE_URL_POLICY.problemOf(trimmed);
         if (problem != null) {
             throw Violations.ofField(GitProviderModel.BASE_URL.getName(), baseUrl,
-                HohenheimViolations.text("git_provider_bad_base_url").withArg("reason", problem));
+                HohenheimMicrocopy.VIOLATIONS.of("git_provider_bad_base_url").withArg("reason", problem));
         }
         return trimmed;
-    }
-
-    /** The row's per-kind settings map, never null. */
-    @SuppressWarnings("unchecked")
-    static @NonNull Map<String, Object> settingsOf(@NonNull Row provider) {
-        Object stored = provider.get(GitProviderModel.SETTINGS);
-        return stored instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
     }
 
     private static volatile boolean kindInvariantInstalled;
@@ -145,23 +143,10 @@ public final class GitProviders {
             if (row == null) {
                 return;
             }
-            validate(effective(row, GitProviderModel.KIND),
-                effective(row, GitProviderModel.BASE_URL));
+            Row stored = StoredRows.of(Models.get(GitProviderModel.class), row);
+            validate(Objects.toString(row.afterWrite(GitProviderModel.KIND, stored), null),
+                Objects.toString(row.afterWrite(GitProviderModel.BASE_URL, stored), null));
         });
-    }
-
-    /** The value this write will leave on the row: submitted key wins, else the stored one. */
-    private static @Nullable String effective(@NonNull Row row, @NonNull Field<?, ?> field) {
-        if (row.has(field.getName())) {
-            Object value = row.get(field.getName());
-            return value == null ? null : String.valueOf(value);
-        }
-        if (!row.has(GitProviderModel.ID.getName())) {
-            return null;
-        }
-        Row stored = Models.get(GitProviderModel.class).findById(row.get(GitProviderModel.ID));
-        Object value = stored == null ? null : stored.get(field.getName());
-        return value == null ? null : String.valueOf(value);
     }
 
     /**
@@ -175,14 +160,13 @@ public final class GitProviders {
      */
     public static @Nullable Map<String, String> credentialEnv(
             @NonNull Map<String, Object> sourceSettings) throws IOException {
-        Integer providerId = providerIdOf(sourceSettings);
-        String repository = str(sourceSettings.get("repository"));
-        if (providerId == null || repository.isEmpty()) {
+        Binding binding = bindingOf(sourceSettings);
+        if (binding == null) {
             return null;
         }
-        GitProviderClient client = clientFor(providerId);
-        GitProviderClient.Credential credential = client.cloneCredential(repository);
-        String cloneUrl = client.cloneUrl(repository);
+        GitProviderClient client = clientFor(binding.providerId());
+        GitProviderClient.Credential credential = client.cloneCredential(binding.repository());
+        String cloneUrl = client.cloneUrl(binding.repository());
         String origin = originOf(cloneUrl);
         String basic = Base64.getEncoder().encodeToString(
             (credential.username() + ":" + credential.secret())
@@ -195,21 +179,33 @@ public final class GitProviders {
         return env;
     }
 
-    /** The clone URL a provider-bound site uses; null when not provider-bound. */
-    public static @Nullable String boundCloneUrl(@NonNull Map<String, Object> sourceSettings) {
-        Integer providerId = providerIdOf(sourceSettings);
-        String repository = str(sourceSettings.get("repository"));
-        if (providerId == null || repository.isEmpty()) {
-            return null;
+    /**
+     * The URL a source clones from: the bound provider's clone URL, else the declared {@code repository_url}.
+     *
+     * @throws Violations {@code source_no_repository} when the source declares neither
+     */
+    public static @NonNull String requireCloneUrl(@NonNull Map<String, Object> sourceSettings) {
+        Binding binding = bindingOf(sourceSettings);
+        String url = binding != null
+            ? clientFor(binding.providerId()).cloneUrl(binding.repository())
+            : trimmed(sourceSettings.get(GitSourceSchema.REPOSITORY_URL));
+        if (url.isEmpty()) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_no_repository"));
         }
-        return clientFor(providerId).cloneUrl(repository);
+        return url;
     }
 
-    static @Nullable Integer providerIdOf(@NonNull Map<String, Object> sourceSettings) {
-        Object value = sourceSettings.get("provider_id");
-        return value instanceof Number number && number.intValue() > 0
-            ? number.intValue() : null;
+    /** @return the source's provider binding, or null when it names no provider or no repository */
+    public static @Nullable Binding bindingOf(@NonNull Map<String, Object> sourceSettings) {
+        Integer providerId = RawValues.positiveInt(sourceSettings.get(GitSourceSchema.PROVIDER_ID));
+        String repository = trimmed(sourceSettings.get(GitSourceSchema.REPOSITORY));
+        return providerId == null || repository.isEmpty() ? null : new Binding(providerId, repository);
     }
+
+    /** A source bound to a git provider: its clone URL and credentials derive from the provider and repository. */
+    public record Binding(int providerId, @NonNull String repository) {
+    }
+
 
     /** Scheme + authority of a URL; the config key scope credentials bind to. */
     private static @NonNull String originOf(@NonNull String url) {
@@ -219,9 +215,5 @@ public final class GitProviders {
         }
         int pathStart = url.indexOf('/', schemeEnd + 3);
         return pathStart < 0 ? url : url.substring(0, pathStart);
-    }
-
-    private static @NonNull String str(@Nullable Object value) {
-        return value == null ? "" : value.toString().trim();
     }
 }

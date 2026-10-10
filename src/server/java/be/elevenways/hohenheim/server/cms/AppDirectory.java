@@ -1,7 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.app.AppFix;
+import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -10,31 +11,22 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.site.SiteHostnamesCell;
-import be.elevenways.hohenheim.site.DomainCertCell;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
-import be.elevenways.zenit.cms.common.panel.PanelRequest;
-import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
-import be.elevenways.zenit.cms.common.render.action.LinkActionState;
-import be.elevenways.zenit.cms.common.render.action.RecordActionsData;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.server.page.CmsRecordSources;
-import be.elevenways.zenit.cms.server.panel.PartsReads;
-import be.elevenways.zenit.cms.server.render.action.RecordActionBands;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
-import be.elevenways.zenit.common.routing.ReturnPath;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.widget.common.data.WidgetBadge;
@@ -73,13 +65,19 @@ final class AppDirectory {
     enum Source {
 
         /** A workload, together with the sites that serve it. */
-        WORKLOAD,
+        WORKLOAD(HohenheimSlugs.INSTANCES),
 
         /** A site that serves no workload the viewer may open. */
-        WEBSITE,
+        WEBSITE(HohenheimSlugs.SITES),
 
         /** A Docker stack; its services are its members. */
-        STACK;
+        STACK(HohenheimSlugs.STACKS);
+
+        private final @NonNull String entrySlug;
+
+        Source(@NonNull String entrySlug) {
+            this.entrySlug = entrySlug;
+        }
 
         /** @return the stable token the list's kind filter and the row key carry */
         @NonNull String token() {
@@ -97,15 +95,21 @@ final class AppDirectory {
      *                    on the delegated panel
      * @param https       what HTTPS gives its main address (the one the address cell shows), in the Addresses list's
      *                    words; null without an exact address
-     * @param health      the verdict its own record page leads with
+     * @param health      the verdict its own record page leads with, its fixes offered on the record it speaks for
      * @param target      its record page's front door
-     * @param fix         the first fix that verdict names which this viewer may use, as its record's band offers it;
-     *                    null when it names none (the Apps list's row action, board Apps-List)
      */
     record App(@NonNull String key, @NonNull Source source, int id, @NonNull String name, @NonNull String kind,
                @NonNull SiteHostnamesCell address, @Nullable String addressText, @Nullable String host,
-               @Nullable DomainCertCell https, @NonNull RecordHealth health, @NonNull RouteTarget target,
-               @Nullable AppFix fix) {
+               @Nullable StateLineCell https, @NonNull RecordHealth health, @NonNull RouteTarget target) {
+
+        // AIDEV-NOTE: an app is a reading, so its verdict's fixes are ROW actions of the record behind it (or of the
+        // site a workload's verdict already speaks for), never of the Apps entry: ResourceHealth.fixColumn() offers
+        // them on that record exactly as its band does (board Apps-List's "Get a certificate").
+        App {
+            if (health.fixesOn() == null) {
+                health = health.on(source.entrySlug, id);
+            }
+        }
 
         /** @return how the dashboard and the sidebar count this app, by the verdict its record page leads with */
         @NonNull Count count() {
@@ -159,16 +163,16 @@ final class AppDirectory {
     }
 
     private static @NonNull List<App> readUncached(@NonNull Panel panel, @NonNull AccessContext access) {
-        boolean delegated = ManagePanel.SLUG.equals(panel.slug());
+        boolean delegated = HohenheimSlugs.MANAGE.equals(panel.slug());
         Wording words = Wording.of(access);
         List<Row> sites = listed(panel, HohenheimSlugs.SITES, access);
         List<Row> instances = new ArrayList<>();
-        for (Row instance : listed(panel, InstanceParts.SLUG, access)) {
+        for (Row instance : listed(panel, HohenheimSlugs.INSTANCES, access)) {
             if (!InstanceParts.isGenerated(instance)) {
                 instances.add(instance);
             }
         }
-        List<Row> stacks = listed(panel, StackParts.SLUG, access);
+        List<Row> stacks = listed(panel, HohenheimSlugs.STACKS, access);
 
         Set<String> working = AppHealth.workingNames();
         Map<Integer, Row> workloads = new LinkedHashMap<>();
@@ -202,16 +206,14 @@ final class AppDirectory {
             }
             SiteHostnamesCell address = names.isEmpty() ? endpointAddress(id, delegated)
                 : SiteParts.hostnamesCellOf(names);
-            RecordHealth health = workloadHealth.apply(instance);
             apps.add(new App(Source.WORKLOAD.token() + "-" + id, Source.WORKLOAD, id,
                 String.valueOf((Object) instance.get(InstanceModel.NAME)),
                 WidgetBadge.of(InstanceModel.KIND, instance.get(InstanceModel.KIND), words.locales, words.resolver)
                     .label(),
                 address, address.primary(),
-                delegated ? null : hostOf(instance.get(InstanceModel.SERVER_ID)),
-                mainHttps(names, served, working, access, panel.slug()), health,
-                InstanceParts.recordRoute(panel.slug(), instance, null),
-                fixOf(panel, access, InstanceParts.SLUG, instance, health)));
+                delegated ? null : ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID)),
+                mainHttps(names, served, working, access, panel.slug()), workloadHealth.apply(instance),
+                InstanceParts.recordRoute(panel.slug(), instance, null)));
         }
 
         Function<Row, RecordHealth> websiteHealth = AppHealth.sites(delegated).read(websites, access);
@@ -220,12 +222,11 @@ final class AppDirectory {
             int id = site.get(SiteModel.ID);
             List<Row> names = domains.getOrDefault(id, List.of());
             SiteHostnamesCell address = SiteParts.hostnamesCellOf(names);
-            RecordHealth health = websiteHealth.apply(site);
             apps.add(new App(Source.WEBSITE.token() + "-" + id, Source.WEBSITE, id,
                 String.valueOf((Object) site.get(SiteModel.NAME)), words.say(SiteParts.upstreamLabel(site)),
                 address, address.primary(), websiteHost(site, servedBy),
-                mainHttps(names, List.of(site), working, access, panel.slug()), health,
-                SiteParts.recordRoute(panel.slug(), id), fixOf(panel, access, HohenheimSlugs.SITES, site, health)));
+                mainHttps(names, List.of(site), working, access, panel.slug()), websiteHealth.apply(site),
+                SiteParts.recordRoute(panel.slug(), id)));
         }
 
         Function<Row, RecordHealth> stackHealth = AppHealth.stacks().read(stacks, access);
@@ -234,63 +235,15 @@ final class AppDirectory {
             int id = stack.get(StackModel.ID);
             apps.add(new App(Source.STACK.token() + "-" + id, Source.STACK, id,
                 String.valueOf((Object) stack.get(StackModel.NAME)),
-                words.say(Microcopy.of("stack_kind").withFilter("scope", "app_list")
+                words.say(HohenheimMicrocopy.APP_LIST.of("stack_kind")
                     .withArg("count", members.getOrDefault(id, 0))),
                 new SiteHostnamesCell(null, 0), null,
-                delegated ? null : hostOf(stack.get(StackModel.SERVER_ID)),
+                delegated ? null : ServerModel.canonicalNameOf(stack.get(StackModel.SERVER_ID)),
                 null, stackHealth.apply(stack),
-                CmsRoutes.subpage(panel.slug(), StackParts.SLUG, id, StackServicesPage.SLUG), null));
+                CmsRoutes.subpage(panel.slug(), HohenheimSlugs.STACKS, id, HohenheimSlugs.Tab.SERVICES)));
         }
         apps.sort(Comparator.comparing((App app) -> app.name().toLowerCase(Locale.ROOT)).thenComparing(App::key));
         return List.copyOf(apps);
-    }
-
-    /**
-     * The first fix an app's verdict names that this viewer may use, offered exactly as the record's own band offers it
-     * ({@link RecordActionBands#named}: the entry's gates and scope, its confirmation, through that record's action
-     * family): an address's "Get a certificate", a workload's "Restart". A fix the reader may not use, or one offered
-     * dead, is passed over; the row shows nothing rather than a refusal.
-     *
-     * AIDEV-NOTE: the fixes are ROW actions of the record behind the app (the workload, the site) or, for a workload
-     * speaking for its site, of that site ({@link RecordHealth#fixesOn}), never actions of the Apps list's own subject,
-     * so the list draws them through a cell. A verdict read without a request (a sidebar badge off-request) offers
-     * none.
-     *
-     * @param ownSlug the entry of the record the app is read from
-     * @param own     that record
-     */
-    static @Nullable AppFix fixOf(@NonNull Panel panel, @NonNull AccessContext access, @NonNull String ownSlug,
-                                  @NonNull Row own, @NonNull RecordHealth health) {
-        Conduit conduit = access.conduit();
-        if (health.fixes().isEmpty() || conduit == null) {
-            return null;
-        }
-        RecordHealth.FixesOn on = health.fixesOn();
-        PanelEntry entry = panel.entryBySlug(on != null ? on.entrySlug() : ownSlug);
-        if (entry == null || !panel.admits(entry, access)) {
-            return null;
-        }
-        Object record = on == null ? own
-            : PartsReads.loadRow(new PanelRequest(panel, conduit, access, ReturnPath.of(null)), entry, on.recordKey(),
-                access);
-        if (record == null) {
-            return null;
-        }
-        RecordActionsData offered = RecordActionBands.named(panel, entry, record, access,
-            CmsRoutes.list(panel.slug(), AppParts.SLUG).toUrl(), health.fixes());
-        for (Identifier fix : health.fixes()) {
-            for (LinkActionState link : offered.inlineLinks()) {
-                if (link.id().equals(fix)) {
-                    return new AppFix(link, null);
-                }
-            }
-            for (InvokeActionState invoke : offered.inlineInvokes()) {
-                if (invoke.id().equals(fix) && invoke.disabledReason() == null) {
-                    return new AppFix(null, invoke);
-                }
-            }
-        }
-        return null;
     }
 
     /**
@@ -355,9 +308,9 @@ final class AppDirectory {
      * @param sites the sites the names belong to, which decide whether the name is a TLS passthrough
      * @return the cell, null without a name; a pattern's says HTTPS works per name a certificate covers
      */
-    private static @Nullable DomainCertCell mainHttps(@NonNull List<Row> names, @NonNull List<Row> sites,
-                                                      @NonNull Set<String> working, @NonNull AccessContext access,
-                                                      @NonNull String panelSlug) {
+    private static @Nullable StateLineCell mainHttps(@NonNull List<Row> names, @NonNull List<Row> sites,
+                                                     @NonNull Set<String> working, @NonNull AccessContext access,
+                                                     @NonNull String panelSlug) {
         if (names.isEmpty()) {
             return null;
         }
@@ -369,11 +322,6 @@ final class AppDirectory {
             }
         }
         return DomainParts.certificateCell(main, passthrough, working, access, panelSlug);
-    }
-
-    /** The name of the host a workload or stack runs on, the way its record page's lead line names it. */
-    private static @NonNull String hostOf(@Nullable Integer serverId) {
-        return ServerModel.nameOf(ServerModel.canonicalServerId(serverId));
     }
 
     /**
@@ -401,7 +349,7 @@ final class AppDirectory {
     private static @Nullable String websiteHost(@NonNull Row site, @NonNull Map<Integer, Row> servedBy) {
         Integer instanceId = site.get(SiteModel.INSTANCE_ID);
         Row instance = instanceId == null ? null : servedBy.get(instanceId);
-        return instance == null ? null : hostOf(instance.get(InstanceModel.SERVER_ID));
+        return instance == null ? null : ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID));
     }
 
     /** The live (untrashed) sites serving each of these workloads, read once, in stored order. */

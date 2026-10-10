@@ -4,11 +4,14 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.database.DatabaseWrites;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.validation.Violations;
 import com.microsoft.playwright.assertions.PlaywrightAssertions;
 import org.junit.jupiter.api.*;
+
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -205,6 +208,45 @@ class DatabaseAdminTest extends HohenheimTestBase {
         } finally {
             model.find().where(DatabaseModel.NAME.eq(victimName)).delete();
             model.find().where(DatabaseModel.NAME.eq(freshName)).delete();
+        }
+    }
+
+    /**
+     * The admin create used to spell its own name rule ({@code [a-z0-9][a-z0-9-]*}, key {@code name_format}) and so
+     * refused names the model's rule ({@link DatabaseModel#isValidName}, Docker's object-name shape) accepts. The
+     * create now asks that one rule (DD8): the record name is a Docker container, volume and backup directory name,
+     * never a hostname and never the SQL identifier (that is {@code db_name}).
+     */
+    @Test
+    void theAdminCreateAsksTheOneDatabaseNameRule() {
+        DatabaseModel model = Models.get(DatabaseModel.class);
+        String mixed = "Shop_DB.v2";
+        try {
+            // 1. A name with upper case, an underscore and a dot: the model's rule accepts it, so the create does.
+            assertThat(DatabaseModel.isValidName(mixed)).as("step 1: the rule accepts it").isTrue();
+            Object id = DatabaseWrites.create(Map.of(
+                DatabaseModel.NAME.getName(), mixed,
+                DatabaseModel.ENGINE.getName(), "redis",
+                DatabaseModel.DB_NAME.getName(), "shopdb",
+                DatabaseModel.IMAGE.getName(), "hohenheim-absent-image:notatag"));
+            assertThat((String) model.findById(id).get(DatabaseModel.NAME))
+                .as("step 1: the record keeps the name as typed").isEqualTo(mixed);
+
+            // 2. A name the rule refuses is refused by the create too, on the name, with the rule's own key, and
+            //    before any record exists.
+            Throwable refused = catchThrowable(() -> DatabaseWrites.create(Map.of(
+                DatabaseModel.NAME.getName(), "_shop/db",
+                DatabaseModel.ENGINE.getName(), "redis",
+                DatabaseModel.DB_NAME.getName(), "shopdb")));
+            assertThat(refused).as("step 2: a typed refusal").isInstanceOf(Violations.class);
+            assertThat(((Violations) refused).all().get(0).message().key())
+                .as("step 2: the model rule's key").isEqualTo("database_name_invalid");
+            assertThat(((Violations) refused).all().get(0).fieldName())
+                .as("step 2: anchored on the name").isEqualTo(DatabaseModel.NAME.getName());
+            assertThat(model.find().where(DatabaseModel.NAME.eq("_shop/db")).count())
+                .as("step 2: nothing was written").isZero();
+        } finally {
+            model.find().where(DatabaseModel.NAME.eq(mixed)).delete();
         }
     }
 }

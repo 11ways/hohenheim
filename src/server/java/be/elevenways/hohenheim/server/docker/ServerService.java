@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostKeys;
@@ -11,13 +12,13 @@ import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * The multi-server inventory: persists Docker hosts ({@link ServerModel}) and builds a
@@ -245,8 +246,7 @@ public class ServerService extends DatasourceScoped {
                         + server.get("auth") + "'; enroll the client certificate");
             }
             Map<String, Object> environment =
-                server.get("environment") instanceof Map<?, ?> map
-                    ? castMap(map) : Map.of();
+                RawValues.map(server.get("environment"));
             Map<String, Object> info = new LinkedHashMap<>();
             info.put("ServerVersion", environment.get("server_version"));
             info.put("OperatingSystem", environment.get("os_name"));
@@ -277,11 +277,6 @@ public class ServerService extends DatasourceScoped {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> castMap(Map<?, ?> map) {
-        return (Map<String, Object>) map;
-    }
-
     /**
      * An {@link IncusClient} for the named server; fails closed (HostTrustException)
      * on an unpinned https endpoint or a missing client identity, and refuses a host
@@ -297,34 +292,22 @@ public class ServerService extends DatasourceScoped {
 
     private static Summary summaryOf(Row row, HostProbe.Outcome outcome) {
         String target = row.get(ServerModel.SSH_TARGET);
-        Map<String, Object> info = outcome.info();
+        Map<String, Object> info = Objects.requireNonNullElse(outcome.info(), Map.of());
         return new Summary(
             row.get(ServerModel.NAME),
             row.get(ServerModel.MODE),
             target != null ? target : "",
             outcome.reachable(),
-            asInt(info, "NCPU"),
-            asLong(info, "MemTotal"),
-            asInt(info, "ContainersRunning"),
-            asInt(info, "Containers"),
-            asInt(info, "Images"),
-            asString(info, "ServerVersion"),
-            asString(info, "OperatingSystem"),
-            asString(info, "OSType"),
-            asString(info, "Architecture"),
+            RawValues.intOr(info.get("NCPU"), 0),
+            info.get("MemTotal") instanceof Number memory ? memory.longValue() : 0L,
+            RawValues.intOr(info.get("ContainersRunning"), 0),
+            RawValues.intOr(info.get("Containers"), 0),
+            RawValues.intOr(info.get("Images"), 0),
+            Objects.toString(info.get("ServerVersion"), ""),
+            Objects.toString(info.get("OperatingSystem"), ""),
+            Objects.toString(info.get("OSType"), ""),
+            Objects.toString(info.get("Architecture"), ""),
             outcome.kind() != null ? outcome.kind().token : null,
             outcome.detail());
-    }
-
-    private static int asInt(Map<String, Object> info, String key) {
-        return info != null && info.get(key) instanceof Number n ? n.intValue() : 0;
-    }
-
-    private static long asLong(Map<String, Object> info, String key) {
-        return info != null && info.get(key) instanceof Number n ? n.longValue() : 0L;
-    }
-
-    private static String asString(Map<String, Object> info, String key) {
-        return info != null && info.get(key) != null ? String.valueOf(info.get(key)) : "";
     }
 }

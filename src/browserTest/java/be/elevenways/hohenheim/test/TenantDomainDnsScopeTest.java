@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.cms.ManageDnsRecordParts;
 import be.elevenways.zenit.cms.server.panel.PartsLists;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
@@ -159,7 +159,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
         tenantSession = session.token();
 
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, ownSiteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
     }
 
     private static Row site(Model model, String name, String slug) {
@@ -621,8 +621,8 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
         // 4. Minting a token is its OWN capability: a tenant holding only edit is refused,
         //    and the stored digest is proof it wrote nothing.
-        assertGranted(DnsRecordModel.MODEL_ID, dynamicId, HohenheimAccess.EDIT);
-        assertGranted(DnsRecordModel.MODEL_ID, dynamicId, HohenheimAccess.VIEW);
+        assertGranted(DnsRecordModel.MODEL_ID, dynamicId, HohenheimCapabilities.EDIT);
+        assertGranted(DnsRecordModel.MODEL_ID, dynamicId, HohenheimCapabilities.VIEW);
         String storedDigest = DynamicDnsService.credentialFor(dynamicId)
             .get(DnsDyndnsCredentialModel.TOKEN_DIGEST);
         assertThat(tenantPost("/manage/dns-records/invoke/hohenheim.dyndns_token?ids=" + dynamicId, "")
@@ -631,15 +631,15 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
             .get(DnsDyndnsCredentialModel.TOKEN_DIGEST))
             .as("the refused action minted nothing").isEqualTo(storedDigest);
 
-        assertGranted(DnsRecordModel.MODEL_ID, dynamicId, HohenheimAccess.DYNDNS);
+        assertGranted(DnsRecordModel.MODEL_ID, dynamicId, HohenheimCapabilities.DYNDNS);
         assertThat(tenantPost("/manage/dns-records/invoke/hohenheim.dyndns_token?ids=" + dynamicId, "")
             .statusCode()).as("the dyndns holder may re-mint").isIn(200, 302, 303);
         assertThat((String) DynamicDnsService.credentialFor(dynamicId)
             .get(DnsDyndnsCredentialModel.TOKEN_DIGEST))
             .as("and the stored digest actually rotated").isNotEqualTo(storedDigest);
 
-        for (String capability : List.of(HohenheimAccess.EDIT, HohenheimAccess.VIEW,
-                HohenheimAccess.DYNDNS)) {
+        for (String capability : List.of(HohenheimCapabilities.EDIT, HohenheimCapabilities.VIEW,
+                HohenheimCapabilities.DYNDNS)) {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, DnsRecordModel.MODEL_ID, dynamicId, capability);
         }
         TenantConduits.as(adminPrincipal, () -> {
@@ -841,7 +841,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
         // 5. An explicit view grant is the SECOND lane, and it is view-only: the row becomes
         //    reachable, and a write is still refused because view is not edit.
-        assertGranted(DnsRecordModel.MODEL_ID, foreignRecordId, HohenheimAccess.VIEW);
+        assertGranted(DnsRecordModel.MODEL_ID, foreignRecordId, HohenheimCapabilities.VIEW);
         assertThat(tenantGet("/zn/records/hohenheim.dns_record/item/" + foreignRecordId)
             .statusCode()).as("a view grant reaches exactly one foreign row").isEqualTo(200);
         assertThatThrownBy(() -> TenantConduits.as(tenantPrincipal, () -> {
@@ -854,7 +854,7 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
         // 6. An edit grant authorizes the row -- but NOT a rename onto a third name, which is
         //    the claim half and answers to hostname authority alone.
-        assertGranted(DnsRecordModel.MODEL_ID, foreignRecordId, HohenheimAccess.EDIT);
+        assertGranted(DnsRecordModel.MODEL_ID, foreignRecordId, HohenheimCapabilities.EDIT);
         assertThatCode(() -> TenantConduits.as(tenantPrincipal, () -> {
             Row row = model.findById(foreignRecordId);
             row.set(DnsRecordModel.VALUE, "10.0.0.78");
@@ -871,9 +871,9 @@ class TenantDomainDnsScopeTest extends HohenheimTestBase {
 
         // 7. Revoking both puts the row back out of reach on every surface.
         RecordGrants.revoke(GrantSubjectType.USER, tenantId, DnsRecordModel.MODEL_ID, foreignRecordId,
-            HohenheimAccess.VIEW);
+            HohenheimCapabilities.VIEW);
         RecordGrants.revoke(GrantSubjectType.USER, tenantId, DnsRecordModel.MODEL_ID, foreignRecordId,
-            HohenheimAccess.EDIT);
+            HohenheimCapabilities.EDIT);
         assertThat(tenantGet("/zn/records/hohenheim.dns_record/item/" + foreignRecordId)
             .statusCode()).as("a revoked grant is a closed door again").isEqualTo(404);
         assertThatThrownBy(() -> TenantConduits.as(tenantPrincipal, () -> {

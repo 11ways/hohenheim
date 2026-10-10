@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -12,6 +14,8 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.KnownCapability;
 import be.elevenways.zenit.common.security.Permission;
@@ -19,6 +23,7 @@ import be.elevenways.zenit.common.security.Principal;
 import be.elevenways.zenit.common.security.RecordCapabilityScope;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.data.RecordSourceGate;
+import be.elevenways.zenit.server.operation.Authorizer;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -27,9 +32,9 @@ import java.util.function.Function;
 
 /**
  * THE per-record access policy funnel. Sites still use a SINGLE capability string
- * ({@link #MANAGE}) covering view, edit and operate together; INSTANCES carry the
+ * ({@link HohenheimCapabilities#MANAGE}) covering view, edit and operate together; INSTANCES carry the
  * split vocabulary the Phase 3/5/6 gates need (view/console/power/config/destroy,
- * plus the file, snapshot, backup, image and exec verbs), with {@link #MANAGE} kept as the
+ * plus the file, snapshot, backup, image and exec verbs), with {@link HohenheimCapabilities#MANAGE} kept as the
  * ownership marker and as the umbrella that IMPLIES the first five. Adding a verb
  * needs no schema change: grants are plain (subject, model, record, capability) tuples.
  * Per-record decisions ride the framework's fixed precedence walk
@@ -46,8 +51,8 @@ import java.util.function.Function;
  * every-record authority, and {@link #grantedRecordIds} now REFUSES to pretend
  * otherwise.
  *
- * AIDEV-NOTE: this class is THE public funnel and the home of the capability vocabulary;
- * the mechanics live in package-private collaborators it delegates to (HohenheimGrantPolicy
+ * AIDEV-NOTE: this class is THE public funnel; the capability names live in HohenheimCapabilities and
+ * nowhere else. The mechanics live in package-private collaborators it delegates to (HohenheimGrantPolicy
  * for the boot-time declarations, RecordOwners for ownership, OperationGates for the
  * service-side gates, CapabilityScopes for the set-wise walk and its request memo). Callers
  * keep asking HohenheimAccess; a collaborator made public would be a second entry point.
@@ -61,118 +66,6 @@ import java.util.function.Function;
 @BlastAutoLoad
 public final class HohenheimAccess {
 
-    /** The single v1 capability on a site record. */
-    public static final String MANAGE = HohenheimCapabilities.MANAGE;
-
-    /** Read a record's own state: DNS record fields, certificate status (never key material). */
-    public static final String VIEW = "view";
-
-    /** Author a DNS record inside the delegated type allow-list. */
-    public static final String EDIT = "edit";
-
-    /** Mint and hold a DNS record's dyndns update token. */
-    public static final String DYNDNS = "dyndns";
-
-    // AIDEV-NOTE: there is deliberately no `request` capability on CertificateModel.
-    // One was registered here until 2026-08-13 and NOTHING ever read it: authority to
-    // order a certificate is decided by NAME COVERAGE in CertificateAuthority.authorize
-    // (every requested name must be covered by a live domain row of a site the caller
-    // holds `manage` on), which is a different question from a per-certificate grant --
-    // the certificate the grant would sit on does not exist yet when the request is
-    // made. Because zenit-auth's RecordAccessPage draws one grant column per REGISTERED
-    // capability, the registration alone put a `request` checkbox in front of operators
-    // that granted nothing while reporting success. Do not re-add it without a reader.
-
-    /**
-     * Attach to the instance's OWN primary process: the read-only console stream, the
-     * console command lane and the VM framebuffer. ORDINARY per the plan's sensitivity
-     * classes, and deliberately NOT {@link #EXEC}: a console line reaches the workload's
-     * stdin, never an arbitrary program as an arbitrary user.
-     */
-    public static final String CONSOLE = HohenheimCapabilities.CONSOLE;
-
-    /** Start, stop and restart the workload. ORDINARY: it changes runtime state, never content. */
-    public static final String POWER = HohenheimCapabilities.POWER;
-
-    /**
-     * Author what the instance IS: its record fields, its devices, its schedules and an
-     * in-place app update. ELEVATED -- editing what runs is one step from running anything.
-     */
-    public static final String CONFIG = HohenheimCapabilities.CONFIG;
-
-    /**
-     * Tear the workload down and trash the record. ELEVATED: it is irreversible for the
-     * tenant's own data, but it is authority over their OWN instance only, so it stays
-     * delegable (an operator may hand a tenant lead the right to retire their own boxes).
-     */
-    public static final String DESTROY = "destroy";
-
-    /**
-     * Run an ARBITRARY command as an arbitrary user inside the workload. ADMIN by the
-     * plan's sensitivity classes: it is root-in-container and therefore a host-escape
-     * amplifier, so {@link KnownCapability} makes it structurally non-delegable, never
-     * owner-implied, and (the rule this wave added) impossible to reach through
-     * {@link #MANAGE}'s umbrella. An operator may still grant it deliberately; a tenant
-     * holding it can never pass it on.
-     */
-    public static final String EXEC = HohenheimCapabilities.EXEC;
-
-    /**
-     * Open an INTERACTIVE login shell inside the workload -- the tenant verb the product's
-     * "your own box" promise is made of, and deliberately NOT {@link #EXEC}.
-     *
-     * ELEVATED and DELEGABLE: unlike exec it is bounded to a workload that already runs as
-     * a NON-ROOT uid (the shell surface refuses every other kind BY NAME), so what it hands
-     * out is authority over the tenant's own files and processes rather than
-     * root-in-container. That is what makes it something an operator may hand to a tenant
-     * lead, where exec never can be.
-     *
-     * AIDEV-NOTE: deliberately NOT listed in any {@code impliedBy}, {@link #MANAGE}
-     * included. Implication is retroactive -- it changes what every ALREADY-STORED grant
-     * row means -- so folding a shell into the manage umbrella would silently hand an
-     * interactive terminal to every existing manage holder. Same reasoning that keeps
-     * the file, snapshot and backup verbs out of that umbrella; an operator grants this one
-     * deliberately, on the record, or it is not held.
-     */
-    public static final String SHELL = HohenheimCapabilities.SHELL;
-
-    /**
-     * Read a managed database's CREDENTIALS -- the plaintext {@code db_password} the
-     * record stores encrypted. ELEVATED and deliberately separate from {@link #VIEW}: a
-     * read-only teammate may see that a database exists, its engine and its status, and
-     * still not hold the credential that connects to it as its owner.
-     */
-    public static final String CREDENTIALS = "credentials";
-
-    /** Take and restore driver-level snapshots of an instance (data-destructive on restore). */
-    public static final String SNAPSHOTS = HohenheimCapabilities.SNAPSHOTS;
-
-    /** Export instance backups and restore them to new instances. */
-    public static final String BACKUPS = HohenheimCapabilities.BACKUPS;
-
-    /**
-     * Browse, read and download the files inside an instance's own volumes. An ORDINARY
-     * tenant capability per the plan's sensitivity classes -- it reads the tenant's own
-     * data and nothing else -- and deliberately NOT implied by {@link #FILES_WRITE}: the
-     * two are asked for separately on every path in InstanceFiles.
-     */
-    public static final String FILES_READ = "files.read";
-
-    /**
-     * Write, upload, rename, delete and mkdir inside an instance's own volumes. ELEVATED:
-     * editing a start script or a jar is editing what runs, which is why it is a separate
-     * capability from {@link #FILES_READ} rather than a mode of it.
-     */
-    public static final String FILES_WRITE = "files.write";
-
-    /**
-     * Run an ARBITRARY, non-template image on an instance. Exec-equivalent by the
-     * threat model (an attacker-chosen image is attacker-chosen code), so admin/
-     * type-level: elevated and deliberately NOT delegable -- a manage holder must not
-     * be able to launder it to a third party or mint it into an API-key scope.
-     */
-    public static final String IMAGE_ANY = "image_any";
-
     /**
      * Type-level authority to CREATE an instance. Deliberately a PERMISSION and not a
      * record capability: no record exists yet, so there is nothing to hold a capability
@@ -181,10 +74,10 @@ public final class HohenheimAccess {
      * {@link be.elevenways.hohenheim.server.instance.InstancePlacement} (which host).
      */
     public static final Permission INSTANCES_CREATE = Permission.declare("hohenheim.instances.create",
-        Microcopy.of("hohenheim_instances_create").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
+        HohenheimMicrocopy.PERMISSION.of("hohenheim_instances_create"), Permission.Delegation.DELEGABLE);
 
     /**
-     * Type-level authority over EVERY site: {@link #MANAGE} on all of them, WITHOUT
+     * Type-level authority over EVERY site: {@link HohenheimCapabilities#MANAGE} on all of them, WITHOUT
      * {@code hohenheim.admin.access}. It rides the walk's type-level row, which sits behind
      * the gate-denial row, so an explicit denial of {@link ManagePanel#ACCESS} still kills it
      * -- and behind the admin row, so it grants strictly less than the admin permission.
@@ -192,9 +85,9 @@ public final class HohenheimAccess {
      * AIDEV-NOTE: declared on SiteModel and NOWHERE ELSE, and that is a policy decision the
      * mechanism cannot make. {@code RecordCapabilityRules.typeLevelPermission} is per MODEL,
      * not per capability: holding it confers EVERY capability in that model's vocabulary.
-     * Sites have exactly one ({@link #MANAGE}), so the two readings coincide. On
-     * InstanceModel they would not -- its vocabulary carries {@link #EXEC} and
-     * {@link #IMAGE_ANY}, both deliberately admin-only and non-delegable -- so an
+     * Sites have exactly one ({@link HohenheimCapabilities#MANAGE}), so the two readings coincide. On
+     * InstanceModel they would not -- its vocabulary carries {@link HohenheimCapabilities#EXEC} and
+     * {@link HohenheimCapabilities#IMAGE_ANY}, both deliberately admin-only and non-delegable -- so an
      * instances-wide equivalent needs per-capability narrowing in the framework FIRST. Do not
      * copy this declaration onto another model without it.
      *
@@ -202,7 +95,7 @@ public final class HohenheimAccess {
      * permission is a leaf, and holding it includes handing it on.
      */
     public static final Permission SITES_MANAGE_ALL = Permission.declare("hohenheim.sites.manage_all",
-        Microcopy.of("hohenheim_sites_manage_all").withFilter("scope", "permission"), Permission.Delegation.DELEGABLE);
+        HohenheimMicrocopy.PERMISSION.of("hohenheim_sites_manage_all"), Permission.Delegation.DELEGABLE);
 
     /** How a packed subject set separates its entries; no subject token can contain it. */
     public static final String SUBJECT_SEPARATOR = "\n";
@@ -223,12 +116,22 @@ public final class HohenheimAccess {
     }
 
     /**
-     * Whether the context holds {@link #MANAGE} on the site, decided by the
+     * An operation authorizer admitting operators alone, from every surface; anyone else is refused FORBIDDEN.
+     *
+     * @param diagnostic the refusal's diagnostic, naming the operator act
+     */
+    public static <S, I> @NonNull Authorizer<S, I> operatorOnly(@NonNull String diagnostic) {
+        return (subject, input, access) -> isAdmin(access) ? null
+            : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, diagnostic);
+    }
+
+    /**
+     * Whether the context holds {@link HohenheimCapabilities#MANAGE} on the site, decided by the
      * framework's precedence walk (admin bypass, gate denial, grants) -- never
      * by a grants-only lookup beside it.
      */
     public static boolean canManageSite(@NonNull AccessContext ctx, int siteId) {
-        return ctx.hasCapability(SiteModel.MODEL_ID, siteId, MANAGE);
+        return ctx.hasCapability(SiteModel.MODEL_ID, siteId, HohenheimCapabilities.MANAGE);
     }
 
     /**
@@ -243,15 +146,16 @@ public final class HohenheimAccess {
      * detached context rides the SAME precedence walk as the context variant.
      */
     public static boolean canManageSite(@NonNull Principal principal, int siteId) {
-        return AccessContext.detached(principal).hasCapability(SiteModel.MODEL_ID, siteId, MANAGE);
+        return AccessContext.detached(principal).hasCapability(SiteModel.MODEL_ID, siteId,
+            HohenheimCapabilities.MANAGE);
     }
 
     /**
-     * Whether the context holds {@link #MANAGE} on the instance -- the SAME precedence
+     * Whether the context holds {@link HohenheimCapabilities#MANAGE} on the instance -- the SAME precedence
      * walk as {@link #canManageSite}, over the instance grant vocabulary.
      */
     public static boolean canManageInstance(@NonNull AccessContext ctx, int instanceId) {
-        return ctx.hasCapability(InstanceModel.MODEL_ID, instanceId, MANAGE);
+        return hasInstanceCapability(ctx, instanceId, HohenheimCapabilities.MANAGE);
     }
 
     /** Conduit convenience for HTTP handlers. */
@@ -264,7 +168,7 @@ public final class HohenheimAccess {
      * a detached context's precedence walk.
      */
     public static boolean canManageInstance(@NonNull Principal principal, int instanceId) {
-        return hasInstanceCapability(principal, instanceId, MANAGE);
+        return hasInstanceCapability(principal, instanceId, HohenheimCapabilities.MANAGE);
     }
 
     /**
@@ -287,10 +191,12 @@ public final class HohenheimAccess {
      * socket handshakes). A predicate that runs once per RENDERED ROW must use
      * {@link #reachesRecord} instead -- converting THIS wrapper would put the request
      * memo (and its documented staleness rule) under every write gate.
+     *
+     * @param instanceId the instance, null (an unset reference) answering false
      */
-    public static boolean hasInstanceCapability(@NonNull AccessContext ctx, int instanceId,
+    public static boolean hasInstanceCapability(@NonNull AccessContext ctx, @Nullable Integer instanceId,
                                                 @NonNull String capability) {
-        return ctx.hasCapability(InstanceModel.MODEL_ID, instanceId, capability);
+        return instanceId != null && ctx.hasCapability(InstanceModel.MODEL_ID, instanceId, capability);
     }
 
     /**
@@ -298,10 +204,12 @@ public final class HohenheimAccess {
      * precedence walk every other tier rides, over the database vocabulary. Per-ROW
      * callers use {@link #reachesRecord}; the fresh walk stays for write gates
      * (see the note on {@link #hasInstanceCapability(AccessContext, int, String)}).
+     *
+     * @param databaseId the database, null (an unset reference) answering false
      */
-    public static boolean hasDatabaseCapability(@NonNull AccessContext ctx, int databaseId,
+    public static boolean hasDatabaseCapability(@NonNull AccessContext ctx, @Nullable Integer databaseId,
                                                 @NonNull String capability) {
-        return ctx.hasCapability(DatabaseModel.MODEL_ID, databaseId, capability);
+        return databaseId != null && ctx.hasCapability(DatabaseModel.MODEL_ID, databaseId, capability);
     }
 
     /**
@@ -316,7 +224,7 @@ public final class HohenheimAccess {
     // ---- Record ownership (RecordOwners) ----
 
     /**
-     * Whether two records of one model answer to the SAME owner (equal {@link #MANAGE} subjects).
+     * Whether two records of one model answer to the SAME owner (equal {@link HohenheimCapabilities#MANAGE} subjects).
      *
      * @return true for the same owner, failing CLOSED to false when grants cannot be read
      * @see RecordOwners#sameOwner(Identifier, Object, Object)
@@ -332,7 +240,7 @@ public final class HohenheimAccess {
     }
 
     /**
-     * THE owner identity of a record: the subjects holding {@link #MANAGE} on it.
+     * THE owner identity of a record: the subjects holding {@link HohenheimCapabilities#MANAGE} on it.
      *
      * @return the manage-grant subjects, or null when grants are unreadable (callers fail closed)
      * @see RecordOwners#manageSubjectsOf(Identifier, Object)
@@ -391,7 +299,7 @@ public final class HohenheimAccess {
     }
 
     /**
-     * Hand the creation owner {@link #MANAGE} on a record it just created.
+     * Hand the creation owner {@link HohenheimCapabilities#MANAGE} on a record it just created.
      *
      * @see RecordOwners#grantCreatorManage
      */
@@ -455,16 +363,11 @@ public final class HohenheimAccess {
     /**
      * THE operation-funnel gate for a capability-sensitive managed-database act.
      *
-     * @throws Violations {@code database_not_permitted}
+     * @throws Violations {@link HohenheimViolations#databaseNotPermitted}, the one answer for an invisible, absent or denied database
      * @see OperationGates#requireDatabaseCapability
      */
     public static void requireDatabaseCapability(int databaseId, @NonNull String capability) {
         OperationGates.requireDatabaseCapability(databaseId, capability);
-    }
-
-    /** THE uniform managed-database refusal; visibility, absence and denial are one answer. */
-    public static @NonNull Violations databaseRefusal() {
-        return OperationGates.databaseRefusal();
     }
 
     // ---- Set-wise scopes and their request memo (CapabilityScopes) ----
@@ -574,7 +477,7 @@ public final class HohenheimAccess {
     }
 
     /**
-     * Every site id the context holds {@link #MANAGE} on.
+     * Every site id the context holds {@link HohenheimCapabilities#MANAGE} on.
      *
      * @throws IllegalStateException on an every-site scope; see {@link #grantedRecordIds}
      */
@@ -613,7 +516,7 @@ public final class HohenheimAccess {
     }
 
     /**
-     * Every site id the principal holds {@link #MANAGE} on, for conduit-less contexts.
+     * Every site id the principal holds {@link HohenheimCapabilities#MANAGE} on, for conduit-less contexts.
      *
      * @throws IllegalStateException on an every-site scope
      */

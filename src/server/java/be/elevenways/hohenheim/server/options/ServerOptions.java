@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.options;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.HostMode;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -81,7 +82,7 @@ public final class ServerOptions {
     /** Display name for a stored server key, tolerant of a key whose server vanished. */
     public static String nameFromKey(@Nullable Object storedKey) {
         try {
-            return ServerModel.nameOf(ServerModel.canonicalServerId(storedKey));
+            return ServerModel.canonicalNameOf(storedKey);
         } catch (IllegalArgumentException unknown) {
             return String.valueOf(storedKey);
         }
@@ -94,7 +95,7 @@ public final class ServerOptions {
 
         @Override public Microcopy getLabel() {
             return mode == HostMode.LOCAL
-                ? Microcopy.of("server_local").withFilter("scope", "server_option")
+                ? HohenheimMicrocopy.SERVER_OPTION.of("server_local")
                     .withArg("name", name)
                 : Microcopy.literal(name);
         }

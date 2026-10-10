@@ -1,12 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.zenit.common.text.Texts;
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.protoblast.common.key.IdentifierKey;
-import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.routing.RouteScope;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -36,7 +36,7 @@ final class StackFailures {
     static @Nullable String reasonOf(@NonNull Row stack) {
         Row deployment = failedDeploymentOf(stack);
         String error = deployment == null ? null : deployment.get(StackDeploymentModel.ERROR);
-        return error == null || error.isBlank() ? null : error;
+        return Texts.blankAsNull(error);
     }
 
     /**
@@ -49,7 +49,7 @@ final class StackFailures {
         }
         Row deployment = latestDeploymentOf(stack.get(StackModel.ID));
         return deployment != null
-            && StackDeploymentModel.STATUS_FAILED.equals(deployment.get(StackDeploymentModel.STATUS))
+            && StackDeploymentModel.LIFECYCLE.is(deployment.get(StackDeploymentModel.STATUS), OperationStatus.FAILED)
             ? deployment : null;
     }
 
@@ -62,21 +62,13 @@ final class StackFailures {
         if (stackId == null) {
             return null;
         }
-        Map<Integer, Row> memo = memo();
-        if (memo != null && memo.containsKey(stackId)) {
+        Map<Integer, Row> memo = CmsSupport.memo(LATEST, HashMap::new);
+        if (memo.containsKey(stackId)) {
             return memo.get(stackId);
         }
         List<Row> rows = Models.get(StackDeploymentModel.class).findByStackId(stackId, 1);
         Row latest = rows.isEmpty() ? null : rows.get(0);
-        if (memo != null) {
-            memo.put(stackId, latest);
-        }
+        memo.put(stackId, latest);
         return latest;
-    }
-
-    /** The request's memo, created on first use; null without a request (an attribute-less one keeps none). */
-    private static @Nullable Map<Integer, Row> memo() {
-        Conduit conduit = RouteScope.currentConduit();
-        return conduit == null ? null : CmsSupport.memo(conduit, LATEST, HashMap::new);
     }
 }

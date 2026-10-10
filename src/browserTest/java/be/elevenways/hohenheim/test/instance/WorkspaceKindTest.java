@@ -619,7 +619,7 @@ class WorkspaceKindTest {
             int id = row.get(InstanceModel.ID);
             instances.add(id);
 
-            assertThatThrownBy(() -> new WorkspaceBuilds().deploy(id, "main", DeployTrigger.MANUAL))
+            assertThatThrownBy(() -> new WorkspaceBuilds().deploy(id, "main", null, DeployTrigger.MANUAL))
                 .as("the in-container checkout only applies to a workspace")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("workspace_kind_required");

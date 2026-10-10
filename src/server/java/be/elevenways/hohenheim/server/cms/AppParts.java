@@ -1,12 +1,15 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.AppDirectory.App;
 import be.elevenways.hohenheim.server.cms.AppDirectory.Source;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
@@ -37,6 +40,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
@@ -55,15 +59,20 @@ import java.util.function.Predicate;
  */
 public final class AppParts {
 
-    /** The entry's slug on both panels. */
-    public static final String SLUG = "apps";
-
-    private static final StringField NAME = StringField.builder("name").label(copy("name")).build();
-    private static final StringField ADDRESS_TEXT = StringField.builder("address_text").label(copy("address")).build();
-    private static final StringField KIND = StringField.builder("kind").label(copy("kind")).build();
-    private static final StringField HOST = StringField.builder("host").label(copy("host")).build();
+    private static final StringField NAME = StringField.builder("name").label(HohenheimMicrocopy.APP_LIST.of("name"))
+        .build();
+    private static final StringField ADDRESS_TEXT = StringField.builder("address_text")
+        .label(HohenheimMicrocopy.APP_LIST.of("address")).build();
+    private static final StringField KIND = StringField.builder("kind").label(HohenheimMicrocopy.APP_LIST.of("kind"))
+        .build();
+    private static final StringField HOST = StringField.builder("host").label(HohenheimMicrocopy.APP_LIST.of("host"))
+        .build();
     private static final EnumField TYPE = typeField();
     private static final EnumField STATE = stateField();
+
+    /** The two drawn columns no field carries: the address cell and the main address's HTTPS. */
+    private static final String ADDRESS_COLUMN = "address";
+    private static final String HTTPS_COLUMN = "https";
 
     private AppParts() {
     }
@@ -75,7 +84,7 @@ public final class AppParts {
      * @return the operator's Apps list
      */
     static @NonNull PanelResource<App> admin(@NonNull List<String> related, @Nullable String putOnline) {
-        return onward(entry("app", HohenheimPanel.SLUG, true), related, putOnline, null).build();
+        return onward(entry(HohenheimIds.id("app"), HohenheimSlugs.ADMIN, true), related, putOnline, null).build();
     }
 
     /**
@@ -86,11 +95,11 @@ public final class AppParts {
      *         since the delegated panel names no host
      */
     static @NonNull PanelResource<App> manage(@NonNull List<String> related, @Nullable String putOnline) {
-        return onward(entry("manage_app", ManagePanel.SLUG, false), related, putOnline,
-                InstanceTemplateParts::offersTenantCatalog)
-            // NAV-ONLY: a tenant granted nothing an app is made of sees no empty entry; the list stays scoped.
-            .hasInScopeRecords(access -> HohenheimAccess.managesAnySite(access)
-                || HohenheimAccess.reachesAny(access, InstanceModel.MODEL_ID, HohenheimAccess.VIEW))
+        // A tenant granted nothing an app is made of sees no empty entry; the list stays scoped.
+        return ManageTwin.listed(onward(entry(ManageTwin.id("app"), HohenheimSlugs.MANAGE, false), related, putOnline,
+                    InstanceTemplateParts::offersTenantCatalog),
+                access -> HohenheimAccess.managesAnySite(access)
+                    || HohenheimAccess.reachesAny(access, InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW))
             .build();
     }
 
@@ -115,7 +124,7 @@ public final class AppParts {
         return builder;
     }
 
-    private static PanelResource.@NonNull Builder<App> entry(@NonNull String id, @NonNull String panelSlug,
+    private static PanelResource.@NonNull Builder<App> entry(@NonNull Identifier id, @NonNull String panelSlug,
                                                              boolean withHost) {
         StorePages<App> pages = new StorePages<>() {
             @Override
@@ -133,25 +142,26 @@ public final class AppParts {
             @Override
             public @NonNull RecordPage<App> page(TableView.@NonNull Applied<App> applied,
                                                  @NonNull AccessContext access) {
-                return this.inMemory(applied, apps(panelSlug, access), AppParts::cell, access);
+                return this.inMemory(applied, apps(panelSlug, access), (app, column) -> values(app).get(column.name()),
+                    access);
             }
         };
         ResourceList.Builder<App> list = ResourceList.store(table(withHost), pages)
             .chrome(ListChrome.MINIMAL)
-            .emptyDescription(copy("empty"));
+            .emptyDescription(HohenheimMicrocopy.APP_LIST.of("empty"));
         if (withHost) {
             list.search(NAME.getName(), ADDRESS_TEXT.getName(), HOST.getName());
         } else {
             list.search(NAME.getName(), ADDRESS_TEXT.getName());
         }
-        return PanelResource.builder(HohenheimIds.id(id), SLUG,
+        return PanelResource.builder(id, HohenheimSlugs.APPS,
                 SubjectType.of(HohenheimIds.id("app"), App.class, App::key))
-            .label(copy("plural"))
-            .recordLabel(copy("singular"))
+            .label(HohenheimMicrocopy.APP_LIST.of("plural"))
+            .recordLabel(HohenheimMicrocopy.APP_LIST.of("singular"))
             // The operator reads the data model it lists; a tenant reads their apps, never "sites, instances and
             // stacks" (DEP10).
-            .description(withHost ? Microcopy.of("nav_hint").withFilter("scope", "app")
-                : Microcopy.of("nav_hint").withFilter("scope", "manage_app"))
+            .description(withHost ? HohenheimMicrocopy.APP.of("nav_hint")
+                : HohenheimMicrocopy.MANAGE_APP.of("nav_hint"))
             .icon(Icon.of("cubes"))
             // The one count the sidebar carries (board Main): the apps with a problem, as the Apps tile says them.
             .navBadge(access -> {
@@ -163,8 +173,7 @@ public final class AppParts {
             .reads(ResourceReads.<App>typed(App::key)
                 .load((key, access) -> apps(panelSlug, access).stream()
                     .filter(app -> app.key().equals(key)).findFirst().orElse(null))
-                .values(app -> Map.of(NAME.getName(), app.name()))
-                .cells(AppParts::cell)
+                .values(AppParts::values)
                 .build()
                 .title(App::name));
     }
@@ -174,42 +183,43 @@ public final class AppParts {
         TableSpec.Builder<App> table = TableSpec.<App>builder()
             .column(ResourceHealth.column())
             .column(ColumnSpec.fromField(NAME).sortable().build())
-            .column(ColumnSpec.virtual("address", copy("address"))
+            .column(ColumnSpec.virtual(ADDRESS_COLUMN, HohenheimMicrocopy.APP_LIST.of("address"))
                 .renderer(HohenheimTemplateIds.CELL_SITE_HOSTNAMES).build())
             .column(ColumnSpec.fromField(ADDRESS_TEXT).hidden().build())
             .column(ColumnSpec.fromField(KIND).sortable().build());
         if (withHost) {
             // A website no instance serves runs on no host: the board's dash, never the framework's "None".
-            table.column(ColumnSpec.fromField(HOST).sortable().absent(copy("host_none")).build());
+            table.column(ColumnSpec.fromField(HOST).sortable().absent(HohenheimMicrocopy.APP_LIST.of("host_none"))
+                .build());
         }
         // The main address's HTTPS in the Addresses list's words and cell, never the app's overall verdict; then the
-        // fix its verdict offers (board Apps-List's "Get a certificate"), drawn as its own record's band offers it.
-        table.column(ColumnSpec.virtual("https", copy("https")).renderer(HohenheimTemplateIds.CELL_DOMAIN_CERTIFICATE)
-                .build())
-            .column(ColumnSpec.virtual("fix", copy("fix")).renderer(HohenheimTemplateIds.CELL_APP_FIX).labelHidden()
-                .alignment(ColumnSpec.Alignment.RIGHT).build())
+        // framework's fix cell (board Apps-List's "Get a certificate"), offered as the app's record's band offers it.
+        table.column(ColumnSpec.virtual(HTTPS_COLUMN, HohenheimMicrocopy.APP_LIST.of("https"))
+            .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
+            .column(ResourceHealth.fixColumn())
             .column(ColumnSpec.fromField(TYPE).hidden().build())
             .column(ColumnSpec.fromField(STATE).hidden().build())
-            .filter(FilterSpec.leaf(TYPE, CoreTypes.EQUALS).label(copy("kind")).build());
+            .filter(FilterSpec.leaf(TYPE, CoreTypes.EQUALS).label(HohenheimMicrocopy.APP_LIST.of("kind")).build());
         if (withHost) {
-            table.filter(FilterSpec.leaf(HOST, CoreTypes.CONTAINS).label(copy("host")).build());
+            table.filter(FilterSpec.leaf(HOST, CoreTypes.CONTAINS).label(HohenheimMicrocopy.APP_LIST.of("host"))
+                .build());
         }
-        return table.filter(FilterSpec.leaf(STATE, CoreTypes.EQUALS).label(copy("state")).build()).build();
+        return table.filter(FilterSpec.leaf(STATE, CoreTypes.EQUALS).label(HohenheimMicrocopy.APP_LIST.of("state"))
+            .build()).build();
     }
 
-    private static @Nullable Object cell(@NonNull App app, @NonNull ColumnSpec column) {
-        return switch (column.name()) {
-            case "name" -> app.name();
-            case "address" -> app.address();
-            case "address_text" -> app.addressText();
-            case "kind" -> app.kind();
-            case "host" -> app.host();
-            case "https" -> app.https();
-            case "fix" -> app.fix();
-            case "type" -> app.source().token();
-            case "state" -> app.health().tone().token();
-            default -> null;
-        };
+    /** @return every column's value of one app, keyed by the column it fills */
+    private static @NonNull Map<String, Object> values(@NonNull App app) {
+        Map<String, Object> values = new HashMap<>();
+        values.put(NAME.getName(), app.name());
+        values.put(ADDRESS_COLUMN, app.address());
+        values.put(ADDRESS_TEXT.getName(), app.addressText());
+        values.put(KIND.getName(), app.kind());
+        values.put(HOST.getName(), app.host());
+        values.put(HTTPS_COLUMN, app.https());
+        values.put(TYPE.getName(), app.source().token());
+        values.put(STATE.getName(), app.health().tone().token());
+        return values;
     }
 
     /** @return the apps the named panel lists for this viewer; none for a panel this node does not register */
@@ -227,7 +237,7 @@ public final class AppParts {
                                                              @Nullable Predicate<AccessContext> offered) {
         PanelAction.LinkBuilder<App> link = PanelAction.<App>link(HohenheimIds.id("app_put_online"),
                 ActionPlacement.HEADER)
-            .label(copy("put_online"))
+            .label(HohenheimMicrocopy.APP_LIST.of("put_online"))
             .icon(Icon.of("plus"))
             .style(ActionStyle.PRIMARY)
             .inlineInHeader(true)
@@ -242,21 +252,17 @@ public final class AppParts {
     private static @NonNull EnumField typeField() {
         EnumField.Builder builder = EnumField.builder("type");
         for (Source source : Source.values()) {
-            builder.value(source.token(), spec -> spec.label(copy("type_" + source.token())));
+            builder.value(source.token(), spec -> spec.label(HohenheimMicrocopy.APP_LIST.of("type_" + source.token())));
         }
-        return builder.label(copy("kind")).build();
+        return builder.label(HohenheimMicrocopy.APP_LIST.of("kind")).build();
     }
 
     /** The state filter's values: the framework's verdict tones, worded for an app. */
     private static @NonNull EnumField stateField() {
         EnumField.Builder builder = EnumField.builder("state");
         for (HealthTone tone : HealthTone.values()) {
-            builder.value(tone.token(), spec -> spec.label(copy("state_" + tone.token())));
+            builder.value(tone.token(), spec -> spec.label(HohenheimMicrocopy.APP_LIST.of("state_" + tone.token())));
         }
-        return builder.label(copy("state")).build();
-    }
-
-    private static @NonNull Microcopy copy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "app_list");
+        return builder.label(HohenheimMicrocopy.APP_LIST.of("state")).build();
     }
 }

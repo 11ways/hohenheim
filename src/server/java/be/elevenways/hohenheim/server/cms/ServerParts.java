@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.StateLineCell;
@@ -9,10 +11,10 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.protoblast.common.key.IdentifierKey;
+import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.text.ByteText;
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.host.HostStatusCell;
@@ -22,9 +24,7 @@ import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.options.ServerOptions;
-import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -43,7 +43,6 @@ import be.elevenways.zenit.cms.common.resource.ResourceVerb;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.edit.Computed;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FieldAccess;
@@ -58,7 +57,6 @@ import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationHandlers;
@@ -72,9 +70,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import static be.elevenways.hohenheim.server.cms.ServerWords.hostCopy;
-import static be.elevenways.hohenheim.server.cms.ServerWords.serverCopy;
-
 /**
  * Host inventory parts over stored evidence, explicit trust/lifecycle operations and two-phase enrollment writes.
  * Host identifiers and addresses are verbatim; state words resolve in the viewer's locale.
@@ -83,7 +78,6 @@ import static be.elevenways.hohenheim.server.cms.ServerWords.serverCopy;
  * @since 0.1.0
  */
 public final class ServerParts {
-    public static final String SLUG = "servers";
     private static final String STATE_COLUMN = "state";
     private static final String MEMORY_COLUMN = "memory";
     private static final String RUNS_COLUMN = "runs";
@@ -91,18 +85,19 @@ public final class ServerParts {
     /** Request memo of every host's app and database counts: three queries per rendered list. */
     private static final IdentifierKey<Map<Integer, int[]>> RUNS_COUNTS = IdentifierKey.of("hohenheim", "host_runs");
     static final StringField INCUS_TRUST_TOKEN = StringField.builder("incus_trust_token")
-        .label(HohenheimFormCopy.label("incus_trust_token")).help(HohenheimFormCopy.help("incus_trust_token")).build();
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("incus_trust_token"))
+        .help(HohenheimMicrocopy.HELP.of("incus_trust_token")).build();
     static final StringField TRUST_NOTICE = StringField.builder("trust_notice")
-        .label(HohenheimFormCopy.label("trust_notice")).visibleIn(EditView.CREATE).build();
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("trust_notice")).visibleIn(EditView.CREATE).build();
     static final List<String> LOCAL_IMMUTABLE = List.of(ServerModel.NAME.getName(), ServerModel.RUNTIME.getName(),
         ServerModel.SSH_TARGET.getName(), ServerModel.INCUS_URL.getName());
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_server"))
         .happened(OperationSentences.of("delete_server"))
-        .label(Microcopy.of("delete").withFilter("scope", "cms"))
+        .label(CmsMicrocopy.of("delete"))
         .one(SubjectType.record(ServerModel.MODEL_ID)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .result(Integer.class).facts(OperationFact.DESTRUCTIVE).command(CmsCommands.TRANSACTIONAL).register();
     static {
-        OperationHandlers.attach(DELETE).availability((row, access) -> deleteUnavailable(row)).handle(call -> {
+        OperationHandlers.attach(DELETE).availability((row, access) -> DeleteImpact.serverInUse(row)).handle(call -> {
             Models.get(ServerModel.class).delete(call.subject());
             ServerOptions.refresh();
             return 1;
@@ -121,22 +116,26 @@ public final class ServerParts {
         bindings.add(ResourceFieldBinding.of(INCUS_TRUST_TOKEN.getName(),
             FieldAccess.customRecordAware((access, record) -> local(record)
                 ? FieldAccess.Decision.HIDDEN : FieldAccess.Decision.EDITABLE)));
-        return PanelResource.builder(HohenheimIds.id("server"), SLUG, SubjectType.record(ServerModel.MODEL_ID))
-            .label(serverCopy("plural")).recordLabel(serverCopy("singular")).description(serverCopy("nav_hint"))
+        return PanelResource.builder(HohenheimIds.id("server"), HohenheimSlugs.SERVERS, SubjectType
+            .record(ServerModel.MODEL_ID))
+            .label(HohenheimMicrocopy.SERVER.of("plural")).recordLabel(HohenheimMicrocopy.SERVER.of("singular"))
+            .description(HohenheimMicrocopy.SERVER.of("nav_hint"))
             .navGroup(NavGroup.DEFAULT).navOrder(40).icon(Icon.of("server"))
-            .form(ResourceForm.<Row>of(formSpec()).bindings(bindings).landingTab(ServerOverviewState.SLUG)
-                .tabLabel(AppOverview.copy("configuration")).build())
+            .form(ResourceForm.<Row>of(formSpec()).bindings(bindings).landingTab(RecordOverview.SLUG)
+                .tabLabel(HohenheimMicrocopy.APP_OVERVIEW.of("configuration")).build())
             .list(hostList(tableSpec()))
             .reads(ResourceReads.rows().mapCells((row, column) -> "host_status".equals(column.name()) ? statusCellOf(row) : null))
             .writes(ResourceMutations.rows().create(call -> ServerInventoryWrites.create(call.values()))
                 .update(call -> { ServerInventoryWrites.update(call.record(), call.values()); return null; })
                 .delete(DELETE).scopeVerifiedBeforeWrite().ownsWriteEnvelope(ResourceVerb.CREATE, ResourceVerb.UPDATE).build())
-            .deleteConfirmation(DeleteConfirmation.of(DeleteConfirmation.body(serverCopy("delete_confirm"))))
+            .deleteConfirmation(DeleteConfirmation.of(
+                DeleteConfirmation.body(HohenheimMicrocopy.SERVER.of("delete_confirm"))))
             .actions(actions)
-            .tabs(ResourceTabs.<Row>of(List.of(RecordOverview.<Row>fields(ServerOverviewState.SLUG, serverCopy("overview"))
+            .tabs(ResourceTabs.<Row>of(List.of(RecordOverview.<Row>fields(RecordOverview.SLUG,
+                HohenheimMicrocopy.SERVER.of("overview"))
                     .withoutFields().widgets(ServerOverviewState::widgets), new ServerMediaTab()))
                 .withHistory().historyInStrip().withContributions())
-            .relatedPages(RelatedPage.toPeer("reconcile-findings")).build();
+            .relatedPages(RelatedPage.toPeer(HohenheimSlugs.RECONCILE_FINDINGS)).build();
     }
 
     static boolean local(@Nullable Object record) {
@@ -144,13 +143,15 @@ public final class ServerParts {
     }
 
     static FormSpec formSpec() {
-        return FormSpec.builder().createTitle(serverCopy("create_title"))
+        return FormSpec.builder().createTitle(HohenheimMicrocopy.SERVER.of("create_title"))
             .add(ServerModel.NAME).add(FieldFormEntryRegistry.INSTANCE.deriveEntry(ServerModel.RUNTIME))
             .add(ServerModel.SSH_TARGET).add(ServerModel.INCUS_URL).add(INCUS_TRUST_TOKEN)
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(ServerModel.POSTURE))
             .add(ServerModel.PUBLIC_IPV4).add(ServerModel.PUBLIC_IPV6)
-            .add(Computed.of(TRUST_NOTICE, values -> hostCopy(serverCopy(ServerModel.RUNTIME_INCUS.equals(values.get("runtime"))
-                ? "trust_notice_body_incus" : "trust_notice_body"))).dependsOn("runtime").build())
+            .add(Computed.of(TRUST_NOTICE, values -> CmsSupport.resolvedTextOrDefault(HohenheimMicrocopy.SERVER.of(
+                ServerModel.RUNTIME_INCUS.equals(values.get("runtime")) ? "trust_notice_body_incus"
+                    : "trust_notice_body")))
+                .dependsOn("runtime").build())
             .section(FormSection.advanced(ServerModel.PUBLIC_IPV4.getName(), ServerModel.PUBLIC_IPV6.getName())).build();
     }
 
@@ -164,16 +165,16 @@ public final class ServerParts {
             // The daemon and when it was last seen sit under the name, as the board's card line does.
             .column(ColumnSpec.fromField(ServerModel.NAME).filterable().subtext("host_status").build())
             .column(ColumnSpec.fromField(ServerModel.PUBLIC_IPV4).hidden().build())
-            .column(ColumnSpec.virtual(STATE_COLUMN, listCopy("state_column"))
+            .column(ColumnSpec.virtual(STATE_COLUMN, HohenheimMicrocopy.HOST_LIST.of("state_column"))
                 .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
-            .column(ColumnSpec.virtual("host_status", serverCopy("host_status"))
+            .column(ColumnSpec.virtual("host_status", HohenheimMicrocopy.SERVER.of("host_status"))
                 .renderer(HohenheimTemplateIds.CELL_HOST_STATUS).hidden().build())
-            .column(ColumnSpec.virtual(MEMORY_COLUMN, listCopy("memory_column"))
+            .column(ColumnSpec.virtual(MEMORY_COLUMN, HohenheimMicrocopy.HOST_LIST.of("memory_column"))
                 .renderer(HohenheimTemplateIds.CELL_HOST_MEMORY).build())
             // What it runs sits under who may run here, as the board's card ends; a sixth column pushed the table
             // under the pinned row actions at 1440px.
             .column(ColumnSpec.fromField(ServerModel.POSTURE).filterable().subtext(RUNS_COLUMN).build())
-            .column(ColumnSpec.virtual(RUNS_COLUMN, listCopy("runs_column")).hidden().build())
+            .column(ColumnSpec.virtual(RUNS_COLUMN, HohenheimMicrocopy.HOST_LIST.of("runs_column")).hidden().build())
             .column(ColumnSpec.fromField(ServerModel.RUNTIME).filterable().hidden().build())
             .column(ColumnSpec.fromField(ServerModel.SSH_TARGET).filterable().copyable().hidden().build())
             .column(ColumnSpec.fromField(ServerModel.ADMISSION).filterable().hidden().build())
@@ -204,11 +205,11 @@ public final class ServerParts {
         Integer id = server.get(ServerModel.ID);
         HostCapacityView capacity = id == null ? null : InstanceCapacity.viewOf(server, id);
         if (capacity == null || !capacity.measured() || capacity.budgetMb() <= 0) {
-            return new HostMemoryCell(false, 0, listCopy(capacity != null && capacity.stale()
+            return new HostMemoryCell(false, 0, HohenheimMicrocopy.HOST_LIST.of(capacity != null && capacity.stale()
                 ? "memory_stale" : "memory_unmeasured"));
         }
         int percent = (int) Math.min(100, Math.round(100.0 * capacity.bookedMb() / capacity.budgetMb()));
-        return new HostMemoryCell(true, percent, listCopy("memory_booked")
+        return new HostMemoryCell(true, percent, HohenheimMicrocopy.HOST_LIST.of("memory_booked")
             .withArg("booked", sizeOfMegabytes(capacity.bookedMb()))
             .withArg("budget", sizeOfMegabytes(capacity.budgetMb())));
     }
@@ -221,19 +222,12 @@ public final class ServerParts {
     /** How many apps and managed databases the host runs, counted once per rendered list. */
     private static @NonNull String runsCellOf(@NonNull Row server, @NonNull PanelRequest request) {
         Conduit conduit = request.conduit();
-        Map<Integer, int[]> counts = conduit.getAttribute(RUNS_COUNTS);
-        if (counts == null) {
-            counts = runsCounts();
-            try {
-                conduit.setAttribute(RUNS_COUNTS, counts);
-            } catch (UnsupportedOperationException attributeless) {
-                // An attribute-less conduit counts again per row.
-            }
-        }
+        Map<Integer, int[]> counts = CmsSupport.memo(conduit, RUNS_COUNTS, ServerParts::runsCounts);
         int[] runs = counts.getOrDefault(server.get(ServerModel.ID), new int[2]);
-        Microcopy text = runs[0] == 0 && runs[1] == 0 ? listCopy("runs_nothing")
-            : listCopy("runs_count").withArg("apps", listCopy("apps_count").withArg("count", runs[0]))
-                .withArg("databases", listCopy("databases_count").withArg("count", runs[1]));
+        Microcopy text = runs[0] == 0 && runs[1] == 0 ? HohenheimMicrocopy.HOST_LIST.of("runs_nothing")
+            : HohenheimMicrocopy.HOST_LIST.of("runs_count")
+                .withArg("apps", HohenheimMicrocopy.HOST_LIST.of("apps_count").withArg("count", runs[0]))
+                .withArg("databases", HohenheimMicrocopy.HOST_LIST.of("databases_count").withArg("count", runs[1]));
         return text.resolve(conduit.getLocales(), conduit.getMessageResolver());
     }
 
@@ -259,20 +253,6 @@ public final class ServerParts {
         return counts;
     }
 
-    static @NonNull Microcopy listCopy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "host_list");
-    }
-
-    static @Nullable Microcopy deleteUnavailable(Row row) {
-        if (local(row)) return serverCopy("delete_local");
-        Integer id = row.get(ServerModel.ID);
-        Row migrating = id == null ? null : ServerModel.migratingOnto(id).first();
-        if (migrating != null) return serverCopy("delete_migrating")
-            .withArg("instance", String.valueOf((Object) migrating.get(InstanceModel.NAME)));
-        ServerModel.References references = id == null ? null : ServerModel.referencesOf(id);
-        return references != null && references.any() ? references.describe(serverCopy("delete_in_use")) : null;
-    }
-
     static @NonNull HostStatusCell statusCellOf(@NonNull Row row) {
         Instant seen = row.get(ServerModel.LAST_SEEN_AT);
         String iso = seen == null ? null : seen.toString();
@@ -282,21 +262,18 @@ public final class ServerParts {
         if (capabilities instanceof Map<?, ?> values && values.get(versionKey) instanceof String version && !version.isBlank()) {
             daemon += " " + version;
         }
-        RelativeTimeWording wording = null;
-        try {
-            wording = RelativeTimeWording.resolve(LocaleChain.of(RouteLocales.get().getDefaultLocale()), Zenit.getMessageResolver());
-        } catch (RuntimeException unbooted) { /* The stored cell is also readable before boot. */ }
-        if (row.get(ServerModel.QUARANTINED_AT) != null) return new HostStatusCell(HostState.QUARANTINED, daemon, null, iso, wording);
+        if (row.get(ServerModel.QUARANTINED_AT) != null) return new HostStatusCell(HostState.QUARANTINED, daemon, null,
+            iso);
         String error = row.get(ServerModel.LAST_ERROR_KIND);
         if (error != null && !error.isBlank()) {
-            return new HostStatusCell(HostState.ERROR, daemon, HostProbe.FailureKind.labelOf(error), iso, wording);
+            return new HostStatusCell(HostState.ERROR, daemon, HostProbe.FailureKind.labelOf(error), iso);
         }
-        if (seen == null) return new HostStatusCell(HostState.NEVER_PROBED, daemon, null, null, wording);
+        if (seen == null) return new HostStatusCell(HostState.NEVER_PROBED, daemon, null, null);
         try {
             HostAdmission.requireRecentContact(row);
-            return new HostStatusCell(HostState.OK, daemon, null, iso, wording);
+            return new HostStatusCell(HostState.OK, daemon, null, iso);
         } catch (Violations lapsed) {
-            return new HostStatusCell(HostState.SILENT, daemon, null, iso, wording);
+            return new HostStatusCell(HostState.SILENT, daemon, null, iso);
         }
     }
 }

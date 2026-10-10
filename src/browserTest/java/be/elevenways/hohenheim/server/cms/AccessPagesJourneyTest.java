@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.model.BanModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.security.BanStateCell;
+import be.elevenways.hohenheim.security.BanState;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.security.HohenheimSecurity;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -102,6 +103,12 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
             .contains("Tried names this server does not serve");
         assertThat(now).as("step 2: the score and the old wording are gone")
             .doesNotContain("score 26 over threshold").doesNotContain("Went over the limit");
+        String rendered = now.replaceAll("(?s)<script.*?</script>", "");
+        String renderedRow = rendered.substring(rendered.indexOf("203.0.113.43"));
+        // The row from its address up to its state cell, which follows the By cell.
+        assertThat(renderedRow.substring(0, renderedRow.indexOf("data-state=")))
+            .as("step 2: by the threat scorer reads as the source's word, never its stored token")
+            .contains("Automatic").doesNotContain(">auto<");
 
         // 3. The page is the blocked addresses, blocked through its one header action and its form; no quick-add
         //    bar (board Access-Blocked).
@@ -123,16 +130,40 @@ class AccessPagesJourneyTest extends HohenheimTestBase {
         Models.get(BanModel.class).save(expired);
         assertThat(BanModel.blockedNow(expired, Now.instant())).as("step 5: an expired block is not blocked now")
             .isFalse();
-        assertThat(BanStateCell.of(expired, Now.instant()).token()).as("step 5: its state reads expired")
-            .isEqualTo(BanStateCell.EXPIRED);
+        assertThat(BanState.of(expired, Now.instant())).as("step 5: its state reads expired")
+            .isEqualTo(BanState.EXPIRED);
         assertThat(adminGet("/admin/bans").body()).as("step 5: the default Blocked now view leaves it out")
             .contains("203.0.113.41").doesNotContain("203.0.113.45");
         String notBlocked = adminGet("/admin/bans?filter." + BanModel.BLOCKED_NOW + "=false").body();
         assertThat(notBlocked).as("step 5: it is listed among the blocks that do not hold")
-            .contains("203.0.113.45").contains("data-ban-state=\"" + BanStateCell.EXPIRED + "\"")
+            .contains("203.0.113.45").contains("data-state=\"" + BanState.EXPIRED.token() + "\"")
             .doesNotContain("203.0.113.41");
         assertThat(notBlocked).as("step 5: and no block there offers Lift, the expired one included")
             .doesNotContain("lift_ban");
+        // 5b. A lifted block's "Until" is when it was lifted, never the expiry it no longer has (DD10a).
+        Row lifted = Models.get(BanModel.class).find().where(BanModel.IP.eq("203.0.113.42")).first();
+        Instant liftedAt = lifted.get(BanModel.LIFTED_AT);
+        Instant formerExpiry = lifted.get(BanModel.EXPIRES_AT);
+        assertThat(BanState.until(lifted)).as("step 5b: until reads the lift").isEqualTo(liftedAt);
+        assertThat(notBlocked).as("step 5b: the lifted row's Until is its lift")
+            .contains("datetime=\"" + liftedAt + "\"")
+            .doesNotContain("datetime=\"" + formerExpiry + "\"");
+
+        // 5c. With no miss in the past hour the Recent misses card says so in one sentence, with no stray "Unknown"
+        //     beside it (DD10a: the empty state was a fact without a value).
+        Duration offset = Now.offset();
+        Now.setOffset(offset.plus(BanParts.RECENT_MISSES).plusMinutes(1));
+        String quiet;
+        try {
+            quiet = adminGet("/admin/bans").body().replaceAll("(?s)<script.*?</script>", "");
+        } finally {
+            Now.setOffset(offset);
+        }
+        String quietCard = quiet.substring(quiet.indexOf("Recent misses"));
+        quietCard = quietCard.substring(0, Math.min(quietCard.length(), 1500));
+        assertThat(quietCard).as("step 5c: the empty state is its sentence")
+            .contains("No address asked for a name this server does not serve in the past hour")
+            .doesNotContain("widget-fact-empty").doesNotContain("Unknown");
 
         // 6. Recent misses (board Access-Blocked): the threat scorer's requests for names this server does not serve,
         //    one line per address, the most recent names first and the rest counted.

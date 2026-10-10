@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.host.HostMemoryCell;
@@ -114,7 +115,7 @@ class HostsPageJourneyTest extends HohenheimTestBase {
                 InstanceModel.SERVER_ID.getName(), admitted).forEach(app::set);
             Models.get(InstanceModel.class).save(app);
             cleanup.add(0, () -> HardDeletes.row(Models.get(InstanceModel.class), app));
-            HttpResponse<String> list = adminGet("/admin/" + ServerParts.SLUG);
+            HttpResponse<String> list = adminGet("/admin/" + HohenheimSlugs.SERVERS);
             assertThat(list.statusCode()).as("step 5: the Hosts list renders").isEqualTo(200);
             assertThat(list.body()).as("step 5: the admission in words")
                 .contains("Takes new apps", "Takes no new apps", "Waiting for its checks")
@@ -168,12 +169,13 @@ class HostsPageJourneyTest extends HohenheimTestBase {
                 .filter(fact -> fact.name().equals(HostPreflight.MEM_TOTAL_FACT)).findFirst().orElseThrow();
             assertThat(say(memory.label())).as("step 8: the memory fact is named in words").isEqualTo("Memory");
             assertThat(memory.value()).as("step 8: as a size, never a byte count").isEqualTo("16.0 GB");
-            String waitingPage = adminGet("/admin/" + ServerParts.SLUG + "/" + waiting + "/page/overview").body();
+            String waitingPage = adminGet("/admin/" + HohenheimSlugs.SERVERS + "/" + waiting + "/page/overview").body();
             assertThat(waitingPage).as("step 8: the host page draws the finding")
                 .contains("nftables refused a firewall change")
                 .as("step 8: and the advice's").contains("The probe instance never answered")
                 .as("step 8: and the report's verdict apart from its time").contains("data-preflight-verdict");
-            String admittedPage = adminGet("/admin/" + ServerParts.SLUG + "/" + admitted + "/page/overview").body();
+            String admittedPage = adminGet("/admin/" + HohenheimSlugs.SERVERS + "/" + admitted + "/page/overview")
+                .body();
             assertThat(admittedPage).as("step 8: the measured memory as a size").contains("16.0 GB")
                 .as("step 8: never its raw bytes").doesNotContain(String.valueOf(16L * 1024 * 1024 * 1024));
         } finally {
@@ -217,8 +219,8 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             assertThat(say(item.detail())).as("step 2: in the same words").isEqualTo(say(refusal));
             assertThat(say(item.action())).as("step 2: offering a fresh check").isEqualTo("Check again");
             assertThat(item.target().toUrl()).as("step 2: on the host's Overview, never its Configuration form")
-                .isEqualTo("/admin/" + ServerParts.SLUG + "/" + stale + "/open");
-            String stalePage = adminGet("/admin/" + ServerParts.SLUG + "/" + stale + "/page/overview").body();
+                .isEqualTo("/admin/" + HohenheimSlugs.SERVERS + "/" + stale + "/open");
+            String stalePage = adminGet("/admin/" + HohenheimSlugs.SERVERS + "/" + stale + "/page/overview").body();
             assertThat(stalePage).as("step 2: the host page wears the same state").contains("Cannot take new apps")
                 .doesNotContain("Takes new apps");
             assertThat(stalePage).as("step 2: its capacity says when memory was last measured")
@@ -294,7 +296,7 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             HostPreflight.store(PREFIX + "stale", new HostPreflight.Report(List.of(
                 new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon")),
                 Map.of(), true, Now.instant(), null));
-            String page = adminGet("/admin/" + ServerParts.SLUG + "/" + stale + "/page/overview").body();
+            String page = adminGet("/admin/" + HohenheimSlugs.SERVERS + "/" + stale + "/page/overview").body();
             assertThat(page).as("step 6: the posture in the board's words").contains("Shared containers")
                 .doesNotContain("operator risk");
             assertThat(page).as("step 6: the accepted risk names who accepted it").contains("Accepted by ")

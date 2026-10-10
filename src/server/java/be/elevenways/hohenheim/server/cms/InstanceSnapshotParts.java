@@ -1,14 +1,16 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceSnapshotOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshotOperationHandlers;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -42,33 +44,33 @@ import java.util.List;
  * @since 0.1.0
  */
 public final class InstanceSnapshotParts {
-    public static final String SLUG = "instance-snapshots";
     private InstanceSnapshotParts() {}
     public static @NonNull PanelResource<Row> admin() {
-        return entry("instance_snapshot").tabs(ResourceTabs.<Row>none().withHistory().withContributions()).build();
+        return entry(HohenheimIds.id("instance_snapshot"))
+            .tabs(ResourceTabs.<Row>none().withHistory().withContributions()).build();
     }
     public static @NonNull PanelResource<Row> manage() {
-        return entry("manage_instance_snapshot").scope(TenantScopes.INSTANCE_SNAPSHOTS)
-            .hasInScopeRecords(access -> HohenheimAccess.reachesAny(access, InstanceModel.MODEL_ID, HohenheimAccess.SNAPSHOTS))
-            .tabs(ResourceTabs.<Row>none().withContributions()).build();
+        return ManageTwin.reached(entry(ManageTwin.id("instance_snapshot")), TenantScopes.INSTANCE_SNAPSHOTS,
+            ResourceTabs.<Row>none().withContributions()).build();
     }
-    private static PanelResource.@NonNull Builder<Row> entry(String id) {
+    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
         InstanceSnapshotOperationHandlers.init();
-        return PanelResource.builder(HohenheimIds.id(id), SLUG, InstanceSnapshotOperations.SNAPSHOT)
-            .label(Microcopy.of("plural").withFilter("scope", "instance_snapshot"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "instance_snapshot"))
+        return PanelResource.builder(id, HohenheimSlugs.INSTANCE_SNAPSHOTS, InstanceSnapshotOperations.SNAPSHOT)
+            .label(HohenheimMicrocopy.INSTANCE_SNAPSHOT.of("plural"))
+            .recordLabel(HohenheimMicrocopy.INSTANCE_SNAPSHOT.of("singular"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP).navOrder(16).icon(Icon.of("camera")).showInNav(false)
             .standsUnder(HohenheimSlugs.INSTANCES)
             // A snapshot belongs to its instance: listed in the instance's Backups tab, its record page leads back there.
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceSnapshotModel.INSTANCE_ID)
-                .tab(InstanceParts.BACKUPS_TAB))
+                .tab(HohenheimSlugs.Tab.BACKUPS))
             .form(ResourceForm.<Row>of(FormSpec.builder().add(InstanceSnapshotModel.NOTE).build())
                 .inlineEditable(InstanceSnapshotModel.NOTE).build())
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL).search(InstanceSnapshotModel.NOTE).build())
             .reads(ResourceReads.rows().title(InstanceSnapshotParts::title))
             .writes(ResourceMutations.rows().update().delete(InstanceSnapshotOperations.DELETE).build())
             .authority(ResourceAuthority.<Row>builder().write(null, (row, access) -> HohenheimAccess.reachesRecord(access,
-                InstanceModel.MODEL_ID, row.get(InstanceSnapshotModel.INSTANCE_ID), HohenheimAccess.SNAPSHOTS)).build())
+                InstanceModel.MODEL_ID, row.get(InstanceSnapshotModel.INSTANCE_ID),
+                    HohenheimCapabilities.SNAPSHOTS)).build())
             .actions(List.of(restore()));
     }
     private static TableSpec<Row> tableSpec() {
@@ -87,17 +89,16 @@ public final class InstanceSnapshotParts {
         return nativeName != null && !nativeName.isBlank() ? nativeName : null;
     }
     private static PanelAction<Row> restore() {
-        Microcopy verb = Microcopy.of("restore").withFilter("scope", "instance_snapshot");
+        ConfirmationSpec restore = Confirmations.of(HohenheimMicrocopy.INSTANCE_SNAPSHOT.of("restore"),
+            HohenheimMicrocopy.INSTANCE_SNAPSHOT.of("restore_confirm_generic"), ActionStyle.DESTRUCTIVE);
         return PanelAction.<Row, Void>places(InstanceSnapshotOperations.RESTORE, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("restored")
-                    .withFilter("scope", "instance_snapshot").withArg("name", instanceName(request.subject()))))
+                (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_SNAPSHOT
+                    .of("restored")
+                    .withArg("name", instanceName(request.subject()))))
             .style(ActionStyle.DESTRUCTIVE)
-            .confirmation(ConfirmationSpec.builder().title(verb)
-                .body(Microcopy.of("restore_confirm_generic").withFilter("scope", "instance_snapshot"))
-                .confirmLabel(verb).style(ActionStyle.DESTRUCTIVE).build())
-            .dynamicConfirmation(row -> ConfirmationSpec.builder().title(verb)
-                .body(Microcopy.of("restore_confirm").withFilter("scope", "instance_snapshot").withArg("name", instanceName(row)))
-                .confirmLabel(verb).style(ActionStyle.DESTRUCTIVE).requireTypedConfirmation(instanceName(row)).build()).build();
+            .confirmation(restore)
+            .dynamicConfirmation(row -> Confirmations.typed(restore.withBody(HohenheimMicrocopy.INSTANCE_SNAPSHOT
+                .of("restore_confirm").withArg("name", instanceName(row))), instanceName(row))).build();
     }
     private static String instanceName(Row row) {
         Row owner = StoredRows.byId(Models.get(InstanceModel.class), row.get(InstanceSnapshotModel.INSTANCE_ID));

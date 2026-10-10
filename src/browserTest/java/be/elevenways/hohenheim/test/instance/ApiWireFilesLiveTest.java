@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
@@ -83,16 +83,16 @@ class ApiWireFilesLiveTest extends HohenheimTestBase {
         instanceId = row.get(InstanceModel.ID);
         handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
 
-        for (String capability : List.of(HohenheimAccess.MANAGE, HohenheimAccess.FILES_READ,
-                HohenheimAccess.FILES_WRITE)) {
+        for (String capability : List.of(HohenheimCapabilities.MANAGE, HohenheimCapabilities.FILES_READ,
+                HohenheimCapabilities.FILES_WRITE)) {
             RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId, capability, true);
         }
         RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         List<String> scopes = List.of(
-            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.MANAGE),
-            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.FILES_READ),
-            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.FILES_WRITE));
+            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.MANAGE),
+            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.FILES_READ),
+            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.FILES_WRITE));
         tenant = new Caller.Key(ApiKeyService.create(tenantId, "wire-files-tenant", scopes, null).plaintext());
         // The viewer's key carries every scope the tenant's does: its owner's VIEW grant is what refuses it.
         viewer = new Caller.Key(ApiKeyService.create(viewerId, "wire-files-viewer", scopes, null).plaintext());

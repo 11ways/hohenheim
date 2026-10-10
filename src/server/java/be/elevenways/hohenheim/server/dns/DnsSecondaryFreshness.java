@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.dns;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
@@ -19,6 +20,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * What each linked secondary actually SERVES for a primary zone, probed from this primary
@@ -71,7 +73,7 @@ public final class DnsSecondaryFreshness {
         catch (Exception e) {
             return outcomes;
         }
-        long ourSerial = valueOr(zone.get(DnsZoneModel.SERIAL), 0);
+        long ourSerial = Objects.requireNonNullElse(zone.get(DnsZoneModel.SERIAL), 0);
         for (DnsZonePeers.Linked linked : DnsZonePeers.enabled(zoneId)) {
             outcomes.add(probeLink(originString, origin, ourSerial, linked.link(), linked.peer()));
         }
@@ -81,7 +83,7 @@ public final class DnsSecondaryFreshness {
     private static @NonNull Outcome probeLink(@NonNull String originString, @NonNull Name origin,
                                               long ourSerial, @NonNull Row link, @NonNull Row peer) {
         String host = peer.get(DnsPeerModel.TRANSFER_HOST);
-        int port = valueOr(peer.get(DnsPeerModel.TRANSFER_PORT), 53);
+        int port = Objects.requireNonNullElse(peer.get(DnsPeerModel.TRANSFER_PORT), 53);
         Long served = null;
         String error;
         if (host == null || host.isBlank()) {
@@ -113,7 +115,8 @@ public final class DnsSecondaryFreshness {
                 Alerts.trySend(NotificationEvents.DNS_SECONDARY_STALE,
                     Alerts.about(DnsZonePeerModel.MODEL_ID, link.get(DnsZonePeerModel.ID)),
                     staleTitle(List.of(peerName), originString),
-                    Alerts.copy("dns_secondary_stale_body").withArg("lag", lagOf(peer, link, ourSerial)));
+                    HohenheimMicrocopy.ALERT.of("dns_secondary_stale_body")
+                        .withArg("lag", lagOf(peer, link, ourSerial)));
                 Blast.slog("dns.secondary_stale", java.util.Map.of(
                     "zone", originString, "peer", peerName,
                     "served", served != null ? served : -1, "primary", ourSerial));
@@ -130,7 +133,7 @@ public final class DnsSecondaryFreshness {
      * @return "kuifje has an old copy of starfleet.life", the headline the attention item and the alert share
      */
     public static @NonNull Microcopy staleTitle(@NonNull List<String> peers, @NonNull String origin) {
-        return Microcopy.of("dns_secondaries_stale").withFilter("scope", "attention_title")
+        return HohenheimMicrocopy.ATTENTION_TITLE.of("dns_secondaries_stale")
             .withArg("count", peers.size()).withArg("peers", peers).withArg("origin", origin);
     }
 
@@ -144,21 +147,18 @@ public final class DnsSecondaryFreshness {
         String name = String.valueOf((Object) peer.get(DnsPeerModel.NAME));
         String host = peer.get(DnsPeerModel.TRANSFER_HOST);
         if (host == null || host.isBlank()) {
-            return lagCopy("dns_secondary_no_host").withArg("peer", name);
+            return HohenheimMicrocopy.ATTENTION_DETAIL.of("dns_secondary_no_host").withArg("peer", name);
         }
         String error = link.get(DnsZonePeerModel.PROBE_ERROR);
         if (error != null && !error.isBlank()) {
-            return lagCopy("dns_secondary_silent").withArg("peer", name).withArg("error", error);
+            return HohenheimMicrocopy.ATTENTION_DETAIL.of("dns_secondary_silent").withArg("peer", name)
+                .withArg("error", error);
         }
         Integer served = link.get(DnsZonePeerModel.SERVED_SERIAL);
         // A serial is an identifier, never a quantity: as text, so no locale groups its digits.
-        return lagCopy("dns_secondary_behind").withArg("peer", name)
+        return HohenheimMicrocopy.ATTENTION_DETAIL.of("dns_secondary_behind").withArg("peer", name)
             .withArg("served", String.valueOf(served != null ? served : 0))
             .withArg("serial", String.valueOf(primarySerial));
-    }
-
-    private static @NonNull Microcopy lagCopy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "attention_detail");
     }
 
     /** @return true when a link has been behind or silent for longer than {@link #STALE_AFTER} */
@@ -169,9 +169,5 @@ public final class DnsSecondaryFreshness {
     /** @return true when the link row records a lag that has outlived the window */
     public static boolean isStale(@NonNull Row link) {
         return isStale(link.get(DnsZonePeerModel.BEHIND_SINCE), Now.instant());
-    }
-
-    private static int valueOr(@Nullable Integer value, int fallback) {
-        return value != null ? value : fallback;
     }
 }

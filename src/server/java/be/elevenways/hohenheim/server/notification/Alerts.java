@@ -126,11 +126,6 @@ public final class Alerts {
         }
     }
 
-    /** @return alert copy of scope {@code alert} */
-    public static @NonNull Microcopy copy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "alert");
-    }
-
     /**
      * The panel inbox of every enabled administrator, as comms recipients.
      *

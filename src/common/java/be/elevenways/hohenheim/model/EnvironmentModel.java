@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
 import be.elevenways.zenit.common.orm.field.Field;
@@ -29,17 +29,17 @@ public class EnvironmentModel extends Model {
     public static final IntegerField PROJECT_ID = SCHEMA.addField(
         IntegerField.builder().name("project_id")
             .required()
-            .label(HohenheimFormCopy.label("project"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("project"))
             .build());
 
     /** Never localized: an environment name is user data. */
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .required()
-        .label(HohenheimFormCopy.label("environment_name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("environment_name"))
         .build());
 
     public static final TextField DESCRIPTION = SCHEMA.addField(TextField.builder().name("description")
-        .label(HohenheimFormCopy.label("project_description"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("project_description"))
         .build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());

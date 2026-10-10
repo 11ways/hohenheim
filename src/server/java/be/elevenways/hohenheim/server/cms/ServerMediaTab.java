@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.InstallMediaFetchState;
@@ -41,11 +43,9 @@ import java.util.Map;
  */
 public final class ServerMediaTab implements RecordTab.Rendered<Row> {
 
-    public static final String SLUG = "install-media";
-
     @Override public @NonNull Identifier id() { return HohenheimIds.id("server_media"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("tab").withFilter("scope", "server_media"); }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.SERVER_MEDIA.of("tab"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.INSTALL_MEDIA; }
     @Override public @NonNull Icon icon() { return Icon.of("compact-disc"); }
 
     @Override
@@ -71,7 +71,7 @@ public final class ServerMediaTab implements RecordTab.Rendered<Row> {
     @NonNull ActionResult<?> body(@NonNull Conduit conduit, @NonNull Row server) {
         Integer serverId = server.get(ServerModel.ID);
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", CmsSupport.pageTitle(conduit, "server_media",
+        vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.SERVER_MEDIA,
             server.get(ServerModel.NAME)));
         vars.put("serverId", serverId);
         vars.put("serverName", server.get(ServerModel.NAME));

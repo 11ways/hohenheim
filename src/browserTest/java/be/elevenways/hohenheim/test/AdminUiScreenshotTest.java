@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
@@ -107,11 +108,11 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
         }
 
         // A deploy history for the application's Deploys tab.
-        releaseOperation(applicationId, ReleaseOperationModel.STATUS_SUCCEEDED,
+        releaseOperation(applicationId, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED),
             "9f3ab21c44", null, 42150, 90);
-        releaseOperation(applicationId, ReleaseOperationModel.STATUS_FAILED,
+        releaseOperation(applicationId, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED),
             "1adf99e072", "health probe never answered on port 3000", 61400, 30);
-        releaseOperation(applicationId, ReleaseOperationModel.STATUS_SUCCEEDED,
+        releaseOperation(applicationId, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED),
             "77e0c5b911", null, 39800, 5);
 
         // Sites: one per interesting upstream, with hostnames and mixed TLS.

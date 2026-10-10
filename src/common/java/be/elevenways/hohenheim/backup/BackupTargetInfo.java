@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.backup;
 
-import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.orm.field.TypeDefinition;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.WordedKind;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
@@ -11,11 +10,15 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * discriminator of a backup target ({@code filesystem} and {@code ssh} now; object
  * storage reserved), driving the RegistryMemberField and the schemaFrom settings form.
  */
-public interface BackupTargetInfo extends TypeDefinition {
+public interface BackupTargetInfo extends WordedKind {
 
-    /** @return the registry identifier; its string form is the stored column value */
-    @NonNull Identifier typeId();
+    @Override
+    default @NonNull HohenheimMicrocopy labelScope() {
+        return HohenheimMicrocopy.BACKUP_TARGET_KIND;
+    }
 
-    /** Short description shown in the kind selector UI. */
-    @NonNull Microcopy getDescription();
+    @Override
+    default @NonNull HohenheimMicrocopy descriptionScope() {
+        return HohenheimMicrocopy.BACKUP_TARGET_KIND_DESCRIPTION;
+    }
 }

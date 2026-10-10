@@ -151,8 +151,8 @@ class QuotaDimensionDriftTest {
     @Test
     void aRefusalInAnyDimensionUnwindsTheOthersAndTheReconcileKeepsAnOpenWindow() {
         Db.run(datasource, () -> {
-            String countBucket = InstanceQuota.bucketKeyOf("");
-            String memoryBucket = InstanceQuota.memoryBucketOf("");
+            String countBucket = OwnerBudget.INSTANCES.bucketOf("");
+            String memoryBucket = OwnerBudget.OWNER_MEMORY.bucketOf("");
             int alpha = host("alpha");
             long slots = Quotas.usedOf(countBucket);
             long memory = Quotas.usedOf(memoryBucket);

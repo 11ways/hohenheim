@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.protoblast.common.thread.JobRunner;
@@ -30,11 +31,11 @@ class NoIdentityGateTest {
     /** @return what the gates answer on the calling thread, one line per gate */
     private static String gateAnswers() {
         return answer("operation", () -> HohenheimAccess.requireOperationCapability(ANY_INSTANCE,
-                HohenheimAccess.POWER))
+                HohenheimCapabilities.POWER))
             + " " + answer("destroy", () -> HohenheimAccess.requireDestroyPermitted(ANY_INSTANCE))
             + " " + answer("operator", HohenheimAccess::requireOperatorOperation)
             + " " + answer("database", () -> HohenheimAccess.requireDatabaseCapability(ANY_DATABASE,
-                HohenheimAccess.DESTROY));
+                HohenheimCapabilities.DESTROY));
     }
 
     private static String answer(String gate, Runnable check) {

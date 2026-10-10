@@ -1,24 +1,17 @@
 package be.elevenways.hohenheim.server.database;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimViolations;
-import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.docker.OwnerLabels;
-import be.elevenways.hohenheim.server.docker.ResourceLimits;
-import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.server.docker.ContainerSettings;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
-import be.elevenways.hohenheim.server.runtime.NetworkPosture;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
-import be.elevenways.hohenheim.server.util.EnvVars;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DoubleField;
@@ -35,6 +28,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * The instance kind a MANAGED DATABASE's engine container lowers onto: an
@@ -65,11 +60,9 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
 
     /** Lowercase {@link ManagedDatabase.Engine} token; decides port, data path and hardening. */
     public static final StringField ENGINE = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("engine").label(HohenheimFormCopy.label("engine")).build());
+        StringField.builder().name("engine").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("engine")).build());
 
-    public static final StringField IMAGE = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("image").label(HohenheimFormCopy.label("image"))
-            .help(HohenheimFormCopy.help("image")).build());
+    public static final StringField IMAGE = SETTINGS_SCHEMA.addField(InstanceKindFields.image());
 
     /**
      * The named volume the engine's data directory mounts, or blank for an EPHEMERAL
@@ -80,7 +73,7 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
 
     public static final BooleanField EPHEMERAL = SETTINGS_SCHEMA.addField(
         BooleanField.builder("ephemeral").defaultValue(false)
-            .label(HohenheimFormCopy.label("ephemeral")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("ephemeral")).build());
 
     /**
      * Whether the container is a SHARED engine (a {@code DatabaseEngineModel} row's)
@@ -89,27 +82,22 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
      */
     public static final BooleanField SHARED = SETTINGS_SCHEMA.addField(
         BooleanField.builder("shared").defaultValue(false)
-            .label(HohenheimFormCopy.label("placement")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("placement")).build());
 
     public static final StringField COMMAND = SETTINGS_SCHEMA.addField(
         StringField.builder().name("command")
-            .label(HohenheimFormCopy.label("container_command")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_command")).build());
 
     // secret(): redacted on derived surfaces (revisions, activity), like every env map.
     // The engine's environment never lives here -- passwords, root user and init database
     // all ride the instance-variable secret lane (encrypted column) and merge into the env
     // at deploy; see DatabaseInstances. Rows an older controller wrote are sealed at boot.
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
-        StringMapField.builder("environment_variables")
-            .label(HohenheimFormCopy.label("environment_variables")).secret().build());
+        InstanceKindFields.environmentVariables());
 
-    public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("memory_limit_mb")
-            .label(HohenheimFormCopy.label("memory_limit")).build());
+    public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
 
-    public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(
-        DoubleField.builder().name("cpu_limit")
-            .label(HohenheimFormCopy.label("cpu_limit")).build());
+    public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(InstanceKindFields.cpuLimit());
 
     /** Size cap for an ephemeral (tmpfs) data mount: 1 GiB -- generous for tests and small
      *  preview databases, while bounding RAM use (tmpfs only consumes RAM for live data). */
@@ -130,16 +118,6 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
     public @NonNull String getDisplayName() { return "Database container"; }
 
     @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("database_container").withFilter("scope", "instance_kind");
-    }
-
-    @Override
-    public @NonNull Microcopy getDescription() {
-        return Microcopy.of("database_container").withFilter("scope", "instance_kind_description");
-    }
-
-    @Override
     public Icon getIcon() { return Icon.of("database"); }
 
     @Override
@@ -157,29 +135,24 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
 
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
-        return new DockerInstanceRuntime(new ServerService().clientFor(serverName),
-            WorkloadNetworkPolicy.forServer(serverName), NetworkPosture.PRIVATE, Egress.NONE);
+        return DockerInstanceRuntime.onServer(serverName, Egress.NONE);
     }
 
     @Override
     public @NonNull InstanceSpec specFor(int instanceId, @NonNull Map<String, Object> settings) {
         ManagedDatabase.Engine engine = engineOf(settings);
-        String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, instanceId);
 
-        String image = str(settings.get("image"));
+        String image = trimmed(settings.get(IMAGE.getName()));
         if (image.isEmpty()) {
             image = engine.defaultImage;
         }
-
-        String command = str(settings.get("command"));
-        List<String> cmd = command.isEmpty() ? null : List.of(command.split("\\s+"));
 
         Map<String, String> volumes = new LinkedHashMap<>();
         Map<String, Long> tmpfs = new LinkedHashMap<>();
         if (isEphemeral(settings)) {
             tmpfs.put(engine.dataPath, EPHEMERAL_DATA_SIZE_BYTES);
         } else {
-            volumes.put(str(settings.get("data_volume")), engine.dataPath);
+            volumes.put(trimmed(settings.get("data_volume")), engine.dataPath);
         }
 
         // Loopback/tcp/no-fixed-port: the record-after shape. Host processes dial the
@@ -187,11 +160,7 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
         PortPublication publication =
             new PortPublication(engine.port, PortPublication.TCP, false, null, null);
 
-        return InstanceSpec.builder(handle, image,
-                ResourceLimits.fromSettings(settings, defaultFootprintMb(settings)),
-                engine.hardening(), OwnerLabels.of(InstanceModel.MODEL_ID, instanceId))
-            .command(cmd)
-            .env(EnvVars.toMap(settings.get("environment_variables")))
+        return ContainerSettings.spec(instanceId, image, settings, defaultFootprintMb(settings), engine.hardening())
             .volumes(volumes)
             .publication(publication)
             .tmpfs(tmpfs)
@@ -218,18 +187,13 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
     public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
         try {
             ManagedDatabase.Engine engine = engineOf(settings);
-            if (isShared(settings) && engine.supportsLogicalDatabases()) {
+            if (RawValues.isOn(settings, SHARED) && engine.supportsLogicalDatabases()) {
                 return engine.sharedFootprintMb();
             }
             return engine.footprintMb(isEphemeral(settings));
         } catch (Violations unknownEngine) {
             return ManagedDatabase.Engine.maxFootprintMb();
         }
-    }
-
-    /** Whether this container is a SHARED engine hosting many logical databases. */
-    static boolean isShared(@NonNull Map<String, Object> settings) {
-        return Boolean.TRUE.equals(settings.get(SHARED.getName()));
     }
 
     /**
@@ -240,8 +204,8 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
      * there is nothing to mount -- which is why this is one predicate and not two reads.
      */
     static boolean isEphemeral(@NonNull Map<String, Object> settings) {
-        return Boolean.TRUE.equals(settings.get("ephemeral"))
-            || str(settings.get("data_volume")).isEmpty();
+        return RawValues.isOn(settings, EPHEMERAL)
+            || trimmed(settings.get(DATA_VOLUME.getName())).isEmpty();
     }
 
     /**
@@ -249,17 +213,13 @@ public final class DatabaseContainerKind implements InstanceKindHandler {
      *         never a silent default, which would run the WRONG image on the wrong port
      */
     static ManagedDatabase.@NonNull Engine engineOf(@NonNull Map<String, Object> settings) {
-        String token = str(settings.get("engine"));
+        String token = trimmed(settings.get("engine"));
         ManagedDatabase.Engine engine = ManagedDatabase.Engine.forToken(token);
         if (engine == null) {
             throw Violations.ofField("settings.engine", token,
-                HohenheimViolations.text("database_engine_unknown")
+                HohenheimMicrocopy.VIOLATIONS.of("database_engine_unknown")
                     .withArg("engine", token));
         }
         return engine;
-    }
-
-    private static String str(Object value) {
-        return value == null ? "" : value.toString().trim();
     }
 }

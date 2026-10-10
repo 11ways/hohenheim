@@ -1,22 +1,33 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.CertificateModel;
+import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.DnsZonePeerModel;
 import be.elevenways.hohenheim.model.EnvironmentModel;
+import be.elevenways.hohenheim.model.GroupedCounts;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
+import be.elevenways.hohenheim.model.RuntimeImageModel;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.SiteAuthProviderGuards;
+import be.elevenways.hohenheim.server.database.DatabaseEngines;
+import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.project.ProjectGuards;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.protoblast.common.http.Uri;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -29,20 +40,21 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.function.Supplier;
 
 /**
- * The facts a per-record delete confirmation names, memoized per request.
+ * What a delete takes with it or why it is dead: the facts a per-record delete confirmation names and every
+ * resource's in-use refusal, memoized per request.
  *
- * AIDEV-NOTE: {@code Resource.deleteConfirmationFor} is called once per ROW while a list
- * page renders, so a naive implementation would issue a query per row. The two tables a
- * delete warning has to consult (site hostnames, certificate SAN lists) are snapshotted
- * ONCE per request through the conduit's attribute scope and every zone/site/certificate
- * on the page is then answered in memory. A conduit-less caller (a test, a detail render
- * outside a request) degrades to reading the tables directly rather than failing.
+ * AIDEV-NOTE: a delete's confirmation and its availability are asked once per ROW while a list page renders, so a
+ * naive implementation would issue a query per row. Every table a delete warning or refusal consults is read ONCE
+ * per request through {@link CmsSupport#memo} and every record on the page is then answered in memory. A
+ * conduit-less caller (a test, a detail render outside a request) degrades to reading the tables directly rather
+ * than failing. The {@code *InUse} methods are the ONE home of a delete's dead reason; each resource's delete
+ * operation reads its own here.
  */
-final class DeleteImpact {
+public final class DeleteImpact {
 
     /** Request-scoped snapshot of every site hostname, so a list page reads the table once. */
     private static final IdentifierKey<List<Row>> DOMAINS =
@@ -88,7 +100,139 @@ final class DeleteImpact {
     private static final IdentifierKey<List<Row>> VARIABLES =
         IdentifierKey.of("hohenheim", "delete_impact_variables");
 
+    /** Request-scoped database id to the live instances attached to it, shared with the list's Used by cell. */
+    private static final IdentifierKey<Map<Integer, List<Row>>> ATTACHED =
+        IdentifierKey.of("hohenheim", "database_used_by");
+
+    /** Request-scoped runtime image id to the live instances running it. */
+    private static final IdentifierKey<Map<Integer, Long>> IMAGE_INSTANCES =
+        IdentifierKey.of("hohenheim", "delete_impact_image_instances");
+
+    /** Request-scoped runtime image id to the templates naming it. */
+    private static final IdentifierKey<Map<Integer, Long>> IMAGE_TEMPLATES =
+        IdentifierKey.of("hohenheim", "delete_impact_image_templates");
+
+    /** Request-scoped host id to what still references it. */
+    private static final IdentifierKey<Map<Integer, ServerModel.References>> SERVER_REFERENCES =
+        IdentifierKey.of("hohenheim", "delete_impact_server_references");
+
+    /** Request-scoped host id to the instance a cold migration is moving onto it. */
+    private static final IdentifierKey<Map<Integer, Row>> MIGRATIONS =
+        IdentifierKey.of("hohenheim", "delete_impact_migrations");
+
     private DeleteImpact() {}
+
+    // -- why a delete is dead: each @return is the refusal, null while the delete is live -----------------------------
+
+    /** @return the sites gated by the provider (named) and the access rules naming it (counted) */
+    static @Nullable Microcopy authProviderInUse(@NonNull Row provider) {
+        Integer id = provider.get(SiteAuthProviderModel.ID);
+        String sites = join(sitesGatedByAuthProvider(id));
+        long rules = rulesNamingAuthProvider(id);
+        if (!sites.isEmpty()) {
+            return HohenheimMicrocopy.AUTH_PROVIDER.of("delete_in_use").withArg("sites", sites).withArg("rules", rules);
+        }
+        return rules > 0 ? HohenheimMicrocopy.AUTH_PROVIDER.of("delete_in_use_rules").withArg("rules", rules) : null;
+    }
+
+    /**
+     * AIDEV-NOTE: both tiers count. Since 2026-08-08 a database can be attached to an instance, and a refusal that only
+     * counted SITES would have let a tenant destroy the engine out from under their own running game server.
+     *
+     * @return the live workloads holding the database, named
+     */
+    static @Nullable Microcopy databaseInUse(@NonNull Row database) {
+        String workloads = workloadsHolding(database.get(DatabaseModel.ID));
+        return workloads.isEmpty() ? null : HohenheimMicrocopy.DATABASE.of("delete_in_use")
+            .withArg("name", String.valueOf((Object) database.get(DatabaseModel.NAME)))
+            .withArg("workloads", workloads);
+    }
+
+    /** @return the databases still living on the engine, named */
+    static @Nullable Microcopy engineInUse(@NonNull Row engine) {
+        Integer engineId = engine.get(DatabaseEngineModel.ID);
+        List<Row> hosted = new ArrayList<>();
+        for (Row database : engineId == null ? List.<Row>of() : databases()) {
+            if (engineId.equals(database.get(DatabaseModel.ENGINE_ID))) {
+                hosted.add(database);
+            }
+        }
+        return hosted.isEmpty() ? null : HohenheimMicrocopy.DATABASE_ENGINE.of("delete_in_use")
+            .withArg("name", String.valueOf((Object) engine.get(DatabaseEngineModel.NAME)))
+            .withArg("databases", DatabaseEngines.names(hosted));
+    }
+
+    /**
+     * Without the peer the secondary zones replicating from it decay to {@code error} and stop answering once their SOA
+     * expire window closes; the enforcement for every other writer is {@code DnsPeerCascades}.
+     *
+     * @return the secondary zones replicating from the peer, named
+     */
+    static @Nullable Microcopy dnsPeerInUse(@NonNull Row peer) {
+        String zones = join(secondaryZonesOfPeer(peer.get(DnsPeerModel.ID)));
+        return zones.isEmpty() ? null : HohenheimMicrocopy.DNS_PEER.of("delete_in_use").withArg("zones", zones);
+    }
+
+    /** @return what still groups under the environment, in the write funnel's own words */
+    static @Nullable Microcopy environmentInUse(@NonNull Row environment) {
+        ProjectGuards.EnvironmentUsage usage = environmentUsage(environment.get(EnvironmentModel.ID));
+        return usage.isEmpty() ? null : usage.refusal();
+    }
+
+    /** @return how many live instances and templates still run inside the image */
+    static @Nullable Microcopy runtimeImageInUse(@NonNull Row image) {
+        Integer id = image.get(RuntimeImageModel.ID);
+        if (id == null) {
+            return null;
+        }
+        long instances = CmsSupport.memo(IMAGE_INSTANCES, () -> GroupedCounts.of(Models.get(InstanceModel.class).find(),
+            InstanceModel.RUNTIME_IMAGE_ID)).getOrDefault(id, 0L);
+        long templates = CmsSupport.memo(IMAGE_TEMPLATES, () -> GroupedCounts.of(Models.get(InstanceTemplateModel.class).find(),
+            InstanceTemplateModel.RUNTIME_IMAGE_ID)).getOrDefault(id, 0L);
+        return instances > 0 || templates > 0 ? HohenheimMicrocopy.RUNTIME_IMAGE.of("delete_in_use")
+            .withArg("instances", instances).withArg("templates", templates) : null;
+    }
+
+    /** @return why the host cannot go: it is this machine, a migration is landing on it, or records still name it */
+    static @Nullable Microcopy serverInUse(@NonNull Row server) {
+        if (ServerParts.local(server)) {
+            return HohenheimMicrocopy.SERVER.of("delete_local");
+        }
+        Integer id = server.get(ServerModel.ID);
+        if (id == null) {
+            return null;
+        }
+        Row migrating = CmsSupport.memo(MIGRATIONS, ServerModel::migrationsByTarget).get(id);
+        if (migrating != null) {
+            return HohenheimMicrocopy.SERVER.of("delete_migrating")
+                .withArg("instance", String.valueOf((Object) migrating.get(InstanceModel.NAME)));
+        }
+        ServerModel.References references = CmsSupport.memo(SERVER_REFERENCES, ServerModel::referencesByServer)
+            .getOrDefault(id, ServerModel.References.NONE);
+        return references.any() ? references.describe(HohenheimMicrocopy.SERVER.of("delete_in_use")) : null;
+    }
+
+    /** @return the live instance rows a database is attached to, in link order */
+    static @NonNull List<Row> liveInstancesOf(@Nullable Integer databaseId) {
+        return databaseId == null ? List.of()
+            : CmsSupport.memo(ATTACHED, InstanceDatabaseLinks::liveInstancesByDatabase).getOrDefault(databaseId, List.of());
+    }
+
+    /**
+     * The names of the live workloads attached to a database, joined for a sentence; empty when nothing holds it.
+     *
+     * AIDEV-NOTE: names only, never a path in prose (DD10b). The list's Used by cell links each app for a reader who
+     * may open it; a reason or refusal is a sentence.
+     */
+    public static @NonNull String workloadsHolding(@Nullable Integer databaseId) {
+        List<String> workloads = new ArrayList<>();
+        for (Row instance : liveInstancesOf(databaseId)) {
+            workloads.add(String.valueOf((Object) instance.get(InstanceModel.NAME)));
+        }
+        return join(workloads);
+    }
+
+    // -- what a delete takes with it ----------------------------------------------------------------------------------
 
     /** @return the origins of the SECONDARY zones that replicate from one peer */
     static @NonNull List<String> secondaryZonesOfPeer(@Nullable Integer peerId) {
@@ -140,17 +284,7 @@ final class DeleteImpact {
 
     /** @return how many access rules name one auth provider */
     static long rulesNamingAuthProvider(@Nullable Integer providerId) {
-        if (providerId == null) {
-            return 0;
-        }
-        long rules = 0;
-        for (Row rule : rules()) {
-            if (AccessRuleModel.TYPE_AUTH_PROVIDER.equals(rule.get(AccessRuleModel.TYPE))
-                    && providerId.equals(SiteAuthProviderGuards.providerIdOf(rule))) {
-                rules++;
-            }
-        }
-        return rules;
+        return SiteAuthProviderGuards.rulesNaming(providerId, rules());
     }
 
     /**
@@ -434,69 +568,48 @@ final class DeleteImpact {
     }
 
     private static @NonNull List<Row> domains() {
-        return snapshot(DOMAINS, () -> Models.get(SiteDomainModel.class).find().all());
+        return CmsSupport.memo(DOMAINS, () -> Models.get(SiteDomainModel.class).find().all());
     }
 
     private static @NonNull List<Row> certificates() {
-        return snapshot(CERTIFICATES, () -> Models.get(CertificateModel.class).find().all());
+        return CmsSupport.memo(CERTIFICATES, () -> Models.get(CertificateModel.class).find().all());
     }
 
     private static @NonNull List<Row> zones() {
-        return snapshot(ZONES, () -> Models.get(DnsZoneModel.class).find().all());
+        return CmsSupport.memo(ZONES, () -> Models.get(DnsZoneModel.class).find().all());
     }
 
     /** LIVE sites only (the soft-delete find hook): a trashed site gates and names nothing. */
     private static @NonNull List<Row> sites() {
-        return snapshot(SITES, () -> Models.get(SiteModel.class).find().all());
+        return CmsSupport.memo(SITES, () -> Models.get(SiteModel.class).find().all());
     }
 
     private static @NonNull List<Row> paths() {
-        return snapshot(PATHS, () -> Models.get(ProtectedPathModel.class).find().all());
+        return CmsSupport.memo(PATHS, () -> Models.get(ProtectedPathModel.class).find().all());
     }
 
     private static @NonNull List<Row> rules() {
-        return snapshot(RULES, () -> Models.get(AccessRuleModel.class).find().all());
+        return CmsSupport.memo(RULES, () -> Models.get(AccessRuleModel.class).find().all());
     }
 
     private static @NonNull List<Row> zonePeers() {
-        return snapshot(ZONE_PEERS, () -> Models.get(DnsZonePeerModel.class).find().all());
+        return CmsSupport.memo(ZONE_PEERS, () -> Models.get(DnsZonePeerModel.class).find().all());
     }
 
     private static @NonNull List<Row> environments() {
-        return snapshot(ENVIRONMENTS, () -> Models.get(EnvironmentModel.class).find().all());
+        return CmsSupport.memo(ENVIRONMENTS, () -> Models.get(EnvironmentModel.class).find().all());
     }
 
     private static @NonNull List<Row> databases() {
-        return snapshot(DATABASES, () -> Models.get(DatabaseModel.class).find().all());
+        return CmsSupport.memo(DATABASES, () -> Models.get(DatabaseModel.class).find().all());
     }
 
     /** Soft-deleted instances included: an attachment to a destroyed workload still names it. */
     private static @NonNull List<Row> instances() {
-        return snapshot(INSTANCES, () -> Models.get(InstanceModel.class).find().withTrashed().all());
+        return CmsSupport.memo(INSTANCES, () -> Models.get(InstanceModel.class).find().withTrashed().all());
     }
 
     private static @NonNull List<Row> variables() {
-        return snapshot(VARIABLES, () -> Models.get(InstanceVariableModel.class).find().all());
-    }
-
-    /** Read a snapshot from the request scope, loading it once when it is not there yet. */
-    private static @NonNull List<Row> snapshot(@NonNull IdentifierKey<List<Row>> key,
-                                               @NonNull Supplier<List<Row>> loader) {
-        Conduit conduit = RouteScope.currentConduit();
-        if (conduit == null) {
-            return loader.get();
-        }
-        try {
-            List<Row> cached = conduit.getAttribute(key);
-            if (cached != null) {
-                return cached;
-            }
-            List<Row> loaded = loader.get();
-            conduit.setAttribute(key, loaded);
-            return loaded;
-        } catch (UnsupportedOperationException attributeless) {
-            // An attribute-less conduit degrades to reading the table.
-            return loader.get();
-        }
+        return CmsSupport.memo(VARIABLES, () -> Models.get(InstanceVariableModel.class).find().all());
     }
 }

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.zenit.server.operation.OperationPipeline;
 import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -16,7 +17,6 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -27,6 +27,7 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -100,13 +101,13 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
 
         tenantId = ApiSupport.user("devsurf-tenant@surface.test", "Device Surface Tenant");
         tenantKey = ApiKeyService.create(tenantId, NAME_PREFIX + "key",
-            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.MANAGE)),
+            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.MANAGE)),
             null).plaintext();
 
         viewerId = ApiSupport.user("devsurf-viewer@surface.test", "Device Surface Viewer");
         viewerKey = ApiKeyService.create(viewerId, NAME_PREFIX + "viewer-key",
-            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.VIEW),
-                CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.CONFIG)),
+            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW),
+                CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.CONFIG)),
             null).plaintext();
     }
 
@@ -156,7 +157,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         int id = row.get(InstanceModel.ID);
         this.instances.add(id);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, id,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         return id;
     }
 
@@ -257,7 +258,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
      */
     @Test
     void everyRefusalIsNamedAndLeavesNoPartialDeviceRow() throws Exception {
-        String bucket = InstanceDeviceQuota.diskBucketOf("");
+        String bucket = OwnerBudget.DISK_GB.bucketOf("");
         int instanceId = deviceCapableInstance("devsurf-refusals");
         String handle = handleOf(instanceId);
         long usedBefore = Quotas.usedOf(bucket);
@@ -458,7 +459,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         //    Without this the refusals below would be indistinguishable from the
         //    no-existence-oracle 404 the foreign-instance journey already pins.
         RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         HttpResponse<String> listed = keyGet(viewerKey,
             "/api/v1/instances/" + instanceId + "/devices");
         assertThat(listed.statusCode())
@@ -536,7 +537,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .as("step 1: the fixture disk was attached").isEqualTo(200);
         Row row = deviceRows(instanceId).get(0);
 
-        PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, InstanceAttachmentParts.DEVICES);
+        PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.MANAGE, HohenheimSlugs.INSTANCE_DEVICES);
         Panel panel = PanelRegistry.getBySlug(HohenheimSlugs.MANAGE);
         AccessContext viewer = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(viewerId, "Device Surface Viewer")));
@@ -546,13 +547,13 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         // 2. THE PREMISE, again: view-only really can SEE this device, so an absent
         //    affordance below is a WRITE decision and not the row being invisible.
         RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         assertThat(PartsReads.<Row>loadRow(new PanelRequest(panel, viewer.conduit(), viewer, null), resource,
             row.get(InstanceDeviceModel.ID), viewer))
             .as("step 2: the view delegate's read scope is an allow, not a deny")
             .isNotNull();
         assertThat(HohenheimAccess.hasInstanceCapability(viewer, instanceId,
-                HohenheimAccess.VIEW))
+                HohenheimCapabilities.VIEW))
             .as("step 2: and it really holds view on this instance").isTrue();
 
         // 3. The affordances are WITHHELD from it -- both of them, and the destructive
@@ -569,7 +570,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         // 4. And they are OFFERED to the config holder, so step 3 measured AUTHORITY and
         //    not a surface that refuses everyone -- the way an untested gate rots.
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.CONFIG, true);
+            HohenheimCapabilities.CONFIG, true);
         assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, row, operator))
             .as("step 4: a config holder keeps its edit affordance").isTrue();
         assertThat(detachOffered(row, operator))
@@ -580,7 +581,7 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         // 5. Revoking the capability takes the affordances away again, so the answer
         //    tracks the live grant graph rather than anything cached at wiring time.
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.CONFIG, false);
+            HohenheimCapabilities.CONFIG, false);
         AccessContext revoked = AccessContext.of(TenantConduits.stubFor(
             new UserPrincipal(tenantId, "Device Surface Tenant")));
         assertThat(ResourceVerbs.permitsBy(panel, resource, ResourceVerb.UPDATE, row, revoked))

@@ -26,9 +26,8 @@ final class HohenheimWidgetCopy {
 
     private HohenheimWidgetCopy() {}
 
-    /** @param scope the microcopy scope filter, e.g. {@code instance_overview} */
-    static @NonNull Map<Locale, String> localized(@NonNull String key, @NonNull String scope) {
-        Microcopy copy = Microcopy.of(key).withFilter("scope", scope);
+    /** @return the copy resolved in every content locale */
+    static @NonNull Map<Locale, String> localized(@NonNull Microcopy copy) {
         Map<Locale, String> label = new LinkedHashMap<>();
         for (Locale locale : ContentLocales.get()) {
             label.put(locale, copy.resolve(LocaleChain.of(locale), Zenit.getMessageResolver()));

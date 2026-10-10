@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hohenheim.HohenheimParams;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.game.GameDomainOperations;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
@@ -12,7 +12,7 @@ import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.source.GiteaProviderKind;
 import be.elevenways.hohenheim.source.GitProviderOperations;
@@ -42,6 +42,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
+import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
+
 /**
  * The database, DNS and git provider entries of stage 5 B13, admin and tenant twins, stored before they move onto
  * shared parts and compared exactly after it.
@@ -53,22 +56,12 @@ import java.util.Map;
  * their hosts' records. The accepted differences are the moved actions' routes, declared as placed operation moves. A
  * failing comparison is a changed surface, never a file to refresh.
  *
- * AIDEV-NOTE: intended difference, Access tab added (Jelle 2026-10-03): the stored set carries one added
- * {@code tab access} fact per database record case, re-recorded beside the legacy capture, because zenit-auth's record
- * access page rides every parts entry over a grantable model (RecordTab#ridesEveryEntry). Every other fact is the
- * legacy capture as stored.
- *
- * AIDEV-NOTE: intended difference, board Databases (W9a, 2026-10-08): the operator's database record case carries the
- * list's redrawn columns (where it runs under the name, engine, used by, last backup; the name inside the engine, the
- * host, the placement, its engine and the tmpfs flag behind the picker), the placed "Back up now" row action and the
- * Overview landing tab before Restore, each hand-inserted beside the legacy capture. With Edit and "Back up now"
- * filling the two inline row slots, the dump download link moves to the overflow band.
+ * AIDEV-NOTE: the database row's dump download link sits in the overflow band because Edit and "Back up now" fill the
+ * two inline row slots.
  */
 class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
 
     private static final String PREFIX = "b13-surfaces-";
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
-    private static final String MANAGE = HohenheimSlugs.MANAGE;
     private static final String GIT_PROVIDERS = HohenheimSlugs.GIT_PROVIDERS;
     private static final String GAME_DOMAINS = "game-domains";
     private static final String ZONE_PEERS = "dns-zone-peers";
@@ -104,7 +97,7 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
     static void removeProviders() {
         Models.get(GameDomainModel.class).delete(Integer.parseInt(gameDomainId));
         RecordGrants.revoke(GrantSubjectType.USER, gitId, GitProviderModel.MODEL_ID,
-            Integer.parseInt(tenantProviderId), HohenheimAccess.MANAGE);
+            Integer.parseInt(tenantProviderId), HohenheimCapabilities.MANAGE);
         HardDeletes.byId(Models.get(GitProviderModel.class), Integer.parseInt(tenantProviderId));
         HardDeletes.byId(Models.get(GitProviderModel.class), Integer.parseInt(sharedProviderId));
     }
@@ -120,7 +113,7 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
         int tenantProvider = provider(PREFIX + "tenant", false);
         tenantProviderId = String.valueOf(tenantProvider);
         RecordGrants.grant(GrantSubjectType.USER, gitId, GitProviderModel.MODEL_ID, tenantProvider,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         int site = site(PREFIX + "site");
         siteId = String.valueOf(site);
@@ -142,12 +135,12 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
         engineId = String.valueOf(engine(PREFIX + "engine"));
         int database = database(PREFIX + "db");
         databaseId = String.valueOf(database);
-        RecordGrants.grant(GrantSubjectType.USER, viewId, DatabaseModel.MODEL_ID, database, HohenheimAccess.VIEW,
+        RecordGrants.grant(GrantSubjectType.USER, viewId, DatabaseModel.MODEL_ID, database, HohenheimCapabilities.VIEW,
             true);
         RecordGrants.grant(GrantSubjectType.USER, credentialsId, DatabaseModel.MODEL_ID, database,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         RecordGrants.grant(GrantSubjectType.USER, credentialsId, DatabaseModel.MODEL_ID, database,
-            HohenheimAccess.CREDENTIALS, true);
+            HohenheimCapabilities.CREDENTIALS, true);
 
         operator = access(operatorPrincipal());
         tenantGit = access(new UserPrincipal(gitId, "B13 Git Tenant"));
@@ -185,7 +178,7 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
         stored.check(capture(SurfaceCase.of(ADMIN, ZONE_PEERS, "operator", operator)
             .onRecord(zonePeerId, "link")));
         stored.check(capture(SurfaceCase.of(ADMIN, ZONE_PEERS, "operator", operator).named(ADMIN + "." + ZONE_PEERS
-            + ".operator.prefill").withParameter(HohenheimParams.ZONE_ID_PREFILL.getName(), primaryZoneId)));
+            + ".operator.prefill").withParameter(CmsEndpoints.PARENT_PARAM.getName(), primaryZoneId)));
         stored.check(capture(SurfaceCase.of(ADMIN, GIT_PROVIDERS, "operator", operator)
             .selecting(List.of(sharedProviderId, tenantProviderId), "sel")));
 

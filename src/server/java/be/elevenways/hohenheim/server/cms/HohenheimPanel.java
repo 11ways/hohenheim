@@ -1,12 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.server.cms.AuthAdminParts;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
@@ -38,9 +37,6 @@ public final class HohenheimPanel extends Panel {
      */
     public static final Permission ACCESS = HohenheimSources.ADMIN_ACCESS;
 
-    /** The panel's slug, aliased from the common declaring home so endpoint paths agree with it. */
-    public static final String SLUG = HohenheimSlugs.ADMIN;
-
     // AIDEV-NOTE: the sidebar is EIGHT entries in one unlabelled block, in the order of the 2026-09-30 boards:
     // Dashboard, Apps, Databases, Hosts, Domains, Access, Activity, Settings (redesign plan, W4). It names what an
     // operator comes to DO, never a table: Apps reads sites, instances and stacks as one list (AppDirectory), and
@@ -69,22 +65,22 @@ public final class HohenheimPanel extends Panel {
      *  built from. Servers are deliberately NOT here: a host is not a workload, it is the
      *  installation itself, so it sits in the ungrouped top block beside the dashboard. */
     public static final NavGroup DEPLOY_GROUP =
-        NavGroup.of("deploy", HohenheimFormCopy.navGroup("deploy"), 150, Icon.of("rocket"));
+        NavGroup.of("deploy", HohenheimMicrocopy.HOHENHEIM_NAV.of("deploy"), 150, Icon.of("rocket"));
 
     /** Networking group: how traffic REACHES those workloads -- DNS, certificates, access
      *  control, and the cooldown that holds a released hostname out of circulation. */
     public static final NavGroup NETWORK_GROUP =
-        NavGroup.of("networking", HohenheimFormCopy.navGroup("networking"), 200,
+        NavGroup.of("networking", HohenheimMicrocopy.HOHENHEIM_NAV.of("networking"), 200,
             Icon.of("network-wired"));
 
     /** Security group: who may act and who is refused -- users, roles, abuse protection,
      *  IP bans; opens the background tail. */
     public static final NavGroup SECURITY_GROUP =
-        NavGroup.of("security", HohenheimFormCopy.navGroup("security"), 800, Icon.of("shield-halved"))
+        NavGroup.of("security", HohenheimMicrocopy.HOHENHEIM_NAV.of("security"), 800, Icon.of("shield-halved"))
             .withSeparatorBefore(true);
 
     public HohenheimPanel() {
-        super(HohenheimIds.id("admin"), SLUG, Microcopy.of("title").withFilter("scope", "admin"), ACCESS);
+        super(HohenheimIds.id("admin"), HohenheimSlugs.ADMIN, HohenheimMicrocopy.ADMIN.of("title"), ACCESS);
     }
 
     /** Below ManagePanel's default 100: an operator holding both panels lands on /admin. */
@@ -121,8 +117,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, AuthProviderParts.admin(), Role.PROXY);
         addIf(peers, DatabaseParts.admin(), Role.DATABASES);
         addIf(peers, DatabaseParts.engines(), Role.DATABASES);
-        // Needs BOTH tiers to exist: it joins an instance to a managed database.
-        if (HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES)) {
+        if (InstanceAttachmentParts.databasesServed()) {
             peers.add(InstanceAttachmentParts.databasesAdmin());
         }
         addIf(peers, InstanceParts.admin(), Role.INSTANCES);
@@ -132,7 +127,7 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, TemplateChildParts.volumes(), Role.INSTANCES);
         // A declared database is created through the managed-database tier at
         // instance create, so the declaration form needs both tiers like the attachment.
-        if (HohenheimRoles.enabled(Role.DATABASES) && HohenheimRoles.enabled(Role.INSTANCES)) {
+        if (InstanceAttachmentParts.databasesServed()) {
             peers.add(TemplateChildParts.databases());
         }
         addIf(peers, InstanceFileParts.admin(), Role.INSTANCES);
@@ -188,9 +183,9 @@ public final class HohenheimPanel extends Panel {
         // so these two describe themselves like every other entry and
         // AdminNavigationJourneyTest step 2 no longer exempts anything.
         peers.add(AuthAdminParts.users(SECURITY_GROUP, 10,
-            Microcopy.of("nav_hint").withFilter("scope", "user")));
+            HohenheimMicrocopy.USER.of("nav_hint")));
         peers.add(AuthAdminParts.roles(SECURITY_GROUP, 20,
-            Microcopy.of("nav_hint").withFilter("scope", "role")));
+            HohenheimMicrocopy.ROLE.of("nav_hint")));
         addIf(peers, new SpamserviceOverviewPage(), Role.FIREWALL);
         addIf(peers, new SpamserviceInstallationResource(), Role.FIREWALL);
         addIf(peers, SpamserviceSamplesResource.create(), Role.FIREWALL);
@@ -216,37 +211,33 @@ public final class HohenheimPanel extends Panel {
         // permissions (TaskOperations.VIEW/MANAGE), so an operator holding "*" sees them, a delegated admin only by grant.
         peers.add(TaskAdmin.schedules(NavGroup.SYSTEM, 96));
         peers.add(TaskAdmin.runs(NavGroup.SYSTEM, 97));
-        peers.add(AppParts.admin(present(peers, HohenheimSlugs.SITES, InstanceParts.SLUG, StackParts.SLUG,
-                ProjectParts.SLUG),
-            present(peers, PutOnlinePage.SLUG).isEmpty() ? null : PutOnlinePage.SLUG));
+        peers.add(AppParts.admin(present(peers, HohenheimSlugs.SITES, HohenheimSlugs.INSTANCES, HohenheimSlugs.STACKS,
+                HohenheimSlugs.PROJECTS),
+            present(peers, HohenheimSlugs.PUT_ONLINE).isEmpty() ? null : HohenheimSlugs.PUT_ONLINE));
         // In the Domains board's tab order: addresses, certificates, DNS zones, released addresses.
-        addCluster(peers, cluster("domain_names", DOMAINS_CLUSTER, "globe", 50), DomainParts.SLUG,
-            HohenheimSlugs.CERTIFICATES, HohenheimSlugs.DNS_ZONES, ReleasedClaimParts.SLUG);
+        addCluster(peers, cluster("domain_names", HohenheimSlugs.Cluster.DOMAIN_NAMES, "globe", 50),
+            HohenheimSlugs.DOMAINS,
+            HohenheimSlugs.CERTIFICATES, HohenheimSlugs.DNS_ZONES, HohenheimSlugs.RELEASED_CLAIMS);
         // In the Access board's tab order: lists, blocked addresses, people (users and roles), sign-in providers.
-        addCluster(peers, cluster("access", ACCESS_CLUSTER, "shield-halved", 60), HohenheimSlugs.ACCESS_LISTS,
-            BanParts.SLUG, AuthAdminParts.USERS_SLUG, AuthAdminParts.ROLES_SLUG, AuthProviderParts.SLUG,
-            SpamserviceOverviewPage.SLUG);
-        addCluster(peers, cluster("activity", ACTIVITY_CLUSTER, "clock-rotate-left", 70),
+        addCluster(peers, cluster("access", HohenheimSlugs.Cluster.ACCESS, "shield-halved", 60),
+            HohenheimSlugs.ACCESS_LISTS,
+            HohenheimSlugs.BANS, AuthAdminParts.USERS_SLUG, AuthAdminParts.ROLES_SLUG, HohenheimSlugs.AUTH_PROVIDERS,
+            HohenheimSlugs.SPAMSERVICE);
+        addCluster(peers, cluster("activity", HohenheimSlugs.Cluster.LOG, "clock-rotate-left", 70),
             activity.slug(), inbox.slug(), deliveries.slug());
-        addCluster(peers, cluster("settings", SETTINGS_CLUSTER, "gear", 80), SettingsPage.DEFAULT_SLUG,
-            HohenheimSlugs.INSTANCE_TEMPLATES, RuntimeImageParts.SLUG, HohenheimSlugs.GIT_PROVIDERS,
-            DatabaseParts.ENGINES_SLUG, NotificationChannelParts.SLUG, BackupTargetParts.SLUG,
+        addCluster(peers, cluster("settings", HohenheimSlugs.Cluster.CONFIGURE, "gear", 80), SettingsPage.DEFAULT_SLUG,
+            HohenheimSlugs.INSTANCE_TEMPLATES, HohenheimSlugs.RUNTIME_IMAGES, HohenheimSlugs.GIT_PROVIDERS,
+            HohenheimSlugs.DATABASE_ENGINES, HohenheimSlugs.NOTIFICATIONS, HohenheimSlugs.BACKUP_TARGETS,
             TaskAdmin.SCHEDULES_SLUG, TaskAdmin.RUNS_SLUG, buildInfo.slug());
         return peers;
     }
-
-    /** The cluster slugs: each is the sidebar row's URL, which lands on the first member the viewer may open. */
-    public static final String DOMAINS_CLUSTER = "domain-names";
-    public static final String ACCESS_CLUSTER = "access";
-    public static final String ACTIVITY_CLUSTER = "log";
-    public static final String SETTINGS_CLUSTER = "configure";
 
     /** A sidebar cluster in the unlabelled default block, worded under {@code nav_cluster}; both panels build theirs here. */
     static PanelCluster.@NonNull Builder cluster(@NonNull String key, @NonNull String slug,
                                                  @NonNull String icon, int navOrder) {
         return PanelCluster.builder(HohenheimIds.id("cluster_" + key), slug,
-                Microcopy.of(key).withFilter("scope", "nav_cluster"))
-            .description(Microcopy.of(key).withFilter("scope", "nav_cluster_hint"))
+                HohenheimMicrocopy.NAV_CLUSTER.of(key))
+            .description(HohenheimMicrocopy.NAV_CLUSTER_HINT.of(key))
             .icon(Icon.of(icon))
             .navGroup(NavGroup.DEFAULT)
             .navOrder(navOrder);
@@ -303,7 +294,7 @@ public final class HohenheimPanel extends Panel {
             .requirePermission(HohenheimSources.ADMIN_ACCESS)
             .navGroup(NavGroup.SYSTEM)
             .navOrder(95)
-            .description(Microcopy.of("nav_hint").withFilter("scope", "settings"))
+            .description(HohenheimMicrocopy.SETTINGS.of("nav_hint"))
             .build();
     }
 }

@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.app;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
-import be.elevenways.hohenheim.site.DomainCertCell;
+import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.zenit.cms.common.render.table.HealthCellState;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -24,7 +24,7 @@ public record AppSummary(
     @NonNull String name,
     @NonNull String detail,
     @NonNull String url,
-    @Nullable DomainCertCell https,
+    @Nullable StateLineCell https,
     @NonNull HealthCellState health,
     boolean verdict
 ) {

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.security;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.HohenheimRoles;
@@ -68,7 +69,7 @@ public final class HohenheimSecurity {
             BanService.INSTANCE.boot();
             // The sshd tail is ENFORCEMENT-tier too: it exists to produce bans, and a
             // node that does not enforce them has no reason to read another daemon's log.
-            if (SshAuthWatcher.isConfigured()) {
+            if (HohenheimSettings.isOn(HohenheimSettings.Security.SSH_WATCH_ENABLED)) {
                 SshAuthWatcher.INSTANCE.start();
             }
         } else {
@@ -101,9 +102,6 @@ public final class HohenheimSecurity {
      */
     static final Map<String, Microcopy> EVENT_LABELS;
 
-    /** The scope of the ban causes. */
-    private static final String CAUSE_SCOPE = "ban_cause";
-
     /**
      * What tipped an automatic ban for each type, by the same copy key as its label: a sentence counting the
      * events ("Tried {$count} names this server does not serve"). Drift-tested beside the labels.
@@ -130,8 +128,8 @@ public final class HohenheimSecurity {
         Map<String, Microcopy> labels = new LinkedHashMap<>();
         Map<String, Microcopy> causes = new LinkedHashMap<>();
         keys.forEach((type, key) -> {
-            labels.put(type, label(key));
-            causes.put(type, Microcopy.of(key).withFilter("scope", CAUSE_SCOPE));
+            labels.put(type, HohenheimMicrocopy.SECURITY_EVENT_TYPE.of(key));
+            causes.put(type, HohenheimMicrocopy.BAN_CAUSE.of(key));
         });
         EVENT_LABELS = Map.copyOf(labels);
         EVENT_CAUSES = Map.copyOf(causes);
@@ -146,7 +144,7 @@ public final class HohenheimSecurity {
         if (cause != null) {
             return cause.withArg("count", events);
         }
-        return Microcopy.of("other_event").withFilter("scope", CAUSE_SCOPE).withArg("count", events)
+        return HohenheimMicrocopy.BAN_CAUSE.of("other_event").withArg("count", events)
             .withArg("event", labelOf(type));
     }
 
@@ -181,7 +179,7 @@ public final class HohenheimSecurity {
         }
         Microcopy cause = type == null ? null : EVENT_CAUSES.get(type);
         return cause != null ? cause.withFilter("target", UNCOUNTED)
-            : Microcopy.of("other_event").withFilter("scope", CAUSE_SCOPE).withFilter("target", UNCOUNTED)
+            : HohenheimMicrocopy.BAN_CAUSE.of("other_event").withFilter("target", UNCOUNTED)
                 .withArg("event", labelOf(type));
     }
 
@@ -191,10 +189,6 @@ public final class HohenheimSecurity {
         for (Map.Entry<String, Microcopy> label : EVENT_LABELS.entrySet()) {
             KnownSecurityEvents.describe(label.getKey(), label.getValue());
         }
-    }
-
-    private static @NonNull Microcopy label(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "security_event_type");
     }
 
     /**

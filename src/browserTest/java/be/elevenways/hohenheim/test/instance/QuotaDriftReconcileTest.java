@@ -1,12 +1,12 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
-import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.quota.QuotaReconciler;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -63,8 +63,8 @@ class QuotaDriftReconcileTest {
     /** DockerContainerKind.defaultFootprintMb -- what an unbounded container is admitted as. */
     private static final int FOOTPRINT_MB = 512;
 
-    private static final String MEMORY_BUCKET = InstanceQuota.memoryBucketOf("");
-    private static final String COUNT_BUCKET = InstanceQuota.bucketKeyOf("");
+    private static final String MEMORY_BUCKET = OwnerBudget.OWNER_MEMORY.bucketOf("");
+    private static final String COUNT_BUCKET = OwnerBudget.INSTANCES.bucketOf("");
 
     private static SqlDatasource datasource;
 

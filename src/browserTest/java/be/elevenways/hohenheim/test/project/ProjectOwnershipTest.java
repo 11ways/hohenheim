@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.project;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
@@ -10,7 +11,6 @@ import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.project.Projects;
@@ -329,14 +329,14 @@ class ProjectOwnershipTest extends HohenheimTestBase {
 
         // 4. The charged bucket is the PROJECT's -- the same packing sameOwner
         //    compares and the placement chooser labels hosts with.
-        String projectBucket = InstanceQuota.bucketKeyOf(
+        String projectBucket = OwnerBudget.INSTANCES.bucketOf(
             HohenheimAccess.packSubjects(Projects.ownerSubjectsOf(projectOne)));
         assertThat((String) instance.get(InstanceModel.QUOTA_BUCKET))
             .as("step 4: the create charged the project's bucket")
             .isEqualTo(projectBucket);
         assertThat((String) instance.get(InstanceModel.QUOTA_BUCKET))
             .as("step 4: and not the member's personal bucket")
-            .isNotEqualTo(InstanceQuota.bucketKeyOf(
+            .isNotEqualTo(OwnerBudget.INSTANCES.bucketOf(
                 HohenheimAccess.packSubjects(Set.of("user:" + memberAId))));
 
         // 5. And the creator still REACHES it -- through membership, not a direct grant.
@@ -353,7 +353,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         String packOne = HohenheimAccess.packSubjects(Projects.ownerSubjectsOf(projectOne));
         Row cap = Models.get(InstanceQuotaModel.class).createEmptyRow();
         cap.set(InstanceQuotaModel.SUBJECTS, packOne);
-        cap.set(InstanceQuotaModel.MAX_INSTANCES, (int) InstanceQuota.usedBy(packOne));
+        cap.set(InstanceQuotaModel.MAX_INSTANCES, (int) OwnerBudget.INSTANCES.usedBy(packOne));
         Models.get(InstanceQuotaModel.class).save(cap);
 
         // 1. Project one is full: the next create into it is refused BY NAME and
@@ -379,7 +379,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         assertThat(landed).as("step 2: and the record exists").isNotNull();
         assertThat((String) landed.get(InstanceModel.QUOTA_BUCKET))
             .as("step 2: charged to project TWO's bucket")
-            .isEqualTo(InstanceQuota.bucketKeyOf(
+            .isEqualTo(OwnerBudget.INSTANCES.bucketOf(
                 HohenheimAccess.packSubjects(Projects.ownerSubjectsOf(projectTwo))));
 
         Models.get(InstanceQuotaModel.class).delete(cap.get(InstanceQuotaModel.ID));
@@ -401,7 +401,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         //    would disagree with the grants, which is the failure the guard refuses.
         //    The refusal fires BEFORE the quota hook (beforeValidate), so no
         //    reservation is spent by the aborted write -- the usage must not move.
-        long operatorUsedBefore = InstanceQuota.usedBy("");
+        long operatorUsedBefore = OwnerBudget.INSTANCES.usedBy("");
         Throwable mismatch = catchThrowable(() -> {
             Row omega = Models.get(InstanceModel.class).findById(omegaId);
             omega.set(InstanceModel.ENVIRONMENT_ID, environmentId);
@@ -426,7 +426,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         assertThat(violationKeys(refusedCreate))
             .as("step 2: an operator create into a project environment is refused")
             .contains("environment_project_mismatch");
-        assertThat(InstanceQuota.usedBy(""))
+        assertThat(OwnerBudget.INSTANCES.usedBy(""))
             .as("step 2: the refused create spent NO reservation")
             .isEqualTo(operatorUsedBefore);
         assertThat(Models.get(InstanceModel.class).find()

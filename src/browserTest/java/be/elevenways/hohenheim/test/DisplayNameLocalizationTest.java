@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
@@ -213,7 +214,7 @@ class DisplayNameLocalizationTest {
     private static void checkRefusal(Microcopy label, String what, ShippedCatalogs catalogs,
                                      LocaleChain described, List<String> broken) {
         String message = Violations.ofField("kind", "unused",
-            Microcopy.of("instance_kind_owner_managed").withFilter("scope", "violations")
+            HohenheimMicrocopy.VIOLATIONS.of("instance_kind_owner_managed")
                 .withArg("kind", label)).getMessage();
         if (message.contains("Microcopy{")) {
             broken.add(what + " -> reached the reader as a debug toString: " + message);

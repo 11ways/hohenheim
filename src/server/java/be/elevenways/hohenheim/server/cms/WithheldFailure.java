@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.routing.RouteScope;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -64,7 +64,7 @@ public final class WithheldFailure {
     static @NonNull WithheldFailure of(@NonNull Conduit conduit) {
         boolean delegated = CmsSupport.isDelegatedPanel(conduit);
         String withheld = delegated
-            ? Microcopy.of("failure_withheld").withFilter("scope", "delegated")
+            ? HohenheimMicrocopy.DELEGATED.of("failure_withheld")
                 .resolve(conduit.getLocales(), conduit.getMessageResolver())
             : "";
         return new WithheldFailure(delegated, withheld);

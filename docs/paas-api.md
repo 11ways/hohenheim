@@ -34,7 +34,7 @@ listings additionally require the key to cover site or instance `manage`
 
 **CORRECTED 2026-08-12: instance VISIBILITY resolves at `view`, not `manage`.**
 `InstanceApi.visibleInstances`/`visibleInstance` ask
-`HohenheimAccess.VIEW` and nothing else, by design -- visibility answers "may
+`HohenheimCapabilities.VIEW` and nothing else, by design -- visibility answers "may
 you see this record", never "may you do this to it", and every mutating handler
 reaches a service that asks its own capability. The `/manage` UI resolves the
 same way (`ManageInstanceResource.java:91`, `:143`). This is NOT a wider-door

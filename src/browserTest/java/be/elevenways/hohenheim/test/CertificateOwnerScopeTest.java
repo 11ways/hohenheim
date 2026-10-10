@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.server.ApiKeyService;
 import be.elevenways.zenit.common.Zenit;
@@ -73,10 +73,10 @@ class CertificateOwnerScopeTest extends HohenheimTestBase {
         foreignCertId = foreign.get(CertificateModel.ID);
 
         narrowedKey = ApiKeyService.create(tenantId, "cert-scope-narrowed",
-            List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE)),
+            List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE)),
             null).plaintext();
         coveringKey = ApiKeyService.create(tenantId, "cert-scope-covering",
-            List.of(CapabilityScopes.format(CertificateModel.MODEL_ID, HohenheimAccess.VIEW)),
+            List.of(CapabilityScopes.format(CertificateModel.MODEL_ID, HohenheimCapabilities.VIEW)),
             null).plaintext();
     }
 

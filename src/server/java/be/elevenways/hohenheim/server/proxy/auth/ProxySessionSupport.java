@@ -66,32 +66,29 @@ public final class ProxySessionSupport {
     }
 
     public static void clearSessionCookie(HttpServerExchange exchange) {
-        Cookie cookie = baseCookie(exchange, ProxyAuthKeys.SESSION_COOKIE, "");
-        cookie.setMaxAge(0);
-        exchange.setResponseCookie(cookie);
+        writeCookie(exchange, ProxyAuthKeys.SESSION_COOKIE, "", 0);
     }
 
     public static void writePersistentCookie(HttpServerExchange exchange, String value, int maxAgeSeconds) {
-        Cookie cookie = baseCookie(exchange, ProxyAuthKeys.PERSISTENT_COOKIE, value);
-        cookie.setMaxAge(maxAgeSeconds);
-        exchange.setResponseCookie(cookie);
+        writeCookie(exchange, ProxyAuthKeys.PERSISTENT_COOKIE, value, maxAgeSeconds);
     }
 
     public static void clearPersistentCookie(HttpServerExchange exchange) {
-        Cookie cookie = baseCookie(exchange, ProxyAuthKeys.PERSISTENT_COOKIE, "");
-        cookie.setMaxAge(0);
-        exchange.setResponseCookie(cookie);
+        writeCookie(exchange, ProxyAuthKeys.PERSISTENT_COOKIE, "", 0);
     }
 
     public static void writePendingLoginCookie(HttpServerExchange exchange, String sealed) {
-        Cookie cookie = baseCookie(exchange, ProxyAuthKeys.PENDING_LOGIN_COOKIE, sealed);
-        cookie.setMaxAge(PENDING_LOGIN_MAX_AGE_SECONDS);
-        exchange.setResponseCookie(cookie);
+        writeCookie(exchange, ProxyAuthKeys.PENDING_LOGIN_COOKIE, sealed, PENDING_LOGIN_MAX_AGE_SECONDS);
     }
 
     public static void clearPendingLoginCookie(HttpServerExchange exchange) {
-        Cookie cookie = baseCookie(exchange, ProxyAuthKeys.PENDING_LOGIN_COOKIE, "");
-        cookie.setMaxAge(0);
+        writeCookie(exchange, ProxyAuthKeys.PENDING_LOGIN_COOKIE, "", 0);
+    }
+
+    /** Set one proxy cookie for {@code maxAgeSeconds}; 0 clears it. */
+    private static void writeCookie(HttpServerExchange exchange, String name, String value, int maxAgeSeconds) {
+        Cookie cookie = baseCookie(exchange, name, value);
+        cookie.setMaxAge(maxAgeSeconds);
         exchange.setResponseCookie(cookie);
     }
 

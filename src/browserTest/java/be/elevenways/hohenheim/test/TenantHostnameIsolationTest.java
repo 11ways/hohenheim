@@ -7,7 +7,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.cms.ManageDashboard;
 import be.elevenways.hohenheim.server.cms.ManagePanel;
@@ -81,9 +81,9 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
         alice = new UserPrincipal(aliceId, "Alice Iso");
         int bobId = ApiSupport.user("bob-iso@hohenheim.local", "Bob Iso");
         RecordGrants.grant(GrantSubjectType.USER, aliceId, SiteModel.MODEL_ID,
-            aliceSiteId, HohenheimAccess.MANAGE, true);
+            aliceSiteId, HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, bobId, SiteModel.MODEL_ID,
-            bobSiteId, HohenheimAccess.MANAGE, true);
+            bobSiteId, HohenheimCapabilities.MANAGE, true);
 
         // The harness administrator, revived as a principal for the detailed-sentence half.
         Row adminRow = Models.get(UserModel.class).find()
@@ -261,7 +261,7 @@ class TenantHostnameIsolationTest extends HohenheimTestBase {
         //    a name only the foreign wildcard covers is refused when it goes live.
         Integer stagedSiteId = site("Tenant-iso staged", "tenant-iso-staged");
         RecordGrants.grant(GrantSubjectType.USER, aliceId, SiteModel.MODEL_ID,
-            stagedSiteId, HohenheimAccess.MANAGE, true);
+            stagedSiteId, HohenheimCapabilities.MANAGE, true);
         Row staged = sites.findById(stagedSiteId);
         staged.set(SiteModel.ENABLED, false);
         sites.save(staged);

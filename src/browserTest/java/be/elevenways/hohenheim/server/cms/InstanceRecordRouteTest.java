@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.test.TestDatabases;
@@ -34,7 +35,7 @@ class InstanceRecordRouteTest {
         assertThat(InstanceParts.recordRoute("admin", authored, null).toUrl())
             .as("step 1: an instance links to its own record, landing on its overview")
             .isEqualTo("/admin/instances/5/page/overview");
-        assertThat(InstanceParts.recordRoute("admin", authored, InstanceConsolePage.SLUG).toUrl())
+        assertThat(InstanceParts.recordRoute("admin", authored, HohenheimSlugs.Tab.CONSOLE).toUrl())
             .as("step 1: or to the subpage the caller names")
             .isEqualTo("/admin/instances/5/page/console");
 
@@ -42,9 +43,9 @@ class InstanceRecordRouteTest {
         //    links to the Deploys tab of the application that owns it, whatever subpage
         //    the caller asked for.
         Row release = row(9, ReleaseKind.ID.toString(), InstanceModel.MODEL_ID.toString(), 3);
-        assertThat(InstanceParts.recordRoute("admin", release, InstanceConsolePage.SLUG).toUrl())
+        assertThat(InstanceParts.recordRoute("admin", release, HohenheimSlugs.Tab.CONSOLE).toUrl())
             .as("step 2: a release links to its application's Deploys tab")
-            .isEqualTo("/admin/instances/3/page/" + InstanceDeploymentsPage.SLUG);
+            .isEqualTo("/admin/instances/3/page/" + HohenheimSlugs.Tab.DEPLOYMENTS);
 
         // 3. A release no application owns links to the list, never to itself.
         Row orphan = row(11, ReleaseKind.ID.toString(), null, null);

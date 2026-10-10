@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.instance.PlaintextEnvironments;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
@@ -439,7 +440,7 @@ public final class DatabaseInstances {
         ManagedDatabase.Engine engine = host.engine();
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("engine", engine.token());
-        settings.put("image", host.resolvedImage());
+        settings.put(InstanceKindFields.IMAGE, host.resolvedImage());
         settings.put("ephemeral", host.ephemeral());
         settings.put("shared", host.shared());
         settings.put("data_volume", host.ephemeral() ? "" : host.dataVolume());
@@ -451,10 +452,10 @@ public final class DatabaseInstances {
             settings.put("command", command);
         }
         if (host.limits().memoryMb() != null) {
-            settings.put("memory_limit_mb", host.limits().memoryMb());
+            settings.put(InstanceKindFields.MEMORY_LIMIT_MB, host.limits().memoryMb());
         }
         if (host.limits().cpus() != null) {
-            settings.put("cpu_limit", host.limits().cpus());
+            settings.put(InstanceKindFields.CPU_LIMIT, host.limits().cpus());
         }
         return settings;
     }

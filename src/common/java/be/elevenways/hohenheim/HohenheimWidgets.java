@@ -25,11 +25,11 @@ public final class HohenheimWidgets {
      * down/degraded sites, failed databases, failed latest deploys, failed task runs).
      */
     public static final DisplayWidget ATTENTION = register("attention", HohenheimTemplateIds.WIDGET_ATTENTION,
-        Microcopy.of("attention").withFilter("scope", "dashboard"), "bell");
+        HohenheimMicrocopy.DASHBOARD.of("attention"), "bell");
 
     /** First-run guidance shown while the installation has no sites. */
     public static final DisplayWidget ONBOARDING = register("onboarding", HohenheimTemplateIds.WIDGET_ONBOARDING,
-        Microcopy.of("onboarding").withFilter("scope", "dashboard"), "rocket");
+        HohenheimMicrocopy.DASHBOARD.of("onboarding"), "rocket");
 
     /**
      * Dashboard readiness checklist: the ordered steps between a fresh install and a deployed
@@ -38,7 +38,7 @@ public final class HohenheimWidgets {
      */
     public static final DisplayWidget ONBOARDING_CHECKLIST = register("onboarding_checklist",
         HohenheimTemplateIds.WIDGET_ONBOARDING_CHECKLIST,
-        Microcopy.of("checklist_title").withFilter("scope", "onboarding_checklist"), "list-check");
+        HohenheimMicrocopy.ONBOARDING_CHECKLIST.of("checklist_title"), "list-check");
 
     /**
      * The host's live contact state: a status dot, the state word and the last-contact relative time.
@@ -49,50 +49,50 @@ public final class HohenheimWidgets {
      * timestamp, which is the half an operator reads.
      */
     public static final DisplayWidget HOST_STATE = register("host_state", HohenheimTemplateIds.WIDGET_HOST_STATE,
-        Microcopy.of("state").withFilter("scope", "server_overview"), "tower-broadcast");
+        HohenheimMicrocopy.SERVER_OVERVIEW.of("state"), "tower-broadcast");
 
     /** Per-lane trust state: the pinned fingerprint, what the machine offers now, and this controller's own client material. */
     public static final DisplayWidget HOST_TRUST = register("host_trust", HohenheimTemplateIds.WIDGET_HOST_TRUST,
-        Microcopy.of("trust_ssh").withFilter("scope", "server_overview"), "key");
+        HohenheimMicrocopy.SERVER_OVERVIEW.of("trust_ssh"), "key");
 
     /** The stored preflight report: kernel-truth isolation, every check with its own stamp, and the measured facts. */
     public static final DisplayWidget HOST_PREFLIGHT = register("host_preflight",
         HohenheimTemplateIds.WIDGET_HOST_PREFLIGHT,
-        Microcopy.of("preflight_report").withFilter("scope", "server_overview"), "stethoscope");
+        HohenheimMicrocopy.SERVER_OVERVIEW.of("preflight_report"), "stethoscope");
 
     /** Everything this host carries: the same three populations that block cordon, drain and delete. */
     public static final DisplayWidget HOST_WORKLOADS = register("host_workloads",
         HohenheimTemplateIds.WIDGET_HOST_WORKLOADS,
-        Microcopy.of("workloads").withFilter("scope", "server_overview"), "cubes");
+        HohenheimMicrocopy.SERVER_OVERVIEW.of("workloads"), "cubes");
 
     /** Every port claim an instance holds, joined to its host's declared address. */
     public static final DisplayWidget INSTANCE_ENDPOINTS = register("instance_endpoints",
         HohenheimTemplateIds.WIDGET_INSTANCE_ENDPOINTS,
-        Microcopy.of("endpoint").withFilter("scope", "instance_overview"), "plug");
+        HohenheimMicrocopy.INSTANCE_OVERVIEW.of("endpoint"), "plug");
 
     /** An app's addresses with whether HTTPS works for each: the body of the overview's Addresses card. */
     public static final DisplayWidget APP_ADDRESSES = register("app_addresses", HohenheimTemplateIds.WIDGET_APP_ADDRESSES,
-        Microcopy.of("addresses").withFilter("scope", "app_overview"), "globe");
+        HohenheimMicrocopy.APP_OVERVIEW.of("addresses"), "globe");
 
     /** An app's protected paths, an open one said as open: the body of the overview's Protection card. */
     public static final DisplayWidget APP_PROTECTION = register("app_protection",
         HohenheimTemplateIds.WIDGET_APP_PROTECTION,
-        Microcopy.of("protection").withFilter("scope", "app_overview"), "lock");
+        HohenheimMicrocopy.APP_OVERVIEW.of("protection"), "lock");
 
     /** The dashboard's Apps band (board Main): each app with what it is, where, and whether HTTPS works. */
     public static final DisplayWidget APPS = register("apps", HohenheimTemplateIds.WIDGET_APPS,
-        Microcopy.of("apps").withFilter("scope", "dashboard"), "cubes");
+        HohenheimMicrocopy.DASHBOARD.of("apps"), "cubes");
 
     /**
      * The admin dashboard's count tile (board Main): a count with the line saying what it holds, which the framework's
      * record-count tile cannot say (an app is a reading, not a record; "2 of 3" is no count of one source).
      */
     public static final DisplayWidget STAT = register("stat", HohenheimTemplateIds.WIDGET_STAT,
-        Microcopy.of("stat_tile").withFilter("scope", "dashboard"), "gauge");
+        HohenheimMicrocopy.DASHBOARD.of("stat_tile"), "gauge");
 
     /** The /manage landing's usage card (board Manage-Home): each capped budget of the tenant against its cap. */
     public static final DisplayWidget TENANT_USAGE = register("tenant_usage", HohenheimTemplateIds.WIDGET_TENANT_USAGE,
-        Microcopy.of("title").withFilter("scope", "tenant_usage"), "gauge");
+        HohenheimMicrocopy.TENANT_USAGE.of("title"), "gauge");
 
     private HohenheimWidgets() {
     }

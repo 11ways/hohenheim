@@ -130,15 +130,15 @@ public final class RouteClaims {
     }
 
     /**
-     * The claim key of a row about to be written, reading through
-     * {@link SiteDomainModel#effective} so a partial CMS update is judged on the values it
-     * will actually end up with.
+     * The claim key of a row about to be written, judged on the values a partial CMS update will end up with.
+     *
+     * @param stored the persisted domain row, null on a create
      */
-    public static @NonNull String keyOfPendingWrite(@NonNull Row domain) {
-        return keyOf(SiteDomainModel.effective(domain, SiteDomainModel.HOSTNAME),
-            SiteDomainModel.effective(domain, SiteDomainModel.MATCH_TYPE),
-            SiteDomainModel.effective(domain, SiteDomainModel.PATH),
-            SiteDomainModel.effective(domain, SiteDomainModel.LISTEN_ON));
+    public static @NonNull String keyOfPendingWrite(@NonNull Row domain, @Nullable Row stored) {
+        return keyOf(domain.afterWrite(SiteDomainModel.HOSTNAME, stored),
+            domain.afterWrite(SiteDomainModel.MATCH_TYPE, stored),
+            domain.afterWrite(SiteDomainModel.PATH, stored),
+            domain.afterWrite(SiteDomainModel.LISTEN_ON, stored));
     }
 
     /**

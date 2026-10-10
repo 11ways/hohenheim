@@ -48,7 +48,7 @@ class DnsZoneRecordsDeleteAffordanceTest extends HohenheimTestBase {
      * fixture handed back, so nothing here depends on the key resolving to anything.
      */
     private static final Microcopy REASON =
-        Microcopy.of("delete_unavailable").withFilter("scope", "dns_zone_records_test");
+        Microcopy.of("delete_unavailable");
 
     private static int zoneId;
 

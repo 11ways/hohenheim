@@ -31,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -103,6 +104,43 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
         stored.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
         assertThat(check.labelFor(stored).key()).as("step 4: an admitted host is checked again")
             .isEqualTo("check_again");
+    }
+
+    @Test
+    void eachHostIsOfferedTheTrustVerbsOfItsOwnLanesOnly() {
+        Row docker = sshHost("lanes-docker");
+        Row incus = sshHost("lanes-incus");
+        incus.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
+        incus.set(ServerModel.INCUS_URL, "https://lanes-incus.invalid:8443");
+        Models.get(ServerModel.class).save(incus);
+        incus = Models.get(ServerModel.class).findById(incus.get(ServerModel.ID));
+        Row local = Models.get(ServerModel.class).findById(ServerModel.localServerId());
+
+        // 1. An SSH host is offered the host-key scan, and none of the Incus verbs.
+        assertThat(offer("scan_host_key", docker)).as("step 1: an SSH host scans its host key")
+            .isInstanceOf(OperationPipeline.Offer.Available.class);
+        assertThat(offer("scan_incus_cert", docker)).as("step 1: a Docker host has no Incus certificate")
+            .isInstanceOf(OperationPipeline.Offer.Hidden.class);
+        assertThat(offer("reap_controller_objects", docker)).as("step 1: nor Incus controller objects to reap")
+            .isInstanceOf(OperationPipeline.Offer.Hidden.class);
+
+        // 2. An Incus host over HTTPS is offered its certificate scan and the reaper.
+        assertThat(offer("scan_incus_cert", incus)).as("step 2: an Incus host scans its certificate")
+            .isInstanceOf(OperationPipeline.Offer.Available.class);
+        assertThat(offer("reap_controller_objects", incus)).as("step 2: and may reap its controller objects")
+            .isInstanceOf(OperationPipeline.Offer.Available.class);
+
+        // 3. The local host has no SSH lane, so no host-key verb.
+        assertThat(offer("scan_host_key", local)).as("step 3: the local host scans no SSH key")
+            .isInstanceOf(OperationPipeline.Offer.Hidden.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static OperationPipeline.Offer offer(String id, Row host) {
+        PanelAction<Row> placed = Stream.concat(ServerLifecycleActions.placed().stream(),
+                ServerTrustActions.placed().stream())
+            .filter(action -> action.id().equals(HohenheimIds.id(id))).findFirst().orElseThrow();
+        return OperationPipeline.offer((Operation<Row, ?, ?>) placed.operation(), TenantConduits.operator(), host);
     }
 
     @Test

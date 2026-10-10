@@ -9,6 +9,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.server.util.Sha256;
+import be.elevenways.hohenheim.source.GitSourceSchema;
+import be.elevenways.zenit.common.orm.model.Schema;
+
 /**
  * The versioned manifest every instance backup carries: everything a restore needs to
  * rebuild the instance as a NEW record -- kind, the RAW stored settings map, resolved
@@ -60,10 +65,18 @@ public record BackupManifest(int version,
                              @Nullable ApplicationEntry application) {
 
     /** The manifest format this build WRITES; it reads every version down to 1. */
-    public static final int FORMAT_VERSION = 3;
+    public static final int FORMAT_VERSION = 4;
 
     /** The first format: no {@link InstanceProfile} (see {@link #profile()}). */
     public static final int VERSION_WITHOUT_PROFILE = 1;
+
+    /** The first format whose settings read a git source's absent auto_deploy as on; older ones meant off. */
+    public static final int VERSION_AUTO_DEPLOY_ON = 4;
+
+    // AIDEV-NOTE: the bump to 4 carries no new field, only a new MEANING of silence (DD11h made a git source
+    // without a stored auto_deploy deploy on push; before, it read off). A restore of an older manifest therefore
+    // stores the off it meant (restoredSettings), the archive-side twin of M011's keepStoredSourcesManual; the
+    // version, never the capture date, says which reading applies.
 
     // AIDEV-NOTE: the bump to 2 is deliberate and the alternative (keep 1, treat the
     // additions as optional) was rejected for ONE reason: with the version left at 1 an
@@ -148,6 +161,23 @@ public record BackupManifest(int version,
                                   @Nullable String backupTargetName,
                                   @NonNull List<VariableEntry> variables,
                                   @NonNull List<FileEntry> files) {}
+
+    /**
+     * The settings map a restore stores: a git source in a manifest older than {@link #VERSION_AUTO_DEPLOY_ON} whose
+     * auto_deploy is not a stored boolean keeps the off that manifest meant.
+     *
+     * @param kindSchema the restored kind's settings schema, or null when the kind declares none
+     */
+    public @NonNull Map<String, Object> restoredSettings(@Nullable Schema kindSchema) {
+        if (this.version >= VERSION_AUTO_DEPLOY_ON || kindSchema == null
+                || kindSchema.getField(GitSourceSchema.AUTO_DEPLOY) == null
+                || this.settings.get(GitSourceSchema.AUTO_DEPLOY) instanceof Boolean) {
+            return this.settings;
+        }
+        Map<String, Object> restored = new LinkedHashMap<>(this.settings);
+        restored.put(GitSourceSchema.AUTO_DEPLOY, false);
+        return restored;
+    }
 
     /** Total plaintext payload bytes (the capacity check's input). */
     public long totalVolumeBytes() {
@@ -327,7 +357,7 @@ public record BackupManifest(int version,
                 volumes.add(new VolumeEntry(volumeName, path, file, sha, size.longValue()));
                 requireSegment(volumeName, "volume name");
                 requireSegment(file, "volume file");
-                if (size.longValue() < 0 || !sha.matches("[0-9a-f]{64}")
+                if (size.longValue() < 0 || !Sha256.isHex(sha)
                         || volumes.stream().filter(v -> v.name().equals(volumeName)
                             || v.file().equals(file)).count() > 1) {
                     throw new IOException("Invalid or duplicate backup volume inventory");
@@ -356,7 +386,7 @@ public record BackupManifest(int version,
         String file = requireText(map.get("file"), "application payload file");
         requireSegment(file, "application payload file");
         String sha = requireText(map.get("sha256"), "application payload checksum");
-        if (size.longValue() < 0 || !sha.matches("[0-9a-f]{64}")) {
+        if (size.longValue() < 0 || !Sha256.isHex(sha)) {
             throw new IOException("Invalid application backup payload inventory");
         }
         return new PayloadEntry(file, sha, size.longValue());
@@ -421,8 +451,8 @@ public record BackupManifest(int version,
         }
         String crashPolicy = instance.get("crash_policy") instanceof String policy
                 && !policy.isBlank() ? policy : "none";
-        String environment = textOrNull(instance.get("environment"));
-        String backupTarget = textOrNull(instance.get("backup_target"));
+        String environment = RawValues.nonBlankString(instance.get("environment"));
+        String backupTarget = RawValues.nonBlankString(instance.get("backup_target"));
 
         List<VariableEntry> variables = new ArrayList<>();
         if (root.get("variables") instanceof List<?> list) {
@@ -447,15 +477,11 @@ public record BackupManifest(int version,
                 String content = entry.get("content") instanceof String text ? text : "";
                 String mode = entry.get("mode") instanceof String text && !text.isBlank()
                     ? text : "0644";
-                files.add(new FileEntry(path, content, mode, textOrNull(entry.get("generated_by"))));
+                files.add(new FileEntry(path, content, mode, RawValues.nonBlankString(entry.get("generated_by"))));
             }
         }
         return new InstanceProfile(template, crashPolicy, environment, backupTarget,
             List.copyOf(variables), List.copyOf(files));
-    }
-
-    private static @Nullable String textOrNull(@Nullable Object value) {
-        return value instanceof String text && !text.isBlank() ? text : null;
     }
 
     private static @NonNull String requireText(@Nullable Object value, @NonNull String field)

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -63,7 +64,7 @@ final class WorkloadErrors {
         Row recorded = id == null ? null : newestCause(id);
         HohenheimActivityAction cause = recorded == null ? null : causeOf(recorded.get(ActivityModel.ACTION));
         if (cause == null) {
-            return new Reading(copy("error_cause_unknown"), null);
+            return new Reading(HohenheimMicrocopy.ATTENTION_DETAIL.of("error_cause_unknown"), null);
         }
         Microcopy sentence = cause.happened().withArg("subject", instance.get(InstanceModel.NAME));
         String detail = withDetail ? recorded.get(ActivityModel.DETAIL) : null;
@@ -71,13 +72,15 @@ final class WorkloadErrors {
         // A start that failed is headed "could not be started" by its title (Stoppage.START_FAILED), so its detail is
         // what that meant, never that sentence again.
         return switch (cause.errorCause()) {
-            case HOST_ISOLATION -> new Reading(withDetail ? copy("start_refused_isolation").withArg("host",
-                ServerModel.nameOf(ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)))) : sentence,
+            case HOST_ISOLATION -> new Reading(withDetail
+                ? HohenheimMicrocopy.ATTENTION_DETAIL.of("start_refused_isolation").withArg("host",
+                ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID))) : sentence,
                 null);
             case EXIT_CODE -> new Reading(none ? sentence
-                : copy("error_cause_exit_code").withArg("cause", sentence).withArg("code", detail), null);
+                : HohenheimMicrocopy.ATTENTION_DETAIL.of("error_cause_exit_code").withArg("cause", sentence)
+                    .withArg("code", detail), null);
             case MESSAGE -> new Reading(switch (cause.errorPhase()) {
-                case START -> copy("start_failed_worded");
+                case START -> HohenheimMicrocopy.ATTENTION_DETAIL.of("start_failed_worded");
                 case RUNNING -> sentence;
             }, none ? null : technically(detail));
             case PLAIN, NONE -> new Reading(sentence, null);
@@ -86,7 +89,7 @@ final class WorkloadErrors {
 
     /** @return stored technical text (a daemon's or a gate's own words) as the line after the worded ones */
     static @NonNull Microcopy technically(@NonNull String detail) {
-        return copy("technically").withArg("detail", detail);
+        return HohenheimMicrocopy.ATTENTION_DETAIL.of("technically").withArg("detail", detail);
     }
 
     /**
@@ -178,9 +181,5 @@ final class WorkloadErrors {
             }
         }
         return List.copyOf(ids);
-    }
-
-    private static @NonNull Microcopy copy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "attention_detail");
     }
 }

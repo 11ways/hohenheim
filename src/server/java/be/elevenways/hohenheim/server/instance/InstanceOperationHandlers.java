@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.data.RecordSource;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -34,7 +35,6 @@ import be.elevenways.zenit.server.task.record.SchedulePlacements;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
 import be.elevenways.zenit.server.task.record.StepFailure;
 import be.elevenways.hohenheim.instance.InstanceOperations.MigrateInput;
-import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -73,6 +73,9 @@ public final class InstanceOperationHandlers {
     /** The note a scheduled snapshot carries when its step stores none. */
     static final String SCHEDULED_NOTE = "scheduled";
 
+    /** The operator verbs (placement, install lifecycle, capture, destroy with data) answer to an operator alone. */
+    private static final String OPERATOR_VERB = "an operator verb";
+
     private static final RecordSource<InstanceModel> SUBJECTS = RecordSource.of(InstanceModel.class)
         .id(HohenheimIds.id("instance_operation_subjects")).project(InstanceModel.ID).openToAllLoggedIn()
         .systemAccess(identity -> RecordSchedules.isScheduleWork(identity)
@@ -104,7 +107,7 @@ public final class InstanceOperationHandlers {
             .applies(instance -> authored(instance) && instance.get(InstanceModel.TEMPLATE_ID) != null
                 && !InstanceModel.INSTALL_NONE.equals(instance.get(InstanceModel.INSTALL_STATE))
                 && !InstanceModel.INSTALL_INSTALLED.equals(instance.get(InstanceModel.INSTALL_STATE)))
-            .authorize(InstanceOperationHandlers::operatorOnly)
+            .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(call -> {
                 new InstanceInstalls().install(instanceId(call));
                 return null;
@@ -113,7 +116,7 @@ public final class InstanceOperationHandlers {
             .applies(instance -> authored(instance) && instance.get(InstanceModel.TEMPLATE_ID) != null
                 && (InstanceModel.INSTALL_INSTALLED.equals(instance.get(InstanceModel.INSTALL_STATE))
                     || InstanceModel.INSTALL_FAILED.equals(instance.get(InstanceModel.INSTALL_STATE))))
-            .authorize(InstanceOperationHandlers::operatorOnly)
+            .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(call -> {
                 new InstanceInstalls().reinstall(instanceId(call));
                 return null;
@@ -122,11 +125,11 @@ public final class InstanceOperationHandlers {
             .applies(instance -> authored(instance)
                 && InstanceModel.STATUS_STOPPED.equals(instance.get(InstanceModel.STATUS))
                 && capturable(instance))
-            .authorize(InstanceOperationHandlers::operatorOnly)
+            .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(call -> new InstanceTemplateCapture().capture(instanceId(call)));
         OperationHandlers.attach(InstanceOperations.DESTROY_WITH_DATA).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
-            .authorize(InstanceOperationHandlers::operatorOnly)
+            .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(call -> {
                 new InstanceService().destroyWithData(instanceId(call));
                 return null;
@@ -142,7 +145,7 @@ public final class InstanceOperationHandlers {
                 return 1;
             });
         OperationHandlers.attach(InstanceOperations.MIGRATE).source(SUBJECTS)
-            .authorize(InstanceOperationHandlers::operatorOnly)
+            .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(InstanceOperationHandlers::migrate);
         OperationHandlers.attach(InstanceOperations.EXEC).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
@@ -212,13 +215,6 @@ public final class InstanceOperationHandlers {
     private static <R> R session(@NonNull OperationCall<Row, Void> call) {
         throw new IllegalStateException("A session operation was invoked from " + call.surface().id()
             + ": its socket admits through offered(), and no surface places it");
-    }
-
-    /** The operator verbs (placement, install lifecycle, capture, destroy with data) answer to an operator alone. */
-    private static <I> @Nullable DomainRefusal operatorOnly(@NonNull Row instance, @Nullable I input,
-                                                            @NonNull AccessContext access) {
-        return HohenheimAccess.isAdmin(access) ? null
-            : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "an operator verb");
     }
 
     private static boolean capturable(@NonNull Row instance) {
@@ -296,7 +292,7 @@ public final class InstanceOperationHandlers {
         Integer target = input == null ? null : input.targetServerId();
         if (target == null) {
             throw Violations.ofField(InstanceOperations.TARGET_SERVER.getName(), null,
-                HohenheimViolations.text("migrate_target_required"));
+                HohenheimMicrocopy.VIOLATIONS.of("migrate_target_required"));
         }
         new InstanceMigrations().migrateTo(instanceId(call), target);
         return target;
@@ -341,11 +337,11 @@ public final class InstanceOperationHandlers {
             // The name below falls back to the key.
         }
         String name = instance != null ? instance.get(InstanceModel.NAME) : "#" + key;
-        Microcopy subject = Microcopy.of("instance_backup_failed_subject").withFilter("scope", "alert")
+        Microcopy subject = HohenheimMicrocopy.ALERT.of("instance_backup_failed_subject")
             .withArg("name", name);
         Microcopy body = failure.outcomeUnknown()
-            ? Microcopy.of("instance_backup_unknown_body").withFilter("scope", "alert").withArg("name", name)
-            : Microcopy.of("instance_backup_failed_body").withFilter("scope", "alert").withArg("name", name)
+            ? HohenheimMicrocopy.ALERT.of("instance_backup_unknown_body").withArg("name", name)
+            : HohenheimMicrocopy.ALERT.of("instance_backup_failed_body").withArg("name", name)
                 .withArg("reason", reasonOf(failure.cause()));
         Alerts.trySend(NotificationEvents.BACKUP_FAILED, Alerts.about(InstanceModel.MODEL_ID, key == null ? "-" : key),
             subject, body);

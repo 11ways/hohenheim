@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DnsPeerModel;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.server.dns.DnsPeerApi;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
@@ -195,8 +195,7 @@ class DnsAdminTest extends HohenheimTestBase {
             + "&" + ApiSupport.invokeTransport());
         assertThat(refused.statusCode()).as("step 1: the order is refused, never placed").isEqualTo(422);
         assertThat(refused.body()).as("step 1: and names the missing DNS server")
-            .contains(ApiSupport.shippedText(Microcopy.of("dns_server_disabled")
-                .withFilter("scope", "certificate_request_error")))
+            .contains(ApiSupport.shippedText(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("dns_server_disabled")))
             .as("step 1: the typed name is kept in the redrawn input").contains("hosted.dns-admin.test");
     }
 

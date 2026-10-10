@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.upstream;
 
-import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.orm.field.TypeDefinition;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.WordedKind;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -12,13 +11,17 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * enumerate kinds without server/Undertow dependencies; icon and color facets ride the
  * typed TypeDefinition contract.
  */
-public interface UpstreamKindInfo extends TypeDefinition {
+public interface UpstreamKindInfo extends WordedKind {
 
-    /** @return the registry identifier; its string form is the stored column value */
-    @NonNull Identifier typeId();
+    @Override
+    default @NonNull HohenheimMicrocopy labelScope() {
+        return HohenheimMicrocopy.UPSTREAM_KIND;
+    }
 
-    /** Short description shown in the upstream selector UI. */
-    @NonNull Microcopy getDescription();
+    @Override
+    default @NonNull HohenheimMicrocopy descriptionScope() {
+        return HohenheimMicrocopy.UPSTREAM_KIND_DESCRIPTION;
+    }
 
     /**
      * Whether this kind resolves to an INSTANCE record, which is what makes

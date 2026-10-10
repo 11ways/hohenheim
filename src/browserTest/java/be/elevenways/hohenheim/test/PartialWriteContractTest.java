@@ -9,10 +9,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.cms.AuthProviderParts;
-import be.elevenways.hohenheim.server.cms.HohenheimPanel;
-import be.elevenways.hohenheim.server.cms.InstanceScheduleParts;
-import be.elevenways.hohenheim.server.cms.InstanceScheduleStepParts;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -191,18 +187,19 @@ class PartialWriteContractTest extends HohenheimTestBase {
             gitSiteId, SiteModel.DESCRIPTION.getName(), "a note the operator typed"));
         cases.add(new Case("admin/servers", patch(HohenheimSlugs.ADMIN, "servers", serverId), Models.get(ServerModel.class),
             serverId, ServerModel.NAME.getName(), PREFIX + "renamed-host"));
-        cases.add(new Case("admin/auth-providers", patch(HohenheimSlugs.ADMIN, AuthProviderParts.SLUG, providerId),
+        cases.add(new Case("admin/auth-providers", patch(HohenheimSlugs.ADMIN, HohenheimSlugs.AUTH_PROVIDERS,
+            providerId),
             Models.get(SiteAuthProviderModel.class), providerId,
             SiteAuthProviderModel.NAME.getName(), PREFIX + "renamed provider"));
         cases.add(new Case("admin/certificates", patch(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES, certificateId),
             Models.get(CertificateModel.class), certificateId,
             CertificateModel.NICE_NAME.getName(), PREFIX + "renamed cert"));
-        cases.add(new Case("admin/instance-schedules", rows(PanelEntryViews.of(HohenheimPanel.SLUG,
-            InstanceScheduleParts.SLUG)),
+        cases.add(new Case("admin/instance-schedules", rows(PanelEntryViews.of(HohenheimSlugs.ADMIN,
+            HohenheimSlugs.INSTANCE_SCHEDULES)),
             Models.get(RecordScheduleModel.class), scheduleId,
             RecordScheduleModel.NAME.getName(), PREFIX + "renamed schedule"));
-        cases.add(new Case("admin/instance-schedule-steps", rows(PanelEntryViews.of(HohenheimPanel.SLUG,
-            InstanceScheduleStepParts.SLUG)),
+        cases.add(new Case("admin/instance-schedule-steps", rows(PanelEntryViews.of(HohenheimSlugs.ADMIN,
+            HohenheimSlugs.INSTANCE_SCHEDULE_STEPS)),
             Models.get(RecordScheduleStepModel.class), stepId,
             RecordScheduleStepModel.OFFSET_SECONDS.getName(), 30));
         return cases;
@@ -296,7 +293,7 @@ class PartialWriteContractTest extends HohenheimTestBase {
     @Test
     void aPartialDeviceWriteIsNoLongerRefusedAsARenameOrRetype() {
         Row device = Models.get(InstanceDeviceModel.class).findById(deviceId);
-        PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceAttachmentParts.DEVICES);
+        PanelResource<Row> resource = PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_DEVICES);
 
         // 1. The one entry the cell lane would send for a disk resize.
         Throwable refusal = null;

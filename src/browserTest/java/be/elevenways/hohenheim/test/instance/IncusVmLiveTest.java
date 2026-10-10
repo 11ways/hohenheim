@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
@@ -16,7 +17,6 @@ import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
-import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
@@ -135,8 +135,8 @@ class IncusVmLiveTest {
             InstanceService service = new InstanceService();
             InstanceDevices devices = new InstanceDevices(service);
 
-            String diskBucket = InstanceDeviceQuota.diskBucketOf("");
-            String nicBucket = InstanceDeviceQuota.nicBucketOf("");
+            String diskBucket = OwnerBudget.DISK_GB.bucketOf("");
+            String nicBucket = OwnerBudget.NICS.bucketOf("");
             long diskUsedBefore = Quotas.usedOf(diskBucket);
             long nicUsedBefore = Quotas.usedOf(nicBucket);
             Integer previousDiskCap = Zenit.SETTINGS_VALUES.getValue(
@@ -486,7 +486,7 @@ class IncusVmLiveTest {
             IncusClient incus = new ServerService().incusClientFor(HOST);
             InstanceService service = new InstanceService();
 
-            String diskBucket = InstanceDeviceQuota.diskBucketOf("");
+            String diskBucket = OwnerBudget.DISK_GB.bucketOf("");
             long diskUsedBefore = Quotas.usedOf(diskBucket);
 
             // 1. A VM record DECLARING a 6 GB root (the image's own volume is 4 GiB,

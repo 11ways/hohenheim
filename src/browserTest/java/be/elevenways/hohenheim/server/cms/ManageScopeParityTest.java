@@ -1,9 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -71,16 +72,16 @@ class ManageScopeParityTest extends HohenheimTestBase {
         // The tenant holds view on BOTH, so the only thing that can keep the generated row
         // out of either read is the scope's own base -- which is the claim.
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID,
-            authoredInstanceId, HohenheimAccess.VIEW, true);
+            authoredInstanceId, HohenheimCapabilities.VIEW, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID,
-            generatedInstanceId, HohenheimAccess.VIEW, true);
+            generatedInstanceId, HohenheimCapabilities.VIEW, true);
 
         int liveSite = site(PREFIX + "live", false);
         int deletedSite = site(PREFIX + "deleted", true);
         liveSiteDomainId = domain(liveSite, PREFIX + "live.parity.test");
         deletedSiteDomainId = domain(deletedSite, PREFIX + "deleted.parity.test");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, liveSite,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         // The site serving the authored instance, on which the tenant holds NOTHING (the Starfleet shape: a grant on the
         // instance alone).
@@ -147,7 +148,7 @@ class ManageScopeParityTest extends HohenheimTestBase {
 
         // 4. The /manage Apps list is read from those same two lists: the tenant's authored instance and its live
         //    site, never the generated instance it was granted too, nor the soft-deleted site.
-        Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(ManagePanel.SLUG));
+        Panel manage = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
         Set<String> apps = new LinkedHashSet<>();
         for (AppDirectory.App app : AppDirectory.read(manage, tenant)) {
             if (app.name().startsWith(PREFIX)) {
@@ -185,7 +186,7 @@ class ManageScopeParityTest extends HohenheimTestBase {
 
     /** The ids the admitted entry's own row scope lets this context list. */
     private static Set<Object> resourceIds(Projection resource, AccessContext ctx) {
-        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(ManagePanel.SLUG));
+        Panel panel = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.MANAGE));
         assertThat(panel.admits(resource.entry(), ctx)).as("%s must not deny outright", resource.id()).isTrue();
         Criteria criteria = resource.scope().criteria(ctx);
         QueryBuilder<Row> query = resource.model().find();

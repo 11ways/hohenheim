@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -55,7 +56,7 @@ public final class IncusTrust {
     public static HostKeys.@NonNull ScanResult scanAndPin(@NonNull Row server) {
         IncusEndpoint endpoint = IncusEndpoint.of(server);
         if (!endpoint.https()) {
-            throw Violations.ofForm(HohenheimViolations.text("host_key_scan_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_key_scan_failed")
                 .withArg("target", endpoint.describe())
                 .withArg("detail", "a unix-socket Incus host has no certificate to pin"));
         }
@@ -65,7 +66,7 @@ public final class IncusTrust {
             offered = IncusTls.scanServerCertificate(endpoint.host(), endpoint.port(), 10_000);
             pem = IncusTls.toPem(offered);
         } catch (IOException e) {
-            throw Violations.ofForm(HohenheimViolations.text("host_key_scan_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_key_scan_failed")
                 .withArg("target", endpoint.describe())
                 .withArg("detail", String.valueOf(e.getMessage())));
         }
@@ -138,7 +139,7 @@ public final class IncusTrust {
                     + " this client untrusted");
             }
         } catch (IOException e) {
-            throw Violations.ofForm(HohenheimViolations.text("incus_enroll_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("incus_enroll_failed")
                 .withArg("name", name)
                 .withArg("detail", String.valueOf(e.getMessage())));
         }

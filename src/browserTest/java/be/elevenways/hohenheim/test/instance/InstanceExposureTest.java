@@ -9,7 +9,6 @@ import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -75,7 +74,8 @@ class InstanceExposureTest {
             // 2. The dialog an operator sees BEFORE clicking names every site that will
             //    be disabled -- the fact that only exists per record.
             Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
-            DeleteConfirmation<Row> confirmation = CmsSupport.rowEntry(admin, InstanceParts.SLUG).deleteConfirmation();
+            DeleteConfirmation<Row> confirmation = CmsSupport.rowEntry(admin, HohenheimSlugs.INSTANCES)
+                .deleteConfirmation();
             Row record = Models.get(InstanceModel.class).findById(instanceId);
             PanelRequest request = new PanelRequest(admin, TenantConduits.stubFor(null), AccessContext.anonymous(),
                 null);

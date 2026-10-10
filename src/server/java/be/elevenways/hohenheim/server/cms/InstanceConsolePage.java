@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -42,8 +44,6 @@ import java.util.Map;
  */
 public final class InstanceConsolePage implements ConsoleModes.Mode {
 
-    public static final String SLUG = "console";
-
     private final @NonNull ConsoleModes modes;
 
     InstanceConsolePage(@NonNull ConsoleModes modes) {
@@ -51,13 +51,13 @@ public final class InstanceConsolePage implements ConsoleModes.Mode {
     }
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_console"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("console").withFilter("scope", "instance"); }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE.of("console"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.CONSOLE; }
     @Override public @NonNull Icon icon() { return Icon.of("terminal"); }
 
     @Override
     public @NonNull Microcopy hint() {
-        return Microcopy.of("console").withFilter("scope", "console_mode");
+        return HohenheimMicrocopy.CONSOLE_MODE.of("console");
     }
 
     /**
@@ -114,7 +114,7 @@ public final class InstanceConsolePage implements ConsoleModes.Mode {
         // An unknown token renders the plain shape; the deploy already refused it.
         Object settings = instance.get(InstanceModel.SETTINGS);
         ConsoleKind consoleKind = settings instanceof Map<?, ?> map
-            ? ConsoleKind.declaredIn(castSettings(map)) : ConsoleKind.PLAIN;
+            ? ConsoleKind.declaredIn(RawValues.map(map)) : ConsoleKind.PLAIN;
         vars.put("interactive", consoleKind != null && consoleKind.interactive());
         vars.put("returnUrl", ReturnTarget.capture(conduit));
         // AIDEV-NOTE: the hidden field NAME comes from the framework constant --
@@ -133,11 +133,6 @@ public final class InstanceConsolePage implements ConsoleModes.Mode {
         vars.put("consoleWsUrl", HohenheimEndpoints.INSTANCE_CONSOLE.toUrl(
             Map.of(HohenheimEndpoints.INSTANCE_ID, instanceId)));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_CONSOLE, vars);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static @NonNull Map<String, Object> castSettings(@NonNull Map<?, ?> settings) {
-        return (Map<String, Object>) settings;
     }
 
     /**
@@ -197,7 +192,7 @@ public final class InstanceConsolePage implements ConsoleModes.Mode {
             .with(CmsEndpoints.PANEL_PARAM, panel)
             .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.INSTANCES)
             .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(instanceId))
-            .with(CmsEndpoints.SUBPAGE_PARAM, SLUG)
+            .with(CmsEndpoints.SUBPAGE_PARAM, HohenheimSlugs.Tab.CONSOLE)
             .with(HohenheimParams.SELECTED_LOG, logId);
     }
 

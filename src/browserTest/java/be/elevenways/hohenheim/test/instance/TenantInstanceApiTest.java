@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
@@ -90,31 +91,31 @@ class TenantInstanceApiTest extends HohenheimTestBase {
         // the one docs/paas-api.md says the automation API never lists or drives.
         instanceGeneratedId = generatedInstance(PREFIX + "generated");
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceGeneratedId,
-            HohenheimAccess.FILES_READ, true);
+            HohenheimCapabilities.FILES_READ, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
-            HohenheimAccess.FILES_READ, true);
+            HohenheimCapabilities.FILES_READ, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
-            HohenheimAccess.SNAPSHOTS, true);
+            HohenheimCapabilities.SNAPSHOTS, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantBId, InstanceModel.MODEL_ID, instanceBId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         // The Phase 3 gate's own worked example: a delegate handed console (and, through
         // the umbrella, view) and NOTHING else on instance C. And a second delegate with
         // bare view, for the read lanes.
         RecordGrants.grant(GrantSubjectType.USER, tenantConsoleId, InstanceModel.MODEL_ID, instanceCId,
-            HohenheimAccess.CONSOLE, true);
+            HohenheimCapabilities.CONSOLE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantViewId, InstanceModel.MODEL_ID, instanceCId,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         // A value that already exists, so the DELETE lane has something real to aim at.
         new InstanceVariables().setValue(instanceCId, null, "SEEDED",
             InstanceVariableModel.KIND_PLAIN, "seeded-value");
 
-        String manageScope = CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.MANAGE);
-        String snapshotScope = CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.SNAPSHOTS);
-        String consoleScope = CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.CONSOLE);
-        String configScope = CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.CONFIG);
-        String viewScope = CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.VIEW);
+        String manageScope = CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.MANAGE);
+        String snapshotScope = CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.SNAPSHOTS);
+        String consoleScope = CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.CONSOLE);
+        String configScope = CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.CONFIG);
+        String viewScope = CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW);
         keyManageA = ApiKeyService.create(tenantAId, PREFIX + "a-manage",
             List.of(manageScope), null).plaintext();
         keySnapshotsA = ApiKeyService.create(tenantAId, PREFIX + "a-snapshots",
@@ -136,8 +137,8 @@ class TenantInstanceApiTest extends HohenheimTestBase {
         keyViewC = ApiKeyService.create(tenantViewId, PREFIX + "c-view",
             List.of(viewScope, consoleScope, configScope), null).plaintext();
         keyFilesA = ApiKeyService.create(tenantAId, PREFIX + "a-files",
-            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.FILES_READ),
-                CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.FILES_WRITE),
+            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.FILES_READ),
+                CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.FILES_WRITE),
                 manageScope), null).plaintext();
 
         sessionA = sessionFor(tenantAId).token();
@@ -407,7 +408,7 @@ class TenantInstanceApiTest extends HohenheimTestBase {
             new UserPrincipal(tenantBId, "Api Tenant B"), PermissionChecker.DENY_ALL);
         Throwable refusedMint = catchThrowable(() -> ApiKeyService.create(actorB, tenantBId,
             PREFIX + "b-snapshots",
-            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.SNAPSHOTS)),
+            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.SNAPSHOTS)),
             null));
         assertThat(refusedMint)
             .as("step 3: minting a capability its owner does not hold is refused")
@@ -416,7 +417,7 @@ class TenantInstanceApiTest extends HohenheimTestBase {
         // 4. image_any is NOT delegable at all: not even a holder could mint it.
         Throwable refusedImageAny = catchThrowable(() -> ApiKeyService.create(actorB, tenantBId,
             PREFIX + "b-image-any",
-            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.IMAGE_ANY)),
+            List.of(CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.IMAGE_ANY)),
             null));
         assertThat(refusedImageAny)
             .as("step 4: a non-delegable capability can never enter a key scope")

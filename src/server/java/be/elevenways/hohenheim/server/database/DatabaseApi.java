@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
@@ -7,6 +9,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.api.ApiConduits;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
@@ -35,6 +38,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * The managed-database API (v1): the automation surface over the tier that had none, so
@@ -99,7 +103,7 @@ public final class DatabaseApi {
             if (row == null) {
                 return null;
             }
-            if (ApiConduits.rowEntry(conduit, ApiConduits.adminPanel(), DatabaseParts.SLUG) == null) {
+            if (ApiConduits.rowEntry(conduit, ApiConduits.adminPanel(), HohenheimSlugs.DATABASES) == null) {
                 return null;
             }
             // AIDEV-NOTE: the eligibility is asked HERE first, of the operation's own declaration
@@ -143,7 +147,7 @@ public final class DatabaseApi {
             int databaseId = row.get(DatabaseModel.ID);
             String name = row.get(DatabaseModel.NAME);
             Panel panel = ApiConduits.adminPanel();
-            PanelResource<Row> databases = ApiConduits.rowEntry(conduit, panel, DatabaseParts.SLUG);
+            PanelResource<Row> databases = ApiConduits.rowEntry(conduit, panel, HohenheimSlugs.DATABASES);
             if (databases == null) {
                 return null;
             }
@@ -216,7 +220,7 @@ public final class DatabaseApi {
      */
     private static @NonNull List<Row> visibleDatabases(@NonNull AccessContext ctx) {
         var query = Models.get(DatabaseModel.class).find();
-        Criteria scope = HohenheimAccess.databaseScope(ctx, HohenheimAccess.VIEW);
+        Criteria scope = HohenheimAccess.databaseScope(ctx, HohenheimCapabilities.VIEW);
         if (scope != null) {
             query.where(scope);
         }
@@ -236,7 +240,7 @@ public final class DatabaseApi {
         Row row = databaseId == null ? null
             : Models.get(DatabaseModel.class).findById(databaseId);
         if (row == null || !HohenheimAccess.hasDatabaseCapability(ctx, databaseId,
-                HohenheimAccess.VIEW)) {
+                HohenheimCapabilities.VIEW)) {
             conduit.notFound();
             return null;
         }
@@ -272,13 +276,13 @@ public final class DatabaseApi {
             entry.put("engine_id", database.get(DatabaseModel.ENGINE_ID));
             entry.put("server", ServerModel.nameOf(database.get(DatabaseModel.SERVER_ID)));
             entry.put("ephemeral", Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL)));
-            entry.put("memory_limit_mb", database.get(DatabaseModel.MEMORY_LIMIT_MB));
+            entry.put(InstanceKindFields.MEMORY_LIMIT_MB, database.get(DatabaseModel.MEMORY_LIMIT_MB));
             // The ceiling the record RUNS under, which memory_limit_mb alone never told:
             // a record on the defaults declares nothing, and a shared record's ceiling is
             // its engine's. The CLI prints this rather than deriving it.
             putMemoryCeiling(entry, database);
-            entry.put("cpu_limit", database.get(DatabaseModel.CPU_LIMIT));
-            entry.put("failure_reason", stringOrEmpty(database.get(DatabaseModel.FAILURE_REASON)));
+            entry.put(InstanceKindFields.CPU_LIMIT, database.get(DatabaseModel.CPU_LIMIT));
+            entry.put("failure_reason", Objects.toString(database.get(DatabaseModel.FAILURE_REASON), ""));
         }
         return entry;
     }
@@ -293,7 +297,7 @@ public final class DatabaseApi {
         entry.put("id", database.get(DatabaseModel.ID));
         entry.put("name", database.get(DatabaseModel.NAME));
         entry.put("db_name", database.get(DatabaseModel.DB_NAME));
-        entry.put("db_user", stringOrEmpty(database.get(DatabaseModel.DB_USER)));
+        entry.put("db_user", Objects.toString(database.get(DatabaseModel.DB_USER), ""));
         entry.put("status", String.valueOf((Object) database.get(DatabaseModel.STATUS)));
         entry.put("outcome", DatabaseModel.outcomeOf(database.get(DatabaseModel.STATUS)));
         putMemoryCeiling(entry, database);
@@ -321,17 +325,13 @@ public final class DatabaseApi {
         entry.put("id", engineId);
         entry.put("name", engine.get(DatabaseEngineModel.NAME));
         entry.put("engine", String.valueOf((Object) engine.get(DatabaseEngineModel.ENGINE)));
-        entry.put("image", stringOrEmpty(engine.get(DatabaseEngineModel.IMAGE)));
+        entry.put("image", Objects.toString(engine.get(DatabaseEngineModel.IMAGE), ""));
         entry.put("server", ServerModel.nameOf(engine.get(DatabaseEngineModel.SERVER_ID)));
-        entry.put("memory_limit_mb", engine.get(DatabaseEngineModel.MEMORY_LIMIT_MB));
-        entry.put("cpu_limit", engine.get(DatabaseEngineModel.CPU_LIMIT));
+        entry.put(InstanceKindFields.MEMORY_LIMIT_MB, engine.get(DatabaseEngineModel.MEMORY_LIMIT_MB));
+        entry.put(InstanceKindFields.CPU_LIMIT, engine.get(DatabaseEngineModel.CPU_LIMIT));
         entry.put("databases", engineId == null ? 0 : DatabaseEngines.databasesOn(engineId).size());
         entry.put("status", String.valueOf((Object) engine.get(DatabaseEngineModel.STATUS)));
-        entry.put("failure_reason", stringOrEmpty(engine.get(DatabaseEngineModel.FAILURE_REASON)));
+        entry.put("failure_reason", Objects.toString(engine.get(DatabaseEngineModel.FAILURE_REASON), ""));
         return entry;
-    }
-
-    private static @NonNull String stringOrEmpty(@Nullable Object value) {
-        return value == null ? "" : String.valueOf(value);
     }
 }

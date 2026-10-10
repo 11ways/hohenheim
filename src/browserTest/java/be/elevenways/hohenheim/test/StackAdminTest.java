@@ -28,6 +28,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 
 /**
  * The stack admin surface end to end: every page RENDERS (the service and file
@@ -347,10 +348,9 @@ class StackAdminTest extends HohenheimTestBase {
 
     // -- fixtures -----------------------------------------------------------------
 
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
-    private static final String STACKS = StackParts.SLUG;
-    private static final String SERVICES = StackParts.SERVICES_SLUG;
-    private static final String FILES = StackParts.FILES_SLUG;
+    private static final String STACKS = HohenheimSlugs.STACKS;
+    private static final String SERVICES = HohenheimSlugs.STACK_SERVICES;
+    private static final String FILES = HohenheimSlugs.STACK_FILES;
 
     private static AccessContext operator() {
         return TenantConduits.operator();

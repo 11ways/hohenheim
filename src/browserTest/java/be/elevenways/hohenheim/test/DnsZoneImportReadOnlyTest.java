@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.server.cms.DnsRecordParts;
 import be.elevenways.hohenheim.server.cms.DnsZoneFilePage;
-import be.elevenways.hohenheim.server.cms.DnsZoneParts;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -116,7 +115,7 @@ class DnsZoneImportReadOnlyTest extends HohenheimTestBase {
                     .filter(ResourceList.archivedFilter(false)).build()).archivedLane().build())
                 .build();
             this.peers = List.of(owner, PanelResource.builder(
-                    Identifier.of("hohenheim_test", "site_owned_zones"), DnsZoneParts.SLUG,
+                    Identifier.of("hohenheim_test", "site_owned_zones"), HohenheimSlugs.DNS_ZONES,
                     SubjectType.record(DnsZoneModel.MODEL_ID))
                 .label(Microcopy.literal("Zones")).reads(ResourceReads.rows())
                 .list(ResourceList.rows(TableSpec.<Row>builder().columnFromField(DnsZoneModel.ORIGIN).build()).build())

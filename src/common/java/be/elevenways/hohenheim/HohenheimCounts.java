@@ -12,18 +12,15 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  */
 public final class HohenheimCounts {
 
-    /** The catalog scope every counted noun ships under. */
-    public static final String SCOPE = "count";
-
     private HohenheimCounts() {
     }
 
     /**
-     * @param noun  the counted noun's key under {@link #SCOPE} ("stacks")
+     * @param noun  the counted noun's key under {@link HohenheimMicrocopy#COUNT} ("stacks")
      * @param count how many
      * @return the phrase, pluralized in the reader's locale
      */
     public static @NonNull Microcopy of(@NonNull String noun, long count) {
-        return Microcopy.of(noun).withFilter("scope", SCOPE).withArg("count", count);
+        return HohenheimMicrocopy.COUNT.of(noun).withArg("count", count);
     }
 }

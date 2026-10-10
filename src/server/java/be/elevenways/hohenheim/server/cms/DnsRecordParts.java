@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DnsRecordModel;
@@ -71,7 +72,8 @@ public final class DnsRecordParts {
             .list(ResourceList.rows(parts.tableSpec()).chrome(CmsSupport.FILTERABLE_LIST).facets().ruleFilters()
                 .search(parts.searchFields().toArray(Field<?, ?>[]::new)).build())
             .form(ResourceForm.<Row>of(parts.formSpec()).quickCreate(QUICK_CREATE)
-                .quickCreatePresets(parts::quickCreatePresetValues)
+                .quickCreatePresets(access -> CmsSupport.parentPreset(access, DnsRecordModel.ZONE_ID.getName(),
+                    HohenheimSlugs.DNS_ZONES))
                 .createDefaults(request -> parts.createValues(request.conduit()))
                 .inlineEditable(parts.inlineEditableFields().toArray(Field<?, ?>[]::new)).build())
             .parent(parts.parent())
@@ -85,9 +87,9 @@ public final class DnsRecordParts {
 
     static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
         DnsOperations.init();
-        return PanelResource.builder(id, SLUG, DnsOperations.RECORD)
-            .label(Microcopy.of("plural").withFilter("scope", "dns_record"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "dns_record"))
+        return PanelResource.builder(id, HohenheimSlugs.DNS_RECORDS, DnsOperations.RECORD)
+            .label(HohenheimMicrocopy.DNS_RECORD.of("plural"))
+            .recordLabel(HohenheimMicrocopy.DNS_RECORD.of("singular"))
             .navGroup(HohenheimPanel.NETWORK_GROUP).navOrder(31).icon(Icon.of("list-ul")).showInNav(false)
             .authority(ResourceAuthority.<Row>builder().write(null,
                 (row, access) -> TenantWrites.mayAuthorRecord(access, row)).build())
@@ -95,12 +97,12 @@ public final class DnsRecordParts {
                 new DnsRecordParts().deleteConfirmationFor(row)))
             .actions(List.of(PanelAction.<Row, CmsActionResult>places(DnsOperations.MINT_DYNAMIC_TOKEN,
                 ActionPlacement.ROW, (request, result) -> result.value()).inlineInRow(false)
-                .dynamicDescription(row -> Microcopy.of("dyndns_token_hint").withFilter("scope", "dns_record")
+                .dynamicDescription(row -> HohenheimMicrocopy.DNS_RECORD.of("dyndns_token_hint")
                     .withArg("url", dyndnsUpdateUrl())).build(),
                 PanelAction.<Row, CmsActionResult>places(DnsOperations.REVOKE_DYNAMIC_TOKEN,
                     ActionPlacement.ROW, (request, result) -> result.value()).inlineInRow(false)
-                    .confirmation(ConfirmationSpec.destructive(Microcopy.of("dyndns_revoke_confirm")
-                        .withFilter("scope", "dns_record"))).build()));
+                    .confirmation(ConfirmationSpec.destructive(HohenheimMicrocopy.DNS_RECORD
+                        .of("dyndns_revoke_confirm"))).build()));
     }
 
     public static void requireImportable(@NonNull Panel panel, int zoneId, @NonNull AccessContext access) {
@@ -148,12 +150,10 @@ public final class DnsRecordParts {
         .build();
 
     public @NonNull Identifier id() { return HohenheimIds.id("dns_record"); }
-    public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "dns_record"); }
-    public @NonNull Microcopy recordLabel() { return Microcopy.of("singular").withFilter("scope", "dns_record"); }
-    /** The panel slug, which the zone's Records tab looks this resource up by. */
-    public static final String SLUG = "dns-records";
+    public @NonNull Microcopy label() { return HohenheimMicrocopy.DNS_RECORD.of("plural"); }
+    public @NonNull Microcopy recordLabel() { return HohenheimMicrocopy.DNS_RECORD.of("singular"); }
 
-    public @NonNull String slug() { return SLUG; }
+    public @NonNull String slug() { return HohenheimSlugs.DNS_RECORDS; }
     public @NonNull Model model() { return Models.get(DnsRecordModel.class); }
     public @NonNull FormSpec formSpec() { return this.formSpec; }
     public @NonNull TableSpec<Row> tableSpec() { return this.tableSpec; }
@@ -163,7 +163,7 @@ public final class DnsRecordParts {
      * or under a trashed record) makes every write of its records refused by zenit-cms.
      */
     public @Nullable ResourceParent<Row> parent() {
-        return ResourceParent.of(DnsZoneParts.SLUG, DnsRecordModel.ZONE_ID).tab(DnsZoneRecordsPage.SLUG);
+        return ResourceParent.of(HohenheimSlugs.DNS_ZONES, DnsRecordModel.ZONE_ID).tab(HohenheimSlugs.Tab.RECORDS);
     }
 
     /**
@@ -215,21 +215,6 @@ public final class DnsRecordParts {
     }
 
     /**
-     * The zone the bar adds into: the {@code ?zone_id=} prefill a create link carries, or
-     * the zone whose Records tab is being rendered ({@link CmsSupport#scopedParentId}, which
-     * documents why the answer comes off the REQUEST).
-     */
-    public @NonNull Map<String, Object> quickCreatePresetValues(@NonNull AccessContext accessContext) {
-        Conduit conduit = accessContext.conduit();
-        if (conduit == null) {
-            return Map.of();
-        }
-        Integer zoneId = CmsSupport.scopedParentId(conduit, DnsRecordModel.ZONE_ID.getName(),
-            DnsZoneParts.SLUG);
-        return zoneId != null ? Map.of(DnsRecordModel.ZONE_ID.getName(), zoneId) : Map.of();
-    }
-
-    /**
      * The columns an operator retypes without opening the record: a TTL bump and a
      * value correction are the everyday DNS edits.
      *
@@ -276,7 +261,7 @@ public final class DnsRecordParts {
         Row zone = zoneId != null ? Models.get(DnsZoneModel.class).findById(zoneId) : null;
         // The seconds go in as TEXT: a TTL is an identifier of a cache window, not a
         // quantity, so it must never pick up locale digit grouping ("3,600" is not a TTL).
-        return Microcopy.of("ttl_zone_default").withFilter("scope", "dns_record")
+        return HohenheimMicrocopy.DNS_RECORD.of("ttl_zone_default")
             .withArg("ttl", String.valueOf(DnsZoneModel.defaultTtlOf(zone)));
     }
 
@@ -346,8 +331,7 @@ public final class DnsRecordParts {
             return DeleteConfirmation.<Row>defaults().fallback();
         }
 
-        return DeleteConfirmation.body(Microcopy.of("delete_confirm_named")
-            .withFilter("scope", "dns_record")
+        return DeleteConfirmation.body(HohenheimMicrocopy.DNS_RECORD.of("delete_confirm_named")
             .withArg("name", DnsNames.absolute(origin, owner))
             .withArg("type", type)
             .withArg("value", value)
@@ -393,7 +377,7 @@ public final class DnsRecordParts {
         // parks the plaintext server-side (SecretDisclosures): the flash and durable
         // session data only ever carry a single-use handle.
         return CmsActionResult.refreshWithToast(
-                Microcopy.of("dyndns_minted").withFilter("scope", "dns_record"))
+                HohenheimMicrocopy.DNS_RECORD.of("dyndns_minted"))
             .withSecretArg("token", token);
     }
 
@@ -402,6 +386,6 @@ public final class DnsRecordParts {
         DynamicDnsService.revokeFor(row.get(DnsRecordModel.ID));
         ActivityLog.record(Models.get(DnsRecordModel.class), row.get(DnsRecordModel.ID), HohenheimActivityAction.DYNDNS_TOKEN_REVOKED, null);
         return CmsActionResult.refreshWithToast(
-            Microcopy.of("dyndns_revoked").withFilter("scope", "dns_record"));
+            HohenheimMicrocopy.DNS_RECORD.of("dyndns_revoked"));
     }
 }

@@ -2,8 +2,8 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.security.BanService;
 import be.elevenways.hohenheim.server.security.SshAuthWatcher;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
@@ -15,10 +15,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 
-import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
-import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 
 /**
  * The FIREWALL role's attention items: the managed Spamservice and the SSH watcher, each judged
@@ -28,8 +27,6 @@ import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
  * @since 0.1.0
  */
 public final class FirewallAttention {
-
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
 
     private FirewallAttention() {
     }
@@ -43,10 +40,10 @@ public final class FirewallAttention {
             return null;
         }
         return item(AttentionSeverity.WARNING, "shield",
-            Alerts.copy("auto_ban_budget_subject"),
-            Alerts.copy("auto_ban_budget_body").withArg("budget", budget.budget()),
-            CmsRoutes.list(ADMIN, BanParts.SLUG),
-            action("act_open_bans"));
+            HohenheimMicrocopy.ALERT.of("auto_ban_budget_subject"),
+            HohenheimMicrocopy.ALERT.of("auto_ban_budget_body").withArg("budget", budget.budget()),
+            CmsRoutes.list(ADMIN, HohenheimSlugs.BANS),
+            HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_bans"));
     }
 
     /** Surfaces an enabled managed Spamservice that is not currently ready. */
@@ -70,11 +67,11 @@ public final class FirewallAttention {
         }
         Microcopy detail = snapshot.lastError() != null
             ? literal(snapshot.lastError())
-            : copy("spamservice_not_ready", "attention_detail", "state", snapshot.state());
+            : HohenheimMicrocopy.ATTENTION_DETAIL.of("spamservice_not_ready").withArg("state", snapshot.state());
         return item(AttentionSeverity.WARNING, "shield",
-            copy("not_ready", "spamservice"), detail,
+            HohenheimMicrocopy.SPAMSERVICE.of("not_ready"), detail,
             CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG),
-            action("act_open_settings"));
+            HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_settings"));
     }
 
     /**
@@ -94,10 +91,10 @@ public final class FirewallAttention {
         }
         Microcopy detail = snapshot.lastError() != null
             ? literal(snapshot.lastError())
-            : copy("ssh_watch", "attention_detail");
+            : HohenheimMicrocopy.ATTENTION_DETAIL.of("ssh_watch");
         return item(AttentionSeverity.WARNING, "shield",
-            copy("ssh_watch", "attention_title"), detail,
+            HohenheimMicrocopy.ATTENTION_TITLE.of("ssh_watch"), detail,
             CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG),
-            action("act_open_settings"));
+            HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_settings"));
     }
 }

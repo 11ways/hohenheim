@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceConsoles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -89,10 +90,10 @@ class InstanceConsoleCrashRestartTest {
             int viewerId = ApiSupport.user("crash-viewer@hohenheim.local", "Crash Viewer");
             UserPrincipal viewer = new UserPrincipal(viewerId, "Crash Viewer");
             RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
-                HohenheimAccess.CONSOLE, true);
+                HohenheimCapabilities.CONSOLE, true);
             assertThat(List.of(
-                    HohenheimAccess.hasInstanceCapability(viewer, instanceId, HohenheimAccess.CONSOLE),
-                    HohenheimAccess.hasInstanceCapability(viewer, instanceId, HohenheimAccess.POWER)))
+                    HohenheimAccess.hasInstanceCapability(viewer, instanceId, HohenheimCapabilities.CONSOLE),
+                    HohenheimAccess.hasInstanceCapability(viewer, instanceId, HohenheimCapabilities.POWER)))
                 .as("step 3: the viewer may watch the console and may not power the instance")
                 .containsExactly(true, false);
             TenantConduits.as(viewer, () -> InstanceConsoles.subscribe(instanceId, chunk -> { }));

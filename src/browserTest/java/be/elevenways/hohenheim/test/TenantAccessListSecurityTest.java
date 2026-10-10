@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -55,17 +56,17 @@ class TenantAccessListSecurityTest extends HohenheimTestBase {
         aliceSiteId = site("Alice ACL Site", "alice-acl-site");
         bobSiteId = site("Bob ACL Site", "bob-acl-site");
         RecordGrants.grant(GrantSubjectType.USER, aliceId, SiteModel.MODEL_ID,
-            aliceSiteId, HohenheimAccess.MANAGE, true);
+            aliceSiteId, HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, bobId, SiteModel.MODEL_ID,
-            bobSiteId, HohenheimAccess.MANAGE, true);
+            bobSiteId, HohenheimCapabilities.MANAGE, true);
 
         aliceListId = list("Alice List", false);
         bobListId = list("Bob List", false);
         sharedListId = list("Shared List", true);
         RecordGrants.grant(GrantSubjectType.USER, aliceId, AccessListModel.MODEL_ID,
-            aliceListId, HohenheimAccess.MANAGE, true);
+            aliceListId, HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, bobId, AccessListModel.MODEL_ID,
-            bobListId, HohenheimAccess.MANAGE, true);
+            bobListId, HohenheimCapabilities.MANAGE, true);
         bobRuleId = rule(bobListId);
     }
 

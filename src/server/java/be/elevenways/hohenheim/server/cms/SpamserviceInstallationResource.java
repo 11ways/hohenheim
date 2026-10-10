@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
@@ -8,7 +10,6 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
-import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
@@ -28,7 +29,6 @@ import java.util.Map;
 /** Local Spamservice installation singleton without exposing its controller key. */
 public final class SpamserviceInstallationResource extends RowSingleton {
 
-    public static final String SLUG = "spamservice-installation";
     private final FormSpec formSpec = FormSpec.builder()
         .add(SpamserviceInstallationModel.ENABLED)
         .add(SpamserviceInstallationModel.PORT)
@@ -38,15 +38,15 @@ public final class SpamserviceInstallationResource extends RowSingleton {
         .build();
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("spamservice_installation"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("installation").withFilter("scope", "spamservice"); }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.SPAMSERVICE.of("installation"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.SPAMSERVICE_INSTALLATION; }
     @Override public @NonNull Model model() { return Models.get(SpamserviceInstallationModel.class); }
     @Override public @NonNull FormSpec formSpec() { return this.formSpec; }
     @Override public @NonNull NavGroup navGroup() { return HohenheimPanel.SECURITY_GROUP; }
     @Override public int navOrder() { return 10; }
 
     @Override public boolean showInNav() { return false; }
-    @Override public @NonNull String standsUnder() { return SpamserviceOverviewPage.SLUG; }
+    @Override public @NonNull String standsUnder() { return HohenheimSlugs.SPAMSERVICE; }
     @Override public @NonNull Icon icon() { return Icon.of("download"); }
 
     static {
@@ -71,7 +71,7 @@ public final class SpamserviceInstallationResource extends RowSingleton {
             destructive(SpamserviceOperations.RESTART, "restart"),
             PanelAction.<Void, String>places(SpamserviceOperations.TEST, ActionPlacement.HEADER,
                     (request, result) -> CmsActionResult.refreshWithToast(
-                        SpamserviceOperations.words("test_ok").withArg("status", result.value())))
+                        HohenheimMicrocopy.SPAMSERVICE.of("test_ok").withArg("status", result.value())))
                 .build());
     }
 
@@ -84,9 +84,8 @@ public final class SpamserviceInstallationResource extends RowSingleton {
                                                           @NonNull String name) {
         return toasting(operation, name)
             .style(ActionStyle.DESTRUCTIVE)
-            .confirmation(ConfirmationSpec.builder()
-                .title(SpamserviceOperations.words(name))
-                .body(SpamserviceOperations.words(name + "_confirm")).build())
+            .confirmation(Confirmations.of(HohenheimMicrocopy.SPAMSERVICE.of(name),
+                HohenheimMicrocopy.SPAMSERVICE.of(name + "_confirm"), ActionStyle.DESTRUCTIVE))
             .build();
     }
 
@@ -94,6 +93,6 @@ public final class SpamserviceInstallationResource extends RowSingleton {
     private static PanelAction.@NonNull OperationBuilder<Void, Void> toasting(
             @NonNull Operation<Void, Void, Void> operation, @NonNull String name) {
         return PanelAction.<Void, Void>places(operation, ActionPlacement.HEADER,
-            (request, result) -> CmsActionResult.refreshWithToast(SpamserviceOperations.words(name + "_ok")));
+            (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.SPAMSERVICE.of(name + "_ok")));
     }
 }

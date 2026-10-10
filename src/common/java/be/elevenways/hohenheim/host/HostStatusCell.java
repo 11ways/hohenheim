@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.host;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.plumage.component.StatusDotStatus;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -19,17 +19,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * @param state       the typed verdict; see {@link HostState} for why it is not a String
  * @param daemon      "Docker 27.1.1" / "Incus 7.3" -- the daemon plus its stored version
  * @param error       the failure class in words when {@code state} is {@link HostState#ERROR}
- * @param lastSeenIso last daemon contact, null when never reached
- * @param wording     request-independent relative-time wording (server default locale,
- *                    like every host stat computed without a conduit)
+ * @param lastSeenIso last daemon contact, null when never reached; its relative time is worded by the render
  */
 @HawkeyeClass
 public record HostStatusCell(
     @NonNull HostState state,
     String daemon,
     @Nullable Microcopy error,
-    @Nullable String lastSeenIso,
-    @Nullable RelativeTimeWording wording
+    @Nullable String lastSeenIso
 ) {
 
     /**
@@ -65,7 +62,7 @@ public record HostStatusCell(
         if (this.state == HostState.ERROR) {
             // The relative time after the words is the last contact: say so, or there is none to name.
             Microcopy failed = this.lastSeenIso != null
-                ? Microcopy.of("state_error_seen").withFilter("scope", "server") : wording;
+                ? HohenheimMicrocopy.SERVER.of("state_error_seen") : wording;
             return failed.withArg("kind", this.error != null ? this.error : Microcopy.literal(""));
         }
         return this.state.namesDaemon() ? wording.withArg("daemon", this.daemon != null ? this.daemon : "")

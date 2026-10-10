@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.cms.InstanceBackupParts;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -80,7 +80,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         // either artifact tab.
         consoleUserId = ApiSupport.user("artifact-console@hohenheim.local", "Console Only");
         RecordGrants.grant(GrantSubjectType.USER, consoleUserId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.CONSOLE, true);
+            HohenheimCapabilities.CONSOLE, true);
 
         consoleSession = sessionFor(consoleUserId).token();
     }

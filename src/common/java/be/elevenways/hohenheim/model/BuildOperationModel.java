@@ -1,7 +1,8 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -19,6 +20,8 @@ import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.ColorHue;
 
 import java.util.List;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * THE build-operation record: one row per sandboxed build attempt, shared by every
@@ -69,83 +72,64 @@ public class BuildOperationModel extends Model {
      * through unmapped so {@code Builders.forKind} refuses it by name.
      */
     public static String kindOrDefault(Object value) {
-        String kind = value == null ? "" : String.valueOf(value).trim();
+        String kind = trimmed(value);
         return kind.isEmpty() ? KIND_DOCKERFILE : kind;
     }
 
-    public static final String STATUS_RUNNING = "running";
-    public static final String STATUS_SUCCEEDED = "succeeded";
-    public static final String STATUS_FAILED = "failed";
-    /** The wall-clock quota bound and the sandbox killed the build. */
-    public static final String STATUS_TIMED_OUT = "timed_out";
-    /** A resource quota other than time bound (disk today). */
-    public static final String STATUS_QUOTA_EXCEEDED = "quota_exceeded";
-    /** The build never started: admission, an unenforceable host, an oversized context. */
-    public static final String STATUS_REFUSED = "refused";
+    /** The statuses a build stores in {@link #STATUS}. */
+    public static final OperationLifecycle LIFECYCLE = OperationLifecycle.of(OperationStatus.RUNNING,
+        OperationStatus.SUCCEEDED, OperationStatus.FAILED, OperationStatus.TIMED_OUT, OperationStatus.QUOTA_EXCEEDED,
+        OperationStatus.REFUSED);
 
     public static final IntegerField ID = SCHEMA.addField(
         IntegerField.builder().name("id").build());
 
     public static final EnumField BUILDER_KIND = SCHEMA.addField(EnumField.builder("builder_kind")
         .value(KIND_DOCKERFILE, v -> v.displayName("Dockerfile")
-            .label(kindLabel(KIND_DOCKERFILE)).icon("file-code").color(BadgeVariant.INFO))
+            .label(HohenheimMicrocopy.BUILDER_KIND.of(KIND_DOCKERFILE)).icon("file-code").color(BadgeVariant.INFO))
         .value(KIND_NIXPACKS, v -> v.displayName("Nixpacks")
-            .label(kindLabel(KIND_NIXPACKS)).icon("box").color(BadgeVariant.SECONDARY))
+            .label(HohenheimMicrocopy.BUILDER_KIND.of(KIND_NIXPACKS)).icon("box").color(BadgeVariant.SECONDARY))
         .value(KIND_WORKSPACE, v -> v.displayName("Workspace")
-            .label(kindLabel(KIND_WORKSPACE)).icon("code").color(ColorHue.VIOLET))
+            .label(HohenheimMicrocopy.BUILDER_KIND.of(KIND_WORKSPACE)).icon("code").color(ColorHue.VIOLET))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("builder"))
         .build());
-
-    /** The translation token for a builder kind; the key IS the stored value. */
-    public static Microcopy kindLabel(String kind) {
-        return Microcopy.of(kind).withFilter("scope", "builder_kind");
-    }
 
     public static final StringField FOR_MODEL = SCHEMA.addField(
-        StringField.builder().name("for_model").build());
+        StringField.builder().name("for_model")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("for_model")).build());
 
     public static final IntegerField FOR_ID = SCHEMA.addField(
-        IntegerField.builder().name("for_id").build());
+        IntegerField.builder().name("for_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("for_id")).build());
 
-    public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
-        .value(STATUS_RUNNING, v -> v.displayName("Running")
-            .label(statusLabel(STATUS_RUNNING)).icon("rotate").color(BadgeVariant.INFO))
-        .value(STATUS_SUCCEEDED, v -> v.displayName("Succeeded")
-            .label(statusLabel(STATUS_SUCCEEDED)).icon("check").color(BadgeVariant.SUCCESS))
-        .value(STATUS_FAILED, v -> v.displayName("Failed")
-            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color(BadgeVariant.DESTRUCTIVE))
-        .value(STATUS_TIMED_OUT, v -> v.displayName("Timed out")
-            .label(statusLabel(STATUS_TIMED_OUT)).icon("clock").color(BadgeVariant.WARNING))
-        .value(STATUS_QUOTA_EXCEEDED, v -> v.displayName("Quota exceeded")
-            .label(statusLabel(STATUS_QUOTA_EXCEEDED)).icon("gauge-high").color(BadgeVariant.WARNING))
-        .value(STATUS_REFUSED, v -> v.displayName("Refused")
-            .label(statusLabel(STATUS_REFUSED)).icon("ban").color(BadgeVariant.DESTRUCTIVE))
-        .build());
-
-    /** The translation token for a build status; the key IS the stored value. */
-    private static Microcopy statusLabel(String status) {
-        return Microcopy.of(status).withFilter("scope", "build_status");
-    }
+    public static final EnumField STATUS = SCHEMA.addField(LIFECYCLE.field("status"));
 
     /** Commit sha (git-sourced) or another caller-supplied source identity. */
     public static final StringField SOURCE_REF = SCHEMA.addField(
-        StringField.builder().name("source_ref").build());
+        StringField.builder().name("source_ref")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("source_ref")).build());
 
     /** The content-addressed artifact identity; THE thing a release pins. */
     public static final StringField IMAGE_ID = SCHEMA.addField(
-        StringField.builder().name("image_id").build());
+        StringField.builder().name("image_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("image")).build());
 
     /** Human-findable name of the artifact; never an identity (a tag is mutable). */
     public static final StringField TAG = SCHEMA.addField(
-        StringField.builder().name("tag").build());
+        StringField.builder().name("tag")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("image_tag")).build());
 
     public static final IntegerField EXIT_CODE = SCHEMA.addField(
-        IntegerField.builder().name("exit_code").build());
+        IntegerField.builder().name("exit_code")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("exit_code")).build());
 
     public static final StringField FAILURE_REASON = SCHEMA.addField(
-        StringField.builder().name("failure_reason").build());
+        StringField.builder().name("failure_reason")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("failure_reason")).build());
 
     public static final TextField LOG = SCHEMA.addField(
-        TextField.builder().name("log").build());
+        TextField.builder().name("log")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("build_log")).build());
 
     /**
      * The INSPECTABLE detection record of a detecting builder kind (nixpacks): tool +
@@ -159,28 +143,36 @@ public class BuildOperationModel extends Model {
     // -- the quota that was in force, recorded so a failure is explainable ------
 
     public static final DoubleField CPU_LIMIT = SCHEMA.addField(
-        DoubleField.builder().name("cpu_limit").filterable(false).build());
+        DoubleField.builder().name(InstanceKindFields.CPU_LIMIT).filterable(false)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cpu_limit")).build());
     public static final IntegerField MEMORY_LIMIT_MB = SCHEMA.addField(
-        IntegerField.builder().name("memory_limit_mb").filterable(false).build());
+        IntegerField.builder().name(InstanceKindFields.MEMORY_LIMIT_MB).filterable(false)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("memory_limit")).build());
     public static final IntegerField DISK_LIMIT_MB = SCHEMA.addField(
-        IntegerField.builder().name("disk_limit_mb").filterable(false).build());
+        IntegerField.builder().name("disk_limit_mb").filterable(false)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("disk_limit_mb")).build());
     public static final IntegerField PIDS_LIMIT = SCHEMA.addField(
-        IntegerField.builder().name("pids_limit").filterable(false).build());
+        IntegerField.builder().name("pids_limit").filterable(false)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("pids_limit")).build());
     public static final IntegerField TIMEOUT_SECONDS = SCHEMA.addField(
-        IntegerField.builder().name("timeout_seconds").filterable(false).build());
+        IntegerField.builder().name("timeout_seconds").filterable(false)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("timeout_seconds")).build());
 
     /** Largest writable-layer size the disk watchdog OBSERVED, not a promise. */
     public static final LongField PEAK_DISK_BYTES = SCHEMA.addField(
-        LongField.builder("peak_disk_bytes").filterable(false).build());
+        LongField.builder("peak_disk_bytes").filterable(false)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peak_disk_bytes")).build());
     public static final LongField ARTIFACT_BYTES = SCHEMA.addField(
-        LongField.builder("artifact_bytes").filterable(false).build());
+        LongField.builder("artifact_bytes").filterable(false)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("artifact_bytes")).build());
 
     public static final DateTimeField STARTED_AT = SCHEMA.addField(
         DateTimeField.builder().name("started_at").build());
     public static final DateTimeField FINISHED_AT = SCHEMA.addField(
         DateTimeField.builder().name("finished_at").build());
     public static final IntegerField DURATION_MS = SCHEMA.addField(
-        IntegerField.builder().name("duration_ms").build());
+        IntegerField.builder().name("duration_ms")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("duration_ms")).build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(
@@ -202,16 +194,12 @@ public class BuildOperationModel extends Model {
      * @param keep history depth; a non-positive value falls back to 50
      */
     public void pruneHistory(String forModel, int forId, int keep) {
-        int limit = keep > 0 ? keep : 50;
-        List<Row> stale = this.history(forModel, forId).offset(limit).limit(1000).all();
-        for (Row old : stale) {
-            delete(old.get(ID));
-        }
+        Retention.keepNewest(this, this.history(forModel, forId), ID, keep > 0 ? keep : 50);
     }
 
     /** The newest SUCCEEDED build of one owning record, or null. */
     public Row latestSuccess(String forModel, int forId) {
-        return this.history(forModel, forId).where(STATUS.eq(STATUS_SUCCEEDED)).first();
+        return this.history(forModel, forId).where(STATUS.eq(LIFECYCLE.stored(OperationStatus.SUCCEEDED))).first();
     }
 
     static {

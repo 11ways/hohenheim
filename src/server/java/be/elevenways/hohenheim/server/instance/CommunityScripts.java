@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -144,7 +146,7 @@ public final class CommunityScripts {
         }
         Set<String> missing = unimplementedHelpers(script);
         if (!missing.isEmpty()) {
-            throw Violations.ofForm(HohenheimViolations.text("helper_not_implemented")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("helper_not_implemented")
                 .withArg("what", what)
                 .withArg("helpers", String.join(", ", missing)));
         }
@@ -249,7 +251,7 @@ public final class CommunityScripts {
     public static int importApp(@NonNull String appKey) {
         if (!catalogApps().contains(appKey)) {
             throw Violations.ofField("catalog_app", appKey,
-                HohenheimViolations.text("catalog_app_unknown")
+                HohenheimMicrocopy.VIOLATIONS.of("catalog_app_unknown")
                     .withArg("app", appKey));
         }
         Manifest manifest = manifestOf(appKey);
@@ -258,14 +260,14 @@ public final class CommunityScripts {
         requireVocabularyImplemented(manifest.updateScript(), appKey + " update script");
 
         Map<String, Object> settings = new LinkedHashMap<>();
-        settings.put("image", manifest.imageAlias());
+        settings.put(InstanceKindFields.IMAGE, manifest.imageAlias());
         if (manifest.ramMb() != null) {
-            settings.put("memory_limit_mb", manifest.ramMb());
+            settings.put(InstanceKindFields.MEMORY_LIMIT_MB, manifest.ramMb());
         }
         if (manifest.cpu() != null) {
-            settings.put("cpu_limit", manifest.cpu().doubleValue());
+            settings.put(InstanceKindFields.CPU_LIMIT, manifest.cpu().doubleValue());
         }
-        settings.put("privileged", !manifest.unprivileged());
+        settings.put(SystemContainerKind.PRIVILEGED_FLAG.getName(), !manifest.unprivileged());
         // AIDEV-NOTE: var_disk is DROPPED BY NAME: the incus kind has no per-instance
         // root-disk quota mechanism yet; mapping it onto nothing would be a limit that
         // exists only on paper. Grow it together with the enforcement.
@@ -322,15 +324,7 @@ public final class CommunityScripts {
     }
 
     private static @Nullable Integer intVar(@NonNull String ct, @NonNull String name) {
-        String value = stringVar(ct, name);
-        if (value == null) {
-            return null;
-        }
-        try {
-            return Integer.parseInt(value.trim());
-        } catch (NumberFormatException malformed) {
-            return null;
-        }
+        return RawValues.parsedInt(stringVar(ct, name));
     }
 
     private static @NonNull String readResource(@NonNull String relative) {

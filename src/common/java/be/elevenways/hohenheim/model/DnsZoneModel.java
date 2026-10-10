@@ -1,9 +1,8 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.edit.InputType;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -26,25 +25,33 @@ public class DnsZoneModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField ORIGIN = SCHEMA.addField(StringField.builder().name("origin")
-        .label(HohenheimFormCopy.label("origin")).help(HohenheimFormCopy.help("origin")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("origin")).help(HohenheimMicrocopy.HELP.of("origin")).build());
     public static final StringField SOA_PRIMARY_NS = SCHEMA.addField(StringField.builder().name("soa_primary_ns")
-        .label(HohenheimFormCopy.label("soa_primary_ns")).help(HohenheimFormCopy.help("soa_primary_ns")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("soa_primary_ns"))
+        .help(HohenheimMicrocopy.HELP.of("soa_primary_ns")).build());
     public static final StringField SOA_CONTACT = SCHEMA.addField(StringField.builder().name("soa_contact")
-        .label(HohenheimFormCopy.label("soa_contact")).help(HohenheimFormCopy.help("soa_contact")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("soa_contact")).help(HohenheimMicrocopy.HELP.of("soa_contact"))
+        .build());
     public static final IntegerField SERIAL = SCHEMA.addField(IntegerField.builder().name("serial").defaultValue(1)
-        .label(HohenheimFormCopy.label("serial")).help(HohenheimFormCopy.help("serial")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("serial")).help(HohenheimMicrocopy.HELP.of("serial")).build());
     public static final IntegerField DEFAULT_TTL = SCHEMA.addField(IntegerField.builder().name("default_ttl").defaultValue(3600)
-        .suffix("s").label(HohenheimFormCopy.label("default_ttl")).help(HohenheimFormCopy.help("default_ttl")).build());
+        .suffix("s").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("default_ttl"))
+        .help(HohenheimMicrocopy.HELP.of("default_ttl")).build());
     public static final IntegerField NEGATIVE_TTL = SCHEMA.addField(IntegerField.builder().name("negative_ttl").defaultValue(300)
-        .suffix("s").label(HohenheimFormCopy.label("negative_ttl")).help(HohenheimFormCopy.help("negative_ttl")).build());
+        .suffix("s").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("negative_ttl"))
+        .help(HohenheimMicrocopy.HELP.of("negative_ttl")).build());
     public static final IntegerField SOA_REFRESH = SCHEMA.addField(IntegerField.builder().name("soa_refresh").defaultValue(7200)
-        .suffix("s").label(HohenheimFormCopy.label("soa_refresh")).help(HohenheimFormCopy.help("soa_refresh")).build());
+        .suffix("s").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("soa_refresh"))
+        .help(HohenheimMicrocopy.HELP.of("soa_refresh")).build());
     public static final IntegerField SOA_RETRY = SCHEMA.addField(IntegerField.builder().name("soa_retry").defaultValue(3600)
-        .suffix("s").label(HohenheimFormCopy.label("soa_retry")).help(HohenheimFormCopy.help("soa_retry")).build());
+        .suffix("s").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("soa_retry"))
+        .help(HohenheimMicrocopy.HELP.of("soa_retry")).build());
     public static final IntegerField SOA_EXPIRE = SCHEMA.addField(IntegerField.builder().name("soa_expire").defaultValue(1209600)
-        .suffix("s").label(HohenheimFormCopy.label("soa_expire")).help(HohenheimFormCopy.help("soa_expire")).build());
+        .suffix("s").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("soa_expire"))
+        .help(HohenheimMicrocopy.HELP.of("soa_expire")).build());
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled").defaultValue(true)
-        .label(HohenheimFormCopy.label("zone_enabled")).help(HohenheimFormCopy.help("zone_enabled")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("zone_enabled")).help(HohenheimMicrocopy.HELP.of("zone_enabled"))
+        .build());
 
     /** {@link #ROLE} value for a zone owned and edited on this instance. */
     public static final String ROLE_PRIMARY = "primary";
@@ -57,18 +64,19 @@ public class DnsZoneModel extends Model {
     // tooltip without every surface widening for it.
     public static final EnumField ROLE = SCHEMA.addField(EnumField.builder("role")
         .value(ROLE_PRIMARY, v -> v.displayName("Primary")
-            .label(Microcopy.of("role_primary").withFilter("scope", "dns_role"))
-            .describe(HohenheimFormCopy.help("role_primary"))
+            .label(HohenheimMicrocopy.DNS_ROLE.of("role_primary"))
+            .describe(HohenheimMicrocopy.HELP.of("role_primary"))
             .icon("star").color(ColorHue.BLUE))
         .value(ROLE_SECONDARY, v -> v.displayName("Secondary")
-            .label(Microcopy.of("role_secondary").withFilter("scope", "dns_role"))
-            .describe(HohenheimFormCopy.help("role_secondary"))
+            .label(HohenheimMicrocopy.DNS_ROLE.of("role_secondary"))
+            .describe(HohenheimMicrocopy.HELP.of("role_secondary"))
             .icon("copy").color(ColorHue.GRAY))
-        .label(HohenheimFormCopy.label("zone_role")).help(HohenheimFormCopy.help("zone_role")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("zone_role")).help(HohenheimMicrocopy.HELP.of("zone_role"))
+        .build());
     public static final IntegerField PRIMARY_PEER_ID = SCHEMA.addField(
         IntegerField.builder().name("primary_peer_id")
-            .label(HohenheimFormCopy.label("primary_peer"))
-            .help(HohenheimFormCopy.help("primary_peer")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("primary_peer"))
+            .help(HohenheimMicrocopy.HELP.of("primary_peer")).build());
     /** {@link #TRANSFER_STATUS} value: the last AXFR from the primary peer succeeded. */
     public static final String TRANSFER_OK = "ok";
     /** {@link #TRANSFER_STATUS} value: the last AXFR attempt failed; the replica still serves. */
@@ -84,23 +92,23 @@ public class DnsZoneModel extends Model {
      */
     public static final EnumField TRANSFER_STATUS = SCHEMA.addField(EnumField.builder("transfer_status")
         .value(TRANSFER_OK, v -> v.displayName("Transferred").icon("circle-check")
-            .label(Microcopy.of("transferred").withFilter("scope", "dns_transfer")).color(ColorHue.GREEN))
+            .label(HohenheimMicrocopy.DNS_TRANSFER.of("transferred")).color(ColorHue.GREEN))
         .value(TRANSFER_ERROR, v -> v.displayName("Transfer failed").icon("triangle-exclamation")
-            .label(Microcopy.of("failed").withFilter("scope", "dns_transfer")).color(ColorHue.RED))
+            .label(HohenheimMicrocopy.DNS_TRANSFER.of("failed")).color(ColorHue.RED))
         .value(TRANSFER_EXPIRED, v -> v.displayName("Expired").icon("hourglass-end")
-            .label(Microcopy.of("expired").withFilter("scope", "dns_transfer")).color(ColorHue.ORANGE))
-        .label(HohenheimFormCopy.label("transfer_status"))
-        .help(HohenheimFormCopy.help("transfer_status")).build());
+            .label(HohenheimMicrocopy.DNS_TRANSFER.of("expired")).color(ColorHue.ORANGE))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("transfer_status"))
+        .help(HohenheimMicrocopy.HELP.of("transfer_status")).build());
     public static final StringField TRANSFER_MESSAGE = SCHEMA.addField(
         StringField.builder().name("transfer_message")
-            .label(HohenheimFormCopy.label("transfer_message"))
-            .help(HohenheimFormCopy.help("transfer_message")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("transfer_message"))
+            .help(HohenheimMicrocopy.HELP.of("transfer_message")).build());
     public static final DateTimeField LAST_CHECKED_AT = SCHEMA.addField(
         DateTimeField.builder().name("last_checked_at").build());
     public static final DateTimeField LAST_TRANSFER_AT = SCHEMA.addField(
         DateTimeField.builder().name("last_transfer_at")
-            .label(HohenheimFormCopy.label("last_transfer_at"))
-            .help(HohenheimFormCopy.help("last_transfer_at")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("last_transfer_at"))
+            .help(HohenheimMicrocopy.HELP.of("last_transfer_at")).build());
     public static final StringField REPLICA_RECORDS = SCHEMA.addField(
         StringField.builder().name("replica_records").build());
 
@@ -108,8 +116,8 @@ public class DnsZoneModel extends Model {
     /** The worst finding of the last delegation check; the vocabulary lives on {@link DelegationVerdict}. */
     public static final EnumField DELEGATION_STATUS = SCHEMA.addField(
         DelegationVerdict.fieldBuilder("delegation_status")
-            .label(HohenheimFormCopy.label("delegation_status"))
-            .help(HohenheimFormCopy.help("delegation_status")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("delegation_status"))
+            .help(HohenheimMicrocopy.HELP.of("delegation_status")).build());
     /**
      * One line per finding of the last check, diagnostic text like {@link #TRANSFER_MESSAGE}.
      *
@@ -122,17 +130,18 @@ public class DnsZoneModel extends Model {
     public static final StringField DELEGATION_DETAIL = SCHEMA.addField(
         StringField.builder().name("delegation_detail")
             .inputHint(InputType.MULTILINE)
-            .label(HohenheimFormCopy.label("delegation_detail"))
-            .help(HohenheimFormCopy.help("delegation_detail")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("delegation_detail"))
+            .help(HohenheimMicrocopy.HELP.of("delegation_detail")).build());
     public static final DateTimeField DELEGATION_CHECKED_AT = SCHEMA.addField(
         DateTimeField.builder().name("delegation_checked_at")
-            .label(HohenheimFormCopy.label("delegation_checked_at"))
-            .help(HohenheimFormCopy.help("delegation_checked_at")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("delegation_checked_at"))
+            .help(HohenheimMicrocopy.HELP.of("delegation_checked_at")).build());
 
     // --- DNSSEC (online signing; one Combined Signing Key per zone) ---
     public static final BooleanField DNSSEC_ENABLED = SCHEMA.addField(
         BooleanField.builder("dnssec_enabled").defaultValue(false)
-        .label(HohenheimFormCopy.label("dnssec_enabled")).help(HohenheimFormCopy.help("dnssec_enabled")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("dnssec_enabled"))
+        .help(HohenheimMicrocopy.HELP.of("dnssec_enabled")).build());
     public static final IntegerField DNSSEC_ALGORITHM = SCHEMA.addField(
         IntegerField.builder().name("dnssec_algorithm").defaultValue(13).build());
     /** Base64 PKCS#8 private key; secret so it never leaves the server in exports or forms. */

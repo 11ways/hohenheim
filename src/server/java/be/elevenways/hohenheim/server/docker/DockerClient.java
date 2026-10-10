@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.util.Json;
+import be.elevenways.hohenheim.server.util.PermissionBits;
 import be.elevenways.hohenheim.server.util.Tar;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.dry.Dry;
@@ -22,7 +24,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
@@ -734,7 +735,7 @@ public class DockerClient {
 
         // Detach=false streams the (multiplexed, non-TTY) output until the process exits and
         // the daemon closes the connection; LONG_OP_TIMEOUT covers slow ops like a dump.
-        RawResponse stream = exchange("POST", DockerPaths.exec(execId) + "/start", execStartBody(),
+        Http11.Raw stream = exchange("POST", DockerPaths.exec(execId) + "/start", execStartBody(),
             "application/json", LONG_OP_TIMEOUT_MS);
 
         ByteArrayOutputStream stdout = new ByteArrayOutputStream();
@@ -793,7 +794,7 @@ public class DockerClient {
     @SuppressWarnings("unchecked")
     private int execExitCode(String execId) throws IOException {
         Map<String, Object> info = (Map<String, Object>) parseJson(get(DockerPaths.exec(execId) + "/json").body());
-        return info.get("ExitCode") instanceof Number n ? n.intValue() : -1;
+        return RawValues.intOr(info.get("ExitCode"), -1);
     }
 
     /** Result of a {@link #execStreamed} run: stdout went to the caller's stream, not the heap. */
@@ -1282,7 +1283,7 @@ public class DockerClient {
      * @throws FileNotFoundException when the path does not exist
      */
     public PathStat statArchivePath(String containerId, String path) throws IOException {
-        RawResponse response;
+        Http11.Raw response;
         try {
             // A HEAD answer's Content-Length describes the GET it mirrors, never a body.
             response = parseHttpRaw(transport.roundTrip(buildRequest("HEAD",
@@ -1337,11 +1338,7 @@ public class DockerClient {
 
         /** The permission bits as a 4-digit octal string, e.g. {@code 0644}. */
         public String permissions() {
-            StringBuilder octal = new StringBuilder(Long.toOctalString(this.mode & 0777));
-            while (octal.length() < 4) {
-                octal.insert(0, '0');
-            }
-            return octal.toString();
+            return PermissionBits.octal(this.mode);
         }
     }
 
@@ -1361,17 +1358,6 @@ public class DockerClient {
 
     private record Response(int status, String body) {}
 
-    private record RawResponse(int status, byte[] body, Map<String, String> headers) {
-        RawResponse(int status, byte[] body) {
-            this(status, body, Map.of());
-        }
-
-        /** Header lookup is case-insensitive on the wire; keys are stored lower-cased. */
-        String header(String name) {
-            return this.headers.get(name.toLowerCase(Locale.ROOT));
-        }
-    }
-
     private Response get(String path) throws IOException {
         return request("GET", path, null, null, timeoutMillis);
     }
@@ -1383,18 +1369,18 @@ public class DockerClient {
 
     private Response request(String method, String path, byte[] body, String contentType, long timeoutMs)
             throws IOException {
-        RawResponse response = exchange(method, path, body, contentType, timeoutMs);
+        Http11.Raw response = exchange(method, path, body, contentType, timeoutMs);
         return new Response(response.status(), new String(response.body(), StandardCharsets.UTF_8));
     }
 
     // Performs the HTTP exchange via the transport and returns the byte-accurate body, so binary
     // endpoints (multiplexed log/exec streams, archive downloads) aren't corrupted by a UTF-8 decode.
-    private RawResponse exchange(String method, String path, byte[] body, String contentType, long timeoutMs)
+    private Http11.Raw exchange(String method, String path, byte[] body, String contentType, long timeoutMs)
             throws IOException {
         return exchange(method, path, body, contentType, null, timeoutMs);
     }
 
-    private RawResponse exchange(String method, String path, byte[] body, String contentType,
+    private Http11.Raw exchange(String method, String path, byte[] body, String contentType,
                                  Map<String, String> extraHeaders, long timeoutMs) throws IOException {
         return parseHttpRaw(transport.roundTrip(
             buildRequest(method, path, body, contentType, extraHeaders), timeoutMs));
@@ -1410,19 +1396,19 @@ public class DockerClient {
     // Framing is the shared Http11 codec; this applies Docker's status policy: 2xx is
     // success, and 304 ("not modified") is the daemon's idempotent answer for
     // start/stop when the container is already in the requested state.
-    private static RawResponse parseHttpRaw(byte[] raw) throws IOException {
+    private static Http11.Raw parseHttpRaw(byte[] raw) throws IOException {
         return parseHttpRaw(raw, false);
     }
 
     /** @param bodilessRequest the request was a HEAD, whose Content-Length describes no body */
-    private static RawResponse parseHttpRaw(byte[] raw, boolean bodilessRequest) throws IOException {
+    private static Http11.Raw parseHttpRaw(byte[] raw, boolean bodilessRequest) throws IOException {
         Http11.Raw parsed = Http11.parse(raw, DockerWire.PEER, bodilessRequest);
         int status = parsed.status();
         if ((status < 200 || status >= 300) && status != 304) {
             throw new ApiException(status, "Docker API returned HTTP " + status + ": "
                 + new String(parsed.body(), StandardCharsets.UTF_8).trim());
         }
-        return new RawResponse(status, parsed.body(), parsed.headers());
+        return parsed;
     }
 
     private interface FrameConsumer {

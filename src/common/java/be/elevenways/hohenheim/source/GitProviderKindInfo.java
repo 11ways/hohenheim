@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.source;
 
-import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.orm.field.TypeDefinition;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.WordedKind;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
@@ -16,10 +15,17 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * ({@code Schema.refuseEncryptedJsonSubFields}) -- moving a token here would silently
  * store it in plaintext.
  */
-public interface GitProviderKindInfo extends TypeDefinition {
+public interface GitProviderKindInfo extends WordedKind {
 
-    /** @return the registry identifier; its string form is the stored column value */
-    @NonNull Identifier typeId();
+    @Override
+    default @NonNull HohenheimMicrocopy labelScope() {
+        return HohenheimMicrocopy.GIT_PROVIDER_KIND;
+    }
+
+    @Override
+    default @NonNull HohenheimMicrocopy descriptionScope() {
+        return HohenheimMicrocopy.GIT_PROVIDER_KIND_DESCRIPTION;
+    }
 
     /**
      * Whether a provider of this kind refuses a blank base URL: a kind with no public
@@ -27,7 +33,4 @@ public interface GitProviderKindInfo extends TypeDefinition {
      * the operator never named.
      */
     boolean requiresBaseUrl();
-
-    /** Short description shown in the kind selector UI. */
-    @NonNull Microcopy getDescription();
 }

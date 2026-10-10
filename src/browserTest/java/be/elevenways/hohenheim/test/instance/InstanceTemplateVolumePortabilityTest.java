@@ -1,9 +1,12 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
+import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVolumeModel;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.server.instance.TemplatePortability;
+import be.elevenways.hohenheim.server.instance.variable.IntegerVariableType;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -32,6 +35,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * reported success. The import validates through the SAME rule set the create asks
  * ({@code InstanceTemplates.requireVolumesDeclarable}), so a document that could only
  * ever fail at create time is refused while importing instead.
+ *
+ * A document's kind and variable settings are typed on import too: a text number would make the stored row
+ * unreadable.
  */
 class InstanceTemplateVolumePortabilityTest extends HohenheimTestBase {
 
@@ -44,6 +50,8 @@ class InstanceTemplateVolumePortabilityTest extends HohenheimTestBase {
             int templateId = row.get(InstanceTemplateModel.ID);
             Models.get(InstanceTemplateVolumeModel.class).find()
                 .where(InstanceTemplateVolumeModel.TEMPLATE_ID.eq(templateId)).delete();
+            Models.get(InstanceTemplateVariableModel.class).find()
+                .where(InstanceTemplateVariableModel.TEMPLATE_ID.eq(templateId)).delete();
             templates.delete(templateId);
         }
     }
@@ -130,6 +138,81 @@ class InstanceTemplateVolumePortabilityTest extends HohenheimTestBase {
                 portability.importDocument(
                     resigned(document, body -> body.put("name", PREFIX + "again")), "test")))
             .as("step 7: the unedited document imports its volumes again").hasSize(2);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void textNumbersInADocumentAreStoredAsNumbersAndANonNumberIsRefusedByName() {
+
+        // 1. A template exported as is: its document is the importer's input.
+        int templateId = template(PREFIX + "numbers-source");
+        TemplatePortability portability = new TemplatePortability();
+        String document = portability.export(Models.get(InstanceTemplateModel.class).findById(templateId));
+
+        // 2. A hand-edited document spells the memory limit as text and blanks the CPU limit, as a JSON editor or
+        //    another tool would; the import stores them typed.
+        int importedId = portability.importDocument(resigned(document, body -> {
+            body.put("name", PREFIX + "numbers");
+            body.put("settings", new LinkedHashMap<>(Map.of(InstanceKindFields.MEMORY_LIMIT_MB, "512",
+                InstanceKindFields.CPU_LIMIT, "")));
+        }), "test");
+
+        // 3. The stored row reads back: a text number in an integer setting used to make it unreadable.
+        Row imported = Models.get(InstanceTemplateModel.class).findById(importedId);
+        Map<String, Object> settings = (Map<String, Object>) imported.get(InstanceTemplateModel.SETTINGS);
+        assertThat(settings.get(InstanceKindFields.MEMORY_LIMIT_MB))
+            .as("step 3: the text number is stored as the integer it spells").isEqualTo(512);
+        assertThat(settings.get(InstanceKindFields.CPU_LIMIT))
+            .as("step 3: a blank number is stored as absent").isNull();
+
+        // 4. A value that is no number at all is refused naming the setting, before the template exists.
+        assertThat(violationKeys(refusedImport(document, body -> {
+                body.put("name", PREFIX + "not-a-number");
+                body.put("settings", new LinkedHashMap<>(Map.of(InstanceKindFields.MEMORY_LIMIT_MB, "lots")));
+            })))
+            .as("step 4: a non-number is refused on its setting").contains(InstanceKindFields.MEMORY_LIMIT_MB + "=");
+        assertThat(Models.get(InstanceTemplateModel.class).find()
+                .where(InstanceTemplateModel.NAME.eq(PREFIX + "not-a-number")).first())
+            .as("step 4: the refused document left no template behind").isNull();
+
+        // 5. A number variable's own settings are typed the same way: its minimum spelled as text is stored as the
+        //    integer, its blank maximum as absent.
+        int withVariable = portability.importDocument(resigned(document, body -> {
+            body.put("name", PREFIX + "variable-numbers");
+            body.put("variables", List.of(numberVariable("1", "")));
+        }), "test");
+        Row variable = Models.get(InstanceTemplateVariableModel.class).find()
+            .where(InstanceTemplateVariableModel.TEMPLATE_ID.eq(withVariable)).first();
+        Map<String, Object> variableSettings =
+            (Map<String, Object>) variable.get(InstanceTemplateVariableModel.SETTINGS);
+        assertThat(variableSettings.get(IntegerVariableType.MIN.getName()))
+            .as("step 5: the variable's text minimum is stored as the integer it spells").isEqualTo(1);
+        assertThat(variableSettings.get(IntegerVariableType.MAX.getName()))
+            .as("step 5: its blank maximum is stored as absent").isNull();
+
+        // 6. A variable setting that is no number is refused naming that setting, before the template exists.
+        assertThat(violationKeys(refusedImport(document, body -> {
+                body.put("name", PREFIX + "variable-not-a-number");
+                body.put("variables", List.of(numberVariable("few", "")));
+            })))
+            .as("step 6: a non-number variable setting is refused on its setting")
+            .contains(IntegerVariableType.MIN.getName() + "=");
+        assertThat(Models.get(InstanceTemplateModel.class).find()
+                .where(InstanceTemplateModel.NAME.eq(PREFIX + "variable-not-a-number")).first())
+            .as("step 6: the refused document left no template behind").isNull();
+    }
+
+    /** A document entry for a number variable whose minimum and maximum are spelled as text. */
+    private static Map<String, Object> numberVariable(String min, String max) {
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put(IntegerVariableType.MIN.getName(), min);
+        settings.put(IntegerVariableType.MAX.getName(), max);
+        Map<String, Object> variable = new LinkedHashMap<>();
+        variable.put("key", "WORKERS");
+        variable.put("label", "Workers");
+        variable.put("type", IntegerVariableType.ID.toString());
+        variable.put("settings", settings);
+        return variable;
     }
 
     // -- fixtures ---------------------------------------------------------------

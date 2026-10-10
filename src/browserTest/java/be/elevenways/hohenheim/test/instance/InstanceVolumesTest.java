@@ -7,7 +7,15 @@ import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
+import be.elevenways.hohenheim.instance.VolumeOperations;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
+import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.OperationRequest;
 import be.elevenways.hohenheim.test.InstanceRowCleanup;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -21,6 +29,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -151,6 +160,68 @@ class InstanceVolumesTest {
             Models.get(InstanceVolumeModel.class).find()
                 .where(InstanceVolumeModel.INSTANCE_ID.eq(owner)).delete();
             InstanceRowCleanup.delete(owner);
+        });
+    }
+
+    /** A declaration edit is a partial, versioned operation that keeps the volume's name. */
+    @Test
+    void aDeclarationEditIsPartialVersionedAndKeepsItsName() {
+        Db.run(datasource, () -> {
+            Row owner = Models.get(InstanceModel.class).createEmptyRow();
+            owner.set(InstanceModel.NAME, "volume-edit-owner");
+            owner.set(InstanceModel.KIND, "hohenheim:application");
+            owner.set(InstanceModel.SETTINGS, Map.of());
+            owner.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+            owner.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            Models.get(InstanceModel.class).save(owner);
+            int ownerId = owner.get(InstanceModel.ID);
+            var operator = TenantConduits.operator();
+            var volumes = Models.get(InstanceVolumeModel.class);
+
+            // 1. Create through the operation: the form coerces the MB quota into bytes.
+            var created = OperationPipeline.invoke(OperationRequest.of(VolumeOperations.CREATE,
+                CmsPlacementSurface.ADMIN_ACTION).caller(operator).form(Map.of("instance_id", ownerId, "name",
+                "journey", "container_path", "/journey", "quota_mb", 64, "exclusive", false)));
+            Row row = volumes.findById(created.value());
+            assertThat(row.get(InstanceVolumeModel.QUOTA_BYTES)).as("step 1: the MB quota is stored as bytes")
+                .isEqualTo(64L * 1024L * 1024L);
+            int reviewed = row.get(InstanceVolumeModel.VERSION);
+            String key = String.valueOf(created.value());
+
+            // 2. A usage observation is bookkeeping, not a declaration edit: the version stays.
+            volumes.find().where(InstanceVolumeModel.ID.eq(created.value()))
+                .assign(InstanceVolumeModel.USED_BYTES, 17L)
+                .assign(InstanceVolumeModel.OBSERVED_AT, Now.instant()).updateAll();
+            assertThat(volumes.findById(created.value()).get(InstanceVolumeModel.VERSION))
+                .as("step 2: bookkeeping leaves the declaration version alone").isEqualTo(reviewed);
+
+            // 3. A partial update changes the quota and keeps the mount path and the usage.
+            OperationPipeline.invoke(OperationRequest.of(VolumeOperations.UPDATE, CmsPlacementSurface.ADMIN_ACTION)
+                .caller(operator).subjectKeys(List.of(key)).expectedVersion(reviewed).patch(Map.of("quota_mb", 128)));
+            Row changed = volumes.findById(created.value());
+            assertThat(changed.get(InstanceVolumeModel.QUOTA_BYTES)).as("step 3: the quota edit lands")
+                .isEqualTo(128L * 1024L * 1024L);
+            assertThat(changed.get(InstanceVolumeModel.CONTAINER_PATH)).as("step 3: the mount path is kept")
+                .isEqualTo("/journey");
+            assertThat(changed.get(InstanceVolumeModel.USED_BYTES)).as("step 3: the usage is kept").isEqualTo(17L);
+
+            // 4. The earlier review is stale now, and its refusal keeps the newer quota.
+            assertThatThrownBy(() -> OperationPipeline.invoke(OperationRequest.of(VolumeOperations.UPDATE,
+                    CmsPlacementSurface.ADMIN_ACTION).caller(operator).subjectKeys(List.of(key))
+                .expectedVersion(reviewed).patch(Map.of("quota_mb", 256))))
+                .as("step 4: a stale edit is refused").isInstanceOf(DomainRefusal.class)
+                .satisfies(error -> assertThat(((DomainRefusal) error).reason()).isEqualTo(ZenitRefusalReason.STALE));
+            assertThat(volumes.findById(created.value()).get(InstanceVolumeModel.QUOTA_BYTES))
+                .as("step 4: the winning edit stays").isEqualTo(128L * 1024L * 1024L);
+
+            // 5. A fresh review still cannot rename the volume: the name is its directory.
+            assertThatThrownBy(() -> OperationPipeline.invoke(OperationRequest.of(VolumeOperations.UPDATE,
+                    CmsPlacementSurface.ADMIN_ACTION).caller(operator).subjectKeys(List.of(key))
+                .expectedVersion(changed.get(InstanceVolumeModel.VERSION)).patch(Map.of("name", "renamed"))))
+                .as("step 5: the volume name is immutable").isInstanceOf(Violations.class);
+
+            volumes.find().where(InstanceVolumeModel.INSTANCE_ID.eq(ownerId)).delete();
+            InstanceRowCleanup.delete(ownerId);
         });
     }
 

@@ -90,7 +90,7 @@ public final class ApiSupport {
      * @return the path, with the template as the selected subject
      */
     public static String fromTemplateTarget(String panel, Object templateId) {
-        return CmsRoutes.invoke(panel, InstanceFromTemplatePage.SLUG, InstanceFromTemplatePage.CREATE.id())
+        return CmsRoutes.invoke(panel, HohenheimSlugs.INSTANCES_FROM_TEMPLATE, InstanceFromTemplatePage.CREATE.id())
             .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf(templateId)).toUrl();
     }
 

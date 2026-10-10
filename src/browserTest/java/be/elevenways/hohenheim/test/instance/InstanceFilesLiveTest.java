@@ -9,7 +9,7 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.files.InstanceFiles;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -287,11 +287,11 @@ class InstanceFilesLiveTest {
         int writer = ApiSupport.user("files-writer@live.test");
         int stranger = ApiSupport.user("files-stranger@live.test");
         RecordGrants.grant(GrantSubjectType.USER, reader, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.FILES_READ, true);
+            HohenheimCapabilities.FILES_READ, true);
         RecordGrants.grant(GrantSubjectType.USER, writer, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.FILES_READ, true);
+            HohenheimCapabilities.FILES_READ, true);
         RecordGrants.grant(GrantSubjectType.USER, writer, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.FILES_WRITE, true);
+            HohenheimCapabilities.FILES_WRITE, true);
 
         // 1. The read-capable tenant reads.
         TenantConduits.as(principal(reader), () ->

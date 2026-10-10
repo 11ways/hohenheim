@@ -1,12 +1,11 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.instance.StopKind;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -58,20 +57,20 @@ public class InstanceTemplateModel extends Model {
     // the export format, so it is a plain string, never localized content.
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .required()
-        .label(HohenheimFormCopy.label("name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
         .build());
 
     public static final TextField DESCRIPTION = SCHEMA.addField(TextField.builder().name("description")
-        .label(HohenheimFormCopy.label("description"))
-        .help(HohenheimFormCopy.help("template_description"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("description"))
+        .help(HohenheimMicrocopy.HELP.of("template_description"))
         .build());
 
     // Same ONE discriminator as InstanceModel: the kind implies the runtime.
     public static final EnumField KIND = SCHEMA.addField(
         RegistryMemberField.builder("kind")
             .registry(InstanceKindRegistry.REGISTRY)
-            .label(HohenheimFormCopy.label("kind"))
-            .help(HohenheimFormCopy.help("template_kind"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("kind"))
+            .help(HohenheimMicrocopy.HELP.of("template_kind"))
             .build());
 
     // The settings BASELINE a created instance starts from (image, tag, command,
@@ -80,29 +79,29 @@ public class InstanceTemplateModel extends Model {
     public static final SchemaField SETTINGS = SCHEMA.addField(
         SchemaField.builder("settings")
             .schemaFrom("kind")
-            .label(HohenheimFormCopy.label("settings"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("settings"))
             .build());
 
     /** Operator-bumped catalog version, carried through export/import. */
     public static final IntegerField VERSION = SCHEMA.addField(
         IntegerField.builder().name("version")
             .defaultValue(1)
-            .label(HohenheimFormCopy.label("template_version"))
-            .help(HohenheimFormCopy.help("template_version"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("template_version"))
+            .help(HohenheimMicrocopy.HELP.of("template_version"))
             .build());
 
     /** Image the optional install step runs in (empty = no install step). */
     public static final StringField INSTALL_IMAGE = SCHEMA.addField(
         StringField.builder().name("install_image")
-            .label(HohenheimFormCopy.label("install_image"))
-            .help(HohenheimFormCopy.help("install_image"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("install_image"))
+            .help(HohenheimMicrocopy.HELP.of("install_image"))
             .build());
 
     /** Shell script of the install step, run with the instance's volumes and variables. */
     public static final TextField INSTALL_SCRIPT = SCHEMA.addField(
         TextField.builder().name("install_script")
-            .label(HohenheimFormCopy.label("install_script"))
-            .help(HohenheimFormCopy.help("install_script"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("install_script"))
+            .help(HohenheimMicrocopy.HELP.of("install_script"))
             .build());
 
     /**
@@ -112,33 +111,33 @@ public class InstanceTemplateModel extends Model {
      */
     public static final TextField UPDATE_SCRIPT = SCHEMA.addField(
         TextField.builder().name("update_script")
-            .label(HohenheimFormCopy.label("update_script"))
-            .help(HohenheimFormCopy.help("update_script"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("update_script"))
+            .help(HohenheimMicrocopy.HELP.of("update_script"))
             .build());
 
     /** The EXPLICIT reinstall data policy (the plan's requirement: never an implicit wipe). */
     public static final EnumField REINSTALL_POLICY = SCHEMA.addField(EnumField.builder("reinstall_policy")
         .value(REINSTALL_PRESERVE, v -> v.displayName("Preserve data").icon("shield")
-            .label(Microcopy.of("preserve").withFilter("scope", "reinstall_policy")).color(ColorHue.GREEN))
+            .label(HohenheimMicrocopy.REINSTALL_POLICY.of("preserve")).color(ColorHue.GREEN))
         .value(REINSTALL_CLEAR, v -> v.displayName("Clear data").icon("eraser")
-            .label(Microcopy.of("clear").withFilter("scope", "reinstall_policy")).color(ColorHue.RED))
+            .label(HohenheimMicrocopy.REINSTALL_POLICY.of("clear")).color(ColorHue.RED))
         .defaultValue(REINSTALL_PRESERVE)
-        .label(HohenheimFormCopy.label("reinstall_policy"))
-        .help(HohenheimFormCopy.help("reinstall_policy"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("reinstall_policy"))
+        .help(HohenheimMicrocopy.HELP.of("reinstall_policy"))
         .build());
 
     /** Console line marking readiness (Phase 6 matcher data; carried, not yet wired). */
     public static final StringField READINESS_LINE = SCHEMA.addField(
         StringField.builder().name("readiness_line")
-            .label(HohenheimFormCopy.label("readiness_line"))
-            .help(HohenheimFormCopy.help("readiness_line"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("readiness_line"))
+            .help(HohenheimMicrocopy.HELP.of("readiness_line"))
             .build());
 
     /** Console command for a graceful stop (Phase 6 matcher data; carried, not yet wired). */
     public static final StringField STOP_COMMAND = SCHEMA.addField(
         StringField.builder().name("stop_command")
-            .label(HohenheimFormCopy.label("stop_command"))
-            .help(HohenheimFormCopy.help("stop_command"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("stop_command"))
+            .help(HohenheimMicrocopy.HELP.of("stop_command"))
             .build());
 
     /**
@@ -151,8 +150,8 @@ public class InstanceTemplateModel extends Model {
      */
     public static final IntegerField RUNTIME_IMAGE_ID = SCHEMA.addField(
         IntegerField.builder().name("runtime_image_id")
-            .label(HohenheimFormCopy.label("runtime_image"))
-            .help(HohenheimFormCopy.help("template_runtime_image"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("runtime_image"))
+            .help(HohenheimMicrocopy.HELP.of("template_runtime_image"))
             .build());
 
     /** The layered runtime image, declared so its delete can refuse while templates name it. */
@@ -166,33 +165,33 @@ public class InstanceTemplateModel extends Model {
     /** Overrides the runtime image's default command; {@code \{$VAR\}} expanded at start. */
     public static final StringField START_COMMAND = SCHEMA.addField(
         StringField.builder().name("start_command")
-            .label(HohenheimFormCopy.label("start_command"))
-            .help(HohenheimFormCopy.help("start_command"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("start_command"))
+            .help(HohenheimMicrocopy.HELP.of("start_command"))
             .build());
 
     public static final EnumField READINESS_KIND = SCHEMA.addField(
         ReadinessKind.fieldBuilder("readiness_kind")
-            .label(HohenheimFormCopy.label("readiness_kind"))
-            .help(HohenheimFormCopy.help("readiness_kind"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("readiness_kind"))
+            .help(HohenheimMicrocopy.HELP.of("readiness_kind"))
             .build());
 
     /** The http path or port name {@link #READINESS_KIND} probes; unused by console_line. */
     public static final StringField READINESS_TARGET = SCHEMA.addField(
         StringField.builder().name("readiness_target")
-            .label(HohenheimFormCopy.label("readiness_target"))
-            .help(HohenheimFormCopy.help("readiness_target"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("readiness_target"))
+            .help(HohenheimMicrocopy.HELP.of("readiness_target"))
             .build());
 
     public static final EnumField STOP_KIND = SCHEMA.addField(
         StopKind.fieldBuilder("stop_kind")
-            .label(HohenheimFormCopy.label("stop_kind"))
-            .help(HohenheimFormCopy.help("stop_kind"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("stop_kind"))
+            .help(HohenheimMicrocopy.HELP.of("stop_kind"))
             .build());
 
     public static final IntegerField STOP_GRACE_SECONDS = SCHEMA.addField(
         IntegerField.builder().name("stop_grace_seconds").defaultValue(10).suffix("s")
-            .label(HohenheimFormCopy.label("stop_grace_seconds"))
-            .help(HohenheimFormCopy.help("stop_grace_seconds"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("stop_grace_seconds"))
+            .help(HohenheimMicrocopy.HELP.of("stop_grace_seconds"))
             .build());
 
     // AIDEV-NOTE: there is deliberately NO console_kind column any more. The console
@@ -208,7 +207,7 @@ public class InstanceTemplateModel extends Model {
      */
     public static final DateTimeField APPROVED_AT = SCHEMA.addField(
         DateTimeField.builder().name("approved_at")
-            .label(HohenheimFormCopy.label("approved_at"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("approved_at"))
             .build());
 
     /** The approving operator's principal id (accountability beside the timestamp). */
@@ -221,7 +220,7 @@ public class InstanceTemplateModel extends Model {
     /** Where an imported template came from (operator-supplied origin note); null = authored here. */
     public static final StringField SOURCE = SCHEMA.addField(
         StringField.builder().name("source")
-            .label(HohenheimFormCopy.label("template_source"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("template_source"))
             .build());
 
     /** sha256 of the imported payload's canonical template body (verified at import). */
@@ -245,26 +244,16 @@ public class InstanceTemplateModel extends Model {
         SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
             if (row == null) return;
-            Object line = effective(row, READINESS_LINE);
+            Row stored = StoredRows.of(Models.get(InstanceTemplateModel.class), row);
+            Object line = row.afterWrite(READINESS_LINE, stored);
             if (line == null || line.toString().trim().isEmpty()) return;
-            Object kind = effective(row, READINESS_KIND);
+            Object kind = row.afterWrite(READINESS_KIND, stored);
             if (ReadinessKind.forToken(kind == null ? null : kind.toString())
                     != ReadinessKind.CONSOLE_LINE) {
                 throw Violations.ofField(READINESS_KIND.getName(), kind,
-                    HohenheimViolations.text("readiness_line_needs_console_line"));
+                    HohenheimMicrocopy.VIOLATIONS.of("readiness_line_needs_console_line"));
             }
         });
-    }
-
-    /**
-     * A field's value AFTER this write lands: an inline cell edit submits only the column
-     * it touched, so reading the row alone would judge a partial update against nulls.
-     */
-    private static Object effective(Row row, Field<?, ?> field) {
-        if (row.has(field.getName())) return row.get(field.getName());
-        if (!row.has(ID.getName())) return null;
-        Row stored = Models.get(InstanceTemplateModel.class).findById(row.get(ID));
-        return stored != null ? stored.get(field.getName()) : null;
     }
 
     /** Every template, name order (catalog listings). */

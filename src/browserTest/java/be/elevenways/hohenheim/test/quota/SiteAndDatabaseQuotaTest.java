@@ -1,11 +1,10 @@
 package be.elevenways.hohenheim.test.quota;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
-import be.elevenways.hohenheim.server.quota.DatabaseQuota;
-import be.elevenways.hohenheim.server.quota.SiteQuota;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.common.Zenit;
@@ -47,8 +46,8 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
     private static final String SITE_PREFIX = "quota-site-";
     private static final String DB_PREFIX = "quotadb-";
 
-    private static final String SITE_BUCKET = SiteQuota.bucketKeyOf("");
-    private static final String DATABASE_BUCKET = DatabaseQuota.bucketKeyOf("");
+    private static final String SITE_BUCKET = OwnerBudget.SITES.bucketOf("");
+    private static final String DATABASE_BUCKET = OwnerBudget.DATABASES.bucketOf("");
 
     private Integer previousSiteCap;
     private Integer previousDatabaseCap;
@@ -191,7 +190,7 @@ class SiteAndDatabaseQuotaTest extends HohenheimTestBase {
         //    read as an instance charge or vice versa.
         assertThat(DATABASE_BUCKET)
             .as("step 1: the database dimension has its own bucket namespace")
-            .isNotEqualTo(be.elevenways.hohenheim.server.instance.InstanceQuota.bucketKeyOf(""));
+            .isNotEqualTo(OwnerBudget.INSTANCES.bucketOf(""));
 
         // 2. A database record spends a database slot and is stamped with the bucket.
         Row one = saveDatabase(DB_PREFIX + "one");

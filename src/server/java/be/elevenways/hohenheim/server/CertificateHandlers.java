@@ -24,7 +24,7 @@ final class CertificateHandlers {
             Integer certId = conduit.getParameter(HohenheimEndpoints.CERT_ID);
             Row cert = certModel.findById(certId);
             if (cert == null) {
-                return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, HohenheimSlugs.CERTIFICATES));
+                return HandlerSupport.redirect(CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES));
             }
 
             String certPem = cert.get(CertificateModel.CERTIFICATE_PEM);

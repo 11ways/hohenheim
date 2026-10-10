@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
-import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.thread.ExecutionContext;
@@ -34,8 +34,8 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  */
 class InstanceDeviceQuotaTest extends HohenheimTestBase {
 
-    private static final String DISK_BUCKET = InstanceDeviceQuota.diskBucketOf("");
-    private static final String NIC_BUCKET = InstanceDeviceQuota.nicBucketOf("");
+    private static final String DISK_BUCKET = OwnerBudget.DISK_GB.bucketOf("");
+    private static final String NIC_BUCKET = OwnerBudget.NICS.bucketOf("");
     private static final String NAME_PREFIX = "devq-";
     private static final String FORM_OWNER = "devq-form-owner";
 
@@ -285,10 +285,10 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
             .isEqualTo(2);
 
         // 2. The enforcement half reads exactly what the operator submitted.
-        assertThat(InstanceDeviceQuota.diskLimitFor(FORM_OWNER))
+        assertThat(OwnerBudget.DISK_GB.limitFor(FORM_OWNER))
             .as("step 2: the disk reserve hook honours the form-written override")
             .isEqualTo(7);
-        assertThat(InstanceDeviceQuota.nicLimitFor(FORM_OWNER))
+        assertThat(OwnerBudget.NICS.limitFor(FORM_OWNER))
             .as("step 2: the NIC reserve hook honours the form-written override")
             .isEqualTo(2);
 
@@ -298,10 +298,10 @@ class InstanceDeviceQuotaTest extends HohenheimTestBase {
             "subjects=" + FORM_OWNER + "&max_instances=3&max_disk_gb=0&max_nics=0");
         assertThat(updated.statusCode())
             .as("step 3: the quota form accepted the update").isIn(200, 302, 303);
-        assertThat(InstanceDeviceQuota.diskLimitFor(FORM_OWNER))
+        assertThat(OwnerBudget.DISK_GB.limitFor(FORM_OWNER))
             .as("step 3: an override of 0 stays 0 and does not fall through to the default")
             .isEqualTo(0);
-        assertThat(InstanceDeviceQuota.nicLimitFor(FORM_OWNER))
+        assertThat(OwnerBudget.NICS.limitFor(FORM_OWNER))
             .as("step 3: the NIC override of 0 stays 0")
             .isEqualTo(0);
     }

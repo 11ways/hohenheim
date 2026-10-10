@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -29,7 +28,8 @@ public class DnsPeerModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
-        .label(HohenheimFormCopy.label("peer_name")).help(HohenheimFormCopy.help("peer_name")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peer_name")).help(HohenheimMicrocopy.HELP.of("peer_name"))
+        .build());
 
     /** {@link #PEER_TYPE} value for a peer running Hohenheim: transfers AND forwarded edits. */
     public static final String TYPE_HOHENHEIM = "hohenheim";
@@ -47,29 +47,37 @@ public class DnsPeerModel extends Model {
     public static final EnumField PEER_TYPE = SCHEMA.addField(EnumField.builder("peer_type")
         .defaultValue(TYPE_NAMESERVER)
         .value(TYPE_NAMESERVER, v -> v.displayName("Nameserver")
-            .label(Microcopy.of("type_nameserver").withFilter("scope", "dns_peer"))
+            .label(HohenheimMicrocopy.DNS_PEER.of("type_nameserver"))
             .icon("server").color(ColorHue.GRAY))
         .value(TYPE_HOHENHEIM, v -> v.displayName("Hohenheim")
-            .label(Microcopy.of("type_hohenheim").withFilter("scope", "dns_peer"))
+            .label(HohenheimMicrocopy.DNS_PEER.of("type_hohenheim"))
             .icon("handshake").color(ColorHue.BLUE))
-        .label(HohenheimFormCopy.label("peer_type")).help(HohenheimFormCopy.help("peer_type")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peer_type")).help(HohenheimMicrocopy.HELP.of("peer_type"))
+        .build());
     public static final StringField BASE_URL = SCHEMA.addField(StringField.builder().name("base_url")
-        .label(HohenheimFormCopy.label("peer_base_url")).help(HohenheimFormCopy.help("peer_base_url")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peer_base_url")).help(HohenheimMicrocopy.HELP.of("peer_base_url"))
+        .build());
     public static final StringField API_KEY = SCHEMA.addField(StringField.builder().name("api_key").secret().encrypted()
-        .label(HohenheimFormCopy.label("peer_api_key")).help(HohenheimFormCopy.help("peer_api_key")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peer_api_key")).help(HohenheimMicrocopy.HELP.of("peer_api_key"))
+        .build());
     public static final StringField TRANSFER_HOST = SCHEMA.addField(StringField.builder().name("transfer_host")
-        .label(HohenheimFormCopy.label("peer_transfer_host")).help(HohenheimFormCopy.help("peer_transfer_host")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peer_transfer_host"))
+        .help(HohenheimMicrocopy.HELP.of("peer_transfer_host")).build());
     public static final IntegerField TRANSFER_PORT = SCHEMA.addField(IntegerField.builder().name("transfer_port")
-        .defaultValue(53).label(HohenheimFormCopy.label("peer_transfer_port"))
-        .help(HohenheimFormCopy.help("peer_transfer_port")).build());
+        .defaultValue(53).label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peer_transfer_port"))
+        .help(HohenheimMicrocopy.HELP.of("peer_transfer_port")).build());
     public static final StringField TSIG_KEY_NAME = SCHEMA.addField(StringField.builder().name("tsig_key_name")
-        .label(HohenheimFormCopy.label("peer_tsig_key_name")).help(HohenheimFormCopy.help("peer_tsig_key_name")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peer_tsig_key_name"))
+        .help(HohenheimMicrocopy.HELP.of("peer_tsig_key_name")).build());
     public static final StringField TSIG_ALGORITHM = SCHEMA.addField(StringField.builder().name("tsig_algorithm")
-        .label(HohenheimFormCopy.label("peer_tsig_algorithm")).help(HohenheimFormCopy.help("peer_tsig_algorithm")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peer_tsig_algorithm"))
+        .help(HohenheimMicrocopy.HELP.of("peer_tsig_algorithm")).build());
     public static final StringField TSIG_SECRET = SCHEMA.addField(StringField.builder().name("tsig_secret").secret().encrypted()
-        .label(HohenheimFormCopy.label("peer_tsig_secret")).help(HohenheimFormCopy.help("peer_tsig_secret")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peer_tsig_secret"))
+        .help(HohenheimMicrocopy.HELP.of("peer_tsig_secret")).build());
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled").defaultValue(true)
-        .label(HohenheimFormCopy.label("peer_enabled")).help(HohenheimFormCopy.help("peer_enabled")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peer_enabled")).help(HohenheimMicrocopy.HELP.of("peer_enabled"))
+        .build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

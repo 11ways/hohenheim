@@ -57,17 +57,17 @@ class SpamserviceAdminSurfacesBrowserTest extends HohenheimTestBase {
 
         // 1. Keys and samples changed nothing an operator sees: compared exactly, except that the keys create now
         //    shows the client its operation always takes from the parent read-only (declared correspondence).
-        stored.judgedParentReadonly(surfaceCase(SpamserviceClientKeysResource.SLUG, operator).name(),
+        stored.judgedParentReadonly(surfaceCase(HohenheimSlugs.SPAMSERVICE_KEYS, operator).name(),
             SpamserviceClientKeysResource.create());
-        for (String entry : List.of(SpamserviceClientKeysResource.SLUG, SpamserviceSamplesResource.SLUG)) {
+        for (String entry : List.of(HohenheimSlugs.SPAMSERVICE_KEYS, HohenheimSlugs.SPAMSERVICE_SAMPLES)) {
             stored.check(capture(entry, operator));
         }
 
         // 2. Clients and words: the legacy global q is now the list search over the columns the API searches, and
         //    nothing else moved (declared correspondence, never a recapture).
-        for (String entry : List.of(SpamserviceClientsResource.SLUG, SpamserviceWordsResource.SLUG)) {
+        for (String entry : List.of(HohenheimSlugs.SPAMSERVICE_CLIENTS, HohenheimSlugs.SPAMSERVICE_WORDS)) {
             PanelSurfaces after = capture(entry, operator);
-            List<String> columns = entry.equals(SpamserviceClientsResource.SLUG) ? List.of("name") : List.of("word");
+            List<String> columns = entry.equals(HohenheimSlugs.SPAMSERVICE_CLIENTS) ? List.of("name") : List.of("word");
             stored.check(GlobalTextSearchMoves.of(columns).legacyProjection(
                 before.get(after.caseName()), after));
         }
@@ -76,7 +76,7 @@ class SpamserviceAdminSurfacesBrowserTest extends HohenheimTestBase {
         PanelResource<?> events = SpamserviceSecurityEventsResource.create();
         FilterSpec day = events.list().table().filters().stream().filter(filter -> filter.name().equals("day"))
             .findFirst().orElseThrow();
-        PanelSurfaces after = capture(SpamserviceSecurityEventsResource.SLUG, operator);
+        PanelSurfaces after = capture(HohenheimSlugs.SPAMSERVICE_SECURITY_EVENTS, operator);
         stored.check(TemporalFilterMoves.of("since", "until", day, events.list().storePages().filterVocabulary(), null)
             .legacyProjection(before.get(after.caseName()), after));
 

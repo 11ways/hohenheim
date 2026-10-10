@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.HostMode;
@@ -347,7 +348,7 @@ public final class DockerReconciler {
 
         @Override
         public boolean liveById(@NonNull Identifier model, @NonNull String id) {
-            Integer key = parseInt(id);
+            Integer key = RawValues.parsedInt(id);
             if (key == null) {
                 return false;
             }
@@ -405,14 +406,6 @@ public final class DockerReconciler {
                     .where(StackModel.NAME.eq(name)).first() != null;
             }
             return false;
-        }
-
-        private static @Nullable Integer parseInt(String id) {
-            try {
-                return Integer.parseInt(id);
-            } catch (NumberFormatException e) {
-                return null;
-            }
         }
     }
 

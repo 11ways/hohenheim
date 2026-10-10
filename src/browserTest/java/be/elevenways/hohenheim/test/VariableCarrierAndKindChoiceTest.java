@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.server.cms.EnvironmentParts;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -49,7 +48,7 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
      */
     private static List<String> valueEntriesOf(@Nullable Row record, EditView view) {
         Panel admin = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
-        PanelResource<?> resource = (PanelResource<?>) admin.entryBySlug(EnvironmentParts.VARIABLES_SLUG);
+        PanelResource<?> resource = (PanelResource<?>) admin.entryBySlug(HohenheimSlugs.ENVIRONMENT_VARIABLES);
         FormState state = new FormStateTranslator().translate(
             PartsForms.formSpec(resource), PartsForms.fieldAccessByPath(resource), view,
             TestAccessContexts.contextFor(null), record == null ? PartsForms.formSpec(resource).defaultValues()
@@ -70,7 +69,7 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
 
     /** Creates one variable through the panel entry's CREATE with the value field its submitted kind declares. */
     private static void create(Integer environmentId, String key, String kind, String value) {
-        PanelResourceCalls.create(HohenheimSlugs.ADMIN, EnvironmentParts.VARIABLES_SLUG, Map.of(
+        PanelResourceCalls.create(HohenheimSlugs.ADMIN, HohenheimSlugs.ENVIRONMENT_VARIABLES, Map.of(
             "environment_id", String.valueOf(environmentId), "key", key, "kind", kind,
             "secret".equals(kind) ? "secret_value" : "plain_value", value),
             TenantConduits.operator());
@@ -80,7 +79,7 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
     private static void patch(Integer variableId, Map<String, Object> values) {
         Map<String, Object> raw = new LinkedHashMap<>();
         values.forEach((name, value) -> raw.put(name, String.valueOf(value)));
-        PanelResourceCalls.patch(HohenheimSlugs.ADMIN, EnvironmentParts.VARIABLES_SLUG, variableId, raw,
+        PanelResourceCalls.patch(HohenheimSlugs.ADMIN, HohenheimSlugs.ENVIRONMENT_VARIABLES, variableId, raw,
             TenantConduits.operator());
     }
 

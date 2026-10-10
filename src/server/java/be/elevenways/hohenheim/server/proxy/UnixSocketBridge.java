@@ -1,17 +1,14 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.hohenheim.server.util.Closeables;
 import be.elevenways.hohenheim.server.util.LoopbackPeers;
-import be.elevenways.protoblast.common.Blast;
+import be.elevenways.hohenheim.server.util.SameUidListener;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.StandardProtocolFamily;
 import java.net.UnixDomainSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.Channel;
-import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BinaryOperator;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -48,11 +45,7 @@ public final class UnixSocketBridge {
     private static final long SPAWN_RACE_BACKOFF_MS = 100;
 
     private final UnixDomainSocketAddress upstream;
-    private final ServerSocketChannel server;
-    private final int port;
-    private final AtomicBoolean closed = new AtomicBoolean(false);
-    private final BinaryOperator<Integer> peerOwner;
-    private final @Nullable Integer selfUid;
+    private final SameUidListener listener;
 
     public UnixSocketBridge(String socketPath) throws IOException {
         this(socketPath, false);
@@ -60,7 +53,7 @@ public final class UnixSocketBridge {
 
     /**
      * @param verifyReachable when true, prove the AF_UNIX upstream ANSWERS before the bridge
-     *        exists, closing the loopback listener and throwing when it does not. Callers that
+     *        exists, throwing when it does not. Callers that
      *        CACHE a bridge keyed by an externally-influenced path ({@code AddressUpstreamKind
      *        .bridgeFor}) pass true so an unreachable path is never cached as a permanent
      *        listener + accept thread; the process-lifecycle caller passes false because its
@@ -78,55 +71,20 @@ public final class UnixSocketBridge {
      */
     UnixSocketBridge(String socketPath, boolean verifyReachable, BinaryOperator<Integer> peerOwner,
                      @Nullable Integer selfUid) throws IOException {
-        this.peerOwner = peerOwner;
-        this.selfUid = selfUid;
         this.upstream = UnixDomainSocketAddress.of(socketPath);
-        this.server = ServerSocketChannel.open();
-        this.server.bind(new InetSocketAddress("127.0.0.1", 0));
-        this.port = ((InetSocketAddress) this.server.getLocalAddress()).getPort();
         if (verifyReachable) {
-            try {
-                // connectUpstream already applies the spawn-race retries a request uses, so a
-                // child still binding is tolerated; a genuinely absent path throws here.
-                closeQuietly(connectUpstream());
-            } catch (IOException unreachable) {
-                closeQuietly(this.server);
-                throw unreachable;
-            }
+            // connectUpstream already applies the spawn-race retries a request uses, so a
+            // child still binding is tolerated; a genuinely absent path throws here, before
+            // any listener exists.
+            Closeables.closeQuietly(connectUpstream());
         }
-        Thread.ofVirtual().name("unix-bridge-accept-" + port).start(this::acceptLoop);
+        this.listener = new SameUidListener("unix-bridge-accept-", "UnixSocketBridge (to " + socketPath + ")",
+            peerOwner, selfUid, this::spliceToUpstream);
     }
 
     /** The loopback TCP port the proxy client dials. */
     public int getPort() {
-        return port;
-    }
-
-    private void acceptLoop() {
-        while (!closed.get()) {
-            SocketChannel tcp;
-            try {
-                tcp = server.accept();
-            } catch (IOException e) {
-                if (!closed.get()) {
-                    Blast.log("UnixSocketBridge accept failed:", e.getMessage());
-                }
-                return;
-            }
-            Thread.ofVirtual().start(() -> {
-                if (admits(tcp)) {
-                    spliceToUpstream(tcp);
-                } else {
-                    closeQuietly(tcp);
-                }
-            });
-        }
-    }
-
-    /** Whether the connecting socket belongs to this process's own uid. */
-    private boolean admits(SocketChannel tcp) {
-        return LoopbackPeers.admits(tcp, this.port, this.peerOwner, this.selfUid,
-            "UnixSocketBridge (to " + this.upstream.getPath() + ")");
+        return listener.port();
     }
 
     private void spliceToUpstream(SocketChannel tcp) {
@@ -134,13 +92,13 @@ public final class UnixSocketBridge {
         try {
             unix = connectUpstream();
         } catch (IOException e) {
-            closeQuietly(tcp);
+            Closeables.closeQuietly(tcp);
             return;
         }
         // One virtual thread per direction; the first to see EOF/error closes both so the peer's
         // copy loop unblocks.
-        Thread.ofVirtual().start(() -> { copy(tcp, unix); closeQuietly(tcp); closeQuietly(unix); });
-        Thread.ofVirtual().start(() -> { copy(unix, tcp); closeQuietly(tcp); closeQuietly(unix); });
+        Thread.ofVirtual().start(() -> { copy(tcp, unix); Closeables.closeQuietly(tcp); Closeables.closeQuietly(unix); });
+        Thread.ofVirtual().start(() -> { copy(unix, tcp); Closeables.closeQuietly(tcp); Closeables.closeQuietly(unix); });
     }
 
     private SocketChannel connectUpstream() throws IOException {
@@ -181,16 +139,6 @@ public final class UnixSocketBridge {
 
     /** Stop accepting and release the loopback listener. In-flight splices end when their peers close. */
     public void close() {
-        if (closed.compareAndSet(false, true)) {
-            closeQuietly(server);
-        }
-    }
-
-    private static void closeQuietly(Channel ch) {
-        try {
-            ch.close();
-        } catch (IOException ignored) {
-            // best effort
-        }
+        listener.close();
     }
 }

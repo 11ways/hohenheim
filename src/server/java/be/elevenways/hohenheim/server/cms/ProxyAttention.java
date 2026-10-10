@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionSubject;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
@@ -33,10 +34,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
-import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 
 /**
  * The PROXY role's attention items: certificates, listeners, force-SSL, site health and routing.
@@ -49,8 +49,6 @@ import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
  * @since 0.1.0
  */
 public final class ProxyAttention {
-
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
 
     private ProxyAttention() {
     }
@@ -70,26 +68,26 @@ public final class ProxyAttention {
         if (proxy == null) return;
         if (proxy.getHttpState() == ProxyServer.State.FAILED) {
             items.add(item(AttentionSeverity.ERROR, "sitemap",
-                copy("proxy_http_listener", "attention_title"),
+                HohenheimMicrocopy.ATTENTION_TITLE.of("proxy_http_listener"),
                 literal(proxy.getHttpFailureReason()),
                 CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG),
-                action("act_open_settings")));
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_settings")));
         }
         if (proxy.getHttpsState() == ProxyServer.State.FAILED) {
             items.add(item(AttentionSeverity.ERROR, "certificate",
-                copy("proxy_https_listener", "attention_title"),
+                HohenheimMicrocopy.ATTENTION_TITLE.of("proxy_https_listener"),
                 literal(proxy.getHttpsFailureReason()),
                 CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES),
-                action("act_open_certificates"))
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_certificates"))
                 .about(AttentionSubject.httpsTermination(), refusedOverHttp(proxy)));
         } else if (httpsDegraded(proxy)) {
             // Partial mode: passthrough listens but termination failed, so the listener
             // reads healthy while every force_ssl vhost answers 503.
             items.add(item(AttentionSeverity.ERROR, "certificate",
-                copy("proxy_https_degraded", "attention_title"),
+                HohenheimMicrocopy.ATTENTION_TITLE.of("proxy_https_degraded"),
                 literal(proxy.getHttpsFailureReason()),
                 CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES),
-                action("act_open_certificates"))
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_certificates"))
                 .about(AttentionSubject.httpsTermination(), refusedOverHttp(proxy)));
         }
     }
@@ -123,11 +121,11 @@ public final class ProxyAttention {
         long active = Models.get(CertificateModel.class).find()
             .where(CertificateModel.STATUS.eq(CertificateModel.STATUS_ACTIVE)).count();
         items.add(item(AttentionSeverity.ERROR, "certificate",
-            copy("https_unavailable", "attention_title"),
-            active == 0 ? copy("https_no_certificate", "attention_detail")
-                : copy("https_certificates_unloaded", "attention_detail", "count", active),
+            HohenheimMicrocopy.ATTENTION_TITLE.of("https_unavailable"),
+            active == 0 ? HohenheimMicrocopy.ATTENTION_DETAIL.of("https_no_certificate")
+                : HohenheimMicrocopy.ATTENTION_DETAIL.of("https_certificates_unloaded").withArg("count", active),
             CmsRoutes.list(ADMIN, HohenheimSlugs.CERTIFICATES),
-            action("act_open_certificates"))
+            HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_certificates"))
             .about(AttentionSubject.httpsTermination(), refused));
     }
 
@@ -146,10 +144,12 @@ public final class ProxyAttention {
             return null;
         }
         if (forced.bySetting().isEmpty()) {
-            return copy("https_refused_forced", "attention_detail", "sites", own);
+            return HohenheimMicrocopy.ATTENTION_DETAIL.of("https_refused_forced").withArg("sites", own);
         }
-        return forced.own().isEmpty() ? copy("https_refused_setting", "attention_detail", "sites", bySetting)
-            : copy("https_refused_both", "attention_detail", "forced", own, "sent", bySetting);
+        return forced.own().isEmpty() ? HohenheimMicrocopy.ATTENTION_DETAIL.of("https_refused_setting")
+            .withArg("sites", bySetting)
+            : HohenheimMicrocopy.ATTENTION_DETAIL.of("https_refused_both").withArg("forced", own)
+                .withArg("sent", bySetting);
     }
 
     /**
@@ -180,10 +180,10 @@ public final class ProxyAttention {
             }
             // The address is the root of its site's error page (the site verdict's cause), so that item folds here.
             items.add(item(AttentionSeverity.ERROR, "lock",
-                copy("forced_without_certificate", "attention_title", "hostname", hostname),
-                copy("forced_without_certificate", "attention_detail"),
+                HohenheimMicrocopy.ATTENTION_TITLE.of("forced_without_certificate").withArg("hostname", hostname),
+                HohenheimMicrocopy.ATTENTION_DETAIL.of("forced_without_certificate"),
                 SiteParts.recordRoute(ADMIN, site.get(SiteModel.ID)),
-                action("act_fix_on", "name", AppDirectory.nameOf(site)))
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_fix_on").withArg("name", AppDirectory.nameOf(site)))
                 .about(AttentionSubject.address(domain.get(SiteDomainModel.ID)), null));
         }
     }
@@ -200,11 +200,12 @@ public final class ProxyAttention {
                 continue;
             }
             items.add(item(AttentionSeverity.ERROR, "lock-open",
-                copy("open_protected_path", "attention_title", "path", path.get(ProtectedPathModel.PATH),
-                    "site", AppDirectory.nameOf(site)),
-                copy("open_protected_path", "attention_detail"),
-                CmsRoutes.detail(ADMIN, ProtectedPathParts.SLUG, path.get(ProtectedPathModel.ID)),
-                action("act_protect_path", "path", path.get(ProtectedPathModel.PATH))));
+                HohenheimMicrocopy.ATTENTION_TITLE.of("open_protected_path")
+                    .withArg("path", path.get(ProtectedPathModel.PATH)).withArg("site", AppDirectory.nameOf(site)),
+                HohenheimMicrocopy.ATTENTION_DETAIL.of("open_protected_path"),
+                CmsRoutes.detail(ADMIN, HohenheimSlugs.PROTECTED_PATHS, path.get(ProtectedPathModel.ID)),
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_protect_path")
+                    .withArg("path", path.get(ProtectedPathModel.PATH))));
         }
     }
 
@@ -225,16 +226,18 @@ public final class ProxyAttention {
             boolean renews = Boolean.TRUE.equals(cert.get(CertificateModel.AUTO_RENEW))
                 && CertificateModel.PROVIDER_LETSENCRYPT.equals(cert.get(CertificateModel.PROVIDER));
             Microcopy detail = renewalError != null && !renewalError.isBlank()
-                ? copy("certificate_renewal_failing", "attention_detail", "reason", renewalError)
-                : copy(renews ? "certificate_renewal_late" : "certificate_never_renews", "attention_detail");
+                ? HohenheimMicrocopy.ATTENTION_DETAIL.of("certificate_renewal_failing").withArg("reason", renewalError)
+                : HohenheimMicrocopy.ATTENTION_DETAIL.of(renews ? "certificate_renewal_late"
+                    : "certificate_never_renews");
             AttentionSeverity severity = CertificateExpiry.daysLeft(expires) < 0 ? AttentionSeverity.ERROR
                 : AttentionSeverity.WARNING;
             items.add(item(severity, "certificate",
-                copy("certificate_expiring", "attention_title", "name", cert.get(CertificateModel.NICE_NAME),
-                    "expiry", CertificateExpiry.inSentence(expires)),
+                HohenheimMicrocopy.ATTENTION_TITLE.of("certificate_expiring")
+                    .withArg("name", cert.get(CertificateModel.NICE_NAME))
+                    .withArg("expiry", CertificateExpiry.inSentence(expires)),
                 detail,
                 CmsRoutes.detail(ADMIN, HohenheimSlugs.CERTIFICATES, cert.get(CertificateModel.ID)),
-                action("act_open_certificate")));
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_certificate")));
         }
     }
 
@@ -245,10 +248,11 @@ public final class ProxyAttention {
             .all();
         for (Row row : rows) {
             items.add(item(AttentionSeverity.ERROR, "certificate",
-                copy("certificate", "attention_title", "name", row.get(CertificateModel.NICE_NAME)),
+                HohenheimMicrocopy.ATTENTION_TITLE.of("certificate")
+                    .withArg("name", row.get(CertificateModel.NICE_NAME)),
                 literal(row.get(CertificateModel.RENEWAL_ERROR)),
                 CmsRoutes.detail(ADMIN, HohenheimSlugs.CERTIFICATES, row.get(CertificateModel.ID)),
-                action("act_open_certificate")));
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_certificate")));
         }
     }
 
@@ -289,10 +293,10 @@ public final class ProxyAttention {
                 AppHealth.Verdict verdict = down ? AppHealth.siteReading(site) : null;
                 Microcopy reason = verdict != null ? verdict.health().detail() : null;
                 items.add(item(down ? AttentionSeverity.ERROR : AttentionSeverity.WARNING, "globe",
-                    copy(key, "attention_title", "name", AppDirectory.nameOf(site)),
-                    reason != null ? reason : copy(key, "attention_detail"),
+                    HohenheimMicrocopy.ATTENTION_TITLE.of(key).withArg("name", AppDirectory.nameOf(site)),
+                    reason != null ? reason : HohenheimMicrocopy.ATTENTION_DETAIL.of(key),
                     SiteParts.recordRoute(ADMIN, siteId),
-                    action("act_open_app", "name", AppDirectory.nameOf(site)))
+                    HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_app").withArg("name", AppDirectory.nameOf(site)))
                     .causedBy(verdict != null ? verdict.cause() : null));
             }
         }
@@ -328,11 +332,11 @@ public final class ProxyAttention {
             // A site that turns every visitor away is as broken as one missing from routing (its app row's glyph).
             boolean broken = unrouted || problem.reason().refusesEveryVisitor();
             items.add(item(broken ? AttentionSeverity.ERROR : AttentionSeverity.WARNING, "route",
-                copy(unrouted ? "site_unrouted" : "site_refusing", "attention_title",
-                    "name", name),
+                HohenheimMicrocopy.ATTENTION_TITLE.of(unrouted ? "site_unrouted" : "site_refusing")
+                    .withArg("name", name),
                 reasonOf(problem),
                 SiteParts.recordRoute(ADMIN, problem.siteId()),
-                action("act_fix_on", "name", name)));
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_fix_on").withArg("name", name)));
         }
     }
 
@@ -348,6 +352,7 @@ public final class ProxyAttention {
     /** The localized sentence for a problem's reason, carrying its specific cause (in words when it has them). */
     static @NonNull Microcopy reasonOf(@NonNull RoutingProblem problem) {
         Object cause = problem.cause() != null ? problem.cause() : problem.detail() != null ? problem.detail() : "-";
-        return copy(problem.reason().name().toLowerCase(Locale.ROOT), "routing_problem", "detail", cause);
+        return HohenheimMicrocopy.ROUTING_PROBLEM.of(problem.reason().name().toLowerCase(Locale.ROOT))
+            .withArg("detail", cause);
     }
 }

@@ -18,7 +18,7 @@
             {% if app.verdict %}
             <pl-list-item-trailing><pl-badge variant={% app.health.variant %} attr:data-hh-app-verdict={% app.health.tone %}>{{ app.health.label }}</pl-badge></pl-list-item-trailing>
             {% elseif app.https != null %}
-            <pl-list-item-trailing><pl-badge variant={% app.https.variant %} attr:data-cert-status={% app.https.status %}>{{ app.https.label }}</pl-badge></pl-list-item-trailing>
+            <pl-list-item-trailing><pl-badge variant={% app.https.variant %} attr:data-cert-status={% app.https.state %}>{{ app.https.label }}</pl-badge></pl-list-item-trailing>
             {% /if %}
         </pl-list-item>
         {% /each %}

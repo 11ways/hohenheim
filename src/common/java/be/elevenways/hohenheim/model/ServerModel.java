@@ -1,9 +1,10 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimCounts;
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.host.HostStanding;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.net.IpLiterals;
@@ -20,11 +21,18 @@ import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
-import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.ui.ColorHue;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * A Docker host the platform can manage: the implicit {@code local} daemon, or a remote one
@@ -79,9 +87,16 @@ public class ServerModel extends Model {
     public static final String POSTURE_VM_ISOLATED = "vm_isolated";
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
-    public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").build());
+    public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name")).build());
+
+    /** @return whether a host name has the {@link LowercaseNames} shape; a host name has no ceiling */
+    public static boolean isValidName(@Nullable String name) {
+        return LowercaseNames.isValid(name, Integer.MAX_VALUE);
+    }
     public static final EnumField MODE = SCHEMA.addField(modeField());
-    public static final StringField SSH_TARGET = SCHEMA.addField(StringField.builder().name("ssh_target").build());
+    public static final StringField SSH_TARGET = SCHEMA.addField(StringField.builder().name("ssh_target")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("ssh_target")).build());
 
     /** The mode field, one value per {@link HostMode} member and nothing else. */
     private static EnumField modeField() {
@@ -106,10 +121,11 @@ public class ServerModel extends Model {
      */
     public static final EnumField RUNTIME = SCHEMA.addField(EnumField.builder("runtime")
         .value(RUNTIME_DOCKER, v -> v.displayName("Docker").icon("box")
-            .label(Microcopy.of("docker").withFilter("scope", "host_runtime")).color(ColorHue.BLUE))
+            .label(HohenheimMicrocopy.HOST_RUNTIME.of("docker")).color(ColorHue.BLUE))
         .value(RUNTIME_INCUS, v -> v.displayName("Incus").icon("cubes")
-            .label(Microcopy.of("incus").withFilter("scope", "host_runtime")).color(ColorHue.GREEN))
+            .label(HohenheimMicrocopy.HOST_RUNTIME.of("incus")).color(ColorHue.GREEN))
         .defaultValue(RUNTIME_DOCKER)
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("runtime"))
         .build());
 
     /**
@@ -119,8 +135,8 @@ public class ServerModel extends Model {
      */
     public static final StringField INCUS_URL = SCHEMA.addField(
         StringField.builder().name("incus_url").nullable(true)
-            .label(HohenheimFormCopy.label("incus_url"))
-            .help(HohenheimFormCopy.help("incus_url"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("incus_url"))
+            .help(HohenheimMicrocopy.HELP.of("incus_url"))
             .build());
 
     /**
@@ -152,15 +168,15 @@ public class ServerModel extends Model {
      */
     public static final EnumField POSTURE = SCHEMA.addField(EnumField.builder("posture")
         .value(POSTURE_TRUSTED_ONLY, v -> v.displayName("Trusted only").icon("user-shield")
-            .label(Microcopy.of("trusted_only").withFilter("scope", "host_posture")).color(ColorHue.TEAL))
+            .label(HohenheimMicrocopy.HOST_POSTURE.of("trusted_only")).color(ColorHue.TEAL))
         .value(POSTURE_DEDICATED, v -> v.displayName("Dedicated").icon("user-lock")
-            .label(Microcopy.of("dedicated").withFilter("scope", "host_posture")).color(ColorHue.INDIGO))
+            .label(HohenheimMicrocopy.HOST_POSTURE.of("dedicated")).color(ColorHue.INDIGO))
         .value(POSTURE_SHARED_CONTAINER, v -> v.displayName("Shared containers").icon("cubes")
-            .label(Microcopy.of("shared_container").withFilter("scope", "host_posture")).color(ColorHue.ORANGE))
+            .label(HohenheimMicrocopy.HOST_POSTURE.of("shared_container")).color(ColorHue.ORANGE))
         .value(POSTURE_VM_ISOLATED, v -> v.displayName("VM isolated").icon("boxes-stacked")
-            .label(Microcopy.of("vm_isolated").withFilter("scope", "host_posture")).color(ColorHue.GREEN))
+            .label(HohenheimMicrocopy.HOST_POSTURE.of("vm_isolated")).color(ColorHue.GREEN))
         .defaultValue(POSTURE_TRUSTED_ONLY)
-        .label(HohenheimFormCopy.label("posture")).help(HohenheimFormCopy.help("posture"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("posture")).help(HohenheimMicrocopy.HELP.of("posture"))
         .build());
 
     /**
@@ -176,16 +192,21 @@ public class ServerModel extends Model {
      * partial, so a stored token would only be a second authority that could claim
      * "emptying" while nothing empties.
      */
-    public static final EnumField ADMISSION = SCHEMA.addField(EnumField.builder("admission")
-        .value(ADMISSION_BLOCKED, v -> v.displayName("Blocked").icon("circle-xmark")
-            .label(Microcopy.of("blocked").withFilter("scope", "host_admission")).color(ColorHue.RED))
-        .value(ADMISSION_ADMITTED, v -> v.displayName("Admitted").icon("circle-check")
-            .label(Microcopy.of("admitted").withFilter("scope", "host_admission")).color(ColorHue.GREEN))
-        .value(ADMISSION_CORDONED, v -> v.displayName("Cordoned").icon("circle-pause")
-            .label(Microcopy.of("cordoned").withFilter("scope", "host_admission")).color(ColorHue.ORANGE))
-        .defaultValue(ADMISSION_BLOCKED)
-        .label(HohenheimFormCopy.label("admission")).help(HohenheimFormCopy.help("admission"))
-        .build());
+    public static final EnumField ADMISSION = SCHEMA.addField(admissionField());
+
+    /** The admission field: each stored token wears the badge of the {@link HostStanding} that carries it. */
+    private static EnumField admissionField() {
+        EnumField.Builder builder = EnumField.builder("admission");
+        for (HostStanding standing : HostStanding.values()) {
+            if (standing.admission() != null) {
+                builder.value(standing.admission(), v -> v.label(standing.label()).icon(standing.icon())
+                    .color(standing.variant()));
+            }
+        }
+        return builder.defaultValue(ADMISSION_BLOCKED)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("admission")).help(HohenheimMicrocopy.HELP.of("admission"))
+            .build();
+    }
 
     /** The stored preflight report: one JSON map of named checks plus probed facts. */
     public static final SchemaField CAPABILITIES = SCHEMA.addField(
@@ -211,14 +232,14 @@ public class ServerModel extends Model {
      */
     public static final EnumField VOLUME_BACKEND = SCHEMA.addField(
         VolumeBackend.fieldBuilder("volume_backend")
-            .label(HohenheimFormCopy.label("volume_backend"))
-            .help(HohenheimFormCopy.help("volume_backend"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("volume_backend"))
+            .help(HohenheimMicrocopy.HELP.of("volume_backend"))
             .build());
 
     /** The directory that was probed ({@code <data_path>/volumes}), stored as evidence. */
     public static final StringField VOLUME_ROOT = SCHEMA.addField(
         StringField.builder().name("volume_root").nullable(true)
-            .label(HohenheimFormCopy.label("volume_root")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("volume_root")).build());
 
     /** What the probe actually read, so a {@code none} verdict names its own reason. */
     public static final TextField VOLUME_BACKEND_DETAIL = SCHEMA.addField(
@@ -421,15 +442,15 @@ public class ServerModel extends Model {
      */
     public static final StringField PUBLIC_IPV4 = SCHEMA.addField(
         StringField.builder().name("public_ipv4").nullable(true)
-            .label(HohenheimFormCopy.label("public_ipv4"))
-            .help(HohenheimFormCopy.help("public_ipv4"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("public_ipv4"))
+            .help(HohenheimMicrocopy.HELP.of("public_ipv4"))
             .build());
 
     /** The host's declared public IPv6 literal (AAAA generation); null = none declared. */
     public static final StringField PUBLIC_IPV6 = SCHEMA.addField(
         StringField.builder().name("public_ipv6").nullable(true)
-            .label(HohenheimFormCopy.label("public_ipv6"))
-            .help(HohenheimFormCopy.help("public_ipv6"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("public_ipv6"))
+            .help(HohenheimMicrocopy.HELP.of("public_ipv6"))
             .build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
@@ -465,13 +486,13 @@ public class ServerModel extends Model {
             String v4 = normalizeAddress(row, PUBLIC_IPV4);
             if (v4 != null && !IpLiterals.isIpv4(v4)) {
                 throw Violations.ofField(PUBLIC_IPV4.getName(), v4,
-                    HohenheimViolations.text("server_address_invalid")
+                    HohenheimMicrocopy.VIOLATIONS.of("server_address_invalid")
                         .withArg("address", v4));
             }
             String v6 = normalizeAddress(row, PUBLIC_IPV6);
             if (v6 != null && !IpLiterals.isIpv6(v6)) {
                 throw Violations.ofField(PUBLIC_IPV6.getName(), v6,
-                    HohenheimViolations.text("server_address_invalid")
+                    HohenheimMicrocopy.VIOLATIONS.of("server_address_invalid")
                         .withArg("address", v6));
             }
         });
@@ -510,10 +531,7 @@ public class ServerModel extends Model {
         if (row == null || !row.has(POSTURE.getName())) {
             return;
         }
-        Row stored = storedRowOf(row);
-        String acknowledged = row.has(ACKNOWLEDGED_POSTURE.getName())
-            ? row.get(ACKNOWLEDGED_POSTURE)
-            : (stored != null ? stored.get(ACKNOWLEDGED_POSTURE) : null);
+        String acknowledged = row.afterWrite(ACKNOWLEDGED_POSTURE, StoredRows.of(Models.get(ServerModel.class), row));
         if (acknowledged == null || acknowledged.equals(row.get(POSTURE))) {
             return;
         }
@@ -525,14 +543,6 @@ public class ServerModel extends Model {
     }
 
     /** The persisted row behind a staged one, or null on a create (or an unreadable store). */
-    private static @Nullable Row storedRowOf(@NonNull Row row) {
-        if (!row.has(ID.getName())) {
-            return null;
-        }
-        Object id = row.get(ID);
-        return id == null ? null : Models.get(ServerModel.class).findById(id);
-    }
-
     /** Trim a staged address; a blank submit folds to null (the "none declared" state). */
     private static @Nullable String normalizeAddress(@NonNull Row row,
                                                      @NonNull StringField field) {
@@ -540,7 +550,7 @@ public class ServerModel extends Model {
             return null;
         }
         Object staged = row.get(field.getName());
-        String value = staged != null ? String.valueOf(staged).trim() : "";
+        String value = trimmed(staged);
         row.set(field, value.isEmpty() ? null : value);
         return value.isEmpty() ? null : value;
     }
@@ -572,15 +582,15 @@ public class ServerModel extends Model {
             if (serverId == null) {
                 continue;
             }
-            Row migrating = migratingOnto(serverId).first();
+            Row migrating = migrationsByTarget().get(serverId);
             if (migrating != null) {
-                throw Violations.ofForm(HohenheimViolations.text("server_migration_target")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("server_migration_target")
                     .withArg("name", String.valueOf((Object) doomed.get(NAME)))
                     .withArg("instance", String.valueOf((Object) migrating.get(InstanceModel.NAME))));
             }
             References references = referencesOf(serverId);
             if (references.any()) {
-                throw Violations.ofForm(references.describe(HohenheimViolations.text("server_in_use")
+                throw Violations.ofForm(references.describe(HohenheimMicrocopy.VIOLATIONS.of("server_in_use")
                     .withArg("name", String.valueOf((Object) doomed.get(NAME)))));
             }
             InstanceModel.detachTrashed(InstanceModel.SERVER_ID,
@@ -598,6 +608,9 @@ public class ServerModel extends Model {
      * @param ports     port claims recorded against the host, releasing ones included
      */
     public record References(long stacks, long databases, long engines, long instances, long ports) {
+
+        /** Nothing references the host. */
+        public static final References NONE = new References(0, 0, 0, 0, 0);
 
         /** @return how many rows reference the host in total */
         public long total() {
@@ -624,32 +637,54 @@ public class ServerModel extends Model {
         }
     }
 
-    /**
-     * THE count of what still references a host -- the removal refusal above and the admin
-     * resource's dead delete both read it, so the button can never look available for a host
-     * the delete then refuses.
-     */
+    /** @return what still references one host, {@link References#NONE} when nothing does */
     public static @NonNull References referencesOf(int serverId) {
-        return new References(
-            Models.get(StackModel.class).find()
-                .where(StackModel.SERVER_ID.eq(serverId)).count(),
-            Models.get(DatabaseModel.class).find()
-                .where(DatabaseModel.SERVER_ID.eq(serverId)).count(),
-            Models.get(DatabaseEngineModel.class).find()
-                .where(DatabaseEngineModel.SERVER_ID.eq(serverId)).count(),
-            Models.get(InstanceModel.class).find()
-                .where(InstanceModel.SERVER_ID.eq(serverId)).count(),
-            Models.get(PortAllocationModel.class).find()
-                .where(PortAllocationModel.SERVER_ID.eq(serverId)).count());
+        return referencesByServer().getOrDefault(serverId, References.NONE);
     }
 
     /**
-     * The live instances an open cold migration is moving onto this host -- THE one
-     * query behind both the funnel refusal above and the admin resource's dead delete.
+     * THE count of what still references each host, one grouped query per table -- the removal refusal above and the
+     * admin list's dead delete (one read per page) both read it, so the button can never look available for a host
+     * the delete then refuses.
+     *
+     * @return host id to its references; a host nothing references is absent
      */
-    public static @NonNull QueryBuilder<Row> migratingOnto(int serverId) {
-        return Models.get(InstanceModel.class).find()
-            .where(InstanceModel.MIGRATE_TARGET_ID.eq(serverId));
+    public static @NonNull Map<Integer, References> referencesByServer() {
+        Map<Integer, Long> stacks = GroupedCounts.of(Models.get(StackModel.class).find(), StackModel.SERVER_ID);
+        Map<Integer, Long> databases = GroupedCounts.of(Models.get(DatabaseModel.class).find(),
+            DatabaseModel.SERVER_ID);
+        Map<Integer, Long> engines = GroupedCounts.of(Models.get(DatabaseEngineModel.class).find(),
+            DatabaseEngineModel.SERVER_ID);
+        Map<Integer, Long> instances = GroupedCounts.of(Models.get(InstanceModel.class).find(),
+            InstanceModel.SERVER_ID);
+        Map<Integer, Long> ports = GroupedCounts.of(Models.get(PortAllocationModel.class).find(),
+            PortAllocationModel.SERVER_ID);
+        Set<Integer> held = new HashSet<>();
+        for (Map<Integer, Long> counts : List.of(stacks, databases, engines, instances, ports)) {
+            held.addAll(counts.keySet());
+        }
+        Map<Integer, References> byServer = new HashMap<>();
+        for (Integer serverId : held) {
+            byServer.put(serverId, new References(stacks.getOrDefault(serverId, 0L),
+                databases.getOrDefault(serverId, 0L), engines.getOrDefault(serverId, 0L),
+                instances.getOrDefault(serverId, 0L), ports.getOrDefault(serverId, 0L)));
+        }
+        return byServer;
+    }
+
+    /**
+     * The live instance an open cold migration is moving onto each host -- THE one read behind both the funnel
+     * refusal above and the admin list's dead delete.
+     *
+     * @return destination host id to the first instance moving there
+     */
+    public static @NonNull Map<Integer, Row> migrationsByTarget() {
+        Map<Integer, Row> byTarget = new HashMap<>();
+        for (Row instance : Models.get(InstanceModel.class).find()
+                .where(InstanceModel.MIGRATE_TARGET_ID.isNotNull()).all()) {
+            byTarget.putIfAbsent(instance.get(InstanceModel.MIGRATE_TARGET_ID), instance);
+        }
+        return byTarget;
     }
 
     /** The server with this unique name, or null if none. */
@@ -879,6 +914,15 @@ public class ServerModel extends Model {
             throw new IllegalArgumentException("No server with id " + serverId);
         }
         return String.valueOf(row.get(NAME));
+    }
+
+    /**
+     * The name of the server any spelling resolves to through {@link #canonicalServerId}.
+     *
+     * @throws IllegalArgumentException when the spelling names no known server
+     */
+    public static @NonNull String canonicalNameOf(@Nullable Object raw) {
+        return nameOf(canonicalServerId(raw));
     }
 
     /** The name a message shows for a server id: its name, or {@code #<id>} for a row that is gone. */

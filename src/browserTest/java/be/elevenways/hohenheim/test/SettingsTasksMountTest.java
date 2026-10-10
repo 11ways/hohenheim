@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.cms.HohenheimPanel;
 import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.hohenheim.server.task.BackupDatabases;
 import be.elevenways.hohenheim.server.task.CheckForeignKeys;
@@ -50,7 +49,7 @@ class SettingsTasksMountTest extends HohenheimTestBase {
         // 1. Schedules and runs are members of the Settings cluster, after the settings page.
         Panel admin = PanelRegistry.getBySlug(HohenheimSlugs.ADMIN);
         assertThat(admin).as("step 1: the admin panel is registered").isNotNull();
-        PanelCluster settings = (PanelCluster) admin.entryBySlug(HohenheimPanel.SETTINGS_CLUSTER);
+        PanelCluster settings = (PanelCluster) admin.entryBySlug(HohenheimSlugs.Cluster.CONFIGURE);
         assertThat(settings).as("step 1: the Settings cluster is registered").isNotNull();
         assertThat(settings.members()).as("step 1: the scheduler's two lists are tabs of Settings")
             .startsWith(SettingsPage.DEFAULT_SLUG)

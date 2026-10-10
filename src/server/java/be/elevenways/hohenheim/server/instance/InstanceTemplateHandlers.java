@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
@@ -30,8 +31,6 @@ import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.refusal.DomainRefusal;
-import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
@@ -74,6 +73,9 @@ public final class InstanceTemplateHandlers {
         .project(InstanceTemplateModel.NAME, InstanceTemplateModel.KIND)
         .scopedBy(TenantScopes.INSTANCE_TEMPLATES).build();
 
+    /** Approval is authority over what the whole installation may run: operators alone, from every surface. */
+    private static final String APPROVAL = "template approval is an operator act";
+
     static {
         OperationHandlers.attach(InstanceTemplateOperations.CREATE_INSTANCE_FROM_TEMPLATE)
             .source(SELECTABLE_TEMPLATES)
@@ -81,11 +83,11 @@ public final class InstanceTemplateHandlers {
             .handle(InstanceTemplateHandlers::createFromTemplate);
         OperationHandlers.attach(InstanceTemplateOperations.APPROVE_TEMPLATE)
             .applies(template -> template.get(InstanceTemplateModel.APPROVED_AT) == null)
-            .authorize(InstanceTemplateHandlers::operatorOnly)
+            .authorize(HohenheimAccess.operatorOnly(APPROVAL))
             .handle(InstanceTemplateHandlers::approve);
         OperationHandlers.attach(InstanceTemplateOperations.UNAPPROVE_TEMPLATE)
             .applies(template -> template.get(InstanceTemplateModel.APPROVED_AT) != null)
-            .authorize(InstanceTemplateHandlers::operatorOnly)
+            .authorize(HohenheimAccess.operatorOnly(APPROVAL))
             .handle(InstanceTemplateHandlers::unapprove);
     }
 
@@ -148,13 +150,6 @@ public final class InstanceTemplateHandlers {
     }
 
     // -- approval: the operator act that makes a template tenant-selectable ------------------------------------
-
-    /** Approval is authority over what the whole installation may run: operators alone, from every surface. */
-    private static @Nullable DomainRefusal operatorOnly(@NonNull Row template, @Nullable Void input,
-                                                        @NonNull AccessContext access) {
-        return HohenheimAccess.isAdmin(access) ? null
-            : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "template approval is an operator act");
-    }
 
     /**
      * Stamps who approved the template and when, after the approval-time lane of the vocabulary gate: a function-library
@@ -266,7 +261,7 @@ public final class InstanceTemplateHandlers {
 
     private static ActionResult<Object> importError(Conduit conduit, String key) {
         return importErrorText(conduit,
-            HohenheimViolations.text(key));
+            HohenheimMicrocopy.VIOLATIONS.of(key));
     }
 
     private static ActionResult<Object> importErrorText(Conduit conduit, Microcopy message) {

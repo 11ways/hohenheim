@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.GitProviderModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.source.GitProviderOperationHandlers;
 import be.elevenways.hohenheim.server.source.GiteaProviderKind;
@@ -87,7 +89,7 @@ class GitProviderTenantSurfaceTest extends HohenheimTestBase {
             .isInstanceOf(CmsActionResult.Toast.class);
         assertThat(((CmsActionResult.Toast) tenant).message())
             .as("step 3: the tenant toast is the generic sentence and nothing else")
-            .isEqualTo(Microcopy.of("test_failed_generic").withFilter("scope", "git_provider"));
+            .isEqualTo(HohenheimMicrocopy.GIT_PROVIDER.of("test_failed_generic"));
     }
 
     /**
@@ -99,7 +101,7 @@ class GitProviderTenantSurfaceTest extends HohenheimTestBase {
         Row provider = provider(PREFIX + "invoked", "http://127.0.0.1:1", false);
         int providerId = provider.get(GitProviderModel.ID);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, GitProviderModel.MODEL_ID, providerId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         String route = "/" + HohenheimSlugs.GIT_PROVIDERS + "/invoke/"
             + GitProviderOperations.TEST_CONNECTION.id().getNamespace() + "."
             + GitProviderOperations.TEST_CONNECTION.id().getPath() + "?ids=" + providerId;
@@ -171,7 +173,7 @@ class GitProviderTenantSurfaceTest extends HohenheimTestBase {
         Object key = PartsWrites.persistRow(resource, values(PREFIX + "own"), tenant);
         int providerId = Integer.parseInt(String.valueOf(key));
         assertThat(HohenheimAccess.reachesRecord(tenant, GitProviderModel.MODEL_ID, providerId,
-                HohenheimAccess.MANAGE))
+                HohenheimCapabilities.MANAGE))
             .as("step 2: the creator holds manage on what it registered")
             .isTrue();
 
@@ -228,7 +230,7 @@ class GitProviderTenantSurfaceTest extends HohenheimTestBase {
         int ownId = own.get(GitProviderModel.ID);
         RecordGrants.grant(
             GrantSubjectType.USER, tenantId,
-            GitProviderModel.MODEL_ID, ownId, HohenheimAccess.MANAGE, true);
+            GitProviderModel.MODEL_ID, ownId, HohenheimCapabilities.MANAGE, true);
         try {
             // 1. Publishing its own credential by a direct save is refused as a frozen column.
             Throwable flip = catchThrowable(() -> TenantConduits.as(principal, () -> {
@@ -289,7 +291,7 @@ class GitProviderTenantSurfaceTest extends HohenheimTestBase {
         } finally {
             RecordGrants.revoke(
                 GrantSubjectType.USER, tenantId,
-                GitProviderModel.MODEL_ID, ownId, HohenheimAccess.MANAGE);
+                GitProviderModel.MODEL_ID, ownId, HohenheimCapabilities.MANAGE);
             providers.find().where(GitProviderModel.ID.in(List.of(sharedId, ownId))).delete();
         }
     }

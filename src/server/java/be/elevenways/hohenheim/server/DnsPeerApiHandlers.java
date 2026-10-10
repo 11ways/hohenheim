@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.server.api.ApiConduits;
 import be.elevenways.hohenheim.dns.DnsApiErrorResponse;
@@ -20,6 +21,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.xbill.DNS.TSIG;
 
 import java.util.Map;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * The receiving half of transfer-key negotiation: a peer that minted a shared TSIG
@@ -97,25 +100,12 @@ final class DnsPeerApiHandlers {
 
     /** @return the announced transfer port, or null when absent or out of range */
     private static @Nullable Integer port(@Nullable String raw) {
-        String value = trimmed(raw);
-        if (value.isEmpty()) {
-            return null;
-        }
-        try {
-            int parsed = Integer.parseInt(value);
-            return parsed > 0 && parsed < 65536 ? parsed : null;
-        }
-        catch (NumberFormatException malformed) {
-            return null;
-        }
+        Integer parsed = RawValues.parsedInt(raw);
+        return parsed != null && parsed > 0 && parsed < 65536 ? parsed : null;
     }
 
     private static ActionResult<Object> refusal(Conduit conduit, String error) {
         conduit.setResponseStatus(422);
         return new JsonResult<Object>(new DnsApiErrorResponse(error));
-    }
-
-    private static String trimmed(String value) {
-        return value != null ? value.trim() : "";
     }
 }

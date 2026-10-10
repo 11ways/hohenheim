@@ -95,13 +95,13 @@
 
 ## move a dedicated database
 > POST /api/v1/databases/3/move-shared (application/x-www-form-urlencoded, 0 bytes)
-< 200 application/json; charset=utf-8
-{"id":3,"name":"wire-dedicated-db","status":"queued","watch":"status"}
+< 422 application/json; charset=utf-8
+{"code":"move_not_serving","message":"It cannot move now. It has no engine to run on.","status":422,"violations":[{"code":"move_not_serving","message":"It cannot move now. It has no engine to run on."}]}
 
 ## delete a database a workload holds
 > POST /api/v1/databases/1/delete (application/x-www-form-urlencoded, 0 bytes)
 < 422 application/json; charset=utf-8
-{"code":"delete_in_use","message":"Database 'wire-held-db' is attached to wire-web (\/admin\/instances\/1\/page\/databases). Detach it on each instance's Databases tab first.","status":422,"violations":[{"code":"delete_in_use","message":"Database 'wire-held-db' is attached to wire-web (\/admin\/instances\/1\/page\/databases). Detach it on each instance's Databases tab first."}]}
+{"code":"delete_in_use","message":"Database 'wire-held-db' is attached to wire-web. Detach it on each instance's Databases tab first.","status":422,"violations":[{"code":"delete_in_use","message":"Database 'wire-held-db' is attached to wire-web. Detach it on each instance's Databases tab first."}]}
 
 ## delete a detached database
 > POST /api/v1/databases/2/delete (application/x-www-form-urlencoded, 0 bytes)

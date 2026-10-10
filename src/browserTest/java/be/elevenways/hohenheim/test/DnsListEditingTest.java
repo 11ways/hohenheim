@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -257,7 +257,7 @@ class DnsListEditingTest extends HohenheimTestBase {
         // hostname authority over that ONE name (and manage-panel access).
         int siteId = createSite("dns-tenant-site", "own.tenant.example");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         TestSession tenant = sessionFor(tenantId);
 
         // 1. The name it serves is editable in place: the state says so and the commit lands.
@@ -280,7 +280,7 @@ class DnsListEditingTest extends HohenheimTestBase {
         // 3. With a VIEW grant the record becomes readable -- and the editor state says, in
         //    the same answer the write lane enforces, that it is still not writable.
         RecordGrants.grant(GrantSubjectType.USER, tenantId, DnsRecordModel.MODEL_ID, foreignName,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         InlineEditState foreign = cellState("/manage/dns-records/" + foreignName + "/cell-state",
             tenant.token());
         assertThat(foreign.editable()).as("step 3: viewing is not authoring").isFalse();

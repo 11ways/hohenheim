@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.validation.validator.Range;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -54,8 +54,8 @@ public final class UpstreamSettings {
     static @NonNull IntegerField requestTimeout() {
         return IntegerField.builder().name(REQUEST_TIMEOUT).suffix("s")
             .validator(Range.of(REQUEST_TIMEOUT_MIN_SECONDS, REQUEST_TIMEOUT_MAX_SECONDS))
-            .label(HohenheimFormCopy.label(REQUEST_TIMEOUT))
-            .help(HohenheimFormCopy.help(REQUEST_TIMEOUT)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of(REQUEST_TIMEOUT))
+            .help(HohenheimMicrocopy.HELP.of(REQUEST_TIMEOUT)
                 .withArg("max", REQUEST_TIMEOUT_MAX_SECONDS))
             .build();
     }
@@ -64,8 +64,8 @@ public final class UpstreamSettings {
     static @NonNull IntegerField delay() {
         return IntegerField.builder().name(DELAY).suffix("ms")
             .validator(Range.of(0, DELAY_MAX_MILLIS))
-            .label(HohenheimFormCopy.label(DELAY))
-            .help(HohenheimFormCopy.help(DELAY).withArg("max", DELAY_MAX_MILLIS))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of(DELAY))
+            .help(HohenheimMicrocopy.HELP.of(DELAY).withArg("max", DELAY_MAX_MILLIS))
             .build();
     }
 }

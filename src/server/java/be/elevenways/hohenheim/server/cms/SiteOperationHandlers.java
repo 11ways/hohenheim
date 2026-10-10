@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import java.util.List;
 import java.util.ArrayList;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
@@ -11,6 +13,7 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
@@ -189,7 +192,7 @@ public final class SiteOperationHandlers {
                 requireSome(rules, ProtectPath.PROVIDER_ID.getName(), "protect_path_no_provider");
             }
             default -> throw Violations.ofField(ProtectPath.METHOD.getName(), input.method(),
-                CmsSupport.violationText("protect_path_method"));
+                HohenheimMicrocopy.VIOLATIONS.of("protect_path_method"));
         }
         return rules;
     }
@@ -200,7 +203,7 @@ public final class SiteOperationHandlers {
 
     private static void requireSome(@NonNull List<?> rules, @NonNull String entry, @NonNull String reason) {
         if (rules.isEmpty()) {
-            throw Violations.ofField(entry, "", CmsSupport.violationText(reason));
+            throw Violations.ofField(entry, "", HohenheimMicrocopy.VIOLATIONS.of(reason));
         }
     }
 
@@ -223,7 +226,7 @@ public final class SiteOperationHandlers {
 
     private static <I> @NonNull Authorizer<Row, I> reachesSite() {
         return (site, input, access) -> HohenheimAccess.reachesRecord(access, SiteModel.MODEL_ID,
-            site.get(SiteModel.ID), HohenheimAccess.MANAGE) ? null : concealed(site);
+            site.get(SiteModel.ID), HohenheimCapabilities.MANAGE) ? null : concealed(site);
     }
 
     private static <I> @NonNull Authorizer<Row, I> administers() {
@@ -265,7 +268,7 @@ public final class SiteOperationHandlers {
     private static @Nullable Void rollback(@NonNull OperationCall<Row, Void> call) {
         Integer instanceId = call.subject().get(SiteModel.INSTANCE_ID);
         if (instanceId == null) {
-            throw Violations.ofForm(CmsSupport.violationText("site_exposes_no_instance"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("site_exposes_no_instance"));
         }
         ReleaseEngine.rollback(instanceId);
         return null;
@@ -287,7 +290,7 @@ public final class SiteOperationHandlers {
         String name = input.name();
         if (name == null) {
             throw Violations.ofField(SiteOperations.CLONE_NAME.getName(), "",
-                CmsSupport.violationText("name_required"));
+                HohenheimMicrocopy.VIOLATIONS.of("name_required"));
         }
         SiteModel siteModel = Models.get(SiteModel.class);
         SiteDomainModel domainModel = Models.get(SiteDomainModel.class);
@@ -296,11 +299,8 @@ public final class SiteOperationHandlers {
         clone.set(SiteModel.NAME, name);
         clone.set(SiteModel.SLUG, Slugs.slugify(name));
         clone.set(SiteModel.UPSTREAM_KIND, site.get(SiteModel.UPSTREAM_KIND));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> clonedSettings = site.get(SiteModel.SETTINGS) != null
-            ? new LinkedHashMap<>((Map<String, Object>) site.get(SiteModel.SETTINGS))
-            : null;
-        clone.set(SiteModel.SETTINGS, clonedSettings);
+        Map<String, Object> storedSettings = RawValues.mapOrNull(site.get(SiteModel.SETTINGS));
+        clone.set(SiteModel.SETTINGS, storedSettings != null ? new LinkedHashMap<>(storedSettings) : null);
         clone.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
         clone.set(SiteModel.ENABLED, false);
         clone.set(SiteModel.AUTH_PROVIDER_ID, site.get(SiteModel.AUTH_PROVIDER_ID));
@@ -401,11 +401,10 @@ public final class SiteOperationHandlers {
     }
 
     /** The admin edit's current input: the stored columns its form edits, the patch a partial write lands on. */
-    @SuppressWarnings("unchecked")
     private static SiteWrites.@NonNull EditInput editInput(@NonNull Row site) {
+        Map<String, Object> settings = RawValues.mapOrNull(site.get(SiteModel.SETTINGS));
         return new SiteWrites.EditInput(site.get(SiteModel.NAME), site.get(SiteModel.UPSTREAM_KIND),
-            site.get(SiteModel.INSTANCE_ID), site.get(SiteModel.SETTINGS) instanceof Map<?, ?> settings
-                ? new LinkedHashMap<>((Map<String, Object>) settings) : null,
+            site.get(SiteModel.INSTANCE_ID), settings != null ? new LinkedHashMap<>(settings) : null,
             site.get(SiteModel.TRUSTED_UPSTREAM), site.get(SiteModel.ENABLED), site.get(SiteModel.DESCRIPTION),
             site.get(SiteModel.AUTH_PROVIDER_ID), site.get(SiteModel.ACCESS_LIST_ID));
     }
@@ -500,7 +499,7 @@ public final class SiteOperationHandlers {
     private static @NonNull String requiredName(@Nullable String posted) {
         String name = Texts.trimmedOrNull(posted);
         if (name == null) {
-            throw Violations.ofField(SiteModel.NAME.getName(), "", CmsSupport.violationText("name_required"));
+            throw Violations.ofField(SiteModel.NAME.getName(), "", HohenheimMicrocopy.VIOLATIONS.of("name_required"));
         }
         return name;
     }
@@ -527,7 +526,6 @@ public final class SiteOperationHandlers {
      *
      * @param stored the site as stored, null on a create
      */
-    @SuppressWarnings("unchecked")
     private static @Nullable Map<String, Object> settingsOf(@Nullable String kind, @Nullable Map<String, Object> posted,
                                                             @Nullable Row stored) {
         Map<String, Object> values = new LinkedHashMap<>();
@@ -541,8 +539,8 @@ public final class SiteOperationHandlers {
         Map<String, Object> plain = SubmittedValueCoercion.coerceJsonOrThrow(SiteWrites.SETTINGS_FORM, values, null);
         Object restored = FormSecrets.restore(SiteWrites.SETTINGS_FORM, plain, existing)
             .get(SiteModel.SETTINGS.getName());
-        Map<String, Object> settings = restored instanceof Map<?, ?> map
-            ? new LinkedHashMap<>((Map<String, Object>) map) : null;
+        Map<String, Object> restoredMap = RawValues.mapOrNull(restored);
+        Map<String, Object> settings = restoredMap != null ? new LinkedHashMap<>(restoredMap) : null;
         if (!DevNamespaceUpstreamKind.ID.toString().equals(kind)) {
             return posted == null ? null : settings;
         }

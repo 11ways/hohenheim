@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -47,9 +47,11 @@ public class InstanceDatabaseModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField INSTANCE_ID = SCHEMA.addField(
-        IntegerField.builder().name("instance_id").build());
+        IntegerField.builder().name("instance_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("instance")).build());
     public static final IntegerField DATABASE_ID = SCHEMA.addField(
-        IntegerField.builder().name("database_id").build());
+        IntegerField.builder().name("database_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("database")).build());
 
     /** The attached workload, declared so a database delete can ask which live ones still hold it. */
     public static final BelongsTo<InstanceModel> INSTANCE = SCHEMA.addRelation(
@@ -68,8 +70,8 @@ public class InstanceDatabaseModel extends Model {
             .build());
     public static final StringField ENV_PREFIX = SCHEMA.addField(
         StringField.builder().name("env_prefix")
-            .label(HohenheimFormCopy.label("env_prefix"))
-            .help(HohenheimFormCopy.help("env_prefix"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("env_prefix"))
+            .help(HohenheimMicrocopy.HELP.of("env_prefix"))
             .build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("created_at").build());

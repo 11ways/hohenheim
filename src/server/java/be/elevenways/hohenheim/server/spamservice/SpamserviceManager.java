@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.spamservice;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
 import be.elevenways.hohenheim.server.SystemUsers;
@@ -52,6 +53,8 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.UnaryOperator;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /** Supervises Hohenheim's one nested local Spamservice distribution. */
 public final class SpamserviceManager {
@@ -342,7 +345,7 @@ public final class SpamserviceManager {
             Thread.currentThread().interrupt();
             failStart(requested, "Spamservice startup interrupted");
         } catch (Exception e) {
-            failStart(requested, messageOf(e));
+            failStart(requested, HohenheimViolations.reasonOf(e));
         }
     }
 
@@ -456,7 +459,7 @@ public final class SpamserviceManager {
                 this.client = null;
                 this.baseUrl = null;
                 this.state = SpamserviceState.DEGRADED;
-                this.lastError = "Spamservice integration setup failed: " + messageOf(e);
+                this.lastError = "Spamservice integration setup failed: " + HohenheimViolations.reasonOf(e);
                 scheduleRetryLocked(requested, false);
             }
         }
@@ -982,12 +985,8 @@ public final class SpamserviceManager {
         }
     }
 
-    private static String messageOf(Throwable error) {
-        return error.getMessage() != null ? error.getMessage() : error.getClass().getSimpleName();
-    }
-
     private static String outputSuffix(String output) {
-        String trimmed = output == null ? "" : output.trim();
+        String trimmed = trimmed(output);
         if (trimmed.length() > 4_096) {
             trimmed = trimmed.substring(trimmed.length() - 4_096);
         }

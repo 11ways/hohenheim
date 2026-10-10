@@ -1,23 +1,32 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
-import be.elevenways.hohenheim.HohenheimCounts;
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.WordedKind;
+import be.elevenways.hohenheim.auth.SiteAuthProviderTypeRegistry;
+import be.elevenways.hohenheim.backup.BackupTargetRegistry;
+import be.elevenways.hohenheim.instance.InstanceKindRegistry;
+import be.elevenways.hohenheim.instance.VariableTypeRegistry;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.source.GitProviderKindRegistry;
+import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.common.setting.ContentLocales;
 import be.elevenways.zenit.microcopy.server.JavaMicrocopyKeys;
 import be.elevenways.zenit.microcopy.server.MicrocopyManifestDrift;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import be.elevenways.zenit.test.support.ActivityLabelCoverage;
+import be.elevenways.zenit.test.support.TaskLabelCoverage;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -39,28 +48,28 @@ class DeclaredMicrocopyKeysTest {
     private static final LocaleChain EN = LocaleChain.ofTags("en");
 
     /**
-     * AIDEV-NOTE: the {@code HohenheimFormCopy} helpers are declared by their QUALIFIED
-     * call text only. A factory is matched by call text across every scanned file, and a
-     * bare {@code label} would swallow every builder's {@code .label(...)} and stamp
-     * Hohenheim's field scope on keys that pin something else. Hohenheim static-imports none of
-     * the four, so the qualified spelling covers every call site there is.
+     * AIDEV-NOTE: every {@link HohenheimMicrocopy} constant's {@code of} is declared by its QUALIFIED call text
+     * ({@code HohenheimMicrocopy.VIOLATIONS.of}), so a key read through the scope home is judged like a bare
+     * {@code Microcopy.of}. A factory is matched by call text across every scanned file, which is why no class may
+     * spell a scoped helper of its own: the scan would not see a key it builds.
      */
     private JavaMicrocopyKeys scan() {
-        return JavaMicrocopyKeys.in(Path.of("src/common"), Path.of("src/server"))
+        JavaMicrocopyKeys scan = JavaMicrocopyKeys.in(Path.of("src/common"), Path.of("src/server"))
             // The helpers' own files only FORWARD their parameters; they declare no key.
-            .excluding("HohenheimFormCopy.java", "HohenheimViolations.java", "HohenheimCounts.java")
-            .factory("HohenheimFormCopy.label", List.of("scope=" + HohenheimFormCopy.FIELD_SCOPE), List.of())
-            .factory("HohenheimFormCopy.help", List.of("scope=help"), List.of())
-            .factory("HohenheimFormCopy.section", List.of("scope=form_section"), List.of())
-            .factory("HohenheimFormCopy.navGroup", List.of("scope=" + HohenheimFormCopy.NAV_SCOPE), List.of())
-            // A refusal under Hohenheim's violations scope, a validator's own message included (Regex.of).
-            .factory("HohenheimViolations.text", List.of("scope=" + HohenheimViolations.SCOPE), List.of())
-            .factory("HohenheimViolations.ofForm", List.of("scope=" + HohenheimViolations.SCOPE), List.of())
-            // ServerResource's own host-scoped helper; a key it builds is never spelled
-            // through Microcopy.of, so without this the whole host vocabulary is invisible.
-            .factory("serverCopy", List.of("scope=server"), List.of())
+            .excluding("HohenheimMicrocopy.java", "HohenheimViolations.java", "HohenheimCounts.java");
+        for (HohenheimMicrocopy scope : HohenheimMicrocopy.values()) {
+            scan.factory("HohenheimMicrocopy." + scope.name() + ".of", List.of("scope=" + scope.scope()), List.of());
+        }
+        return scan
+            // An operation on an instance refused, the instance named.
+            .factory("HohenheimViolations.instanceRefusal", List.of("scope=" + HohenheimMicrocopy.VIOLATIONS.scope()),
+                List.of())
+            .factory("HohenheimViolations.instanceRefusalText",
+                List.of("scope=" + HohenheimMicrocopy.VIOLATIONS.scope()), List.of())
             // A counted noun ("2 stacks") a sentence counting several things carries as an argument.
-            .factory("HohenheimCounts.of", List.of("scope=" + HohenheimCounts.SCOPE), List.of())
+            .factory("HohenheimCounts.of", List.of("scope=" + HohenheimMicrocopy.COUNT.scope()), List.of())
+            // zenit-cms's own words (a "Delete" label) Hohenheim reads under that module's scope.
+            .factory("CmsMicrocopy.of", List.of("scope=" + CmsMicrocopy.SCOPE), List.of())
             .factory(JavaMicrocopyKeys.MICROCOPY_OF);
     }
 
@@ -85,11 +94,11 @@ class DeclaredMicrocopyKeysTest {
     void theActivityLogsOwnCopyShipsUnderHohenheimsScope() {
         // Its description and its default filter's chip shipped under core's "activity" scope, a foreign module's name.
         ShippedCatalogs catalogs = new ShippedCatalogs();
-        for (Microcopy copy : List.of(CmsSupport.navHint(HohenheimMicrocopy.SCOPE),
-                Microcopy.of("people_only").withFilter("scope", HohenheimMicrocopy.SCOPE))) {
+        for (Microcopy copy : List.of(CmsSupport.navHint(HohenheimMicrocopy.HOHENHEIM),
+                HohenheimMicrocopy.HOHENHEIM.of("people_only"))) {
             for (String language : List.of("en", "nl")) {
                 assertNotNull(catalogs.resolveSource(copy.key(), LocaleChain.ofTags(language), copy.filters()),
-                    copy.key() + " ships under scope " + HohenheimMicrocopy.SCOPE + " in " + language);
+                    copy.key() + " ships under scope " + HohenheimMicrocopy.HOHENHEIM.scope() + " in " + language);
             }
         }
     }
@@ -97,11 +106,45 @@ class DeclaredMicrocopyKeysTest {
     @Test
     void everyActivityVerbHasALabel() {
         // "move_shared" printed its raw key, and every other verb read its label from zenit-cms's scope.
-        ActivityLabelCoverage.requireShipped(HohenheimMicrocopy.SCOPE, HohenheimActivityAction.class);
+        ActivityLabelCoverage.requireShipped(HohenheimMicrocopy.HOHENHEIM.scope(), HohenheimActivityAction.class);
         // A row written outside an operation read "Jelle: Deployed Instance #3": every verb tells it as a sentence, and
         // the coverage above then requires that sentence in en and nl.
         for (HohenheimActivityAction verb : HohenheimActivityAction.values()) {
             assertNotNull(verb.happened(), verb.id() + " heads its rows with a sentence");
         }
+    }
+
+    @Test
+    void everyTaskAndKindReadsAsWordsInBothLanguages() {
+        // 1. Every task's label ships in en and nl: the framework's own coverage, since the key is the task's id path
+        //    (HohenheimTasks.label), which no literal-key scan sees.
+        TaskLabelCoverage.requireShipped(21, Path.of("src/server/java"), Path.of("src/common/java"));
+
+        // 2. Every production kind's name and description ship in en and nl, for the instance, upstream, git provider,
+        //    backup target, template variable type and site auth provider families; both are keyed by the kind's id
+        //    path (WordedKind), so a new kind without words fails here, never as a raw key (or an English display name
+        //    in every language) on a kind picker. Touching InstanceKinds runs the kinds' autoload first.
+        ShippedCatalogs catalogs = new ShippedCatalogs();
+        InstanceKinds.kindsWhere(kind -> true);
+        List<WordedKind> kinds = new ArrayList<>();
+        InstanceKindRegistry.REGISTRY.forEach(kinds::add);
+        UpstreamKinds.REGISTRY.forEach(kinds::add);
+        GitProviderKindRegistry.REGISTRY.forEach(kinds::add);
+        BackupTargetRegistry.REGISTRY.forEach(kinds::add);
+        VariableTypeRegistry.REGISTRY.forEach(kinds::add);
+        SiteAuthProviderTypeRegistry.REGISTRY.forEach(kinds::add);
+        kinds.removeIf(kind -> !kind.getClass().getName().startsWith("be.elevenways.hohenheim.server."));
+        assertTrue(kinds.size() >= 26, () -> "step 2: the registries list the production kinds, found " + kinds);
+        List<String> missing = new ArrayList<>();
+        for (WordedKind kind : kinds) {
+            for (Microcopy words : List.of(kind.getLabel(), kind.getDescription())) {
+                for (String language : List.of("en", "nl")) {
+                    if (catalogs.resolveSource(words.key(), LocaleChain.ofTags(language), words.filters()) == null) {
+                        missing.add(kind.typeId() + " " + words.key() + words.filters() + " in " + language);
+                    }
+                }
+            }
+        }
+        assertEquals(List.of(), missing, "step 2: every kind reads as words, in en and nl");
     }
 }

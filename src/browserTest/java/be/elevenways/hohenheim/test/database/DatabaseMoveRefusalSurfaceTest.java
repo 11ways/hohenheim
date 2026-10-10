@@ -1,10 +1,15 @@
 package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.cms.DatabaseParts;
+import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.hohenheim.server.instance.OwnedInstances;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.common.flash.FlashLevel;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -33,6 +38,13 @@ class DatabaseMoveRefusalSurfaceTest extends HohenheimTestBase {
 
     @AfterEach
     void removeRecord() {
+        Row record = Models.get(DatabaseModel.class).findByName(NAME);
+        Row engine = record == null ? null : DatabaseInstances.owned(record.get(DatabaseModel.ID));
+        if (engine != null) {
+            // A generated row is only removed in its owner's scope (GeneratedRows), as its owner's own teardown does.
+            OwnedInstances.inScopeUnchecked(DatabaseInstances.SOURCE, DatabaseModel.MODEL_ID,
+                record.get(DatabaseModel.ID), () -> HardDeletes.row(Models.get(InstanceModel.class), engine));
+        }
         Models.get(DatabaseModel.class).find().where(DatabaseModel.NAME.eq(NAME)).delete();
     }
 
@@ -44,6 +56,9 @@ class DatabaseMoveRefusalSurfaceTest extends HohenheimTestBase {
             DatabaseModel.STATUS_ACTIVE, DatabaseModel.PLACEMENT_DEDICATED, null);
         assertThat(DatabaseService.moveRefusal(record))
             .as("step 1: the move is offered for this record").isNull();
+        // Its own engine runs (planted, no daemon), so the move is live: only the claim can refuse it.
+        EngineHandles.plant(record.get(DatabaseModel.ID), NAME, "postgres", InstanceModel.STATUS_RUNNING);
+        assertThat(DatabaseParts.moveUnavailable(record)).as("step 1: and not dead for its engine").isNull();
 
         // 2. Driving the action answers the page lane (a redirect or a render), never a 500.
         var moved = adminPostForm("/admin/databases/invoke/hohenheim.move_database_shared?ids="

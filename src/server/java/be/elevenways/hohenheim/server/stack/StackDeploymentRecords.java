@@ -1,16 +1,15 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.SortOrder;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
-import java.util.List;
 
 /**
  * Persists stack deploy history. Record-keeping must never take a deploy down
@@ -29,7 +28,7 @@ final class StackDeploymentRecords {
             StackDeploymentModel model = Models.get(StackDeploymentModel.class);
             Row row = model.createEmptyRow();
             row.set(StackDeploymentModel.STACK_ID, stackId);
-            row.set(StackDeploymentModel.STATUS, StackDeploymentModel.STATUS_RUNNING);
+            row.set(StackDeploymentModel.STATUS, StackDeploymentModel.LIFECYCLE.stored(OperationStatus.RUNNING));
             row.set(StackDeploymentModel.REASON, reason);
             row.set(StackDeploymentModel.STARTED_AT, Now.instant());
             model.save(row);
@@ -55,7 +54,8 @@ final class StackDeploymentRecords {
             Instant started = row.get(StackDeploymentModel.STARTED_AT);
             Instant finished = Now.instant();
             row.set(StackDeploymentModel.STATUS,
-                success ? StackDeploymentModel.STATUS_SUCCESS : StackDeploymentModel.STATUS_FAILED);
+                success ? StackDeploymentModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED)
+                    : StackDeploymentModel.LIFECYCLE.stored(OperationStatus.FAILED));
             row.set(StackDeploymentModel.ERROR, error);
             row.set(StackDeploymentModel.LOG, log);
             if (specSnapshot != null) {
@@ -67,7 +67,10 @@ final class StackDeploymentRecords {
                     (int) (finished.toEpochMilli() - started.toEpochMilli()));
             }
             model.save(row);
-            prune(model, row.get(StackDeploymentModel.STACK_ID));
+            Integer stackId = row.get(StackDeploymentModel.STACK_ID);
+            if (stackId != null) {
+                model.pruneHistory(stackId, KEEP_PER_STACK);
+            }
         } catch (RuntimeException e) {
             Blast.log("STACK: could not record deployment outcome", recordId, "-", e.getMessage());
         }
@@ -85,7 +88,8 @@ final class StackDeploymentRecords {
             StackDeploymentModel model = Models.get(StackDeploymentModel.class);
             for (Row row : model.find()
                     .where(StackDeploymentModel.STACK_ID.eq(stackId))
-                    .where(StackDeploymentModel.STATUS.eq(StackDeploymentModel.STATUS_RUNNING))
+                    .where(StackDeploymentModel.STATUS.eq(
+                        StackDeploymentModel.LIFECYCLE.stored(OperationStatus.RUNNING)))
                     .all()) {
                 String log = row.get(StackDeploymentModel.LOG);
                 finished(row.get(StackDeploymentModel.ID), false, error,
@@ -96,20 +100,5 @@ final class StackDeploymentRecords {
             Blast.log("STACK: could not finalize interrupted deployments of stack", stackId, "-", e.getMessage());
         }
         return finalized;
-    }
-
-    private static void prune(StackDeploymentModel model, Integer stackId) {
-        if (stackId == null) {
-            return;
-        }
-        List<Row> stale = model.find()
-            .where(StackDeploymentModel.STACK_ID.eq(stackId))
-            .orderBy(StackDeploymentModel.ID, SortOrder.DESC)
-            .offset(KEEP_PER_STACK)
-            .limit(1000)
-            .all();
-        for (Row old : stale) {
-            model.delete(old.get(StackDeploymentModel.ID));
-        }
     }
 }

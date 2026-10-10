@@ -1,20 +1,20 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.runtime.Egress;
-import be.elevenways.hohenheim.server.runtime.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.util.EnvVars;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.BooleanField;
 import be.elevenways.zenit.common.orm.field.DoubleField;
@@ -56,8 +56,8 @@ public final class SystemContainerKind implements InstanceKindHandler {
         new ContainerHardening.Profile(IncusInstanceRuntime.PROFILE_PRIVILEGED, List.of());
 
     public static final StringField IMAGE = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("image").label(HohenheimFormCopy.label("incus_image"))
-            .help(HohenheimFormCopy.help("incus_image")).build());
+        StringField.builder().name(InstanceKindFields.IMAGE).label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("incus_image"))
+            .help(HohenheimMicrocopy.HELP.of("incus_image")).build());
 
     /**
      * Where {@link #IMAGE} is resolved: the catalog over simplestreams, or an image
@@ -68,31 +68,15 @@ public final class SystemContainerKind implements InstanceKindHandler {
      * firmware to boot an ISO with, and the driver refuses that combination by name --
      * an option here could only ever refuse.
      */
-    public static final EnumField IMAGE_ORIGIN = SETTINGS_SCHEMA.addField(
-        EnumField.builder("image_origin")
-            .value(ImageOrigin.CATALOG.key(), v -> v.displayName("Catalog")
-                .icon("cloud-arrow-down")
-                .label(Microcopy.of("catalog").withFilter("scope", "image_origin")))
-            .value(ImageOrigin.PREPARED.key(), v -> v.displayName("Prepared template")
-                .icon("hard-drive")
-                .label(Microcopy.of("prepared").withFilter("scope", "image_origin")))
-            .defaultValue(ImageOrigin.CATALOG.key())
-            .label(HohenheimFormCopy.label("image_origin"))
-            .help(HohenheimFormCopy.help("image_origin")).build());
+    public static final EnumField IMAGE_ORIGIN = SETTINGS_SCHEMA.addField(InstanceKindFields.imageOrigin(false));
 
     // secret(): redacted on derived surfaces, masked in forms, kept on blank submit.
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
-        StringMapField.builder("environment_variables")
-            .label(HohenheimFormCopy.label("environment_variables"))
-            .help(HohenheimFormCopy.help("environment_variables")).secret().build());
+        InstanceKindFields.environmentVariables());
 
-    public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("memory_limit_mb").label(HohenheimFormCopy.label("memory_limit"))
-            .help(HohenheimFormCopy.help("memory_limit")).build());
+    public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
 
-    public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(
-        DoubleField.builder().name("cpu_limit").label(HohenheimFormCopy.label("cpu_limit"))
-            .help(HohenheimFormCopy.help("cpu_limit")).build());
+    public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(InstanceKindFields.cpuLimit());
 
     /**
      * The container's own rootfs cap in GB; blank inherits the pool default. On btrfs
@@ -117,8 +101,8 @@ public final class SystemContainerKind implements InstanceKindHandler {
      */
     public static final BooleanField PRIVILEGED_FLAG = SETTINGS_SCHEMA.addField(
         BooleanField.builder("privileged").defaultValue(false)
-            .label(HohenheimFormCopy.label("incus_privileged"))
-            .help(HohenheimFormCopy.help("incus_privileged")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("incus_privileged"))
+            .help(HohenheimMicrocopy.HELP.of("incus_privileged")).build());
 
     // A pet box is decided by its image, where that image comes from, what it carries and
     // whether it is privileged; the four ceilings all have "unset means unbounded" and
@@ -134,16 +118,6 @@ public final class SystemContainerKind implements InstanceKindHandler {
 
     @Override
     public @NonNull String getDisplayName() { return "System container (LXC)"; }
-
-    @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("system_container").withFilter("scope", "instance_kind");
-    }
-
-    @Override
-    public @NonNull Microcopy getDescription() {
-        return Microcopy.of("system_container").withFilter("scope", "instance_kind_description");
-    }
 
     @Override
     public Icon getIcon() { return Icon.of("cubes"); }
@@ -175,13 +149,13 @@ public final class SystemContainerKind implements InstanceKindHandler {
 
     @Override
     public @NonNull InstanceSpec specFor(int instanceId, @NonNull Map<String, Object> settings) {
-        boolean privileged = Boolean.TRUE.equals(settings.get("privileged"));
+        boolean privileged = RawValues.isOn(settings, PRIVILEGED_FLAG);
         // No command override (a system container boots its init), no named volumes
         // (the rootfs IS the persistent state) and no port publication yet (proxy
         // devices are a later mechanism) -- each absence is structural, not an omission.
         return IncusSpecs.spec(instanceId, settings, defaultFootprintMb(settings),
                 privileged ? PRIVILEGED : UNPRIVILEGED)
-            .env(EnvVars.toMap(settings.get(InstanceVariables.ENVIRONMENT_SETTING)))
+            .env(EnvVars.toMap(settings.get(InstanceKindFields.ENVIRONMENT_VARIABLES)))
             .build();
     }
 

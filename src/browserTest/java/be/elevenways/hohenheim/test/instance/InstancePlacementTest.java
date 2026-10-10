@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.host.VolumeBackend;
@@ -594,8 +595,7 @@ class InstancePlacementTest {
 
         @Override
         public void requirePlaceableOn(String serverName, Map<String, Object> settings) {
-            throw Violations.ofForm(Microcopy.of("host_prepared_image_missing")
-                .withFilter("scope", "violations")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_prepared_image_missing")
                 .withArg("name", serverName)
                 .withArg("image", "win2025-core"));
         }

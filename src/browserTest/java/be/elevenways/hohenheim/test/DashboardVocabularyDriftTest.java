@@ -8,10 +8,12 @@ import be.elevenways.hohenheim.HostTrustLane;
 import be.elevenways.hohenheim.OnboardingState;
 import be.elevenways.hohenheim.WorkloadTier;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
+import be.elevenways.hohenheim.host.HostStanding;
 import be.elevenways.hohenheim.host.HostState;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.plumage.component.StatusDotStatus;
+import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.widget.common.WidgetRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -58,12 +60,22 @@ class DashboardVocabularyDriftTest {
         assertThatThrownBy(() -> AttentionSeverity.of("critical"))
             .as("step 3: an unknown severity is refused").isInstanceOf(IllegalArgumentException.class);
 
-        // 4. Every DNS delegation verdict that raises an item names a severity the enum knows.
-        for (DelegationVerdict verdict : DelegationVerdict.values()) {
-            if (verdict.severity() != null) {
-                assertThat(verdict.severity().key())
-                    .as("step 4: %s raises a tinted severity", verdict).isIn(styled);
-            }
+        // 4. A framework verdict's tone raises attention in one way only: broken is an error, attention a warning,
+        //    and a fine or not-yet-known verdict raises nothing.
+        assertThat(AttentionSeverity.ofTone(HealthTone.BROKEN)).as("step 4: broken").isEqualTo(AttentionSeverity.ERROR);
+        assertThat(AttentionSeverity.ofTone(HealthTone.ATTENTION)).as("step 4: attention")
+            .isEqualTo(AttentionSeverity.WARNING);
+        assertThat(AttentionSeverity.ofTone(HealthTone.OK)).as("step 4: fine").isNull();
+        assertThat(AttentionSeverity.ofTone(HealthTone.UNKNOWN)).as("step 4: not known yet").isNull();
+
+        // 5. A state that raises an item says how loudly on its member, and only the failing ones do.
+        assertThat(DelegationVerdict.MATCHES.severity()).as("step 5: a matching delegation raises nothing").isNull();
+        assertThat(DelegationVerdict.NS_UNREACHABLE.severity()).as("step 5: a lame delegation is an error")
+            .isEqualTo(AttentionSeverity.ERROR);
+        for (HostStanding standing : HostStanding.values()) {
+            assertThat(standing.severity() != null)
+                .as("step 5: %s raises an item exactly when it takes no new apps by itself", standing)
+                .isEqualTo(standing == HostStanding.REFUSING || standing == HostStanding.WAITING);
         }
     }
 
@@ -86,7 +98,7 @@ class DashboardVocabularyDriftTest {
     void certificateCoverageCoversEveryCertificateStatus() {
         // 1. The covered states are exactly the certificate model's STATUS values.
         Set<String> covered = Arrays.stream(CertCoverage.values()).filter(CertCoverage::hasCertificate)
-            .map(CertCoverage::key).collect(Collectors.toSet());
+            .map(CertCoverage::token).collect(Collectors.toSet());
         assertThat(covered).as("step 1: CertCoverage derives from CertificateModel.STATUS")
             .containsExactlyInAnyOrderElementsOf(CertificateModel.STATUS.getValues().keySet());
 

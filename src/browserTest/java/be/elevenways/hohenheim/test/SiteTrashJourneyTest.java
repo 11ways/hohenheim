@@ -1,18 +1,17 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
-import be.elevenways.hohenheim.server.cms.ProtectedPathParts;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
-import be.elevenways.hohenheim.server.quota.SiteQuota;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.flash.FlashNotice;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -42,7 +41,7 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
     private static final String PREFIX = "trash-journey-";
     private static final String SITE_FORM =
         "upstream_kind=hohenheim%3Aaddress&settings.forward_host=127.0.0.1&settings.forward_port=9090";
-    private static final String SITE_BUCKET = SiteQuota.bucketKeyOf("");
+    private static final String SITE_BUCKET = OwnerBudget.SITES.bucketOf("");
 
     @AfterEach
     void cleanUp() {
@@ -209,7 +208,7 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
 
     /** The Domains tab's add: its domain section's create link. */
     private static final String DOMAIN_ADD = "data-cms-child-create=\"domains\"";
-    private static final String PATH_ADD = "data-cms-child-create=\"" + ProtectedPathParts.SLUG + "\"";
+    private static final String PATH_ADD = "data-cms-child-create=\"" + HohenheimSlugs.PROTECTED_PATHS + "\"";
 
     /** A bulk verb's selection, as the list's checkboxes post it. */
     private static String selection(int... siteIds) {

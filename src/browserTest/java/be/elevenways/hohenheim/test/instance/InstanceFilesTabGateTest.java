@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.time.Now;
@@ -52,8 +52,8 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
         int incusHostId = servers.findByName("files-incus-host").get(ServerModel.ID);
         incusInstanceId = instance("files-incus", "hohenheim:system_container", incusHostId);
 
-        consoleSession = delegate("files-console@hohenheim.local", HohenheimAccess.CONSOLE);
-        readerSession = delegate("files-reader@hohenheim.local", HohenheimAccess.FILES_READ);
+        consoleSession = delegate("files-console@hohenheim.local", HohenheimCapabilities.CONSOLE);
+        readerSession = delegate("files-reader@hohenheim.local", HohenheimCapabilities.FILES_READ);
     }
 
     private static int instance(String name, String kind, int serverId) {

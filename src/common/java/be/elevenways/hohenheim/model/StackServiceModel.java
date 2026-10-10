@@ -1,9 +1,9 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -39,60 +39,64 @@ public class StackServiceModel extends Model {
     public static final Schema MOUNT_SCHEMA = new Schema();
     public static final EnumField MOUNT_TYPE = MOUNT_SCHEMA.addField(EnumField.builder("type")
         .value(MOUNT_VOLUME, v -> v.displayName("Volume")
-            .label(Microcopy.of(MOUNT_VOLUME).withFilter("scope", "stack_mount_type")).icon("hard-drive"))
+            .label(HohenheimMicrocopy.STACK_MOUNT_TYPE.of(MOUNT_VOLUME)).icon("hard-drive"))
         .value(MOUNT_TMPFS, v -> v.displayName("Tmpfs")
-            .label(Microcopy.of(MOUNT_TMPFS).withFilter("scope", "stack_mount_type")).icon("memory"))
+            .label(HohenheimMicrocopy.STACK_MOUNT_TYPE.of(MOUNT_TMPFS)).icon("memory"))
         .defaultValue(MOUNT_VOLUME)
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("mount_type"))
         .build());
     public static final StringField MOUNT_NAME = MOUNT_SCHEMA.addField(StringField.builder().name("name")
-        .label(HohenheimFormCopy.label("name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
         .build());
     public static final StringField MOUNT_PATH = MOUNT_SCHEMA.addField(StringField.builder().name("container_path")
-        .label(HohenheimFormCopy.label("container_path"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_path"))
         .build());
     public static final StringField MOUNT_EXTERNAL = MOUNT_SCHEMA.addField(StringField.builder().name("external_name")
-        .label(HohenheimFormCopy.label("mount_external_name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("mount_external_name"))
         .build());
 
     // -- ports sub-schema ----------------------------------------------------
 
     public static final Schema PORT_SCHEMA = new Schema();
     public static final IntegerField PORT_CONTAINER = PORT_SCHEMA.addField(IntegerField.builder().name("container_port")
-        .label(HohenheimFormCopy.label("container_port"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_port"))
         .build());
     public static final IntegerField PORT_HOST = PORT_SCHEMA.addField(IntegerField.builder().name("host_port")
-        .label(HohenheimFormCopy.label("host_port"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("host_port"))
         .build());
     public static final EnumField PORT_PROTOCOL = PORT_SCHEMA.addField(EnumField.builder("protocol")
         .value("tcp", v -> v.displayName("TCP")
-            .label(Microcopy.of("tcp").withFilter("scope", "port_protocol")))
+            .label(HohenheimMicrocopy.PORT_PROTOCOL.of("tcp")))
         .value("udp", v -> v.displayName("UDP")
-            .label(Microcopy.of("udp").withFilter("scope", "port_protocol")))
+            .label(HohenheimMicrocopy.PORT_PROTOCOL.of("udp")))
         .defaultValue("tcp")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("protocol"))
         .build());
     public static final StringField PORT_HOST_IP = PORT_SCHEMA.addField(StringField.builder().name("host_ip")
-        .label(HohenheimFormCopy.label("host_ip"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("host_ip"))
         .build());
 
     // -- depends_on sub-schema -----------------------------------------------
 
     public static final Schema DEPENDS_SCHEMA = new Schema();
     public static final StringField DEPENDS_SERVICE = DEPENDS_SCHEMA.addField(StringField.builder().name("service")
-        .label(HohenheimFormCopy.label("depends_service"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("depends_service"))
         .build());
     public static final EnumField DEPENDS_CONDITION = DEPENDS_SCHEMA.addField(EnumField.builder("condition")
         .value(CONDITION_STARTED, v -> v.displayName("Started")
-            .label(Microcopy.of(CONDITION_STARTED).withFilter("scope", "depends_condition")))
+            .label(HohenheimMicrocopy.DEPENDS_CONDITION.of(CONDITION_STARTED)))
         .value(CONDITION_HEALTHY, v -> v.displayName("Healthy")
-            .label(Microcopy.of(CONDITION_HEALTHY).withFilter("scope", "depends_condition")))
+            .label(HohenheimMicrocopy.DEPENDS_CONDITION.of(CONDITION_HEALTHY)))
         .defaultValue(CONDITION_STARTED)
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("depends_condition"))
         .build());
 
     // -- fields ---------------------------------------------------------------
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
-    public static final IntegerField STACK_ID = SCHEMA.addField(IntegerField.builder().name("stack_id").build());
+    public static final IntegerField STACK_ID = SCHEMA.addField(IntegerField.builder().name("stack_id")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("stack")).build());
 
     /** The owning stack, declared so a stack delete takes its services in one statement (StackCascades). */
     public static final BelongsTo<StackModel> STACK = SCHEMA.addRelation(
@@ -104,25 +108,25 @@ public class StackServiceModel extends Model {
 
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .required()
-        .label(HohenheimFormCopy.label("name"))
-        .help(HohenheimFormCopy.help("service_name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
+        .help(HohenheimMicrocopy.HELP.of("service_name"))
         .build());
 
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled")
         .defaultValue(true)
-        .label(HohenheimFormCopy.label("enabled"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("enabled"))
         .build());
 
     public static final StringField IMAGE = SCHEMA.addField(StringField.builder().name("image")
         .required()
-        .label(HohenheimFormCopy.label("image"))
-        .help(HohenheimFormCopy.help("service_image"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("image"))
+        .help(HohenheimMicrocopy.HELP.of("service_image"))
         .build());
 
     public static final ListField<String> COMMAND = SCHEMA.addField(
         ListField.builder(StringField.builder().name("arg").build()).name("command")
-            .label(HohenheimFormCopy.label("command"))
-            .help(HohenheimFormCopy.help("service_command"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("command"))
+            .help(HohenheimMicrocopy.HELP.of("service_command"))
             .build());
 
     // Secret AND encrypted: env maps routinely carry credentials, and unlike
@@ -131,8 +135,8 @@ public class StackServiceModel extends Model {
     public static final StringMapField ENVIRONMENT = SCHEMA.addField(StringMapField.builder("environment")
         .secret()
         .encrypted()
-        .label(HohenheimFormCopy.label("environment_variables"))
-        .help(HohenheimFormCopy.help("service_environment"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("environment_variables"))
+        .help(HohenheimMicrocopy.HELP.of("service_environment"))
         .build());
 
     /**
@@ -148,84 +152,70 @@ public class StackServiceModel extends Model {
      */
     public static final ListField<String> CAPABILITIES = SCHEMA.addField(
         ListField.builder(StringField.builder().name("capability").build()).name("capabilities")
-            .label(HohenheimFormCopy.label("capabilities"))
-            .help(HohenheimFormCopy.help("service_capabilities"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("capabilities"))
+            .help(HohenheimMicrocopy.HELP.of("service_capabilities"))
             .build());
 
     public static final SchemaField MOUNTS = SCHEMA.addField(
         SchemaField.builder("mounts").subSchema(MOUNT_SCHEMA).list()
-            .label(HohenheimFormCopy.label("mounts"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("mounts"))
             .build());
 
     public static final SchemaField PORTS = SCHEMA.addField(
         SchemaField.builder("ports").subSchema(PORT_SCHEMA).list()
-            .label(HohenheimFormCopy.label("ports"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("ports"))
             .build());
 
     public static final SchemaField DEPENDS_ON = SCHEMA.addField(
         SchemaField.builder("depends_on").subSchema(DEPENDS_SCHEMA).list()
-            .label(HohenheimFormCopy.label("depends_on"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("depends_on"))
             .build());
 
     public static final StringField HEALTH_CMD = SCHEMA.addField(StringField.builder().name("health_cmd")
-        .label(HohenheimFormCopy.label("health_cmd"))
-        .help(HohenheimFormCopy.help("health_cmd"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("health_cmd"))
+        .help(HohenheimMicrocopy.HELP.of("health_cmd"))
         .build());
 
     public static final IntegerField HEALTH_INTERVAL_SECONDS = SCHEMA.addField(
         IntegerField.builder().name("health_interval_seconds")
             .defaultValue(10)
             .suffix("s")
-            .label(HohenheimFormCopy.label("health_interval"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("health_interval"))
             .build());
 
     public static final IntegerField HEALTH_TIMEOUT_SECONDS = SCHEMA.addField(
         IntegerField.builder().name("health_timeout_seconds")
             .defaultValue(5)
             .suffix("s")
-            .label(HohenheimFormCopy.label("health_timeout"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("health_timeout"))
             .build());
 
     public static final IntegerField HEALTH_RETRIES = SCHEMA.addField(
         IntegerField.builder().name("health_retries")
             .defaultValue(5)
-            .label(HohenheimFormCopy.label("health_retries"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("health_retries"))
             .build());
 
     public static final IntegerField HEALTH_START_PERIOD_SECONDS = SCHEMA.addField(
         IntegerField.builder().name("health_start_period_seconds")
             .defaultValue(0)
             .suffix("s")
-            .label(HohenheimFormCopy.label("health_start_period"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("health_start_period"))
             .build());
 
     public static final EnumField RESTART_POLICY = SCHEMA.addField(EnumField.builder("restart_policy")
         .value("unless-stopped", v -> v.displayName("Unless stopped")
-            .label(restartLabel("unless_stopped")))
-        .value("always", v -> v.displayName("Always").label(restartLabel("always")))
-        .value("on-failure", v -> v.displayName("On failure").label(restartLabel("on_failure")))
-        .value("no", v -> v.displayName("Never").label(restartLabel("never")))
+            .label(HohenheimMicrocopy.RESTART_POLICY.of("unless_stopped")))
+        .value("always", v -> v.displayName("Always").label(HohenheimMicrocopy.RESTART_POLICY.of("always")))
+        .value("on-failure", v -> v.displayName("On failure").label(HohenheimMicrocopy.RESTART_POLICY.of("on_failure")))
+        .value("no", v -> v.displayName("Never").label(HohenheimMicrocopy.RESTART_POLICY.of("never")))
         .defaultValue("unless-stopped")
-        .label(HohenheimFormCopy.label("restart_policy"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("restart_policy"))
         .build());
 
-    /**
-     * The translation token for a restart policy; the key is the stored Docker token with
-     * its hyphen folded to an underscore, and {@code no} spelled out as {@code never}.
-     */
-    private static Microcopy restartLabel(String policy) {
-        return Microcopy.of(policy).withFilter("scope", "restart_policy");
-    }
+    public static final IntegerField MEMORY_LIMIT_MB = SCHEMA.addField(InstanceKindFields.memoryLimit());
 
-    public static final IntegerField MEMORY_LIMIT_MB = SCHEMA.addField(IntegerField.builder().name("memory_limit_mb")
-        .label(HohenheimFormCopy.label("memory_limit"))
-        .help(HohenheimFormCopy.help("memory_limit"))
-        .build());
-
-    public static final DoubleField CPU_LIMIT = SCHEMA.addField(DoubleField.builder().name("cpu_limit")
-        .label(HohenheimFormCopy.label("cpu_limit"))
-        .help(HohenheimFormCopy.help("cpu_limit"))
-        .build());
+    public static final DoubleField CPU_LIMIT = SCHEMA.addField(InstanceKindFields.cpuLimit());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

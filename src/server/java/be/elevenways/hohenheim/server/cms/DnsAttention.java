@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionSubject;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.dns.DelegationVerdict;
@@ -26,10 +27,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
-import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 
 /**
  * The DNS role's attention items: the listener, zones without NS, stale secondaries and broken delegations.
@@ -41,8 +41,6 @@ import static be.elevenways.hohenheim.server.cms.AttentionItems.literal;
  */
 public final class DnsAttention {
 
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
-
     private DnsAttention() {
     }
 
@@ -53,19 +51,19 @@ public final class DnsAttention {
         if (Boolean.TRUE.equals(enabled) && (dnsServer == null || !dnsServer.isRunning())) {
             String reason = dnsServer != null ? dnsServer.getStartupError() : null;
             items.add(item(AttentionSeverity.ERROR, "sitemap",
-                copy("dns_listener", "attention_title"),
+                HohenheimMicrocopy.ATTENTION_TITLE.of("dns_listener"),
                 literal(reason),
                 CmsRoutes.list(ADMIN, SettingsPage.DEFAULT_SLUG),
-                action("act_open_settings")));
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_settings")));
         }
         for (DnsZoneSnapshot zone : DnsZoneStore.INSTANCE.zones()) {
             if (zone.getRrset(zone.getOrigin(), Type.NS) == null) {
                 items.add(item(AttentionSeverity.WARNING, "sitemap",
-                    copy("dns_zone_no_ns", "attention_title", "origin", zone.getOriginString()),
-                    copy("dns_zone_no_ns", "attention_detail"),
-                    CmsRoutes.subpage(ADMIN, DnsZoneParts.SLUG, zone.getZoneId(),
-                        DnsZoneRecordsPage.SLUG),
-                    action("act_add_ns")));
+                    HohenheimMicrocopy.ATTENTION_TITLE.of("dns_zone_no_ns").withArg("origin", zone.getOriginString()),
+                    HohenheimMicrocopy.ATTENTION_DETAIL.of("dns_zone_no_ns"),
+                    CmsRoutes.subpage(ADMIN, HohenheimSlugs.DNS_ZONES, zone.getZoneId(),
+                        HohenheimSlugs.Tab.RECORDS),
+                    HohenheimMicrocopy.ATTENTION_ACTION.of("act_add_ns")));
             }
         }
         staleDnsSecondaries(items);
@@ -110,12 +108,12 @@ public final class DnsAttention {
                 names.add(String.valueOf((Object) pair[1].get(DnsPeerModel.NAME)));
                 lags.add(DnsSecondaryFreshness.lagOf(pair[1], pair[0], serial != null ? serial : 0));
             }
-            Microcopy detail = copy("dns_secondaries_lag", "attention_detail", "lags", lags);
+            Microcopy detail = HohenheimMicrocopy.ATTENTION_DETAIL.of("dns_secondaries_lag").withArg("lags", lags);
             items.add(item(AttentionSeverity.WARNING, "handshake",
                 DnsSecondaryFreshness.staleTitle(names, String.valueOf((Object) zone.get(DnsZoneModel.ORIGIN))),
                 detail,
-                CmsRoutes.subpage(ADMIN, DnsZoneParts.SLUG, zoneId, "secondaries"),
-                action("act_open_secondaries"))
+                CmsRoutes.subpage(ADMIN, HohenheimSlugs.DNS_ZONES, zoneId, HohenheimSlugs.Tab.SECONDARIES),
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_secondaries"))
                 .about(AttentionSubject.zone(zoneId), null));
         });
     }
@@ -131,11 +129,11 @@ public final class DnsAttention {
                 continue;
             }
             items.add(item(verdict.severity(), verdict.icon(),
-                copy("dns_delegation_broken", "attention_title",
-                    "origin", String.valueOf(zone.get(DnsZoneModel.ORIGIN))),
+                HohenheimMicrocopy.ATTENTION_TITLE.of("dns_delegation_broken")
+                    .withArg("origin", String.valueOf(zone.get(DnsZoneModel.ORIGIN))),
                 verdict.label(),
-                CmsRoutes.detail(ADMIN, DnsZoneParts.SLUG, zone.get(DnsZoneModel.ID)),
-                action("act_open_zone")));
+                CmsRoutes.detail(ADMIN, HohenheimSlugs.DNS_ZONES, zone.get(DnsZoneModel.ID)),
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_zone")));
         }
     }
 }

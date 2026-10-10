@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
@@ -15,7 +17,6 @@ import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
-import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
@@ -41,6 +42,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * What a DELEGATED TENANT may write, enforced on the model write pipelines rather than on
@@ -174,13 +178,18 @@ public final class TenantWrites {
      * panel. Work with no identity never does, and an anonymous caller never does.
      */
     public static boolean actsAsOperator() {
+        return systemOrCaller(HohenheimAccess::isAdmin);
+    }
+
+    /** @return whether the work in flight is declared system work or a caller {@code admits} passes; none never is */
+    public static boolean systemOrCaller(@NonNull Predicate<AccessContext> admits) {
         ExecutionIdentity identity = ExecutionIdentity.current();
         if (identity == null) {
             return false;
         }
         return switch (identity.kind()) {
             case SYSTEM -> true;
-            case CALLER -> HohenheimAccess.isAdmin(Objects.requireNonNull(identity.callerContext()));
+            case CALLER -> admits.test(Objects.requireNonNull(identity.callerContext()));
         };
     }
 
@@ -293,7 +302,8 @@ public final class TenantWrites {
         InstanceVariableModel.SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
             if (row != null && isTenantOriginated()) {
-                requireVariableConfig(instanceOwnerOf(row));
+                requireVariableConfig(row.afterWrite(InstanceVariableModel.INSTANCE_ID,
+                    StoredRows.of(Models.get(InstanceVariableModel.class), row)));
             }
         });
         InstanceVariableModel.SCHEMA.addBeforeRemoveHook(context -> {
@@ -317,10 +327,10 @@ public final class TenantWrites {
             for (Row doomed : context.doomedRows()) {
                 Object id = doomed.get(DatabaseModel.ID);
                 if (id == null) {
-                    throw HohenheimAccess.databaseRefusal();
+                    throw HohenheimViolations.databaseNotPermitted();
                 }
                 HohenheimAccess.requireDatabaseCapability(
-                    (Integer) id, HohenheimAccess.DESTROY);
+                    (Integer) id, HohenheimCapabilities.DESTROY);
             }
         });
         InstanceDatabaseModel.SCHEMA.addBeforeValidateHook(context -> {
@@ -328,9 +338,7 @@ public final class TenantWrites {
             if (row == null || !isTenantOriginated()) {
                 return;
             }
-            Row stored = row.has(InstanceDatabaseModel.ID.getName())
-                ? Models.get(InstanceDatabaseModel.class).findById(row.get(InstanceDatabaseModel.ID))
-                : null;
+            Row stored = StoredRows.of(Models.get(InstanceDatabaseModel.class), row);
             requireInstanceLinkAuthority(
                 row.afterWrite(InstanceDatabaseModel.INSTANCE_ID, stored),
                 row.afterWrite(InstanceDatabaseModel.DATABASE_ID, stored));
@@ -363,10 +371,11 @@ public final class TenantWrites {
                 // anonymous caller holds none of it: /nic/update updates, it never deletes.
                 boolean authorized = ctx != null && ctx.isAccount()
                     && (ctx.hasCapability(DnsRecordModel.MODEL_ID, doomed.get(DnsRecordModel.ID),
-                            HohenheimAccess.EDIT)
+                            HohenheimCapabilities.EDIT)
                         || HostnameAuthority.canManage(snapshot, ctx, fqdnOf(doomed, doomed)));
                 if (!authorized) {
-                    throw refusal(DnsRecordModel.NAME.getName(), doomed.get(DnsRecordModel.NAME));
+                    throw Violations.ofField(DnsRecordModel.NAME.getName(), doomed.get(DnsRecordModel.NAME),
+                        HohenheimMicrocopy.VIOLATIONS.of("tenant_record_not_authorized"));
                 }
             }
         });
@@ -469,8 +478,7 @@ public final class TenantWrites {
      * @throws Violations {@code tenant_git_provider_not_managed} or {@code tenant_field_frozen}
      */
     private static void checkGitProviderWrite(@NonNull Row row) {
-        Object id = row.has(GitProviderModel.ID.getName()) ? row.get(GitProviderModel.ID) : null;
-        Row stored = id != null ? Models.get(GitProviderModel.class).findById(id) : null;
+        Row stored = StoredRows.of(Models.get(GitProviderModel.class), row);
         if (stored != null) {
             requireGitProviderAuthority(stored.get(GitProviderModel.ID));
         }
@@ -479,7 +487,7 @@ public final class TenantWrites {
         if (row.has(GitProviderModel.SHARED.getName())
                 && Boolean.TRUE.equals(row.get(GitProviderModel.SHARED)) != Boolean.TRUE.equals(baseline)) {
             throw Violations.ofField(GitProviderModel.SHARED.getName(),
-                row.get(GitProviderModel.SHARED), CmsSupport.violationText("tenant_field_frozen"));
+                row.get(GitProviderModel.SHARED), HohenheimMicrocopy.VIOLATIONS.of("tenant_field_frozen"));
         }
     }
 
@@ -487,9 +495,9 @@ public final class TenantWrites {
     private static void requireGitProviderAuthority(@Nullable Object providerId) {
         AccessContext ctx = acting();
         boolean authorized = ctx != null && ctx.isAccount() && providerId != null
-            && ctx.hasCapability(GitProviderModel.MODEL_ID, providerId, HohenheimAccess.MANAGE);
+            && ctx.hasCapability(GitProviderModel.MODEL_ID, providerId, HohenheimCapabilities.MANAGE);
         if (!authorized) {
-            throw Violations.ofForm(CmsSupport.violationText("tenant_git_provider_not_managed"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("tenant_git_provider_not_managed"));
         }
     }
 
@@ -504,9 +512,7 @@ public final class TenantWrites {
      * @throws Violations anchored on the offending field
      */
     private static void checkAccessListWrite(@NonNull Row row) {
-        Row stored = row.has(AccessListModel.ID.getName())
-            && row.get(AccessListModel.ID) != null
-            ? Models.get(AccessListModel.class).findById(row.get(AccessListModel.ID)) : null;
+        Row stored = StoredRows.of(Models.get(AccessListModel.class), row);
         if (stored != null) {
             requireAccessListAuthority(stored.get(AccessListModel.ID));
         }
@@ -516,7 +522,7 @@ public final class TenantWrites {
                 && !Objects.equals(row.get(AccessListModel.SHARED), baseline)) {
             throw Violations.ofField(AccessListModel.SHARED.getName(),
                 row.get(AccessListModel.SHARED),
-                CmsSupport.violationText("tenant_field_frozen"));
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_field_frozen"));
         }
     }
 
@@ -528,9 +534,7 @@ public final class TenantWrites {
      * @throws Violations anchored on the list field
      */
     private static void checkAccessRuleWrite(@NonNull Row row) {
-        Row stored = row.has(AccessRuleModel.ID.getName())
-            && row.get(AccessRuleModel.ID) != null
-            ? Models.get(AccessRuleModel.class).findById(row.get(AccessRuleModel.ID)) : null;
+        Row stored = StoredRows.of(Models.get(AccessRuleModel.class), row);
         requireAccessListAuthority(row.afterWrite(AccessRuleModel.ACCESS_LIST_ID, stored));
         if (stored != null && row.has(AccessRuleModel.ACCESS_LIST_ID.getName())
                 && !Objects.equals(row.get(AccessRuleModel.ACCESS_LIST_ID),
@@ -548,9 +552,7 @@ public final class TenantWrites {
      * @throws Violations anchored on the offending field
      */
     private static void checkProtectedPathWrite(@NonNull Row row) {
-        Row stored = row.has(ProtectedPathModel.ID.getName())
-            && row.get(ProtectedPathModel.ID) != null
-            ? Models.get(ProtectedPathModel.class).findById(row.get(ProtectedPathModel.ID)) : null;
+        Row stored = StoredRows.of(Models.get(ProtectedPathModel.class), row);
         requireManagedSite(row.afterWrite(ProtectedPathModel.SITE_ID, stored));
         if (stored != null && row.has(ProtectedPathModel.SITE_ID.getName())
                 && !Objects.equals(row.get(ProtectedPathModel.SITE_ID),
@@ -561,7 +563,7 @@ public final class TenantWrites {
         Object listId = row.afterWrite(ProtectedPathModel.ACCESS_LIST_ID, stored);
         if (ctx == null || !HohenheimAccess.canUseAccessList(ctx, listId)) {
             throw Violations.ofField(ProtectedPathModel.ACCESS_LIST_ID.getName(), listId,
-                CmsSupport.violationText("tenant_access_list_not_usable"));
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_access_list_not_usable"));
         }
     }
 
@@ -569,10 +571,10 @@ public final class TenantWrites {
     private static void requireAccessListAuthority(@Nullable Object listId) {
         AccessContext ctx = acting();
         boolean authorized = ctx != null && ctx.isAccount() && listId != null
-            && ctx.hasCapability(AccessListModel.MODEL_ID, listId, HohenheimAccess.MANAGE);
+            && ctx.hasCapability(AccessListModel.MODEL_ID, listId, HohenheimCapabilities.MANAGE);
         if (!authorized) {
             throw Violations.ofField(AccessRuleModel.ACCESS_LIST_ID.getName(), listId,
-                CmsSupport.violationText("tenant_access_list_not_managed"));
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_access_list_not_managed"));
         }
     }
 
@@ -582,7 +584,7 @@ public final class TenantWrites {
         if (!(siteId instanceof Integer id) || ctx == null
                 || !HohenheimAccess.canManageSite(ctx, id)) {
             throw Violations.ofField(ProtectedPathModel.SITE_ID.getName(), siteId,
-                CmsSupport.violationText("tenant_site_not_managed"));
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_site_not_managed"));
         }
     }
 
@@ -595,8 +597,7 @@ public final class TenantWrites {
      */
     private static void checkDomainWrite(@NonNull Row row) {
         Model model = Models.get(SiteDomainModel.class);
-        Row stored = row.has(SiteDomainModel.ID.getName())
-            ? model.findById(row.get(SiteDomainModel.ID)) : null;
+        Row stored = StoredRows.of(model, row);
 
         // The site the row will belong to must be one the tenant actually manages. The
         // resource's AccessFunction scopes what a tenant may READ; it says nothing about
@@ -606,7 +607,7 @@ public final class TenantWrites {
         if (!(siteIdValue instanceof Integer siteId) || ctx == null
                 || !HohenheimAccess.canManageSite(ctx, siteId)) {
             throw Violations.ofField(SiteDomainModel.SITE_ID.getName(), siteIdValue,
-                CmsSupport.violationText("tenant_site_not_managed"));
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_site_not_managed"));
         }
 
         // An unbounded hostname set is not a delegable claim: a tenant wildcard swallows
@@ -635,7 +636,7 @@ public final class TenantWrites {
             matchType != null ? String.valueOf(matchType) : null);
         if (!SiteDomainModel.MATCH_EXACT.equals(tier)) {
             throw Violations.ofField(SiteDomainModel.MATCH_TYPE.getName(), matchType,
-                CmsSupport.violationText("tenant_match_type_exact"));
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_match_type_exact"));
         }
 
         // A listener restriction makes the row DISJOINT from every other row's listener set,
@@ -644,7 +645,7 @@ public final class TenantWrites {
         if (isPresent(row.afterWrite(SiteDomainModel.LISTEN_ON, stored))) {
             throw Violations.ofField(SiteDomainModel.LISTEN_ON.getName(),
                 row.afterWrite(SiteDomainModel.LISTEN_ON, stored),
-                CmsSupport.violationText("tenant_listen_on_frozen"));
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_listen_on_frozen"));
         }
 
         // The SAME exemption applies to a differing path, one dimension over: two rows with
@@ -656,7 +657,7 @@ public final class TenantWrites {
         if (isPresent(row.afterWrite(SiteDomainModel.PATH, stored))) {
             throw Violations.ofField(SiteDomainModel.PATH.getName(),
                 row.afterWrite(SiteDomainModel.PATH, stored),
-                CmsSupport.violationText("tenant_path_frozen"));
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_path_frozen"));
         }
 
         // Everything outside the delegated set keeps its stored value (its default on a
@@ -680,7 +681,7 @@ public final class TenantWrites {
         if (newClaim && claimed != null && !claimed.isEmpty()
                 && !HostnameAuthority.mayClaim(siteId, claimed)) {
             throw Violations.ofField(SiteDomainModel.HOSTNAME.getName(), hostnameValue,
-                CmsSupport.violationText(HostnameAuthority.HOSTNAME_UNAVAILABLE));
+                HohenheimMicrocopy.VIOLATIONS.of(HostnameAuthority.HOSTNAME_UNAVAILABLE));
         }
     }
 
@@ -702,7 +703,7 @@ public final class TenantWrites {
             Object baseline = stored != null ? stored.get(name) : field.getDefaultValue();
             if (!Objects.equals(row.get(name), baseline)) {
                 throw Violations.ofField(name, row.get(name),
-                    CmsSupport.violationText("tenant_field_frozen"));
+                    HohenheimMicrocopy.VIOLATIONS.of("tenant_field_frozen"));
             }
         }
     }
@@ -759,10 +760,9 @@ public final class TenantWrites {
      */
     private static void checkSiteWrite(@NonNull Row row) {
         Model model = Models.get(SiteModel.class);
-        Object idValue = row.has(SiteModel.ID.getName()) ? row.get(SiteModel.ID) : null;
         // Trashed included: a write to a trashed site is an UPDATE of it (deleted_at is a
         // frozen column), never a create that skips the frozen-column rule.
-        Row stored = StoredRows.byId(model, idValue);
+        Row stored = StoredRows.of(model, row);
 
         Object kind = row.afterWrite(SiteModel.UPSTREAM_KIND, stored);
         Object settings = row.afterWrite(SiteModel.SETTINGS, stored);
@@ -826,20 +826,21 @@ public final class TenantWrites {
         if (!row.has(SiteModel.SETTINGS.getName())) {
             return;
         }
-        if (!AddressUpstreamKind.ID.toString().equals(String.valueOf(effectiveSiteType(row)))) {
+        Object siteType = row.afterWrite(SiteModel.UPSTREAM_KIND, StoredRows.of(Models.get(SiteModel.class), row));
+        if (!AddressUpstreamKind.ID.toString().equals(String.valueOf(siteType))) {
             return;
         }
         Object settingsValue = row.get(SiteModel.SETTINGS);
         if (!(settingsValue instanceof Map<?, ?> settings)) {
             return;
         }
-        String host = textOf(settings.get(AddressUpstreamKind.FORWARD_HOST.getName()));
+        String host = trimmed(settings.get(AddressUpstreamKind.FORWARD_HOST.getName()));
         if (host.isEmpty()) {
             return;
         }
         if (PROXY_UPSTREAM_BASE.problemOf(schemeOf(settings) + "://" + host) != null) {
             throw Violations.ofField(settingsKey(AddressUpstreamKind.FORWARD_HOST.getName()),
-                host, CmsSupport.violationText("proxy_upstream_invalid"));
+                host, HohenheimMicrocopy.VIOLATIONS.of("proxy_upstream_invalid"));
         }
     }
 
@@ -859,10 +860,10 @@ public final class TenantWrites {
      */
     private static void refuseTenantUpstream(@NonNull String kind, @NonNull Map<?, ?> settings) {
         if (AddressUpstreamKind.ID.toString().equals(kind)) {
-            String socket = textOf(settings.get(AddressUpstreamKind.SOCKET.getName()));
+            String socket = trimmed(settings.get(AddressUpstreamKind.SOCKET.getName()));
             if (!socket.isEmpty()) {
                 throw Violations.ofField(settingsKey(AddressUpstreamKind.SOCKET.getName()), socket,
-                    CmsSupport.violationText("tenant_proxy_upstream_private"));
+                    HohenheimMicrocopy.VIOLATIONS.of("tenant_proxy_upstream_private"));
             }
             refusePrivateHost(AddressUpstreamKind.FORWARD_HOST.getName(), schemeOf(settings),
                 settings.get(AddressUpstreamKind.FORWARD_HOST.getName()),
@@ -875,10 +876,10 @@ public final class TenantWrites {
         } else if (StaticUpstreamKind.ID.toString().equals(kind)) {
             for (String pathKey : List.of(StaticUpstreamKind.ROOT_PATH.getName(),
                     StaticUpstreamKind.FALLBACK_FILE.getName())) {
-                String path = textOf(settings.get(pathKey));
+                String path = trimmed(settings.get(pathKey));
                 if (!path.isEmpty()) {
                     throw Violations.ofField(settingsKey(pathKey), path,
-                        CmsSupport.violationText("tenant_field_frozen"));
+                        HohenheimMicrocopy.VIOLATIONS.of("tenant_field_frozen"));
                 }
             }
         }
@@ -887,43 +888,26 @@ public final class TenantWrites {
     /** @throws Violations {@code tenant_proxy_upstream_private} unless the host is public */
     private static void refusePrivateHost(@NonNull String key, @NonNull String scheme,
                                           @Nullable Object hostValue, @Nullable Object portValue) {
-        String host = textOf(hostValue);
+        String host = trimmed(hostValue);
         if (host.isEmpty()) {
             return;
         }
         String authority = portValue instanceof Integer port ? host + ":" + port : host;
         if (tenantUpstreamGuard.problemOf(scheme + "://" + authority) != null) {
             throw Violations.ofField(settingsKey(key), host,
-                CmsSupport.violationText("tenant_proxy_upstream_private"));
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_proxy_upstream_private"));
         }
     }
 
     /** The upstream scheme an address-kind settings map dials, defaulting like the handler. */
     private static @NonNull String schemeOf(@NonNull Map<?, ?> settings) {
-        String scheme = textOf(settings.get(AddressUpstreamKind.FORWARD_SCHEME.getName()));
+        String scheme = trimmed(settings.get(AddressUpstreamKind.FORWARD_SCHEME.getName()));
         return scheme.isEmpty() ? "http" : scheme;
     }
 
     /** The violation field of one settings member. */
     private static @NonNull String settingsKey(@NonNull String member) {
         return SiteModel.SETTINGS.getName() + "." + member;
-    }
-
-    private static @NonNull String textOf(@Nullable Object value) {
-        return value == null ? "" : String.valueOf(value).trim();
-    }
-
-    /** The site type the write ends up with, reading the stored row on a partial update. */
-    private static @Nullable Object effectiveSiteType(@NonNull Row row) {
-        if (row.has(SiteModel.UPSTREAM_KIND.getName())) {
-            return row.get(SiteModel.UPSTREAM_KIND);
-        }
-        Object id = row.has(SiteModel.ID.getName()) ? row.get(SiteModel.ID) : null;
-        if (id == null) {
-            return null;
-        }
-        Row stored = StoredRows.byId(Models.get(SiteModel.class), id);
-        return stored != null ? stored.get(SiteModel.UPSTREAM_KIND) : null;
     }
 
     // --- Instances -------------------------------------------------------------------
@@ -1001,8 +985,8 @@ public final class TenantWrites {
 
         AccessContext ctx = acting();
         if (ctx == null || !ctx.isAccount()
-                || !ctx.hasCapability(InstanceModel.MODEL_ID, idValue, HohenheimAccess.CONFIG)) {
-            throw Violations.ofForm(HohenheimViolations.text("instance_not_permitted"));
+                || !ctx.hasCapability(InstanceModel.MODEL_ID, idValue, HohenheimCapabilities.CONFIG)) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_not_permitted"));
         }
 
         refuseFrozenColumns(model, row, stored, INSTANCE_TENANT_WRITABLE, INSTANCE_DERIVED);
@@ -1043,7 +1027,7 @@ public final class TenantWrites {
             }
             if (!Objects.equals(staged.get(key), current.get(key))) {
                 throw Violations.ofField(column + "." + name, staged.get(key),
-                    CmsSupport.violationText("tenant_field_frozen"));
+                    HohenheimMicrocopy.VIOLATIONS.of("tenant_field_frozen"));
             }
         }
     }
@@ -1109,13 +1093,12 @@ public final class TenantWrites {
      */
     private static void checkDatabaseWrite(@NonNull Row row) {
         Model model = Models.get(DatabaseModel.class);
-        Object idValue = row.has(DatabaseModel.ID.getName()) ? row.get(DatabaseModel.ID) : null;
-        Row stored = idValue != null ? model.findById(idValue) : null;
+        Row stored = StoredRows.of(model, row);
 
         if (stored == null) {
             if (!DATABASE_ALLOCATION.isActive()) {
                 throw Violations.ofForm(
-                    CmsSupport.violationText("tenant_database_not_allocatable"));
+                    HohenheimMicrocopy.VIOLATIONS.of("tenant_database_not_allocatable"));
             }
             return;
         }
@@ -1161,33 +1144,18 @@ public final class TenantWrites {
         AccessContext ctx = acting();
         if (!(instanceIdValue instanceof Integer instanceId) || ctx == null || !ctx.isAccount()
                 || !HohenheimAccess.hasInstanceCapability(ctx, instanceId,
-                    HohenheimAccess.CONFIG)) {
+                    HohenheimCapabilities.CONFIG)) {
             throw Violations.ofField(InstanceDatabaseModel.INSTANCE_ID.getName(), instanceIdValue,
-                CmsSupport.violationText("tenant_instance_not_managed"));
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_instance_not_managed"));
         }
         if (!(databaseIdValue instanceof Integer databaseId)
                 || !HohenheimAccess.hasDatabaseCapability(ctx, databaseId,
-                    HohenheimAccess.MANAGE)) {
-            throw HohenheimAccess.databaseRefusal();
+                    HohenheimCapabilities.MANAGE)) {
+            throw HohenheimViolations.databaseNotPermitted();
         }
     }
 
     // --- Instance variables ----------------------------------------------------------
-
-    /**
-     * The owning instance of a variable row a write is about to land, reading the stored
-     * row when the submit carries no owner column (a partial update).
-     */
-    private static @Nullable Object instanceOwnerOf(@NonNull Row row) {
-        if (row.has(InstanceVariableModel.INSTANCE_ID.getName())) {
-            return row.get(InstanceVariableModel.INSTANCE_ID);
-        }
-        Object id = row.has(InstanceVariableModel.ID.getName())
-            ? row.get(InstanceVariableModel.ID) : null;
-        Row stored = id == null ? null
-            : Models.get(InstanceVariableModel.class).findById(id);
-        return stored == null ? null : stored.get(InstanceVariableModel.INSTANCE_ID);
-    }
 
     /**
      * Refuse a tenant write to an INSTANCE-owned variable value without {@code config}
@@ -1199,7 +1167,7 @@ public final class TenantWrites {
      * this one holds when a future surface writes the row directly -- which is precisely
      * how the /api/v1 variable lane came to be the copy that lost the check. A variable
      * substitutes into {@code command}/{@code cloud_init} at deploy, so authoring one is
-     * authoring what runs, which is what {@link HohenheimAccess#CONFIG} means.
+     * authoring what runs, which is what {@link HohenheimCapabilities#CONFIG} means.
      *
      * AIDEV-NOTE: ENVIRONMENT-owned rows (a null instance owner) pass here. They belong to
      * a project, hold no instance capability to ask about, and are gated by
@@ -1218,8 +1186,8 @@ public final class TenantWrites {
         AccessContext ctx = acting();
         if (ctx == null || !ctx.isAccount()
                 || !ctx.hasCapability(InstanceModel.MODEL_ID, instanceId,
-                    HohenheimAccess.CONFIG)) {
-            throw Violations.ofForm(HohenheimViolations.text("instance_not_permitted"));
+                    HohenheimCapabilities.CONFIG)) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_not_permitted"));
         }
     }
 
@@ -1233,8 +1201,7 @@ public final class TenantWrites {
      */
     private static void checkRecordWrite(@NonNull Row row) {
         Model model = Models.get(DnsRecordModel.class);
-        Row stored = row.has(DnsRecordModel.ID.getName())
-            ? model.findById(row.get(DnsRecordModel.ID)) : null;
+        Row stored = StoredRows.of(model, row);
 
         requireRecordAuthority(row, stored);
         refuseForeignRecordType(row.afterWrite(DnsRecordModel.TYPE, stored));
@@ -1251,7 +1218,7 @@ public final class TenantWrites {
                     stored.get(DnsRecordModel.ZONE_ID))) {
             throw Violations.ofField(DnsRecordModel.ZONE_ID.getName(),
                 row.get(DnsRecordModel.ZONE_ID),
-                CmsSupport.violationText("tenant_zone_frozen"));
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_zone_frozen"));
         }
 
         // managed_by drives the zone-file import's replace scope (it replaces only rows where
@@ -1261,7 +1228,7 @@ public final class TenantWrites {
                 && !Objects.equals(row.get(DnsRecordModel.MANAGED_BY), storedManagedBy)) {
             throw Violations.ofField(DnsRecordModel.MANAGED_BY.getName(),
                 row.get(DnsRecordModel.MANAGED_BY),
-                CmsSupport.violationText("tenant_managed_by_frozen"));
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_managed_by_frozen"));
         }
     }
 
@@ -1281,7 +1248,8 @@ public final class TenantWrites {
         AccessContext ctx = acting();
         if (ctx == null) {
             // Tenant-originated with no caller: work that declared no identity holds no authority.
-            throw refusal(DnsRecordModel.NAME.getName(), row.get(DnsRecordModel.NAME));
+            throw Violations.ofField(DnsRecordModel.NAME.getName(), row.get(DnsRecordModel.NAME),
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_record_not_authorized"));
         }
 
         // AIDEV-NOTE: the ANONYMOUS lane is /nic/update and nothing else. It is already
@@ -1293,7 +1261,8 @@ public final class TenantWrites {
         if (!ctx.isAccount()) {
             if (stored == null
                     || DynamicDnsService.credentialFor(stored.get(DnsRecordModel.ID)) == null) {
-                throw refusal(DnsRecordModel.NAME.getName(), row.afterWrite(DnsRecordModel.NAME, stored));
+                throw Violations.ofField(DnsRecordModel.NAME.getName(), row.afterWrite(DnsRecordModel.NAME, stored),
+                    HohenheimMicrocopy.VIOLATIONS.of("tenant_record_not_authorized"));
             }
             refuseChangesOutside(row, stored, Set.of(DnsRecordModel.VALUE.getName()));
             return;
@@ -1301,7 +1270,7 @@ public final class TenantWrites {
 
         Object recordId = stored != null ? stored.get(DnsRecordModel.ID) : null;
         boolean holdsEdit = recordId != null
-            && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimAccess.EDIT);
+            && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimCapabilities.EDIT);
 
         HostnameAuthority.Snapshot snapshot = HostnameAuthority.Snapshot.load();
         boolean ownsStoredName = stored != null
@@ -1311,14 +1280,16 @@ public final class TenantWrites {
         // alone. (A dyndns grant is authority over the CREDENTIAL table only -- see
         // checkCredentialWrite -- never over any column of the record itself.)
         if (stored != null && !holdsEdit && !ownsStoredName) {
-            throw refusal(DnsRecordModel.NAME.getName(), row.afterWrite(DnsRecordModel.NAME, stored));
+            throw Violations.ofField(DnsRecordModel.NAME.getName(), row.afterWrite(DnsRecordModel.NAME, stored),
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_record_not_authorized"));
         }
 
         String claimed = fqdnOf(row, stored);
         boolean claimsNewName = stored == null
             || !claimed.equals(fqdnOf(stored, stored));
         if (claimsNewName && !HostnameAuthority.canManage(snapshot, ctx, claimed)) {
-            throw refusal(DnsRecordModel.NAME.getName(), claimed);
+            throw Violations.ofField(DnsRecordModel.NAME.getName(), claimed,
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_record_not_authorized"));
         }
     }
 
@@ -1345,7 +1316,8 @@ public final class TenantWrites {
             }
             Object baseline = stored != null ? stored.get(name) : field.getDefaultValue();
             if (!Objects.equals(row.get(name), baseline)) {
-                throw refusal(name, row.get(name));
+                throw Violations.ofField(name, row.get(name),
+                    HohenheimMicrocopy.VIOLATIONS.of("tenant_record_not_authorized"));
             }
         }
     }
@@ -1360,15 +1332,11 @@ public final class TenantWrites {
     private static void checkCredentialWrite(@Nullable Object recordId) {
         AccessContext ctx = acting();
         boolean authorized = ctx != null && ctx.isAccount() && recordId != null
-            && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimAccess.DYNDNS);
+            && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimCapabilities.DYNDNS);
         if (!authorized) {
-            throw refusal(DnsDyndnsCredentialModel.RECORD_ID.getName(), recordId);
+            throw Violations.ofField(DnsDyndnsCredentialModel.RECORD_ID.getName(), recordId,
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_record_not_authorized"));
         }
-    }
-
-    private static @NonNull Violations refusal(@NonNull String field, @Nullable Object value) {
-        return Violations.ofField(field, value,
-            CmsSupport.violationText("tenant_record_not_authorized"));
     }
 
     /**
@@ -1392,7 +1360,7 @@ public final class TenantWrites {
         }
         Object recordId = stored.get(DnsRecordModel.ID);
         if (recordId != null
-                && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimAccess.EDIT)) {
+                && ctx.hasCapability(DnsRecordModel.MODEL_ID, recordId, HohenheimCapabilities.EDIT)) {
             return true;
         }
         // memoized, not load(): this runs per LIST ROW through updatableBy/deletableBy,
@@ -1405,7 +1373,7 @@ public final class TenantWrites {
         String text = type != null ? String.valueOf(type) : "";
         if (!RECORD_TYPES.contains(text)) {
             throw Violations.ofField(DnsRecordModel.TYPE.getName(), text,
-                CmsSupport.violationText("tenant_record_type"));
+                HohenheimMicrocopy.VIOLATIONS.of("tenant_record_type"));
         }
     }
 

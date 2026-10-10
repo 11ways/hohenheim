@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.cms.CertificateParts;
 import be.elevenways.zenit.cms.common.render.table.SynthesizedRowActions;
 import be.elevenways.zenit.cms.test.support.PlacedOperationMoves;
@@ -27,19 +27,11 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
+import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
 
 /**
  * Immutable before/after surface evidence for the certificate administration and its status-only tenant twin.
- *
- * AIDEV-NOTE: intended difference, Access tab added (Jelle 2026-10-03): the stored set carries one added
- * {@code tab access} fact per record case, re-recorded beside the legacy capture, because zenit-auth's record access
- * page rides every parts entry over a grantable model (RecordTab#ridesEveryEntry). Every other fact is the legacy
- * capture as stored.
- *
- * AIDEV-NOTE: intended difference, certificate orders as placed operations (W1a, 2026-10-05): the request page link
- * became the list's {@code request_certificate} header action, the re-issue link the row's {@code reissue_certificate}
- * invoke (still in the overflow after the download, still Let's Encrypt rows only), and the form gained the {@code dns_records_display} entry a waiting manual
- * DNS-01 order fills; those facts are re-recorded, every other one is the capture as stored.
  *
  * @author Jelle De Loecker
  * @since 0.9.0
@@ -47,8 +39,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CertificateSurfacesBrowserTest extends HohenheimTestBase {
 
     private static final String ENTRY = HohenheimSlugs.CERTIFICATES;
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
-    private static final String MANAGE = HohenheimSlugs.MANAGE;
     private static String customId;
     private static String issuedId;
     private static String accountId;
@@ -69,7 +59,7 @@ class CertificateSurfacesBrowserTest extends HohenheimTestBase {
         site.set(SiteModel.ENABLED, true);
         sites.save(site);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, site.get(SiteModel.ID),
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         operator = TenantConduits.operator();
         tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(tenantId, "Certificate Surfaces Tenant")));
         customId = certificate("surface-custom", CertificateModel.PROVIDER_CUSTOM, "custom.surfaces.test", tenantId);

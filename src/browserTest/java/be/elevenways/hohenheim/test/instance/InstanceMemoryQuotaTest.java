@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -55,8 +55,8 @@ class InstanceMemoryQuotaTest extends HohenheimTestBase {
     /** DockerContainerKind.defaultFootprintMb -- what an unbounded container is admitted as. */
     private static final int FOOTPRINT_MB = 512;
 
-    private static final String MEMORY_BUCKET = InstanceQuota.memoryBucketOf("");
-    private static final String COUNT_BUCKET = InstanceQuota.bucketKeyOf("");
+    private static final String MEMORY_BUCKET = OwnerBudget.OWNER_MEMORY.bucketOf("");
+    private static final String COUNT_BUCKET = OwnerBudget.INSTANCES.bucketOf("");
 
     private static HostFixtures.LocalHostState localBefore;
 

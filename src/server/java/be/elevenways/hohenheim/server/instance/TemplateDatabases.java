@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.zenit.common.text.Texts;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
@@ -66,7 +68,7 @@ public final class TemplateDatabases {
         InstanceKindHandler handler = InstanceKinds.getHandler(kind);
         if (handler == null || !handler.supportedRuntimes().contains(ServerModel.RUNTIME_DOCKER)) {
             throw Violations.ofField("kind", kind,
-                CmsSupport.violationText("instance_kind_no_injection")
+                HohenheimMicrocopy.VIOLATIONS.of("instance_kind_no_injection")
                     .withArg("kind", String.valueOf(kind)));
         }
         DatabaseModel databases = Models.get(DatabaseModel.class);
@@ -74,13 +76,13 @@ public final class TemplateDatabases {
             String engine = declaration.get(InstanceTemplateDatabaseModel.ENGINE);
             if (ManagedDatabase.Engine.forToken(engine) == null) {
                 throw Violations.ofField("engine", engine,
-                    CmsSupport.violationText("unknown_engine").withArg("engine", engine));
+                    HohenheimMicrocopy.VIOLATIONS.of("unknown_engine").withArg("engine", engine));
             }
             String label = labelFor(instanceName, prefixOf(declaration));
             String stored = TenantDatabases.storedNameFor(ctx, label);
             if (databases.findByName(stored) != null) {
                 throw Violations.ofField(DatabaseModel.NAME.getName(), stored,
-                    CmsSupport.violationText("database_name_taken").withArg("name", stored));
+                    HohenheimMicrocopy.VIOLATIONS.of("database_name_taken").withArg("name", stored));
             }
         }
     }
@@ -102,13 +104,13 @@ public final class TemplateDatabases {
             String image = declaration.get(InstanceTemplateDatabaseModel.IMAGE);
             Row database = TenantDatabases.allocate(ctx, labelFor(instanceName, prefix),
                 declaration.get(InstanceTemplateDatabaseModel.ENGINE),
-                image == null || image.isBlank() ? null : image.trim(), serverId);
+                Texts.trimmedOrNull(image), serverId);
             int placed = ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID));
             if (placed != serverId) {
                 // Injection dials the engine over a link network that only exists on the
                 // instance's daemon: a database elsewhere would be credentials for a host
                 // the workload cannot reach, which is the silent-success shape.
-                throw Violations.ofForm(CmsSupport.violationText("template_database_host_mismatch")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("template_database_host_mismatch")
                     .withArg("name", String.valueOf((Object) database.get(DatabaseModel.NAME)))
                     .withArg("server", ServerModel.nameOf(placed))
                     .withArg("instance_server", ServerModel.nameOf(serverId)));

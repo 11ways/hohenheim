@@ -1,10 +1,11 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
@@ -36,7 +37,7 @@ public final class InstanceBackupOperations {
     public static final Operation<Row, Void, Restored> RESTORE_BACKUP =
         Operation.declare(HohenheimIds.id("restore_backup"))
             .happened(OperationSentences.of("restore_backup"))
-            .label(Microcopy.of("restore_new").withFilter("scope", "instance_backup"))
+            .label(HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new"))
             .icon(Icon.of("clone"))
             .one(BACKUP)
             .gate(OperationGate.open())
@@ -54,7 +55,7 @@ public final class InstanceBackupOperations {
     public static final Operation<Row, Void, Integer> DELETE_BACKUP =
         Operation.declare(HohenheimIds.id("delete_backup"))
             .happened(OperationSentences.of("delete_backup"))
-            .label(Microcopy.of("delete").withFilter("scope", "cms"))
+            .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(BACKUP)
             .gate(OperationGate.open())

@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.site.SiteTlsCell;
+import be.elevenways.hohenheim.site.SiteTls;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -37,8 +37,8 @@ class NewDomainHttpsJourneyTest extends HohenheimTestBase {
         Row fresh = domain(site, "fresh.https-journey.test", null);
         assertThat((Boolean) fresh.get(SiteDomainModel.FORCE_SSL)).as("step 1: a new address is not forced").isFalse();
         assertThat((Boolean) fresh.get(SiteDomainModel.FORCE_SSL_AUTO)).as("step 1: but armed").isTrue();
-        assertThat(SiteParts.tlsCellOf(site).token()).as("step 1: the site's HTTPS reads missing, never forced")
-            .isEqualTo(SiteTlsCell.MISSING);
+        assertThat(SiteParts.tlsOf(site)).as("step 1: the site's HTTPS reads missing, never forced")
+            .isEqualTo(SiteTls.MISSING);
 
         // 2. An explicit choice disarms the latch: switched on and off again by the operator, it stays off.
         Row chosen = domain(site, "chosen.https-journey.test", true);
@@ -61,7 +61,7 @@ class NewDomainHttpsJourneyTest extends HohenheimTestBase {
             .as("step 3: the switch is recorded in the address's activity").hasSize(1);
         assertThat((Boolean) domains.findById(chosen.get(SiteDomainModel.ID)).get(SiteDomainModel.FORCE_SSL))
             .as("step 3: an explicit off stays off").isFalse();
-        assertThat(SiteParts.tlsCellOf(site).token()).as("step 3: every exact address works").isEqualTo(SiteTlsCell.WORKS);
+        assertThat(SiteParts.tlsOf(site)).as("step 3: every exact address works").isEqualTo(SiteTls.WORKS);
 
         // 4. An address added while a working certificate already covers it is forced in the same write.
         Row late = domain(site, "late.https-journey.test", null);
@@ -78,8 +78,8 @@ class NewDomainHttpsJourneyTest extends HohenheimTestBase {
         certificates.delete(wildcard);
         assertThat((Boolean) domains.findById(fresh.get(SiteDomainModel.ID)).get(SiteDomainModel.FORCE_SSL))
             .as("step 5: losing the certificate never unforces").isTrue();
-        assertThat(SiteParts.tlsCellOf(site).token()).as("step 5: the site reads broken")
-            .isEqualTo(SiteTlsCell.BROKEN);
+        assertThat(SiteParts.tlsOf(site)).as("step 5: the site reads broken")
+            .isEqualTo(SiteTls.BROKEN);
         List<AttentionItem> items = new ArrayList<>();
         ProxyAttention.forcedWithoutCertificate(items);
         assertThat(items).as("step 5: one item per forced address without a working certificate")

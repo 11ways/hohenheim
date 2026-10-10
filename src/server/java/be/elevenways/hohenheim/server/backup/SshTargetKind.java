@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.server.backup;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.options.ServerOptions;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.RegistryMemberField;
@@ -19,6 +18,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
 import java.util.Map;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * SSH backup-target kind: a directory on an ENROLLED HOST, reached over ssh through
@@ -43,14 +44,14 @@ public final class SshTargetKind implements BackupTargetKindHandler {
     public static final EnumField SERVER = SETTINGS_SCHEMA.addField(
         RegistryMemberField.builder("server")
             .registry(ServerOptions.REGISTRY)
-            .label(HohenheimFormCopy.label("server"))
-            .help(HohenheimFormCopy.help("backup_ssh_server"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("server"))
+            .help(HohenheimMicrocopy.HELP.of("backup_ssh_server"))
             .build());
 
     public static final StringField PATH = SETTINGS_SCHEMA.addField(
         StringField.builder().name("path")
-            .label(HohenheimFormCopy.label("directory"))
-            .help(HohenheimFormCopy.help("backup_ssh_path"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("directory"))
+            .help(HohenheimMicrocopy.HELP.of("backup_ssh_path"))
             .build());
 
     static {
@@ -64,16 +65,6 @@ public final class SshTargetKind implements BackupTargetKindHandler {
 
     @Override
     public @NonNull String getDisplayName() { return "SSH host"; }
-
-    @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("ssh").withFilter("scope", "backup_target_kind");
-    }
-
-    @Override
-    public @NonNull Microcopy getDescription() {
-        return Microcopy.of("ssh").withFilter("scope", "backup_target_kind_description");
-    }
 
     @Override
     public Icon getIcon() { return Icon.of("server"); }
@@ -94,11 +85,11 @@ public final class SshTargetKind implements BackupTargetKindHandler {
      */
     @Override
     public @NonNull BackupTarget targetFor(@NonNull Map<String, Object> settings) throws IOException {
-        String path = text(settings.get("path"));
+        String path = trimmed(settings.get("path"));
         if (path.isEmpty() || !path.startsWith("/")) {
             throw new IOException("SSH backup target needs an absolute remote directory path");
         }
-        String spelling = text(settings.get("server"));
+        String spelling = trimmed(settings.get("server"));
         if (spelling.isEmpty()) {
             // Explicit, because canonicalServerId folds a blank spelling to the LOCAL
             // host, and "the local host is not an ssh destination" is a confusing way to
@@ -118,9 +109,5 @@ public final class SshTargetKind implements BackupTargetKindHandler {
         // named before any downtime is spent on it.
         target.requireUsableDestination();
         return target;
-    }
-
-    private static String text(Object value) {
-        return value == null ? "" : value.toString().trim();
     }
 }

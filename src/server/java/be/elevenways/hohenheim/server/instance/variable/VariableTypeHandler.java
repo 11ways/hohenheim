@@ -7,6 +7,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Server half of a variable type: builds the REAL zenit field a submitted value is
@@ -32,6 +33,6 @@ public interface VariableTypeHandler extends VariableTypeInfo {
      * typed field re-coerces on the way back out).
      */
     default @Nullable String toStoredString(@Nullable Object coerced) {
-        return coerced == null ? null : String.valueOf(coerced);
+        return Objects.toString(coerced, null);
     }
 }

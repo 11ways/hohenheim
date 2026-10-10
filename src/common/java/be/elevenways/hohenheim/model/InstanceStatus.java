@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.ui.BadgeColor;
 import be.elevenways.zenit.common.ui.ColorHue;
@@ -71,7 +72,7 @@ public enum InstanceStatus {
 
     /** The translated label of the status badge. */
     public @NonNull Microcopy label() {
-        return Microcopy.of(this.token).withFilter("scope", "instance_status");
+        return HohenheimMicrocopy.INSTANCE_STATUS.of(this.token);
     }
 
     /**

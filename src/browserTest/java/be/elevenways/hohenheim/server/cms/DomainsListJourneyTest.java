@@ -120,9 +120,9 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             assertThat(html).as("step 3: and for the one pointing elsewhere")
                 .contains("data-state=\"points_elsewhere\"");
             assertThat(html).as("step 3: the forced name without a certificate reads broken")
-                .contains("data-cert-status=\"" + CertCoverage.ERROR.key() + "\"");
+                .contains("data-state=\"" + CertCoverage.ERROR.token() + "\"");
             assertThat(html).as("step 3: the covered name reads as working")
-                .contains("data-cert-status=\"" + CertCoverage.ACTIVE.key() + "\"");
+                .contains("data-state=\"" + CertCoverage.ACTIVE.token() + "\"");
             assertThat(html).as("step 3: Get a certificate is offered for the uncovered name")
                 .contains("request_domain_certificate");
             assertThat(html).as("step 3: the App cell links the app to its overview, the framework's front door")
@@ -144,7 +144,7 @@ class DomainsListJourneyTest extends HohenheimTestBase {
                 .contains("HTTPS is forced, but no working certificate covers this name");
             assertThat(html).as("step 4: the covered name's badge is the word").contains(">Works<");
             assertThat(html).as("step 4: and its certificate links on its own line")
-                .contains("data-cert-link").contains("Covered " + suffix);
+                .contains("data-state-link").contains("Covered " + suffix);
 
             // 5. The Domains area heads its tabs with its own name, the page's one heading (the cluster landing draws
             //    no member h1 since D13-FW), and its fourth tab reads in the board's words.
@@ -153,8 +153,9 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             assertThat(html.split("<h1", -1).length - 1).as("step 5: and it is the page's one heading").isEqualTo(1);
             assertThat(html).as("step 5: released names are addresses").contains("Released addresses");
             String strip = html.substring(html.indexOf("data-cms-cluster-tabs"));
-            List<Integer> tabs = List.of(DomainParts.SLUG, HohenheimSlugs.CERTIFICATES, HohenheimSlugs.DNS_ZONES,
-                ReleasedClaimParts.SLUG).stream().map(slug -> strip.indexOf("href=\"/admin/" + slug + "\"")).toList();
+            List<Integer> tabs = List.of(HohenheimSlugs.DOMAINS, HohenheimSlugs.CERTIFICATES, HohenheimSlugs.DNS_ZONES,
+                HohenheimSlugs.RELEASED_CLAIMS).stream().map(slug -> strip.indexOf("href=\"/admin/" + slug + "\""))
+                    .toList();
             assertThat(tabs).as("step 5: every member is a tab").doesNotContain(-1);
             assertThat(tabs).as("step 5: in the board's order: Addresses, Certificates, DNS zones, Released addresses")
                 .isSorted();
@@ -192,7 +193,7 @@ class DomainsListJourneyTest extends HohenheimTestBase {
                 String served = adminGet("/admin/domains?q=" + suffix).body();
                 assertThat(served).as("step 8: the list says so beside the badge")
                     .contains("A certificate is stored for this name, but the proxy cannot serve it")
-                    .doesNotContain("data-cert-status=\"" + CertCoverage.ACTIVE.key() + "\"");
+                    .doesNotContain("data-state=\"" + CertCoverage.ACTIVE.token() + "\"");
                 // 9. Routing, the force-HTTPS latch and "Get a certificate" read that same rule
                 //    (CertificateCoverage.workingNames): the stored row covers nothing the proxy loaded, so the name is
                 //    offered a certificate of its own, and an armed address written under it is not forced.
@@ -227,7 +228,7 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             servers.save(local);
             assertThat(DomainParts.reachCell(movedRow, HostnameReach.LOOKUP_WAIT_MS).state())
                 .as("step 10: the remembered answer stands until it is checked again").isEqualTo("points_elsewhere");
-            HttpResponse<String> checked = adminPostForm("/admin/" + DomainParts.SLUG + "/invoke/"
+            HttpResponse<String> checked = adminPostForm("/admin/" + HohenheimSlugs.DOMAINS + "/invoke/"
                 + DomainParts.CHECK_REACH.id().toString().replace(':', '.') + "?ids=" + movedRow.get(SiteDomainModel.ID),
                 "");
             assertThat(checked.statusCode()).as("step 10: the check runs").isLessThan(400);

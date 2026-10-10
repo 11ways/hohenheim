@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -13,9 +14,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.List;
 
-import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
-import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 
 /**
  * The STACKS role's attention items: a stack that stopped (its deploy failed, or none of its services runs) or runs
@@ -29,8 +29,6 @@ import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
  */
 public final class StackAttention {
 
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
-
     private StackAttention() {
     }
 
@@ -41,15 +39,18 @@ public final class StackAttention {
             if (!StackModel.STATUS_FAILED.equals(status) && !StackModel.STATUS_DEGRADED.equals(status)) {
                 continue;
             }
+            RecordHealth verdict = AppHealth.stackHealth(stack);
+            AttentionSeverity severity = AttentionSeverity.ofTone(verdict.tone());
+            if (severity == null) {
+                continue;
+            }
             Object name = stack.get(StackModel.NAME);
             AppHealth.Stoppage stoppage = AppHealth.stackStoppage(stack);
             Microcopy title = stoppage != null ? stoppage.title(name)
-                : copy("stack_degraded", "attention_title", "name", name);
-            RecordHealth verdict = AppHealth.stackHealth(stack);
-            items.add(item(stoppage != null ? AttentionSeverity.ERROR : AttentionSeverity.WARNING, "layer-group",
-                title, verdict.detail(),
-                CmsRoutes.subpage(ADMIN, StackParts.SLUG, stack.get(StackModel.ID), StackServicesPage.SLUG),
-                action("act_open_app", "name", name)));
+                : HohenheimMicrocopy.ATTENTION_TITLE.of("stack_degraded").withArg("name", name);
+            items.add(item(severity, "layer-group", title, verdict.detail(),
+                CmsRoutes.subpage(ADMIN, HohenheimSlugs.STACKS, stack.get(StackModel.ID), HohenheimSlugs.Tab.SERVICES),
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_app").withArg("name", name)));
         }
     }
 }

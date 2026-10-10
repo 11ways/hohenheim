@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.dry.BlastDrySerializers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -79,7 +80,7 @@ public enum HostState {
 
     /** @return the wording shown beside the dot, before its arguments */
     public @NonNull Microcopy wording() {
-        return Microcopy.of(this.wordingKey).withFilter("scope", "server");
+        return HohenheimMicrocopy.SERVER.of(this.wordingKey);
     }
 
     static {

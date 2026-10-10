@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceChildDeletes;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -40,9 +42,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public final class InstanceScheduleRunParts {
 
-    /** The entry's slug. */
-    public static final String SLUG = "instance-schedule-runs";
-
     /** The computed per-step verdict column. */
     private static final String STEPS = "steps";
 
@@ -63,22 +62,22 @@ public final class InstanceScheduleRunParts {
             .column(ColumnSpec.fromField(RecordScheduleRunModel.RECORD_ID).build())
             .column(ColumnSpec.fromField(RecordScheduleRunModel.STATUS).filterable().subtext("error").build())
             .column(ColumnSpec.fromField(RecordScheduleRunModel.ERROR)
-                .label(Microcopy.of("error").withFilter("scope", "instance_schedule"))
+                .label(HohenheimMicrocopy.INSTANCE_SCHEDULE.of("error"))
                 .hidden().build())
             .column(ColumnSpec.fromField(RecordScheduleRunModel.TRIGGER).build())
-            .column(ColumnSpec.virtual(STEPS, Microcopy.of("steps").withFilter("scope", "instance_schedule")).build())
+            .column(ColumnSpec.virtual(STEPS, HohenheimMicrocopy.INSTANCE_SCHEDULE.of("steps")).build())
             .column(ColumnSpec.fromField(RecordScheduleRunModel.STARTED_AT).subtext("ended_at").build())
             .column(ColumnSpec.fromField(RecordScheduleRunModel.ENDED_AT).hidden().build())
             .build();
-        return PanelResource.builder(HohenheimIds.id("instance_schedule_run"), SLUG,
+        return PanelResource.builder(HohenheimIds.id("instance_schedule_run"), HohenheimSlugs.INSTANCE_SCHEDULE_RUNS,
                 SubjectType.record(RecordScheduleRunModel.MODEL_ID))
-            .label(Microcopy.of("runs").withFilter("scope", "instance_schedule"))
-            .recordLabel(Microcopy.of("run").withFilter("scope", "instance_schedule"))
+            .label(HohenheimMicrocopy.INSTANCE_SCHEDULE.of("runs"))
+            .recordLabel(HohenheimMicrocopy.INSTANCE_SCHEDULE.of("run"))
             .icon(Icon.of("clock-rotate-left"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(20)
             .showInNav(false)
-            .standsUnder(InstanceScheduleParts.SLUG)
+            .standsUnder(HohenheimSlugs.INSTANCE_SCHEDULES)
             // The run table is zenit's, shared by every host model's schedules: this entry is the instances' runs.
             .scope(RowScope.within(() -> RecordScheduleRunModel.MODEL.eq(InstanceModel.MODEL_ID.toString())))
             // Compact per-step verdicts, so "which step failed and why" reads from the list.
@@ -112,7 +111,7 @@ public final class InstanceScheduleRunParts {
             if (step.error() != null) {
                 summary.append(" (").append(step.error()).append(')');
             }
-            Microcopy execution = Microcopy.of("step_execution").withFilter("scope", "instance_schedule")
+            Microcopy execution = HohenheimMicrocopy.INSTANCE_SCHEDULE.of("step_execution")
                 .withArg("id", text.text(null, RecordScheduleStepRunModel.STEP_ID, step.stepId(), locales, resolver))
                 .withArg("attempts", text.text(null, RecordScheduleStepRunModel.ATTEMPT, step.attempts(), locales, resolver))
                 .withArg("started", text.text(null, RecordScheduleStepRunModel.STARTED_AT, step.startedAt(), locales, resolver))
@@ -129,7 +128,7 @@ public final class InstanceScheduleRunParts {
     private static @Nullable String title(@NonNull Row run) {
         String status = CmsSupport.enumLabel(RecordScheduleRunModel.STATUS, run.get(RecordScheduleRunModel.STATUS));
         String title = status == null ? null : CmsSupport.resolvedText(
-            Microcopy.of("run_title").withFilter("scope", "instance_schedule")
+            HohenheimMicrocopy.INSTANCE_SCHEDULE.of("run_title")
                 .withArg("id", String.valueOf((Object) run.get(RecordScheduleRunModel.ID)))
                 .withArg("status", status));
         return title != null && !title.isBlank() ? title : null;

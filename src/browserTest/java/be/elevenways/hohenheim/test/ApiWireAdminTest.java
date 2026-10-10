@@ -8,7 +8,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.test.ApiWire.Caller;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -91,14 +91,14 @@ class ApiWireAdminTest extends HohenheimTestBase {
 
         GrantService.createDirectGrant(GrantSubjectType.USER, tenantId, MANAGE_ACCESS, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, DatabaseModel.MODEL_ID, heldDatabaseId,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
 
         admin = new Caller.Key(ApiKeyService.create(operatorId, "wire-admin-admin", List.of("hohenheim.*"), null)
             .plaintext());
         tenant = new Caller.Key(ApiKeyService.create(tenantId, "wire-admin-tenant",
             List.of(MANAGE_ACCESS,
-                CapabilityScopes.format(DatabaseModel.MODEL_ID, HohenheimAccess.VIEW),
-                CapabilityScopes.format(AccessListModel.MODEL_ID, HohenheimAccess.MANAGE)), null).plaintext());
+                CapabilityScopes.format(DatabaseModel.MODEL_ID, HohenheimCapabilities.VIEW),
+                CapabilityScopes.format(AccessListModel.MODEL_ID, HohenheimCapabilities.MANAGE)), null).plaintext());
         tenantSession = new Caller.Session(sessionCookieHeader(sessionFor(tenantId).token()));
     }
 

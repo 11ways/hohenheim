@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.cms.ManagePanel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.source.GiteaProviderKind;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -54,24 +54,24 @@ class TenantReferencePolicyTest extends HohenheimTestBase {
         int strangerList = list("Reference Stranger List", false);
         list("Reference Shared List", true);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, AccessListModel.MODEL_ID, ownList,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, strangerId, AccessListModel.MODEL_ID, strangerList,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         int ownForge = provider("Reference Own Forge", "own", false);
         int strangerForge = provider("Reference Stranger Forge", "stranger", false);
         provider("Reference Shared Forge", "shared", true);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, GitProviderModel.MODEL_ID, ownForge,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, strangerId, GitProviderModel.MODEL_ID, strangerForge,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         tenantAuth = sessionFor(tenantId);
     }
 
     @Test
     void aTenantsPickersOfferTheReferencePolicyWhileItsListKeepsTheOwnedScope() throws Exception {
-        Panel manage = Objects.requireNonNull(PanelRegistry.get(HohenheimIds.id(ManagePanel.SLUG)),
+        Panel manage = Objects.requireNonNull(PanelRegistry.get(HohenheimIds.id(HohenheimSlugs.MANAGE)),
             "the /manage panel is registered");
         AccessContext access = AccessContext.of(TenantConduits.stubFor(tenant));
         EditContext onManage = EditContext.of(access).pickerSources(PanelRecordSources.pickers(manage));

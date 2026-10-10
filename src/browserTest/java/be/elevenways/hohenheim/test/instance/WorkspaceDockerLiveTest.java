@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.BuildOperationModel;
@@ -231,12 +232,12 @@ class WorkspaceDockerLiveTest {
             //    workspace into WorkspaceBuilds); this proves the verb directly and proves
             //    a re-deploy over an existing checkout FETCHES rather than re-cloning.
             WorkspaceBuilds.Outcome deployed = new WorkspaceBuilds()
-                .deploy(instanceId, "master", DeployTrigger.MANUAL);
+                .deploy(instanceId, "master", null, DeployTrigger.MANUAL);
             Row recorded = Models.get(BuildOperationModel.class)
                 .findById(deployed.operationId());
             assertThat((String) recorded.get(BuildOperationModel.STATUS))
                 .as("step 6: the deploy is recorded as a durable operation")
-                .isEqualTo(BuildOperationModel.STATUS_SUCCEEDED);
+                .isEqualTo(BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
             assertThat((String) recorded.get(BuildOperationModel.BUILDER_KIND))
                 .as("step 6: under the workspace builder kind, never a sandboxed one")
                 .isEqualTo(BuildOperationModel.KIND_WORKSPACE);

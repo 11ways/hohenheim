@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.incus.FakeVgaConsoleDaemon;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
@@ -85,7 +85,7 @@ class VmScreenJourneyTest extends HohenheimTestBase {
         int instanceId = vm("screen-journey-vm", InstanceModel.STATUS_RUNNING);
         int tenantId = ApiSupport.user("screen-tenant@hohenheim.local", "Screen tenant");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.CONSOLE, true);
+            HohenheimCapabilities.CONSOLE, true);
         VmSpice previous = VmSpice.SEAM.installed();
         BrowserContext tenantContext = null;
         try (ScriptedSpiceServer spice = this.spice()) {
@@ -134,7 +134,7 @@ class VmScreenJourneyTest extends HohenheimTestBase {
 
             // 5. His grant is revoked: the next revalidation closes his view, which says so.
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
-                HohenheimAccess.CONSOLE);
+                HohenheimCapabilities.CONSOLE);
             tenant.waitForFunction("([selector, token]) => document.querySelector(selector)"
                     + ".getAttribute('data-screen-status') === token",
                 List.of(SCREEN, ScreenStatus.ACCESS_REVOKED.token()),
@@ -146,7 +146,7 @@ class VmScreenJourneyTest extends HohenheimTestBase {
             }
             VmSpice.SEAM.restoreInstalled(previous);
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId,
-                HohenheimAccess.CONSOLE);
+                HohenheimCapabilities.CONSOLE);
             HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
             Models.get(UserModel.class).delete(tenantId);
         }
@@ -171,11 +171,11 @@ class VmScreenJourneyTest extends HohenheimTestBase {
             for (int instanceId : new int[] {running, stopped, container, generated[0]}) {
                 grants.add(new int[] {consoleId, instanceId});
                 RecordGrants.grant(GrantSubjectType.USER, consoleId, InstanceModel.MODEL_ID, instanceId,
-                    HohenheimAccess.CONSOLE, true);
+                    HohenheimCapabilities.CONSOLE, true);
             }
             grants.add(new int[] {viewerId, running});
             RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, running,
-                HohenheimAccess.VIEW, true);
+                HohenheimCapabilities.VIEW, true);
 
             // 1. VIEW reaches the record but not its screen: refused as policy, without a frame.
             RecordingScreenSocket viewer = open(viewerId, running);
@@ -199,14 +199,14 @@ class VmScreenJourneyTest extends HohenheimTestBase {
             assertThat(console.picture().pixel(4, 4)).as("step 4: the VM's green screen").isEqualTo(0x00FF00);
             assertThat(console.handler().revalidate()).as("step 4: still granted").isTrue();
             RecordGrants.revoke(GrantSubjectType.USER, consoleId, InstanceModel.MODEL_ID, running,
-                HohenheimAccess.CONSOLE);
+                HohenheimCapabilities.CONSOLE);
             assertThat(console.handler().revalidate()).as("step 4: revoked, refused").isFalse();
             console.disconnect();
         } finally {
             VmSpice.SEAM.restoreInstalled(previous);
             for (int[] grant : grants) {
                 RecordGrants.revoke(GrantSubjectType.USER, grant[0], InstanceModel.MODEL_ID, grant[1],
-                    grant[0] == viewerId ? HohenheimAccess.VIEW : HohenheimAccess.CONSOLE);
+                    grant[0] == viewerId ? HohenheimCapabilities.VIEW : HohenheimCapabilities.CONSOLE);
             }
             for (int instanceId : new int[] {running, stopped, container}) {
                 HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
@@ -223,7 +223,7 @@ class VmScreenJourneyTest extends HohenheimTestBase {
         int consoleId = ApiSupport.user("screen-console-op@hohenheim.local", "Screen console op");
         int instanceId = vm("screen-console-vm", InstanceModel.STATUS_RUNNING);
         RecordGrants.grant(GrantSubjectType.USER, consoleId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.CONSOLE, true);
+            HohenheimCapabilities.CONSOLE, true);
         VmSpice previous = VmSpice.SEAM.installed();
         List<RecordingScreenSocket> viewers = new ArrayList<>();
         try (ScriptedSpiceServer spice = this.spice()) {
@@ -313,7 +313,7 @@ class VmScreenJourneyTest extends HohenheimTestBase {
         } finally {
             VmSpice.SEAM.restoreInstalled(previous);
             RecordGrants.revoke(GrantSubjectType.USER, consoleId, InstanceModel.MODEL_ID, instanceId,
-                HohenheimAccess.CONSOLE);
+                HohenheimCapabilities.CONSOLE);
             HardDeletes.byId(Models.get(InstanceModel.class), instanceId);
             Models.get(UserModel.class).delete(consoleId);
         }

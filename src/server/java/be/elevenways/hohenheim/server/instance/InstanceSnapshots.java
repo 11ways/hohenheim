@@ -1,11 +1,14 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
+import be.elevenways.hohenheim.model.Retention;
 import be.elevenways.hohenheim.server.BootSettle;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.backup.BackupArchive;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
@@ -16,13 +19,12 @@ import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -31,8 +33,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,8 +51,9 @@ import java.util.Map;
  */
 public final class InstanceSnapshots {
 
-    private static final DateTimeFormatter STAMP =
-        DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
+    private static final Retention.InstanceCaptures RETENTION = new Retention.InstanceCaptures(InstanceSnapshotModel.class,
+        InstanceSnapshotModel.ID, InstanceSnapshotModel.INSTANCE_ID, InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_COMPLETE,
+        HohenheimSettings.Backup.SNAPSHOT_RETENTION, "SNAPSHOT");
 
     private final @NonNull InstanceService instances;
 
@@ -72,7 +73,7 @@ public final class InstanceSnapshots {
      * @throws Violations naming the refusal or failure
      */
     public int create(int instanceId, @Nullable String note) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.SNAPSHOTS);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.SNAPSHOTS);
         int snapshotId = this.instances.operations().exclusive(instanceId,
             InstanceOperationLock.Contention.REFUSE, () -> createLocked(instanceId, note));
         // Written here, once, on success, whichever surface asked; no surface writes one of its own.
@@ -93,7 +94,7 @@ public final class InstanceSnapshots {
         if (volumes.isEmpty()) {
             throw HohenheimViolations.instanceRefusal("snapshot_no_volumes", resolved.row(), null);
         }
-        InstanceStatus live = resolved.runtime().status(resolved.spec().handle());
+        InstanceStatus live = resolved.liveStatus();
         requirePresent(live, resolved);
         boolean wasRunning = live.running();
 
@@ -114,7 +115,7 @@ public final class InstanceSnapshots {
                     // used to resolve to the SAME directory, and then retention deleting
                     // one row's payload took the other row's tars with it. Same hazard,
                     // same fix, both lanes.
-                    String stamp = STAMP.format(Now.instant());
+                    String stamp = UtcStamp.now();
                     directory[0] = snapshotRoot().resolve("instance-" + instanceId)
                         .resolve(stamp + "-" + snapshot[0].get(InstanceSnapshotModel.ID));
                     RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot[0])
@@ -189,7 +190,7 @@ public final class InstanceSnapshots {
      */
     private int createNative(int instanceId, @NonNull Resolved resolved,
                              @NonNull NativeSnapshotSupport support, @Nullable String note) {
-        InstanceStatus live = resolved.runtime().status(resolved.spec().handle());
+        InstanceStatus live = resolved.liveStatus();
         requirePresent(live, resolved);
         String prior = live.running() ? InstanceModel.STATUS_RUNNING
             : InstanceModel.STATUS_STOPPED;
@@ -207,7 +208,7 @@ public final class InstanceSnapshots {
                     // name -- the second either fails or aliases the first, and then
                     // retention deleting one row's payload takes the other row's snapshot
                     // with it. That is why the row is saved first.
-                    nativeName[0] = "hib-" + STAMP.format(Now.instant())
+                    nativeName[0] = "hib-" + UtcStamp.now()
                         + "-" + snapshot[0].get(InstanceSnapshotModel.ID);
                     RecordStamp.on(Models.get(InstanceSnapshotModel.class), snapshot[0])
                         .set(InstanceSnapshotModel.NATIVE_NAME, nativeName[0])
@@ -246,11 +247,11 @@ public final class InstanceSnapshots {
         if (snapshot == null
                 || !InstanceSnapshotModel.STATUS_COMPLETE.equals(
                     snapshot.get(InstanceSnapshotModel.STATUS))) {
-            throw Violations.ofForm(HohenheimViolations.text("snapshot_not_restorable")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("snapshot_not_restorable")
                 .withArg("id", snapshotId));
         }
         int instanceId = snapshot.get(InstanceSnapshotModel.INSTANCE_ID);
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.SNAPSHOTS);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.SNAPSHOTS);
         this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
             () -> restoreLocked(instanceId, snapshotId, snapshot));
     }
@@ -277,9 +278,9 @@ public final class InstanceSnapshots {
             String declaredPath = volumes.get(entry.getKey());
             Object capturedPath = entry.getValue().get("path");
             if (declaredPath == null || !declaredPath.equals(capturedPath)) {
-                throw Violations.ofForm(HohenheimViolations.text("snapshot_mismatch")
-                    .withArg("volume", entry.getKey())
-                    .withArg("name", resolved.row().get(InstanceModel.NAME)));
+                throw Violations.ofForm(HohenheimViolations.instanceRefusalText("snapshot_mismatch",
+                        resolved.row(), null)
+                    .withArg("volume", entry.getKey()));
             }
             Path file = directory.resolve(String.valueOf(entry.getValue().get("file")));
             String expectedSha = String.valueOf(entry.getValue().get("sha256"));
@@ -291,12 +292,12 @@ public final class InstanceSnapshots {
                 actualSize = Files.size(file);
                 actualSha = BackupArchive.sha256Of(file);
             } catch (IOException missing) {
-                throw Violations.ofForm(HohenheimViolations.text("snapshot_corrupt")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("snapshot_corrupt")
                     .withArg("volume", entry.getKey())
                     .withArg("reason", HohenheimViolations.reasonOf(missing)));
             }
             if (actualSize != expectedSize || !actualSha.equals(expectedSha)) {
-                throw Violations.ofForm(HohenheimViolations.text("snapshot_corrupt")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("snapshot_corrupt")
                     .withArg("volume", entry.getKey())
                     .withArg("reason", "expected sha256 " + expectedSha + " (" + expectedSize
                         + " bytes), found " + actualSha + " (" + actualSize + " bytes)"));
@@ -306,7 +307,7 @@ public final class InstanceSnapshots {
         }
         RestoreCapacity.require(resolved.serverId(), total);
 
-        InstanceStatus live = resolved.runtime().status(resolved.spec().handle());
+        InstanceStatus live = resolved.liveStatus();
         requirePresent(live, resolved);
         boolean wasRunning = live.running();
 
@@ -364,17 +365,17 @@ public final class InstanceSnapshots {
     private void restoreNative(int instanceId, @NonNull Resolved resolved,
                                @NonNull Row snapshot, @NonNull String nativeName) {
         if (!(resolved.runtime() instanceof NativeSnapshotSupport support)) {
-            throw Violations.ofForm(HohenheimViolations.text("snapshots_unsupported")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("snapshots_unsupported")
                 .withArg("kind", String.valueOf((Object) resolved.row().get(InstanceModel.KIND))));
         }
         // -- verification, BEFORE any live state changes -----------------------
-        InstanceStatus live = resolved.runtime().status(resolved.spec().handle());
+        InstanceStatus live = resolved.liveStatus();
         requirePresent(live, resolved);
         try {
             if (!support.snapshotExists(resolved.spec(), nativeName)) {
-                throw Violations.ofForm(HohenheimViolations.text("snapshot_missing")
-                    .withArg("snapshot", nativeName)
-                    .withArg("name", resolved.row().get(InstanceModel.NAME)));
+                throw Violations.ofForm(HohenheimViolations.instanceRefusalText("snapshot_missing",
+                        resolved.row(), null)
+                    .withArg("snapshot", nativeName));
             }
         } catch (IOException unanswerable) {
             throw HohenheimViolations.instanceRefusal("instance_restore_failed", resolved.row(), unanswerable);
@@ -412,31 +413,7 @@ public final class InstanceSnapshots {
      * arbitrarily -- which snapshot survives must not be arbitrary.
      */
     public void pruneForRetention(int instanceId) {
-        Integer retention = Zenit.SETTINGS_VALUES.getValue(
-            HohenheimSettings.Backup.SNAPSHOT_RETENTION);
-        if (retention == null || retention <= 0) {
-            return;
-        }
-        List<Row> complete = Models.get(InstanceSnapshotModel.class).find()
-            .where(InstanceSnapshotModel.INSTANCE_ID.eq(instanceId))
-            .where(InstanceSnapshotModel.STATUS.eq(InstanceSnapshotModel.STATUS_COMPLETE))
-            .orderBy(InstanceSnapshotModel.ID, SortOrder.DESC)
-            .all();
-        for (int i = retention; i < complete.size(); i++) {
-            Object id = complete.get(i).get(InstanceSnapshotModel.ID);
-            try {
-                deleteAuthorized((Integer) id);
-            } catch (Violations pruneFailed) {
-                Blast.log("SNAPSHOT: retention could not remove snapshot", id,
-                    "- kept for a later sweep");
-            } catch (RuntimeException unexpected) {
-                // The capture this sweep follows ALREADY SUCCEEDED. Letting anything the
-                // retention hits escape would report that capture as failed while its
-                // snapshot sits complete on the daemon -- a lie in the opposite direction.
-                Blast.log("SNAPSHOT: retention hit an unexpected failure on snapshot", id,
-                    "- kept for a later sweep:", HohenheimViolations.reasonOf(unexpected));
-            }
-        }
+        RETENTION.sweep(instanceId, old -> deleteAuthorized(old.get(InstanceSnapshotModel.ID)));
     }
 
     /**
@@ -512,7 +489,7 @@ public final class InstanceSnapshots {
     /** Remove a snapshot's payload (controller files or the daemon-side snapshot) and its row. */
     public void delete(int snapshotId) {
         HohenheimAccess.requireOperationCapability(
-            instanceOf(snapshotId), HohenheimAccess.SNAPSHOTS);
+            instanceOf(snapshotId), HohenheimCapabilities.SNAPSHOTS);
         deleteAuthorized(snapshotId);
     }
 
@@ -548,7 +525,7 @@ public final class InstanceSnapshots {
     private static int instanceOf(int snapshotId) {
         Row snapshot = Models.get(InstanceSnapshotModel.class).findById(snapshotId);
         if (snapshot == null) {
-            throw Violations.ofForm(HohenheimViolations.text("snapshot_not_restorable")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("snapshot_not_restorable")
                 .withArg("id", snapshotId));
         }
         return snapshot.get(InstanceSnapshotModel.INSTANCE_ID);
@@ -563,7 +540,7 @@ public final class InstanceSnapshots {
     private static void requireRemoved(@NonNull Path root, @NonNull String label) {
         IOException failure = FileTrees.delete(root);
         if (failure != null) {
-            throw Violations.ofForm(HohenheimViolations.text("snapshot_delete_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("snapshot_delete_failed")
                 .withArg("snapshot", label)
                 .withArg("reason", HohenheimViolations.reasonOf(failure)));
         }
@@ -589,7 +566,7 @@ public final class InstanceSnapshots {
         try {
             support.deleteSnapshot(resolved.spec(), nativeName);
         } catch (IOException error) {
-            throw Violations.ofForm(HohenheimViolations.text("snapshot_delete_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("snapshot_delete_failed")
                 .withArg("snapshot", nativeName)
                 .withArg("reason", HohenheimViolations.reasonOf(error)));
         }
@@ -602,7 +579,7 @@ public final class InstanceSnapshots {
         if (resolved.runtime() instanceof VolumeSnapshotSupport support) {
             return support;
         }
-        throw Violations.ofForm(HohenheimViolations.text("snapshots_unsupported")
+        throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("snapshots_unsupported")
             .withArg("kind", String.valueOf((Object) resolved.row().get(InstanceModel.KIND))));
     }
 
@@ -627,19 +604,15 @@ public final class InstanceSnapshots {
     /** Refuse an ABSENT or UNREACHABLE workload with a named violation. */
     static void requirePresent(@NonNull InstanceStatus live, @NonNull Resolved resolved) {
         if (live.state() == ContainerState.ABSENT) {
-            throw Violations.ofForm(HohenheimViolations.text("instance_workload_absent")
-                .withArg("name", resolved.row().get(InstanceModel.NAME)));
+            throw HohenheimViolations.instanceRefusal("instance_workload_absent", resolved.row(), null);
         }
         if (live.state() == ContainerState.UNREACHABLE) {
-            throw Violations.ofForm(HohenheimViolations.text("instance_unreachable")
-                .withArg("name", resolved.row().get(InstanceModel.NAME)));
+            throw HohenheimViolations.instanceRefusal("instance_unreachable", resolved.row(), null);
         }
     }
 
     static long maxArchiveBytes() {
-        Integer capMb = Zenit.SETTINGS_VALUES.getValue(
-            HohenheimSettings.Backup.MAX_ARCHIVE_MB);
-        return (capMb == null || capMb <= 0 ? 1024L : capMb.longValue()) * 1024 * 1024;
+        return HohenheimSettings.positiveMbAsBytes(HohenheimSettings.Backup.MAX_ARCHIVE_MB);
     }
 
 

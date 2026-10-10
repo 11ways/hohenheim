@@ -1,7 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.activity.OperationSentences;
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimPickRules;
 import be.elevenways.hohenheim.model.AccessListModel;
@@ -13,7 +14,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.site.SiteOperations;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FieldFormEntryDefaults;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
@@ -31,7 +32,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.operation.ArchiveOperations;
-import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
@@ -63,8 +63,8 @@ public final class SiteWrites {
      */
     public static final StringField CREATE_HOSTNAME = StringField.builder()
         .name(SiteDomainModel.HOSTNAME.getName())
-        .label(HohenheimFormCopy.label("hostname"))
-        .help(HohenheimFormCopy.help("create_hostname"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("hostname"))
+        .help(HohenheimMicrocopy.HELP.of("create_hostname"))
         .placeholder("example.com")
         .visibleIn(EditView.CREATE)
         .build();
@@ -159,13 +159,13 @@ public final class SiteWrites {
     /** Creates a site and, when the form carried one, its first hostname, atomically. Its result is the site's id. */
     public static final Operation<Void, CreateInput, Integer> CREATE =
         Operation.declare(HohenheimIds.id("create_site"))
-            .label(Microcopy.of("create").withFilter("scope", "cms"))
+            .label(CmsMicrocopy.of("create"))
             .happened(ZenitActivityAction.CREATE.happened())
             .noSubject()
             .gate(OperationGate.open())
             .input(OperationInput.of(ADMIN_FORM, CreateInput.class, v -> new CreateInput(
                 v.get(SiteModel.NAME), v.get(CREATE_HOSTNAME), v.get(SiteModel.UPSTREAM_KIND),
-                v.get(SiteModel.INSTANCE_ID), settings(v.get(SiteModel.SETTINGS.getName())),
+                v.get(SiteModel.INSTANCE_ID), RawValues.mapOrNull(v.get(SiteModel.SETTINGS.getName())),
                 v.get(SiteModel.TRUSTED_UPSTREAM), v.get(SiteModel.ENABLED), v.get(SiteModel.DESCRIPTION),
                 v.get(SiteModel.AUTH_PROVIDER_ID), v.get(SiteModel.ACCESS_LIST_ID))))
             .result(Integer.class)
@@ -176,12 +176,12 @@ public final class SiteWrites {
     public static final Operation<Row, EditInput, Void> UPDATE =
         Operation.declare(HohenheimIds.id("update_site"))
             .happened(OperationSentences.of("update_site"))
-            .label(Microcopy.of("save").withFilter("scope", "cms"))
+            .label(CmsMicrocopy.of("save"))
             .one(SiteOperations.SITE)
             .gate(OperationGate.open())
             .input(OperationInput.of(ADMIN_FORM.forView(EditView.EDIT), EditInput.class, v -> new EditInput(
                 v.get(SiteModel.NAME), v.get(SiteModel.UPSTREAM_KIND), v.get(SiteModel.INSTANCE_ID),
-                settings(v.get(SiteModel.SETTINGS.getName())), v.get(SiteModel.TRUSTED_UPSTREAM),
+                RawValues.mapOrNull(v.get(SiteModel.SETTINGS.getName())), v.get(SiteModel.TRUSTED_UPSTREAM),
                 v.get(SiteModel.ENABLED), v.get(SiteModel.DESCRIPTION), v.get(SiteModel.AUTH_PROVIDER_ID),
                 v.get(SiteModel.ACCESS_LIST_ID))))
             .patchable()
@@ -192,7 +192,7 @@ public final class SiteWrites {
     public static final Operation<Row, ManageInput, Void> MANAGE_UPDATE =
         Operation.declare(HohenheimIds.id("manage_update_site"))
             .happened(OperationSentences.of("manage_update_site"))
-            .label(Microcopy.of("save").withFilter("scope", "cms"))
+            .label(CmsMicrocopy.of("save"))
             .one(SiteOperations.SITE)
             .gate(OperationGate.open())
             .input(OperationInput.of(MANAGE_FORM, ManageInput.class, v -> new ManageInput(
@@ -207,7 +207,7 @@ public final class SiteWrites {
      */
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_site"))
         .happened(OperationSentences.of("delete_site"))
-        .label(Microcopy.of("delete").withFilter("scope", "cms"))
+        .label(CmsMicrocopy.of("delete"))
         .icon(Icon.TRASH)
         .one(SiteOperations.SITE)
         .gate(OperationGate.open())
@@ -233,10 +233,5 @@ public final class SiteWrites {
         ArchiveOperations.purge(SiteModel.class, SubjectArity.MANY, OperationGate.permission(HohenheimPanel.ACCESS));
 
     private SiteWrites() {
-    }
-
-    @SuppressWarnings("unchecked")
-    static @Nullable Map<String, Object> settings(@Nullable Object value) {
-        return value instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
     }
 }

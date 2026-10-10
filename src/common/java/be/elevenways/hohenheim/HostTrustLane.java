@@ -22,13 +22,13 @@ public enum HostTrustLane {
 
     /** The ssh host key the controller pins, and the client key it installs. */
     SSH("host_key",
-        Microcopy.of("trust_ssh").withFilter("scope", "server_overview"),
-        Microcopy.of("client_key").withFilter("scope", "server_overview")),
+        HohenheimMicrocopy.SERVER_OVERVIEW.of("trust_ssh"),
+        HohenheimMicrocopy.SERVER_OVERVIEW.of("client_key")),
 
     /** The Incus server certificate the controller pins, and the client certificate it presents. */
     INCUS("incus_cert",
-        Microcopy.of("trust_incus").withFilter("scope", "server_overview"),
-        Microcopy.of("client_cert").withFilter("scope", "server_overview"));
+        HohenheimMicrocopy.SERVER_OVERVIEW.of("trust_incus"),
+        HohenheimMicrocopy.SERVER_OVERVIEW.of("client_cert"));
 
     private final String key;
     private final Microcopy title;

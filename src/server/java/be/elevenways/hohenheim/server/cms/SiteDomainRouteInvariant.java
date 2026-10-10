@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
@@ -21,6 +23,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * THE domain route invariant on the SiteDomainModel write pipeline, and the site-enable side of the same route check.
@@ -75,15 +79,14 @@ public final class SiteDomainRouteInvariant {
             if (row == null) {
                 return;
             }
-            Object siteIdValue = SiteDomainModel.effective(row, SiteDomainModel.SITE_ID);
-            Row site = siteIdValue instanceof Integer siteId
-                ? Models.get(SiteModel.class).findById(siteId) : null;
-            String key = RouteClaims.isLive(site) ? RouteClaims.keyOfPendingWrite(row) : null;
+            Row stored = StoredRows.of(Models.get(SiteDomainModel.class), row);
+            Integer siteId = row.afterWrite(SiteDomainModel.SITE_ID, stored);
+            Row site = siteId != null ? Models.get(SiteModel.class).findById(siteId) : null;
+            String key = RouteClaims.isLive(site) ? RouteClaims.keyOfPendingWrite(row, stored) : null;
             // RELEASE PATH 2 of 3: editing the hostname, path or listener set of a LIVE row
             // frees the departing key with nothing else observing it -- the site write hook
             // never runs for a domain-only edit. The stored row is still readable here, and
             // (unlike a site delete) its grants are untouched, so the owner set is exact.
-            Row stored = storedDomainOf(row);
             if (stored != null && !Objects.equals(key, stored.get(SiteDomainModel.LIVE_ROUTE_KEY))) {
                 ReleasedClaims.recordReleaseOf(stored);
             }
@@ -95,14 +98,6 @@ public final class SiteDomainRouteInvariant {
         // tenant releases a name. A ledger written at only SOME release points is worse
         // than none: it would quarantine some hostnames and silently free others.
         SiteDomainModel.SCHEMA.addBeforeRemoveHook(ReleasedClaims::recordReleaseOfDoomedRows);
-    }
-
-    /** The stored domain row a write targets, or null for a create. */
-    private static @Nullable Row storedDomainOf(@NonNull Row row) {
-        if (!row.has(SiteDomainModel.ID.getName()) || row.get(SiteDomainModel.ID) == null) {
-            return null;
-        }
-        return Models.get(SiteDomainModel.class).findById(row.get(SiteDomainModel.ID));
     }
 
     /**
@@ -123,14 +118,15 @@ public final class SiteDomainRouteInvariant {
 
     /** Hostname required, a site required, and the route unclaimed. */
     private static void refuseRouteConflicts(@NonNull Row row) {
-        Object hostnameValue = SiteDomainModel.effective(row, SiteDomainModel.HOSTNAME);
-        String hostname = hostnameValue != null ? String.valueOf(hostnameValue).trim() : "";
+        Row stored = StoredRows.of(Models.get(SiteDomainModel.class), row);
+        Object hostnameValue = row.afterWrite(SiteDomainModel.HOSTNAME, stored);
+        String hostname = trimmed(hostnameValue);
         if (hostname.isEmpty()) {
-            throw Violations.ofField("hostname", hostname, CmsSupport.violationText("hostname_required"));
+            throw Violations.ofField("hostname", hostname, HohenheimMicrocopy.VIOLATIONS.of("hostname_required"));
         }
-        Object siteIdValue = SiteDomainModel.effective(row, SiteDomainModel.SITE_ID);
+        Object siteIdValue = row.afterWrite(SiteDomainModel.SITE_ID, stored);
         if (!(siteIdValue instanceof Integer siteId)) {
-            throw Violations.ofField("site_id", siteIdValue, CmsSupport.violationText("site_required"));
+            throw Violations.ofField("site_id", siteIdValue, HohenheimMicrocopy.VIOLATIONS.of("site_required"));
         }
         Row site = Models.get(SiteModel.class).findById(siteId);
         // Uniqueness compares CANONICAL route components: the hostname as the model hook
@@ -162,13 +158,13 @@ public final class SiteDomainRouteInvariant {
         // site name), so a same-route row on ANOTHER site is exactly as broken as one on
         // this site. Rows of DISABLED other sites (clones, staged drafts) are exempt --
         // they hold no routes; the conflict is refused again on the site-enable edit.
-        String matchType = stringValue(SiteDomainModel.effective(row, SiteDomainModel.MATCH_TYPE));
+        String matchType = Objects.toString(row.afterWrite(SiteDomainModel.MATCH_TYPE, stored), null);
         String canonicalHostname = SiteDomainModel.canonicalHostname(hostname, matchType);
-        String path = normalizedPath(SiteDomainModel.effective(row, SiteDomainModel.PATH));
+        String path = normalizedPath(row.afterWrite(SiteDomainModel.PATH, stored));
         List<String> listenOn = ListenerAddressMatcher.parse(
-            stringValue(SiteDomainModel.effective(row, SiteDomainModel.LISTEN_ON)));
+            Objects.toString(row.afterWrite(SiteDomainModel.LISTEN_ON, stored), null));
         Object ownId = row.has(SiteDomainModel.ID.getName()) ? row.get(SiteDomainModel.ID) : null;
-        boolean introducesClaim = introducesClaim(storedDomainOf(row), row, canonicalHostname, matchType);
+        boolean introducesClaim = introducesClaim(stored, row, canonicalHostname, matchType);
 
         Map<Integer, Row> sitesById = new HashMap<>();
         for (Row candidateSite : Models.get(SiteModel.class).find().all()) {
@@ -215,23 +211,23 @@ public final class SiteDomainRouteInvariant {
                 // never enumerate the installation's hostnames or site names.
                 throw Violations.ofField("hostname", hostname,
                     ClaimRefusals.heldBy(candidateSiteId, candidateSite,
-                        holder -> CmsSupport.violationText("route_overlaps_other_site")
+                        holder -> HohenheimMicrocopy.VIOLATIONS.of("route_overlaps_other_site")
                             .withArg("hostname", String.valueOf(candidateHostname))
                             .withArg("site", holder),
-                        CmsSupport.violationText(HostnameAuthority.HOSTNAME_UNAVAILABLE)));
+                        HohenheimMicrocopy.VIOLATIONS.of(HostnameAuthority.HOSTNAME_UNAVAILABLE)));
             }
             if (!sameSite) {
                 throw Violations.ofField(path == null ? "hostname" : "path",
                     path == null ? hostname : path,
                     ClaimRefusals.heldBy(candidateSiteId, candidateSite,
-                        holder -> CmsSupport.violationText("route_taken_other_site")
+                        holder -> HohenheimMicrocopy.VIOLATIONS.of("route_taken_other_site")
                             .withArg("site", holder),
-                        CmsSupport.violationText(HostnameAuthority.HOSTNAME_UNAVAILABLE)));
+                        HohenheimMicrocopy.VIOLATIONS.of(HostnameAuthority.HOSTNAME_UNAVAILABLE)));
             }
             if (path == null) {
-                throw Violations.ofField("hostname", hostname, CmsSupport.violationText("hostname_taken"));
+                throw Violations.ofField("hostname", hostname, HohenheimMicrocopy.VIOLATIONS.of("hostname_taken"));
             }
-            throw Violations.ofField("path", path, CmsSupport.violationText("route_taken"));
+            throw Violations.ofField("path", path, HohenheimMicrocopy.VIOLATIONS.of("route_taken"));
         }
 
         // The QUARANTINE tier, last: a live holder is the more actionable refusal and keeps
@@ -244,7 +240,7 @@ public final class SiteDomainRouteInvariant {
         // (refuseEnableRouteConflicts), which is what closes the
         // stage-on-a-disabled-site-then-enable two-step.
         if (ownSiteLive) {
-            Row quarantine = ReleasedClaims.refusalFor(RouteClaims.keyOfPendingWrite(row),
+            Row quarantine = ReleasedClaims.refusalFor(RouteClaims.keyOfPendingWrite(row, stored),
                 matchType, siteId);
             if (quarantine != null) {
                 throw Violations.ofField("hostname", hostname, quarantineViolation(quarantine,
@@ -297,7 +293,7 @@ public final class SiteDomainRouteInvariant {
         if (stored == null) {
             return true;
         }
-        if (!RouteClaims.keyOfPendingWrite(row)
+        if (!RouteClaims.keyOfPendingWrite(row, stored)
                 .equals(stored.get(SiteDomainModel.LIVE_ROUTE_KEY))) {
             return true;
         }
@@ -321,7 +317,7 @@ public final class SiteDomainRouteInvariant {
      */
     private static @NonNull Microcopy quarantineViolation(@NonNull Row quarantine,
                                                           @NonNull String key) {
-        return CmsSupport.violationText(key)
+        return HohenheimMicrocopy.VIOLATIONS.of(key)
             .withArg("hostname", String.valueOf(quarantine.get(ReleasedRouteClaimModel.HOSTNAME)))
             .withArg("days", String.valueOf(ReleasedClaims.remainingDays(quarantine)));
     }
@@ -346,7 +342,7 @@ public final class SiteDomainRouteInvariant {
             }
             String ownHostname = SiteDomainModel.canonicalHostname(
                 own.get(SiteDomainModel.HOSTNAME), own.get(SiteDomainModel.MATCH_TYPE));
-            String ownMatchType = stringValue(own.get(SiteDomainModel.MATCH_TYPE));
+            String ownMatchType = Objects.toString(own.get(SiteDomainModel.MATCH_TYPE), null);
             String ownPath = normalizedPath(own.get(SiteDomainModel.PATH));
             List<String> ownListen = ListenerAddressMatcher.parse(own.get(SiteDomainModel.LISTEN_ON));
             // The stored row IS the pending write here, so this asks whether the row
@@ -389,12 +385,12 @@ public final class SiteDomainRouteInvariant {
                 String ownName = String.valueOf(own.get(SiteDomainModel.HOSTNAME));
                 throw Violations.ofField("enabled", true,
                     ClaimRefusals.heldBy(candidateSiteId, candidateSite,
-                        site -> CmsSupport.violationText(
+                        site -> HohenheimMicrocopy.VIOLATIONS.of(
                                 identical ? goLive.routeConflictKey() : goLive.routeOverlapKey())
                             .withArg("hostname", ownName)
                             .withArg("pattern", String.valueOf(candidateHostname))
                             .withArg("site", site),
-                        CmsSupport.violationText(goLive.hostnameUnavailableKey())
+                        HohenheimMicrocopy.VIOLATIONS.of(goLive.hostnameUnavailableKey())
                             .withArg("hostname", ownName)));
             }
 
@@ -413,10 +409,6 @@ public final class SiteDomainRouteInvariant {
     /** THE overlap rule lives with the matcher, so the quarantine judges it identically. */
     private static boolean listenersOverlap(@NonNull List<String> first, @NonNull List<String> second) {
         return ListenerAddressMatcher.overlap(first, second);
-    }
-
-    private static @Nullable String stringValue(@Nullable Object value) {
-        return value != null ? String.valueOf(value) : null;
     }
 
     /** Canonical route path for uniqueness, delegated to the routing authority. */

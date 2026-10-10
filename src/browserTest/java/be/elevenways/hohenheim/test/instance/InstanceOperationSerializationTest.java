@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.CountDownLatch;
 import java.util.List;
@@ -13,7 +14,6 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -136,8 +136,8 @@ class InstanceOperationSerializationTest {
             // 1. A capture whose daemon step answers with a NAMED refusal, not an IO error:
             //    the net that caught only IOException left the record `capturing`.
             FakeNativeDaemons.DURING_SNAPSHOT.set(() -> {
-                throw Violations.ofForm(Microcopy.of("snapshots_unsupported")
-                    .withFilter("scope", "violations").withArg("kind", "fake"));
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("snapshots_unsupported")
+                    .withArg("kind", "fake"));
             });
             Throwable captureRefused = catchThrowable(() -> snapshots.create(id, "refused"));
             assertThat(captureRefused)
@@ -160,8 +160,8 @@ class InstanceOperationSerializationTest {
             new InstanceService().deploy(id);
             int snapshotId = snapshots.create(id, "good");
             FakeNativeDaemons.DURING_RESTORE.set(() -> {
-                throw Violations.ofForm(Microcopy.of("snapshots_unsupported")
-                    .withFilter("scope", "violations").withArg("kind", "fake"));
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("snapshots_unsupported")
+                    .withArg("kind", "fake"));
             });
             Throwable restoreRefused = catchThrowable(() -> snapshots.restore(snapshotId));
             assertThat(restoreRefused)

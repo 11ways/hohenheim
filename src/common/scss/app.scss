@@ -102,10 +102,8 @@
         --pl-log-view-max-height: 24rem;
     }
 
-    // A word and a line in a list cell: the answer's badge, what it means underneath. An address's HTTPS cell
-    // stacks the same way: the badge, then when its certificate expires.
-    .hh-state-line,
-    .hh-cert-coverage {
+    // A state cell: the answer's badge, and the lines that explain it stacked underneath.
+    .hh-state-line {
         display: inline-flex;
         flex-direction: column;
         align-items: flex-start;
@@ -139,8 +137,7 @@
         font-size: var(--pl-font-size-sm);
     }
 
-    .hh-state-line-detail,
-    .hh-cert-expiry {
+    .hh-state-line-detail {
         color: var(--pl-color-text-muted);
         font-size: var(--pl-font-size-sm);
         // A renewal error or an expiry wraps inside its column instead of widening the table past the viewport.

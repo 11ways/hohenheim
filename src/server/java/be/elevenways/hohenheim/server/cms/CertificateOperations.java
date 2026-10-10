@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -9,7 +10,6 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.protoblast.common.http.Uri;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionRequest;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -39,6 +39,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.RawValues.trimmed;
+
 /**
  * Let's Encrypt from the admin: request a certificate (from the certificate list, or for one domain row), re-order an
  * existing one, and finish a manual DNS-01 order once its TXT records are published.
@@ -64,30 +66,30 @@ public final class CertificateOperations {
 
     static final ListField<String> DOMAINS = ListField.<String>builder(DOMAIN_NAME)
         .name("domains")
-        .label(copy("domains"))
-        .help(copy("domains_help"))
+        .label(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("domains"))
+        .help(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("domains_help"))
         .build();
 
     static final StringField NICE_NAME = StringField.builder("nice_name")
-        .label(copy("name"))
+        .label(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("name"))
         .placeholder("example.com")
         .build();
 
     static final StringField EMAIL = StringField.builder("letsencrypt_email")
-        .label(copy("account_email"))
-        .help(copy("account_email_help"))
+        .label(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("account_email"))
+        .help(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("account_email_help"))
         .build();
 
     public static final EnumField CHALLENGE = CertificateModel.challengeTypeField()
         .defaultValue(CertificateModel.CHALLENGE_HTTP)
-        .label(copy("validation"))
-        .help(copy("validation_help"))
+        .label(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("validation"))
+        .help(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("validation_help"))
         .build();
 
     public static final EnumField DNS_PUBLISHER = CertificateModel.dnsPublisherField()
         .defaultValue(CertificateModel.DNS_PUBLISHER_MANUAL)
-        .label(copy("dns_mode"))
-        .help(copy("dns_mode_help"))
+        .label(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("dns_mode"))
+        .help(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("dns_mode_help"))
         .build();
 
     private static final FormSpec INPUT = FormSpec.builder()
@@ -106,8 +108,8 @@ public final class CertificateOperations {
     /** A new certificate for the names the operator lists; the certificate list's header action. */
     public static final Operation<Void, Order, Integer> REQUEST = Operation.declare(HohenheimIds.id("request_certificate"))
         .happened(OperationSentences.of("request_certificate"))
-        .label(copy("get_certificate"))
-        .description(copy("uses_production"))
+        .label(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("get_certificate"))
+        .description(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("uses_production"))
         .icon(Icon.of("lock"))
         .noSubject()
         .gate(OperationGate.open())
@@ -122,8 +124,8 @@ public final class CertificateOperations {
     public static final Operation<Row, Order, Integer> REQUEST_FOR_DOMAIN =
         Operation.declare(HohenheimIds.id("request_domain_certificate"))
             .happened(OperationSentences.of("request_domain_certificate"))
-            .label(copy("get_certificate"))
-            .description(copy("uses_production"))
+            .label(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("get_certificate"))
+            .description(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("uses_production"))
             .icon(Icon.of("lock"))
             .one(DOMAIN)
             .gate(OperationGate.open())
@@ -137,8 +139,8 @@ public final class CertificateOperations {
     /** A new order written back into an existing Let's Encrypt certificate: how names or the challenge change. */
     public static final Operation<Row, Order, Integer> REISSUE = Operation.declare(HohenheimIds.id("reissue_certificate"))
         .happened(OperationSentences.of("reissue_certificate"))
-        .label(Microcopy.of("reissue").withFilter("scope", "certificate"))
-        .description(copy("uses_production"))
+        .label(HohenheimMicrocopy.CERTIFICATE.of("reissue"))
+        .description(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("uses_production"))
         .icon(Icon.of("rotate"))
         .one(CERTIFICATE)
         .gate(OperationGate.open())
@@ -152,8 +154,8 @@ public final class CertificateOperations {
     /** Finishes a manual DNS-01 order after its TXT records are published. */
     public static final Operation<Row, Void, Integer> CONTINUE_DNS = Operation.declare(HohenheimIds.id("continue_dns_order"))
         .happened(OperationSentences.of("continue_dns_order"))
-        .label(copy("verify_dns"))
-        .description(copy("verify_dns_hint"))
+        .label(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("verify_dns"))
+        .description(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("verify_dns_hint"))
         .icon(Icon.of("circle-check"))
         .one(CERTIFICATE)
         .gate(OperationGate.open())
@@ -175,7 +177,7 @@ public final class CertificateOperations {
     static @NonNull PanelAction<Row> requestAction() {
         init();
         return PanelAction.<Row, Integer>places(REQUEST, ActionPlacement.HEADER, CertificateOperations::opened)
-            .confirmation(ConfirmationSpec.generic(copy("uses_production"), false))
+            .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("uses_production"), false))
             .inSheet()
             .inlineInHeader(true)
             .build();
@@ -185,7 +187,7 @@ public final class CertificateOperations {
     static @NonNull PanelAction<Row> requestForDomainAction() {
         init();
         return PanelAction.<Row, Integer>places(REQUEST_FOR_DOMAIN, ActionPlacement.ROW, CertificateOperations::opened)
-            .confirmation(ConfirmationSpec.generic(copy("uses_production"), false))
+            .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("uses_production"), false))
             .inSheet()
             .inputValues((domain, request) -> prefill(domain))
             // A name a working certificate already covers needs no new one: changing that certificate is its own
@@ -200,7 +202,7 @@ public final class CertificateOperations {
     static @NonNull PanelAction<Row> reissueAction() {
         init();
         return PanelAction.<Row, Integer>places(REISSUE, ActionPlacement.ROW, CertificateOperations::opened)
-            .confirmation(ConfirmationSpec.generic(copy("reissue_notice"), false))
+            .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("reissue_notice"), false))
             .inSheet()
             .inputValues((cert, request) -> reorder(cert))
             // A manual upload has no order to repeat, and the ACME account row is not a certificate at all: the
@@ -215,7 +217,8 @@ public final class CertificateOperations {
     static @NonNull PanelAction<Row> continueDnsAction() {
         init();
         return PanelAction.<Row, Integer>places(CONTINUE_DNS, ActionPlacement.ROW, CertificateOperations::opened)
-            .confirmation(ConfirmationSpec.generic(copy("publish_description"), false))
+            .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("publish_description"),
+                false))
             .build();
     }
 
@@ -245,21 +248,13 @@ public final class CertificateOperations {
         }
         String stored = cert.get(CertificateModel.DOMAIN_NAMES_TEXT);
         values.put(DOMAINS.getName(), stored == null || stored.isBlank() ? List.of() : List.of(stored.split(",")));
-        values.put(NICE_NAME.getName(), text(cert.get(CertificateModel.NICE_NAME)));
-        values.put(EMAIL.getName(), text(cert.get(CertificateModel.LETSENCRYPT_EMAIL)));
-        String challenge = text(cert.get(CertificateModel.CHALLENGE_TYPE));
+        values.put(NICE_NAME.getName(), trimmed(cert.get(CertificateModel.NICE_NAME)));
+        values.put(EMAIL.getName(), trimmed(cert.get(CertificateModel.LETSENCRYPT_EMAIL)));
+        String challenge = trimmed(cert.get(CertificateModel.CHALLENGE_TYPE));
         values.put(CHALLENGE.getName(), challenge.isEmpty() ? CertificateModel.CHALLENGE_HTTP : challenge);
-        String publisher = text(cert.get(CertificateModel.DNS_PUBLISHER));
+        String publisher = trimmed(cert.get(CertificateModel.DNS_PUBLISHER));
         values.put(DNS_PUBLISHER.getName(), publisher.isEmpty() ? CertificateModel.DNS_PUBLISHER_MANUAL : publisher);
         return values;
-    }
-
-    private static @NonNull String text(@Nullable Object value) {
-        return value == null ? "" : String.valueOf(value).trim();
-    }
-
-    static @NonNull Microcopy copy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "certificate_request");
     }
 
     /**

@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.cms.AccessRuleParts;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -28,6 +28,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
+import static be.elevenways.hohenheim.HohenheimSlugs.MANAGE;
+
 /**
  * The access-rule entries (admin and the /manage twin) of the Hohenheim legacy-admin remainder (batch 1b), stored
  * before the rule tree moves onto core's TreeBehaviour and the entries onto shared parts, and compared exactly after.
@@ -41,8 +44,6 @@ import java.util.Map;
 class AccessRuleSurfacesBrowserTest extends HohenheimTestBase {
 
     private static final String PREFIX = "access-rule-surfaces-";
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
-    private static final String MANAGE = HohenheimSlugs.MANAGE;
     private static final String LISTS = HohenheimSlugs.ACCESS_LISTS;
     private static final String RULES = "access-rules";
 
@@ -79,11 +80,12 @@ class AccessRuleSurfacesBrowserTest extends HohenheimTestBase {
         sharedRuleId = String.valueOf(rule(sharedList, null, AccessRuleModel.TYPE_IP_ALLOW,
             Map.of("network", "192.168.0.0/16"), true, 0));
         RecordGrants.grant(GrantSubjectType.USER, tenantId, AccessListModel.MODEL_ID, tenantList,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         // AIDEV-NOTE: the legacy /manage eligibility counted no access-list grant, so the tenant also manages a site
         // (the AccessSurfacesBrowserTest fixture) for the panel to admit it at all.
         siteId = site(PREFIX + "site");
-        RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId, HohenheimAccess.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId, HohenheimCapabilities.MANAGE,
+            true);
         operator = TenantConduits.operator();
         tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(tenantId, "Access Rule Surfaces Tenant")));
         tenantEmpty = AccessContext.of(TenantConduits.stubFor(
@@ -93,10 +95,10 @@ class AccessRuleSurfacesBrowserTest extends HohenheimTestBase {
     /** The fixture rows leave with the class; deleting a list takes its rules (the list cascade). */
     @AfterAll
     static void cleanUp() {
-        RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId, HohenheimAccess.MANAGE);
+        RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId, HohenheimCapabilities.MANAGE);
         HardDeletes.byId(Models.get(SiteModel.class), siteId);
         RecordGrants.revoke(GrantSubjectType.USER, tenantId, AccessListModel.MODEL_ID, Integer.parseInt(tenantListId),
-            HohenheimAccess.MANAGE);
+            HohenheimCapabilities.MANAGE);
         HardDeletes.byId(Models.get(AccessListModel.class), Integer.parseInt(tenantListId));
         HardDeletes.byId(Models.get(AccessListModel.class), Integer.parseInt(sharedListId));
     }

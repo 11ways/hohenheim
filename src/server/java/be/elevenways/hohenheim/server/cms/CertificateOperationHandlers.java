@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -16,7 +17,8 @@ import be.elevenways.hohenheim.server.tls.CommandDnsTxtPublisher;
 import be.elevenways.hohenheim.server.tls.HostnameReach;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.validation.validator.Email;
+import be.elevenways.zenit.common.validation.ValidationContext;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -31,6 +33,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * The certificate operations' handlers: every Let's Encrypt order the admin places goes through {@link #order}.
@@ -70,8 +74,8 @@ final class CertificateOperationHandlers {
 
     /** @return the reason no order may be placed now, or null */
     static @Nullable Microcopy letsEncryptUnavailable() {
-        return Boolean.TRUE.equals(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED))
-            ? null : error("letsencrypt_disabled");
+        return HohenheimSettings.isOn(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED)
+            ? null : HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("letsencrypt_disabled");
     }
 
     /** A hostname a certificate can be ordered for: one exact name on a site this proxy terminates TLS for. */
@@ -92,40 +96,41 @@ final class CertificateOperationHandlers {
      */
     static int order(CertificateOperations.@NonNull Order order, @NonNull AccessContext access,
                      @Nullable Row reissue) {
-        String email = order.email() == null ? "" : order.email().trim();
-        if (!email.isEmpty() && !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
-            throw refused(error("invalid_email").withArg("email", email));
+        String email = trimmed(order.email());
+        if (!Email.instance().validate(email, ValidationContext.of("email")).isValid()) {
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("invalid_email").withArg("email", email));
         }
         List<String> hostnames = order.hostnames();
         if (hostnames.isEmpty()) {
-            throw refused(error("domain_required"));
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("domain_required"));
         }
         String niceName = order.niceName() == null || order.niceName().isBlank() ? hostnames.get(0) : order.niceName();
         boolean dns = CertificateModel.CHALLENGE_DNS.equals(order.challenge());
         String publisher = dns ? (order.publisher() == null ? CertificateModel.DNS_PUBLISHER_MANUAL : order.publisher())
             : null;
         if (!dns && hostnames.stream().anyMatch(name -> AcmeService.wildcardSanBase(name) != null)) {
-            throw refused(error("wildcard_requires_dns"));
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("wildcard_requires_dns"));
         }
         List<String> invalid = AcmeService.invalidHostnames(hostnames, dns);
         if (!invalid.isEmpty()) {
-            throw refused(error("invalid_hostnames").withArg("hostnames", String.join(", ", invalid)));
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("invalid_hostnames")
+                .withArg("hostnames", String.join(", ", invalid)));
         }
         Microcopy unavailable = letsEncryptUnavailable();
         if (unavailable != null) {
             throw refused(unavailable);
         }
         if (reissue != null && CertificateModel.DNS_PUBLISHER_MANUAL.equals(publisher)) {
-            throw refused(error("reissue_manual_unsupported"));
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("reissue_manual_unsupported"));
         }
         if (CertificateModel.DNS_PUBLISHER_INTERNAL.equals(publisher)) {
             refuseUnhostedZones(hostnames);
         } else if (CertificateModel.DNS_PUBLISHER_COMMAND.equals(publisher) && !CommandDnsTxtPublisher.isConfigured()) {
-            throw refused(error("hook_not_configured"));
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("hook_not_configured"));
         }
         ProxyServer proxy = ServerMain.getProxyServer();
         if (proxy == null) {
-            throw refused(error("proxy_unavailable"));
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("proxy_unavailable"));
         }
         if (!dns) {
             refuseUnreachable(hostnames);
@@ -177,7 +182,7 @@ final class CertificateOperationHandlers {
         AcmeService.ManualDnsRequest pending = proxy == null ? null
             : proxy.getAcmeService().manualDnsRequestFor(cert.get(CertificateModel.ID));
         if (pending == null) {
-            throw refused(error("manual_expired"));
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("manual_expired"));
         }
         int certId = proxy.getAcmeService().completeManualDnsCertificate(pending.token());
         if (certId < 0) {
@@ -192,7 +197,7 @@ final class CertificateOperationHandlers {
     private static void refuseUnhostedZones(@NonNull List<String> hostnames) {
         var dnsServer = ServerMain.getDnsServer();
         if (dnsServer == null || !dnsServer.isRunning()) {
-            throw refused(error("dns_server_disabled"));
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("dns_server_disabled"));
         }
         InternalDnsTxtPublisher internal = new InternalDnsTxtPublisher();
         List<String> unhosted = new ArrayList<>();
@@ -215,10 +220,12 @@ final class CertificateOperationHandlers {
             }
         }
         if (!unhosted.isEmpty()) {
-            throw refused(error("zone_not_hosted").withArg("hostnames", String.join(", ", unhosted)));
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("zone_not_hosted")
+                .withArg("hostnames", String.join(", ", unhosted)));
         }
         if (!replicated.isEmpty()) {
-            throw refused(error("zone_not_primary").withArg("hostnames", String.join(", ", replicated))
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("zone_not_primary")
+                .withArg("hostnames", String.join(", ", replicated))
                 .withArg("peer", String.valueOf(owningPeer)));
         }
     }
@@ -232,13 +239,15 @@ final class CertificateOperationHandlers {
                 // may sit behind a CDN or a floating address that still forwards the challenge (Reach#declared).
                 case POINTS_ELSEWHERE -> {
                     if (reach.declared()) {
-                        throw refused(error("does_not_point_here").withArg("hostname", hostname)
+                        throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("does_not_point_here")
+                            .withArg("hostname", hostname)
                             .withArg("addresses", String.join(", ", reach.addresses())));
                     }
                 }
                 case UNRESOLVED -> {
                     if (reach.declared()) {
-                        throw refused(error("does_not_resolve").withArg("hostname", hostname));
+                        throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("does_not_resolve")
+                            .withArg("hostname", hostname));
                     }
                 }
                 // of() waits for the resolver, so CHECKING and NOT_CHECKED never come from it; nobody is refused on
@@ -259,22 +268,18 @@ final class CertificateOperationHandlers {
             case NOT_MANAGED -> "hostname_not_managed";
             case EXCLUDED -> "excluded_hostnames";
         };
-        return error(key).withArg("hostnames", refused.hostname());
+        return HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of(key).withArg("hostnames", refused.hostname());
     }
 
     private static CertificateOperations.@NonNull Order require(CertificateOperations.@Nullable Order order) {
         if (order == null) {
-            throw refused(error("domain_required"));
+            throw refused(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("domain_required"));
         }
         return order;
     }
 
     private static @NonNull Violations refused(@NonNull Microcopy message) {
         return Violations.ofForm(message);
-    }
-
-    static @NonNull Microcopy error(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "certificate_request_error");
     }
 
     private static <S, I> @NonNull Authorizer<S, I> admin() {

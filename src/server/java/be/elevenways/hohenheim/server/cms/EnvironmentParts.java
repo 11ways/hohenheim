@@ -1,12 +1,13 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
@@ -21,7 +22,6 @@ import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
-import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RowScope;
 import be.elevenways.zenit.cms.common.resource.RowSave;
 import be.elevenways.hohenheim.instance.VariableKind;
@@ -34,7 +34,6 @@ import be.elevenways.zenit.common.operation.SubjectArity;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.routing.ParameterDefinition;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.operation.RowDeleteOperations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -58,12 +57,6 @@ import java.util.Map;
  */
 public final class EnvironmentParts {
 
-    /** The environment entry's slug, which the project list's related pages name. */
-    public static final String SLUG = "environments";
-
-    /** The environment-variable entry's slug, which the environment list's related pages name. */
-    public static final String VARIABLES_SLUG = "environment-variables";
-
     /** Only environment-owned values: an instance's own variable belongs to the instance surfaces. */
     public static final RowScope VARIABLE_ROWS =
         RowScope.within(() -> InstanceVariableModel.ENVIRONMENT_ID.isNotNull());
@@ -79,7 +72,7 @@ public final class EnvironmentParts {
     public static final Operation<Row, Void, Integer> DELETE =
         RowDeleteOperations.declare(EnvironmentModel.class, SubjectArity.ONE, OPERATOR)
             .id(HohenheimIds.id("delete_environment"))
-            .availability((environment, access) -> inUseReason(environment))
+            .availability((environment, access) -> DeleteImpact.environmentInUse(environment))
             .register();
 
     /** Removes one environment-owned variable; anything running keeps its value until its next deploy. */
@@ -121,17 +114,17 @@ public final class EnvironmentParts {
             .column(ColumnSpec.fromField(EnvironmentModel.DESCRIPTION).hidden().build())
             .column(ColumnSpec.fromField(EnvironmentModel.PROJECT_ID).relation(project).build())
             .build();
-        return PanelResource.builder(HohenheimIds.id("environment"), SLUG, SUBJECT)
-            .label(Microcopy.of("plural").withFilter("scope", "environment"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "environment"))
+        return PanelResource.builder(HohenheimIds.id("environment"), HohenheimSlugs.ENVIRONMENTS, SUBJECT)
+            .label(HohenheimMicrocopy.ENVIRONMENT.of("plural"))
+            .recordLabel(HohenheimMicrocopy.ENVIRONMENT.of("singular"))
             // Demoted out of the sidebar: this sentence reaches a reader through the panel index and the related
             // pages of the project list.
-            .description(CmsSupport.navHint("environment"))
+            .description(CmsSupport.navHint(HohenheimMicrocopy.ENVIRONMENT))
             .icon(Icon.of("layer-group"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(15)
             .showInNav(false)
-            .standsUnder(ProjectParts.SLUG)
+            .standsUnder(HohenheimSlugs.PROJECTS)
             .reads(ResourceReads.rows())
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
                 .search(EnvironmentModel.NAME, EnvironmentModel.DESCRIPTION).build())
@@ -141,15 +134,16 @@ public final class EnvironmentParts {
                 .createDefaults(request -> prefill(request, HohenheimParams.PROJECT_ID_PREFILL,
                     EnvironmentModel.PROJECT_ID.getName()))
                 .quickCreate(ENVIRONMENT_QUICK_CREATE)
-                .quickCreatePresets(access -> preset(access, EnvironmentModel.PROJECT_ID.getName(), "projects"))
+                .quickCreatePresets(access -> CmsSupport.parentPreset(access, EnvironmentModel.PROJECT_ID.getName(),
+                    HohenheimSlugs.PROJECTS))
                 .inlineEditable(EnvironmentModel.NAME)
                 .build())
             .writes(ResourceMutations.rows().create().update().delete(DELETE).build())
             // The dialog states the policy the write funnel enforces: an environment still holding variables or
             // workloads is refused, so the operator learns the order of operations before the click.
             .deleteConfirmation(DeleteConfirmation.of(DeleteConfirmation.body(
-                Microcopy.of("delete_confirm").withFilter("scope", "environment"))))
-            .relatedPages(RelatedPage.toPeer(VARIABLES_SLUG))
+                HohenheimMicrocopy.ENVIRONMENT.of("delete_confirm"))))
+            .relatedPages(RelatedPage.toPeer(HohenheimSlugs.ENVIRONMENT_VARIABLES))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
     }
@@ -178,16 +172,16 @@ public final class EnvironmentParts {
             .column(ColumnSpec.fromField(InstanceVariableModel.KIND).filterable().hidden().build())
             .column(ColumnSpec.fromField(InstanceVariableModel.ENVIRONMENT_ID).relation(environment).build())
             .build();
-        return PanelResource.builder(HohenheimIds.id("environment_variable"), VARIABLES_SLUG,
+        return PanelResource.builder(HohenheimIds.id("environment_variable"), HohenheimSlugs.ENVIRONMENT_VARIABLES,
                 SubjectType.record(InstanceVariableModel.MODEL_ID))
-            .label(Microcopy.of("plural").withFilter("scope", "environment_variable"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "environment_variable"))
-            .description(CmsSupport.navHint("environment_variable"))
+            .label(HohenheimMicrocopy.ENVIRONMENT_VARIABLE.of("plural"))
+            .recordLabel(HohenheimMicrocopy.ENVIRONMENT_VARIABLE.of("singular"))
+            .description(CmsSupport.navHint(HohenheimMicrocopy.ENVIRONMENT_VARIABLE))
             .icon(Icon.of("sliders"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(15)
             .showInNav(false)
-            .standsUnder(SLUG)
+            .standsUnder(HohenheimSlugs.ENVIRONMENTS)
             // List, load and create alike: a create without an environment refuses rather than landing as an orphan.
             .scope(VARIABLE_ROWS)
             .reads(ResourceReads.rows())
@@ -199,8 +193,8 @@ public final class EnvironmentParts {
                 .createDefaults(request -> prefill(request, HohenheimParams.ENVIRONMENT_ID_PREFILL,
                     InstanceVariableModel.ENVIRONMENT_ID.getName()))
                 .quickCreate(VARIABLE_QUICK_CREATE)
-                .quickCreatePresets(access -> preset(access, InstanceVariableModel.ENVIRONMENT_ID.getName(),
-                    SLUG))
+                .quickCreatePresets(access -> CmsSupport.parentPreset(access,
+                    InstanceVariableModel.ENVIRONMENT_ID.getName(), HohenheimSlugs.ENVIRONMENTS))
                 .build())
             .writes(ResourceMutations.rows().create().update().delete(DELETE_VARIABLE)
                 .beforeSave(EnvironmentParts::placeValueInItsCarrier)
@@ -209,16 +203,6 @@ public final class EnvironmentParts {
                 .forRow((variable, request) -> variableDeleteBody(variable)))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
-    }
-
-    /**
-     * The reason an environment cannot go, in the write funnel's own words.
-     *
-     * @return null when nothing groups under the environment
-     */
-    static @Nullable Microcopy inUseReason(@NonNull Row environment) {
-        var usage = DeleteImpact.environmentUsage(environment.get(EnvironmentModel.ID));
-        return usage.isEmpty() ? null : usage.refusal();
     }
 
     /** Retires the physical column the submitted kind no longer uses after ordinary authorization and coercion. */
@@ -242,10 +226,9 @@ public final class EnvironmentParts {
             : DeleteImpact.environmentNameOf(variable.get(InstanceVariableModel.ENVIRONMENT_ID));
         String key = variable == null ? null : variable.get(InstanceVariableModel.KEY);
         if (environment == null || environment.isBlank() || key == null || key.isBlank()) {
-            return DeleteConfirmation.body(Microcopy.of("delete_confirm").withFilter("scope", "environment_variable"));
+            return DeleteConfirmation.body(HohenheimMicrocopy.ENVIRONMENT_VARIABLE.of("delete_confirm"));
         }
-        return DeleteConfirmation.body(Microcopy.of("delete_confirm_named")
-            .withFilter("scope", "environment_variable")
+        return DeleteConfirmation.body(HohenheimMicrocopy.ENVIRONMENT_VARIABLE.of("delete_confirm_named")
             .withArg("key", key)
             .withArg("environment", environment));
     }
@@ -255,17 +238,6 @@ public final class EnvironmentParts {
                                                         @NonNull ParameterDefinition<Integer> param,
                                                         @NonNull String field) {
         Integer id = CmsSupport.prefill(request.conduit(), param);
-        return id != null ? Map.of(field, id) : Map.of();
-    }
-
-    /** The parent the quick-add bar adds into: the {@code ?<parent>_id=} prefill, else the tab's own record. */
-    private static @NonNull Map<String, Object> preset(@NonNull AccessContext access, @NonNull String field,
-                                                       @NonNull String parentSlug) {
-        Conduit conduit = access.conduit();
-        if (conduit == null) {
-            return Map.of();
-        }
-        Integer id = CmsSupport.scopedParentId(conduit, field, parentSlug);
         return id != null ? Map.of(field, id) : Map.of();
     }
 }

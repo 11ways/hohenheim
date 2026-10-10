@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
 import be.elevenways.hohenheim.server.instance.SystemContainerKind;
 import be.elevenways.hohenheim.server.instance.VmKind;
-import be.elevenways.hohenheim.server.runtime.ImageOrigin;
+import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import org.junit.jupiter.api.BeforeAll;

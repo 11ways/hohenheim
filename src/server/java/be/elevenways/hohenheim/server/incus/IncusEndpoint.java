@@ -5,6 +5,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import static be.elevenways.hohenheim.RawValues.trimmed;
+
 /**
  * The parsed {@code incus_url} of one host record: {@code https://host[:8443]} or a
  * unix socket ({@code unix://[/path]}, blank = the default socket).
@@ -24,7 +26,7 @@ public record IncusEndpoint(boolean https, @NonNull String host, int port,
      *         a URL nothing validated must never reach a connect call
      */
     public static @NonNull IncusEndpoint parse(@Nullable String raw) {
-        String url = raw != null ? raw.trim() : "";
+        String url = trimmed(raw);
         if (url.isEmpty() || url.equals("unix://")) {
             return new IncusEndpoint(false, "", 0, UnixIncusTransport.DEFAULT_SOCKET);
         }

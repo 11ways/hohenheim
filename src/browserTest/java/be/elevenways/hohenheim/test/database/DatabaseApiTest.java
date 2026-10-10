@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -88,13 +88,13 @@ class DatabaseApiTest extends HohenheimTestBase {
         int tenantId = ApiSupport.user(PREFIX + "tenant@surface.test", "Database API Tenant");
         GrantService.createDirectGrant(GrantSubjectType.USER, tenantId, MANAGE_ACCESS, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, DatabaseModel.MODEL_ID, databaseId,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, DatabaseModel.MODEL_ID, databaseId,
-            HohenheimAccess.DESTROY, true);
+            HohenheimCapabilities.DESTROY, true);
         keyTenant = ApiKeyService.create(tenantId, PREFIX + "tenant",
             List.of(MANAGE_ACCESS,
-                CapabilityScopes.format(DatabaseModel.MODEL_ID, HohenheimAccess.VIEW),
-                CapabilityScopes.format(DatabaseModel.MODEL_ID, HohenheimAccess.DESTROY)),
+                CapabilityScopes.format(DatabaseModel.MODEL_ID, HohenheimCapabilities.VIEW),
+                CapabilityScopes.format(DatabaseModel.MODEL_ID, HohenheimCapabilities.DESTROY)),
             null).plaintext();
     }
 

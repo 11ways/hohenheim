@@ -12,7 +12,6 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
@@ -103,7 +102,7 @@ class EnvironmentDeleteReasonTest extends HohenheimTestBase {
 
         // 4. The panel's own delete is refused with the same reason and the row survives.
         Violations refused = catchThrowableOfType(() -> PanelResourceCalls.delete(
-            HohenheimSlugs.ADMIN, EnvironmentParts.SLUG, environmentId, operator), Violations.class);
+            HohenheimSlugs.ADMIN, HohenheimSlugs.ENVIRONMENTS, environmentId, operator), Violations.class);
         assertThat((Object) refused).as("step 4: the delete is refused").isNotNull();
         assertThat(resolve(refused.all().get(0).message())).as("step 4: naming the holder").contains(KEY);
         assertThat(Models.get(EnvironmentModel.class).findById(environmentId))
@@ -114,7 +113,7 @@ class EnvironmentDeleteReasonTest extends HohenheimTestBase {
         variableId = null;
         assertThat(deleteUnavailable(environment, operator))
             .as("step 5: nothing holds the environment any more").isNull();
-        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, EnvironmentParts.SLUG, environmentId, operator);
+        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.ENVIRONMENTS, environmentId, operator);
         assertThat(Models.get(EnvironmentModel.class).findById(environmentId))
             .as("step 5: the free environment is deleted").isNull();
         environmentId = null;

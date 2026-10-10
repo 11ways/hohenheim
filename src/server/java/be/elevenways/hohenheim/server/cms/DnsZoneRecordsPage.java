@@ -1,10 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.dns.DnsRecordDto;
 import be.elevenways.hohenheim.dns.DnsRecordFormView;
 import be.elevenways.hohenheim.dns.DnsRecordView;
@@ -21,6 +22,7 @@ import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.protoblast.common.typed.rule.Condition;
 import be.elevenways.protoblast.common.typed.rule.Operand;
 import be.elevenways.plumage.component.Pager;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -33,7 +35,6 @@ import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
-import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.render.action.PageFormState;
 import be.elevenways.zenit.cms.server.page.PageActions;
 import be.elevenways.zenit.cms.server.panel.PartsLists;
@@ -49,7 +50,6 @@ import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.zenit.cms.server.render.table.TableStateTranslator;
 import be.elevenways.zenit.common.data.FacetUrlState;
 import be.elevenways.zenit.common.data.ListState;
-import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.RecordPage;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -62,6 +62,7 @@ import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.routing.ReturnPath;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.http.ReturnTarget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -89,9 +90,8 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
     private static final PanelAction<Row> REMOTE_EDIT = PanelAction.<Row, CmsActionResult>places(
         DnsOperations.REMOTE_EDIT, ActionPlacement.PAGE, (request, result) -> result.value())
         .transport("action", "record_id")
-        .confirmation(ConfirmationSpec.builder()
-            .title(Microcopy.of("save_remote").withFilter("scope", "dns_remote"))
-            .body(Microcopy.of("edit_saved").withFilter("scope", "dns_remote")).build())
+        .confirmation(Confirmations.of(HohenheimMicrocopy.DNS_REMOTE.of("save_remote"),
+            HohenheimMicrocopy.DNS_REMOTE.of("edit_saved"), ActionStyle.DEFAULT))
         .selectedByRoute(zone -> String.valueOf((Object) zone.get(DnsZoneModel.ID))).build();
 
     @Override public @NonNull List<PanelAction<Row>> actions() { return List.of(REMOTE_EDIT); }
@@ -108,11 +108,9 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
     private static final Identifier TEMPLATE = HohenheimTemplateIds.DNS_ZONE_RECORDS;
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("dns_zone_records"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("records").withFilter("scope", "dns_zone"); }
-    /** This tab's slug under the zone record. */
-    public static final String SLUG = "records";
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.DNS_ZONE.of("records"); }
 
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.RECORDS; }
     @Override public @NonNull Icon icon() { return Icon.of("list-ul"); }
 
     /** The DNS record resource lives only on the admin panel. */
@@ -163,7 +161,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
      */
     private static @Nullable PanelResource<Row> recordResource(Conduit conduit, AccessContext access) {
         Panel panel = PanelRegistry.getBySlug(PANEL);
-        if (panel != null && panel.entryBySlug(DnsRecordParts.SLUG) instanceof PanelResource<?> entry) {
+        if (panel != null && panel.entryBySlug(HohenheimSlugs.DNS_RECORDS) instanceof PanelResource<?> entry) {
             @SuppressWarnings("unchecked") PanelResource<Row> records = (PanelResource<Row>) entry;
             return records;
         }
@@ -206,7 +204,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         // The per-row write verdicts below walk each record's parent (this zone) once for the whole page.
         PartsWrites.prefetchLineage(resource, panel, records, accessContext);
 
-        BoundEndpoint<?> listTarget = CmsRoutes.subpage(PANEL, DnsZoneParts.SLUG, zoneId, this.slug());
+        BoundEndpoint<?> listTarget = CmsRoutes.subpage(PANEL, HohenheimSlugs.DNS_ZONES, zoneId, this.slug());
         String listUrl = listTarget.toUrl();
         // An add returns to the listing AS IT STANDS, so a search made before it survives.
         // Rebuilt from the state this render knows rather than echoed from the request URL:
@@ -250,7 +248,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
             .with(HohenheimParams.ZONE_ID_PREFILL, zoneId);
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", CmsSupport.pageTitle(conduit, "dns_zone_records", origin));
+        vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.DNS_ZONE_RECORDS, origin));
         vars.put("zoneId", zoneId);
         vars.put("origin", origin);
         vars.put("available", true);
@@ -276,7 +274,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
     /** Everything the template declares, for the branch that has no record resource to read. */
     private @NonNull Map<String, Object> unavailableVars(@NonNull Conduit conduit, @NonNull Row zone) {
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", CmsSupport.pageTitle(conduit, "dns_zone_records",
+        vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.DNS_ZONE_RECORDS,
             zone.get(DnsZoneModel.ORIGIN)));
         vars.put("origin", zone.get(DnsZoneModel.ORIGIN));
         vars.put("zoneId", zone.get(DnsZoneModel.ID));
@@ -344,12 +342,12 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         if (api != null) {
             try {
                 for (DnsRecordDto remote : api.listRecords(origin)) {
-                    String id = text(remote.id());
+                    String id = Objects.toString(remote.id(), "");
                     records.add(new DnsRecordView(
                         id,
-                        text(remote.name()),
-                        text(remote.type()),
-                        text(remote.ttl()),
+                        Objects.toString(remote.name(), ""),
+                        Objects.toString(remote.type(), ""),
+                        Objects.toString(remote.ttl(), ""),
                         remoteDisplayValue(remote),
                         remote.enabled(),
                         remote.managed_by() != null,
@@ -361,13 +359,13 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
                 reachable = true;
             }
             catch (RuntimeException e) {
-                notice = Microcopy.of("peer_unreachable").withFilter("scope", "dns_remote")
+                notice = HohenheimMicrocopy.DNS_REMOTE.of("peer_unreachable")
                     .withArg("message", String.valueOf(e.getMessage()))
                     .resolve(conduit.getLocales(), conduit.getMessageResolver());
             }
         }
         else {
-            notice = Microcopy.of("peer_not_configured").withFilter("scope", "dns_remote")
+            notice = HohenheimMicrocopy.DNS_REMOTE.of("peer_not_configured")
                 .resolve(conduit.getLocales(), conduit.getMessageResolver());
         }
 
@@ -384,7 +382,7 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         }
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", CmsSupport.pageTitle(conduit, "dns_zone_records", origin));
+        vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.DNS_ZONE_RECORDS, origin));
         vars.put("zoneId", zoneId);
         vars.put("origin", origin);
         vars.put("peerName", peer != null ? String.valueOf(peer.get(DnsPeerModel.NAME)) : "");
@@ -395,13 +393,13 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         // The numeric fields ride pl-number-input, whose value is a typed Double (null =
         // empty) -- never the native numeric input, whose decimal separator follows the
         // browser's UI locale. Scale 0 makes the submitted canonical text a whole number.
-        vars.put("editTtl", editRecord != null ? wholeNumber(editRecord.ttl()) : null);
-        vars.put("editPriority", editRecord != null ? wholeNumber(editRecord.priority()) : null);
-        vars.put("editWeight", editRecord != null ? wholeNumber(editRecord.weight()) : null);
-        vars.put("editPort", editRecord != null ? wholeNumber(editRecord.port()) : null);
+        vars.put("editTtl", editRecord != null ? RawValues.parsedDouble(editRecord.ttl()) : null);
+        vars.put("editPriority", editRecord != null ? RawValues.parsedDouble(editRecord.priority()) : null);
+        vars.put("editWeight", editRecord != null ? RawValues.parsedDouble(editRecord.weight()) : null);
+        vars.put("editPort", editRecord != null ? RawValues.parsedDouble(editRecord.port()) : null);
         vars.put("recordTypes", DnsRecordModel.ALL_TYPES);
         vars.put("addRecordTarget", remoteRecordTarget(zoneId, "new"));
-        vars.put("recordsTabTarget", CmsRoutes.subpage(PANEL, DnsZoneParts.SLUG, zoneId, this.slug()));
+        vars.put("recordsTabTarget", CmsRoutes.subpage(PANEL, HohenheimSlugs.DNS_ZONES, zoneId, this.slug()));
         vars.put("remoteForm", editable && editRecord != null
             ? remoteForm(request, zone, Map.of("record_id", editRecord.id())) : null);
         Map<String, PageFormState> deletes = new LinkedHashMap<>();
@@ -428,13 +426,13 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
         Integer peerId = zone.get(DnsZoneModel.PRIMARY_PEER_ID);
         DnsPeerApi api = DnsPeerApi.forPeer(peerId != null ? Models.get(DnsPeerModel.class).findById(peerId) : null);
         if (api == null) {
-            return CmsActionResult.errorToast(Microcopy.of("peer_not_configured").withFilter("scope", "dns_remote"));
+            return CmsActionResult.errorToast(HohenheimMicrocopy.DNS_REMOTE.of("peer_not_configured"));
         }
 
         String origin = zone.get(DnsZoneModel.ORIGIN);
         String action = input.action() == null ? "" : input.action();
         if (!action.isEmpty() && !"delete".equals(action)) {
-            throw HohenheimViolations.ofField("action", action, "dns_remote_action_invalid");
+            throw Violations.ofField("action", action, HohenheimMicrocopy.VIOLATIONS.of("dns_remote_action_invalid"));
         }
         String recordText = input.record_id() == null ? "" : input.record_id();
         Integer recordId = HandlerSupport.submittedInteger(Map.of("record_id", recordText), "record_id");
@@ -458,11 +456,11 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
             // A validation refusal round-trips by microcopy key (same catalogs on both instances); a transport
             // failure shows the raw message.
             return CmsActionResult.errorToast(e.getViolationKey() != null
-                ? HohenheimViolations.text(e.getViolationKey())
-                : Microcopy.of("peer_call_failed").withFilter("scope", "dns_remote")
+                ? HohenheimMicrocopy.VIOLATIONS.of(e.getViolationKey())
+                : HohenheimMicrocopy.DNS_REMOTE.of("peer_call_failed")
                     .withArg("reason", String.valueOf(e.getMessage())));
         }
-        return CmsActionResult.refreshWithToast(Microcopy.of("edit_saved").withFilter("scope", "dns_remote"));
+        return CmsActionResult.refreshWithToast(HohenheimMicrocopy.DNS_REMOTE.of("edit_saved"));
     }
 
     /**
@@ -476,9 +474,9 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
                                                            @NonNull String recordId) {
         return CmsEndpoints.RECORD_SUBPAGE
             .with(CmsEndpoints.PANEL_PARAM, PANEL)
-            .with(CmsEndpoints.RESOURCE_PARAM, DnsZoneParts.SLUG)
+            .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.DNS_ZONES)
             .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(zoneId))
-            .with(CmsEndpoints.SUBPAGE_PARAM, SLUG)
+            .with(CmsEndpoints.SUBPAGE_PARAM, HohenheimSlugs.Tab.RECORDS)
             .with(HohenheimParams.REMOTE_RECORD, recordId);
     }
 
@@ -505,40 +503,25 @@ public final class DnsZoneRecordsPage implements RecordTab.Rendered<Row> {
     /** @return remote fields encoded as strings for HTML form controls */
     private static @NonNull DnsRecordFormView formView(@NonNull DnsRecordDto remote) {
         return new DnsRecordFormView(
-            text(remote.id()),
-            text(remote.name()),
-            text(remote.type()),
-            text(remote.ttl()),
-            text(remote.value()),
-            text(remote.priority()),
-            text(remote.weight()),
-            text(remote.port()),
+            Objects.toString(remote.id(), ""),
+            Objects.toString(remote.name(), ""),
+            Objects.toString(remote.type(), ""),
+            Objects.toString(remote.ttl(), ""),
+            Objects.toString(remote.value(), ""),
+            Objects.toString(remote.priority(), ""),
+            Objects.toString(remote.weight(), ""),
+            Objects.toString(remote.port(), ""),
             remote.enabled() ? "true" : "false");
     }
 
     private static @NonNull String remoteDisplayValue(@NonNull DnsRecordDto remote) {
-        return DnsRecordModel.presentationValue(remote.type(), text(remote.value()),
+        return DnsRecordModel.presentationValue(remote.type(), Objects.toString(remote.value(), ""),
             remote.priority(), remote.weight(), remote.port());
-    }
-
-    /** @return the form view's number text as the Double a pl-number-input takes, null when blank or not one */
-    private static @Nullable Double wholeNumber(@NonNull String text) {
-        PrimitiveCoercion.Result<Double> parsed =
-            PrimitiveCoercion.toDouble(text, true, PrimitiveCoercion.TextRule.TRIMMED_BLANK_IS_NULL);
-        return parsed.ok() ? parsed.value() : null;
     }
 
     private @Nullable PageFormState remoteForm(PanelRequest request, Row zone, Map<String, Object> values) {
         PageActions.Opened opened = PageActions.open(request, this, zone, REMOTE_EDIT.id(), values);
         return opened instanceof PageActions.Form form ? form.state() : null;
-    }
-
-    private static @NonNull String text(@Nullable String value) {
-        return value != null ? String.valueOf(value) : "";
-    }
-
-    private static @NonNull String text(@Nullable Integer value) {
-        return value != null ? String.valueOf(value) : "";
     }
 
 }

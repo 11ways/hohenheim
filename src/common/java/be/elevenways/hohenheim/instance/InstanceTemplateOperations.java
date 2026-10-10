@@ -1,10 +1,11 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.FormStep;
 import be.elevenways.zenit.common.edit.Nested;
@@ -46,12 +47,14 @@ public final class InstanceTemplateOperations {
     public static final SubjectType<Row> TEMPLATE = SubjectType.record(InstanceTemplateModel.MODEL_ID);
 
     public static final StringField NAME = StringField.builder("name").required()
-        .label(copy("instance_name")).build();
+        .label(HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("instance_name")).build();
 
     /** The host; an operator's choice, fixed to null for everyone else (InstancePlacement decides). */
-    public static final IntegerField SERVER_ID = IntegerField.builder("serverId").label(copy("host")).build();
+    public static final IntegerField SERVER_ID = IntegerField.builder("serverId")
+        .label(HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("host")).build();
 
-    public static final IntegerField PROJECT_ID = IntegerField.builder("projectId").label(copy("project")).build();
+    public static final IntegerField PROJECT_ID = IntegerField.builder("projectId")
+        .label(HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("project")).build();
 
     /** No picker offers an environment here: every placement fixes it to null. */
     public static final IntegerField ENVIRONMENT_ID = IntegerField.builder("environmentId").build();
@@ -65,16 +68,17 @@ public final class InstanceTemplateOperations {
         .add(PROJECT_ID)
         .add(ENVIRONMENT_ID)
         .add(Nested.of(VARIABLES).subSpec(FormSpec.builder().build()).build())
-        .step(FormStep.of("details", copy("step_details"), NAME.getName(), SERVER_ID.getName(),
+        .step(FormStep.of("details", HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("step_details"), NAME.getName(),
+            SERVER_ID.getName(),
             PROJECT_ID.getName(), ENVIRONMENT_ID.getName()))
-        .step(new FormStep(VARIABLES, Microcopy.of("variables").withFilter("scope", "template_contents"),
-            copy("step_variables_lead"), List.of(VARIABLES)))
+        .step(new FormStep(VARIABLES, HohenheimMicrocopy.TEMPLATE_CONTENTS.of("variables"),
+            HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("step_variables_lead"), List.of(VARIABLES)))
         .build();
 
     public static final Operation<Row, CreateFromTemplate, Integer> CREATE_INSTANCE_FROM_TEMPLATE =
         Operation.declare(HohenheimIds.id("create_instance_from_template"))
             .happened(OperationSentences.of("create_instance_from_template"))
-            .label(Microcopy.of("create_instance").withFilter("scope", "instance_template"))
+            .label(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("create_instance"))
             .icon(Icon.of("plus"))
             .one(TEMPLATE)
             .gate(OperationGate.open())
@@ -96,7 +100,7 @@ public final class InstanceTemplateOperations {
     public static final Operation<Row, Void, Void> APPROVE_TEMPLATE =
         Operation.declare(HohenheimIds.id("approve_template"))
             .happened(OperationSentences.of("approve_template"))
-            .label(Microcopy.of("approve").withFilter("scope", "instance_template"))
+            .label(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("approve"))
             .icon(Icon.of("circle-check"))
             .one(TEMPLATE)
             .gate(OperationGate.open())
@@ -107,7 +111,7 @@ public final class InstanceTemplateOperations {
     public static final Operation<Row, Void, Void> UNAPPROVE_TEMPLATE =
         Operation.declare(HohenheimIds.id("unapprove_template"))
             .happened(OperationSentences.of("unapprove_template"))
-            .label(Microcopy.of("unapprove").withFilter("scope", "instance_template"))
+            .label(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("unapprove"))
             .icon(Icon.of("circle-xmark"))
             .one(TEMPLATE)
             .gate(OperationGate.open())
@@ -130,12 +134,7 @@ public final class InstanceTemplateOperations {
     }
 
     /** @return a coerced {@link #VARIABLES} value as its map, empty when absent */
-    @SuppressWarnings("unchecked")
     public static @NonNull Map<String, Object> variables(@Nullable Object value) {
-        return value instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
-    }
-
-    private static @NonNull Microcopy copy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "instance_from_template");
+        return RawValues.map(value);
     }
 }

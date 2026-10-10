@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -59,26 +59,27 @@ public class DnsRecordModel extends Model {
     public static final Schema MX_DATA_SCHEMA = new Schema();
     public static final IntegerField MX_PRIORITY = MX_DATA_SCHEMA.addField(
         IntegerField.builder().name("priority")
-            .label(HohenheimFormCopy.label("record_priority"))
-            .help(HohenheimFormCopy.help("record_priority")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("record_priority"))
+            .help(HohenheimMicrocopy.HELP.of("record_priority")).build());
 
     public static final Schema SRV_DATA_SCHEMA = new Schema();
     public static final IntegerField SRV_PRIORITY = SRV_DATA_SCHEMA.addField(
         IntegerField.builder().name("priority")
-            .label(HohenheimFormCopy.label("record_priority"))
-            .help(HohenheimFormCopy.help("record_priority")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("record_priority"))
+            .help(HohenheimMicrocopy.HELP.of("record_priority")).build());
     public static final IntegerField SRV_WEIGHT = SRV_DATA_SCHEMA.addField(
         IntegerField.builder().name("weight")
-            .label(HohenheimFormCopy.label("record_weight"))
-            .help(HohenheimFormCopy.help("record_weight")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("record_weight"))
+            .help(HohenheimMicrocopy.HELP.of("record_weight")).build());
     public static final IntegerField SRV_PORT = SRV_DATA_SCHEMA.addField(
         IntegerField.builder().name("port")
-            .label(HohenheimFormCopy.label("record_port"))
-            .help(HohenheimFormCopy.help("record_port")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("record_port"))
+            .help(HohenheimMicrocopy.HELP.of("record_port")).build());
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField ZONE_ID = SCHEMA.addField(IntegerField.builder().name("zone_id")
-        .label(HohenheimFormCopy.label("record_zone")).help(HohenheimFormCopy.help("record_zone")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("record_zone")).help(HohenheimMicrocopy.HELP.of("record_zone"))
+        .build());
     /** The owning zone; a record dies with its zone (the delete cascade asks through this). */
     public static final BelongsTo<DnsZoneModel> ZONE = SCHEMA.addRelation(
         BelongsTo.to(DnsZoneModel.class)
@@ -87,29 +88,30 @@ public class DnsRecordModel extends Model {
             .remoteKey(DnsZoneModel.ID)
             .build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
-        .label(HohenheimFormCopy.label("record_name")).help(HohenheimFormCopy.help("record_name")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("record_name")).help(HohenheimMicrocopy.HELP.of("record_name"))
+        .build());
     public static final EnumField TYPE = SCHEMA.addField(EnumField.builder("type")
-        .label(HohenheimFormCopy.label("record_type")).help(HohenheimFormCopy.help("record_type"))
-        .value(TYPE_A, v -> v.displayName("A").label(typeLabel("a")).icon("location-dot").color(ColorHue.BLUE))
-        .value(TYPE_AAAA, v -> v.displayName("AAAA").label(typeLabel("aaaa")).icon("location-dot")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("record_type")).help(HohenheimMicrocopy.HELP.of("record_type"))
+        .value(TYPE_A, v -> v.displayName("A").label(HohenheimMicrocopy.DNS_RECORD_TYPE.of("a")).icon("location-dot")
+            .color(ColorHue.BLUE))
+        .value(TYPE_AAAA, v -> v.displayName("AAAA").label(HohenheimMicrocopy.DNS_RECORD_TYPE.of("aaaa"))
+            .icon("location-dot")
             .color(ColorHue.INDIGO))
-        .value(TYPE_CNAME, v -> v.displayName("CNAME").label(typeLabel("cname")).icon("link").color(ColorHue.PURPLE))
-        .value(TYPE_NS, v -> v.displayName("NS").label(typeLabel("ns")).icon("server").color(ColorHue.ORANGE))
-        .value(TYPE_MX, v -> v.displayName("MX").label(typeLabel("mx")).icon("envelope").color(ColorHue.GREEN)
+        .value(TYPE_CNAME, v -> v.displayName("CNAME").label(HohenheimMicrocopy.DNS_RECORD_TYPE.of("cname"))
+            .icon("link").color(ColorHue.PURPLE))
+        .value(TYPE_NS, v -> v.displayName("NS").label(HohenheimMicrocopy.DNS_RECORD_TYPE.of("ns")).icon("server")
+            .color(ColorHue.ORANGE))
+        .value(TYPE_MX, v -> v.displayName("MX").label(HohenheimMicrocopy.DNS_RECORD_TYPE.of("mx")).icon("envelope")
+            .color(ColorHue.GREEN)
             .schema(MX_DATA_SCHEMA))
-        .value(TYPE_TXT, v -> v.displayName("TXT").label(typeLabel("txt")).icon("quote-left").color(ColorHue.GRAY))
-        .value(TYPE_CAA, v -> v.displayName("CAA").label(typeLabel("caa")).icon("certificate").color(ColorHue.TEAL))
-        .value(TYPE_SRV, v -> v.displayName("SRV").label(typeLabel("srv")).icon("network-wired").color(ColorHue.PINK)
+        .value(TYPE_TXT, v -> v.displayName("TXT").label(HohenheimMicrocopy.DNS_RECORD_TYPE.of("txt"))
+            .icon("quote-left").color(ColorHue.GRAY))
+        .value(TYPE_CAA, v -> v.displayName("CAA").label(HohenheimMicrocopy.DNS_RECORD_TYPE.of("caa"))
+            .icon("certificate").color(ColorHue.TEAL))
+        .value(TYPE_SRV, v -> v.displayName("SRV").label(HohenheimMicrocopy.DNS_RECORD_TYPE.of("srv"))
+            .icon("network-wired").color(ColorHue.PINK)
             .schema(SRV_DATA_SCHEMA))
         .build());
-
-    /**
-     * The translation token for a record type; the key is the stored token in lower case,
-     * spelled out because this class is COMMON and java.util.Locale is not TeaVM-safe.
-     */
-    private static Microcopy typeLabel(String type) {
-        return Microcopy.of(type).withFilter("scope", "dns_record_type");
-    }
     /**
      * THE record-type vocabulary, DERIVED from {@link #TYPE}'s declared values rather than
      * re-listed beside them.
@@ -129,19 +131,22 @@ public class DnsRecordModel extends Model {
     public static final List<String> DATA_FIELD_NAMES = dataFieldNames();
 
     public static final IntegerField TTL = SCHEMA.addField(IntegerField.builder().name("ttl")
-        .suffix("s").label(HohenheimFormCopy.label("record_ttl")).help(HohenheimFormCopy.help("record_ttl")).build());
+        .suffix("s").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("record_ttl"))
+        .help(HohenheimMicrocopy.HELP.of("record_ttl")).build());
     public static final StringField VALUE = SCHEMA.addField(StringField.builder().name("value")
-        .label(HohenheimFormCopy.label("record_value")).help(HohenheimFormCopy.help("record_value")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("record_value")).help(HohenheimMicrocopy.HELP.of("record_value"))
+        .build());
 
     /** Type-specific RDATA extras, shaped by the sub-schema the record's TYPE declares. */
     public static final SchemaField DATA = SCHEMA.addField(SchemaField.builder("data")
         .schemaFrom("type")
-        .label(HohenheimFormCopy.label("record_data")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("record_data")).build());
 
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled").defaultValue(true)
-        .label(HohenheimFormCopy.label("record_enabled")).help(HohenheimFormCopy.help("record_enabled")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("record_enabled"))
+        .help(HohenheimMicrocopy.HELP.of("record_enabled")).build());
     public static final StringField MANAGED_BY = SCHEMA.addField(StringField.builder().name("managed_by")
-        .label(HohenheimFormCopy.label("managed_by")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("managed_by")).build());
 
     /**
      * Which system authored this row, or null when an operator did.
@@ -251,21 +256,7 @@ public class DnsRecordModel extends Model {
         if (!(data instanceof Map<?, ?> map)) {
             return null;
         }
-        Object value = map.get(key);
-        if (value instanceof Integer number) {
-            return number;
-        }
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        if (value instanceof String text && !text.isBlank()) {
-            try {
-                return Integer.parseInt(text.trim());
-            } catch (NumberFormatException ignored) {
-                return null;
-            }
-        }
-        return null;
+        return RawValues.parsedInt(map.get(key));
     }
 
     /**

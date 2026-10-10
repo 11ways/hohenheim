@@ -404,7 +404,7 @@ public class ServerMain {
 
     // Register the Proteus realm as an SSO option when configured; password login is always available.
     private static void registerProteusIfConfigured() {
-        if (!Boolean.TRUE.equals(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.ENABLED))) {
+        if (!HohenheimSettings.isOn(HohenheimSettings.AuthProteus.ENABLED)) {
             return;
         }
         String endpoint = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.AuthProteus.ENDPOINT);

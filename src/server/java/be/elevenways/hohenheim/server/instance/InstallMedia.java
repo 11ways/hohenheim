@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
@@ -124,12 +125,12 @@ public final class InstallMedia {
         requireName(name);
         String problem = FETCH_POLICY.problemOf(url);
         if (problem != null) {
-            throw Violations.ofField("url", url, HohenheimViolations.text("media_url_invalid"));
+            throw Violations.ofField("url", url, HohenheimMicrocopy.VIOLATIONS.of("media_url_invalid"));
         }
         // The named refusal, before any daemon contact: the fetcher asks the SAME guard
         // again per hop, so this is a message, never the only gate.
         if (OutboundUrlGuard.PUBLIC_INTERNET.check(url) instanceof OutboundUrlGuard.Refused) {
-            throw Violations.ofField("url", url, HohenheimViolations.text("media_url_not_public"));
+            throw Violations.ofField("url", url, HohenheimMicrocopy.VIOLATIONS.of("media_url_not_public"));
         }
         try {
             IncusClient incus = clientOf(server);
@@ -137,7 +138,7 @@ public final class InstallMedia {
         } catch (IOException e) {
             Blast.log("MEDIA: checking", name, "on",
                 server.get(ServerModel.NAME), "failed -", e.getMessage());
-            throw Violations.ofForm(HohenheimViolations.text("media_fetch_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("media_fetch_failed")
                 .withArg("media", name)
                 .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
@@ -200,7 +201,7 @@ public final class InstallMedia {
         } catch (IOException e) {
             Blast.log("MEDIA: importing", name, "onto",
                 server.get(ServerModel.NAME), "failed -", e.getMessage());
-            throw Violations.ofForm(HohenheimViolations.text("media_fetch_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("media_fetch_failed")
                 .withArg("media", name)
                 .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
@@ -217,7 +218,7 @@ public final class InstallMedia {
         requireName(name);
         List<String> holders = referencingInstances(server, name);
         if (!holders.isEmpty()) {
-            throw Violations.ofForm(HohenheimViolations.text("media_in_use")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("media_in_use")
                 .withArg("media", name)
                 .withArg("instances", String.join(", ", holders)));
         }
@@ -230,7 +231,7 @@ public final class InstallMedia {
                     + pool + "' after its delete was accepted");
             }
         } catch (IOException e) {
-            throw Violations.ofForm(HohenheimViolations.text("media_delete_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("media_delete_failed")
                 .withArg("media", name)
                 .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
@@ -350,7 +351,7 @@ public final class InstallMedia {
     private static void requireAbsent(@NonNull IncusClient incus, @NonNull String pool,
                                       @NonNull String name) throws IOException {
         if (incus.customVolume(pool, name) != null) {
-            throw Violations.ofField("name", name, HohenheimViolations.text("media_exists")
+            throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("media_exists")
                 .withArg("media", name));
         }
     }
@@ -366,7 +367,7 @@ public final class InstallMedia {
 
     private static void requireName(@NonNull String name) {
         if (!name.matches(NAME_PATTERN)) {
-            throw Violations.ofField("name", name, HohenheimViolations.text("media_name_invalid")
+            throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("media_name_invalid")
                 .withArg("name", name));
         }
     }

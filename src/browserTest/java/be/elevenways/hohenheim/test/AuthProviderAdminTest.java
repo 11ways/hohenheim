@@ -1,9 +1,13 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.zenit.test.support.OutboundFixture;
+import be.elevenways.hohenheim.auth.SiteAuthProviderType;
+import be.elevenways.hohenheim.auth.SiteAuthProviderTypeRegistry;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.server.auth.BasicCredentials;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import com.microsoft.playwright.assertions.PlaywrightAssertions;
@@ -55,6 +59,16 @@ class AuthProviderAdminTest extends HohenheimTestBase {
         // Described permissions render their description line.
         assertThat(page.locator("div[role='option'][data-value='auth.admin.access'] .pl-select-subtitle")
             .innerText()).isEqualTo("Access the admin panel");
+
+        // Each provider type reads as its words with its description line, and in Dutch as Dutch words: the type's
+        // English display name printed in every language was the DD10b bug.
+        var basic = page.locator("div[role='option'][data-value='hohenheim:basic']");
+        assertThat(basic.innerText()).as("the Basic type's name").contains("HTTP Basic Auth");
+        assertThat(basic.locator(".pl-select-subtitle").innerText()).as("the Basic type's description")
+            .isEqualTo("A username and password the browser asks for");
+        SiteAuthProviderType basicType = SiteAuthProviderTypeRegistry.REGISTRY.get(BasicAuthProviderType.ID);
+        assertThat(basicType.getLabel().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+            .as("the Basic type in Dutch").isEqualTo("HTTP-basisauthenticatie");
 
         // Choosing a type swaps the placeholder for the type's fields, live.
         page.locator("pl-select[name='provider_type'] .pl-select-field").click();

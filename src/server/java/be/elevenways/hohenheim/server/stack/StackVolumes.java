@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StackModel;
@@ -221,7 +222,7 @@ public final class StackVolumes {
 
     private static @NonNull Violations taken(@NonNull String field, @NonNull String volume,
                                              @NonNull String otherStack) {
-        return Violations.ofField(field, volume, HohenheimViolations.text("stack_volume_name_taken")
+        return Violations.ofField(field, volume, HohenheimMicrocopy.VIOLATIONS.of("stack_volume_name_taken")
             .withArg("volume", volume)
             .withArg("stack", otherStack));
     }
@@ -247,13 +248,8 @@ public final class StackVolumes {
                     StackServiceModel.MOUNTS.getName())) {
                 return;   // this write stages no mount list: nothing new is declared
             }
-            Integer serviceId = row.has(StackServiceModel.ID.getName())
-                ? row.get(StackServiceModel.ID) : null;
-            Row stored = serviceId == null ? null
-                : Models.get(StackServiceModel.class).findById(serviceId);
-            Integer stackId = row.has(StackServiceModel.STACK_ID.getName())
-                ? row.get(StackServiceModel.STACK_ID)
-                : stored != null ? stored.get(StackServiceModel.STACK_ID) : null;
+            Row stored = StoredRows.of(Models.get(StackServiceModel.class), row);
+            Integer stackId = row.afterWrite(StackServiceModel.STACK_ID, stored);
             String stackName = stackNameOf(stackId);
             if (stackId == null || stackName == null) {
                 return;

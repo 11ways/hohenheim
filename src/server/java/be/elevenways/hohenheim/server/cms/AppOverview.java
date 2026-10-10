@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.CertCoverage;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.app.AppAddress;
@@ -35,7 +36,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.CardWidget;
@@ -70,14 +70,12 @@ import java.util.Set;
  */
 final class AppOverview {
 
-    static final String SLUG = RecordOverview.SLUG;
-
     private AppOverview() {
     }
 
     /** The site's front door: the app composition over the site alone. */
     static @NonNull RecordOverview<Row> siteTab() {
-        return RecordOverview.<Row>fields(SLUG, Microcopy.of("overview").withFilter("scope", "instance"))
+        return RecordOverview.<Row>fields(RecordOverview.SLUG, HohenheimMicrocopy.INSTANCE.of("overview"))
             .withoutFields()
             .widgets(AppOverview::siteWidgets);
     }
@@ -111,7 +109,6 @@ final class AppOverview {
         return new WidgetTree(List.of(section("hh-app-overview", regions)));
     }
 
-
     // -- cards ------------------------------------------------------------------------
 
     /** Every name these sites answer on, each with whether HTTPS works for it. */
@@ -132,8 +129,9 @@ final class AppOverview {
         String addUrl = siteId != null && opens(access, HohenheimSlugs.SITES, siteId, SiteParts.DOMAINS_TAB)
             ? CmsRoutes.subpage(panelSlug, HohenheimSlugs.SITES, siteId, SiteParts.DOMAINS_TAB).toUrl()
             : null;
-        return card(copy("addresses"), new WidgetInstance(HohenheimWidgets.APP_ADDRESSES.id(), Map.of()).withData(rows),
-            copy("add_address"), addUrl, "plus");
+        return card(HohenheimMicrocopy.APP_OVERVIEW.of("addresses"),
+            new WidgetInstance(HohenheimWidgets.APP_ADDRESSES.id(), Map.of()).withData(rows),
+            HohenheimMicrocopy.APP_OVERVIEW.of("add_address"), addUrl, "plus");
     }
 
     private static @NonNull AppAddress address(@NonNull Row domain, boolean passthrough, boolean main,
@@ -143,19 +141,19 @@ final class AppOverview {
         MessageResolver resolver = conduit.getMessageResolver();
         String hostname = String.valueOf((Object) domain.get(SiteDomainModel.HOSTNAME));
         Integer domainId = domain.get(SiteDomainModel.ID);
-        String url = opens(access, DomainParts.SLUG, domainId, null)
-            ? CmsRoutes.detail(CmsSupport.panelSlug(conduit), DomainParts.SLUG, domainId).toUrl() : null;
+        String url = opens(access, HohenheimSlugs.DOMAINS, domainId, null)
+            ? CmsRoutes.detail(CmsSupport.panelSlug(conduit), HohenheimSlugs.DOMAINS, domainId).toUrl() : null;
         List<String> notes = new ArrayList<>();
         if (main) {
             notes.add(text("main_address", locales, resolver));
         }
         if (passthrough) {
             CertCoverage notUsed = CertCoverage.NOT_USED;
-            return new AppAddress(hostname, url, notUsed.label(), notUsed.badgeVariant(), String.join(" · ", notes));
+            return new AppAddress(hostname, url, notUsed.label(), notUsed.variant(), String.join(" · ", notes));
         }
         if (!AppHealth.exact(domain)) {
             notes.add(text("pattern_note", locales, resolver));
-            return new AppAddress(hostname, url, CertCoverage.PATTERN.label(), CertCoverage.PATTERN.badgeVariant(),
+            return new AppAddress(hostname, url, CertCoverage.PATTERN.label(), CertCoverage.PATTERN.variant(),
                 String.join(" · ", notes));
         }
         boolean forced = Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL));
@@ -167,10 +165,11 @@ final class AppOverview {
         Instant expires = certificate == null ? null : certificate.get(CertificateModel.EXPIRES_ON);
         if (expires != null) {
             // The board's "certificate valid until ...", in the one expiry wording the HTTPS cells and the tile use.
-            notes.add(copy("certificate_note").withArg("expiry", CertificateExpiry.inSentence(expires))
+            notes.add(HohenheimMicrocopy.APP_OVERVIEW.of("certificate_note")
+                .withArg("expiry", CertificateExpiry.inSentence(expires))
                 .resolve(locales, resolver));
         }
-        return new AppAddress(hostname, url, coverage.label(), coverage.badgeVariant(), String.join(" · ", notes));
+        return new AppAddress(hostname, url, coverage.label(), coverage.variant(), String.join(" · ", notes));
     }
 
     /**
@@ -203,31 +202,33 @@ final class AppOverview {
                 Microcopy how = open ? null : AccessRuleSummaries.protectionOf(listId);
                 Integer pathId = path.get(ProtectedPathModel.ID);
                 rows.add(new AppProtection(lead + path.get(ProtectedPathModel.PATH),
-                    opens(access, ProtectedPathParts.SLUG, pathId, null)
-                        ? CmsRoutes.detail(panelSlug, ProtectedPathParts.SLUG, pathId).toUrl() : null,
-                    (how != null ? how : Microcopy.of(open ? "list_admits_everyone" : "by_list")
-                        .withFilter("scope", "app_overview").withArg("list", listName(listId)))
+                    opens(access, HohenheimSlugs.PROTECTED_PATHS, pathId, null)
+                        ? CmsRoutes.detail(panelSlug, HohenheimSlugs.PROTECTED_PATHS, pathId).toUrl() : null,
+                    (how != null ? how : HohenheimMicrocopy.APP_OVERVIEW.of(open ? "list_admits_everyone" : "by_list")
+                        .withArg("list", listName(listId)))
                         .resolve(locales, resolver),
                     open, true));
             }
             Integer siteList = site.get(SiteModel.ACCESS_LIST_ID);
             rows.add(new AppProtection(lead + text("everything_else", locales, resolver), null,
                 siteList == null ? text("public", locales, resolver)
-                    : Microcopy.of("by_list").withFilter("scope", "app_overview")
+                    : HohenheimMicrocopy.APP_OVERVIEW.of("by_list")
                         .withArg("list", listName(siteList)).resolve(locales, resolver),
                 false, siteList != null));
         }
         Integer siteId = served.size() == 1 ? served.get(0).get(SiteModel.ID) : null;
-        String protectUrl = siteId != null && opens(access, HohenheimSlugs.SITES, siteId, ProtectedPathParts.SLUG)
-            ? CmsRoutes.subpage(panelSlug, HohenheimSlugs.SITES, siteId, ProtectedPathParts.SLUG).toUrl()
+        String protectUrl = siteId != null && opens(access, HohenheimSlugs.SITES, siteId,
+            HohenheimSlugs.PROTECTED_PATHS)
+            ? CmsRoutes.subpage(panelSlug, HohenheimSlugs.SITES, siteId, HohenheimSlugs.PROTECTED_PATHS).toUrl()
             : null;
-        return card(copy("protection"), new WidgetInstance(HohenheimWidgets.APP_PROTECTION.id(), Map.of()).withData(rows),
-            copy("protect_path"), protectUrl, "lock");
+        return card(HohenheimMicrocopy.APP_OVERVIEW.of("protection"),
+            new WidgetInstance(HohenheimWidgets.APP_PROTECTION.id(), Map.of()).withData(rows),
+            HohenheimMicrocopy.APP_OVERVIEW.of("protect_path"), protectUrl, "lock");
     }
 
     /** The workload's measured resources, each the framework's usage gauge, so NOT MEASURED stays an answer. */
     static @NonNull WidgetInstance resources(@NonNull List<WidgetInstance> gauges) {
-        return CardWidget.of(copy("resources"), new WidgetTree(gauges));
+        return CardWidget.of(HohenheimMicrocopy.APP_OVERVIEW.of("resources"), new WidgetTree(gauges));
     }
 
     /** One measured resource under its label, for {@link #resources}. */
@@ -236,7 +237,7 @@ final class AppOverview {
     }
 
     static @NonNull WidgetInstance details(@NonNull List<WidgetFact> facts) {
-        return CardWidget.of(copy("details"),
+        return CardWidget.of(HohenheimMicrocopy.APP_OVERVIEW.of("details"),
             new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));
     }
 
@@ -245,7 +246,8 @@ final class AppOverview {
      * InstanceOverview's note on the audit log's audience).
      */
     static @NonNull WidgetInstance recent(@NonNull Model model, @NonNull Integer id) {
-        return CardWidget.of(copy("recent"), new WidgetTree(List.of(new WidgetInstance(RecordsWidget.ID, Map.of(
+        return CardWidget.of(HohenheimMicrocopy.APP_OVERVIEW.of("recent"),
+            new WidgetTree(List.of(new WidgetInstance(RecordsWidget.ID, Map.of(
             "source", CmsSupport.ACTIVITY_SOURCE,
             // What people did (no bookkeeping verb such as a reconcile's correction), one row per command or batch:
             // an SFTP session's 312 uploads read as one "Uploaded 312 files".
@@ -285,8 +287,8 @@ final class AppOverview {
         if (CmsSupport.isDelegatedPanel(conduit)) {
             return what;
         }
-        String where = copy("on_host").withArg("host",
-                ServerModel.nameOf(ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID))))
+        String where = HohenheimMicrocopy.APP_OVERVIEW.of("on_host").withArg("host",
+                ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID)))
             .resolve(conduit.getLocales(), conduit.getMessageResolver());
         return what.isEmpty() ? where : what + " · " + where;
     }
@@ -308,7 +310,7 @@ final class AppOverview {
         Row instance = instanceId == null ? null : Models.get(InstanceModel.class).findById(instanceId);
         if (instance != null) {
             String workload = Models.get(InstanceModel.class).getDisplayTitle(instance);
-            facts.add(opens(access, InstanceParts.SLUG, instanceId, null)
+            facts.add(opens(access, HohenheimSlugs.INSTANCES, instanceId, null)
                 ? WidgetFact.link(text("workload", locales, resolver), workload,
                     InstanceParts.recordRoute(panelSlug, instance, null).toUrl())
                 : WidgetFact.of(text("workload", locales, resolver), workload));
@@ -359,12 +361,8 @@ final class AppOverview {
         return new WidgetInstance(SectionWidget.ID, Map.of("css_class", cssClass), new WidgetTree(children));
     }
 
-    static @NonNull Microcopy copy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "app_overview");
-    }
-
     static @NonNull String text(@NonNull String key, @NonNull LocaleChain locales,
                                 @Nullable MessageResolver resolver) {
-        return copy(key).resolve(locales, resolver);
+        return HohenheimMicrocopy.APP_OVERVIEW.of(key).resolve(locales, resolver);
     }
 }

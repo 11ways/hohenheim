@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.application;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
@@ -142,7 +143,7 @@ class ApplicationReleaseTest {
                     .as("step 2: the release published a port to be probed on").isNotNull();
                 assertThat(latestOp(applicationId).get(ReleaseOperationModel.STATUS))
                     .as("step 2: the deploy is a recorded, succeeded release operation")
-                    .isEqualTo(ReleaseOperationModel.STATUS_SUCCEEDED);
+                    .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
 
                 // 3. THE SITE ANSWERS THROUGH IT: the instance upstream resolves the
                 //    serving release's published port off the ledger. The handler

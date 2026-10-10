@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
@@ -122,10 +123,10 @@ public final class SiteEnableInvariant {
         String hostname = RouteClaims.hostnameOf(conflict.getKey());
         return Violations.ofField("enabled", true,
             ClaimRefusals.heldBy(holderId, holder,
-                site -> CmsSupport.violationText(goLive.routeConflictKey())
+                site -> HohenheimMicrocopy.VIOLATIONS.of(goLive.routeConflictKey())
                     .withArg("hostname", hostname)
                     .withArg("site", holder != null ? site : "?"),
-                CmsSupport.violationText(goLive.hostnameUnavailableKey())
+                HohenheimMicrocopy.VIOLATIONS.of(goLive.hostnameUnavailableKey())
                     .withArg("hostname", hostname)));
     }
 

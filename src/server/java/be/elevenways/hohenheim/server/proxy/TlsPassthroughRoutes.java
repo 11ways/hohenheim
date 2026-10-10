@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.proxy;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
@@ -71,8 +72,7 @@ public final class TlsPassthroughRoutes {
             UpstreamKindHandler handler = UpstreamKindHandlers.getHandler(site.get(SiteModel.UPSTREAM_KIND));
             if (handler == null) continue;
 
-            @SuppressWarnings("unchecked")
-            Map<String, Object> settings = (Map<String, Object>) site.get(SiteModel.SETTINGS);
+            Map<String, Object> settings = RawValues.mapOrNull(site.get(SiteModel.SETTINGS));
             if (settings == null) settings = Map.of();
 
             boolean passthrough = handler instanceof TlsPassthroughProvider;

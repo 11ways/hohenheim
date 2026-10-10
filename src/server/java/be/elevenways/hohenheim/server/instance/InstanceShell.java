@@ -1,9 +1,12 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
+import be.elevenways.hohenheim.server.HandlerSupport;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
@@ -99,7 +102,6 @@ public final class InstanceShell {
      * handshake for ten minutes on a contended daemon (OBSERVED, 2026-08-23).
      */
     private static final long START_SETTLE_MS = 250;
-
 
     private static final Map<Integer, List<Session>> LIVE = new ConcurrentHashMap<>();
 
@@ -201,8 +203,8 @@ public final class InstanceShell {
         // caller who may not shell into it, so this is not an existence oracle either.
         if (principal == null || !principal.kind().account()
                 || !HohenheimAccess.hasInstanceCapability(principal, instanceId,
-                    HohenheimAccess.SHELL)) {
-            throw Violations.ofForm(HohenheimViolations.text("instance_not_permitted"));
+                    HohenheimCapabilities.SHELL)) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_not_permitted"));
         }
 
         Resolved resolved = this.instances.resolve(instanceId);
@@ -210,7 +212,7 @@ public final class InstanceShell {
         InstanceOperationGuard.requireOperable(instance);
 
         if (!InstanceModel.STATUS_RUNNING.equals(instance.get(InstanceModel.STATUS))) {
-            throw refusal("shell_not_running", instance);
+            throw HohenheimViolations.instanceRefusal("shell_not_running", instance, null);
         }
 
         // GATE 2: the uid. See the class note -- this is the mitigation the whole feature
@@ -225,13 +227,13 @@ public final class InstanceShell {
         // the uid reason rather than the runtime one; both are true of it.
         Integer runUser = resolved.spec().runUser();
         if (runUser == null || runUser == 0) {
-            throw refusal("shell_requires_nonroot_workload", instance);
+            throw HohenheimViolations.instanceRefusal("shell_requires_nonroot_workload", instance, null);
         }
 
         // GATE 3: the driver. An Incus workload has no pseudo-terminal lane yet, exactly
         // as it has no file lane, and says so rather than failing mid-handshake.
         if (!(resolved.runtime() instanceof PtySupport pty) || !pty.supportsPty()) {
-            throw refusal("shell_unsupported_runtime", instance);
+            throw HohenheimViolations.instanceRefusal("shell_unsupported_runtime", instance, null);
         }
 
         List<Session> sessions = LIVE.computeIfAbsent(instanceId,
@@ -241,8 +243,8 @@ public final class InstanceShell {
         synchronized (sessions) {
             sessions.removeIf(session -> !session.isOpen());
             if (sessions.size() >= MAX_SESSIONS_PER_INSTANCE) {
-                throw Violations.ofForm(HohenheimViolations.text("shell_too_many_sessions")
-                    .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
+                throw Violations.ofForm(HohenheimViolations.instanceRefusalText("shell_too_many_sessions",
+                        instance, null)
                     .withArg("max", String.valueOf(MAX_SESSIONS_PER_INSTANCE)));
             }
         }
@@ -335,9 +337,7 @@ public final class InstanceShell {
             try {
                 attempt = pty.openPty(resolved.spec(), List.of(candidate), cols, rows);
             } catch (IOException e) {
-                throw Violations.ofForm(HohenheimViolations.text("shell_failed")
-                    .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
-                    .withArg("reason", String.valueOf(e.getMessage())));
+                throw HohenheimViolations.instanceRefusal("shell_failed", instance, e);
             }
             boolean dead;
             try {
@@ -346,30 +346,21 @@ public final class InstanceShell {
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 attempt.close();
-                throw Violations.ofForm(HohenheimViolations.text("shell_failed")
-                    .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
+                throw Violations.ofForm(HohenheimViolations.instanceRefusalText("shell_failed", instance, null)
                     .withArg("reason", "interrupted"));
             } catch (IOException unreachable) {
                 // The daemon could not be asked whether it started. Believing it started
                 // would be the silent-success shape; refuse and say why.
                 attempt.close();
-                throw Violations.ofForm(HohenheimViolations.text("shell_failed")
-                    .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
-                    .withArg("reason", String.valueOf(unreachable.getMessage())));
+                throw HohenheimViolations.instanceRefusal("shell_failed", instance, unreachable);
             }
             if (!dead) {
                 return new Started(candidate, attempt);
             }
             attempt.close();
         }
-        throw Violations.ofForm(HohenheimViolations.text("shell_missing_in_image")
-            .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
+        throw Violations.ofForm(HohenheimViolations.instanceRefusalText("shell_missing_in_image", instance, null)
             .withArg("shell", String.join(", ", candidates)));
-    }
-
-    private static @NonNull Violations refusal(@NonNull String key, @NonNull Row instance) {
-        return Violations.ofForm(HohenheimViolations.text(key)
-            .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME))));
     }
 
     /** The same attribution shape zenit-auth's request resolver produces, off-request. */
@@ -542,11 +533,7 @@ public final class InstanceShell {
                 ActivityLog.record(Models.get(InstanceModel.class), this.instanceId,
                     action, detail));
             try {
-                if (this.datasource == null) {
-                    write.run();
-                } else {
-                    Db.run(this.datasource, write);
-                }
+                HandlerSupport.inScope(this.datasource, write);
             } catch (RuntimeException e) {
                 // An audit that cannot be written must be LOUD; it must not kill the
                 // session teardown it is part of.

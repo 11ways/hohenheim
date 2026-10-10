@@ -5,7 +5,6 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.server.panel.OperationWrites;
 import be.elevenways.hohenheim.test.PanelEntryViews;
-import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.server.cms.InstanceAttention;
@@ -239,7 +238,7 @@ class InstancePowerAuditTest {
             //    so the same operation was audited over /api/v1 and silent from the UI
             //    -- including from /manage, where the delegated tenant lives.
             int panelId = instanceRecord("audit-panel");
-            var panel = PanelEntryViews.of(HohenheimSlugs.ADMIN, InstanceParts.SLUG);
+            var panel = PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES);
             Row panelRow = Models.get(InstanceModel.class).findById(panelId);
             PanelAction<Row> deployAction = PlacedActionClicks.placed(panel, "start_instance");
             PanelAction<Row> stopAction = PlacedActionClicks.placed(panel, "stop_instance");

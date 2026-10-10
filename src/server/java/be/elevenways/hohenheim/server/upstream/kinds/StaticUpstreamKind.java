@@ -1,9 +1,9 @@
 package be.elevenways.hohenheim.server.upstream.kinds;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimPaths;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -37,28 +37,28 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
 
     public static final StringField ROOT_PATH = SETTINGS_SCHEMA.addField(
         PathField.builder("root_path").browserSource(HohenheimPaths.SERVER_FILES, PathKind.DIRECTORY)
-            .label(HohenheimFormCopy.label("root_path"))
-            .help(HohenheimFormCopy.help("root_path")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("root_path"))
+            .help(HohenheimMicrocopy.HELP.of("root_path")).build());
 
     // Default true matches the Node original (ecstatic showed listings out of the box).
     public static final BooleanField AUTOINDEX = SETTINGS_SCHEMA.addField(
-        BooleanField.builder("autoindex").defaultValue(true).label(HohenheimFormCopy.label("autoindex"))
-            .help(HohenheimFormCopy.help("autoindex")).build());
+        BooleanField.builder("autoindex").defaultValue(true).label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("autoindex"))
+            .help(HohenheimMicrocopy.HELP.of("autoindex")).build());
 
     public static final BooleanField INDEXES = SETTINGS_SCHEMA.addField(
-        BooleanField.builder("indexes").defaultValue(true).label(HohenheimFormCopy.label("indexes"))
-            .help(HohenheimFormCopy.help("indexes")).build());
+        BooleanField.builder("indexes").defaultValue(true).label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("indexes"))
+            .help(HohenheimMicrocopy.HELP.of("indexes")).build());
 
     public static final BooleanField SHOW_HIDDEN_FILES = SETTINGS_SCHEMA.addField(
         BooleanField.builder("show_hidden_files").defaultValue(false)
-            .label(HohenheimFormCopy.label("show_hidden_files"))
-            .help(HohenheimFormCopy.help("show_hidden_files")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("show_hidden_files"))
+            .help(HohenheimMicrocopy.HELP.of("show_hidden_files")).build());
 
     public static final IntegerField DELAY = SETTINGS_SCHEMA.addField(UpstreamSettings.delay());
 
     public static final StringField FALLBACK_FILE = SETTINGS_SCHEMA.addField(
-        PathField.builder().name("fallback_file").label(HohenheimFormCopy.label("fallback_file"))
-            .help(HohenheimFormCopy.help("fallback_file")).build());
+        PathField.builder().name("fallback_file").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("fallback_file"))
+            .help(HohenheimMicrocopy.HELP.of("fallback_file")).build());
 
     // The folder and the fallback file are the decision (board App-Config-Address); what a
     // folder shows is the next thing changed, and the delay is right almost always so its
@@ -76,16 +76,6 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
 
     @Override
     public String getDisplayName() { return "Static"; }
-
-    @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("static").withFilter("scope", "upstream_kind");
-    }
-
-    @Override
-    public @NonNull Microcopy getDescription() {
-        return Microcopy.of("static").withFilter("scope", "upstream_kind_description");
-    }
 
     @Override
     public Icon getIcon() { return Icon.of("folder"); }
@@ -111,9 +101,9 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
     public SiteRequestHandler createHandler(Row site, Map<String, Object> settings) {
         String rootPathStr = (String) settings.get("root_path");
         String fallbackFile = (String) settings.get("fallback_file");
-        boolean autoindex = !Boolean.FALSE.equals(settings.get("autoindex"));
-        boolean indexes = !Boolean.FALSE.equals(settings.get("indexes"));
-        boolean showHidden = Boolean.TRUE.equals(settings.get("show_hidden_files"));
+        boolean autoindex = RawValues.isOn(settings, AUTOINDEX);
+        boolean indexes = RawValues.isOn(settings, INDEXES);
+        boolean showHidden = RawValues.isOn(settings, SHOW_HIDDEN_FILES);
 
         if (rootPathStr == null || rootPathStr.isEmpty()) {
             // Empty 200 like Node ecstatic with no root: the site exists but serves nothing.
@@ -131,7 +121,7 @@ public class StaticUpstreamKind implements UpstreamKindHandler {
         if (TenantUpstreams.publicOnly(site)) {
             Integer siteId = site.get(SiteModel.ID);
             return new FaultedSiteHandler(siteId != null ? siteId : -1,
-                Microcopy.of("tenant_host_files").withFilter("scope", "site_fault"));
+                HohenheimMicrocopy.SITE_FAULT.of("tenant_host_files"));
         }
 
         return new StaticFileHandler(Path.of(rootPathStr), fallbackFile, autoindex,

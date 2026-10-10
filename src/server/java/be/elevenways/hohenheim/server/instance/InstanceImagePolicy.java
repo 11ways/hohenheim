@@ -1,12 +1,13 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.StoredRows;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
-import be.elevenways.hohenheim.server.runtime.ImageOrigin;
+import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -66,12 +67,12 @@ public final class InstanceImagePolicy {
      * {@code security.privileged} container).
      */
     private static final List<JudgedSetting> JUDGED_SETTINGS = List.of(
-        new JudgedSetting("image", settings -> settingText(settings, "image")),
+        new JudgedSetting(InstanceKindFields.IMAGE, settings -> settingText(settings, InstanceKindFields.IMAGE)),
         new JudgedSetting("tag", settings -> settingText(settings, "tag")),
         // Absent origin is CATALOG on both sides -- the pre-existing default
         // (InstanceSpec's convenience constructor), so an approved template authored
         // before image_origin existed keeps authorising exactly what it always did.
-        new JudgedSetting("image_origin", InstanceImagePolicy::originOf));
+        new JudgedSetting(ImageOrigin.SETTING, InstanceImagePolicy::originOf));
 
     /** The judged keys, and therefore the ONLY settings members a tenant write may move. */
     public static final Set<String> JUDGED_SETTINGS_KEYS = JUDGED_SETTINGS.stream()
@@ -106,7 +107,7 @@ public final class InstanceImagePolicy {
         Object kind = row.afterWrite(InstanceModel.KIND, stored);
         Map<String, String> judged =
             readJudged(row.afterWrite(InstanceModel.SETTINGS, stored));
-        String image = judged.get("image");
+        String image = judged.get(InstanceKindFields.IMAGE);
 
         if (stored != null) {
             boolean unchanged = Objects.equals(templateId, stored.get(InstanceModel.TEMPLATE_ID))
@@ -136,11 +137,11 @@ public final class InstanceImagePolicy {
         AccessContext ctx = TenantWrites.acting();
         Integer recordId = stored != null ? stored.get(InstanceModel.ID) : null;
         if (ctx != null && recordId != null
-                && ctx.hasCapability(InstanceModel.MODEL_ID, recordId, HohenheimAccess.IMAGE_ANY)) {
+                && ctx.hasCapability(InstanceModel.MODEL_ID, recordId, HohenheimCapabilities.IMAGE_ANY)) {
             return;
         }
         throw Violations.ofField("settings.image", image,
-            HohenheimViolations.text("image_requires_capability")
+            HohenheimMicrocopy.VIOLATIONS.of("image_requires_capability")
                 .withArg("image", image == null ? "" : image));
     }
 
@@ -165,7 +166,7 @@ public final class InstanceImagePolicy {
 
     /** The declared {@code image_origin} key, defaulting to catalog like {@link ImageOrigin}. */
     private static @NonNull String originOf(@Nullable Object settings) {
-        String key = settingText(settings, "image_origin");
+        String key = settingText(settings, ImageOrigin.SETTING);
         return key == null ? ImageOrigin.CATALOG.key() : key;
     }
 }

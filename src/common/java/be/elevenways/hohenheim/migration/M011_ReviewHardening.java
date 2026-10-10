@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.migration;
 
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.hohenheim.net.LegacyIpSpellings;
 import be.elevenways.protoblast.common.platform.PlatformSeam;
@@ -50,7 +51,8 @@ import java.util.TreeSet;
  * and the provenance mark of every operator-trustable target, set on the rows stored before it;
  * and the lock version of every game-domain mapping, whose writes became operations;
  * and the access-rule tree on core's TreeBehaviour: nullable positions, one tree index and dense sibling runs;
- * and every workload restarting after a crash, the stored ones and the column default.
+ * and every workload restarting after a crash, the stored ones and the column default;
+ * and every stored git source keeping auto-deploy off once a new source starts with it on.
  *
  * AIDEV-NOTE: this is ONE migration on purpose (2026-09-30). It replaced M011, M012, M015, M016 and M017,
  * which no production install (kuifje at 009, robbedoes at 010) had applied; the two test installs that
@@ -90,7 +92,7 @@ public class M011_ReviewHardening extends HohenheimMigration {
     /** The grant row's model spelling for a site, as zenit-auth stores it. */
     static final String SITE_MODEL = "hohenheim:site";
 
-    /** The ownership capability, as HohenheimAccess.MANAGE spells it. */
+    /** The ownership capability, as HohenheimCapabilities.MANAGE spells it. */
     static final String MANAGE = "manage";
 
     /** The upstream kinds that dial something a tenant-owned site is refused, as production stored them. */
@@ -247,10 +249,44 @@ public class M011_ReviewHardening extends HohenheimMigration {
             column -> column.nullable(true).maxLength(50).defaultValue(CRASH_RESTART)));
         schema.data("restart every stored workload after a crash, the new default", "1",
             M011_ReviewHardening::restartStoredWorkloadsOnCrash);
+        // A new git source deploys on push by default now; every stored one keeps the off an absent flag used to read
+        // (Jelle, 2026-10-10).
+        schema.data("keep every stored git source's auto-deploy off", "1",
+            M011_ReviewHardening::keepStoredSourcesManual);
         // The settings page asked the system tier itself; each setting now asks its own leaf, so whoever held the tier
         // keeps every setting the page offers.
         GrantMigrations.grantToHolders(schema, "grant the system tier's holders every settings leaf", "2",
             List.of("hohenheim.admin.system"), SYSTEM_SETTINGS_GRANTS);
+    }
+
+    /** The instance kinds whose settings carry a git source, as production stored them. */
+    static final List<String> GIT_SOURCE_KINDS = List.of("hohenheim:application", "hohenheim:workspace");
+
+    /** The source settings key that turns deploy-on-push on, as production stored it. */
+    static final String AUTO_DEPLOY_KEY = "auto_deploy";
+
+    /**
+     * The data step storing {@code auto_deploy: false} on every git source whose flag is not a stored boolean, which
+     * every reader answered as off; trashed rows included, so one restored later behaves as before.
+     */
+    public static void keepStoredSourcesManual(@NonNull Datasource datasource) {
+        Db.run(datasource, () -> {
+            IntegerField id = IntegerField.builder().name("id").build();
+            StringField kind = StringField.builder().name("kind").build();
+            SchemaField settings = SchemaField.builder("settings").build();
+            FrozenModel instances = new FrozenModel("instances", id, kind, settings);
+            for (Row row : instances.find().where(kind.in(GIT_SOURCE_KINDS)).all()) {
+                Map<?, ?> stored = row.get(settings) instanceof Map<?, ?> map ? map : Map.of();
+                if (stored.get(AUTO_DEPLOY_KEY) instanceof Boolean) {
+                    continue;
+                }
+                Map<String, Object> rewritten = new LinkedHashMap<>();
+                stored.forEach((key, value) -> rewritten.put(String.valueOf(key), value));
+                rewritten.put(AUTO_DEPLOY_KEY, false);
+                row.set(settings, rewritten);
+                instances.save(row);
+            }
+        });
     }
 
     /** The settings leaves the system tier's holders are granted: every one the settings page offers. */

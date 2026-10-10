@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.incus.IncusClient;
@@ -220,7 +220,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             //    has no drivers, no network or a failed boot -- exactly what RDP cannot
             //    observe.
             RecordGrants.grant(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, id,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             viewer = RecordingScreenSocket.as(new UserPrincipal(userId, "Windows tenant")).autoAck(true)
                 .with(HohenheimEndpoints.INSTANCE_ID, id).open(HohenheimEndpoints.VM_FRAMEBUFFER);
             assertThat(ipv4Of(incus, handle))
@@ -340,7 +340,7 @@ class IncusWindowsTemplateLiveTest extends HohenheimTestBase {
             remote.forceDelete(agentlessHandle);
             remote.forceDelete(absentHandle);
             RecordGrants.revoke(GrantSubjectType.USER, userId, InstanceModel.MODEL_ID, id,
-                HohenheimAccess.MANAGE);
+                HohenheimCapabilities.MANAGE);
             for (int record : List.of(id, agentlessId, absentId)) {
                 HardDeletes.byId(Models.get(InstanceModel.class), record);
             }

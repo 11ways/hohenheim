@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimCounts;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
@@ -85,7 +86,7 @@ public final class InstanceCatalogGuards {
             return;
         }
         Row template = live.first().get(InstanceModel.TEMPLATE);
-        throw Violations.ofForm(CmsSupport.violationText("template_in_use")
+        throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("template_in_use")
             .withArg("name", template != null
                 ? String.valueOf((Object) template.get(InstanceTemplateModel.NAME)) : "")
             .withArg("count", count));
@@ -108,7 +109,7 @@ public final class InstanceCatalogGuards {
         Row image = instanceCount > 0
             ? instances.first().get(InstanceModel.RUNTIME_IMAGE)
             : templates.first().get(InstanceTemplateModel.RUNTIME_IMAGE);
-        throw Violations.ofForm(CmsSupport.violationText("runtime_image_in_use")
+        throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("runtime_image_in_use")
             .withArg("name", image != null
                 ? String.valueOf((Object) image.get(RuntimeImageModel.NAME)) : "")
             .withArg("instances", HohenheimCounts.of("instances", instanceCount))

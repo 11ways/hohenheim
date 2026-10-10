@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
@@ -191,7 +193,7 @@ public final class InstancePlacement {
      *         {@code no_placement_available}
      */
     public static int chooseForOwner(@NonNull String packedOwner, @NonNull Workload workload) {
-        return chooseForBucket(InstanceQuota.bucketKeyOf(packedOwner), workload, null);
+        return chooseForBucket(OwnerBudget.INSTANCES.bucketOf(packedOwner), workload, null);
     }
 
     /**
@@ -276,14 +278,14 @@ public final class InstancePlacement {
                 throw kindRefusal;
             }
             if (somethingWasFull) {
-                throw Violations.ofForm(HohenheimViolations.text("no_placement_capacity")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("no_placement_capacity")
                     .withArg("needed", footprint)
                     .withArg("free", Math.max(0, largestFreeMb)));
             }
             if (unmeasured != null) {
                 throw Violations.ofForm(capacityUnproven(unmeasured));
             }
-            throw Violations.ofForm(HohenheimViolations.text("no_placement_available"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("no_placement_available"));
         }
         return chosen;
     }

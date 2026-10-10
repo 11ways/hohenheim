@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.AttentionSubject;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -10,7 +11,6 @@ import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
-import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -23,9 +23,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import static be.elevenways.hohenheim.server.cms.AttentionItems.action;
-import static be.elevenways.hohenheim.server.cms.AttentionItems.copy;
 import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
+import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
 
 /**
  * The DATABASES role's attention items: each database that does not serve (its {@link DatabaseVerdict}), records a
@@ -36,8 +35,6 @@ import static be.elevenways.hohenheim.server.cms.AttentionItems.item;
  * @since 0.1.0
  */
 public final class DatabaseAttention {
-
-    private static final String ADMIN = HohenheimSlugs.ADMIN;
 
     private DatabaseAttention() {
     }
@@ -57,16 +54,18 @@ public final class DatabaseAttention {
         for (Row row : Models.get(DatabaseModel.class).find().all()) {
             DatabaseVerdict verdict = DatabaseVerdict.ofDatabase(row);
             Microcopy title = verdict.state().attentionTitle(row.get(DatabaseModel.NAME));
+            AttentionSeverity severity = verdict.state().severity();
             Integer id = row.get(DatabaseModel.ID);
-            if (title == null || id == null) {
+            if (title == null || severity == null || id == null) {
                 continue;
             }
             int apps = usedBy.getOrDefault(id, List.of()).size();
             Row leftover = leftovers.get(id);
-            items.add(item(verdict.state().severity(), "database", title, verdict.reason(),
-                CmsRoutes.open(ADMIN, DatabaseParts.SLUG, id), action("act_open_database"))
+            items.add(item(severity, "database", title, verdict.reason(),
+                CmsRoutes.open(ADMIN, HohenheimSlugs.DATABASES, id),
+                    HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_database"))
                 .about(AttentionSubject.database(id),
-                    apps == 0 ? null : copy("apps_use_it", "attention_detail", "count", apps))
+                    apps == 0 ? null : HohenheimMicrocopy.ATTENTION_DETAIL.of("apps_use_it").withArg("count", apps))
                 .withNote(leftover == null ? null : leftoverLine(leftover)));
         }
         // An ACTIVE record carrying a reason is the one shape a status alone cannot show:
@@ -82,10 +81,10 @@ public final class DatabaseAttention {
                 continue;
             }
             items.add(item(AttentionSeverity.WARNING, "database",
-                copy("database", "attention_title", "name", row.get(DatabaseModel.NAME)),
-                copy("database_operation_failed", "attention_detail", "reason", reason),
-                CmsRoutes.detail(ADMIN, "databases", row.get(DatabaseModel.ID)),
-                action("act_open_database")));
+                HohenheimMicrocopy.ATTENTION_TITLE.of("database").withArg("name", row.get(DatabaseModel.NAME)),
+                HohenheimMicrocopy.ATTENTION_DETAIL.of("database_operation_failed").withArg("reason", reason),
+                CmsRoutes.detail(ADMIN, HohenheimSlugs.DATABASES, row.get(DatabaseModel.ID)),
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_database")));
         }
         failedDatabaseEngines(items);
     }
@@ -112,9 +111,10 @@ public final class DatabaseAttention {
                 return;
             }
             items.add(item(AttentionSeverity.WARNING, "database",
-                Alerts.copy("database_move_leftover_subject").withArg("name", database.get(DatabaseModel.NAME)),
-                leftoverLine(instance), CmsRoutes.open(ADMIN, DatabaseParts.SLUG, databaseId),
-                action("act_open_database"))
+                HohenheimMicrocopy.ALERT.of("database_move_leftover_subject")
+                    .withArg("name", database.get(DatabaseModel.NAME)),
+                leftoverLine(instance), CmsRoutes.open(ADMIN, HohenheimSlugs.DATABASES, databaseId),
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_database"))
                 .about(AttentionSubject.database(databaseId), null));
         });
     }
@@ -149,8 +149,9 @@ public final class DatabaseAttention {
 
     /** @return the leftover in the alert's words: which old engine, on which host, still holding what */
     private static @NonNull Microcopy leftoverLine(@NonNull Row instance) {
-        return copy("database_move_leftover", "attention_detail", "engine", instance.get(InstanceModel.NAME),
-            "host", ServerModel.nameOf(ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID))));
+        return HohenheimMicrocopy.ATTENTION_DETAIL.of("database_move_leftover")
+            .withArg("engine", instance.get(InstanceModel.NAME))
+            .withArg("host", ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID)));
     }
 
     /**
@@ -179,15 +180,15 @@ public final class DatabaseAttention {
                 .all()) {
             String reason = row.get(DatabaseEngineModel.FAILURE_REASON);
             items.add(item(AttentionSeverity.ERROR, "server",
-                copy("database_engine", "attention_title",
-                    "name", row.get(DatabaseEngineModel.NAME)),
+                HohenheimMicrocopy.ATTENTION_TITLE.of("database_engine")
+                    .withArg("name", row.get(DatabaseEngineModel.NAME)),
                 reason == null || reason.isBlank()
-                    ? copy("provisioning_failed", "attention_detail")
-                    : copy("engine_provisioning_failed_reason", "attention_detail",
-                        "reason", reason),
-                CmsRoutes.detail(ADMIN, DatabaseParts.ENGINES_SLUG,
+                    ? HohenheimMicrocopy.ATTENTION_DETAIL.of("provisioning_failed")
+                    : HohenheimMicrocopy.ATTENTION_DETAIL.of("engine_provisioning_failed_reason")
+                        .withArg("reason", reason),
+                CmsRoutes.detail(ADMIN, HohenheimSlugs.DATABASE_ENGINES,
                     row.get(DatabaseEngineModel.ID)),
-                action("act_open_engine")));
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_engine")));
         }
     }
 
@@ -233,11 +234,12 @@ public final class DatabaseAttention {
                 continue;
             }
             items.add(item(AttentionSeverity.WARNING, "database",
-                copy("app_database_down", "attention_title",
-                    "name", instance.get(InstanceModel.NAME), "database", database.get(DatabaseModel.NAME)),
+                HohenheimMicrocopy.ATTENTION_TITLE.of("app_database_down")
+                    .withArg("name", instance.get(InstanceModel.NAME))
+                    .withArg("database", database.get(DatabaseModel.NAME)),
                 verdict.reason() != null ? verdict.reason() : verdict.state().label(),
-                InstanceParts.recordRoute(ADMIN, instance, InstanceDatabasesPage.SLUG),
-                action("act_open_databases"))
+                InstanceParts.recordRoute(ADMIN, instance, HohenheimSlugs.Tab.DATABASES),
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_open_databases"))
                 .causedBy(AttentionSubject.database(databaseId)));
         }
     }

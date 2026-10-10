@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
@@ -64,8 +65,8 @@ public final class InstanceAttachmentOperationHandlers {
         Integer instanceId = link.get(InstanceDatabaseModel.INSTANCE_ID);
         Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
         return instanceId != null && databaseId != null
-            && HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID, instanceId, HohenheimAccess.CONFIG)
-            && HohenheimAccess.reachesRecord(access, DatabaseModel.MODEL_ID, databaseId, HohenheimAccess.MANAGE);
+            && HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID, instanceId, HohenheimCapabilities.CONFIG)
+            && HohenheimAccess.reachesRecord(access, DatabaseModel.MODEL_ID, databaseId, HohenheimCapabilities.MANAGE);
     }
 
     /** A cdrom's detach is an OPERATOR act, which the device funnel refuses anyone else with the tier refusal. */

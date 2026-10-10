@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -49,7 +51,7 @@ final class DatabaseOverview {
 
     /** The database's landing tab. */
     static @NonNull RecordOverview<Row> tab() {
-        return RecordOverview.<Row>fields(RecordOverview.SLUG, Microcopy.of("overview").withFilter("scope", "instance"))
+        return RecordOverview.<Row>fields(RecordOverview.SLUG, HohenheimMicrocopy.INSTANCE.of("overview"))
             .withoutFields()
             .widgets(DatabaseOverview::widgets);
     }
@@ -62,11 +64,12 @@ final class DatabaseOverview {
         Integer id = database.get(DatabaseModel.ID);
 
         List<WidgetInstance> main = new ArrayList<>();
-        main.add(card(tabCopy("connection"), connectionFacts(database, panelSlug, locales, resolver)));
-        main.add(card(tabCopy("used_by"), usedByFacts(id, panelSlug, locales, resolver)));
+        main.add(card(HohenheimMicrocopy.DATABASE_TAB.of("connection"),
+            connectionFacts(database, panelSlug, locales, resolver)));
+        main.add(card(HohenheimMicrocopy.DATABASE_TAB.of("used_by"), usedByFacts(id, panelSlug, locales, resolver)));
 
         List<WidgetInstance> side = new ArrayList<>();
-        side.add(card(copy("backups"), backupFacts(database, locales, resolver)));
+        side.add(card(HohenheimMicrocopy.DATABASE_OVERVIEW.of("backups"), backupFacts(database, locales, resolver)));
         if (id != null) {
             side.add(AppOverview.recent(Models.get(DatabaseModel.class), id));
         }
@@ -80,17 +83,19 @@ final class DatabaseOverview {
         List<WidgetFact> facts = new ArrayList<>();
         Object engine = database.get(DatabaseModel.ENGINE);
         if (engine != null) {
-            facts.add(WidgetFact.badge(tabCopy("engine").resolve(locales, resolver),
+            facts.add(WidgetFact.badge(HohenheimMicrocopy.DATABASE_TAB.of("engine").resolve(locales, resolver),
                 WidgetBadge.of(DatabaseModel.ENGINE, engine, locales, resolver)));
         }
         Integer engineId = database.get(DatabaseModel.ENGINE_ID);
         String runsOn = runsOn(database).resolve(locales, resolver);
         facts.add(DatabaseModel.isShared(database) && engineId != null
             ? WidgetFact.link(text("runs_on", locales, resolver), runsOn,
-                CmsRoutes.detail(panelSlug, DatabaseParts.ENGINES_SLUG, engineId).toUrl())
+                CmsRoutes.detail(panelSlug, HohenheimSlugs.DATABASE_ENGINES, engineId).toUrl())
             : WidgetFact.of(text("runs_on", locales, resolver), runsOn));
-        facts.add(WidgetFact.of(tabCopy("database").resolve(locales, resolver), database.get(DatabaseModel.DB_NAME)));
-        facts.add(WidgetFact.of(tabCopy("user").resolve(locales, resolver), database.get(DatabaseModel.DB_USER)));
+        facts.add(WidgetFact.of(HohenheimMicrocopy.DATABASE_TAB.of("database")
+            .resolve(locales, resolver), database.get(DatabaseModel.DB_NAME)));
+        facts.add(WidgetFact.of(HohenheimMicrocopy.DATABASE_TAB.of("user")
+            .resolve(locales, resolver), database.get(DatabaseModel.DB_USER)));
         facts.add(WidgetFact.of(text("how_apps_connect", locales, resolver),
             text("how_apps_connect_value", locales, resolver)));
         return facts;
@@ -125,7 +130,7 @@ final class DatabaseOverview {
                 text("backup_temporary_detail", locales, resolver)));
             return facts;
         }
-        facts.add(WidgetFact.of(text("kept", locales, resolver), copy("kept_value")
+        facts.add(WidgetFact.of(text("kept", locales, resolver), HohenheimMicrocopy.DATABASE_OVERVIEW.of("kept_value")
             .withArg("count", Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.BACKUP_RETENTION))
             .resolve(locales, resolver)));
         String name = database.get(DatabaseModel.NAME);
@@ -135,7 +140,7 @@ final class DatabaseOverview {
         }
         if (dumps.isEmpty()) {
             facts.add(WidgetFact.of(text("backup_never", locales, resolver),
-                text("backup_never_detail", locales, resolver)));
+                DatabaseParts.neverBackedUpDetail(database).resolve(locales, resolver)));
         }
         return facts;
     }
@@ -145,13 +150,13 @@ final class DatabaseOverview {
      * its own container's host.
      */
     static @NonNull Microcopy runsOn(@NonNull Row database) {
-        String host = ServerModel.nameOf(ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID)));
+        String host = ServerModel.canonicalNameOf(database.get(DatabaseModel.SERVER_ID));
         if (!DatabaseModel.isShared(database)) {
-            return copy("runs_on_dedicated").withArg("host", host);
+            return HohenheimMicrocopy.DATABASE_OVERVIEW.of("runs_on_dedicated").withArg("host", host);
         }
         Integer engineId = database.get(DatabaseModel.ENGINE_ID);
         Row engine = engineId == null ? null : Models.get(DatabaseEngineModel.class).findById(engineId);
-        return copy("runs_on_shared").withArg("host", host)
+        return HohenheimMicrocopy.DATABASE_OVERVIEW.of("runs_on_shared").withArg("host", host)
             .withArg("engine", engine != null ? String.valueOf((Object) engine.get(DatabaseEngineModel.NAME))
                 : "#" + engineId);
     }
@@ -161,17 +166,8 @@ final class DatabaseOverview {
             new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));
     }
 
-    /** The Restore tab's connection words, which this card shares. */
-    private static @NonNull Microcopy tabCopy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "database_tab");
-    }
-
-    static @NonNull Microcopy copy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "database_overview");
-    }
-
     private static @NonNull String text(@NonNull String key, @NonNull LocaleChain locales,
                                         @Nullable MessageResolver resolver) {
-        return copy(key).resolve(locales, resolver);
+        return HohenheimMicrocopy.DATABASE_OVERVIEW.of(key).resolve(locales, resolver);
     }
 }

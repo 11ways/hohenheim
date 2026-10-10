@@ -14,7 +14,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.game.VelocityConfigs;
@@ -92,13 +92,13 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         tenantDomainId = ApiSupport.user("tenant-domain@gamedomain.test");
 
         RecordGrants.grant(GrantSubjectType.USER, tenantInstancesId, InstanceModel.MODEL_ID, backendId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantInstancesId, InstanceModel.MODEL_ID, secondBackendId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantInstancesId, InstanceModel.MODEL_ID, proxyId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantDomainId, SiteModel.MODEL_ID, siteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         var zones = Models.get(DnsZoneModel.class);
         Row zone = zones.createEmptyRow();
@@ -221,7 +221,7 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         // 3. Granting the SAME principal the missing site authority makes the identical
         //    call succeed -- the refusal above was the authority check and nothing else.
         RecordGrants.grant(GrantSubjectType.USER, tenantInstancesId, SiteModel.MODEL_ID, siteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         Row mapping = GameDomains.applyAuthorized(instancesOnly,
             mappingRow(domainId, backendId, proxyId));
         assertThat(mappingCount())
@@ -471,7 +471,7 @@ class GameDomainAuthorityTest extends HohenheimTestBase {
         int victimSiteId = victimSite.get(SiteModel.ID);
         int arenaTenant = ApiSupport.user("tenant-arena@gamedomain.test");
         RecordGrants.grant(GrantSubjectType.USER, arenaTenant, SiteModel.MODEL_ID, victimSiteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         Row victimDomain = domains.createEmptyRow();
         victimDomain.set(SiteDomainModel.SITE_ID, victimSiteId);
         victimDomain.set(SiteDomainModel.HOSTNAME, released);

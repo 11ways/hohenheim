@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.protoblast.common.http.HttpMethod;
 import be.elevenways.protoblast.common.time.Now;
@@ -42,7 +43,6 @@ public class GithubProviderClient extends ApiProviderClient {
     private final int providerId;
     private final @NonNull String webBase;
     private final @NonNull String apiBase;
-    private final @Nullable String accessToken;
     private final @Nullable String appId;
     private final @Nullable String appInstallationId;
     private final @Nullable String appPrivateKeyPem;
@@ -50,17 +50,16 @@ public class GithubProviderClient extends ApiProviderClient {
     GithubProviderClient(int providerId, @Nullable String baseUrl, @Nullable String accessToken,
                          @Nullable String appId, @Nullable String appInstallationId,
                          @Nullable String appPrivateKeyPem, @NonNull OutboundUrlGuard guard) {
-        super(guard);
+        super(guard, accessToken);
         this.providerId = providerId;
         String base = baseUrl == null || baseUrl.isBlank()
             ? "https://github.com" : trimSlash(baseUrl.trim());
         this.webBase = base;
         this.apiBase = "https://github.com".equals(base)
             ? "https://api.github.com" : base + "/api/v3";
-        this.accessToken = blankToNull(accessToken);
-        this.appId = blankToNull(appId);
-        this.appInstallationId = blankToNull(appInstallationId);
-        this.appPrivateKeyPem = blankToNull(appPrivateKeyPem);
+        this.appId = Texts.blankAsNull(appId);
+        this.appInstallationId = Texts.blankAsNull(appInstallationId);
+        this.appPrivateKeyPem = Texts.blankAsNull(appPrivateKeyPem);
     }
 
     @Override
@@ -240,13 +239,6 @@ public class GithubProviderClient extends ApiProviderClient {
     }
 
     // -- plumbing -------------------------------------------------------------
-
-    private @NonNull String requireToken() throws IOException {
-        if (this.accessToken == null) {
-            throw new IOException("Provider has no access token configured");
-        }
-        return this.accessToken;
-    }
 
     /** App token when configured, else the stored token; API reads accept either. */
     private @NonNull String anyToken() throws IOException {

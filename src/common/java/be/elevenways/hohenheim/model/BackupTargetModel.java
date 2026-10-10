@@ -1,8 +1,8 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimCounts;
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.backup.BackupTargetRegistry;
@@ -32,20 +32,20 @@ public class BackupTargetModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
-        .label(HohenheimFormCopy.label("name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
         .build());
 
     public static final EnumField KIND = SCHEMA.addField(
         RegistryMemberField.builder("kind")
             .registry(BackupTargetRegistry.REGISTRY)
-            .label(HohenheimFormCopy.label("kind"))
-            .help(HohenheimFormCopy.help("backup_target_kind"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("kind"))
+            .help(HohenheimMicrocopy.HELP.of("backup_target_kind"))
             .build());
 
     public static final SchemaField SETTINGS = SCHEMA.addField(
         SchemaField.builder("settings")
             .schemaFrom("kind")
-            .label(HohenheimFormCopy.label("settings"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("settings"))
             .build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
@@ -122,7 +122,7 @@ public class BackupTargetModel extends Model {
             String name = String.valueOf((Object) doomed.get(NAME));
             if (controlPlane != null && !controlPlane.isBlank()
                     && controlPlane.equals(name)) {
-                throw Violations.ofForm(HohenheimViolations.text("backup_target_control_plane")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_target_control_plane")
                     .withArg("name", name));
             }
             long backups = Models.get(InstanceBackupModel.class).find()
@@ -135,7 +135,7 @@ public class BackupTargetModel extends Model {
                 .where(InstanceModel.BACKUP_TARGET_ID.eq(targetId))
                 .count();
             if (backups > 0 || instances > 0) {
-                throw Violations.ofForm(HohenheimViolations.text("backup_target_in_use")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_target_in_use")
                     .withArg("name", name)
                     .withArg("backups", HohenheimCounts.of("backups", backups))
                     .withArg("instances", HohenheimCounts.of("instances", instances)));

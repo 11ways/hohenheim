@@ -1,12 +1,12 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.game.GameDomains;
@@ -19,10 +19,9 @@ import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution.WorkloadClaim;
 import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -35,8 +34,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -74,9 +71,6 @@ import java.util.function.Consumer;
  * rollback loses nothing.
  */
 public final class InstanceMigrations {
-
-    private static final DateTimeFormatter STAMP = DateTimeFormatter
-        .ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
 
 
 
@@ -158,9 +152,9 @@ public final class InstanceMigrations {
                 supportedRuntimes, sourceTransportable);
             Long budget = InstanceCapacity.budgetMbOf(server);
             destinations.add(new Destination(serverId, name, refusal == null, refusal,
-                clampInt(InstanceCapacity.bookedMbOn(serverId)),
+                Math.clamp(InstanceCapacity.bookedMbOn(serverId), 0, Integer.MAX_VALUE),
                 budget == null ? 0
-                    : clampInt(InstanceCapacity.bookableMbOn(serverId, budget))));
+                    : Math.clamp(InstanceCapacity.bookableMbOn(serverId, budget), 0, Integer.MAX_VALUE)));
         }
         return destinations;
     }
@@ -193,34 +187,26 @@ public final class InstanceMigrations {
         } catch (Violations unaddressable) {
             List<Violation> named = unaddressable.all();
             return named.isEmpty()
-                ? HohenheimViolations.text("instance_host_unreachable").withArg("name", name)
+                ? HohenheimMicrocopy.VIOLATIONS.of("instance_host_unreachable").withArg("name", name)
                     .withArg("reason", "client construction failed")
                 : named.get(0).message();
         }
         if (!sourceTransportable || !hasTransport(targetRuntime)) {
-            return HohenheimViolations.text("migrate_unsupported")
-                .withArg("name", nameOf(resolved.row()));
+            return HohenheimViolations.instanceRefusalText("migrate_unsupported", resolved.row(), null);
         }
         long devices = deviceCountOf(resolved.row().get(InstanceModel.ID));
         if (devices > 0) {
-            return HohenheimViolations.text("migrate_devices_present")
-                .withArg("name", nameOf(resolved.row()))
+            return HohenheimViolations.instanceRefusalText("migrate_devices_present", resolved.row(), null)
                 .withArg("count", devices);
         }
         if (GameDomains.isPaired(resolved.row().get(InstanceModel.ID))) {
-            return HohenheimViolations.text("migrate_game_paired")
-                .withArg("name", nameOf(resolved.row()));
+            return HohenheimViolations.instanceRefusalText("migrate_game_paired", resolved.row(), null);
         }
         if (resolved.spec().publication() != null) {
-            return HohenheimViolations.text("migrate_publication_present")
-                .withArg("name", nameOf(resolved.row()));
+            return HohenheimViolations.instanceRefusalText("migrate_publication_present", resolved.row(), null);
         }
         return HostAdmission.instancePlacementRefusal(serverId, resolved.handler().isolation(),
             resolved.row().get(InstanceModel.QUOTA_BUCKET));
-    }
-
-    private static int clampInt(long value) {
-        return (int) Math.min(Integer.MAX_VALUE, Math.max(0, value));
     }
 
     // -- single-instance migration ---------------------------------------------
@@ -253,7 +239,7 @@ public final class InstanceMigrations {
         // Operator-only for the same reason restore-to-new is: this lane bypasses the
         // tenant creation funnel and decides placement -- both operator authorities.
         if (TenantWrites.isTenantOriginated()) {
-            throw Violations.ofForm(HohenheimViolations.text("migrate_operator_only"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("migrate_operator_only"));
         }
         this.instances.operations().exclusive(instanceId, InstanceOperationLock.Contention.REFUSE,
             () -> migrateToLocked(instanceId, targetServerId));
@@ -265,13 +251,11 @@ public final class InstanceMigrations {
         InstanceOperationGuard.requireOperable(resolved.row());
         if (InstanceModel.INSTALL_INSTALLING.equals(
                 resolved.row().get(InstanceModel.INSTALL_STATE))) {
-            throw Violations.ofForm(HohenheimViolations.text("instance_busy")
-                .withArg("name", nameOf(resolved.row()))
+            throw Violations.ofForm(HohenheimViolations.instanceRefusalText("instance_busy", resolved.row(), null)
                 .withArg("status", InstanceModel.INSTALL_INSTALLING));
         }
         if (targetServerId == resolved.serverId()) {
-            throw Violations.ofForm(HohenheimViolations.text("migrate_same_host")
-                .withArg("name", nameOf(resolved.row())));
+            throw HohenheimViolations.instanceRefusal("migrate_same_host", resolved.row(), null);
         }
         Row target = Models.get(ServerModel.class).findById(targetServerId);
         InstanceKinds.requireRuntimeMatch(ServerModel.nameOf(targetServerId),
@@ -287,8 +271,7 @@ public final class InstanceMigrations {
             targetName);
         Transport transport = transportFor(resolved, targetRuntime);
         if (transport == null) {
-            throw Violations.ofForm(HohenheimViolations.text("migrate_unsupported")
-                .withArg("name", nameOf(resolved.row())));
+            throw HohenheimViolations.instanceRefusal("migrate_unsupported", resolved.row(), null);
         }
         // Device rows are UNMOVABLE this wave, refused by name: neither transport
         // carries custom volumes (the native export skips them, the volume capture
@@ -299,8 +282,8 @@ public final class InstanceMigrations {
         // is host-local and an import naming it can fail or dangle.
         long devices = deviceCountOf(instanceId);
         if (devices > 0) {
-            throw Violations.ofForm(HohenheimViolations.text("migrate_devices_present")
-                .withArg("name", nameOf(resolved.row()))
+            throw Violations.ofForm(HohenheimViolations.instanceRefusalText("migrate_devices_present",
+                    resolved.row(), null)
                 .withArg("count", devices));
         }
         // A game-domain mapping binds this instance to its proxy/backend PARTNER over a
@@ -310,8 +293,7 @@ public final class InstanceMigrations {
         // severing the mapping first is the operator's explicit decision, never this
         // lane's silent side effect.
         if (GameDomains.isPaired(instanceId)) {
-            throw Violations.ofForm(HohenheimViolations.text("migrate_game_paired")
-                .withArg("name", nameOf(resolved.row())));
+            throw HohenheimViolations.instanceRefusal("migrate_game_paired", resolved.row(), null);
         }
         // A port publication is a host-scoped reservation (DNS may point at it); moving
         // one silently would strand the claim -- refused by name until a consumer needs it.
@@ -320,12 +302,11 @@ public final class InstanceMigrations {
         // refused one gate earlier as game-paired when it carries mappings, and lands
         // HERE when it does not -- its public port claim is what cannot move.
         if (resolved.spec().publication() != null) {
-            throw Violations.ofForm(HohenheimViolations.text("migrate_publication_present")
-                .withArg("name", nameOf(resolved.row())));
+            throw HohenheimViolations.instanceRefusal("migrate_publication_present", resolved.row(), null);
         }
 
         String handle = resolved.spec().handle();
-        boolean wasRunning = resolved.runtime().status(handle).running();
+        boolean wasRunning = resolved.liveStatus().running();
         this.instances.leases().requireFence(resolved.serverId());
         this.instances.leases().requireFence(targetServerId);
 
@@ -341,8 +322,8 @@ public final class InstanceMigrations {
             try {
                 WorkloadClaim claim = targetAttribution.claimOf(resolved.spec());
                 if (claim == WorkloadClaim.FOREIGN) {
-                    throw Violations.ofForm(HohenheimViolations.text("migrate_destination_occupied")
-                        .withArg("name", nameOf(resolved.row()))
+                    throw Violations.ofForm(HohenheimViolations.instanceRefusalText("migrate_destination_occupied",
+                            resolved.row(), null)
                         .withArg("server", targetName));
                 }
                 if (claim == WorkloadClaim.OURS) {
@@ -362,15 +343,15 @@ public final class InstanceMigrations {
         try {
             InstanceOperationGuard.stampMigrating(this.instances.leases(), instanceId,
                 resolved.serverId(), targetServerId, reservedMb,
-                nameOf(resolved.row()));
+                InstanceModel.nameOf(resolved.row()));
         } catch (RuntimeException notOurs) {
             // The window never opened, so no settle will ever close it. The EXACT
             // reservation comes back, never a recompute of the row's current booking.
             InstanceCapacity.release(targetServerId, reservedMb);
             throw notOurs;
         }
-        Path staging = stagingRoot().resolve("migrate-" + instanceId + "-"
-            + STAMP.format(Now.instant()));
+        Path staging = InstanceBackups.stagingRoot().resolve("migrate-" + instanceId + "-"
+            + UtcStamp.now());
         try {
             InstanceConsoles.markStopExpected(instanceId);
             InstanceConsoles.closeSession(instanceId);
@@ -396,7 +377,7 @@ public final class InstanceMigrations {
 
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, instanceId);
             resolved.runtime().destroy(handle);
-            if (resolved.runtime().status(handle).state() != ContainerState.ABSENT) {
+            if (resolved.liveStatus().state() != ContainerState.ABSENT) {
                 throw new IOException("Source copy of '" + handle + "' still exists on '"
                     + ServerModel.nameOf(resolved.serverId())
                     + "' after its removal was accepted");
@@ -409,7 +390,7 @@ public final class InstanceMigrations {
 
             InstanceOperationGuard.handoff(this.instances.leases(), instanceId,
                 resolved.serverId(), targetServerId,
-                InstanceModel.STATUS_STOPPED, nameOf(resolved.row()));
+                InstanceModel.STATUS_STOPPED, InstanceModel.nameOf(resolved.row()));
             this.checkpoint.accept("flipped");
         } catch (IOException | RuntimeException error) {
             // The same deterministic settle a killed controller gets at boot; it
@@ -468,12 +449,12 @@ public final class InstanceMigrations {
      */
     public @NonNull DrainReport drain(int serverId) {
         if (TenantWrites.isTenantOriginated()) {
-            throw Violations.ofForm(HohenheimViolations.text("migrate_operator_only"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("migrate_operator_only"));
         }
         Row server = Models.get(ServerModel.class).findById(serverId);
         if (server == null || !ServerModel.ADMISSION_CORDONED
                 .equals(server.get(ServerModel.ADMISSION))) {
-            throw Violations.ofForm(HohenheimViolations.text("drain_requires_cordon")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("drain_requires_cordon")
                 .withArg("name", server != null
                     ? String.valueOf((Object) server.get(ServerModel.NAME))
                     : String.valueOf(serverId)));
@@ -634,7 +615,7 @@ public final class InstanceMigrations {
             }
             InstanceOperationGuard.clearMigration(this.instances.leases(), instanceId,
                 resolved.serverId(), targetId,
-                InstanceModel.STATUS_STOPPED, nameOf(row), null);
+                InstanceModel.STATUS_STOPPED, InstanceModel.nameOf(row), null);
             Blast.log("MIGRATE: rolled back interrupted migration of", handle,
                 "- source host keeps it");
             return true;
@@ -645,7 +626,7 @@ public final class InstanceMigrations {
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, instanceId);
             InstanceOperationGuard.handoff(this.instances.leases(), instanceId,
                 resolved.serverId(), targetId,
-                InstanceModel.STATUS_STOPPED, nameOf(row));
+                InstanceModel.STATUS_STOPPED, InstanceModel.nameOf(row));
             Blast.log("MIGRATE: completed interrupted migration of", handle,
                 "onto", targetName);
             return true;
@@ -654,7 +635,7 @@ public final class InstanceMigrations {
         // where it is, so the window's destination booking goes back like a rollback's.
         InstanceOperationGuard.clearMigration(this.instances.leases(), instanceId,
             resolved.serverId(), targetId,
-            InstanceModel.STATUS_ERROR, nameOf(row), HohenheimActivityAction.WORKLOAD_COPY_LOST);
+            InstanceModel.STATUS_ERROR, InstanceModel.nameOf(row), HohenheimActivityAction.WORKLOAD_COPY_LOST);
         Blast.log("MIGRATE: interrupted migration of", handle, "found NO copy on either"
             + " host; the record is stamped error for the operator");
         return true;
@@ -847,14 +828,6 @@ public final class InstanceMigrations {
         return Models.get(InstanceDeviceModel.class).find()
             .where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
             .count();
-    }
-
-    private static @NonNull String nameOf(@NonNull Row row) {
-        return String.valueOf((Object) row.get(InstanceModel.NAME));
-    }
-
-    private static Path stagingRoot() {
-        return Path.of(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Backup.STAGING_PATH));
     }
 
 

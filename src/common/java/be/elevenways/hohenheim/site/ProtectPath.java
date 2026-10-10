@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.site;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.zenit.common.edit.Array;
 import be.elevenways.zenit.common.edit.FieldFormEntryRegistry;
@@ -46,24 +46,29 @@ public final class ProtectPath {
     public static final String METHOD_SIGN_IN = "sign_in";
 
     public static final StringField PATH = StringField.builder("path")
-        .label(copy("path"))
-        .help(copy("path_help"))
+        .label(HohenheimMicrocopy.PROTECT_PATH.of("path"))
+        .help(HohenheimMicrocopy.PROTECT_PATH.of("path_help"))
         .placeholder("/wp-admin")
         .required()
         .build();
 
     public static final EnumField METHOD = EnumField.builder("method")
-        .value(METHOD_PASSWORD, v -> v.displayName("Password").label(copy("method_password")).icon("key"))
-        .value(METHOD_NETWORK, v -> v.displayName("Network").label(copy("method_network")).icon("network-wired"))
-        .value(METHOD_SIGN_IN, v -> v.displayName("Sign-in").label(copy("method_sign_in")).icon("user-lock"))
+        .value(METHOD_PASSWORD, v -> v.displayName("Password")
+            .label(HohenheimMicrocopy.PROTECT_PATH.of("method_password")).icon("key"))
+        .value(METHOD_NETWORK, v -> v.displayName("Network").label(HohenheimMicrocopy.PROTECT_PATH.of("method_network"))
+            .icon("network-wired"))
+        .value(METHOD_SIGN_IN, v -> v.displayName("Sign-in").label(HohenheimMicrocopy.PROTECT_PATH.of("method_sign_in"))
+            .icon("user-lock"))
         .defaultValue(METHOD_PASSWORD)
-        .label(copy("method"))
+        .label(HohenheimMicrocopy.PROTECT_PATH.of("method"))
         .required()
         .build();
 
-    static final StringField USERNAME = StringField.builder("username").label(copy("username")).build();
+    static final StringField USERNAME = StringField.builder("username")
+        .label(HohenheimMicrocopy.PROTECT_PATH.of("username")).build();
 
-    static final StringField PASSWORD = StringField.builder().name("password").secret().label(copy("password")).build();
+    static final StringField PASSWORD = StringField.builder().name("password").secret()
+        .label(HohenheimMicrocopy.PROTECT_PATH.of("password")).build();
 
     /** The people who may pass a password-protected path, one username and password each. */
     public static final ItemList PEOPLE = ItemList.of("people", FormSpec.builder()
@@ -75,12 +80,12 @@ public final class ProtectPath {
 
     public static final ListField<String> NETWORKS = ListField.<String>builder(NETWORK)
         .name("networks")
-        .label(copy("networks"))
-        .help(copy("networks_help"))
+        .label(HohenheimMicrocopy.PROTECT_PATH.of("networks"))
+        .help(HohenheimMicrocopy.PROTECT_PATH.of("networks_help"))
         .build();
 
     public static final IntegerField PROVIDER_ID = IntegerField.builder().name("provider_id")
-        .label(copy("provider"))
+        .label(HohenheimMicrocopy.PROTECT_PATH.of("provider"))
         .build();
 
     private static final FormSpec FORM = FormSpec.builder()
@@ -114,9 +119,9 @@ public final class ProtectPath {
 
     /** The site record's "Protect a path", answered with the protected path's id. */
     public static final Operation<Row, Input, Integer> OPERATION = Operation.declare(HohenheimIds.id("protect_path"))
-        .label(copy("action"))
-        .description(copy("description"))
-        .happened(Microcopy.of("happened").withFilter("scope", "protect_path"))
+        .label(HohenheimMicrocopy.PROTECT_PATH.of("action"))
+        .description(HohenheimMicrocopy.PROTECT_PATH.of("description"))
+        .happened(HohenheimMicrocopy.PROTECT_PATH.of("happened"))
         .icon(Icon.of("lock"))
         .one(SiteOperations.SITE)
         .gate(OperationGate.open())
@@ -139,9 +144,5 @@ public final class ProtectPath {
             }
         }
         return people;
-    }
-
-    private static @NonNull Microcopy copy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "protect_path");
     }
 }

@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.model;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.common.text.Texts;
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimViolations;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.net.IpRanges;
 import be.elevenways.zenit.common.orm.behaviour.TreeBehaviour;
@@ -67,26 +66,26 @@ public class AccessRuleModel extends Model {
     public static final Schema GROUP_DATA_SCHEMA = new Schema();
     public static final EnumField GROUP_SATISFY = GROUP_DATA_SCHEMA.addField(EnumField.builder("satisfy")
         .value(AccessListModel.SATISFY_ANY, v -> v.displayName("Any")
-            .label(Microcopy.of("any").withFilter("scope", "access_satisfy"))
+            .label(HohenheimMicrocopy.ACCESS_SATISFY.of("any"))
             .icon("check").color(ColorHue.BLUE))
         .value(AccessListModel.SATISFY_ALL, v -> v.displayName("All")
-            .label(Microcopy.of("all").withFilter("scope", "access_satisfy"))
+            .label(HohenheimMicrocopy.ACCESS_SATISFY.of("all"))
             .icon("list-check").color(ColorHue.ORANGE))
         .defaultValue(AccessListModel.SATISFY_ANY)
-        .label(HohenheimFormCopy.label("satisfy"))
-        .help(HohenheimFormCopy.help("rule_satisfy"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("satisfy"))
+        .help(HohenheimMicrocopy.HELP.of("rule_satisfy"))
         .build());
 
     public static final Schema BASIC_AUTH_DATA_SCHEMA = new Schema();
     public static final StringField BASIC_AUTH_USERNAME = BASIC_AUTH_DATA_SCHEMA.addField(
         StringField.builder().name("username")
-            .label(HohenheimFormCopy.label("basic_auth_user"))
-            .help(HohenheimFormCopy.help("basic_auth_user")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("basic_auth_user"))
+            .help(HohenheimMicrocopy.HELP.of("basic_auth_user")).build());
     /** Typed in plaintext, STORED as an argon2 hash (the resource hashes on save). */
     public static final StringField BASIC_AUTH_PASSWORD = BASIC_AUTH_DATA_SCHEMA.addField(
         StringField.builder().name("password").secret()
-            .label(HohenheimFormCopy.label("basic_auth_password"))
-            .help(HohenheimFormCopy.help("basic_auth_password")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("basic_auth_password"))
+            .help(HohenheimMicrocopy.HELP.of("basic_auth_password")).build());
 
     /**
      * Shared by both address leaves: allow and deny ask the same question of the same
@@ -95,14 +94,14 @@ public class AccessRuleModel extends Model {
     public static final Schema NETWORK_DATA_SCHEMA = new Schema();
     public static final StringField NETWORK = NETWORK_DATA_SCHEMA.addField(
         StringField.builder().name("network")
-            .label(HohenheimFormCopy.label("rule_network"))
-            .help(HohenheimFormCopy.help("rule_network")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("rule_network"))
+            .help(HohenheimMicrocopy.HELP.of("rule_network")).build());
 
     public static final Schema AUTH_PROVIDER_DATA_SCHEMA = new Schema();
     public static final IntegerField PROVIDER_ID = AUTH_PROVIDER_DATA_SCHEMA.addField(
         IntegerField.builder().name("provider_id")
-            .label(HohenheimFormCopy.label("rule_provider"))
-            .help(HohenheimFormCopy.help("rule_provider")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("rule_provider"))
+            .help(HohenheimMicrocopy.HELP.of("rule_provider")).build());
     /**
      * Narrows the identity this leaf accepts; blank = any identity the provider
      * authenticates. Suggestions come from the CHOSEN provider's realm.
@@ -110,8 +109,8 @@ public class AccessRuleModel extends Model {
     public static final StringField PROVIDER_REQUIRED_PERMISSION = AUTH_PROVIDER_DATA_SCHEMA.addField(
         PermissionField.builder("required_permission")
             .suggestionSource(RULE_PROVIDER_SUGGESTION_SOURCE)
-            .label(HohenheimFormCopy.label("required_permission"))
-            .help(HohenheimFormCopy.help("required_permission")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("required_permission"))
+            .help(HohenheimMicrocopy.HELP.of("required_permission")).build());
     public static final BelongsTo<SiteAuthProviderModel> PROVIDER = AUTH_PROVIDER_DATA_SCHEMA.addRelation(
         BelongsTo.to(SiteAuthProviderModel.class)
             .name("provider")
@@ -124,7 +123,7 @@ public class AccessRuleModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField ACCESS_LIST_ID = SCHEMA.addField(
         IntegerField.builder().name("access_list_id")
-            .label(HohenheimFormCopy.label("rule_access_list")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("rule_access_list")).build());
     /** The enclosing group row, or null for a direct child of the list's implicit root. */
     public static final IntegerField PARENT_ID = SCHEMA.addField(
         IntegerField.builder().name("parent_id").filterable(false).build());
@@ -135,28 +134,28 @@ public class AccessRuleModel extends Model {
     public static final IntegerField SORT = SCHEMA.addField(
         IntegerField.builder().name("sort").build());
     public static final EnumField TYPE = SCHEMA.addField(EnumField.builder("type")
-        .label(HohenheimFormCopy.label("rule_type")).help(HohenheimFormCopy.help("rule_type"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("rule_type")).help(HohenheimMicrocopy.HELP.of("rule_type"))
         .value(TYPE_GROUP, v -> v.displayName("Group")
-            .label(Microcopy.of("group").withFilter("scope", "access_rule_type"))
+            .label(HohenheimMicrocopy.ACCESS_RULE_TYPE.of("group"))
             .icon("layer-group").color(ColorHue.GRAY).schema(GROUP_DATA_SCHEMA))
         .value(TYPE_BASIC_AUTH, v -> v.displayName("Basic auth")
-            .label(Microcopy.of("basic_auth").withFilter("scope", "access_rule_type"))
+            .label(HohenheimMicrocopy.ACCESS_RULE_TYPE.of("basic_auth"))
             .icon("lock").color(ColorHue.AMBER).schema(BASIC_AUTH_DATA_SCHEMA))
         .value(TYPE_IP_ALLOW, v -> v.displayName("Allowed network")
-            .label(Microcopy.of("ip_allow").withFilter("scope", "access_rule_type"))
+            .label(HohenheimMicrocopy.ACCESS_RULE_TYPE.of("ip_allow"))
             .icon("check").color(ColorHue.GREEN).schema(NETWORK_DATA_SCHEMA))
         .value(TYPE_IP_DENY, v -> v.displayName("Denied network")
-            .label(Microcopy.of("ip_deny").withFilter("scope", "access_rule_type"))
+            .label(HohenheimMicrocopy.ACCESS_RULE_TYPE.of("ip_deny"))
             .icon("ban").color(ColorHue.RED).schema(NETWORK_DATA_SCHEMA))
         .value(TYPE_AUTH_PROVIDER, v -> v.displayName("Auth provider")
-            .label(Microcopy.of("auth_provider").withFilter("scope", "access_rule_type"))
+            .label(HohenheimMicrocopy.ACCESS_RULE_TYPE.of("auth_provider"))
             .icon("shield-halved").color(ColorHue.INDIGO).schema(AUTH_PROVIDER_DATA_SCHEMA))
         .build());
 
     /** Type-specific configuration, shaped by the sub-schema the rule's TYPE declares. */
     public static final SchemaField DATA = SCHEMA.addField(SchemaField.builder("data")
         .schemaFrom("type")
-        .label(HohenheimFormCopy.label("rule_data")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("rule_data")).build());
 
     /**
      * A DERIVED search index: the rule's own data values as one plain string.
@@ -168,12 +167,12 @@ public class AccessRuleModel extends Model {
      */
     public static final StringField SEARCH_TEXT = SCHEMA.addField(
         StringField.builder().name("search_text")
-            .label(HohenheimFormCopy.label("rule_search_text")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("rule_search_text")).build());
 
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled")
         .defaultValue(true)
-        .label(HohenheimFormCopy.label("rule_enabled"))
-        .help(HohenheimFormCopy.help("rule_enabled")).build());
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("rule_enabled"))
+        .help(HohenheimMicrocopy.HELP.of("rule_enabled")).build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
@@ -217,7 +216,7 @@ public class AccessRuleModel extends Model {
                 String type = row.get(TYPE);
                 if (type == null || !TYPE.isValidValue(type)) {
                     throw Violations.ofField(TYPE.getName(), type,
-                        HohenheimViolations.text("access_rule_type_invalid"));
+                        HohenheimMicrocopy.VIOLATIONS.of("access_rule_type_invalid"));
                 }
             }
             validateData(row.get(TYPE), row.get(DATA), Boolean.TRUE.equals(row.get(ENABLED)));
@@ -246,7 +245,7 @@ public class AccessRuleModel extends Model {
                 String satisfy = Texts.trimmedOrNull(map.get(GROUP_SATISFY.getName()));
                 if (satisfy != null && !GROUP_SATISFY.isValidValue(satisfy)) {
                     throw Violations.ofField("data." + GROUP_SATISFY.getName(), satisfy,
-                        HohenheimViolations.text("access_rule_satisfy_invalid"));
+                        HohenheimMicrocopy.VIOLATIONS.of("access_rule_satisfy_invalid"));
                 }
             }
             case TYPE_IP_ALLOW, TYPE_IP_DENY -> {
@@ -254,7 +253,7 @@ public class AccessRuleModel extends Model {
                 if (network == null ? enabled : parseNetwork(network) == null) {
                     throw Violations.ofField("data." + NETWORK.getName(),
                         map.get(NETWORK.getName()),
-                        HohenheimViolations.text("access_rule_network_invalid"));
+                        HohenheimMicrocopy.VIOLATIONS.of("access_rule_network_invalid"));
                 }
             }
             case TYPE_BASIC_AUTH -> {
@@ -263,13 +262,13 @@ public class AccessRuleModel extends Model {
                 // so a username carrying one can never be presented back to this rule.
                 if (username != null && username.indexOf(':') >= 0) {
                     throw Violations.ofField("data." + BASIC_AUTH_USERNAME.getName(), username,
-                        HohenheimViolations.text("access_rule_username_invalid"));
+                        HohenheimMicrocopy.VIOLATIONS.of("access_rule_username_invalid"));
                 }
                 if (enabled && (username == null
                         || Texts.trimmedOrNull(map.get(BASIC_AUTH_PASSWORD.getName())) == null)) {
                     throw Violations.ofField("data." + BASIC_AUTH_USERNAME.getName(),
                         map.get(BASIC_AUTH_USERNAME.getName()),
-                        HohenheimViolations.text("access_rule_credential_incomplete"));
+                        HohenheimMicrocopy.VIOLATIONS.of("access_rule_credential_incomplete"));
                 }
             }
             case TYPE_AUTH_PROVIDER -> {
@@ -277,11 +276,11 @@ public class AccessRuleModel extends Model {
                 Integer providerId = providerId(raw);
                 if (providerId == null && Texts.trimmedOrNull(raw) != null) {
                     throw Violations.ofField("data." + PROVIDER_ID.getName(), raw,
-                        HohenheimViolations.text("access_rule_provider_invalid"));
+                        HohenheimMicrocopy.VIOLATIONS.of("access_rule_provider_invalid"));
                 }
                 if (enabled && providerId == null) {
                     throw Violations.ofField("data." + PROVIDER_ID.getName(), null,
-                        HohenheimViolations.text("access_rule_provider_missing"));
+                        HohenheimMicrocopy.VIOLATIONS.of("access_rule_provider_missing"));
                 }
             }
             default -> {

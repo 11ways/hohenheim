@@ -1,16 +1,17 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
-import be.elevenways.hohenheim.server.runtime.ImageOrigin;
+import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.ImagePublishSupport;
+import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -20,8 +21,6 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -39,9 +38,6 @@ import java.util.Map;
  * records where it came from so that fact is readable.
  */
 public final class InstanceTemplateCapture {
-
-    private static final DateTimeFormatter STAMP =
-        DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneOffset.UTC);
 
     private final @NonNull InstanceService instances;
 
@@ -72,41 +68,37 @@ public final class InstanceTemplateCapture {
         InstanceOperationGuard.requireOperable(resolved.row());
         if (!resolved.handler().supportsTemplateCapture()
                 || !(resolved.runtime() instanceof ImagePublishSupport publisher)) {
-            throw Violations.ofForm(HohenheimViolations.text("template_capture_unsupported")
-                .withArg("name", nameOf(resolved.row())));
+            throw HohenheimViolations.instanceRefusal("template_capture_unsupported", resolved.row(), null);
         }
         if (!InstanceModel.STATUS_STOPPED.equals(resolved.row().get(InstanceModel.STATUS))) {
             // The DRIVER also refuses a non-stopped publish on daemon truth; this is the
             // record-status twin so the refusal happens before any status is stamped.
-            throw Violations.ofForm(HohenheimViolations.text("template_capture_requires_stopped")
-                .withArg("name", nameOf(resolved.row())));
+            throw HohenheimViolations.instanceRefusal("template_capture_requires_stopped", resolved.row(), null);
         }
 
         String alias = aliasFor(resolved.row());
         this.instances.leases().requireFence(resolved.serverId());
         InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
             resolved.serverId(), InstanceModel.STATUS_CAPTURING,
-            nameOf(resolved.row()));
+            InstanceModel.nameOf(resolved.row()));
         try {
-            String description = "Captured from instance '" + nameOf(resolved.row())
+            String description = "Captured from instance '" + InstanceModel.nameOf(resolved.row())
                 + "' (#" + instanceId + ")";
             publisher.publishImage(resolved.spec(), alias, description);
         } catch (IOException e) {
-            throw Violations.ofForm(HohenheimViolations.text("template_capture_failed")
-                .withArg("name", nameOf(resolved.row()))
-                .withArg("reason", HohenheimViolations.reasonOf(e)));
+            throw HohenheimViolations.instanceRefusal("template_capture_failed", resolved.row(), e);
         } finally {
             // A publish READS the stopped workload and never changes it; both outcomes
             // settle the record back to the state the capture started from.
             InstanceOperationGuard.stamp(this.instances.leases(), instanceId,
                 resolved.serverId(), InstanceModel.STATUS_STOPPED,
-                nameOf(resolved.row()));
+                InstanceModel.nameOf(resolved.row()));
         }
 
         int templateId = mintTemplate(resolved, instanceId, alias);
         ActivityLog.record(Models.get(InstanceModel.class), instanceId,
             HohenheimActivityAction.TEMPLATE_CAPTURED, alias);
-        Blast.log("TEMPLATE: captured instance", nameOf(resolved.row()), "as alias",
+        Blast.log("TEMPLATE: captured instance", InstanceModel.nameOf(resolved.row()), "as alias",
             alias, "-> template", templateId, "(unapproved)");
         return templateId;
     }
@@ -118,18 +110,18 @@ public final class InstanceTemplateCapture {
         if (resolved.row().get(InstanceModel.SETTINGS) instanceof Map<?, ?> current) {
             current.forEach((key, value) -> settings.put(String.valueOf(key), value));
         }
-        settings.put("image", alias);
-        settings.put("image_origin", ImageOrigin.PREPARED.key());
+        settings.put(InstanceKindFields.IMAGE, alias);
+        settings.put(ImageOrigin.SETTING, ImageOrigin.PREPARED.key());
         String host = ServerModel.nameOf(resolved.serverId());
 
         InstanceTemplateModel templates = Models.get(InstanceTemplateModel.class);
         Row template = templates.createEmptyRow();
-        template.set(InstanceTemplateModel.NAME, nameOf(resolved.row())
-            + " (" + STAMP.format(Now.instant()) + ")");
+        template.set(InstanceTemplateModel.NAME, InstanceModel.nameOf(resolved.row())
+            + " (" + UtcStamp.now() + ")");
         template.set(InstanceTemplateModel.KIND, resolved.row().get(InstanceModel.KIND));
         template.set(InstanceTemplateModel.SETTINGS, settings);
         template.set(InstanceTemplateModel.SOURCE, "captured from instance #" + instanceId
-            + " (" + nameOf(resolved.row()) + ") on host " + host);
+            + " (" + InstanceModel.nameOf(resolved.row()) + ") on host " + host);
         // APPROVED_AT stays null by construction: capture and approval are two acts.
         templates.save(template);
         int templateId = template.get(InstanceTemplateModel.ID);
@@ -139,18 +131,14 @@ public final class InstanceTemplateCapture {
 
     /** A daemon-safe alias derived from the instance: {@code tpl-<slug>-<stamp>}. */
     static @NonNull String aliasFor(@NonNull Row instance) {
-        String slug = Slugs.slugify(nameOf(instance));
+        String slug = Slugs.slugify(InstanceModel.nameOf(instance));
         if (slug.isEmpty()) {
             slug = "instance";
         }
         if (slug.length() > 40) {
             slug = slug.substring(0, 40);
         }
-        return "tpl-" + slug + "-" + STAMP.format(Now.instant());
-    }
-
-    private static @NonNull String nameOf(@NonNull Row instance) {
-        return String.valueOf((Object) instance.get(InstanceModel.NAME));
+        return "tpl-" + slug + "-" + UtcStamp.now();
     }
 
 }

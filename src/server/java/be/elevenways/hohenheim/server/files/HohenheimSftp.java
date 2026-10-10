@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.files;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.setting.SettingDefinition;
@@ -36,14 +37,9 @@ public final class HohenheimSftp {
     private HohenheimSftp() {
     }
 
-    /** @return whether the operator turned SFTP on */
-    public static boolean isEnabled() {
-        return Boolean.TRUE.equals(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Sftp.ENABLED));
-    }
-
     /** @return the configured port while SFTP is enabled, the one the SSH ban rule also covers; null when off */
     public static @Nullable Integer enabledPort() {
-        if (!isEnabled()) {
+        if (!HohenheimSettings.isOn(HohenheimSettings.Sftp.ENABLED)) {
             return null;
         }
         int port = valueOf(HohenheimSettings.Sftp.PORT);
@@ -77,7 +73,7 @@ public final class HohenheimSftp {
     public static synchronized void startIfEnabled() {
         stop();
         failure = null;
-        if (!isEnabled()) {
+        if (!HohenheimSettings.isOn(HohenheimSettings.Sftp.ENABLED)) {
             return;
         }
         try {
@@ -86,7 +82,7 @@ public final class HohenheimSftp {
             Blast.slog("hohenheim.sftp_started", Map.of("port", running.port(),
                 "fingerprint", running.hostKeyFingerprint()));
         } catch (IOException | RuntimeException refused) {
-            failure = refused.getMessage() == null ? refused.getClass().getSimpleName() : refused.getMessage();
+            failure = HohenheimViolations.reasonOf(refused);
             Blast.slog("hohenheim.sftp_failed", Map.of("error", failure));
         }
     }

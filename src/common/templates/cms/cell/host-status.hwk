@@ -12,7 +12,7 @@
     <span>{{ value.stateText }}</span>
     {% /if %}
     {% if value.lastSeenIso != null %}
-    <pl-relative-time datetime={% value.lastSeenIso %} wording={% value.wording %} title={% value.lastSeenIso %}></pl-relative-time>
+    <pl-relative-time datetime={% value.lastSeenIso %} title={% value.lastSeenIso %}></pl-relative-time>
     {% /if %}
 </span>
 {% /if %}

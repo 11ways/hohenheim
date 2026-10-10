@@ -1,18 +1,74 @@
 package be.elevenways.hohenheim;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.util.BlastString;
+import org.checkerframework.checker.nullness.qual.NonNull;
+
 /**
- * The single home of the scope filter Hohenheim's activity copy ships under: its verbs' labels, its operations'
- * sentences and its activity log's own copy (its description and its default filter's chip), never core's
- * {@code activity} scope.
+ * The single home of every catalog scope Hohenheim's microcopy ships under, one constant per scope.
+ *
+ * AIDEV-NOTE: the scope value IS the constant's name in lower case, so a scope is spelled once. Java reads a key
+ * through {@code HohenheimMicrocopy.X.of("key")} and nowhere else: a class spelling its own scoped helper is how one
+ * message silently loses the filter and resolves some other entry of the same word. Templates spell the same values as
+ * literals ({@code t("name", scope: "hohenheim_field")}); MicrocopyCatalogScopeTest owns exactly these values (a
+ * constant no catalog variant carries fails it), and DeclaredMicrocopyKeysTest declares every constant's {@code of}
+ * as a key factory. Labels ship under Hohenheim's own scopes, never plumage's {@code field} or {@code nav}: two
+ * modules declaring one (key, filters) identity keep only one text. Activity copy ships under {@link #HOHENHEIM},
+ * never core's {@code activity} scope; violations keep their own scope rather than core's ValidationMicrocopy one, so
+ * a Hohenheim entry never shadows a core validation message. The framework's later scoped-copy factory replaces this.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
  */
-public final class HohenheimMicrocopy {
+public enum HohenheimMicrocopy {
 
-    /** The scope filter value of Hohenheim's activity verb labels, operation sentences and activity log copy. */
-    public static final String SCOPE = "hohenheim";
+    ACCESS_LIST, ACCESS_RULE, ACCESS_RULE_TYPE, ACCESS_SATISFY, ADMIN, ADMIN_INBOX, ALERT, APP, APP_HEALTH,
+    APP_LIST, APP_OVERVIEW, ATTENTION_ACTION, ATTENTION_DETAIL, ATTENTION_TITLE, AUTH_PROVIDER, AUTH_PROVIDER_TYPE,
+    AUTH_PROVIDER_TYPE_DESCRIPTION, BACKUP_STATUS,
+    BACKUP_TARGET, BACKUP_TARGET_KIND, BACKUP_TARGET_KIND_DESCRIPTION, BAN, BAN_CAUSE, BAN_SCOPE, BAN_SOURCE,
+    BAN_STATE, BUILDER_KIND, BUILD_OPERATION, CAPABILITY, CERT_CHALLENGE, CERTIFICATE,
+    CERTIFICATE_REQUEST, CERTIFICATE_REQUEST_ERROR, CERT_PROVIDER, CERT_STATUS, CONSOLE_KIND, CONSOLE_MODE, COUNT,
+    CRASH_POLICY, DASHBOARD, DATABASE, DATABASE_ENGINE, DATABASE_LIST, DATABASE_OVERVIEW, DATABASE_PLACEMENT,
+    DATABASE_RESTORE, DATABASE_STATUS, DATABASE_TAB, DB_ENGINE, DELEGATED, DEPENDS_CONDITION, DEPLOYMENTS,
+    DEV_SESSIONS, DNS_DELEGATION, DNS_FRESHNESS, DNS_PEER, DNS_PUBLISHER, DNS_RECORD, DNS_RECORD_TYPE, DNS_REMOTE,
+    DNS_ROLE, DNS_SECONDARIES, DNS_TRANSFER, DNS_ZONE, DNS_ZONE_FILE, DNS_ZONE_PEER, DNS_ZONE_RECORDS, DOMAIN_MATCH,
+    ENVIRONMENT, ENVIRONMENT_VARIABLE, FORM_SECTION, GAME_DOMAIN, GIT_PROVIDER, GIT_PROVIDER_KIND,
+    GIT_PROVIDER_KIND_DESCRIPTION, HELP, HOHENHEIM, HOHENHEIM_FIELD, HOHENHEIM_NAV, HOST_ADMISSION, HOST_CHECK,
+    HOST_LIST, HOST_MODE, HOST_POSTURE, HOST_PROBE, HOST_RUNTIME, IMAGE_ORIGIN, INSTALL_STATE, INSTANCE,
+    INSTANCE_ARTIFACTS, INSTANCE_BACKUP, INSTANCE_CONSOLE, INSTANCE_DATABASE, INSTANCE_DEPLOYMENTS, INSTANCE_DEVICE,
+    INSTANCE_EXEC, INSTANCE_FILE, INSTANCE_FILES, INSTANCE_FRAMEBUFFER, INSTANCE_FROM_TEMPLATE, INSTANCE_KIND,
+    INSTANCE_KIND_DESCRIPTION, INSTANCE_MIGRATE, INSTANCE_OVERVIEW, INSTANCE_PROVISIONING, INSTANCE_QUOTA,
+    INSTANCE_SCHEDULE, INSTANCE_SHELL, INSTANCE_SNAPSHOT, INSTANCE_STATS, INSTANCE_STATUS, INSTANCE_TEMPLATE,
+    INSTANCE_VARIABLE, INSTANCE_VOLUME, ISOLATION_FINDING, MANAGE, MANAGE_APP, MANAGE_DASHBOARD, NAV_CLUSTER,
+    NAV_CLUSTER_HINT, NOTIFICATION_CHANNEL, NOTIFICATION_EVENT, NOTIFICATION_FORMAT, ONBOARDING,
+    ONBOARDING_CHECKLIST, OPERATION_STATUS, PERMISSION, PORT_EXPOSURE, PORT_PROTOCOL, POWER_OPERATION,
+    PREVIEW_DEPLOYMENT, PREVIEW_STATUS, PROJECT, PROJECT_MEMBER, PROTECTED_PATH, PROTECT_PATH, PROXY_ERROR, PUT_ONLINE,
+    READINESS_KIND, RECONCILE_BUCKET, RECONCILE_FINDING, RECONCILE_KIND, REDIRECT_STATUS, REINSTALL_POLICY,
+    RELEASED_CLAIM, RELEASE_KIND, RELEASE_OPERATION, RESTART_POLICY, ROLE, ROUTING_PROBLEM, RUNTIME_IMAGE,
+    RUNTIME_ROLE, SCHEDULE_ACTION, SCHEDULE_RUN_STATUS, SCHEDULE_STEP, SECURITY_EVENT_TYPE, SERVER, SERVER_MEDIA,
+    SERVER_OPTION, SERVER_OVERVIEW, SETTINGS, SETTINGS_SECTION, SITE, SITE_DATABASE, SITE_DATABASES, SITE_DOMAIN,
+    SITE_DOMAINS, SITE_FAULT, SITE_STATUS, SITE_TLS, SNAPSHOT_STATUS, SPAMSERVICE, SPAMSERVICE_CLIENT,
+    SPAMSERVICE_EVENT, SPAMSERVICE_KEY, SPAMSERVICE_REPUTATION, SPAMSERVICE_SAMPLE, SPAMSERVICE_WORD, STACK,
+    STACK_DEPLOYMENTS, STACK_DEPLOY_REASON, STACK_FILE, STACK_MOUNT_TYPE, STACK_SERVICE,
+    STACK_SERVICES, STACK_STATE, STACK_STATUS, STOP_KIND, TEMPLATE_CONTENTS, TEMPLATE_DATABASE, TEMPLATE_FILE,
+    TEMPLATE_IMPORT, TEMPLATE_VARIABLE, TEMPLATE_VOLUME, TENANT_USAGE, UID_MODE, UPSTREAM_KIND,
+    UPSTREAM_KIND_DESCRIPTION, UPSTREAM_PROTOCOL, UPSTREAM_SCHEME, USER, VARIABLE_KIND, VARIABLE_TYPE,
+    VARIABLE_TYPE_DESCRIPTION, VIOLATIONS,
+    VOLUME_BACKEND, WEBHOOK_OUTCOME;
 
-    private HohenheimMicrocopy() {
+    private final String scope;
+
+    HohenheimMicrocopy() {
+        this.scope = BlastString.lower(this.name());
+    }
+
+    /** @return the scope filter value this constant's catalog entries carry */
+    public @NonNull String scope() {
+        return this.scope;
+    }
+
+    /** @return the key under this scope, ready for its args */
+    public @NonNull Microcopy of(@NonNull String key) {
+        return Microcopy.of(key).withFilter("scope", this.scope);
     }
 }

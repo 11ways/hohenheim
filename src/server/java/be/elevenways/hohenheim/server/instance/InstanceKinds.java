@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
@@ -125,7 +126,7 @@ public final class InstanceKinds {
         // this sentence is translated, so the raw name would render a half-Dutch refusal.
         // A Microcopy ARGUMENT resolves in the reader's locale (protoblast MessageEvaluator).
         throw Violations.ofField(InstanceModel.KIND.getName(), kind,
-            HohenheimViolations.text("instance_kind_owner_managed")
+            HohenheimMicrocopy.VIOLATIONS.of("instance_kind_owner_managed")
                 .withArg("kind", handler.getLabel()));
     }
 
@@ -145,7 +146,7 @@ public final class InstanceKinds {
         if (supportedRuntimes.contains(hostRuntime)) {
             return null;
         }
-        return HohenheimViolations.text("host_runtime_mismatch")
+        return HohenheimMicrocopy.VIOLATIONS.of("host_runtime_mismatch")
             .withArg("name", hostName)
             .withArg("runtime", hostRuntime)
             .withArg("required", String.join(", ", new TreeSet<>(supportedRuntimes)));
@@ -222,9 +223,9 @@ public final class InstanceKinds {
             }
             Set<String> runtimes = new TreeSet<>(handler.supportedRuntimes());
             options.add(option.withDescription(runtimes.size() == 1
-                ? Microcopy.of("kind_needs_runtime_host").withFilter("scope", "instance")
+                ? HohenheimMicrocopy.INSTANCE.of("kind_needs_runtime_host")
                     .withArg("runtime", ServerModel.RUNTIME.getValues().get(runtimes.iterator().next()).getLabel())
-                : Microcopy.of("kind_needs_host").withFilter("scope", "instance")));
+                : HohenheimMicrocopy.INSTANCE.of("kind_needs_host")));
         }
         return options;
     }

@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.ApiWire;
 import be.elevenways.hohenheim.test.ApiWire.Caller;
@@ -72,13 +72,14 @@ class ApiWireInstancesTest extends HohenheimTestBase {
         FakeDeviceDaemon.DAEMON.put(FakeDeviceDaemon.handleOf(devicesId), new FakeDeviceDaemon.Workload());
         disposableId = instance("wire-disposable", FakeNativeDaemons.FakeNativeKind.ID.toString(), fixture.hostId);
 
-        for (String capability : List.of(HohenheimAccess.MANAGE, HohenheimAccess.SNAPSHOTS, HohenheimAccess.BACKUPS)) {
+        for (String capability : List.of(HohenheimCapabilities.MANAGE, HohenheimCapabilities.SNAPSHOTS,
+            HohenheimCapabilities.BACKUPS)) {
             RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId, capability, true);
         }
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, devicesId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         Row seeded = Models.get(InstanceVariableModel.class).createEmptyRow();
         seeded.set(InstanceVariableModel.INSTANCE_ID, instanceId);
         seeded.set(InstanceVariableModel.KEY, "WIRE_SEEDED");
@@ -90,14 +91,14 @@ class ApiWireInstancesTest extends HohenheimTestBase {
         admin = new Caller.Key(ApiKeyService.create(operatorId, "wire-instances-admin", List.of("hohenheim.*"), null)
             .plaintext());
         tenant = new Caller.Key(ApiKeyService.create(tenantId, "wire-instances-tenant", List.of(
-            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.MANAGE),
-            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.SNAPSHOTS),
-            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.BACKUPS)), null).plaintext());
+            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.MANAGE),
+            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.SNAPSHOTS),
+            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.BACKUPS)), null).plaintext());
         // The viewer's key carries every scope the tenant's does: its owner's VIEW grant is what refuses it.
         viewer = new Caller.Key(ApiKeyService.create(viewerId, "wire-instances-viewer", List.of(
-            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.MANAGE),
-            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.SNAPSHOTS),
-            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.BACKUPS)), null).plaintext());
+            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.MANAGE),
+            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.SNAPSHOTS),
+            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.BACKUPS)), null).plaintext());
         tenantSession = new Caller.Session(sessionCookieHeader(sessionFor(tenantId).token()));
     }
 

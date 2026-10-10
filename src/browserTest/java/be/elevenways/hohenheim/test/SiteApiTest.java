@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.proxy.RouteClaims;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -56,7 +56,7 @@ class SiteApiTest extends HohenheimTestBase {
         tenantId = user("site-api-tenant@surface.test", "Site Api Tenant");
         tenantSiteId = site(PREFIX + "tenant", true);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, tenantSiteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         // The operator's catch-all: a live wildcard row nobody has a grant on, so every
         // free name under the zone is the operator's namespace.
         catchAllSiteId = site(PREFIX + "catch-all", true);
@@ -67,7 +67,7 @@ class SiteApiTest extends HohenheimTestBase {
         keyAdmin = ApiKeyService.create(adminId, PREFIX + "admin", List.of("hohenheim.*"), null)
             .plaintext();
         keyTenant = ApiKeyService.create(tenantId, PREFIX + "tenant",
-            List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE)), null)
+            List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE)), null)
             .plaintext();
         // The admin's OWN key narrowed to an unrelated vocabulary: no admin permission
         // survives the narrowing, so the create door must be shut for it.

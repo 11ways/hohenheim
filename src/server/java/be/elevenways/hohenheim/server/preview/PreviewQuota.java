@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.preview;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
@@ -46,17 +47,9 @@ public final class PreviewQuota {
     private PreviewQuota() {
     }
 
-    public static @NonNull String bucketKeyOf(@NonNull String packedSubjects) {
-        return OwnerBudget.PREVIEWS.bucketOf(packedSubjects);
-    }
-
     /** @return the cap, or null for uncapped (0 or less in settings) */
     public static @Nullable Integer limit() {
         return OwnerBudget.PREVIEWS.limitFor("");
-    }
-
-    public static long usedBy(@NonNull String packedSubjects) {
-        return OwnerBudget.PREVIEWS.usedBy(packedSubjects);
     }
 
     /**
@@ -75,11 +68,11 @@ public final class PreviewQuota {
         if (!(applicationId instanceof Number number)) {
             throw Violations.ofField(PreviewDeploymentModel.APPLICATION_ID.getName(),
                 applicationId,
-                HohenheimViolations.text("preview_application_required"));
+                HohenheimMicrocopy.VIOLATIONS.of("preview_application_required"));
         }
         String pack = OwnerQuota.currentOwnerPack(InstanceModel.MODEL_ID, number.intValue());
         if (pack == null) {
-            throw Violations.ofForm(HohenheimViolations.text("preview_owner_unreadable"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("preview_owner_unreadable"));
         }
         return pack;
     }

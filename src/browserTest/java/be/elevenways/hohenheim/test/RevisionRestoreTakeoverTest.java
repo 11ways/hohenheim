@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.types.BasicAuthProviderType;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -142,7 +142,8 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
         int operatorId = ApiSupport.user("restore-operator@hohenheim.local", "Restore Operator");
         TestSession operatorSession = sessionFor(operatorId);
         String operatorCsrf = operatorSession.csrf();
-        RecordGrants.grant(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, aId, HohenheimAccess.MANAGE, true);
+        RecordGrants.grant(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, aId, HohenheimCapabilities.MANAGE,
+            true);
 
         try {
             // 5. The attack: the tenant POSTs the real /manage revision-restore route to
@@ -227,7 +228,8 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             assertThat(enabledOwnersOf(CONTESTED_HOST))
                 .as("A is now the single owner of the hostname").isEqualTo(1);
         } finally {
-            RecordGrants.revoke(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, aId, HohenheimAccess.MANAGE);
+            RecordGrants.revoke(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, aId,
+                HohenheimCapabilities.MANAGE);
             var domainModel = Models.get(SiteDomainModel.class);
             for (Row d : domainModel.findBySiteId(aId)) domainModel.delete(d);
             for (Row d : domainModel.findBySiteId(bId)) domainModel.delete(d);
@@ -319,7 +321,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
         TestSession tenantSession = sessionFor(operatorId);
         String tenantCsrf = tenantSession.csrf();
         RecordGrants.grant(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Proxy.HTTP_PORT, 0);
         ProxyServer proxy = new ProxyServer();
@@ -388,7 +390,7 @@ class RevisionRestoreTakeoverTest extends HohenheimTestBase {
             proxy.stop();
             upstream.stop(0);
             RecordGrants.revoke(GrantSubjectType.USER, operatorId, SiteModel.MODEL_ID, siteId,
-                HohenheimAccess.MANAGE);
+                HohenheimCapabilities.MANAGE);
             for (Row d : domainModel.findBySiteId(siteId)) domainModel.delete(d);
             HardDeletes.row(siteModel, site);
             providerModel.delete(provider);

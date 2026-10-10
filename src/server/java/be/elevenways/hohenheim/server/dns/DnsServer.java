@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.dns;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.util.Closeables;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.Zenit;
@@ -172,8 +173,8 @@ public final class DnsServer {
             return;
         }
         this.running = false;
-        closeQuietly(this.udpSocket);
-        closeSocketQuietly(this.tcpSocket);
+        Closeables.closeQuietly(this.udpSocket);
+        Closeables.closeQuietly(this.tcpSocket);
         this.udpSocket = null;
         this.tcpSocket = null;
         if (this.workers != null) {
@@ -307,20 +308,20 @@ public final class DnsServer {
 
             InetAddress peer = socket.getInetAddress();
             if (!this.acquireTcpSlot(peer)) {
-                closeSocketQuietly(socket);
+                Closeables.closeQuietly(socket);
                 continue;
             }
 
             ExecutorService pool = this.workers;
             if (pool == null) {
                 this.releaseTcpSlot(peer);
-                closeSocketQuietly(socket);
+                Closeables.closeQuietly(socket);
                 return;
             }
             try {
                 // The shared watchdog, so a connection still in flight when stop() runs
                 // keeps its deadline.
-                ScheduledFuture<?> deadline = Watchdog.schedule(() -> closeSocketQuietly(socket),
+                ScheduledFuture<?> deadline = Watchdog.schedule(() -> Closeables.closeQuietly(socket),
                     this.tcpConnectionDeadlineMs);
                 pool.execute(() -> {
                     try {
@@ -329,7 +330,7 @@ public final class DnsServer {
                     finally {
                         deadline.cancel(false);
                         this.releaseTcpSlot(peer);
-                        closeSocketQuietly(socket);
+                        Closeables.closeQuietly(socket);
                     }
                 });
             }
@@ -337,7 +338,7 @@ public final class DnsServer {
                 // stop() shut the pool down between the accept and here; the pending
                 // deadline only closes the socket closed below.
                 this.releaseTcpSlot(peer);
-                closeSocketQuietly(socket);
+                Closeables.closeQuietly(socket);
                 return;
             }
         }
@@ -522,31 +523,5 @@ public final class DnsServer {
         }
         response.getHeader().setRcode(Rcode.REFUSED);
         return response.toWire(65535);
-    }
-
-    private static void closeQuietly(@Nullable DatagramSocket socket) {
-        if (socket != null) {
-            socket.close();
-        }
-    }
-
-    private static void closeSocketQuietly(@Nullable ServerSocket socket) {
-        if (socket != null) {
-            try {
-                socket.close();
-            }
-            catch (IOException ignored) {
-            }
-        }
-    }
-
-    private static void closeSocketQuietly(@Nullable Socket socket) {
-        if (socket != null) {
-            try {
-                socket.close();
-            }
-            catch (IOException ignored) {
-            }
-        }
     }
 }

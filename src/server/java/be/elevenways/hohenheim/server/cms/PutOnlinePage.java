@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
@@ -53,9 +55,6 @@ import java.util.Map;
  */
 public final class PutOnlinePage extends PanelPage {
 
-    /** The page's slug; the dashboard's and the Apps list's primary action lead here. */
-    public static final String SLUG = "put-online";
-
     /** The chooser's "Point an address somewhere else" group, as a fragment a link can scroll to. */
     public static final String ADDRESSES_ANCHOR = "put-online-" + PutOnlineGroup.ADDRESS.token();
 
@@ -63,8 +62,8 @@ public final class PutOnlinePage extends PanelPage {
     public static final PanelAction<Row> FROM_TEMPLATE = PanelAction.<Row, Integer>places(PutOnline.PUT_ONLINE,
             ActionPlacement.PAGE,
             (request, result) -> CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
-                HohenheimSlugs.INSTANCES, result.value(), InstanceOverview.SLUG).toUrl())))
-        .confirmation(ConfirmationSpec.generic(PutOnline.copy("finish"), false))
+                HohenheimSlugs.INSTANCES, result.value(), RecordOverview.SLUG).toUrl())))
+        .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
         .selectedBy(HohenheimParams.FROM_TEMPLATE_TEMPLATE.getName())
         .fixed((template, request) -> fixed(request.access()))
         .build();
@@ -74,7 +73,7 @@ public final class PutOnlinePage extends PanelPage {
             PutOnline.PUT_ADDRESS_ONLINE, ActionPlacement.PAGE,
             (request, result) -> CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
                 HohenheimSlugs.SITES, result.value(), "overview").toUrl())))
-        .confirmation(ConfirmationSpec.generic(PutOnline.copy("finish"), false))
+        .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
         // The chooser already answered what it serves: the kind rides the form as transport, never asked again.
         .transport(SiteModel.UPSTREAM_KIND.getName())
         .build();
@@ -84,11 +83,11 @@ public final class PutOnlinePage extends PanelPage {
     private static final List<Microcopy> AFTER_WIZARD = List.of(PutOnline.STEP_LIVE);
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("put_online"); }
-    @Override public @NonNull Microcopy label() { return PutOnline.copy("put_online"); }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.PUT_ONLINE.of("put_online"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.PUT_ONLINE; }
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
     @Override public boolean showInNav() { return false; }
-    @Override public @NonNull String standsUnder() { return AppParts.SLUG; }
+    @Override public @NonNull String standsUnder() { return HohenheimSlugs.APPS; }
 
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -100,8 +99,8 @@ public final class PutOnlinePage extends PanelPage {
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", resolve(label(), request));
-        vars.put("lead", PutOnline.copy("lead"));
-        vars.put("cancelTarget", CmsRoutes.list(request.panelSlug(), AppParts.SLUG));
+        vars.put("lead", HohenheimMicrocopy.PUT_ONLINE.of("lead"));
+        vars.put("cancelTarget", CmsRoutes.list(request.panelSlug(), HohenheimSlugs.APPS));
         String kind = request.conduit().getQueryParam(HohenheimParams.PUT_ONLINE_KIND.getName());
         String template = request.conduit().getQueryParam(HohenheimParams.FROM_TEMPLATE_TEMPLATE.getName());
         if (template != null && !template.isBlank()) {
@@ -138,7 +137,7 @@ public final class PutOnlinePage extends PanelPage {
                 return request.conduit().softRedirect(chosen);
             }
             vars.put("groups", groups);
-            vars.put("chooseAction", CmsRoutes.list(request.panelSlug(), SLUG).toUrl());
+            vars.put("chooseAction", CmsRoutes.list(request.panelSlug(), HohenheimSlugs.PUT_ONLINE).toUrl());
         }
         return new RenderTemplateResult(HohenheimTemplateIds.PUT_ONLINE, vars);
     }
@@ -157,11 +156,12 @@ public final class PutOnlinePage extends PanelPage {
             card(cards, targets, PutOnlineGroup.TEMPLATE, "template:" + family.name(),
                 kindInfo == null ? "cube" : kindInfo.getIcon().name(), family.name(),
                 resolve(family.cardLine(), request),
-                CmsRoutes.list(request.panelSlug(), SLUG)
+                CmsRoutes.list(request.panelSlug(), HohenheimSlugs.PUT_ONLINE)
                     .with(HohenheimParams.FROM_TEMPLATE_TEMPLATE, template.get(InstanceTemplateModel.ID)));
         }
         card(cards, targets, PutOnlineGroup.TEMPLATE, "catalog", "folder-open",
-            resolve(PutOnline.copy("catalog"), request), resolve(PutOnline.copy("catalog_help"), request),
+            resolve(HohenheimMicrocopy.PUT_ONLINE.of("catalog"), request),
+                resolve(HohenheimMicrocopy.PUT_ONLINE.of("catalog_help"), request),
             CmsRoutes.list(request.panelSlug(), HohenheimSlugs.INSTANCE_TEMPLATES));
         for (InstanceKindInfo info : InstanceKindRegistry.REGISTRY) {
             PutOnlineGroup group = info.putOnlineGroup();
@@ -178,7 +178,7 @@ public final class PutOnlinePage extends PanelPage {
                 if (group != null) {
                     card(cards, targets, group, "kind:" + info.typeId(), info.getIcon().name(),
                         resolve(info.getLabel(), request), resolve(info.getDescription(), request),
-                        CmsRoutes.list(request.panelSlug(), SLUG)
+                        CmsRoutes.list(request.panelSlug(), HohenheimSlugs.PUT_ONLINE)
                             .with(HohenheimParams.PUT_ONLINE_KIND, info.typeId().toString()));
                 }
             }
@@ -221,7 +221,7 @@ public final class PutOnlinePage extends PanelPage {
                 if (!id.equals(chosenId)) {
                     Map<String, Object> version = new HashMap<>();
                     version.put("name", String.valueOf((Object) member.get(InstanceTemplateModel.NAME)));
-                    version.put("target", CmsRoutes.list(request.panelSlug(), SLUG)
+                    version.put("target", CmsRoutes.list(request.panelSlug(), HohenheimSlugs.PUT_ONLINE)
                         .with(HohenheimParams.FROM_TEMPLATE_TEMPLATE, id));
                     versions.add(version);
                 }

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceLogModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
@@ -144,7 +145,7 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
             String strip = overview.substring(stripStart, overview.indexOf("</pl-scroll-nav>", stripStart));
             assertThat(strip).as("step 2: overview, addresses and protection, in that order")
                 .containsSubsequence(siteRecord + "/page/overview", siteRecord + "/page/" + SiteParts.DOMAINS_TAB,
-                    siteRecord + "/page/" + ProtectedPathParts.SLUG);
+                    siteRecord + "/page/" + HohenheimSlugs.PROTECTED_PATHS);
             assertThat(strip).as("step 2: the tabs read as the overview's cards do")
                 .contains("Addresses").contains("Protection")
                 .doesNotContain(">Domains<").doesNotContain("Protected paths");
@@ -168,14 +169,14 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
     void theDelegatedConsoleHasNoOneOffCommand() {
         // 1. The operator's console offers the command mode; the delegated one never does (exec is ADMIN-sensitivity).
         assertThat(ConsoleModes.operator().tabs()).as("step 1: the operator console carries the command mode")
-            .anyMatch(tab -> InstanceExecPage.SLUG.equals(tab.slug()));
+            .anyMatch(tab -> HohenheimSlugs.Tab.EXEC.equals(tab.slug()));
         assertThat(ConsoleModes.delegated().tabs()).as("step 1: the delegated console does not")
-            .noneMatch(tab -> InstanceExecPage.SLUG.equals(tab.slug()));
+            .noneMatch(tab -> HohenheimSlugs.Tab.EXEC.equals(tab.slug()));
 
         // 2. Exactly one console tab sits in the strip on each panel: the hub; every other mode stays out of it.
         assertThat(ConsoleModes.operator().tabs()).as("step 2: only the hub is in the strip")
             .filteredOn(tab -> tab.inTabs())
-            .singleElement().matches(tab -> InstanceConsolePage.SLUG.equals(tab.slug()));
+            .singleElement().matches(tab -> HohenheimSlugs.Tab.CONSOLE.equals(tab.slug()));
     }
 
     private static Row instance(String name) {

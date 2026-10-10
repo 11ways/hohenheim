@@ -1,33 +1,33 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
+import be.elevenways.hohenheim.StateBadge;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.HohenheimCounts;
+import be.elevenways.hohenheim.model.GroupedCounts;
 import be.elevenways.hohenheim.server.database.DatabaseBackups;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.time.RelativeTime;
-import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
+import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.text.ByteText;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.Secrets;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.database.DatabaseEngines;
-import be.elevenways.hohenheim.server.database.DatabaseInstances;
 import be.elevenways.hohenheim.server.database.DatabaseService;
-import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
-import be.elevenways.hohenheim.server.database.ManagedDatabase;
+import be.elevenways.hohenheim.server.database.DatabaseWrites;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
-import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -54,7 +54,6 @@ import be.elevenways.zenit.cms.common.resource.ResourceList;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
-import be.elevenways.zenit.cms.common.resource.RowWriteCall;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
@@ -69,20 +68,14 @@ import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectType;
-import be.elevenways.zenit.common.orm.activity.ActivityLog;
-import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
-import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
-import be.elevenways.zenit.common.orm.query.aggregate.Aggregate;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
-import be.elevenways.zenit.common.routing.RouteScope;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
-import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
@@ -92,20 +85,20 @@ import be.elevenways.zenit.widget.common.data.WidgetFact;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * The managed-database tier's parts: the operator's databases, their /manage twin and the shared engines (stage 4
  * contract 10). Create provisions in the background, the resource ceilings are the only columns an update writes,
- * and every delete is a domain operation whose "still in use" refusal is its availability.
+ * and every delete is a domain operation whose "still in use" refusal is its availability. The writes themselves, and
+ * the name rule they check, are {@link DatabaseWrites}'; this class only declares the panel.
  *
  * AIDEV-NOTE: the /manage twin is a NARROWING, never a gate of its own: its rows are the databases the caller may view
  * ({@link TenantScopes#DATABASES}), it allocates through the tenant funnel ({@link TenantDatabases#allocate}) and
@@ -118,24 +111,8 @@ import java.util.Objects;
  */
 public final class DatabaseParts {
 
-    /** The databases entry slug, on both panels. */
-    public static final String SLUG = "databases";
-
-    /** The engines entry slug, which the placement column's relation pick and the attention items name. */
-    public static final String ENGINES_SLUG = "database-engines";
-
     private static final SubjectType<Row> DATABASE = SubjectType.record(DatabaseModel.MODEL_ID);
     private static final SubjectType<Row> ENGINE = SubjectType.record(DatabaseEngineModel.MODEL_ID);
-
-    /** Where a dedicated record keeps the ceilings the shared resize lane reads and writes. */
-    private static final ProvisionedRecords.Columns DATABASE_CEILINGS = new ProvisionedRecords.Columns(
-        DatabaseModel.ID, DatabaseModel.MEMORY_LIMIT_MB, DatabaseModel.CPU_LIMIT,
-        DatabaseModel.STATUS, DatabaseModel.FAILURE_REASON);
-
-    /** Where an engine keeps the ceilings the shared resize lane reads and writes. */
-    private static final ProvisionedRecords.Columns ENGINE_CEILINGS = new ProvisionedRecords.Columns(
-        DatabaseEngineModel.ID, DatabaseEngineModel.MEMORY_LIMIT_MB, DatabaseEngineModel.CPU_LIMIT,
-        DatabaseEngineModel.STATUS, DatabaseEngineModel.FAILURE_REASON);
 
     /** The list's virtual columns: where a database runs, what uses it, and its newest stored dump. */
     private static final String RUNS_ON_COLUMN = "runs_on";
@@ -149,10 +126,6 @@ public final class DatabaseParts {
     /** A newest dump older than the nightly 03:00 run plus half a day of slack means the backups stopped. */
     static final Duration BACKUP_OVERDUE_AFTER = Duration.ofHours(36);
 
-    /** Request memo of every database's live workloads: two queries per rendered list. */
-    private static final IdentifierKey<Map<Integer, List<Row>>> USED_BY =
-        IdentifierKey.of("hohenheim", "database_used_by");
-
     /** The virtual column counting the managed databases living on an engine. */
     private static final String DATABASES_COLUMN = "databases";
 
@@ -161,7 +134,7 @@ public final class DatabaseParts {
         IdentifierKey.of("hohenheim", "database_engine_database_counts");
 
     /** The create verb in the Databases board's words: the list's button and the form's heading. */
-    private static final Microcopy CREATE_TITLE = Microcopy.of("create_title").withFilter("scope", "database");
+    private static final Microcopy CREATE_TITLE = HohenheimMicrocopy.DATABASE.of("create_title");
 
     /** The operator's create and resize form. */
     private static final FormSpec ADMIN_FORM = FormSpec.builder()
@@ -218,7 +191,7 @@ public final class DatabaseParts {
      */
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_database"))
         .happened(OperationSentences.of("delete_database"))
-        .label(Microcopy.of("delete").withFilter("scope", "cms"))
+        .label(CmsMicrocopy.of("delete"))
         .icon(Icon.TRASH)
         .one(DATABASE)
         .gate(OperationGate.open())
@@ -231,8 +204,8 @@ public final class DatabaseParts {
     public static final Operation<Row, Void, Void> MOVE_TO_SHARED =
         Operation.declare(HohenheimIds.id("move_database_shared"))
             .happened(OperationSentences.of("move_database_shared"))
-            .label(Microcopy.of("move_shared").withFilter("scope", "database"))
-            .description(Microcopy.of("move_shared_hint").withFilter("scope", "database"))
+            .label(HohenheimMicrocopy.DATABASE.of("move_shared"))
+            .description(HohenheimMicrocopy.DATABASE.of("move_shared_hint"))
             .icon(Icon.of("layer-group"))
             .one(DATABASE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
@@ -246,8 +219,8 @@ public final class DatabaseParts {
     public static final Operation<Row, Void, Void> BACK_UP_NOW =
         Operation.declare(HohenheimIds.id("back_up_database"))
             .happened(OperationSentences.of("back_up_database"))
-            .label(Microcopy.of("back_up_now").withFilter("scope", "database"))
-            .description(Microcopy.of("back_up_now_hint").withFilter("scope", "database"))
+            .label(HohenheimMicrocopy.DATABASE.of("back_up_now"))
+            .description(HohenheimMicrocopy.DATABASE.of("back_up_now_hint"))
             .icon(Icon.of("box-archive"))
             .one(DATABASE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
@@ -258,8 +231,8 @@ public final class DatabaseParts {
     public static final Operation<Row, Void, Void> FORCE_DELETE =
         Operation.declare(HohenheimIds.id("force_delete_database"))
             .happened(OperationSentences.of("force_delete_database"))
-            .label(Microcopy.of("force_delete").withFilter("scope", "database"))
-            .description(Microcopy.of("force_delete_hint").withFilter("scope", "database"))
+            .label(HohenheimMicrocopy.DATABASE.of("force_delete"))
+            .description(HohenheimMicrocopy.DATABASE.of("force_delete_hint"))
             .icon(Icon.of("triangle-exclamation"))
             .one(DATABASE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
@@ -271,7 +244,7 @@ public final class DatabaseParts {
     public static final Operation<Row, Void, Integer> DELETE_ENGINE =
         Operation.declare(HohenheimIds.id("delete_database_engine"))
             .happened(OperationSentences.of("delete_database_engine"))
-            .label(Microcopy.of("delete").withFilter("scope", "cms"))
+            .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(ENGINE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
@@ -284,8 +257,8 @@ public final class DatabaseParts {
     public static final Operation<Row, Void, Void> FORCE_DELETE_ENGINE =
         Operation.declare(HohenheimIds.id("force_delete_database_engine"))
             .happened(OperationSentences.of("force_delete_database_engine"))
-            .label(Microcopy.of("force_delete").withFilter("scope", "database_engine"))
-            .description(Microcopy.of("force_delete_hint").withFilter("scope", "database_engine"))
+            .label(HohenheimMicrocopy.DATABASE_ENGINE.of("force_delete"))
+            .description(HohenheimMicrocopy.DATABASE_ENGINE.of("force_delete_hint"))
             .icon(Icon.of("triangle-exclamation"))
             .one(ENGINE)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
@@ -297,9 +270,9 @@ public final class DatabaseParts {
         OperationHandlers.attach(DELETE)
             .authorize((database, input, access) -> mayDestroy(database, access) ? null
                 : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "destroying a database demands destroy on it"))
-            .availability((database, access) -> inUseReason(database))
+            .availability((database, access) -> DeleteImpact.databaseInUse(database))
             .handle(call -> {
-                destroy(call.subject());
+                DatabaseWrites.destroy(call.subject());
                 return 1;
             });
         OperationHandlers.attach(BACK_UP_NOW)
@@ -310,6 +283,7 @@ public final class DatabaseParts {
             });
         OperationHandlers.attach(MOVE_TO_SHARED)
             .applies(database -> DatabaseService.moveRefusal(database) == null)
+            .availability((database, access) -> moveUnavailable(database))
             .handle(call -> {
                 new DatabaseService().moveToSharedEngineInBackground(call.subject().get(DatabaseModel.NAME));
                 return null;
@@ -317,38 +291,19 @@ public final class DatabaseParts {
         OperationHandlers.attach(FORCE_DELETE)
             .applies(database -> DatabaseModel.STATUS_DESTROY_FAILED.equals(database.get(DatabaseModel.STATUS)))
             .handle(call -> {
-                Row database = call.subject();
-                String name = database.get(DatabaseModel.NAME);
-                // The same in-use refusal the delete makes, asked BEFORE the engine instance is abandoned: the
-                // funnel would refuse the row delete anyway, but by then the abandon has already run.
-                refuseWhileAttached(name, database.get(DatabaseModel.ID));
-                ActivityLog.withAction(ZenitActivityAction.DELETE, "force-destroy",
-                    () -> new DatabaseService().forceDestroyRecord(name));
+                DatabaseWrites.forceDestroy(call.subject());
                 return null;
             });
         OperationHandlers.attach(DELETE_ENGINE)
-            .availability((engine, access) -> engineInUseReason(engine))
+            .availability((engine, access) -> DeleteImpact.engineInUse(engine))
             .handle(call -> {
-                destroyEngine(call.subject());
+                DatabaseWrites.destroyEngine(call.subject());
                 return 1;
             });
         OperationHandlers.attach(FORCE_DELETE_ENGINE)
             .applies(engine -> DatabaseModel.STATUS_DESTROY_FAILED.equals(engine.get(DatabaseEngineModel.STATUS)))
             .handle(call -> {
-                Row engine = call.subject();
-                Integer engineId = engine.get(DatabaseEngineModel.ID);
-                String name = engine.get(DatabaseEngineModel.NAME);
-                ActivityLog.withAction(ZenitActivityAction.DELETE, "force-destroy", () -> {
-                    try {
-                        if (engineId != null) {
-                            DatabaseEngines.forceDestroy(engineId);
-                        }
-                    } catch (IOException e) {
-                        throw Violations.ofForm(CmsSupport.violationText("database_engine_destroy_failed")
-                            .withArg("name", name)
-                            .withArg("reason", String.valueOf(e.getMessage())));
-                    }
-                });
+                DatabaseWrites.forceDestroyEngine(call.subject());
                 return null;
             });
     }
@@ -374,11 +329,12 @@ public final class DatabaseParts {
             // The name inside the engine, the host, the placement and its engine move behind the picker and the
             // filters; the overview and the Restore tab carry them.
             .column(ColumnSpec.fromField(DatabaseModel.NAME).filterable().subtext(RUNS_ON_COLUMN).build())
-            .column(ColumnSpec.virtual(RUNS_ON_COLUMN, listCopy("runs_on_column")).hidden().build())
+            .column(ColumnSpec.virtual(RUNS_ON_COLUMN, HohenheimMicrocopy.DATABASE_LIST.of("runs_on_column")).hidden()
+                .build())
             .column(ColumnSpec.fromField(DatabaseModel.ENGINE).filterable().build())
-            .column(ColumnSpec.virtual(USED_BY_COLUMN, listCopy("used_by_column"))
+            .column(ColumnSpec.virtual(USED_BY_COLUMN, HohenheimMicrocopy.DATABASE_LIST.of("used_by_column"))
                 .renderer(CmsTemplateIds.CELL_RECORD_LINKS).build())
-            .column(ColumnSpec.virtual(LAST_BACKUP_COLUMN, listCopy("last_backup_column"))
+            .column(ColumnSpec.virtual(LAST_BACKUP_COLUMN, HohenheimMicrocopy.DATABASE_LIST.of("last_backup_column"))
                 .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
             .column(stateColumn())
             .column(ColumnSpec.fromField(DatabaseModel.DB_NAME).filterable().copyable().hidden().build())
@@ -403,7 +359,7 @@ public final class DatabaseParts {
             .filter(FilterSpec.leaf(DatabaseModel.STATUS, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(DatabaseModel.STATUS)).build())
             .build();
-        return entry("database")
+        return entry(HohenheimIds.id("database"))
             // One of the admin sidebar's eight rows; the /manage twin keeps its group.
             .navGroup(NavGroup.DEFAULT)
             .navOrder(30)
@@ -426,19 +382,22 @@ public final class DatabaseParts {
                 .build())
             .form(ResourceForm.<Row>of(ADMIN_FORM)
                 .landingTab(RecordOverview.SLUG)
-                .tabLabel(AppOverview.copy("configuration"))
+                .tabLabel(HohenheimMicrocopy.APP_OVERVIEW.of("configuration"))
                 .bindings(adminBindings())
                 .createDefaults(DatabaseParts::createDefaults)
                 .notice((database, access) -> resizeNotice(database))
                 .build())
             .writes(ResourceMutations.rows()
-                .create(DatabaseParts::provision)
-                .update(DatabaseParts::resize)
+                .create(call -> DatabaseWrites.create(call.values()))
+                .update(call -> {
+                    DatabaseWrites.resize(Objects.requireNonNull(call.record()), call.values());
+                    return null;
+                })
                 .delete(DELETE)
                 .build())
             .deleteConfirmation(deleteConfirmation())
             .actions(List.of(backUpNow(), backupLink(HohenheimIds.id("backup_database"), false), moveToShared(),
-                forceDelete()))
+                forceDelete(FORCE_DELETE, HohenheimMicrocopy.DATABASE, DatabaseModel.NAME)))
             // The overview first (the record's front door), then the restore tab; no history, as the legacy subpages()
             // override had it; contributed tabs (zenit-auth's Access tab) join like on every converted entry.
             .tabs(ResourceTabs.<Row>of(List.of(DatabaseOverview.tab(), new DatabaseRestorePage())).withContributions())
@@ -466,18 +425,17 @@ public final class DatabaseParts {
             .column(stateColumn())
             .column(ColumnSpec.fromField(DatabaseModel.STATUS).filterable().hidden().build())
             .build();
-        return entry("manage_database")
-            // A row of the tenant's sidebar, in the board's place (ManagePanel's sidebar note).
+        // A row of the tenant's sidebar, in the board's place (ManagePanel's sidebar note), shown while the tenant
+        // holds a database or may create one (board Manage-Home, the doors drawn only where they open). reachesAny,
+        // because an id set cannot express every-record authority.
+        return ManageTwin.listed(entry(ManageTwin.id("database")), TenantScopes.DATABASES,
+                ResourceTabs.<Row>of(List.of(new ManageDatabaseCredentialsPage())),
+                access -> HohenheimAccess.reachesAny(access, DatabaseModel.MODEL_ID, HohenheimCapabilities.VIEW)
+                    || TenantDatabases.canAllocate(access))
             .navGroup(NavGroup.DEFAULT)
             .navOrder(30)
-            .scope(TenantScopes.DATABASES)
             // The host and the engine on it are operator inventory: never a rule, sort, search or value of this list.
             .withholds(HostFields.of(DatabaseModel.MODEL_ID))
-            // NAV-ONLY: the row shows while the tenant holds a database or may create one (board Manage-Home, the
-            // doors drawn only where they open); the route stays scoped. reachesAny, because an id set cannot express
-            // every-record authority.
-            .hasInScopeRecords(access -> HohenheimAccess.reachesAny(access, DatabaseModel.MODEL_ID,
-                HohenheimAccess.VIEW) || TenantDatabases.canAllocate(access))
             .list(ResourceList.rows(table).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()
                 .search(DatabaseModel.NAME, DatabaseModel.DB_NAME)
                 .computed(Objects.requireNonNull(table.column(STATE_COLUMN)),
@@ -495,17 +453,16 @@ public final class DatabaseParts {
                 .delete(DELETE)
                 .build())
             .deleteConfirmation(deleteConfirmation())
-            .actions(List.of(backupLink(HohenheimIds.id("manage_backup_database"), true)))
-            .tabs(ResourceTabs.<Row>of(List.of(new ManageDatabaseCredentialsPage())))
+            .actions(List.of(backupLink(ManageTwin.id("backup_database"), true)))
             .build();
     }
 
     /** The identity, nav placement and plain row reads both database twins share. */
-    private static PanelResource.@NonNull Builder<Row> entry(@NonNull String id) {
-        return PanelResource.builder(HohenheimIds.id(id), SLUG, DATABASE)
-            .label(Microcopy.of("plural").withFilter("scope", "database"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "database"))
-            .description(Microcopy.of("nav_hint").withFilter("scope", "database"))
+    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
+        return PanelResource.builder(id, HohenheimSlugs.DATABASES, DATABASE)
+            .label(HohenheimMicrocopy.DATABASE.of("plural"))
+            .recordLabel(HohenheimMicrocopy.DATABASE.of("singular"))
+            .description(HohenheimMicrocopy.DATABASE.of("nav_hint"))
             .icon(Icon.of("database"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(50)
@@ -570,152 +527,13 @@ public final class DatabaseParts {
             return null;
         }
         return DatabaseModel.isShared(database)
-            ? Microcopy.of("shared_notice").withFilter("scope", "database")
-            : Microcopy.of("resize_notice").withFilter("scope", "database");
-    }
-
-    /**
-     * The service persists the record itself (status provisioning) and provisions the container in the background;
-     * it REFUSES a name that is already taken ({@code database_name_taken}) rather than converging onto it.
-     *
-     * AIDEV-NOTE: the returned id is the row the service inserted, never the answer to a re-query by name: that is
-     * how a colliding create once reported success while it had overwritten someone else's database.
-     */
-    private static @NonNull Object provision(@NonNull RowWriteCall call) {
-        Map<String, Object> values = call.values();
-        String name = trimmed(values.get(DatabaseModel.NAME.getName()));
-        if (!name.matches("[a-z0-9][a-z0-9-]*")) {
-            throw Violations.ofField("name", name, CmsSupport.violationText("name_format"));
-        }
-        String engineToken = trimmed(values.get(DatabaseModel.ENGINE.getName())).toLowerCase(Locale.ROOT);
-        ManagedDatabase.Engine engine = ManagedDatabase.Engine.forToken(engineToken);
-        if (engine == null) {
-            throw Violations.ofField("engine", engineToken,
-                CmsSupport.violationText("unknown_engine").withArg("engine", engineToken));
-        }
-        String database = trimmed(values.get(DatabaseModel.DB_NAME.getName()));
-        if (database.isEmpty()) {
-            throw Violations.ofField("db_name", database, CmsSupport.violationText("database_name_required"));
-        }
-        String user = trimmed(values.get(DatabaseModel.DB_USER.getName()));
-        if (user.isEmpty()) {
-            user = "appuser";
-        }
-        String password = trimmed(values.get(DatabaseModel.DB_PASSWORD.getName()));
-        if (password.isEmpty()) {
-            password = Secrets.generatePassword();
-        }
-        String image = trimmed(values.get(DatabaseModel.IMAGE.getName()));
-        boolean ephemeral = Boolean.TRUE.equals(values.get(DatabaseModel.EPHEMERAL.getName()));
-        // The FK is canonical; the service API still speaks the (unique) server name.
-        String server = ServerModel.nameOf(
-            values.get(DatabaseModel.SERVER_ID.getName()) instanceof Integer serverId ? serverId : null);
-        ResourceLimits limits = ResourceLimits.of(
-            values.get(DatabaseModel.MEMORY_LIMIT_MB.getName()) instanceof Integer mb ? mb : null,
-            values.get(DatabaseModel.CPU_LIMIT.getName()) instanceof Double cpus ? cpus : null);
-        // A blank placement is the service's own default (shared where the engine can host logical databases and the
-        // data is persistent), never a third placement here.
-        String placement = trimmed(values.get(DatabaseModel.PLACEMENT.getName()));
-        Integer engineId = values.get(DatabaseModel.ENGINE_ID.getName()) instanceof Integer id ? id : null;
-        Row created = new DatabaseService().createAsync(name, engine, image.isEmpty() ? null : image, user, password,
-            database, ephemeral, server, limits, placement.isEmpty() ? null : placement, engineId);
-        return created.get(DatabaseModel.ID);
-    }
-
-    /**
-     * THE resize: the two resource ceilings and nothing else, through the lane shared with the engines
-     * ({@link ProvisionedRecords#resize}). The engine row's reservation runs INLINE, so a host without room refuses on
-     * this form ({@code host_capacity_reached}). A ceiling the write does not carry keeps its stored value.
-     */
-    private static @Nullable Object resize(@NonNull RowWriteCall call) {
-        Row existing = Objects.requireNonNull(call.record());
-        if (DatabaseModel.isShared(existing)) {
-            // The fields are HIDDEN on a shared record, so a submitted value did not come from the rendered form;
-            // refuse it by name instead of booking a ceiling against a container this record does not own.
-            if (ProvisionedRecords.carriesCeiling(call.values(), DATABASE_CEILINGS)) {
-                throw Violations.ofForm(CmsSupport.violationText("database_shared_limits"));
-            }
-            return null;
-        }
-        DatabaseService service = new DatabaseService();
-        ProvisionedRecords.resize(Models.get(DatabaseModel.class), existing, call.values(), DATABASE_CEILINGS,
-            DatabaseInstances::reserveEngineRow, service::provisionInBackground);
-        return null;
+            ? HohenheimMicrocopy.DATABASE.of("shared_notice")
+            : HohenheimMicrocopy.DATABASE.of("resize_notice");
     }
 
     /** An operator holds {@code destroy} on every record; a delegate on the records it was granted it on. */
     static boolean mayDestroy(@NonNull Row database, @NonNull AccessContext access) {
-        Integer id = database.get(DatabaseModel.ID);
-        return id != null && HohenheimAccess.hasDatabaseCapability(access, id, HohenheimAccess.DESTROY);
-    }
-
-    /**
-     * A database a live workload still holds is offered DEAD, naming the workloads and the page each is detached on;
-     * the handler refuses with the same facts.
-     *
-     * AIDEV-NOTE: both tiers count. Since 2026-08-08 a database can be attached to an instance, and a refusal that only
-     * counted SITES would have let a tenant destroy the engine out from under their own running game server.
-     *
-     * @return null when nothing holds it
-     */
-    static @Nullable Microcopy inUseReason(@NonNull Row database) {
-        String workloads = attachedWorkloads(database.get(DatabaseModel.ID));
-        if (workloads.isEmpty()) {
-            return null;
-        }
-        return Microcopy.of("delete_in_use").withFilter("scope", "database")
-            .withArg("name", String.valueOf((Object) database.get(DatabaseModel.NAME)))
-            .withArg("workloads", workloads);
-    }
-
-    /**
-     * The verified teardown: a NAMED refusal, never a 500, when it is unconfirmed; the record is then kept (status
-     * {@code destroy_failed}), the port claim parked, and the force delete is the recorded way out.
-     */
-    private static void destroy(@NonNull Row database) {
-        String name = database.get(DatabaseModel.NAME);
-        refuseWhileAttached(name, database.get(DatabaseModel.ID));
-        try {
-            new DatabaseService().destroy(name, true);
-        } catch (IOException e) {
-            String detail = WithheldFailure.operatorDetail(e);
-            throw Violations.ofForm(detail == null
-                ? CmsSupport.violationText("database_destroy_failed_tenant").withArg("name", name)
-                : CmsSupport.violationText("database_destroy_failed")
-                    .withArg("name", name)
-                    .withArg("reason", detail));
-        }
-        // Links to soft-deleted owners are debris once the database is gone: the row delete inside destroy takes them
-        // along through the model funnel (InstanceDatabaseLinks).
-    }
-
-    /** @throws Violations {@code database_in_use} naming the workloads and their detach page */
-    private static void refuseWhileAttached(@Nullable String name, @Nullable Integer id) {
-        String workloads = attachedWorkloads(id);
-        if (!workloads.isEmpty()) {
-            throw Violations.ofForm(CmsSupport.violationText("database_in_use")
-                .withArg("name", name)
-                .withArg("workloads", workloads));
-        }
-    }
-
-    /**
-     * The live workloads attached to a database, each with the URL of the instance's Databases tab (the page a detach
-     * happens on), joined for a sentence; empty when nothing holds it.
-     */
-    private static @NonNull String attachedWorkloads(@Nullable Integer databaseId) {
-        if (databaseId == null) {
-            return "";
-        }
-        Conduit conduit = RouteScope.currentConduit();
-        String panel = conduit != null ? CmsSupport.panelSlug(conduit) : HohenheimSlugs.ADMIN;
-        List<String> workloads = new ArrayList<>();
-        for (Row instance : InstanceDatabaseLinks.liveInstances(databaseId)) {
-            workloads.add(instance.get(InstanceModel.NAME) + " ("
-                + CmsRoutes.subpage(panel, HohenheimSlugs.INSTANCES, instance.get(InstanceModel.ID),
-                    InstanceDatabasesPage.SLUG).toUrl() + ")");
-        }
-        return DeleteImpact.join(workloads);
+        return HohenheimAccess.hasDatabaseCapability(access, database.get(DatabaseModel.ID), HohenheimCapabilities.DESTROY);
     }
 
     /**
@@ -725,10 +543,9 @@ public final class DatabaseParts {
      */
     private static @NonNull DeleteConfirmation<Row> deleteConfirmation() {
         return DeleteConfirmation.<Row>of(DeleteConfirmation.body(
-                Microcopy.of("delete_confirm").withFilter("scope", "database")))
-            .forRow((database, request) -> DeleteConfirmation.body(Microcopy.of(
+                HohenheimMicrocopy.DATABASE.of("delete_confirm")))
+            .forRow((database, request) -> DeleteConfirmation.body(HohenheimMicrocopy.DATABASE.of(
                     DatabaseModel.isShared(database) ? "delete_confirm_shared" : "delete_confirm")
-                .withFilter("scope", "database")
                 .withArg("name", String.valueOf((Object) database.get(DatabaseModel.NAME)))));
     }
 
@@ -740,13 +557,13 @@ public final class DatabaseParts {
      */
     private static @NonNull PanelAction<Row> backupLink(@NonNull Identifier id, boolean delegated) {
         PanelAction.LinkBuilder<Row> link = PanelAction.<Row>link(id, ActionPlacement.ROW)
-            .label(Microcopy.of("backup").withFilter("scope", "database"))
+            .label(HohenheimMicrocopy.DATABASE.of("backup"))
             .icon(Icon.of("download"))
             .route((database, request) -> HohenheimEndpoints.DATABASES_BACKUP
                 .with(HohenheimEndpoints.DATABASE_NAME, database.get(DatabaseModel.NAME)));
         if (delegated) {
             link.shownWhen((database, access) -> HohenheimAccess.reachesRecord(access, DatabaseModel.MODEL_ID,
-                database.get(DatabaseModel.ID), HohenheimAccess.BACKUPS));
+                database.get(DatabaseModel.ID), HohenheimCapabilities.BACKUPS));
         }
         return link.build();
     }
@@ -760,53 +577,41 @@ public final class DatabaseParts {
      */
     private static @NonNull PanelAction<Row> moveToShared() {
         return PanelAction.<Row, Void>places(MOVE_TO_SHARED, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("move_started")
-                    .withFilter("scope", "database")
+                (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.DATABASE.of("move_started")
                     .withArg("name", request.subject().get(DatabaseModel.NAME))))
             .inlineInRow(false)
             .inlineOnRecord(false)
             // The record-less fallback the framework requires beside a dynamic one.
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("move_shared").withFilter("scope", "database"))
-                .body(Microcopy.of("move_shared_confirm_generic").withFilter("scope", "database"))
-                .confirmLabel(Microcopy.of("move_shared_ok").withFilter("scope", "database"))
-                .style(ActionStyle.PRIMARY)
-                .build())
-            .dynamicConfirmation(database -> ConfirmationSpec.builder()
-                .title(Microcopy.of("move_shared").withFilter("scope", "database"))
-                .body(Microcopy.of("move_shared_confirm").withFilter("scope", "database")
-                    .withArg("name", database.get(DatabaseModel.NAME)))
-                .confirmLabel(Microcopy.of("move_shared_ok").withFilter("scope", "database"))
-                .style(ActionStyle.PRIMARY)
-                .build())
+            .confirmation(Confirmations.of(HohenheimMicrocopy.DATABASE.of("move_shared"),
+                HohenheimMicrocopy.DATABASE.of("move_shared_ok"),
+                HohenheimMicrocopy.DATABASE.of("move_shared_confirm_generic"), ActionStyle.PRIMARY))
+            .dynamicConfirmation(database -> Confirmations.of(HohenheimMicrocopy.DATABASE.of("move_shared"),
+                HohenheimMicrocopy.DATABASE.of("move_shared_ok"),
+                HohenheimMicrocopy.DATABASE.of("move_shared_confirm").withArg("name", database.get(DatabaseModel.NAME)),
+                ActionStyle.PRIMARY))
             .build();
     }
 
     /**
-     * Visible ONLY once a normal destroy already failed, typed-confirmed with the database's own name and recorded;
-     * the container and volume may survive on the host, where the reconciler reports them as orphans.
+     * The recorded escape hatch of a database or an engine, visible ONLY once a normal destroy already failed and
+     * typed-confirmed with the record's own name; the container and volume may survive on the host, where the
+     * reconciler reports them as orphans.
+     *
+     * @param scope the record kind's copy: {@code force_delete}, {@code force_delete_confirm_generic},
+     *              {@code force_delete_confirm} and {@code force_delete_done}
      */
-    private static @NonNull PanelAction<Row> forceDelete() {
-        return PanelAction.<Row, Void>places(FORCE_DELETE, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("force_delete_done")
-                    .withFilter("scope", "database")
-                    .withArg("name", request.subject().get(DatabaseModel.NAME))))
+    private static @NonNull PanelAction<Row> forceDelete(@NonNull Operation<Row, Void, Void> operation,
+                                                         @NonNull HohenheimMicrocopy scope, @NonNull StringField name) {
+        ConfirmationSpec force = Confirmations.of(scope.of("force_delete"), scope.of("force_delete_confirm_generic"),
+            ActionStyle.DESTRUCTIVE);
+        return PanelAction.<Row, Void>places(operation, ActionPlacement.ROW,
+                (request, result) -> CmsActionResult.refreshWithToast(scope.of("force_delete_done")
+                    .withArg("name", request.subject().get(name))))
             .style(ActionStyle.DESTRUCTIVE)
             .inlineInRow(false)
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("force_delete").withFilter("scope", "database"))
-                .body(Microcopy.of("force_delete_confirm_generic").withFilter("scope", "database"))
-                .confirmLabel(Microcopy.of("force_delete_ok").withFilter("scope", "database"))
-                .style(ActionStyle.DESTRUCTIVE)
-                .build())
-            .dynamicConfirmation(database -> ConfirmationSpec.builder()
-                .title(Microcopy.of("force_delete").withFilter("scope", "database"))
-                .body(Microcopy.of("force_delete_confirm").withFilter("scope", "database")
-                    .withArg("name", database.get(DatabaseModel.NAME)))
-                .confirmLabel(Microcopy.of("force_delete_ok").withFilter("scope", "database"))
-                .style(ActionStyle.DESTRUCTIVE)
-                .requireTypedConfirmation(database.get(DatabaseModel.NAME))
-                .build())
+            .confirmation(force)
+            .dynamicConfirmation(row -> Confirmations.typed(force.withBody(scope.of("force_delete_confirm")
+                .withArg("name", row.get(name))), row.get(name)))
             .build();
     }
 
@@ -815,8 +620,7 @@ public final class DatabaseParts {
      */
     private static @NonNull PanelAction<Row> backUpNow() {
         return PanelAction.<Row, Void>places(BACK_UP_NOW, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("back_up_started")
-                    .withFilter("scope", "database")
+                (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.DATABASE.of("back_up_started")
                     .withArg("name", request.subject().get(DatabaseModel.NAME))))
             .build();
     }
@@ -824,13 +628,40 @@ public final class DatabaseParts {
     /** @return why this database cannot be backed up now, or null when it can */
     static @Nullable Microcopy backUpUnavailable(@NonNull Row database) {
         if (Boolean.TRUE.equals(database.get(DatabaseModel.EPHEMERAL))) {
-            return Microcopy.of("back_up_temporary").withFilter("scope", "database");
+            return HohenheimMicrocopy.DATABASE.of("back_up_temporary");
         }
-        // A dump runs inside the engine serving it: the verdict every surface reads, never the stored "active".
-        if (!DatabaseVerdict.ofDatabase(database).serves()) {
-            return Microcopy.of("back_up_not_active").withFilter("scope", "database");
+        // A dump runs inside the engine serving it.
+        return whileNotServing(database, HohenheimMicrocopy.DATABASE.of("back_up_not_active"),
+            HohenheimMicrocopy.DATABASE.of("back_up_not_serving"));
+    }
+
+    /** @return why this database cannot move onto a shared engine now (the move dumps it from the engine it leaves) */
+    public static @Nullable Microcopy moveUnavailable(@NonNull Row database) {
+        return whileNotServing(database, HohenheimMicrocopy.DATABASE.of("move_not_active"),
+            HohenheimMicrocopy.DATABASE.of("move_not_serving"));
+    }
+
+    /**
+     * Why a verb that runs inside this database's engine (a dump, a move) cannot run now: the verdict every surface
+     * reads, never the stored "active".
+     *
+     * @param plain      the verb's words for a verdict that gives no reason
+     * @param withReason the verb's words around the verdict's reason
+     * @return those words, null while the database serves
+     */
+    private static @Nullable Microcopy whileNotServing(@NonNull Row database, @NonNull Microcopy plain,
+                                                       @NonNull Microcopy withReason) {
+        DatabaseVerdict verdict = DatabaseVerdict.ofDatabase(database);
+        if (verdict.serves()) {
+            return null;
         }
-        return null;
+        return verdict.reason() == null ? plain : withReason.withArg("reason", verdict.reason());
+    }
+
+    /** @return what a database with no dump yet is told: why it cannot be backed up now, or how it will be */
+    static @NonNull Microcopy neverBackedUpDetail(@NonNull Row database) {
+        Microcopy unavailable = backUpUnavailable(database);
+        return unavailable != null ? unavailable : HohenheimMicrocopy.DATABASE_OVERVIEW.of("backup_never_detail");
     }
 
     /** The muted line under a database's name: its shared engine and host, or its own container's host. */
@@ -844,17 +675,15 @@ public final class DatabaseParts {
      * reader who may open it; "No app" when none does.
      */
     private static @NonNull RecordLinksCell usedByCell(@NonNull Row database, @NonNull PanelRequest request) {
-        List<Row> instances = CmsSupport.memo(request.conduit(), USED_BY,
-                InstanceDatabaseLinks::liveInstancesByDatabase)
-            .getOrDefault(database.get(DatabaseModel.ID), List.of());
+        List<Row> instances = DeleteImpact.liveInstancesOf(database.get(DatabaseModel.ID));
         if (instances.isEmpty()) {
-            return RecordLinksCell.none(DatabaseOverview.copy("used_by_none"));
+            return RecordLinksCell.none(HohenheimMicrocopy.DATABASE_OVERVIEW.of("used_by_none"));
         }
-        boolean listed = AppDirectory.offers(request.panel(), InstanceParts.SLUG, request.access());
+        boolean listed = AppDirectory.offers(request.panel(), HohenheimSlugs.INSTANCES, request.access());
         List<RecordLink> links = new ArrayList<>();
         for (Row instance : instances) {
             boolean opens = listed && HohenheimAccess.reachesRecord(request.access(), InstanceModel.MODEL_ID,
-                instance.get(InstanceModel.ID), HohenheimAccess.VIEW);
+                instance.get(InstanceModel.ID), HohenheimCapabilities.VIEW);
             links.add(new RecordLink(String.valueOf((Object) instance.get(InstanceModel.NAME)),
                 opens ? InstanceParts.recordRoute(request.panelSlug(), instance, null).toUrl() : null));
         }
@@ -877,37 +706,61 @@ public final class DatabaseParts {
         List<WidgetFact> facts = new ArrayList<>();
         for (Row engine : engines) {
             Integer id = engine.get(DatabaseEngineModel.ID);
-            String host = ServerModel.nameOf(ServerModel.canonicalServerId(engine.get(DatabaseEngineModel.SERVER_ID)));
-            Microcopy holds = listCopy("engine_holds")
+            String host = ServerModel.canonicalNameOf(engine.get(DatabaseEngineModel.SERVER_ID));
+            Microcopy holds = HohenheimMicrocopy.DATABASE_LIST.of("engine_holds")
                 .withArg("databases", HohenheimCounts.of("databases", counts.getOrDefault(id, 0L)))
                 .withArg("state", Labels.inSentence(DatabaseVerdict.ofEngine(engine).state().label()));
             facts.add(WidgetFact.link(
-                listCopy("engine_on_host").withArg("engine", CmsSupport.enumValueLabel(DatabaseEngineModel.ENGINE,
+                HohenheimMicrocopy.DATABASE_LIST.of("engine_on_host")
+                    .withArg("engine", CmsSupport.enumValueLabel(DatabaseEngineModel.ENGINE,
                         String.valueOf((Object) engine.get(DatabaseEngineModel.ENGINE)))).withArg("host", host)
                     .resolve(conduit.getLocales(), conduit.getMessageResolver()),
                 holds.resolve(conduit.getLocales(), conduit.getMessageResolver()),
-                CmsRoutes.open(panelSlug, ENGINES_SLUG, id).toUrl()));
+                CmsRoutes.open(panelSlug, HohenheimSlugs.DATABASE_ENGINES, id).toUrl()));
         }
         WidgetInstance card = new WidgetInstance(CardWidget.ID,
-            Map.of("title", listCopy("engines_title"), "lead", listCopy("engines_lead")),
+            Map.of("title", HohenheimMicrocopy.DATABASE_LIST.of("engines_title"), "lead",
+                HohenheimMicrocopy.DATABASE_LIST.of("engines_lead")),
             new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));
         return new WidgetTree(List.of(AdminDashboard.section(card)));
     }
 
-    /** Where a database's backups stand: the Last backup cell and the dashboard's Backups tile read one verdict. */
-    enum BackupState {
+    /**
+     * Where a database's backups stand: the Last backup cell and the dashboard's Backups tile read one verdict.
+     *
+     * AIDEV-NOTE: a {@link StateBadge}, not a worded state: an overdue or recent dump's badge reads the dump's age.
+     */
+    enum BackupState implements StateBadge {
 
         /** A temporary database is never backed up, by design. */
-        TEMPORARY,
+        TEMPORARY("temporary", BadgeVariant.OUTLINE),
 
         /** A persistent database with no stored dump. */
-        NEVER,
+        NEVER("never", BadgeVariant.WARNING),
 
         /** The newest dump is older than the nightly backup allows ({@link #BACKUP_OVERDUE_AFTER}). */
-        OVERDUE,
+        OVERDUE("overdue", BadgeVariant.WARNING),
 
         /** The newest dump is recent. */
-        DONE;
+        DONE("done", BadgeVariant.SUCCESS);
+
+        private final String token;
+        private final BadgeVariant variant;
+
+        BackupState(@NonNull String token, @NonNull BadgeVariant variant) {
+            this.token = token;
+            this.variant = variant;
+        }
+
+        @Override
+        public @NonNull String token() {
+            return this.token;
+        }
+
+        @Override
+        public @NonNull BadgeVariant variant() {
+            return this.variant;
+        }
 
         /** @return whether the database is meant to have backups at all, so a count of backed-up things holds it */
         boolean expectsBackups() {
@@ -946,35 +799,28 @@ public final class DatabaseParts {
     private static @NonNull StateLineCell lastBackupCell(@NonNull Row database, @NonNull PanelRequest request) {
         BackupReading backup = backupOf(database);
         DatabaseBackups.Stored newest = backup.newest();
-        return switch (backup.state()) {
-            case TEMPORARY -> new StateLineCell("temporary", BadgeVariant.OUTLINE,
-                Microcopy.of("backup_temporary").withFilter("scope", "database_overview"),
-                Microcopy.of("backup_temporary_detail").withFilter("scope", "database_overview"), null);
-            case NEVER -> new StateLineCell("never", BadgeVariant.WARNING,
-                Microcopy.of("backup_never").withFilter("scope", "database_overview"),
-                Microcopy.of("backup_never_detail").withFilter("scope", "database_overview"), null);
-            case OVERDUE -> new StateLineCell("overdue", BadgeVariant.WARNING, Microcopy.literal(ago(newest, request)),
-                Microcopy.of("backup_overdue_detail").withFilter("scope", "database_overview")
-                    .withArg("size", ByteText.human(newest.bytes())), null);
-            case DONE -> new StateLineCell("done", BadgeVariant.SUCCESS, Microcopy.literal(ago(newest, request)),
-                Microcopy.literal(ByteText.human(newest.bytes())), null);
+        BackupState state = backup.state();
+        return switch (state) {
+            case TEMPORARY -> StateLineCell.of(state, HohenheimMicrocopy.DATABASE_OVERVIEW.of("backup_temporary"),
+                HohenheimMicrocopy.DATABASE_OVERVIEW.of("backup_temporary_detail"));
+            case NEVER -> StateLineCell.of(state, HohenheimMicrocopy.DATABASE_OVERVIEW.of("backup_never"),
+                neverBackedUpDetail(database));
+            case OVERDUE -> StateLineCell.of(state, Microcopy.literal(ago(newest, request)),
+                HohenheimMicrocopy.DATABASE_OVERVIEW.of("backup_overdue_detail")
+                    .withArg("size", ByteText.human(newest.bytes())));
+            case DONE -> StateLineCell.of(state, Microcopy.literal(ago(newest, request)),
+                Microcopy.literal(ByteText.human(newest.bytes())));
         };
     }
 
     private static @NonNull String ago(DatabaseBackups.@NonNull Stored dump, @NonNull PanelRequest request) {
-        Conduit conduit = request.conduit();
-        return RelativeTime.ago(dump.at(),
-            RelativeTimeWording.resolve(conduit.getLocales(), conduit.getMessageResolver()));
+        return RelativeTime.ago(dump.at(), CmsSupport.timeWording(request.conduit()));
     }
 
     /** The state column every database and engine list draws in place of the stored status. */
     private static @NonNull ColumnSpec stateColumn() {
-        return ColumnSpec.virtual(STATE_COLUMN, listCopy("state_column"))
+        return ColumnSpec.virtual(STATE_COLUMN, HohenheimMicrocopy.DATABASE_LIST.of("state_column"))
             .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build();
-    }
-
-    private static @NonNull Microcopy listCopy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "database_list");
     }
 
     // -- the shared engines ---------------------------------------------------------------------------------------
@@ -996,7 +842,7 @@ public final class DatabaseParts {
                 .build())
             .column(stateColumn())
             .column(ColumnSpec.virtual(DATABASES_COLUMN,
-                Microcopy.of("databases").withFilter("scope", "database_engine")).build())
+                HohenheimMicrocopy.DATABASE_ENGINE.of("databases")).build())
             .column(ColumnSpec.fromField(DatabaseEngineModel.MEMORY_LIMIT_MB).build())
             .column(ColumnSpec.fromField(DatabaseEngineModel.STATUS).filterable().hidden().build())
             .filter(FilterSpec.leaf(DatabaseEngineModel.NAME, CoreTypes.CONTAINS)
@@ -1006,10 +852,10 @@ public final class DatabaseParts {
             .filter(FilterSpec.leaf(DatabaseEngineModel.STATUS, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(DatabaseEngineModel.STATUS)).build())
             .build();
-        return PanelResource.builder(HohenheimIds.id("database_engine"), ENGINES_SLUG, ENGINE)
-            .label(Microcopy.of("plural").withFilter("scope", "database_engine"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "database_engine"))
-            .description(CmsSupport.navHint("database_engine"))
+        return PanelResource.builder(HohenheimIds.id("database_engine"), HohenheimSlugs.DATABASE_ENGINES, ENGINE)
+            .label(HohenheimMicrocopy.DATABASE_ENGINE.of("plural"))
+            .recordLabel(HohenheimMicrocopy.DATABASE_ENGINE.of("singular"))
+            .description(CmsSupport.navHint(HohenheimMicrocopy.DATABASE_ENGINE))
             .icon(Icon.of("server"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             // Right after Databases: the tier the list above it places records on.
@@ -1028,25 +874,24 @@ public final class DatabaseParts {
                 // A new ceiling recreates the engine container, and every database on it loses its connections until
                 // it is back.
                 .notice((engine, access) -> engine.get(DatabaseEngineModel.ID) == null ? null
-                    : Microcopy.of("resize_notice").withFilter("scope", "database_engine"))
+                    : HohenheimMicrocopy.DATABASE_ENGINE.of("resize_notice"))
                 .build())
             .writes(ResourceMutations.rows()
-                .create(DatabaseParts::provisionEngine)
+                .create(call -> DatabaseWrites.createEngine(call.values()))
                 .update(call -> {
-                    ProvisionedRecords.resize(Models.get(DatabaseEngineModel.class),
-                        Objects.requireNonNull(call.record()), call.values(), ENGINE_CEILINGS,
-                        DatabaseEngines::reserveRow, DatabaseEngines::redeployInBackground);
+                    DatabaseWrites.resizeEngine(Objects.requireNonNull(call.record()), call.values());
                     return null;
                 })
                 .delete(DELETE_ENGINE)
                 .build())
             // Deleting an engine destroys its container AND the volume every database sat on.
             .deleteConfirmation(DeleteConfirmation.<Row>of(DeleteConfirmation.body(
-                    Microcopy.of("delete_confirm").withFilter("scope", "database_engine")))
-                .forRow((engine, request) -> DeleteConfirmation.body(Microcopy.of("delete_confirm")
-                    .withFilter("scope", "database_engine")
+                    HohenheimMicrocopy.DATABASE_ENGINE.of("delete_confirm")))
+                .forRow((engine,
+                    request) -> DeleteConfirmation.body(HohenheimMicrocopy.DATABASE_ENGINE.of("delete_confirm")
                     .withArg("name", String.valueOf((Object) engine.get(DatabaseEngineModel.NAME))))))
-            .actions(List.of(forceDeleteEngine()))
+            .actions(List.of(forceDelete(FORCE_DELETE_ENGINE, HohenheimMicrocopy.DATABASE_ENGINE,
+                DatabaseEngineModel.NAME)))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
     }
@@ -1074,132 +919,6 @@ public final class DatabaseParts {
     }
 
     /**
-     * Persist the engine as {@code provisioning}, reserve its instance row INLINE (so a host without room refuses on
-     * this form) and bring the container up after commit.
-     *
-     * AIDEV-NOTE: there is deliberately no refusal of a second engine of the same kind on one host: running two major
-     * versions side by side is why an engine can be created by hand at all. The allocation funnel resolves the FIRST.
-     */
-    private static @NonNull Object provisionEngine(@NonNull RowWriteCall call) {
-        Map<String, Object> values = call.values();
-        String name = trimmed(values.get(DatabaseEngineModel.NAME.getName()));
-        if (!name.matches("[a-z0-9][a-z0-9-]*")) {
-            throw Violations.ofField(DatabaseEngineModel.NAME.getName(), name,
-                CmsSupport.violationText("name_format"));
-        }
-        String engineToken = trimmed(values.get(DatabaseEngineModel.ENGINE.getName())).toLowerCase(Locale.ROOT);
-        ManagedDatabase.Engine engine = ManagedDatabase.Engine.forToken(engineToken);
-        if (engine == null) {
-            throw Violations.ofField(DatabaseEngineModel.ENGINE.getName(), engineToken,
-                CmsSupport.violationText("unknown_engine").withArg("engine", engineToken));
-        }
-        if (!engine.supportsLogicalDatabases()) {
-            // The placement's refusal, on its key: an engine with no per-database namespace can only ever serve one
-            // database, which is a DEDICATED record and not this tier.
-            throw Violations.ofField(DatabaseEngineModel.ENGINE.getName(), engineToken,
-                CmsSupport.violationText("database_placement_unsupported").withArg("engine", engineToken));
-        }
-        String rootUser = trimmed(values.get(DatabaseEngineModel.ROOT_USER.getName()));
-        if (rootUser.isEmpty()) {
-            rootUser = "root";
-        }
-        String rootPassword = trimmed(values.get(DatabaseEngineModel.ROOT_PASSWORD.getName()));
-        if (rootPassword.isEmpty()) {
-            rootPassword = Secrets.generatePassword();
-        }
-        String image = trimmed(values.get(DatabaseEngineModel.IMAGE.getName()));
-        ResourceLimits limits = ResourceLimits.of(
-            values.get(DatabaseEngineModel.MEMORY_LIMIT_MB.getName()) instanceof Integer mb ? mb : null,
-            values.get(DatabaseEngineModel.CPU_LIMIT.getName()) instanceof Double cpus ? cpus : null);
-
-        Model model = Models.get(DatabaseEngineModel.class);
-        Row row = model.createEmptyRow();
-        row.set(DatabaseEngineModel.NAME, name);
-        row.set(DatabaseEngineModel.ENGINE, engine.token());
-        row.set(DatabaseEngineModel.IMAGE, image.isEmpty() ? null : image);
-        row.set(DatabaseEngineModel.SERVER_ID,
-            values.get(DatabaseEngineModel.SERVER_ID.getName()) instanceof Integer serverId
-                ? serverId : ServerModel.localServerId());
-        row.set(DatabaseEngineModel.ROOT_USER, rootUser);
-        row.set(DatabaseEngineModel.ROOT_PASSWORD, rootPassword);
-        row.set(DatabaseEngineModel.MEMORY_LIMIT_MB, limits.memoryMb());
-        row.set(DatabaseEngineModel.CPU_LIMIT, limits.cpus());
-        row.set(DatabaseEngineModel.STATUS, DatabaseModel.STATUS_PROVISIONING);
-        model.save(row);
-
-        // Books the engine against the host budget through the instance write hook, and refuses here (never on a pool
-        // thread minutes later) when it does not fit.
-        DatabaseEngines.reserveRow(row, limits);
-
-        Integer engineId = row.get(DatabaseEngineModel.ID);
-        if (engineId != null) {
-            model.getResolvedDatasource().afterCommit(() -> DatabaseEngines.provisionInBackground(engineId));
-        }
-        return engineId;
-    }
-
-    /**
-     * An engine still hosting databases is offered DEAD, naming them; the handler refuses with the same facts.
-     *
-     * @return null when no record lives on it
-     */
-    static @Nullable Microcopy engineInUseReason(@NonNull Row engine) {
-        Integer engineId = engine.get(DatabaseEngineModel.ID);
-        List<Row> hosted = engineId == null ? List.of() : DatabaseEngines.databasesOn(engineId);
-        if (hosted.isEmpty()) {
-            return null;
-        }
-        return Microcopy.of("delete_in_use").withFilter("scope", "database_engine")
-            .withArg("name", String.valueOf((Object) engine.get(DatabaseEngineModel.NAME)))
-            .withArg("databases", DatabaseEngines.names(hosted));
-    }
-
-    /**
-     * Verified teardown: the container and its data volume go, and the row with them.
-     *
-     * @throws Violations {@code database_engine_destroy_failed} when the teardown is unconfirmed; the record is kept
-     *                    (status destroy_failed) and the force delete is the recorded way out
-     */
-    private static void destroyEngine(@NonNull Row engine) {
-        Integer engineId = engine.get(DatabaseEngineModel.ID);
-        if (engineId == null) {
-            return;
-        }
-        try {
-            DatabaseEngines.destroy(engineId, true);
-        } catch (IOException e) {
-            throw Violations.ofForm(CmsSupport.violationText("database_engine_destroy_failed")
-                .withArg("name", String.valueOf((Object) engine.get(DatabaseEngineModel.NAME)))
-                .withArg("reason", String.valueOf(e.getMessage())));
-        }
-    }
-
-    /** The recorded escape hatch, visible ONLY once a normal destroy already failed, typed-confirmed and recorded. */
-    private static @NonNull PanelAction<Row> forceDeleteEngine() {
-        return PanelAction.<Row, Void>places(FORCE_DELETE_ENGINE, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("force_delete_done")
-                    .withFilter("scope", "database_engine")
-                    .withArg("name", request.subject().get(DatabaseEngineModel.NAME))))
-            .style(ActionStyle.DESTRUCTIVE)
-            .inlineInRow(false)
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("force_delete").withFilter("scope", "database_engine"))
-                .body(Microcopy.of("force_delete_confirm_generic").withFilter("scope", "database_engine"))
-                .confirmLabel(Microcopy.of("force_delete_ok").withFilter("scope", "database_engine"))
-                .style(ActionStyle.DESTRUCTIVE)
-                .build())
-            .dynamicConfirmation(engine -> ConfirmationSpec.builder()
-                .title(Microcopy.of("force_delete").withFilter("scope", "database_engine"))
-                .body(Microcopy.of("force_delete_confirm").withFilter("scope", "database_engine")
-                    .withArg("name", engine.get(DatabaseEngineModel.NAME)))
-                .confirmLabel(Microcopy.of("force_delete_ok").withFilter("scope", "database_engine"))
-                .style(ActionStyle.DESTRUCTIVE)
-                .requireTypedConfirmation(engine.get(DatabaseEngineModel.NAME))
-                .build())
-            .build();
-    }
-
-    /**
      * The engine's database count, off the request's memo: ONE grouped aggregate over every engine per rendered
      * list instead of one query per row.
      */
@@ -1214,21 +933,6 @@ public final class DatabaseParts {
 
     /** @return engine id -> managed database count, for every engine holding one */
     private static @NonNull Map<Integer, Long> countDatabasesPerEngine() {
-        Map<Integer, Long> counts = new HashMap<>();
-        for (Row group : Models.get(DatabaseModel.class).find()
-                .where(DatabaseModel.ENGINE_ID.isNotNull())
-                .groupBy(DatabaseModel.ENGINE_ID)
-                .aggregateAll(Aggregate.count().as("database_count"))) {
-            Object engineId = group.get(DatabaseModel.ENGINE_ID.getName());
-            Object counted = group.get("database_count");
-            if (engineId instanceof Number id && counted instanceof Number number) {
-                counts.put(id.intValue(), number.longValue());
-            }
-        }
-        return counts;
-    }
-
-    private static @NonNull String trimmed(@Nullable Object value) {
-        return ProvisionedRecords.trimmed(value);
+        return GroupedCounts.of(Models.get(DatabaseModel.class).find(), DatabaseModel.ENGINE_ID);
     }
 }

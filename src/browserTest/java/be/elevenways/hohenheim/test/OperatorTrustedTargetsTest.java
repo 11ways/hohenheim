@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.source.GiteaProviderKind;
 import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
 import be.elevenways.zenit.auth.AuthEndpoints;
@@ -54,8 +54,8 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
         int operatorSite = site("trusted-target-operator");
         int tenantSite = site("trusted-target-tenant");
         int provider = provider("trusted-target-forge");
-        RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, tenantSite, HohenheimAccess.MANAGE,
-            true);
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, tenantSite,
+            HohenheimCapabilities.MANAGE, true);
         Integer[] formSite = new Integer[1];
         try {
             // 1. The delegated admin aiming an operator-owned site at loopback is refused on the settings, and the
@@ -132,7 +132,7 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
             assertThat(forwardHost(formSite[0])).as("step 7: the host is unchanged").isEqualTo("203.0.113.30");
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, tenantSite,
-                HohenheimAccess.MANAGE);
+                HohenheimCapabilities.MANAGE);
             HardDeletes.byId(sites, operatorSite);
             HardDeletes.byId(sites, tenantSite);
             HardDeletes.byId(providers, provider);
@@ -156,8 +156,8 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
 
             // 2. While a tenant owns the site, a delegate aims it at loopback (a tenant site never dials it), which
             //    clears the mark; a delegate carrying the mark itself is not believed.
-            RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId, HohenheimAccess.MANAGE,
-                true);
+            RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
+                HohenheimCapabilities.MANAGE, true);
             assertThat(write(delegated, sites, siteId, SiteModel.SETTINGS, forward("127.0.0.1")))
                 .as("step 2: a tenant-owned site's upstream is the delegate's to edit").isNull();
             assertThat(trusted(siteId)).as("step 2: the delegate's upstream is unmarked").isFalse();
@@ -167,7 +167,8 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
 
             // 3. The tenant's grant goes: the site is operator-owned, yet its unmarked upstream is dialled at the
             //    public tier only, and loopback is refused.
-            RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId, HohenheimAccess.MANAGE);
+            RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
+                HohenheimCapabilities.MANAGE);
             Row site = sites.findById(siteId);
             assertThat(TenantUpstreams.isTenantOwned(site)).as("step 3: the site is operator-owned now").isFalse();
             assertThat(TenantUpstreams.publicOnly(site)).as("step 3: but its upstream stays public-only").isTrue();
@@ -192,7 +193,8 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
             assertThat(TenantUpstreams.vet("http", "127.0.0.1", TenantUpstreams.publicOnly(site)))
                 .as("step 5: loopback is dialled").isInstanceOf(OutboundUrlGuard.Allowed.class);
         } finally {
-            RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId, HohenheimAccess.MANAGE);
+            RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
+                HohenheimCapabilities.MANAGE);
             HardDeletes.byId(sites, siteId);
         }
     }
@@ -205,10 +207,12 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
         GrantService.createDirectGrant(GrantSubjectType.USER, admin, HohenheimSources.ADMIN_ACCESS.value(), true);
         UserPrincipal delegated = new UserPrincipal(admin, "Map Delegate");
         try {
-            RecordGrants.grant(GrantSubjectType.USER, admin, GitProviderModel.MODEL_ID, id, HohenheimAccess.MANAGE, true);
+            RecordGrants.grant(GrantSubjectType.USER, admin, GitProviderModel.MODEL_ID, id,
+                HohenheimCapabilities.MANAGE, true);
             assertThat(write(delegated, providers, id, GitProviderModel.BASE_URL, "https://delegate.example.test")).isNull();
             assertThat(providers.findById(id).get(GitProviderModel.TARGET_TRUSTED)).isEqualTo(false);
-            RecordGrants.revoke(GrantSubjectType.USER, admin, GitProviderModel.MODEL_ID, id, HohenheimAccess.MANAGE);
+            RecordGrants.revoke(GrantSubjectType.USER, admin, GitProviderModel.MODEL_ID, id,
+                HohenheimCapabilities.MANAGE);
             // 1. An operator changes a target through a map row, with no setter history.
             Row mapped = new Row(new LinkedHashMap<>(Map.of("id", id, "base_url", "https://map.example.test")), providers);
             assertThat(mapped.isWritten(GitProviderModel.BASE_URL)).as("step 1: no setter history").isFalse();
@@ -224,7 +228,8 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
             assertThat(providers.findById(id).get(GitProviderModel.BASE_URL))
                 .as("step 2: refused target stayed stored").isEqualTo("https://map.example.test");
         } finally {
-            RecordGrants.revoke(GrantSubjectType.USER, admin, GitProviderModel.MODEL_ID, id, HohenheimAccess.MANAGE);
+            RecordGrants.revoke(GrantSubjectType.USER, admin, GitProviderModel.MODEL_ID, id,
+                HohenheimCapabilities.MANAGE);
             HardDeletes.byId(providers, id);
         }
     }
@@ -240,10 +245,11 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
         UserPrincipal delegated = new UserPrincipal(admin, "In-place Delegate");
         try {
             // 1. The delegate's tenant-owned target clears provenance.
-            RecordGrants.grant(GrantSubjectType.USER, tenant, SiteModel.MODEL_ID, id, HohenheimAccess.MANAGE, true);
+            RecordGrants.grant(GrantSubjectType.USER, tenant, SiteModel.MODEL_ID, id, HohenheimCapabilities.MANAGE,
+                true);
             assertThat(write(delegated, sites, id, SiteModel.SETTINGS, forward("203.0.113.21"))).isNull();
             assertThat(trusted(id)).as("step 1: initially untrusted").isFalse();
-            RecordGrants.revoke(GrantSubjectType.USER, tenant, SiteModel.MODEL_ID, id, HohenheimAccess.MANAGE);
+            RecordGrants.revoke(GrantSubjectType.USER, tenant, SiteModel.MODEL_ID, id, HohenheimCapabilities.MANAGE);
 
             // 2. Mutating the loaded map bypasses setters but not the operator's actual-change vouch.
             Row row = sites.findById(id);
@@ -259,7 +265,7 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
                 .as("step 3: mutable map does not bypass the gate").isInstanceOf(Violations.class);
             assertThat(forwardHost(id)).as("step 3: stored target is unchanged").isEqualTo("127.0.0.8");
         } finally {
-            RecordGrants.revoke(GrantSubjectType.USER, tenant, SiteModel.MODEL_ID, id, HohenheimAccess.MANAGE);
+            RecordGrants.revoke(GrantSubjectType.USER, tenant, SiteModel.MODEL_ID, id, HohenheimCapabilities.MANAGE);
             HardDeletes.byId(sites, id);
         }
     }
@@ -273,19 +279,20 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
         UserPrincipal delegated = new UserPrincipal(admin, "Batch Delegate");
         try {
             // 1. A tenant-owned target written by a delegate is untrusted, including through saveAll.
-            RecordGrants.grant(GrantSubjectType.USER, admin, SiteModel.MODEL_ID, id, HohenheimAccess.MANAGE, true);
+            RecordGrants.grant(GrantSubjectType.USER, admin, SiteModel.MODEL_ID, id, HohenheimCapabilities.MANAGE,
+                true);
             Row row = sites.findById(id);
             row.set(SiteModel.SETTINGS, forward("203.0.113.22"));
             TenantConduits.as(delegated, () -> sites.saveAll(List.of(row)));
             assertThat(trusted(id)).as("step 1: delegated batch target is untrusted").isFalse();
-            RecordGrants.revoke(GrantSubjectType.USER, admin, SiteModel.MODEL_ID, id, HohenheimAccess.MANAGE);
+            RecordGrants.revoke(GrantSubjectType.USER, admin, SiteModel.MODEL_ID, id, HohenheimCapabilities.MANAGE);
 
             // 2. Reusing that row for an operator name-only save must not replay the earlier intent.
             row.set(SiteModel.NAME, "batch-target-renamed");
             TenantConduits.as(operator(), () -> sites.save(row));
             assertThat(trusted(id)).as("step 2: name-only save does not vouch for the batch target").isFalse();
         } finally {
-            RecordGrants.revoke(GrantSubjectType.USER, admin, SiteModel.MODEL_ID, id, HohenheimAccess.MANAGE);
+            RecordGrants.revoke(GrantSubjectType.USER, admin, SiteModel.MODEL_ID, id, HohenheimCapabilities.MANAGE);
             HardDeletes.byId(sites, id);
         }
     }

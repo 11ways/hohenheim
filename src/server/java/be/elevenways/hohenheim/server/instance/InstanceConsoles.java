@@ -1,9 +1,13 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.server.HandlerSupport;
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -116,8 +120,8 @@ public final class InstanceConsoles {
         // (InstanceReadiness), and honouring a leftover line beside them would leave a
         // workload stamped `starting` forever while its port probe had already passed.
         String readiness = InstanceReadiness.declaredKind(row) == ReadinessKind.CONSOLE_LINE
-            ? trimmedOrNull(templateValue(row, InstanceTemplateModel.READINESS_LINE)) : null;
-        String stopCommand = trimmedOrNull(templateValue(row, InstanceTemplateModel.STOP_COMMAND));
+            ? Texts.trimmedOrNull(templateValue(row, InstanceTemplateModel.READINESS_LINE)) : null;
+        String stopCommand = Texts.trimmedOrNull(templateValue(row, InstanceTemplateModel.STOP_COMMAND));
         boolean restartPolicy = InstanceModel.CRASH_RESTART
             .equals(row.get(InstanceModel.CRASH_POLICY));
         if (readiness == null && stopCommand == null && !restartPolicy) {
@@ -130,8 +134,7 @@ public final class InstanceConsoles {
             return null;
         }
         if (!(resolved.runtime() instanceof ConsoleStreamSupport support)) {
-            throw Violations.ofForm(HohenheimViolations.text("console_unsupported")
-                .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME))));
+            throw HohenheimViolations.instanceRefusal("console_unsupported", row, null);
         }
         closeSession(instanceId);
         if (support.attachRequiresRunning()) {
@@ -186,7 +189,7 @@ public final class InstanceConsoles {
             return;
         }
         final InstanceConsoleSession armed = session;
-        armed.armReadiness(readiness, () -> withScope(watch.datasource(), () ->
+        armed.armReadiness(readiness, () -> HandlerSupport.inScope(watch.datasource(), () ->
             stampIfStatus(watch.leases(), watch.serverId(), watch.instanceName(), instanceId,
                 () -> isCurrent(armed), InstanceModel.STATUS_STARTING, InstanceModel.STATUS_RUNNING,
                 "readiness line observed on the console", null, null)));
@@ -201,7 +204,7 @@ public final class InstanceConsoles {
             if (armed.readinessMatched()) {
                 return;
             }
-            withScope(watch.datasource(), () ->
+            HandlerSupport.inScope(watch.datasource(), () ->
                 stampIfStatus(watch.leases(), watch.serverId(), watch.instanceName(), instanceId,
                     () -> isCurrent(armed), InstanceModel.STATUS_STARTING, InstanceModel.STATUS_ERROR,
                     "readiness line not observed within " + deadline + "ms",
@@ -273,14 +276,12 @@ public final class InstanceConsoles {
         InstanceService service = new InstanceService();
         InstanceService.Resolved resolved = service.resolve(instanceId);
         if (!(resolved.runtime() instanceof ConsoleStreamSupport support)) {
-            throw Violations.ofForm(HohenheimViolations.text("console_unsupported")
-                .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
+            throw HohenheimViolations.instanceRefusal("console_unsupported", resolved.row(), null);
         }
-        if (!resolved.runtime().status(resolved.spec().handle()).running()) {
-            throw Violations.ofForm(HohenheimViolations.text("console_not_running")
-                .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
+        if (!resolved.liveStatus().running()) {
+            throw HohenheimViolations.instanceRefusal("console_not_running", resolved.row(), null);
         }
-        String stopCommand = trimmedOrNull(
+        String stopCommand = Texts.trimmedOrNull(
             templateValue(resolved.row(), InstanceTemplateModel.STOP_COMMAND));
         return open(support, resolved, instanceId, stopCommand,
             service.leases(), Db.currentOrDefault());
@@ -304,11 +305,10 @@ public final class InstanceConsoles {
      *         {@code logs_unavailable}
      */
     public static @NonNull String tail(int instanceId, int lines) {
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONSOLE);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.CONSOLE);
         InstanceService.Resolved resolved = new InstanceService().resolve(instanceId);
         if (!(resolved.runtime() instanceof ConsoleStreamSupport support)) {
-            throw Violations.ofForm(HohenheimViolations.text("console_unsupported")
-                .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
+            throw HohenheimViolations.instanceRefusal("console_unsupported", resolved.row(), null);
         }
         try {
             // The one-shot read bypasses the session, so it carries its own redaction --
@@ -316,8 +316,7 @@ public final class InstanceConsoles {
             return ConsoleRedaction.redactWhole(
                 support.consoleTail(resolved.spec().handle(), lines), instanceId);
         } catch (IOException e) {
-            throw Violations.ofForm(HohenheimViolations.text("logs_unavailable")
-                .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME))));
+            throw HohenheimViolations.instanceRefusal("logs_unavailable", resolved.row(), null);
         }
     }
 
@@ -434,12 +433,12 @@ public final class InstanceConsoles {
         // THE console-write gate, on the funnel every surface reaches (CMS form,
         // automation API, schedule step) -- a per-handler copy is how the API ends up
         // a wider door than the UI (see HohenheimAccess.requireOperationCapability).
-        HohenheimAccess.requireOperationCapability(instanceId, HohenheimAccess.CONSOLE);
+        HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.CONSOLE);
         InstanceConsoleSession session = ensureSession(instanceId);
         try {
             session.sendCommand(command);
         } catch (IOException e) {
-            throw Violations.ofForm(HohenheimViolations.text("console_send_failed")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("console_send_failed")
                 .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
     }
@@ -523,9 +522,7 @@ public final class InstanceConsoles {
         try {
             console = support.openConsole(resolved.spec().handle());
         } catch (IOException e) {
-            throw Violations.ofForm(HohenheimViolations.text("console_open_failed")
-                .withArg("name", String.valueOf((Object) resolved.row().get(InstanceModel.NAME)))
-                .withArg("reason", HohenheimViolations.reasonOf(e)));
+            throw HohenheimViolations.instanceRefusal("console_open_failed", resolved.row(), e);
         }
         int serverId = resolved.serverId();
         Object name = resolved.row().get(InstanceModel.NAME);
@@ -570,7 +567,7 @@ public final class InstanceConsoles {
                 detail.isEmpty() ? "" : "(" + detail + ")");
             return;
         }
-        withScope(datasource, () -> {
+        HandlerSupport.inScope(datasource, () -> {
             Integer exitCode;
             try {
                 exitCode = support.exitCode(session.handle());
@@ -680,16 +677,8 @@ public final class InstanceConsoles {
 
     static void alertCrashLoop(int instanceId, @NonNull Object name) {
         Alerts.trySend(NotificationEvents.INSTANCE_CRASH_LOOP, Alerts.about(InstanceModel.MODEL_ID, instanceId),
-            Alerts.copy("crash_loop_subject").withArg("name", name),
-            Alerts.copy("crash_loop_body").withArg("name", name));
-    }
-
-    private static void withScope(@Nullable Datasource datasource, @NonNull Runnable body) {
-        if (datasource != null) {
-            Db.run(datasource, body);
-        } else {
-            body.run();
-        }
+            HohenheimMicrocopy.ALERT.of("crash_loop_subject").withArg("name", name),
+            HohenheimMicrocopy.ALERT.of("crash_loop_body").withArg("name", name));
     }
 
     private static @Nullable String templateValue(@NonNull Row instance,
@@ -700,9 +689,5 @@ public final class InstanceConsoles {
         }
         Row template = Models.get(InstanceTemplateModel.class).findById(id);
         return template == null ? null : template.get(field);
-    }
-
-    private static @Nullable String trimmedOrNull(@Nullable String value) {
-        return value == null || value.isBlank() ? null : value.trim();
     }
 }

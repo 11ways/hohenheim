@@ -19,10 +19,10 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 @BlastAutoLoad
 public enum WorkloadTier {
 
-    INSTANCE("instance", Microcopy.of("tier_instance").withFilter("scope", "server_overview")),
-    STACK("stack", Microcopy.of("tier_stack").withFilter("scope", "server_overview")),
-    DATABASE("database", Microcopy.of("tier_database").withFilter("scope", "server_overview")),
-    DATABASE_ENGINE("database_engine", Microcopy.of("tier_database_engine").withFilter("scope", "server_overview"));
+    INSTANCE("instance", HohenheimMicrocopy.SERVER_OVERVIEW.of("tier_instance")),
+    STACK("stack", HohenheimMicrocopy.SERVER_OVERVIEW.of("tier_stack")),
+    DATABASE("database", HohenheimMicrocopy.SERVER_OVERVIEW.of("tier_database")),
+    DATABASE_ENGINE("database_engine", HohenheimMicrocopy.SERVER_OVERVIEW.of("tier_database_engine"));
 
     private final String key;
     private final Microcopy label;

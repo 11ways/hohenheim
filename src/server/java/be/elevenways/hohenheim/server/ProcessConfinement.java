@@ -1,7 +1,6 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.zenit.common.Zenit;
 
 /**
  * The per-user process cap ({@code prlimit --nproc}) {@link SystemUsers#execution} sets on a host process Hohenheim
@@ -12,16 +11,11 @@ import be.elevenways.zenit.common.Zenit;
  */
 public final class ProcessConfinement {
 
-    /** Fallback per-user process cap when the setting is unreadable; also its default. */
-    public static final int DEFAULT_PIDS_LIMIT = 512;
-
     private ProcessConfinement() {
     }
 
     /** @return the configured per-user process cap, never below 1 */
     public static int pidsLimit() {
-        Integer configured = Zenit.SETTINGS_VALUES.getValue(
-            HohenheimSettings.Process.PIDS_LIMIT);
-        return configured != null && configured > 0 ? configured : DEFAULT_PIDS_LIMIT;
+        return HohenheimSettings.positiveOrDefault(HohenheimSettings.Process.PIDS_LIMIT);
     }
 }

@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test.source;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.source.GitCheckout;
 import be.elevenways.hohenheim.server.source.GitProviderClient;
 import be.elevenways.hohenheim.server.source.GitProviders;
@@ -143,7 +143,7 @@ class GitSourceReachTest extends HohenheimTestBase {
 
         // 3. A tenant takes ownership: the SAME stored path is now refused at checkout.
         RecordGrants.grant(GrantSubjectType.USER, ApiSupport.user("reach-tenant@hohenheim.local"),
-            InstanceModel.MODEL_ID, applicationId, HohenheimAccess.MANAGE, true);
+            InstanceModel.MODEL_ID, applicationId, HohenheimCapabilities.MANAGE, true);
         File tenantCheckout = checkouts.resolve("tenant").toFile();
         Throwable local = catchThrowable(() -> GitCheckout.materialize(InstanceModel.MODEL_ID,
             applicationId, "main", settings, tenantCheckout));
@@ -192,7 +192,7 @@ class GitSourceReachTest extends HohenheimTestBase {
             // 2. A tenant owns it now: the loopback address is refused BEFORE any connect,
             //    so a "Test connection" cannot probe the controller's own ports.
             RecordGrants.grant(GrantSubjectType.USER, ApiSupport.user("reach-forge@hohenheim.local"),
-                GitProviderModel.MODEL_ID, providerId, HohenheimAccess.MANAGE, true);
+                GitProviderModel.MODEL_ID, providerId, HohenheimCapabilities.MANAGE, true);
             Throwable refused = catchThrowable(() -> GitProviders.clientFor(providerId)
                 .listRepositories());
             assertThat(refused).as("step 2: the tenant-owned provider is refused")
@@ -232,7 +232,7 @@ class GitSourceReachTest extends HohenheimTestBase {
 
             // 1. The tenant, owning the provider, sets a private base URL (a tenant-owned provider never reaches it).
             RecordGrants.grant(GrantSubjectType.USER, tenantId, GitProviderModel.MODEL_ID, providerId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             TenantConduits.as(tenant, () -> {
                 Row row = providers.findById(providerId);
                 row.set(GitProviderModel.BASE_URL, base + "/");
@@ -242,7 +242,7 @@ class GitSourceReachTest extends HohenheimTestBase {
             // 2. The grant goes and the provider is operator-owned, yet the tenant's base URL is refused before any
             //    connect: only the public internet.
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, GitProviderModel.MODEL_ID, providerId,
-                HohenheimAccess.MANAGE);
+                HohenheimCapabilities.MANAGE);
             assertThat(catchThrowable(() -> GitProviders.clientFor(providerId).listRepositories()))
                 .as("step 2: a tenant-set base URL stays public-only on an operator-owned provider")
                 .isInstanceOf(IOException.class).hasMessageContaining("refused");
@@ -279,7 +279,7 @@ class GitSourceReachTest extends HohenheimTestBase {
                     checkouts.resolve("operator").toFile()))
                 .as("step 4: the operator's local source clones").matches("[0-9a-f]{40}");
             RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, applicationId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             int delegateId = ApiSupport.user("provenance-delegate@hohenheim.local");
             GrantService.createDirectGrant(GrantSubjectType.USER, delegateId, HohenheimSources.ADMIN_ACCESS.value(),
                 true);
@@ -291,7 +291,7 @@ class GitSourceReachTest extends HohenheimTestBase {
                 instances.save(row);
             });
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, applicationId,
-                HohenheimAccess.MANAGE);
+                HohenheimCapabilities.MANAGE);
             File refusedCheckout = checkouts.resolve("unmarked").toFile();
             assertThat(catchThrowable(() -> GitCheckout.materialize(InstanceModel.MODEL_ID, applicationId, "main",
                     local, refusedCheckout)))

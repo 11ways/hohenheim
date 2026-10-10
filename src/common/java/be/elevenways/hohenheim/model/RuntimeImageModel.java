@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -46,77 +45,77 @@ public class RuntimeImageModel extends Model {
      */
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
         .required()
-        .label(HohenheimFormCopy.label("name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
         .build());
 
     public static final TextField DESCRIPTION = SCHEMA.addField(
         TextField.builder().name("description")
-            .label(HohenheimFormCopy.label("description"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("description"))
             .build());
 
     public static final StringField ICON = SCHEMA.addField(StringField.builder().name("icon")
-        .label(HohenheimFormCopy.label("icon"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("icon"))
         .build());
 
     /** The Docker image reference this runtime image builds to (local, never pulled). */
     public static final StringField DOCKER_IMAGE = SCHEMA.addField(
         StringField.builder().name("docker_image")
-            .label(HohenheimFormCopy.label("docker_image"))
-            .help(HohenheimFormCopy.help("docker_image"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("docker_image"))
+            .help(HohenheimMicrocopy.HELP.of("docker_image"))
             .build());
 
     /** The Incus image alias or fingerprint, or null while no Incus variant is published. */
     public static final StringField INCUS_IMAGE = SCHEMA.addField(
         StringField.builder().name("incus_image")
-            .label(HohenheimFormCopy.label("runtime_incus_image"))
-            .help(HohenheimFormCopy.help("runtime_incus_image"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("runtime_incus_image"))
+            .help(HohenheimMicrocopy.HELP.of("runtime_incus_image"))
             .build());
 
     /** Repository-relative directory holding this image's Dockerfile. */
     public static final StringField BUILD_CONTEXT = SCHEMA.addField(
         StringField.builder().name("build_context")
-            .label(HohenheimFormCopy.label("build_context"))
-            .help(HohenheimFormCopy.help("build_context"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("build_context"))
+            .help(HohenheimMicrocopy.HELP.of("build_context"))
             .build());
 
     /** Command started as the workload's main process; an instance may override it. */
     public static final StringField DEFAULT_COMMAND = SCHEMA.addField(
         StringField.builder().name("default_command")
-            .label(HohenheimFormCopy.label("default_command"))
-            .help(HohenheimFormCopy.help("default_command"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("default_command"))
+            .help(HohenheimMicrocopy.HELP.of("default_command"))
             .build());
 
     public static final IntegerField DEFAULT_PORT = SCHEMA.addField(
         IntegerField.builder().name("default_port")
-            .label(HohenheimFormCopy.label("default_port"))
-            .help(HohenheimFormCopy.help("default_port"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("default_port"))
+            .help(HohenheimMicrocopy.HELP.of("default_port"))
             .build());
 
     /** Build command a workspace runs inside the container; null = the image builds nothing. */
     public static final StringField DEFAULT_BUILD_COMMAND = SCHEMA.addField(
         StringField.builder().name("default_build_command")
-            .label(HohenheimFormCopy.label("default_build_command"))
-            .help(HohenheimFormCopy.help("default_build_command"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("default_build_command"))
+            .help(HohenheimMicrocopy.HELP.of("default_build_command"))
             .build());
 
     public static final StringField WORKDIR = SCHEMA.addField(
         StringField.builder().name("workdir")
-            .label(HohenheimFormCopy.label("workdir"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("workdir"))
             .build());
 
     /** Interactive shell the console and exec lanes attach with. */
     public static final StringField SHELL = SCHEMA.addField(
         StringField.builder().name("shell")
             .defaultValue("/bin/bash")
-            .label(HohenheimFormCopy.label("shell"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("shell"))
             .build());
 
     public static final EnumField UID_MODE = SCHEMA.addField(EnumField.builder("uid_mode")
         .value(UID_MAPPED, v -> v.displayName("Mapped uid").icon("user-shield")
-            .label(Microcopy.of(UID_MAPPED).withFilter("scope", "uid_mode")).color(BadgeVariant.SECONDARY))
+            .label(HohenheimMicrocopy.UID_MODE.of(UID_MAPPED)).color(BadgeVariant.SECONDARY))
         .defaultValue(UID_MAPPED)
-        .label(HohenheimFormCopy.label("uid_mode"))
-        .help(HohenheimFormCopy.help("uid_mode"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("uid_mode"))
+        .help(HohenheimMicrocopy.HELP.of("uid_mode"))
         .build());
 
     /**
@@ -125,13 +124,13 @@ public class RuntimeImageModel extends Model {
      */
     public static final BooleanField BUILTIN = SCHEMA.addField(
         BooleanField.builder("builtin").defaultValue(false)
-            .label(HohenheimFormCopy.label("builtin"))
-            .help(HohenheimFormCopy.help("builtin"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("builtin"))
+            .help(HohenheimMicrocopy.HELP.of("builtin"))
             .build());
 
     public static final BooleanField ENABLED = SCHEMA.addField(
         BooleanField.builder("enabled").defaultValue(true)
-            .label(HohenheimFormCopy.label("enabled"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("enabled"))
             .build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(

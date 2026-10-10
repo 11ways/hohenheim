@@ -1,18 +1,18 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations.Restored;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
-import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -47,9 +47,6 @@ import java.util.List;
  */
 public final class InstanceBackupParts {
 
-    /** Both twins' slug, which the per-instance Backups tab reads its hosting panel's entry by. */
-    public static final String SLUG = "instance-backups";
-
     private InstanceBackupParts() {
     }
 
@@ -67,12 +64,8 @@ public final class InstanceBackupParts {
      * surface, which also 404s its routes.
      */
     public static @NonNull PanelResource<Row> manage() {
-        return base(HohenheimIds.id("manage_instance_backup"))
-            .scope(TenantScopes.INSTANCE_BACKUPS)
-            // NAV-ONLY; reachesAny, because an id set cannot express every-record authority.
-            .hasInScopeRecords(access -> HohenheimAccess.reachesAny(access, InstanceModel.MODEL_ID,
-                HohenheimAccess.BACKUPS))
-            .tabs(ResourceTabs.<Row>none().withContributions())
+        return ManageTwin.reached(base(ManageTwin.id("instance_backup")), TenantScopes.INSTANCE_BACKUPS,
+                ResourceTabs.<Row>none().withContributions())
             .build();
     }
 
@@ -91,9 +84,9 @@ public final class InstanceBackupParts {
             .column(ColumnSpec.fromField(InstanceBackupModel.REMOTE_KEY).hidden().copyable().build())
             .column(ColumnSpec.fromField(InstanceBackupModel.CREATED_AT).build())
             .build();
-        return PanelResource.builder(id, SLUG, InstanceBackupOperations.BACKUP)
-            .label(Microcopy.of("plural").withFilter("scope", "instance_backup"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "instance_backup"))
+        return PanelResource.builder(id, HohenheimSlugs.INSTANCE_BACKUPS, InstanceBackupOperations.BACKUP)
+            .label(HohenheimMicrocopy.INSTANCE_BACKUP.of("plural"))
+            .recordLabel(HohenheimMicrocopy.INSTANCE_BACKUP.of("singular"))
             .icon(Icon.of("box-archive"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(17)
@@ -101,7 +94,7 @@ public final class InstanceBackupParts {
             .standsUnder(HohenheimSlugs.INSTANCES)
             // A backup belongs to its instance: listed in the instance's Backups tab, its record page leads back there.
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceBackupModel.INSTANCE_ID)
-                .tab(InstanceParts.BACKUPS_TAB))
+                .tab(HohenheimSlugs.Tab.BACKUPS))
             .reads(ResourceReads.rows().title(InstanceBackupParts::title))
             // A backup is immutable evidence: no create (born from the instance action or the nightly task) and no
             // update; readers view, actions act.
@@ -129,27 +122,23 @@ public final class InstanceBackupParts {
      * config files is the silent degradation the manifest inventory exists to end.
      */
     private static @NonNull PanelAction<Row> restore() {
-        Microcopy verb = Microcopy.of("restore_new").withFilter("scope", "instance_backup");
+        Microcopy verb = HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new");
         return PanelAction.<Row, Restored>places(InstanceBackupOperations.RESTORE_BACKUP, ActionPlacement.ROW,
                 (request, result) -> {
                     Restored outcome = result.value();
                     if (outcome.missing() != null) {
-                        return CmsActionResult.refreshWithToast(Microcopy.of("restored_new_partial")
-                            .withFilter("scope", "instance_backup")
+                        return CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_BACKUP
+                            .of("restored_new_partial")
                             .withArg("id", outcome.instanceId())
                             .withArg("missing", outcome.missing()));
                     }
-                    return CmsActionResult.refreshWithToast(Microcopy.of("restored_new")
-                        .withFilter("scope", "instance_backup")
+                    return CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_BACKUP.of("restored_new")
                         .withArg("id", outcome.instanceId()));
                 })
             .label(verb)
             .icon(Icon.of("clone"))
-            .confirmation(ConfirmationSpec.builder()
-                .title(verb)
-                .body(Microcopy.of("restore_new_confirm").withFilter("scope", "instance_backup"))
-                .confirmLabel(verb)
-                .build())
+            .confirmation(Confirmations.of(verb, HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new_confirm"),
+                ActionStyle.DEFAULT))
             .build();
     }
 }

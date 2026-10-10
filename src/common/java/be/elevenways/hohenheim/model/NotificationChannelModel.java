@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -29,30 +28,29 @@ public class NotificationChannelModel extends Model {
     public static final String FORMAT_GENERIC = "generic";
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
-    public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").required().build());
+    public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name").required()
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name")).build());
     public static final StringField KIND = SCHEMA.addField(StringField.builder().name("kind").build());
     public static final EnumField FORMAT = SCHEMA.addField(EnumField.builder("format")
         .required()
         .value(FORMAT_SLACK, v -> v.displayName("Slack")
-            .label(formatLabel(FORMAT_SLACK)).icon("message").color(ColorHue.PURPLE))
+            .label(HohenheimMicrocopy.NOTIFICATION_FORMAT.of(FORMAT_SLACK)).icon("message").color(ColorHue.PURPLE))
         .value(FORMAT_DISCORD, v -> v.displayName("Discord")
-            .label(formatLabel(FORMAT_DISCORD)).icon("comments").color(ColorHue.INDIGO))
+            .label(HohenheimMicrocopy.NOTIFICATION_FORMAT.of(FORMAT_DISCORD)).icon("comments").color(ColorHue.INDIGO))
         .value(FORMAT_GENERIC, v -> v.displayName("Generic JSON")
-            .label(formatLabel(FORMAT_GENERIC)).icon("code").color(ColorHue.GRAY))
+            .label(HohenheimMicrocopy.NOTIFICATION_FORMAT.of(FORMAT_GENERIC)).icon("code").color(ColorHue.GRAY))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("format"))
         .build());
-
-    /** The translation token for a webhook payload format; the key IS the stored value. */
-    private static Microcopy formatLabel(String format) {
-        return Microcopy.of(format).withFilter("scope", "notification_format");
-    }
     // The webhook URL is a bearer capability (Slack/Discord embed the token in the path).
     public static final StringField URL = SCHEMA.addField(
-        StringField.builder().name("url").secret().encrypted().required().build());
+        StringField.builder().name("url").secret().encrypted().required()
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("url")).build());
     // Subscribed event tokens; empty/null = receive every event, which the help text says
     // out loud -- an empty picker otherwise reads as "subscribed to nothing".
     public static final ListField<String> EVENTS = SCHEMA.addField(
         ListField.<String>builder(StringField.builder().name("event").build()).name("events")
-            .help(HohenheimFormCopy.help("notification_events")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("events"))
+            .help(HohenheimMicrocopy.HELP.of("notification_events")).build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
 

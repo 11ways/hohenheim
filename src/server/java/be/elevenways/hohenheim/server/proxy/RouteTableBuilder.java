@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.auth.SiteAuthDecision;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
@@ -203,8 +204,7 @@ final class RouteTableBuilder {
             return;
         }
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> settings = (Map<String, Object>) site.get(SiteModel.SETTINGS);
+        Map<String, Object> settings = RawValues.mapOrNull(site.get(SiteModel.SETTINGS));
         if (settings == null) settings = Map.of();
 
         List<Row> domains = inputs.domainsBySite().getOrDefault(siteId, List.of());

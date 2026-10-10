@@ -1,8 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.spamservice.client.ManagedClient;
@@ -39,6 +40,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -53,30 +55,29 @@ import java.util.function.Supplier;
  */
 public final class SpamserviceClientsResource {
 
-    public static final String SLUG = "spamservice-clients";
     static final Identifier ID = HohenheimIds.id("spamservice_client");
     static final SubjectType<ManagedClient> CLIENT = SubjectType.of(ID, ManagedClient.class, ManagedClient::id);
 
     private static final StringField NAME = StringField.builder("name").required()
-        .label(words("name")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("name")).build();
     private static final BooleanField ENABLED = BooleanField.builder("enabled").defaultValue(true)
-        .label(words("enabled")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("enabled")).build();
     private static final BooleanField TRUSTED = BooleanField.builder("trusted").defaultValue(false)
-        .label(words("trusted")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("trusted")).build();
     private static final BooleanField PROVISIONER = BooleanField.builder("provisioner").defaultValue(false)
-        .label(words("provisioner")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("provisioner")).build();
     private static final BooleanField MANAGER = BooleanField.builder("manager").defaultValue(false)
-        .label(words("manager")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("manager")).build();
     private static final StringField EXTERNAL_ID = StringField.builder("external_id")
-        .label(words("external_id")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("external_id")).build();
     private static final UuidField OWNER_ID = UuidField.builder("provisioned_by_client_id")
-        .label(words("owner")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("owner")).build();
     private static final StringField ALLOWED_LANGUAGES = StringField.builder("allowed_languages")
-        .label(words("allowed_languages")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("allowed_languages")).build();
     private static final IntegerField SPAM_THRESHOLD = IntegerField.builder("spam_threshold")
-        .defaultValue(50).label(words("spam_threshold")).build();
+        .defaultValue(50).label(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("spam_threshold")).build();
     private static final TextField NOTES = TextField.builder("notes")
-        .label(words("notes")).build();
+        .label(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("notes")).build();
 
     /** The fields the management API answers for one client. */
     private static final List<Field<?, ?>> FIELDS = List.of(NAME, ENABLED, TRUSTED, PROVISIONER, MANAGER, EXTERNAL_ID,
@@ -105,13 +106,13 @@ public final class SpamserviceClientsResource {
         FormSpec form = FormSpec.builder()
             .add(NAME).add(ENABLED).add(TRUSTED).add(PROVISIONER).add(MANAGER)
             .add(EXTERNAL_ID).add(OWNER_ID).add(ALLOWED_LANGUAGES).add(SPAM_THRESHOLD).add(NOTES).build();
-        return PanelResource.builder(ID, SLUG, CLIENT)
-            .label(words("plural"))
-            .recordLabel(words("singular"))
+        return PanelResource.builder(ID, HohenheimSlugs.SPAMSERVICE_CLIENTS, CLIENT)
+            .label(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("plural"))
+            .recordLabel(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("singular"))
             .navGroup(HohenheimPanel.SECURITY_GROUP)
             .navOrder(30)
             .showInNav(false)
-            .standsUnder(SpamserviceOverviewPage.SLUG)
+            .standsUnder(HohenheimSlugs.SPAMSERVICE)
             .icon(Icon.of("users"))
             .reads(ResourceReads.<ManagedClient>typed(ManagedClient::id)
                 .load((key, access) -> {
@@ -119,7 +120,6 @@ public final class SpamserviceClientsResource {
                     return id == null ? null : SpamserviceRemoteStore.require(clients).client(id.toString());
                 })
                 .values(SpamserviceClientsResource::values)
-                .cells(SpamserviceClientsResource::cell)
                 .build()
                 .title(ManagedClient::name))
             .list(ResourceList.store(table, SpamserviceRemoteStore.pages(ID, clients, FIELDS, List.of("name"),
@@ -141,12 +141,12 @@ public final class SpamserviceClientsResource {
                     .updateClient(existing.id(), input(values, existing), existing.revision()))
                 .delete((existing, access) -> SpamserviceRemoteStore.require(clients).deleteClient(existing.id()))
                 .build())
-            .tabs(ResourceTabs.of(List.of(ChildList.<ManagedClient>of(SpamserviceClientKeysResource.SLUG)
-                .label(words("keys")))))
+            .tabs(ResourceTabs.of(List.of(ChildList.<ManagedClient>of(HohenheimSlugs.SPAMSERVICE_KEYS)
+                .label(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("keys")))))
             .actions(List.of(PanelAction.<ManagedClient>link(HohenheimIds.id("spamservice_client_keys"),
                     ActionPlacement.ROW)
-                .label(words("keys"))
-                .description(words("keys_hint"))
+                .label(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("keys"))
+                .description(HohenheimMicrocopy.SPAMSERVICE_CLIENT.of("keys_hint"))
                 .icon(Icon.of("key"))
                 .route((row, request) -> keysTarget(row))
                 .build()))
@@ -155,7 +155,8 @@ public final class SpamserviceClientsResource {
 
     /** @return the client's Keys tab, the target of its row link */
     static @NonNull RouteTarget keysTarget(@NonNull ManagedClient row) {
-        return CmsRoutes.subpage(HohenheimSlugs.ADMIN, SLUG, row.id(), SpamserviceClientKeysResource.TAB);
+        return CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.SPAMSERVICE_CLIENTS, row.id(),
+            HohenheimSlugs.Tab.KEYS);
     }
 
     private static @NonNull Map<String, Object> values(@NonNull ManagedClient row) {
@@ -163,24 +164,11 @@ public final class SpamserviceClientsResource {
             Map.entry("name", row.name()), Map.entry("enabled", row.enabled()),
             Map.entry("trusted", row.trusted()), Map.entry("provisioner", row.provisioner()),
             Map.entry("manager", row.manager()), Map.entry("external_id",
-                SpamserviceRemoteStore.orBlank(row.externalId())),
+                Objects.requireNonNullElse(row.externalId(), "")),
             Map.entry("provisioned_by_client_id", SpamserviceRemoteStore.uuidOrBlank(row.provisionedByClientId())),
-            Map.entry("allowed_languages", SpamserviceRemoteStore.orBlank(row.allowedLanguages())),
+            Map.entry("allowed_languages", Objects.requireNonNullElse(row.allowedLanguages(), "")),
             Map.entry("spam_threshold", row.spamThreshold()),
-            Map.entry("notes", SpamserviceRemoteStore.orBlank(row.notes())));
-    }
-
-    private static @Nullable Object cell(@NonNull ManagedClient row, @NonNull ColumnSpec column) {
-        return switch (column.name()) {
-            case "name" -> row.name();
-            case "enabled" -> row.enabled();
-            case "trusted" -> row.trusted();
-            case "provisioner" -> row.provisioner();
-            case "manager" -> row.manager();
-            case "external_id" -> row.externalId();
-            case "spam_threshold" -> row.spamThreshold();
-            default -> null;
-        };
+            Map.entry("notes", Objects.requireNonNullElse(row.notes(), "")));
     }
 
     /**
@@ -202,7 +190,7 @@ public final class SpamserviceClientsResource {
             bool(values, "provisioner", stored == null ? null : stored.provisioner()),
             bool(values, "manager", stored == null ? null : stored.manager()),
             nullable(values, "allowed_languages", stored == null ? null : stored.allowedLanguages()),
-            integer(values, "spam_threshold", stored == null ? null : stored.spamThreshold(), 50),
+            RawValues.intOr(values.getOrDefault("spam_threshold", stored == null ? null : stored.spamThreshold()), 50),
             nullable(values, "notes", stored == null ? null : stored.notes()));
     }
 
@@ -210,16 +198,8 @@ public final class SpamserviceClientsResource {
         return Boolean.TRUE.equals(values.getOrDefault(name, stored));
     }
 
-    private static int integer(Map<String, Object> values, String name, @Nullable Object stored, int fallback) {
-        return values.getOrDefault(name, stored) instanceof Number number ? number.intValue() : fallback;
-    }
-
     private static @Nullable String nullable(Map<String, Object> values, String name, @Nullable Object stored) {
         Object value = values.getOrDefault(name, stored);
         return value == null || String.valueOf(value).isBlank() ? null : String.valueOf(value).trim();
-    }
-
-    private static @NonNull Microcopy words(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "spamservice_client");
     }
 }

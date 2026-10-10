@@ -1,11 +1,12 @@
 package be.elevenways.hohenheim.server.project;
 
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.GrantSubjects;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -28,7 +29,6 @@ import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.text.Slugs;
-import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -204,8 +204,8 @@ public final class Projects {
         if (!(ctx.principal() instanceof ApiKeyPrincipal key)) {
             return true;
         }
-        return key.coversCapability(SiteModel.MODEL_ID, HohenheimAccess.MANAGE)
-            || key.coversCapability(InstanceModel.MODEL_ID, HohenheimAccess.MANAGE);
+        return key.coversCapability(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE)
+            || key.coversCapability(InstanceModel.MODEL_ID, HohenheimCapabilities.MANAGE);
     }
 
     /**
@@ -266,7 +266,7 @@ public final class Projects {
                                    @NonNull Object recordId) {
         String subject = subjectOf(project);
         for (Row grant : RecordGrants.listForRecord(model, recordId)) {
-            if (!HohenheimAccess.MANAGE.equals(grant.get(RecordGrantModel.CAPABILITY))) {
+            if (!HohenheimCapabilities.MANAGE.equals(grant.get(RecordGrantModel.CAPABILITY))) {
                 continue;
             }
             String type = grant.get(RecordGrantModel.SUBJECT_TYPE);
@@ -285,11 +285,11 @@ public final class Projects {
                 // rather than guess what revoking it would mean.
                 continue;
             }
-            RecordGrants.revoke(subjectType, id, model, recordId, HohenheimAccess.MANAGE);
+            RecordGrants.revoke(subjectType, id, model, recordId, HohenheimCapabilities.MANAGE);
         }
         Integer groupId = project.get(ProjectModel.GROUP_ID);
         Row planted = RecordGrants.grant(GrantSubjectType.GROUP, groupId, model, recordId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         // grant() reports a refused allow by RETURNING the winning deny row rather
         // than throwing (the raced-deny contract). Adoption moved ownership above, so
         // finishing without the manage grant would strand the record with NO manage
@@ -362,7 +362,7 @@ public final class Projects {
      * per viewer through {@code ProjectRoleOwner}.
      */
     static @NonNull Microcopy managedByCopy(@NonNull String projectName) {
-        return Microcopy.of("managed_by_project").withFilter("scope", "role")
+        return HohenheimMicrocopy.ROLE.of("managed_by_project")
             .withArg("name", projectName);
     }
 
@@ -405,7 +405,7 @@ public final class Projects {
     static int ownedRecordCount(int groupId) {
         int count = 0;
         for (Row grant : RecordGrants.listForSubject(GrantSubjectType.GROUP, groupId)) {
-            if (HohenheimAccess.MANAGE.equals(grant.get(RecordGrantModel.CAPABILITY))) {
+            if (HohenheimCapabilities.MANAGE.equals(grant.get(RecordGrantModel.CAPABILITY))) {
                 count++;
             }
         }
@@ -429,9 +429,5 @@ public final class Projects {
     private static @NonNull String safeSlug(@NonNull String name) {
         String slug = Slugs.slugify(name);
         return slug.isEmpty() ? "unnamed" : slug;
-    }
-
-    static Violations refusal(String key) {
-        return Violations.ofForm(HohenheimViolations.text(key));
     }
 }

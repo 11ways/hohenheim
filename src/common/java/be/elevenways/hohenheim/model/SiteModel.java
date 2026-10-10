@@ -1,11 +1,9 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.behaviour.RevisionableBehaviour;
 import be.elevenways.zenit.common.orm.behaviour.SoftDeleteBehaviour;
@@ -36,31 +34,31 @@ public class SiteModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
-        .label(HohenheimFormCopy.label("name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
         .build());
     public static final StringField SLUG = SCHEMA.addField(StringField.builder().name("slug")
-        .label(HohenheimFormCopy.label("slug"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("slug"))
         .build());
 
     // RegistryMemberField: values come from UpstreamKinds at runtime
     public static final EnumField UPSTREAM_KIND = SCHEMA.addField(
         RegistryMemberField.builder("upstream_kind")
             .registry(UpstreamKinds.REGISTRY)
-            .label(HohenheimFormCopy.label("upstream_kind"))
-            .help(HohenheimFormCopy.help("upstream_kind"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("upstream_kind"))
+            .help(HohenheimMicrocopy.HELP.of("upstream_kind"))
             .build());
 
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled")
         .defaultValue(true)
-        .label(HohenheimFormCopy.label("enabled"))
-        .help(HohenheimFormCopy.help("enabled"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("enabled"))
+        .help(HohenheimMicrocopy.HELP.of("enabled"))
         .build());
 
     // Polymorphic settings: schema resolved dynamically from upstream_kind
     public static final SchemaField SETTINGS = SCHEMA.addField(
         SchemaField.builder("settings")
             .schemaFrom("upstream_kind")
-            .label(HohenheimFormCopy.label("settings"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("settings"))
             .build());
 
     /**
@@ -76,8 +74,8 @@ public class SiteModel extends Model {
      */
     public static final BooleanField TRUSTED_UPSTREAM = SCHEMA.addField(BooleanField.builder("trusted_upstream")
         .defaultValue(false)
-        .label(HohenheimFormCopy.label("trusted_upstream"))
-        .help(HohenheimFormCopy.help("trusted_upstream"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("trusted_upstream"))
+        .help(HohenheimMicrocopy.HELP.of("trusted_upstream"))
         .build());
 
     /**
@@ -104,25 +102,25 @@ public class SiteModel extends Model {
      */
     public static final IntegerField INSTANCE_ID = SCHEMA.addField(
         IntegerField.builder().name("instance_id")
-            .label(HohenheimFormCopy.label("instance"))
-            .help(HohenheimFormCopy.help("site_instance"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("instance"))
+            .help(HohenheimMicrocopy.HELP.of("site_instance"))
             .build());
 
     public static final StringField DESCRIPTION = SCHEMA.addField(StringField.builder().name("description")
-        .label(HohenheimFormCopy.label("description"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("description"))
         .build());
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_ACTIVE, v -> v.displayName("Active")
-            .label(Microcopy.of(STATUS_ACTIVE).withFilter("scope", "site_status"))
+            .label(HohenheimMicrocopy.SITE_STATUS.of(STATUS_ACTIVE))
             .icon("circle-check").color(BadgeVariant.SUCCESS))
         .build());
     public static final IntegerField ACCESS_LIST_ID = SCHEMA.addField(IntegerField.builder().name("access_list_id")
-        .label(HohenheimFormCopy.label("access_list"))
-        .help(HohenheimFormCopy.help("access_list"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("access_list"))
+        .help(HohenheimMicrocopy.HELP.of("access_list"))
         .build());
     public static final IntegerField AUTH_PROVIDER_ID = SCHEMA.addField(IntegerField.builder().name("auth_provider_id")
-        .label(HohenheimFormCopy.label("auth_provider"))
-        .help(HohenheimFormCopy.help("auth_provider"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("auth_provider"))
+        .help(HohenheimMicrocopy.HELP.of("auth_provider"))
         .build());
     // Raw spamservice client key for env injection into this site's managed
     // processes. AIDEV-NOTE: deliberately a dedicated column, NOT a key inside
@@ -203,7 +201,8 @@ public class SiteModel extends Model {
         SCHEMA.addBeforeRemoveHook(SiteModel::cascadeDomainRows);
         SCHEMA.addAfterSaveHook(context -> {
             Row site = context.getRow();
-            if (site == null || !UPSTREAM_TLS_PASSTHROUGH.equals(effective(site, UPSTREAM_KIND))) return;
+            if (site == null || !UPSTREAM_TLS_PASSTHROUGH.equals(
+                    site.afterWrite(UPSTREAM_KIND, StoredRows.of(Models.get(SiteModel.class), site)))) return;
             Integer id = site.get(ID);
             if (id == null) return;
             SiteDomainModel domains = Models.get(SiteDomainModel.class);
@@ -277,16 +276,19 @@ public class SiteModel extends Model {
         // A shape rule judges only a write that moves its columns: a site an older release
         // accepted in this shape stays deletable (a soft delete writes deleted_at alone).
         if (row == null || !(row.has(UPSTREAM_KIND.getName()) || row.has(INSTANCE_ID.getName()))) return;
-        Object kind = effective(row, UPSTREAM_KIND);
+        Row stored = StoredRows.of(Models.get(SiteModel.class), row);
+        Object kind = row.afterWrite(UPSTREAM_KIND, stored);
         if (kind == null) return;
         UpstreamKindInfo info = UpstreamKinds.REGISTRY.get(Identifier.tryParse(kind.toString()));
         if (info == null) return;
-        Object instanceId = effective(row, INSTANCE_ID);
+        Object instanceId = row.afterWrite(INSTANCE_ID, stored);
         if (info.requiresInstance() && instanceId == null) {
-            throw HohenheimViolations.ofField("instance_id", null, "upstream_instance_required");
+            throw Violations.ofField("instance_id", null,
+                HohenheimMicrocopy.VIOLATIONS.of("upstream_instance_required"));
         }
         if (!info.requiresInstance() && instanceId != null) {
-            throw HohenheimViolations.ofField("instance_id", instanceId, "upstream_instance_unexpected");
+            throw Violations.ofField("instance_id", instanceId,
+                HohenheimMicrocopy.VIOLATIONS.of("upstream_instance_unexpected"));
         }
     }
 
@@ -301,29 +303,25 @@ public class SiteModel extends Model {
         Row row = context.getRow();
         // Judged only when the write moves a column the rule relates, like the rule above.
         if (row == null || !(row.has(UPSTREAM_KIND.getName()) || row.has(AUTH_PROVIDER_ID.getName())
-                || row.has(ACCESS_LIST_ID.getName()))
-                || !UPSTREAM_TLS_PASSTHROUGH.equals(effective(row, UPSTREAM_KIND))) return;
-        Object authProvider = effective(row, AUTH_PROVIDER_ID);
+                || row.has(ACCESS_LIST_ID.getName()))) return;
+        Row stored = StoredRows.of(Models.get(SiteModel.class), row);
+        if (!UPSTREAM_TLS_PASSTHROUGH.equals(row.afterWrite(UPSTREAM_KIND, stored))) return;
+        Object authProvider = row.afterWrite(AUTH_PROVIDER_ID, stored);
         if (authProvider != null) {
-            throw HohenheimViolations.ofField("auth_provider_id", authProvider, "tls_passthrough_no_http_auth");
+            throw Violations.ofField("auth_provider_id", authProvider,
+                HohenheimMicrocopy.VIOLATIONS.of("tls_passthrough_no_http_auth"));
         }
-        Object accessList = effective(row, ACCESS_LIST_ID);
+        Object accessList = row.afterWrite(ACCESS_LIST_ID, stored);
         if (accessList != null) {
-            throw HohenheimViolations.ofField("access_list_id", accessList, "tls_passthrough_no_access_list");
+            throw Violations.ofField("access_list_id", accessList,
+                HohenheimMicrocopy.VIOLATIONS.of("tls_passthrough_no_access_list"));
         }
         Integer id = row.has(ID.getName()) ? row.get(ID) : null;
         if (id != null) {
             for (Row domain : Models.get(SiteDomainModel.class).findBySiteId(id)) {
-                SiteDomainModel.validateTlsPassthroughValues(domain);
+                SiteDomainModel.validateTlsPassthroughValues(domain, null);
             }
         }
-    }
-
-    private static Object effective(Row row, Field<?, ?> field) {
-        if (row.has(field.getName())) return row.get(field.getName());
-        if (!row.has(ID.getName())) return null;
-        Row stored = StoredRows.byId(Models.get(SiteModel.class), row.get(ID));
-        return stored != null ? stored.get(field.getName()) : null;
     }
 
 

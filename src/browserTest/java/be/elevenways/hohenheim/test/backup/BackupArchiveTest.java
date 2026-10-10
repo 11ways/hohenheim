@@ -2,6 +2,10 @@ package be.elevenways.hohenheim.test.backup;
 
 import be.elevenways.hohenheim.server.backup.BackupArchive;
 import be.elevenways.hohenheim.server.backup.BackupManifest;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
+import be.elevenways.hohenheim.server.instance.DockerContainerKind;
+import be.elevenways.hohenheim.server.instance.WorkspaceKind;
+import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -146,6 +150,52 @@ class BackupArchiveTest {
             .as("step 2: a newer manifest version is refused, naming what is readable")
             .isInstanceOf(IOException.class)
             .hasMessageContaining("reads versions 1 to " + BackupManifest.FORMAT_VERSION);
+    }
+
+    /** A git source restored from a manifest older than DD11h keeps the off its missing auto_deploy meant then. */
+    @Test
+    void anOlderManifestsGitSourceWithoutAutoDeployRestoresOff() throws IOException {
+        // 1. A version 3 application manifest whose source never stored the flag: it meant off, so it restores off.
+        BackupManifest legacy = withSource(BackupManifest.VERSION_AUTO_DEPLOY_ON - 1, "hohenheim:application",
+            Map.of(GitSourceSchema.REPOSITORY_URL, "https://git.example/app.git"));
+        Map<String, Object> restored = legacy.restoredSettings(ApplicationKind.SETTINGS_SCHEMA);
+        assertThat(restored.get(GitSourceSchema.AUTO_DEPLOY))
+            .as("step 1: an older manifest's absent auto_deploy restores as a stored false").isEqualTo(false);
+        assertThat(GitSourceSchema.autoDeploys(restored))
+            .as("step 1: so the restored source does not deploy on push").isFalse();
+        assertThat(restored.get(GitSourceSchema.REPOSITORY_URL))
+            .as("step 1: every other setting arrives unchanged").isEqualTo("https://git.example/app.git");
+
+        // 2. The same older manifest with a stored true keeps it: only silence is reinterpreted.
+        BackupManifest optedIn = withSource(BackupManifest.VERSION_AUTO_DEPLOY_ON - 1, "hohenheim:workspace",
+            Map.of(GitSourceSchema.AUTO_DEPLOY, true));
+        assertThat(optedIn.restoredSettings(WorkspaceKind.SETTINGS_SCHEMA).get(GitSourceSchema.AUTO_DEPLOY))
+            .as("step 2: a stored boolean is restored as it was").isEqualTo(true);
+
+        // 3. A current manifest's absent flag means today's default, so the restore leaves it absent (on).
+        BackupManifest current = withSource(BackupManifest.FORMAT_VERSION, "hohenheim:application", Map.of());
+        Map<String, Object> currentSettings = current.restoredSettings(ApplicationKind.SETTINGS_SCHEMA);
+        assertThat(currentSettings)
+            .as("step 3: a current manifest's source gains no flag").doesNotContainKey(GitSourceSchema.AUTO_DEPLOY);
+        assertThat(GitSourceSchema.autoDeploys(currentSettings))
+            .as("step 3: and deploys on push, as a new source does").isTrue();
+
+        // 4. A kind without a git source never gains the flag, whatever the manifest's age.
+        BackupManifest container = withSource(BackupManifest.VERSION_WITHOUT_PROFILE, "hohenheim:docker_container",
+            Map.of("image", "alpine"));
+        assertThat(container.restoredSettings(DockerContainerKind.SETTINGS_SCHEMA))
+            .as("step 4: a container's settings restore untouched").doesNotContainKey(GitSourceSchema.AUTO_DEPLOY);
+    }
+
+    private BackupManifest withSource(int version, String kind, Map<String, Object> settings) throws IOException {
+        Map<String, Object> map = new LinkedHashMap<>(manifest("0".repeat(64), 0).toMap());
+        map.put("version", version);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> instance = new LinkedHashMap<>((Map<String, Object>) map.get("instance"));
+        instance.put("kind", kind);
+        instance.put("settings", settings);
+        map.put("instance", instance);
+        return BackupManifest.fromMap(map);
     }
 
     @Test

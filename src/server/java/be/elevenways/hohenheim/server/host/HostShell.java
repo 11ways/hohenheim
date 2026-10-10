@@ -90,12 +90,6 @@ public interface HostShell {
         return new ProcessHostShell(null);
     }
 
-    /** @return the parent directory of an absolute host path, {@code /} for a top-level one */
-    static @NonNull String parentOf(@NonNull String path) {
-        int slash = path.lastIndexOf('/');
-        return slash <= 0 ? "/" : path.substring(0, slash);
-    }
-
     /** POSIX single-quoting: the only quoting that survives an arbitrary path. */
     static @NonNull String quote(@Nullable String value) {
         String text = value == null ? "" : value;

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.dns;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
@@ -147,7 +148,7 @@ public final class DnsZoneFiles {
         long zoneTtl = DnsZoneModel.defaultTtlOf(zone);
         int zoneId = zone.get(DnsZoneModel.ID);
         if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
-            throw Violations.ofField("zone_text", origin, importText("import_secondary_zone"));
+            throw Violations.ofField("zone_text", origin, HohenheimMicrocopy.VIOLATIONS.of("import_secondary_zone"));
         }
 
         Name originName;
@@ -194,7 +195,7 @@ public final class DnsZoneFiles {
             nameservers = DnsNameservers.declared();
             if (nameservers.isEmpty() && !fileApexNs.isEmpty()) {
                 throw Violations.ofField("zone_text", String.join(", ", fileApexNs),
-                    importText("import_nameservers_undeclared"));
+                    HohenheimMicrocopy.VIOLATIONS.of("import_nameservers_undeclared"));
             }
             for (String name : nameservers) {
                 parsed.add(DnsNameservers.apexNsRow(model, zoneId, name));
@@ -262,15 +263,10 @@ public final class DnsZoneFiles {
             }
             catch (DnsValueException refused) {
                 invalid.add(new Violation("zone_text", "zone_text", line,
-                    importText(refused.getMicrocopyKey())));
+                    HohenheimMicrocopy.VIOLATIONS.of(refused.getMicrocopyKey())));
             }
         }
         return invalid;
-    }
-
-    /** An import refusal, keyed in the violations scope so the API and the panel name it alike. */
-    private static @NonNull Microcopy importText(@NonNull String key) {
-        return HohenheimViolations.text(key);
     }
 
     private static @NonNull String rowToLine(@NonNull Name originName, int zoneTtl, @NonNull Row row) {

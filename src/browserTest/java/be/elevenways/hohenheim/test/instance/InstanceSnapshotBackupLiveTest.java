@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.test.TestDatabases;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.test.docker.TestImages;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.protoblast.common.time.Now;
@@ -21,7 +22,6 @@ import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.FilesystemBackupTarget;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
-import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceSnapshots;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
@@ -387,7 +387,7 @@ class InstanceSnapshotBackupLiveTest {
                 //    so the restore reports NOTHING unrestored -- a restore that quietly
                 //    dropped half the record and still answered with a bare id is the
                 //    whole defect.
-                long quotaBefore = InstanceQuota.usedBy(operatorBucket);
+                long quotaBefore = OwnerBudget.INSTANCES.usedBy(operatorBucket);
                 InstanceBackups.Restored outcome =
                     backups.restoreToNew(backupId, "backup-clone", null);
                 assertThat(outcome.describeLosses())
@@ -405,7 +405,7 @@ class InstanceSnapshotBackupLiveTest {
 
                 // 4. Its QUOTA reservation is its own (the restore path did not
                 //    bypass the ledger).
-                assertThat(InstanceQuota.usedBy(operatorBucket))
+                assertThat(OwnerBudget.INSTANCES.usedBy(operatorBucket))
                     .as("step 4: restore-to-new consumed one quota slot")
                     .isEqualTo(quotaBefore + 1);
 
@@ -501,7 +501,7 @@ class InstanceSnapshotBackupLiveTest {
                 bytes[bytes.length - 40] ^= 0x01;
                 run(() -> { Files.write(artifact, bytes); return null; });
                 long instancesBefore = Models.get(InstanceModel.class).find().count();
-                long quotaBeforeCorrupt = InstanceQuota.usedBy(operatorBucket);
+                long quotaBeforeCorrupt = OwnerBudget.INSTANCES.usedBy(operatorBucket);
                 long containersBefore = countContainers(docker);
                 Throwable refusal = catchThrowable(() ->
                     backups.restoreToNew(backupId, "never-born", null));
@@ -511,7 +511,7 @@ class InstanceSnapshotBackupLiveTest {
                             assertThat(violation.message().key()).isEqualTo("backup_corrupt")));
                 assertThat(Models.get(InstanceModel.class).find().count())
                     .as("step 10: no instance record was created").isEqualTo(instancesBefore);
-                assertThat(InstanceQuota.usedBy(operatorBucket))
+                assertThat(OwnerBudget.INSTANCES.usedBy(operatorBucket))
                     .as("step 10: no quota was spent").isEqualTo(quotaBeforeCorrupt);
                 assertThat(countContainers(docker))
                     .as("step 10: no container appeared at the daemon").isEqualTo(containersBefore);

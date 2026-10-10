@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.HohenheimEndpoints;
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -13,17 +13,17 @@ import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.CertificateExpiry;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationGate;
 import be.elevenways.zenit.common.operation.SubjectArity;
 import be.elevenways.zenit.common.operation.SubjectType;
-import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.server.operation.RowDeleteOperations;
 import be.elevenways.protoblast.common.time.RelativeTime;
-import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
@@ -41,7 +41,6 @@ import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.SortSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.data.RowScope;
-import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldGroup;
@@ -76,6 +75,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import static be.elevenways.hohenheim.RawValues.trimmed;
+
 /**
  * TLS certificates: manual PEM uploads plus Let's Encrypt requests (via the
  * request page linked from the header). The internal ACME account row is
@@ -96,6 +97,9 @@ public final class CertificateParts {
 
     /** The certificate list's state column. */
     static final String STATE_COLUMN = "state";
+
+    /** The names a certificate covers besides its own name: the name column's second line. */
+    static final String OTHER_NAMES_COLUMN = "other_names";
 
     private CertificateParts() {}
     /**
@@ -131,7 +135,7 @@ public final class CertificateParts {
     private static final FormSpec ADMIN_FORM = FormSpec.builder()
         // The create is the upload (board Certificates: "Get a certificate" orders one, "Upload a certificate" saves
         // your own); the header's request action stands beside it.
-        .createTitle(Microcopy.of("create_title").withFilter("scope", "certificate"))
+        .createTitle(HohenheimMicrocopy.CERTIFICATE.of("create_title"))
         .add(CertificateModel.NICE_NAME)
         .add(CertificateModel.CERTIFICATE_PEM)
         .add(CertificateModel.PRIVATE_KEY_PEM)
@@ -147,9 +151,9 @@ public final class CertificateParts {
         // AIDEV-NOTE: coverage and renewal are STATUS the ACME machinery writes, never
         // authored here, so they sit in the side column beside the name and the key
         // material an operator actually edits (and reads first on the overview).
-        .group(FieldGroup.of("coverage", Microcopy.of("coverage").withFilter("scope", "certificate"))
+        .group(FieldGroup.of("coverage", HohenheimMicrocopy.CERTIFICATE.of("coverage"))
             .inSidebar())
-        .group(FieldGroup.of("renewal", Microcopy.of("renewal_status").withFilter("scope", "certificate"))
+        .group(FieldGroup.of("renewal", HohenheimMicrocopy.CERTIFICATE.of("renewal_status"))
             .inSidebar())
         .build();
 
@@ -159,7 +163,7 @@ public final class CertificateParts {
         return StringField.builder().name(name)
             .visibleIn(EditView.EDIT, EditView.DETAIL)
             .attribute(FieldAttributes.GROUP, group)
-            .label(HohenheimFormCopy.label(labelKey))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of(labelKey))
             .build();
     }
 
@@ -167,8 +171,8 @@ public final class CertificateParts {
         // AIDEV-NOTE: eight visible columns down to six. The first pairs answer ONE
         // question in one cell -- what does it cover, why is it in this state -- while
         // every date stands alone, because a subtext line is not sortable.
-        .column(ColumnSpec.fromField(CertificateModel.NICE_NAME).filterable()
-            .subtext("domain_names_text").build())
+        .column(ColumnSpec.fromField(CertificateModel.NICE_NAME).filterable().subtext(OTHER_NAMES_COLUMN).build())
+        .column(otherNamesColumn())
         .column(ColumnSpec.fromField(CertificateModel.DOMAIN_NAMES_TEXT).filterable().hidden().build())
         .column(ColumnSpec.fromField(CertificateModel.PROVIDER).filterable().build())
         // The state in words (failing, waiting for a DNS record, works and for how long), the column an operator
@@ -208,9 +212,32 @@ public final class CertificateParts {
         .defaultSort(SortSpec.asc(CertificateModel.EXPIRES_ON.getName()))
         .build();
 
+    /** The hidden column behind the name's second line, {@link #otherNames}. */
+    private static @NonNull ColumnSpec otherNamesColumn() {
+        return ColumnSpec.virtual(OTHER_NAMES_COLUMN, HohenheimMicrocopy.CERTIFICATE.of("other_names_column")).hidden()
+            .build();
+    }
+
+    /**
+     * The names a certificate covers besides the name it is listed by, so a certificate named after its one domain
+     * does not repeat it under itself.
+     *
+     * @return the other names comma-joined, or null when it covers none
+     */
+    static @Nullable String otherNames(@NonNull Row cert) {
+        String name = cert.get(CertificateModel.NICE_NAME);
+        List<String> others = new ArrayList<>();
+        for (String covered : CertificateCoverage.namesOf(cert)) {
+            if (name == null || !covered.equalsIgnoreCase(name.trim())) {
+                others.add(covered);
+            }
+        }
+        return others.isEmpty() ? null : String.join(", ", others);
+    }
+
     /** The certificate's state column: a word and a line, {@link #stateCell}. */
     private static @NonNull ColumnSpec stateColumn() {
-        return ColumnSpec.virtual(STATE_COLUMN, Microcopy.of("state_column").withFilter("scope", "certificate"))
+        return ColumnSpec.virtual(STATE_COLUMN, HohenheimMicrocopy.CERTIFICATE.of("state_column"))
             .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build();
     }
 
@@ -220,11 +247,12 @@ public final class CertificateParts {
      * working but not loaded by the proxy, expiring inside the expiry alert's window, or that it works and until when.
      *
      * AIDEV-NOTE: THE certificate state: the Certificates list, the dashboard's Certificates tile (a state that is not
-     * SUCCESS needs a look) and the expiring item's window ({@link AcmeService#EXPIRY_ALERT_DAYS}) read it, so the
-     * list never says "Works" beside a dashboard that counts the certificate as needing a look. A renewal that failed
-     * is "failing" even while the old certificate still serves (status active with an error count): that is the one
-     * an operator must act on before it expires; its last error rides along as the cell's note. A stored active row
-     * the proxy did not load serves nobody (D11's Shop), whatever its expiry says.
+     * {@link CertificateState#WORKS} needs a look) and the expiring item's window
+     * ({@link AcmeService#EXPIRY_ALERT_DAYS}) read it, so the list never says "Works" beside a dashboard that counts
+     * the certificate as needing a look. A renewal that failed is "failing" even while the old certificate still serves
+     * (status active with an error count): that is the one an operator must act on before it expires; its last error
+     * rides along as the cell's note. A stored active row the proxy did not load serves nobody (D11's Shop), whatever
+     * its expiry says.
      */
     static @NonNull StateLineCell stateCell(@NonNull Row cert) {
         return stateCell(cert, CertificateCoverage.loaded(cert));
@@ -239,51 +267,42 @@ public final class CertificateParts {
         Long days = expires == null ? null : CertificateExpiry.daysLeft(expires);
         if (CertificateModel.STATUS_ERROR.equals(status) || errors > 0) {
             Microcopy detail = days == null
-                ? Microcopy.of("state_failing_unissued").withFilter("scope", "certificate")
+                ? HohenheimMicrocopy.CERTIFICATE.of("state_failing_unissued")
                     .withArg("count", Math.max(errors, 1))
-                : Microcopy.of("state_failing_detail").withFilter("scope", "certificate")
+                : HohenheimMicrocopy.CERTIFICATE.of("state_failing_detail")
                     .withArg("count", Math.max(errors, 1)).withArg("expiry", CertificateExpiry.inSentence(expires));
             String error = cert.get(CertificateModel.RENEWAL_ERROR);
-            return new StateLineCell("renewal_failing", BadgeVariant.DESTRUCTIVE,
-                Microcopy.of("state_failing").withFilter("scope", "certificate"), detail,
-                error == null || error.isBlank() ? null : error);
+            return StateLineCell.of(CertificateState.RENEWAL_FAILING, detail)
+                .withNote(error == null || error.isBlank() ? null : Microcopy.literal(error));
         }
         if (CertificateModel.STATUS_PENDING.equals(status)) {
             boolean manualDns = CertificateModel.CHALLENGE_DNS.equals(cert.get(CertificateModel.CHALLENGE_TYPE))
                 && CertificateModel.DNS_PUBLISHER_MANUAL.equals(cert.get(CertificateModel.DNS_PUBLISHER));
             return manualDns
-                ? new StateLineCell("waiting_dns", BadgeVariant.WARNING,
-                    Microcopy.of("state_waiting_dns").withFilter("scope", "certificate"),
-                    Microcopy.of("state_waiting_dns_detail").withFilter("scope", "certificate"), null)
-                : new StateLineCell("issuing", BadgeVariant.WARNING,
-                    Microcopy.of("state_issuing").withFilter("scope", "certificate"),
-                    Microcopy.of("state_issuing_detail").withFilter("scope", "certificate"), null);
+                ? StateLineCell.of(CertificateState.WAITING_DNS,
+                    HohenheimMicrocopy.CERTIFICATE.of("state_waiting_dns_detail"))
+                : StateLineCell.of(CertificateState.ISSUING, HohenheimMicrocopy.CERTIFICATE.of("state_issuing_detail"));
         }
         if (days != null && days < 0) {
-            return new StateLineCell("expired", BadgeVariant.DESTRUCTIVE,
-                Microcopy.of("state_expired").withFilter("scope", "certificate"), CertificateExpiry.of(expires), null);
+            return StateLineCell.of(CertificateState.EXPIRED, CertificateExpiry.of(expires));
         }
         if (!loaded) {
-            return new StateLineCell("not_loaded", BadgeVariant.DESTRUCTIVE,
-                Microcopy.of("state_not_loaded").withFilter("scope", "certificate"),
-                Microcopy.of("state_not_loaded_detail").withFilter("scope", "certificate"), null);
+            return StateLineCell.of(CertificateState.NOT_LOADED,
+                HohenheimMicrocopy.CERTIFICATE.of("state_not_loaded_detail"));
         }
         boolean renews = Boolean.TRUE.equals(cert.get(CertificateModel.AUTO_RENEW))
             && CertificateModel.PROVIDER_LETSENCRYPT.equals(cert.get(CertificateModel.PROVIDER));
         if (days != null && days <= AcmeService.EXPIRY_ALERT_DAYS) {
-            return new StateLineCell("expiring", BadgeVariant.WARNING,
-                Microcopy.of("state_expiring").withFilter("scope", "certificate"),
-                Microcopy.of(renews ? "state_expiring_renews_detail" : "state_expiring_upload_detail")
-                    .withFilter("scope", "certificate").withArg("expiry", CertificateExpiry.inSentence(expires)),
-                null);
+            return StateLineCell.of(CertificateState.EXPIRING, HohenheimMicrocopy.CERTIFICATE
+                .of(renews ? "state_expiring_renews_detail" : "state_expiring_upload_detail")
+                .withArg("expiry", CertificateExpiry.inSentence(expires)));
         }
         Microcopy valid = days == null ? null
             : renews
-                ? Microcopy.of("state_renews_detail").withFilter("scope", "certificate")
+                ? HohenheimMicrocopy.CERTIFICATE.of("state_renews_detail")
                     .withArg("expiry", CertificateExpiry.inSentence(expires))
                 : CertificateExpiry.of(expires);
-        return new StateLineCell("works", BadgeVariant.SUCCESS,
-            Microcopy.of("state_works").withFilter("scope", "certificate"), valid, null);
+        return StateLineCell.of(CertificateState.WORKS, valid);
     }
 
     /**
@@ -297,12 +316,7 @@ public final class CertificateParts {
 
     /** Full installation surface: PEM authoring, read-first overview, and the canonical delete. */
     public static @NonNull PanelResource<Row> admin() {
-        return PanelResource.builder(HohenheimIds.id("certificate"), HohenheimSlugs.CERTIFICATES,
-                SubjectType.record(CertificateModel.MODEL_ID))
-            .label(Microcopy.of("plural").withFilter("scope", "certificate"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "certificate"))
-            .description(Microcopy.of("nav_hint").withFilter("scope", "certificate"))
-            .icon(Icon.of("certificate")).navGroup(HohenheimPanel.NETWORK_GROUP).navOrder(20)
+        return entry(HohenheimIds.id("certificate"))
             .scope(ROWS)
             .reads(ResourceReads.rows().mapCells(CertificateParts::namesCell)
                 .mapValues(Set.of(COVERED_NAMES_DISPLAY.getName(), DNS_RECORDS_DISPLAY.getName(),
@@ -312,6 +326,8 @@ public final class CertificateParts {
             .list(ResourceList.rows(ADMIN_TABLE).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()
                 .search(CertificateModel.NICE_NAME, CertificateModel.DOMAIN_NAMES_TEXT)
                 .computed(Objects.requireNonNull(ADMIN_TABLE.column(STATE_COLUMN)), (row, request) -> stateCell(row))
+                .computed(Objects.requireNonNull(ADMIN_TABLE.column(OTHER_NAMES_COLUMN)),
+                    (row, request) -> otherNames(row))
                 .build())
             .form(ResourceForm.<Row>of(ADMIN_FORM).bindings(fieldBindings()).wideRecordPages()
                 .landingTab(RecordOverview.SLUG).build())
@@ -334,32 +350,39 @@ public final class CertificateParts {
             bindings.add(ResourceFieldBinding.of(entry.name(), FieldAccess.alwaysReadonly()));
         }
         TableSpec<Row> table = TableSpec.<Row>builder()
-            .column(ColumnSpec.fromField(CertificateModel.NICE_NAME).subtext("domain_names_text").build())
+            .column(ColumnSpec.fromField(CertificateModel.NICE_NAME).subtext(OTHER_NAMES_COLUMN).build())
+            .column(otherNamesColumn())
             .column(ColumnSpec.fromField(CertificateModel.DOMAIN_NAMES_TEXT).hidden().build())
             .column(stateColumn())
             .column(ColumnSpec.fromField(CertificateModel.STATUS).hidden().build())
             .column(ColumnSpec.fromField(CertificateModel.RENEWAL_ERROR).hidden().build())
             .column(ColumnSpec.fromField(CertificateModel.EXPIRES_ON).build())
             .defaultSort(SortSpec.desc(CertificateModel.EXPIRES_ON.getName())).build();
-        return PanelResource.builder(HohenheimIds.id("manage_certificate"), HohenheimSlugs.CERTIFICATES,
-                SubjectType.record(CertificateModel.MODEL_ID))
-            .label(Microcopy.of("plural").withFilter("scope", "certificate"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "certificate"))
-            .description(Microcopy.of("nav_hint").withFilter("scope", "certificate"))
-            .icon(Icon.of("certificate")).navGroup(HohenheimPanel.NETWORK_GROUP).navOrder(20)
-            .scope(TenantScopes.CERTIFICATES).reads(ResourceReads.rows().mapCells(CertificateParts::namesCell))
+        // A Domains cluster member: certificates are readable to any signed-in tenant.
+        return ManageTwin.listed(entry(ManageTwin.id("certificate")), TenantScopes.CERTIFICATES, ResourceTabs.none(),
+                access -> HohenheimAccess.isAdmin(access) || access.principalId() != null
+                    || HohenheimAccess.reachesAny(access, CertificateModel.MODEL_ID, HohenheimCapabilities.VIEW))
+            .reads(ResourceReads.rows().mapCells(CertificateParts::namesCell))
             .list(ResourceList.rows(table).chrome(CmsSupport.WIDE_LIST).facets().ruleFilters()
                 .search(CertificateModel.NICE_NAME, CertificateModel.DOMAIN_NAMES_TEXT)
                 .computed(Objects.requireNonNull(table.column(STATE_COLUMN)), (row, request) -> stateCell(row))
+                .computed(Objects.requireNonNull(table.column(OTHER_NAMES_COLUMN)), (row, request) -> otherNames(row))
                 .build())
-            .hasInScopeRecords(access -> HohenheimAccess.isAdmin(access) || access.principalId() != null
-                || HohenheimAccess.reachesAny(access, CertificateModel.MODEL_ID, HohenheimAccess.VIEW))
             .form(ResourceForm.<Row>of(form).bindings(bindings).wideRecordPages().build())
-            .tabs(ResourceTabs.<Row>none()).build();
+            .build();
+    }
+
+    /** The identity and nav placement both twins share. */
+    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
+        return PanelResource.builder(id, HohenheimSlugs.CERTIFICATES, SubjectType.record(CertificateModel.MODEL_ID))
+            .label(HohenheimMicrocopy.CERTIFICATE.of("plural"))
+            .recordLabel(HohenheimMicrocopy.CERTIFICATE.of("singular"))
+            .description(HohenheimMicrocopy.CERTIFICATE.of("nav_hint"))
+            .icon(Icon.of("certificate")).navGroup(HohenheimPanel.NETWORK_GROUP).navOrder(20);
     }
 
     private static @NonNull ConfirmationSpec deleteConfirmation() {
-        return DeleteConfirmation.body(Microcopy.of("delete_confirm").withFilter("scope", "certificate"));
+        return DeleteConfirmation.body(HohenheimMicrocopy.CERTIFICATE.of("delete_confirm"));
     }
 
     /** The same warning NAMING the domains this certificate secures before its key is gone. */
@@ -368,7 +391,7 @@ public final class CertificateParts {
         if (domains.isEmpty()) {
             return deleteConfirmation();
         }
-        return DeleteConfirmation.body(Microcopy.of("delete_confirm_domains").withFilter("scope", "certificate")
+        return DeleteConfirmation.body(HohenheimMicrocopy.CERTIFICATE.of("delete_confirm_domains")
             .withArg("name", String.valueOf((Object) record.get(CertificateModel.NICE_NAME)))
             .withArg("domains", domains));
     }
@@ -447,7 +470,7 @@ public final class CertificateParts {
             return absent;
         }
         return WALL_CLOCK.format(instant.atZone(viewerZone()))
-            + " (" + RelativeTime.ago(instant, wording()) + ")";
+            + " (" + RelativeTime.ago(instant, CmsSupport.timeWording(RouteScope.currentConduit())) + ")";
     }
 
     /** The viewer's own zone, falling back to UTC when no request or cookie says otherwise. */
@@ -459,20 +482,13 @@ public final class CertificateParts {
         }
     }
 
-    /** Request-locale relative-time wording; null falls back to the English defaults. */
-    private static @Nullable RelativeTimeWording wording() {
-        Conduit conduit = RouteScope.currentConduit();
-        return conduit == null ? null
-            : RelativeTimeWording.resolve(conduit.getLocales(), conduit.getMessageResolver());
-    }
-
     private static @NonNull String orNone(@Nullable Object value) {
-        String text = value == null ? "" : String.valueOf(value).trim();
+        String text = trimmed(value);
         return text.isEmpty() ? copy("value_none") : text;
     }
 
     private static @NonNull String copy(@NonNull String key) {
-        return CmsSupport.resolvedTextOrDefault(Microcopy.of(key).withFilter("scope", "certificate"));
+        return CmsSupport.resolvedTextOrDefault(HohenheimMicrocopy.CERTIFICATE.of(key));
     }
 
     /** An uploaded certificate: refused unless its certificate and key both parse; reachable from tests. */
@@ -536,7 +552,7 @@ public final class CertificateParts {
         String keyPem = CmsSupport.textOf(coerced, existing, CertificateModel.PRIVATE_KEY_PEM);
         String name = CmsSupport.textOf(coerced, existing, CertificateModel.NICE_NAME);
         if (name.isEmpty() || certPem.isEmpty() || keyPem.isEmpty()) {
-            throw Violations.ofForm(CmsSupport.violationText("cert_fields_required"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("cert_fields_required"));
         }
         X509Certificate leaf;
         try {
@@ -545,13 +561,13 @@ public final class CertificateParts {
             leaf = certificates.isEmpty() ? null : (X509Certificate) certificates.iterator().next();
         } catch (Exception e) {
             throw Violations.ofField("certificate_pem", null,
-                CmsSupport.violationText("cert_pem_invalid").withArg("detail", e.getMessage()));
+                HohenheimMicrocopy.VIOLATIONS.of("cert_pem_invalid").withArg("detail", e.getMessage()));
         }
         try {
             new PEMParser(new StringReader(keyPem)).readObject();
         } catch (Exception e) {
             throw Violations.ofField("private_key_pem", null,
-                CmsSupport.violationText("key_pem_invalid").withArg("detail", e.getMessage()));
+                HohenheimMicrocopy.VIOLATIONS.of("key_pem_invalid").withArg("detail", e.getMessage()));
         }
         return leaf;
     }
@@ -560,7 +576,7 @@ public final class CertificateParts {
     private static @NonNull List<PanelAction<Row>> actions() {
         List<PanelAction<Row>> actions = new ArrayList<>();
         actions.add(PanelAction.<Row>link(HohenheimIds.id("download_certificate"), ActionPlacement.ROW)
-            .label(Microcopy.of("download").withFilter("scope", "certificate"))
+            .label(HohenheimMicrocopy.CERTIFICATE.of("download"))
             .icon(Icon.of("download"))
             .route((row, request) -> HohenheimEndpoints.CERTIFICATES_DOWNLOAD
                 .with(HohenheimEndpoints.CERT_ID, row.get(CertificateModel.ID)))

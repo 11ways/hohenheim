@@ -45,12 +45,13 @@ public final class GitPickerFormEntries {
             .build());
 
         registry.register(GitRepositoryField.class, field -> ProviderPick.of(field)
-            .providerFromSiblings(new GitRepositoryResolver(), "provider_id")
+            .providerFromSiblings(new GitRepositoryResolver(), GitSourceSchema.PROVIDER_ID)
             .freeText()
             .build());
 
         registry.register(GitBranchField.class, field -> ProviderPick.of(field)
-            .providerFromSiblings(new GitBranchResolver(), "provider_id", "repository")
+            .providerFromSiblings(new GitBranchResolver(), GitSourceSchema.PROVIDER_ID,
+                GitSourceSchema.REPOSITORY)
             .freeText()
             .build());
 

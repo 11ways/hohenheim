@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimChannels;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.InstanceStatsHandler;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -81,7 +81,7 @@ class InstanceStatsRefusalTest extends HohenheimTestBase {
                     .as("step 0: which neither a wait nor a sign-in lifts").isEqualTo(DomainRefusal.Recovery.NEVER);
             }
             RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID,
-                instanceId, HohenheimAccess.VIEW, true);
+                instanceId, HohenheimCapabilities.VIEW, true);
 
             // 1. A tenant holding VIEW is admitted, and its refusal is the bare sentence.
             Throwable tenantRefusal = catchThrowable(() ->

@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.devtunnel.DevTunnelServerHandler;
@@ -61,8 +63,8 @@ final class SiteControlHandlers {
             // InstanceService.deploy knows which verb the record's kind wants.
             report(conduit, settleWithin(SETTLE_WINDOW, "deploy of instance " + instanceId, () ->
                     new InstanceService().deploy(instanceId, DeployTrigger.MANUAL)),
-                deploymentsCopy("deploy_done"), deploymentsCopy("deploy_running"),
-                deploymentsCopy("deploy_failed"));
+                HohenheimMicrocopy.DEPLOYMENTS.of("deploy_done"), HohenheimMicrocopy.DEPLOYMENTS.of("deploy_running"),
+                HohenheimMicrocopy.DEPLOYMENTS.of("deploy_failed"));
             return HandlerSupport.redirectUntyped(deploymentsPageUrl(conduit, instanceId));
         });
 
@@ -76,8 +78,9 @@ final class SiteControlHandlers {
             }
             report(conduit, settleWithin(SETTLE_WINDOW, "rollback of instance " + instanceId,
                     () -> ReleaseEngine.rollback(instanceId)),
-                deploymentsCopy("rollback_done"), deploymentsCopy("rollback_running"),
-                deploymentsCopy("rollback_failed"));
+                HohenheimMicrocopy.DEPLOYMENTS.of("rollback_done"),
+                    HohenheimMicrocopy.DEPLOYMENTS.of("rollback_running"),
+                HohenheimMicrocopy.DEPLOYMENTS.of("rollback_failed"));
             return HandlerSupport.redirectUntyped(deploymentsPageUrl(conduit, instanceId));
         });
     }
@@ -162,11 +165,6 @@ final class SiteControlHandlers {
         }
     }
 
-    /** One Deploys-tab outcome sentence. */
-    private static @NonNull Microcopy deploymentsCopy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "deployments");
-    }
-
     static void initInstanceConsole() {
         HohenheimEndpoints.INSTANCE_CONSOLE.setHandlerFactory(session ->
             new InstanceConsoleHandler(session,
@@ -193,7 +191,7 @@ final class SiteControlHandlers {
      */
     private static String deploymentsPageUrl(Conduit conduit, Integer instanceId) {
         return ReturnPath.pathOr(ReturnTarget.readPath(conduit),
-            CmsRoutes.subpage(HandlerSupport.ADMIN, HohenheimSlugs.INSTANCES, instanceId,
+            CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES, instanceId,
                 "deployments").toUrl());
     }
 
@@ -201,7 +199,7 @@ final class SiteControlHandlers {
     private static boolean refusedInstancePower(Conduit conduit, Integer instanceId) {
         if (instanceId != null && HohenheimAccess.hasInstanceCapability(
                 RecordSourceGate.accessContextOf(conduit), instanceId,
-                HohenheimAccess.POWER)) {
+                HohenheimCapabilities.POWER)) {
             return false;
         }
         conduit.forbidden();

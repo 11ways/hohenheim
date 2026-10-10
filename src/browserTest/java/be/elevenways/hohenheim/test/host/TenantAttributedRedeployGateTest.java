@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test.host;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostPreflight;
@@ -61,7 +61,7 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
         int siteId = site();
         int tenantId = ApiSupport.user("redeploy-tenant@hohenheim.local");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         int instanceId = releaseContainer(siteId, hostId);
 
         assertThat(Models.get(InstanceModel.class).findById(instanceId)
@@ -118,7 +118,7 @@ class TenantAttributedRedeployGateTest extends HohenheimTestBase {
         //    passes the gate goes on to real daemon work, which this lane must not do.
         //    Steps 3 and 4 already prove the condition is what deploy branches on.
         RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
-            HohenheimAccess.MANAGE);
+            HohenheimCapabilities.MANAGE);
         assertThat(OwnedInstances.isTenantAttributed(
                 Models.get(InstanceModel.class).findById(instanceId)))
             .as("step 5: with no manage grant above it the workload is operator-owned")

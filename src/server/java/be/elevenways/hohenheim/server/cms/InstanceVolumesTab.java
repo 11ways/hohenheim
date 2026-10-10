@@ -1,10 +1,13 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
@@ -37,16 +40,14 @@ import java.util.Map;
  */
 public final class InstanceVolumesTab implements RecordTab.Rendered<Row> {
 
-    public static final String SLUG = "volumes";
-
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_volumes"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_volume"); }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE_VOLUME.of("plural"); }
     /**
      * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
      * menu so the visible strip stays the handful of tabs an operator opens daily.
      */
     @Override public boolean secondaryTab() { return true; }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.VOLUMES; }
     @Override public @NonNull Icon icon() { return Icon.of("database"); }
 
     /**
@@ -89,20 +90,20 @@ public final class InstanceVolumesTab implements RecordTab.Rendered<Row> {
                 Boolean.TRUE.equals(volume.get(InstanceVolumeModel.EXCLUSIVE)));
             Object observedAt = volume.get(InstanceVolumeModel.OBSERVED_AT);
             entry.put("observedAtIso", observedAt != null ? observedAt.toString() : "");
-            entry.put("editTarget", CmsRoutes.detail(panel, VolumeParts.SLUG,
+            entry.put("editTarget", CmsRoutes.detail(panel, HohenheimSlugs.INSTANCE_VOLUMES,
                 volume.get(InstanceVolumeModel.ID)));
             volumes.add(entry);
         }
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", CmsSupport.pageTitle(conduit, "instance_volume",
+        vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.INSTANCE_VOLUME,
             instance.get(InstanceModel.NAME)));
         vars.put("instanceId", instanceId);
         vars.put("instanceName", instance.get(InstanceModel.NAME));
         vars.put("volumes", volumes);
         boolean canEdit = HohenheimAccess.isAdmin(accessContext)
             || HohenheimAccess.hasInstanceCapability(
-                accessContext, instanceId, HohenheimAccess.CONFIG);
+                accessContext, instanceId, HohenheimCapabilities.CONFIG);
         // Gated on the SAME boolean the template's {% if %} uses: a declared template
         // variable is serialized into the hydration payload whether or not any element
         // renders it (the InstanceDevicesPage lesson).
@@ -116,7 +117,7 @@ public final class InstanceVolumesTab implements RecordTab.Rendered<Row> {
                                                         @NonNull Integer instanceId) {
         return CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, VolumeParts.SLUG)
+            .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.INSTANCE_VOLUMES)
             .with(HohenheimParams.INSTANCE_ID_PREFILL, instanceId);
     }
 }

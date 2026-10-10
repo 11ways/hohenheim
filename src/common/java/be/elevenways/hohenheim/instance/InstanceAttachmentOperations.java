@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
@@ -35,7 +35,7 @@ public final class InstanceAttachmentOperations {
     public static final Operation<Row, Void, Integer> DETACH_DEVICE =
         Operation.declare(HohenheimIds.id("detach_device"))
             .happened(OperationSentences.of("detach_device"))
-            .label(Microcopy.of("delete").withFilter("scope", "cms"))
+            .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(DEVICE)
             .gate(OperationGate.open())
@@ -48,7 +48,7 @@ public final class InstanceAttachmentOperations {
     public static final Operation<Row, Void, Integer> DELETE_DATABASE_LINK =
         Operation.declare(HohenheimIds.id("delete_instance_database"))
             .happened(OperationSentences.of("delete_instance_database"))
-            .label(Microcopy.of("delete").withFilter("scope", "cms"))
+            .label(CmsMicrocopy.of("delete"))
             .icon(Icon.TRASH)
             .one(DATABASE_LINK)
             .gate(OperationGate.open())

@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.orm.RecordStamp;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
@@ -115,17 +116,15 @@ public final class DnsClaimReleases {
         // values, because a CMS update stages only the changed columns.
         SiteDomainModel.SCHEMA.addBeforeWriteHook(context -> {
             Row row = context.getRow();
-            if (row == null || !row.has(SiteDomainModel.ID.getName())
-                    || row.get(SiteDomainModel.ID) == null) {
+            if (row == null) {
                 return;
             }
-            Row stored = Models.get(SiteDomainModel.class)
-                .findById(row.get(SiteDomainModel.ID));
+            Row stored = StoredRows.of(Models.get(SiteDomainModel.class), row);
             if (stored == null) {
                 return;
             }
             String storedHostname = stored.get(SiteDomainModel.HOSTNAME);
-            Object nextHostname = SiteDomainModel.effective(row, SiteDomainModel.HOSTNAME);
+            Object nextHostname = row.afterWrite(SiteDomainModel.HOSTNAME, stored);
             if (storedHostname == null || Objects.equals(
                     BlastString.lower(storedHostname),
                     BlastString.lower(nextHostname != null ? String.valueOf(nextHostname) : null))) {

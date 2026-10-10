@@ -1,12 +1,12 @@
 package be.elevenways.hohenheim.game;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.GameDomainModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.operation.Operation;
@@ -67,7 +67,7 @@ public final class GameDomainOperations {
     public static final Operation<Void, MappingForm, Integer> CREATE =
         Operation.declare(HohenheimIds.id("create_game_domain"))
             .happened(OperationSentences.of("create_game_domain"))
-            .label(words("create"))
+            .label(HohenheimMicrocopy.GAME_DOMAIN.of("create"))
             .noSubject()
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .input(INPUT)
@@ -78,7 +78,7 @@ public final class GameDomainOperations {
     public static final Operation<Row, MappingForm, Void> UPDATE =
         Operation.declare(HohenheimIds.id("update_game_domain"))
             .happened(OperationSentences.of("update_game_domain"))
-            .label(words("save"))
+            .label(HohenheimMicrocopy.GAME_DOMAIN.of("save"))
             .one(MAPPING)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .input(INPUT)
@@ -88,16 +88,12 @@ public final class GameDomainOperations {
     public static final Operation<Row, Void, Void> DELETE =
         Operation.declare(HohenheimIds.id("delete_game_domain"))
             .happened(OperationSentences.of("delete_game_domain"))
-            .label(words("delete"))
+            .label(HohenheimMicrocopy.GAME_DOMAIN.of("delete"))
             .one(MAPPING)
             .gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))
             .command(COMMAND)
             .register();
 
     private GameDomainOperations() {
-    }
-
-    private static Microcopy words(String key) {
-        return Microcopy.of(key).withFilter("scope", "game_domain");
     }
 }

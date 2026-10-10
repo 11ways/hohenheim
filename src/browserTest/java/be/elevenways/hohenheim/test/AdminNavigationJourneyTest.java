@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -7,9 +9,6 @@ import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.cms.AppParts;
-import be.elevenways.hohenheim.server.cms.HohenheimPanel;
-import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -51,17 +50,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AdminNavigationJourneyTest extends HohenheimTestBase {
 
     /** The sidebar, in the order it renders: one unlabelled block. */
-    private static final List<String> EXPECTED_SIDEBAR = List.of("dashboard", AppParts.SLUG, "databases", "servers",
-        HohenheimPanel.DOMAINS_CLUSTER, HohenheimPanel.ACCESS_CLUSTER, HohenheimPanel.ACTIVITY_CLUSTER,
-        HohenheimPanel.SETTINGS_CLUSTER);
+    private static final List<String> EXPECTED_SIDEBAR = List.of("dashboard", HohenheimSlugs.APPS, "databases",
+        "servers",
+        HohenheimSlugs.Cluster.DOMAIN_NAMES, HohenheimSlugs.Cluster.ACCESS, HohenheimSlugs.Cluster.LOG,
+        HohenheimSlugs.Cluster.CONFIGURE);
 
     /** Each cluster's members, in the order its tabs show them. */
     private static final Map<String, List<String>> EXPECTED_CLUSTERS = Map.of(
-        HohenheimPanel.DOMAINS_CLUSTER, List.of("domains", "certificates", "dns-zones", "released-claims"),
+        HohenheimSlugs.Cluster.DOMAIN_NAMES, List.of("domains", "certificates", "dns-zones", "released-claims"),
         // Roles stay a member (their pages stand under Access) but no tab: zenit-auth's People list reaches them.
-        HohenheimPanel.ACCESS_CLUSTER, List.of("access-lists", "bans", "users", "auth-providers", "spamservice"),
-        HohenheimPanel.ACTIVITY_CLUSTER, List.of("activity", "inbox", "deliveries"),
-        HohenheimPanel.SETTINGS_CLUSTER, List.of("settings", "instance-templates", "runtime-images", "git-providers",
+        HohenheimSlugs.Cluster.ACCESS, List.of("access-lists", "bans", "users", "auth-providers", "spamservice"),
+        HohenheimSlugs.Cluster.LOG, List.of("activity", "inbox", "deliveries"),
+        HohenheimSlugs.Cluster.CONFIGURE, List.of("settings", "instance-templates", "runtime-images", "git-providers",
             "database-engines", "notifications", "backup-targets", "task-schedules", "task-runs", "build-info"));
 
     /**
@@ -200,7 +200,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
 
         // 7. The delegated panel keeps its own nav: unique orders, a description per entry, the tenant's Apps list,
         //    and NONE of the operator-only header links the shared resource superclasses declare.
-        Panel manage = PanelRegistry.getBySlug(ManagePanel.SLUG);
+        Panel manage = PanelRegistry.getBySlug(HohenheimSlugs.MANAGE);
         assertThat(manage).as("step 7: the manage panel is registered").isNotNull();
         List<String> manageSlugs = new ArrayList<>();
         for (PanelNav.Section section : PanelNav.sections(manage, operator)) {
@@ -215,7 +215,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
                     .isTrue();
             }
         }
-        assertThat(manageSlugs).as("step 7: the delegated panel lists the tenant's apps").contains(AppParts.SLUG);
+        assertThat(manageSlugs).as("step 7: the delegated panel lists the tenant's apps").contains(HohenheimSlugs.APPS);
         assertThat(adminGet("/manage/sites").body())
             .as("step 7: the delegated Sites list offers no /admin sibling links")
             .doesNotContain("/admin/auth-providers")
@@ -227,11 +227,11 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
             PanelEntry hidden = admin.entryBySlug(slug);
             assertThat(hidden).as("step 8: '" + slug + "' is registered").isNotNull();
             assertThat(PanelNav.sidebarEntryOf(admin, hidden).slug())
-                .as("step 8: a page of '" + slug + "' marks Apps in the sidebar").isEqualTo(AppParts.SLUG);
+                .as("step 8: a page of '" + slug + "' marks Apps in the sidebar").isEqualTo(HohenheimSlugs.APPS);
         }
         for (String slug : List.of("sites", "instances")) {
             assertThat(PanelNav.sidebarEntryOf(manage, manage.entryBySlug(slug)).slug())
-                .as("step 8: a tenant's page of '" + slug + "' marks their Apps").isEqualTo(AppParts.SLUG);
+                .as("step 8: a tenant's page of '" + slug + "' marks their Apps").isEqualTo(HohenheimSlugs.APPS);
         }
 
         // 9. A person opens on what they can manage (zenit-auth's "Can manage" tab, slug reach), before their
@@ -267,7 +267,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
             }
         }
         assertThat(unworded).as("step 10: every capability has its holder and sentence spelling").isEmpty();
-        assertThat(Microcopy.of("manage").withFilter("scope", "capability").withFilter("context", "holder")
+        assertThat(HohenheimMicrocopy.CAPABILITY.of("manage").withFilter("context", "holder")
             .tryResolve(LocaleChain.ofTags("en"), MessageResolvers.getDefault()))
             .as("step 10: who manages a record is its tenant (board Access-People)").isEqualTo("Tenant");
         KnownCapability siteManage = KnownCapabilities.forModel(SiteModel.MODEL_ID).get(0);
@@ -292,9 +292,9 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
 
         // 12. A hidden entry's page title ends with the sidebar row it stands under, never its own list's name.
         Map<String, String> titledUnder = Map.of(
-            "instance-quotas", AppParts.SLUG,
-            "dns-peers", HohenheimPanel.DOMAINS_CLUSTER,
-            "spamservice-clients", HohenheimPanel.ACCESS_CLUSTER,
+            "instance-quotas", HohenheimSlugs.APPS,
+            "dns-peers", HohenheimSlugs.Cluster.DOMAIN_NAMES,
+            "spamservice-clients", HohenheimSlugs.Cluster.ACCESS,
             "reconcile-findings", "servers");
         for (Map.Entry<String, String> expected : titledUnder.entrySet()) {
             String sidebarLabel = admin.entryBySlug(expected.getValue()).label()

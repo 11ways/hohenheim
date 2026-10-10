@@ -4,8 +4,8 @@ verb CREATE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
 column schedule_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column step_order at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column action at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext=offset_seconds relation=false
-column offset_seconds at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column action at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext=offset relation=false
+column offset at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column failure_policy at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 tab history at=0 landing=false view=false
 control CREATE%20schedule_id at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
@@ -30,8 +30,8 @@ verb DELETE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
 column schedule_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column step_order at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column action at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext=offset_seconds relation=false
-column offset_seconds at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column action at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext=offset relation=false
+column offset at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column failure_policy at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete
@@ -61,8 +61,8 @@ verb CREATE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
 column schedule_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column step_order at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column action at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext=offset_seconds relation=false
-column offset_seconds at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column action at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext=offset relation=false
+column offset at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column failure_policy at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 tab history at=0 landing=false view=false
 control CREATE%20schedule_id at=0 kind=zenitforms:control/number input=number required=false readonly=false options= binding=
@@ -84,8 +84,8 @@ verb DELETE
 chrome - views=false advanced=false search=true columns=false rail=false selection=false export=false trash=false tree=false searchable=false
 column schedule_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 column step_order at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-column action at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext=offset_seconds relation=false
-column offset_seconds at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column action at=2 shown=true hidden=false sortable=false filterable=false copyable=false subtext=offset relation=false
+column offset at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
 column failure_policy at=4 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
 row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms,typed:,input:false target=/{panel}/{entry}/{record}/delete

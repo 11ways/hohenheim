@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.model.Schema;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -38,8 +39,8 @@ public final class RootDisk {
     /** Add the knob to a kind's settings schema; the returned field is the kind's constant. */
     public static @NonNull IntegerField addTo(@NonNull Schema schema) {
         return schema.addField(IntegerField.builder().name(SETTING)
-            .label(HohenheimFormCopy.label("root_disk_gb"))
-            .help(HohenheimFormCopy.help("root_disk_gb"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("root_disk_gb"))
+            .help(HohenheimMicrocopy.HELP.of("root_disk_gb"))
             .suffix("GB")
             .build());
     }
@@ -52,6 +53,6 @@ public final class RootDisk {
      * once, at the surface the operator submitted, instead of once per driver.
      */
     public static @Nullable Integer declaredGb(@NonNull Map<String, Object> settings) {
-        return KindSettingValues.positive(settings.get(SETTING));
+        return RawValues.positiveInt(settings.get(SETTING));
     }
 }

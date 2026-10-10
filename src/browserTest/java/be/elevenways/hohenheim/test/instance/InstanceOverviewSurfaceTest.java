@@ -13,17 +13,13 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The record overview's surface-action round trip, in a REAL browser: a widget-native
- * button on an instance's front door dispatches to the overview's widget surface
- * (CmsDashboardSurfaces, addressed by CmsSurfaceAddress), the overview's declared refresh
- * SurfaceOperation answers with a freshly built tree, and the host element swaps its
- * rendering in place.
+ * The record overview's front door in a REAL browser: a widget surface whose gauges read the stored evidence afresh on
+ * every load, with no Refresh of its own.
  *
- * AIDEV-NOTE: the proof is a value that CHANGED between the first render and the click.
- * Asserting "the button exists and nothing exploded" would pass against a handler that
- * refused, against a host that ignored the outcome, and against a full page reload -- so
- * the disk observation is stamped BETWEEN the two renders, and a marker on window is
- * checked afterwards to prove the document was never reloaded.
+ * AIDEV-NOTE: 3ad0315d removed the overview's Refresh (a no-op operation; "loading the overview reads the same stored
+ * evidence afresh", the board has no such button), so the round trip under test is a LOAD, not a surface action; the
+ * surface-action tree swap itself is zenit-cms's SurfaceActionBrowserTest. The proof is still a value that CHANGED
+ * between two renders: the disk observation is stamped between the first load and the reload.
  */
 class InstanceOverviewSurfaceTest extends HohenheimTestBase {
 
@@ -46,60 +42,54 @@ class InstanceOverviewSurfaceTest extends HohenheimTestBase {
     }
 
     @Test
-    void aWidgetNativeButtonReRendersTheRecordTreeWithoutLeavingThePage() {
+    void theFrontDoorReadsTheStoredDiskEvidenceAfreshOnEachLoad() {
         InstanceModel instances = Models.get(InstanceModel.class);
         int id = instance();
 
         try {
-            // 1. The front door renders as a widget surface, with the page's own
-            //    widget-native button in it. A record dashboard that is not hosted by
-            //    zn-widget-surface can never dispatch anything.
+            // 1. The front door renders as a widget surface, and offers no Refresh: loading it is what reads the
+            //    stored evidence (3ad0315d).
             navigateToApp("/admin/instances/" + id + "/page/overview");
             waitForHydration();
 
             assertThat(page.locator("zn-widget-surface").count())
                 .as("step 1: the record's front door is a widget surface host")
                 .isEqualTo(1);
-            assertThat(page.locator("[data-surface-action=\"refresh\"]").count())
-                .as("step 1: carrying the page's widget-native refresh button")
-                .isEqualTo(1);
+            assertThat(page.locator("[data-surface-action]").count())
+                .as("step 1: with no surface action of its own, the no-op Refresh is gone")
+                .isEqualTo(0);
 
-            // 2. Docker measures no root disk, so the honest first render is the
-            //    not-measured state -- and emphatically not a bar.
+            // 2. A stopped Docker workload has no live memory or CPU sample, and Docker measures no root disk, so
+            //    the honest first render is three named not-measured gauges -- and emphatically not a bar.
             assertThat(page.locator(".widget-usage-unmeasured").count())
-                .as("step 2: an unmeasured disk renders its named state")
-                .isEqualTo(1);
+                .as("step 2: memory, disk and CPU render their named not-measured state")
+                .isEqualTo(3);
             assertThat(page.locator("pl-usage-bar").count())
                 .as("step 2: and never a zero bar, which reads as an empty disk")
                 .isEqualTo(0);
 
-            // 3. The sweeper's observation lands while the page is open. Nothing pushes
-            //    it: a data-carrying widget re-renders only on SSR, soft-nav, or a
-            //    tree-replace outcome -- which is exactly what the button asks for.
+            // 3. The sweeper's observation lands while the page is open.
             Row row = instances.findById(id);
             row.set(InstanceModel.DISK_USED_BYTES, 3_221_225_472L);
             row.set(InstanceModel.DISK_LIMIT_BYTES, 4_294_967_296L);
             row.set(InstanceModel.DISK_OBSERVED_AT, Instant.parse("2026-08-19T08:00:00Z"));
             instances.save(row);
 
-            executeScript("window.__hhSurfaceMarker = 'kept'");
-            click("[data-surface-action=\"refresh\"]");
-
-            // 4. THE ROUND TRIP: the click dispatched to the record surface, the overview's
-            //    refresh SurfaceOperation rebuilt the tree from the re-loaded record, and the host
-            //    swapped its rendering -- so the bar the first render refused now exists.
+            // 4. THE ROUND TRIP: the next load reads the stored observation, so the bar the first render refused
+            //    now exists, and only the disk left the not-measured state.
+            page.reload();
+            waitForHydration();
             waitForSelector("pl-usage-bar");
+            assertThat(page.locator("pl-usage-bar").count())
+                .as("step 4: the disk renders its one measured bar")
+                .isEqualTo(1);
             assertThat(page.locator(".widget-usage-unmeasured").count())
-                .as("step 4: the not-measured state is gone with the reading it denied")
-                .isEqualTo(0);
+                .as("step 4: memory and CPU stay not measured while the workload is stopped")
+                .isEqualTo(2);
 
-            // 5. IN PLACE: no navigation, no reload. A full page load would answer step 4
-            //    just as well and prove nothing about the surface lane.
-            assertThat(executeScript("window.__hhSurfaceMarker"))
-                .as("step 5: the document was never reloaded -- the tree was replaced")
-                .isEqualTo("kept");
+            // 5. The operator is still on the record's front door.
             assertThat(page.url())
-                .as("step 5: and the operator is still on the record's front door")
+                .as("step 5: the reload kept the operator on the record's front door")
                 .endsWith("/admin/instances/" + id + "/page/overview");
         } finally {
             Row cleared = instances.findById(id);

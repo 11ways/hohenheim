@@ -1,69 +1,57 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.schedule.ScheduleRunStatuses;
 import be.elevenways.hohenheim.schedule.ScheduleRunView;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.cms.common.page.CmsEndpoints;
-import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.render.table.DateTimeCellState;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
+import be.elevenways.zenit.cms.server.page.ChildListSections;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
-import be.elevenways.zenit.common.routing.RouteTarget;
-import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
-import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Steps tab on a schedule: the ordered chain plus its recent runs (per-step verdicts
- * inline), linking into the (nav-hidden) step resource forms.
+ * Steps tab on a schedule: the framework's child list section over the chain's steps, then the schedule's recent runs
+ * with their per-step verdicts.
+ *
+ * AIDEV-NOTE: the runs stay hand-drawn here because the run entry has no parent declaration and no /manage twin, so
+ * no child list can carry them; the steps section is {@link InstanceScheduleStepParts#STEPS}, embedded.
+ *
+ * @author Jelle De Loecker
+ * @since  0.9.0
  */
 public final class InstanceScheduleStepsPage implements RecordTab.Rendered<Row> {
 
-    /** The schedule's front door: a schedule without steps runs nothing, so creation lands here. */
-    public static final String SLUG = "steps";
-
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_schedule_steps"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "schedule_step"); }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.SCHEDULE_STEP.of("plural"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.STEPS; }
     @Override public @NonNull Icon icon() { return Icon.of("list-ol"); }
 
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row schedule) {
         Conduit conduit = request.conduit();
-        AccessContext accessContext = request.access();
         Integer scheduleId = schedule.get(RecordScheduleModel.ID);
-        String panel = request.panelSlug();
 
-        List<Map<String, Object>> steps = new ArrayList<>();
-        for (Row step : Models.get(RecordScheduleStepModel.class).findChain(scheduleId)) {
-            Map<String, Object> entry = new HashMap<>();
-            entry.put("id", step.get(RecordScheduleStepModel.ID));
-            entry.put("position", step.get(RecordScheduleStepModel.POSITION));
-            entry.put("action", step.get(RecordScheduleStepModel.ACTION));
-            entry.put("offsetSeconds", step.get(RecordScheduleStepModel.OFFSET_SECONDS));
-            entry.put("failurePolicy", step.get(RecordScheduleStepModel.FAILURE_POLICY));
-            entry.put("editTarget", CmsRoutes.detail(panel, "instance-schedule-steps",
-                step.get(RecordScheduleStepModel.ID)));
-            steps.add(entry);
-        }
-
+        RelativeTimeWording wording = CmsSupport.timeWording(conduit);
         List<ScheduleRunView> runs = new ArrayList<>();
         for (Row run : Models.get(RecordScheduleRunModel.class)
                 .findRecentForSchedule(scheduleId, 10)) {
@@ -71,38 +59,23 @@ public final class InstanceScheduleStepsPage implements RecordTab.Rendered<Row> 
             // table over the framework's six statuses. The template used to call everything
             // that was not "completed" destructive, which painted a still-RUNNING chain red.
             String error = run.get(RecordScheduleRunModel.ERROR);
+            Instant started = run.get(RecordScheduleRunModel.STARTED_AT);
             runs.add(new ScheduleRunView(
                 run.get(RecordScheduleRunModel.ID),
                 ScheduleRunStatuses.badgeFor(run.get(RecordScheduleRunModel.STATUS)),
-                String.valueOf(run.get(RecordScheduleRunModel.STARTED_AT)),
+                started != null ? new DateTimeCellState(started.toString(), wording) : null,
                 InstanceScheduleRunParts.describeSteps(run),
                 error != null ? error : ""));
         }
 
-        int instanceId = InstanceScheduleParts.parseInstanceId(
-            schedule.get(RecordScheduleModel.RECORD_ID));
-
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", CmsSupport.pageTitle(conduit, "schedule_step",
+        vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.SCHEDULE_STEP,
             schedule.get(RecordScheduleModel.NAME)));
-        vars.put("scheduleId", scheduleId);
-        vars.put("scheduleName", schedule.get(RecordScheduleModel.NAME));
-        vars.put("steps", steps);
+        vars.put("sections", ChildListSections.embedded(request,
+            CmsSupport.rowEntry(request.panel(), HohenheimSlugs.INSTANCE_SCHEDULES), schedule,
+            InstanceScheduleStepParts.STEPS));
+        vars.put("panelSlug", request.panelSlug());
         vars.put("runs", runs);
-        boolean canEdit = HohenheimAccess.isAdmin(accessContext)
-            || HohenheimAccess.hasInstanceCapability(
-                accessContext, instanceId, HohenheimAccess.CONFIG);
-        vars.put("canEdit", canEdit);
-        // Create form + prefill query parameter: composed off CmsEndpoints, since
-        // CmsRoutes.create returns the RouteTarget interface (no with(...)).
-        // AIDEV-NOTE: gated on the SAME boolean the template's {% if %} uses. A declared
-        // template variable is serialized into the hydration payload whether or not any
-        // element renders it, so an ungated target would publish an editor route to a
-        // viewer who may not edit (the certificates-request leak the site Domains tab hit).
-        vars.put("addStepTarget", canEdit ? CmsEndpoints.CREATE_FORM
-            .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, "instance-schedule-steps")
-            .with(HohenheimParams.SCHEDULE_ID_PREFILL, scheduleId) : null);
         vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_SCHEDULE_STEPS, vars);
     }

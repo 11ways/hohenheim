@@ -1,6 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -61,7 +64,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.regex.Pattern;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * The managed Docker stack entries from parts: the stack, its services and their config files. A record edits
@@ -78,18 +82,6 @@ import java.util.regex.Pattern;
  * @since  0.9.0
  */
 public final class StackParts {
-
-    /** The stack entry's slug; the service and file entries name it as their parent. */
-    public static final String SLUG = "stacks";
-
-    /** The service entry's slug, which the Services tab links into. */
-    public static final String SERVICES_SLUG = "stack-services";
-
-    /** The config file entry's slug, which the Services tab links into. */
-    public static final String FILES_SLUG = "stack-files";
-
-    /** Stack names become network/container/volume name segments. */
-    static final Pattern NAME_PATTERN = Pattern.compile("[a-z0-9][a-z0-9-]{0,62}");
 
     /** The virtual column carrying a failed stack's reason (the status badge's subtext). */
     static final String LAST_FAILURE_COLUMN = "last_failure";
@@ -123,7 +115,8 @@ public final class StackParts {
             // A FAILED stack names WHY under its badge: the newest deployment's error, so the operator never has to
             // open the Deployments tab to learn what to fix.
             .column(ColumnSpec.fromField(StackModel.STATUS).filterable().subtext(LAST_FAILURE_COLUMN).build())
-            .column(ColumnSpec.virtual(LAST_FAILURE_COLUMN, StackOperations.words("last_failure")).hidden().build())
+            .column(ColumnSpec.virtual(LAST_FAILURE_COLUMN, HohenheimMicrocopy.STACK.of("last_failure")).hidden()
+                .build())
             .column(ColumnSpec.fromField(StackModel.ENABLED).filterable().build())
             .filter(FilterSpec.leaf(StackModel.NAME, CoreTypes.CONTAINS)
                 .label(FieldLabels.labelFor(StackModel.NAME)).build())
@@ -132,17 +125,17 @@ public final class StackParts {
             .filter(FilterSpec.leaf(StackModel.ENABLED, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE)
                 .label(FieldLabels.labelFor(StackModel.ENABLED)).build())
             .build();
-        return PanelResource.builder(HohenheimIds.id("stack"), SLUG, StackOperations.STACK)
-            .label(Microcopy.of("plural").withFilter("scope", "stack"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "stack"))
-            .description(Microcopy.of("nav_hint").withFilter("scope", "stack"))
+        return PanelResource.builder(HohenheimIds.id("stack"), HohenheimSlugs.STACKS, StackOperations.STACK)
+            .label(HohenheimMicrocopy.STACK.of("plural"))
+            .recordLabel(HohenheimMicrocopy.STACK.of("singular"))
+            .description(HohenheimMicrocopy.STACK.of("nav_hint"))
             .icon(Icon.of("layer-group"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(40)
             // Reached through the Apps list, whose toolbar links this list (HohenheimPanel's sidebar note); its pages
             // mark Apps in the sidebar.
             .showInNav(false)
-            .standsUnder(AppParts.SLUG)
+            .standsUnder(HohenheimSlugs.APPS)
             .reads(ResourceReads.rows())
             // Name and description are all a stack carries.
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
@@ -170,14 +163,15 @@ public final class StackParts {
                 // AIDEV-NOTE: the record's front door is the SERVICES tab, the whole fix for "created a stack, now
                 // what": everything that makes a stack RUN lives there, and its empty state names the next step. It
                 // re-points the list's title link too, deliberately.
-                .landingTab(StackServicesPage.SLUG)
+                .landingTab(HohenheimSlugs.Tab.SERVICES)
                 .build())
             .writes(ResourceMutations.rows().create().update()
                 .delete(StackOperations.DELETE_STACK)
                 .ownsWriteEnvelope(ResourceVerb.DELETE)
                 .beforeSave(StackParts::validStack)
                 .build())
-            .deleteConfirmation(DeleteConfirmation.of(DeleteConfirmation.body(StackOperations.words("delete_confirm"))))
+            .deleteConfirmation(DeleteConfirmation.of(
+                DeleteConfirmation.body(HohenheimMicrocopy.STACK.of("delete_confirm"))))
             .actions(stackActions())
             .tabs(ResourceTabs.<Row>of(List.of(new StackServicesPage(), new StackDeploymentsPage())).withHistory()
                 .withContributions())
@@ -230,15 +224,17 @@ public final class StackParts {
             .column(ColumnSpec.fromField(StackServiceModel.ENABLED).build())
             .column(ColumnSpec.fromField(StackServiceModel.STACK_ID).relation(stack).build())
             .build();
-        return PanelResource.builder(HohenheimIds.id("stack_service"), SERVICES_SLUG, StackOperations.SERVICE)
-            .label(Microcopy.of("plural").withFilter("scope", "stack_service"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "stack_service"))
+        return PanelResource.builder(HohenheimIds.id("stack_service"), HohenheimSlugs.STACK_SERVICES,
+            StackOperations.SERVICE)
+            .label(HohenheimMicrocopy.STACK_SERVICE.of("plural"))
+            .recordLabel(HohenheimMicrocopy.STACK_SERVICE.of("singular"))
             .icon(Icon.of("cube"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(26)
             .showInNav(false)
-            .standsUnder(SLUG)
-            .parent(ResourceParent.of(SLUG, StackServiceModel.STACK_ID).tab(StackServicesPage.SLUG))
+            .standsUnder(HohenheimSlugs.STACKS)
+            .parent(ResourceParent.of(HohenheimSlugs.STACKS, StackServiceModel.STACK_ID)
+            .tab(HohenheimSlugs.Tab.SERVICES))
             .reads(ResourceReads.rows())
             // A service is found by its name or by the image it runs.
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
@@ -274,20 +270,20 @@ public final class StackParts {
             .column(ColumnSpec.fromField(StackFileModel.MODE).hidden().build())
             .column(ColumnSpec.fromField(StackFileModel.STACK_SERVICE_ID).relation(service).build())
             .build();
-        return PanelResource.builder(HohenheimIds.id("stack_file"), FILES_SLUG,
+        return PanelResource.builder(HohenheimIds.id("stack_file"), HohenheimSlugs.STACK_FILES,
                 SubjectType.record(StackFileModel.MODEL_ID))
-            .label(Microcopy.of("plural").withFilter("scope", "stack_file"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "stack_file"))
+            .label(HohenheimMicrocopy.STACK_FILE.of("plural"))
+            .recordLabel(HohenheimMicrocopy.STACK_FILE.of("singular"))
             .icon(Icon.of("file-code"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(27)
             .showInNav(false)
-            .standsUnder(SLUG)
+            .standsUnder(HohenheimSlugs.STACKS)
             // A file reaches its stack through its service: a path parent, which the framework walks and queries.
-            .parent(ResourceParent.path(SLUG,
+            .parent(ResourceParent.path(HohenheimSlugs.STACKS,
                     new ResourceParent.Hop(StackFileModel.STACK_SERVICE_ID, StackServiceModel.MODEL_ID),
                     new ResourceParent.Hop(StackServiceModel.STACK_ID, StackModel.MODEL_ID))
-                .tab(StackServicesPage.SLUG))
+                .tab(HohenheimSlugs.Tab.SERVICES))
             .reads(ResourceReads.rows())
             // The path only: CONTENT is encrypted at rest, so a search over it would match ciphertext.
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()
@@ -316,65 +312,53 @@ public final class StackParts {
     // -- placed operations --------------------------------------------------------------------------------------------
 
     private static @NonNull List<PanelAction<Row>> stackActions() {
+        ConfirmationSpec purge = Confirmations.of(HohenheimMicrocopy.STACK.of("purge_volumes"),
+            HohenheimMicrocopy.STACK.of("purge_volumes_ok"),
+            HohenheimMicrocopy.STACK.of("purge_volumes_confirm_generic"), ActionStyle.DESTRUCTIVE);
         return List.of(
             PanelAction.<Row, Void>places(StackOperations.DEPLOY, ActionPlacement.ROW, queued("deploy_queued"))
-                .description(StackOperations.words("deploy_hint"))
-                .confirmation(asked("deploy", "deploy_confirm"))
+                .description(HohenheimMicrocopy.STACK.of("deploy_hint"))
+                .confirmation(Confirmations.of(HohenheimMicrocopy.STACK.of("deploy"),
+                    HohenheimMicrocopy.STACK.of("deploy_confirm"), ActionStyle.DEFAULT))
                 .build(),
             PanelAction.<Row, Void>places(StackOperations.STOP, ActionPlacement.ROW, queued("stop_queued"))
-                .confirmation(asked("stop", "stop_confirm"))
+                .confirmation(Confirmations.of(HohenheimMicrocopy.STACK.of("stop"),
+                    HohenheimMicrocopy.STACK.of("stop_confirm"), ActionStyle.DEFAULT))
                 .build(),
             PanelAction.<Row, Void>places(StackOperations.ROLLBACK, ActionPlacement.ROW, queued("rollback_queued"))
-                .description(StackOperations.words("rollback_hint"))
-                .confirmation(asked("rollback", "rollback_confirm"))
+                .description(HohenheimMicrocopy.STACK.of("rollback_hint"))
+                .confirmation(Confirmations.of(HohenheimMicrocopy.STACK.of("rollback"),
+                    HohenheimMicrocopy.STACK.of("rollback_confirm"), ActionStyle.DEFAULT))
                 .build(),
             // The one stack operation that destroys data instead of processes, so it asks for the stack's OWN name
             // rather than a reflex click. External volumes are unowned and survive it. The static spec is the
             // record-less fallback the builder demands next to a dynamic confirmation.
             PanelAction.<Row, Void>places(StackOperations.PURGE_VOLUMES, ActionPlacement.ROW,
                     queued("purge_volumes_queued"))
-                .description(StackOperations.words("purge_volumes_hint"))
+                .description(HohenheimMicrocopy.STACK.of("purge_volumes_hint"))
                 .style(ActionStyle.DESTRUCTIVE)
                 .inlineInRow(false)
-                .confirmation(purgeConfirmation(null))
-                .dynamicConfirmation(stack -> purgeConfirmation(String.valueOf((Object) stack.get(StackModel.NAME))))
+                .confirmation(purge)
+                .dynamicConfirmation(stack -> Confirmations.typed(purge.withBody(HohenheimMicrocopy.STACK
+                    .of("purge_volumes_confirm").withArg("name", stack.get(StackModel.NAME))),
+                    stack.get(StackModel.NAME)))
                 .build(),
             PanelAction.<Row, String>places(StackOperations.REFRESH, ActionPlacement.ROW,
                     (request, result) -> CmsActionResult.refreshWithToast(
-                        Microcopy.of(result.value()).withFilter("scope", "stack_status")))
+                        HohenheimMicrocopy.STACK_STATUS.of(result.value())))
                 .build(),
             // Disk reclaim is per DAEMON, not per stack, so it belongs on the page rather than on a row.
             PanelAction.<Row, Void>places(StackOperations.RECLAIM_IMAGES, ActionPlacement.HEADER,
                     queued("reclaim_images_started"))
-                .description(StackOperations.words("reclaim_images_hint"))
-                .confirmation(asked("reclaim_images", "reclaim_images_confirm"))
+                .description(HohenheimMicrocopy.STACK.of("reclaim_images_hint"))
+                .confirmation(Confirmations.of(HohenheimMicrocopy.STACK.of("reclaim_images"),
+                    HohenheimMicrocopy.STACK.of("reclaim_images_confirm"), ActionStyle.DEFAULT))
                 .build());
     }
 
     /** A queued operation's answer: the list refreshes and says the work was queued. */
     private static <R> @NonNull ResultStep<ActionRequest<Row>, R, CmsActionResult> queued(@NonNull String key) {
-        return (request, result) -> CmsActionResult.refreshWithToast(StackOperations.words(key));
-    }
-
-    private static @NonNull ConfirmationSpec asked(@NonNull String title, @NonNull String body) {
-        return ConfirmationSpec.builder()
-            .title(StackOperations.words(title))
-            .body(StackOperations.words(body))
-            .build();
-    }
-
-    /** @param name the stack's name the operator must type, null for the record-less fallback */
-    private static @NonNull ConfirmationSpec purgeConfirmation(@Nullable String name) {
-        ConfirmationSpec.Builder builder = ConfirmationSpec.builder()
-            .title(StackOperations.words("purge_volumes"))
-            .body(name == null ? StackOperations.words("purge_volumes_confirm_generic")
-                : StackOperations.words("purge_volumes_confirm").withArg("name", name))
-            .confirmLabel(StackOperations.words("purge_volumes_ok"))
-            .style(ActionStyle.DESTRUCTIVE);
-        if (name != null) {
-            builder.requireTypedConfirmation(name);
-        }
-        return builder.build();
+        return (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.STACK.of(key));
     }
 
     // -- the stack's write rule ---------------------------------------------------------------------------------------
@@ -389,8 +373,8 @@ public final class StackParts {
         Row row = save.row();
         Row existing = save.isCreate() ? null : Models.get(StackModel.class).findById(row.get(StackModel.ID));
         String name = trimmed(row.get(StackModel.NAME));
-        if (!NAME_PATTERN.matcher(name).matches()) {
-            throw Violations.ofField("name", name, CmsSupport.violationText("stack_name_format"));
+        if (!StackModel.isValidName(name)) {
+            throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("stack_name_format"));
         }
         if (save.values().containsKey(StackModel.NAME.getName())) {
             row.set(StackModel.NAME, name);
@@ -398,7 +382,7 @@ public final class StackParts {
         Row duplicate = Models.get(StackModel.class).findByName(name);
         if (duplicate != null
             && (existing == null || !duplicate.get(StackModel.ID).equals(existing.get(StackModel.ID)))) {
-            throw Violations.ofField("name", name, CmsSupport.violationText("stack_name_taken"));
+            throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("stack_name_taken"));
         }
         if (existing != null && !name.equals(existing.get(StackModel.NAME))) {
             // The name is embedded in every ownership label, container, network and volume name: renaming a stack
@@ -408,15 +392,15 @@ public final class StackParts {
             // the worker check narrows the window, it cannot close it without moving the persist onto the worker.
             Integer stackId = existing.get(StackModel.ID);
             if (StackModel.STATUS_DEPLOYING.equals(existing.get(StackModel.STATUS))) {
-                throw Violations.ofField("name", name, CmsSupport.violationText("stack_rename_deployed"));
+                throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("stack_rename_deployed"));
             }
             try {
                 if (stackId != null && StackRuntime.get().ownedContainerCount(stackId) > 0) {
-                    throw Violations.ofField("name", name, CmsSupport.violationText("stack_rename_deployed"));
+                    throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("stack_rename_deployed"));
                 }
             } catch (IOException dockerUnavailable) {
                 // Cannot PROVE the rename is safe: refuse rather than orphan.
-                throw Violations.ofField("name", name, CmsSupport.violationText("stack_rename_unverifiable"));
+                throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("stack_rename_unverifiable"));
             }
         }
     }
@@ -436,8 +420,8 @@ public final class StackParts {
         Row existing = save.isCreate() ? null
             : Models.get(StackServiceModel.class).findById(row.get(StackServiceModel.ID));
         String name = trimmed(row.get(StackServiceModel.NAME));
-        if (!NAME_PATTERN.matcher(name).matches()) {
-            throw Violations.ofField("name", name, CmsSupport.violationText("service_name_format"));
+        if (!StackModel.isValidName(name)) {
+            throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("service_name_format"));
         }
         if (submitted.containsKey(StackServiceModel.NAME.getName())) {
             row.set(StackServiceModel.NAME, name);
@@ -445,7 +429,7 @@ public final class StackParts {
 
         Object stackIdValue = row.get(StackServiceModel.STACK_ID);
         if (!(stackIdValue instanceof Integer stackId)) {
-            throw Violations.ofField("stack_id", stackIdValue, CmsSupport.violationText("stack_required"));
+            throw Violations.ofField("stack_id", stackIdValue, HohenheimMicrocopy.VIOLATIONS.of("stack_required"));
         }
         Integer existingId = existing != null ? existing.get(StackServiceModel.ID) : null;
         List<Row> siblings = Models.get(StackServiceModel.class).find()
@@ -455,7 +439,7 @@ public final class StackParts {
                 continue;
             }
             if (name.equals(trimmed(sibling.get(StackServiceModel.NAME)))) {
-                throw Violations.ofField("name", name, CmsSupport.violationText("service_name_taken"));
+                throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("service_name_taken"));
             }
         }
 
@@ -491,7 +475,7 @@ public final class StackParts {
             for (Row depends : sibling.getRecords(StackServiceModel.DEPENDS_ON)) {
                 if (name.equals(trimmed(depends.get(StackServiceModel.DEPENDS_SERVICE)))) {
                     throw Violations.ofField("name", name,
-                        CmsSupport.violationText("service_still_depended_upon")
+                        HohenheimMicrocopy.VIOLATIONS.of("service_still_depended_upon")
                             .withArg("service", String.valueOf((Object) sibling.get(StackServiceModel.NAME))));
                 }
             }
@@ -521,17 +505,17 @@ public final class StackParts {
             boolean volume = !StackServiceModel.MOUNT_TMPFS.equals(trimmed(mount.get(StackServiceModel.MOUNT_TYPE)));
             // A named volume derives "hohenheim-stack-<stack>-<name>", so the name has to be a safe Docker name
             // segment; an external volume brings its own name instead.
-            if (volume && external.isEmpty() && !NAME_PATTERN.matcher(mountName).matches()) {
+            if (volume && external.isEmpty() && !StackModel.isValidName(mountName)) {
                 throw Violations.ofField("mounts." + index + ".name", mountName,
-                    CmsSupport.violationText("mount_name_format"));
+                    HohenheimMicrocopy.VIOLATIONS.of("mount_name_format"));
             }
             if (!path.startsWith("/")) {
                 throw Violations.ofField("mounts." + index + ".container_path", path,
-                    CmsSupport.violationText("mount_path_absolute"));
+                    HohenheimMicrocopy.VIOLATIONS.of("mount_path_absolute"));
             }
             if (!paths.add(path)) {
                 throw Violations.ofField("mounts." + index + ".container_path", path,
-                    CmsSupport.violationText("mount_path_taken"));
+                    HohenheimMicrocopy.VIOLATIONS.of("mount_path_taken"));
             }
             // The mirror of the config file's shadow refusal: adding the mount AFTER the file is refused exactly like
             // adding the file after the mount -- either order silently hides the staged file at container start.
@@ -540,7 +524,7 @@ public final class StackParts {
                 String filePath = trimmed(file.get(StackFileModel.CONTAINER_PATH));
                 if (filePath.equals(path) || filePath.startsWith(prefix)) {
                     throw Violations.ofField("mounts." + index + ".container_path", path,
-                        CmsSupport.violationText("mount_shadows_file").withArg("file", filePath));
+                        HohenheimMicrocopy.VIOLATIONS.of("mount_shadows_file").withArg("file", filePath));
                 }
             }
         }
@@ -563,23 +547,23 @@ public final class StackParts {
         int index = -1;
         for (Row port : recordsOf(submitted, StackServiceModel.PORTS.getName())) {
             index++;
-            Integer container = CmsSupport.parsedInt(port.get(StackServiceModel.PORT_CONTAINER));
-            if (container == null && CmsSupport.parsedInt(port.get(StackServiceModel.PORT_HOST)) == null
+            Integer container = RawValues.parsedInt(port.get(StackServiceModel.PORT_CONTAINER));
+            if (container == null && RawValues.parsedInt(port.get(StackServiceModel.PORT_HOST)) == null
                 && trimmed(port.get(StackServiceModel.PORT_HOST_IP)).isEmpty()) {
                 continue;   // an untouched blank row the editor added
             }
             if (container == null) {
                 throw Violations.ofField("ports." + index + ".container_port", port.get(StackServiceModel.PORT_CONTAINER),
-                    CmsSupport.violationText("port_container_required"));
+                    HohenheimMicrocopy.VIOLATIONS.of("port_container_required"));
             }
             for (String key : List.of(StackServiceModel.PORT_CONTAINER.getName(), StackServiceModel.PORT_HOST.getName())) {
-                Integer value = CmsSupport.parsedInt(port.get(key));
+                Integer value = RawValues.parsedInt(port.get(key));
                 if (value != null && (value < 1 || value > 65535)) {
                     throw Violations.ofField("ports." + index + "." + key, value,
-                        CmsSupport.violationText("port_range"));
+                        HohenheimMicrocopy.VIOLATIONS.of("port_range"));
                 }
             }
-            Integer host = CmsSupport.parsedInt(port.get(StackServiceModel.PORT_HOST));
+            Integer host = RawValues.parsedInt(port.get(StackServiceModel.PORT_HOST));
             if (host == null) {
                 continue;
             }
@@ -587,7 +571,7 @@ public final class StackParts {
             Object protocol = port.get(StackServiceModel.PORT_PROTOCOL);
             if (!claimed.add(PortLedger.portClaim(hostIp, host, protocol))) {
                 throw Violations.ofField("ports." + index + ".host_port", host,
-                    CmsSupport.violationText("host_port_taken"));
+                    HohenheimMicrocopy.VIOLATIONS.of("host_port_taken"));
             }
             // Sibling DECLARATIONS on the same host, which the ledger cannot see yet: a claim exists only from the
             // DEPLOY, so two services can be authored with the same host port and only collide much later. A
@@ -596,14 +580,14 @@ public final class StackParts {
             String declaredBy = declaringSibling(serverId, existingId, claimKey);
             if (declaredBy != null) {
                 throw Violations.ofField("ports." + index + ".host_port", host,
-                    CmsSupport.violationText("port_held").withArg("holder", declaredBy));
+                    HohenheimMicrocopy.VIOLATIONS.of("port_held").withArg("holder", declaredBy));
             }
             Row holder = PortLedger.holderOf(claimKey);
             Row ownInstance = existingId != null ? StackInstances.owned(existingId) : null;
             if (holder != null && !(ownInstance != null && PortLedger.isOwnedBy(holder,
                     InstanceModel.MODEL_ID, ownInstance.get(InstanceModel.ID)))) {
                 throw Violations.ofField("ports." + index + ".host_port", host,
-                    CmsSupport.violationText("port_held").withArg("holder", PortLedger.describeHolder(holder)));
+                    HohenheimMicrocopy.VIOLATIONS.of("port_held").withArg("holder", PortLedger.describeHolder(holder)));
             }
         }
     }
@@ -657,11 +641,11 @@ public final class StackParts {
             depends.set(StackServiceModel.DEPENDS_SERVICE, target);
             if (!known.contains(target)) {
                 throw Violations.ofField("depends_on." + index + ".service", target,
-                    CmsSupport.violationText("depends_unknown_service"));
+                    HohenheimMicrocopy.VIOLATIONS.of("depends_unknown_service"));
             }
             if (target.equals(name)) {
                 throw Violations.ofField("depends_on." + index + ".service", target,
-                    CmsSupport.violationText("depends_on_self"));
+                    HohenheimMicrocopy.VIOLATIONS.of("depends_on_self"));
             }
         }
     }
@@ -680,7 +664,7 @@ public final class StackParts {
             }
             boolean zeroAllowed = StackServiceModel.HEALTH_START_PERIOD_SECONDS.getName().equals(key);
             if (number.intValue() < 0 || (!zeroAllowed && number.intValue() == 0)) {
-                throw Violations.ofField(key, number, CmsSupport.violationText("health_positive"));
+                throw Violations.ofField(key, number, HohenheimMicrocopy.VIOLATIONS.of("health_positive"));
             }
         }
     }
@@ -704,7 +688,7 @@ public final class StackParts {
             ContainerHardening.declaring(StackServiceKind.HARDENING, "this service", names);
         } catch (IllegalArgumentException notDeclarable) {
             throw Violations.ofField(StackServiceModel.CAPABILITIES.getName(), names,
-                CmsSupport.violationText("capability_not_declarable")
+                HohenheimMicrocopy.VIOLATIONS.of("capability_not_declarable")
                     .withArg("capabilities", String.join(", ", ContainerHardening.DECLARABLE.keySet())));
         }
     }
@@ -732,7 +716,8 @@ public final class StackParts {
         String path = trimmed(row.get(StackFileModel.CONTAINER_PATH));
         Object serviceIdValue = row.get(StackFileModel.STACK_SERVICE_ID);
         if (!(serviceIdValue instanceof Integer serviceId)) {
-            throw Violations.ofField("stack_service_id", serviceIdValue, CmsSupport.violationText("service_required"));
+            throw Violations.ofField("stack_service_id", serviceIdValue,
+                HohenheimMicrocopy.VIOLATIONS.of("service_required"));
         }
         Integer existingId = save.isCreate() ? null : row.get(StackFileModel.ID);
         for (Row sibling : Models.get(StackFileModel.class).find()
@@ -741,7 +726,7 @@ public final class StackParts {
                 continue;
             }
             if (path.equals(trimmed(sibling.get(StackFileModel.CONTAINER_PATH)))) {
-                throw Violations.ofField("container_path", path, CmsSupport.violationText("file_path_taken"));
+                throw Violations.ofField("container_path", path, HohenheimMicrocopy.VIOLATIONS.of("file_path_taken"));
             }
         }
         Row service = Models.get(StackServiceModel.class).findById(serviceId);
@@ -755,7 +740,8 @@ public final class StackParts {
             }
             String prefix = mountPath.endsWith("/") ? mountPath : mountPath + "/";
             if (path.equals(mountPath) || path.startsWith(prefix)) {
-                throw Violations.ofField("container_path", path, CmsSupport.violationText("file_path_shadowed"));
+                throw Violations.ofField("container_path", path,
+                    HohenheimMicrocopy.VIOLATIONS.of("file_path_shadowed"));
             }
         }
     }
@@ -778,9 +764,5 @@ public final class StackParts {
             }
         }
         return records;
-    }
-
-    private static @NonNull String trimmed(@Nullable Object value) {
-        return value != null ? String.valueOf(value).trim() : "";
     }
 }

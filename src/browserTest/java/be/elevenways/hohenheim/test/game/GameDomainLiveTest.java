@@ -19,7 +19,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.game.GameDomains;
@@ -158,11 +158,11 @@ class GameDomainLiveTest {
 
             int tenantId = tenant();
             RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, proxyId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, backendId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             AccessContext tenant = contextFor(new UserPrincipal(tenantId, "Game Tenant"));
 
             InstanceService service = new InstanceService();

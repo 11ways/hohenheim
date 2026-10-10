@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -51,8 +53,7 @@ final class InstanceOperationGuard {
     static void requireOperable(@NonNull Row row) {
         String status = row.get(InstanceModel.STATUS);
         if (!InstanceModel.isOperable(row)) {
-            throw Violations.ofForm(HohenheimViolations.text("instance_busy")
-                .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)))
+            throw Violations.ofForm(HohenheimViolations.instanceRefusalText("instance_busy", row, null)
                 .withArg("status", status));
         }
     }
@@ -70,8 +71,7 @@ final class InstanceOperationGuard {
                 || InstanceModel.INSTALL_INSTALLED.equals(state)) {
             return;
         }
-        throw Violations.ofForm(HohenheimViolations.text("install_incomplete")
-            .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME)))
+        throw Violations.ofForm(HohenheimViolations.instanceRefusalText("install_incomplete", row, null)
             .withArg("state", state));
     }
 
@@ -408,7 +408,7 @@ final class InstanceOperationGuard {
         };
         String line = kept == null ? null : kept.strip().lines().findFirst().orElse(null);
         ActivityLog.record(Models.get(InstanceModel.class), instanceId, cause,
-            line == null || line.isBlank() ? null : line);
+            Texts.blankAsNull(line));
     }
 
     /**
@@ -427,7 +427,7 @@ final class InstanceOperationGuard {
      */
     private static void requireMatched(int matched, int serverId, @NonNull Object instanceName) {
         if (matched == 0) {
-            throw Violations.ofForm(HohenheimViolations.text("instance_fenced_out")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_fenced_out")
                 .withArg("name", String.valueOf(instanceName))
                 .withArg("server", ServerModel.nameOf(serverId)));
         }

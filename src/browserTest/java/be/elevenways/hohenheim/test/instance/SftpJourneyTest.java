@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.cms.AttentionCollector;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.files.HohenheimSftp;
@@ -187,9 +187,9 @@ class SftpJourneyTest {
         int reader = ApiSupport.user("sftp-reader@live.test");
         int writer = ApiSupport.user("sftp-writer@live.test");
         int stranger = ApiSupport.user("sftp-stranger@live.test");
-        grant(reader, id, HohenheimAccess.FILES_READ);
-        grant(writer, id, HohenheimAccess.FILES_READ);
-        grant(writer, id, HohenheimAccess.FILES_WRITE);
+        grant(reader, id, HohenheimCapabilities.FILES_READ);
+        grant(writer, id, HohenheimCapabilities.FILES_READ);
+        grant(writer, id, HohenheimCapabilities.FILES_WRITE);
         String readerPassword = password(reader, false);
         String writerPassword = password(writer, true);
         String strangerPassword = ApiKeyService.create(stranger, "SFTP", InstanceSftpRealm.FILE_SCOPES, null)
@@ -306,8 +306,10 @@ class SftpJourneyTest {
                 .as("step 8: and nothing landed outside it").isEqualTo("no\n");
 
             // 9. The grant is revoked mid-session: the very next request is refused.
-            RecordGrants.revoke(GrantSubjectType.USER, writer, InstanceModel.MODEL_ID, id, HohenheimAccess.FILES_READ);
-            RecordGrants.revoke(GrantSubjectType.USER, writer, InstanceModel.MODEL_ID, id, HohenheimAccess.FILES_WRITE);
+            RecordGrants.revoke(GrantSubjectType.USER, writer, InstanceModel.MODEL_ID, id,
+                HohenheimCapabilities.FILES_READ);
+            RecordGrants.revoke(GrantSubjectType.USER, writer, InstanceModel.MODEL_ID, id,
+                HohenheimCapabilities.FILES_WRITE);
             SftpException revoked = sftpRefusal(catchThrowable(() -> names(write.sftp, "/data")));
             assertThat(revoked.getStatus()).as("step 9: the next request after the revocation is refused")
                 .isEqualTo(SftpConstants.SSH_FX_PERMISSION_DENIED);

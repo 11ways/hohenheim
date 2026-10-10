@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ArtifactOperationModel;
 import be.elevenways.hohenheim.server.application.ArtifactDeploys;
@@ -12,7 +13,7 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.project.Projects;
@@ -95,15 +96,15 @@ class PaasApiTest extends HohenheimTestBase {
         applicationBId = applicationOf(siteBId);
         staticSiteId = site(PREFIX + "static", "hohenheim:static");
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, SiteModel.MODEL_ID, siteAId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, SiteModel.MODEL_ID, staticSiteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantBId, SiteModel.MODEL_ID, siteBId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         instanceAId = instance(PREFIX + "workload");
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID, instanceAId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         projectOneId = project(PREFIX + "one");
         projectTwoId = project(PREFIX + "two");
@@ -123,9 +124,9 @@ class PaasApiTest extends HohenheimTestBase {
         // same table, so the fixture is one record read through two doors.
         deploymentOfAId = releaseOperation(applicationAId, "deploy-log-of-alpha");
 
-        String siteScope = CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE);
+        String siteScope = CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE);
         String instanceScope = CapabilityScopes.format(InstanceModel.MODEL_ID,
-            HohenheimAccess.MANAGE);
+            HohenheimCapabilities.MANAGE);
         keyPaasA = ApiKeyService.create(tenantAId, PREFIX + "a",
             List.of(siteScope, instanceScope), null).plaintext();
         keyPaasB = ApiKeyService.create(tenantBId, PREFIX + "b",
@@ -248,7 +249,7 @@ class PaasApiTest extends HohenheimTestBase {
         op.set(ReleaseOperationModel.KIND, ReleaseOperationModel.KIND_RELEASE);
         op.set(ReleaseOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
         op.set(ReleaseOperationModel.FOR_ID, applicationId);
-        op.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.STATUS_SUCCEEDED);
+        op.set(ReleaseOperationModel.STATUS, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
         op.set(ReleaseOperationModel.STEP_LOG, stepLog);
         Models.get(ReleaseOperationModel.class).save(op);
         return op.get(ReleaseOperationModel.ID);
@@ -259,7 +260,7 @@ class PaasApiTest extends HohenheimTestBase {
         op.set(BuildOperationModel.BUILDER_KIND, BuildOperationModel.KIND_DOCKERFILE);
         op.set(BuildOperationModel.FOR_MODEL, SiteModel.MODEL_ID.toString());
         op.set(BuildOperationModel.FOR_ID, siteId);
-        op.set(BuildOperationModel.STATUS, BuildOperationModel.STATUS_SUCCEEDED);
+        op.set(BuildOperationModel.STATUS, BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
         op.set(BuildOperationModel.LOG, log);
         Models.get(BuildOperationModel.class).save(op);
         return op.get(BuildOperationModel.ID);
@@ -417,7 +418,7 @@ class PaasApiTest extends HohenheimTestBase {
         //    no retained release the engine's own named refusal comes back, which proves
         //    the call reached ReleaseEngine rather than a re-implementation.
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID,
-            applicationAId, HohenheimAccess.POWER, true);
+            applicationAId, HohenheimCapabilities.POWER, true);
         try {
             HttpResponse<String> rollback = keyPost(keyPaasA,
                 "/api/v1/sites/" + siteAId + "/rollback", "");
@@ -431,7 +432,7 @@ class PaasApiTest extends HohenheimTestBase {
                 .isEqualTo(opsBefore);
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID,
-                applicationAId, HohenheimAccess.POWER);
+                applicationAId, HohenheimCapabilities.POWER);
         }
 
         // 4. A site with no instance upstream and no git wrapper has no rollback lane at all.
@@ -579,7 +580,7 @@ class PaasApiTest extends HohenheimTestBase {
         Models.get(InstanceModel.class).save(unadopted);
         int unadoptedId = unadopted.get(InstanceModel.ID);
         RecordGrants.grant(GrantSubjectType.GROUP, projectGroupId, InstanceModel.MODEL_ID, unadoptedId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         unadopted.set(InstanceModel.ENVIRONMENT_ID, environmentId);
         Models.get(InstanceModel.class).save(unadopted);
 
@@ -588,7 +589,7 @@ class PaasApiTest extends HohenheimTestBase {
         //    it. Tenant A is still a project member but now cannot even SEE the
         //    instance -- the ordinary flow would have left it holding MANAGE.
         RecordGrants.revoke(GrantSubjectType.GROUP, projectGroupId, InstanceModel.MODEL_ID, unadoptedId,
-            HohenheimAccess.MANAGE);
+            HohenheimCapabilities.MANAGE);
         String envBase = "/api/v1/environments/" + environmentId + "/variables";
         assertThat(Models.get(InstanceModel.class).findById(unadoptedId)
                 .get(InstanceModel.ENVIRONMENT_ID))
@@ -646,10 +647,10 @@ class PaasApiTest extends HohenheimTestBase {
         assertThat(keyPost(keyPaasA, path, "not-a-jar").statusCode()).isEqualTo(404);
         assertThat(keyGet(keyPaasA, path).statusCode()).isEqualTo(404);
         RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID,
-            applicationAId, HohenheimAccess.CONFIG, true);
+            applicationAId, HohenheimCapabilities.CONFIG, true);
         try {
             String siteOnly = ApiKeyService.create(tenantAId, PREFIX + "site-only-artifact",
-                List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE)), null).plaintext();
+                List.of(CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE)), null).plaintext();
             assertThat(keyPost(siteOnly, path, "not-a-jar").statusCode()).isEqualTo(404);
             assertThat(keyGet(siteOnly, path).statusCode()).isEqualTo(404);
             // The deploy admission is asked on the REQUEST thread, before the body is taken:
@@ -664,7 +665,7 @@ class PaasApiTest extends HohenheimTestBase {
                     .where(ArtifactOperationModel.APPLICATION_ID.eq(applicationAId)).count())
                 .as("the refused upload minted no operation").isZero();
             RecordGrants.grant(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID,
-                applicationAId, HohenheimAccess.POWER, true);
+                applicationAId, HohenheimCapabilities.POWER, true);
             HttpResponse<String> accepted = keyPost(keyPaasA, path, "not-a-jar");
             assertThat(keyPost(keyPaasA, path, "").statusCode()).isEqualTo(422);
             Integer previousCap = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Builds.MAX_UPLOAD_MB);
@@ -682,10 +683,11 @@ class PaasApiTest extends HohenheimTestBase {
             // The upload is processed on a background thread; wait for it to settle.
             Poll.until("the unreadable upload's operation settles as failed",
                 Duration.ofSeconds(10), Duration.ofMillis(20),
-                () -> ArtifactOperationModel.FAILED.equals(Models.get(ArtifactOperationModel.class)
-                    .findById(id).get(ArtifactOperationModel.STATUS)));
+                () -> ArtifactOperationModel.LIFECYCLE.is(Models.get(ArtifactOperationModel.class)
+                    .findById(id).get(ArtifactOperationModel.STATUS), OperationStatus.FAILED));
             operation = Models.get(ArtifactOperationModel.class).findById(id);
-            assertThat(operation.get(ArtifactOperationModel.STATUS)).isEqualTo(ArtifactOperationModel.FAILED);
+            assertThat(operation.get(ArtifactOperationModel.STATUS)).isEqualTo(
+                ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.FAILED));
             HttpResponse<String> receipt = keyGet(keyPaasA, path + "/" + id);
             assertThat(receipt.statusCode()).isEqualTo(200);
             assertThat(receipt.body()).contains("artifact_unreadable").doesNotContain("artifact_path", "environment", "not-a-jar");
@@ -698,9 +700,9 @@ class PaasApiTest extends HohenheimTestBase {
             assertThat(keyGet(keyPaasA, path).body()).contains("absent");
         } finally {
             RecordGrants.revoke(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID,
-                applicationAId, HohenheimAccess.POWER);
+                applicationAId, HohenheimCapabilities.POWER);
             RecordGrants.revoke(GrantSubjectType.USER, tenantAId, InstanceModel.MODEL_ID,
-                applicationAId, HohenheimAccess.CONFIG);
+                applicationAId, HohenheimCapabilities.CONFIG);
         }
     }
 

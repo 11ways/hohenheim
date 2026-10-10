@@ -1,14 +1,15 @@
 package be.elevenways.hohenheim.server.tls;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -61,7 +62,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         tenantUserId = ApiSupport.user("certauth-tenant@hohenheim.local", "Certauth Tenant");
 
         RecordGrants.grant(GrantSubjectType.USER, tenantUserId, SiteModel.MODEL_ID, ownedSiteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         tenant = CertificateAuthority.Requester.ofSubject(PrincipalRef.account(tenantUserId));
 
         // The POST handler reaches the service through the proxy; an unstarted one is
@@ -105,8 +106,8 @@ class CertificateAuthorityTest extends HohenheimTestBase {
             .isEqualTo(422);
         assertThat(response.body())
             .describedAs("the refusal names the serving half and the hostname, not a generic failure")
-            .contains(ApiSupport.shippedText(Microcopy.of("hostname_not_served")
-                .withFilter("scope", "certificate_request_error").withArg("hostnames", unserved)));
+            .contains(ApiSupport.shippedText(HohenheimMicrocopy.CERTIFICATE_REQUEST_ERROR.of("hostname_not_served")
+                .withArg("hostnames", unserved)));
 
         // 3. STATE, not just status: no certificate order exists for that name.
         assertThat(certificateFor(unserved))
@@ -138,10 +139,10 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         // 2. POSITIVE ANCHOR: `view` IS registered, because the /manage certificate
         //    scope really does consult it -- so step 1 is about an unread capability
         //    and not about the vocabulary being empty.
-        assertThat(KnownCapabilities.get(CertificateModel.MODEL_ID, HohenheimAccess.VIEW))
+        assertThat(KnownCapabilities.get(CertificateModel.MODEL_ID, HohenheimCapabilities.VIEW))
             .describedAs("step 2: `view` stays, and it is the whole vocabulary")
             .isNotNull();
-        assertThat(KnownCapabilities.isDelegable(CertificateModel.MODEL_ID, HohenheimAccess.VIEW))
+        assertThat(KnownCapabilities.isDelegable(CertificateModel.MODEL_ID, HohenheimCapabilities.VIEW))
             .describedAs("step 2: and an operator really can hand it out, which is what"
                 + " makes step 1 about an UNREAD capability rather than an empty registry")
             .isTrue();
@@ -253,7 +254,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
             renewalAfterRevocation(cert, certModel);
         } finally {
             RecordGrants.grant(GrantSubjectType.USER, tenantUserId, SiteModel.MODEL_ID, ownedSiteId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
         }
 
         // 3. Restoring the grant makes the certificate renewable again, so the refusal was
@@ -272,7 +273,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
         // 1. An account holding manage on the owned site renews its name.
         int requesterId = ApiSupport.user("certauth-renewer@hohenheim.local", "Certauth Renewer");
         RecordGrants.grant(GrantSubjectType.USER, requesterId, SiteModel.MODEL_ID, ownedSiteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         PrincipalRef stored = PrincipalRef.account(requesterId);
         assertThat(CertificateAuthority.authorize(CertificateAuthority.Requester.ofSubject(stored),
                 List.of("owned." + ZONE)))
@@ -335,7 +336,7 @@ class CertificateAuthorityTest extends HohenheimTestBase {
 
     private void renewalAfterRevocation(Row cert, CertificateModel certModel) {
         assertThat(RecordGrants.revoke(GrantSubjectType.USER, tenantUserId, SiteModel.MODEL_ID, ownedSiteId,
-                HohenheimAccess.MANAGE))
+                HohenheimCapabilities.MANAGE))
             .describedAs("the manage grant that authorized issuance is revoked")
             .isTrue();
         assertThat(HohenheimAccess.canManageSite(

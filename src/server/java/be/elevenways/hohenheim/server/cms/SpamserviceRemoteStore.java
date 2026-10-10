@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.key.IdentifierKey;
@@ -152,7 +153,7 @@ final class SpamserviceRemoteStore {
         return access -> {
             Boolean unavailable = outcome(entry, access);
             boolean failed = unavailable != null ? unavailable : clients.get() == null;
-            return failed ? Microcopy.of("disconnected").withFilter("scope", "spamservice") : null;
+            return failed ? HohenheimMicrocopy.SPAMSERVICE.of("disconnected") : null;
         };
     }
 
@@ -189,16 +190,8 @@ final class SpamserviceRemoteStore {
         if (conduit == null) {
             return;
         }
-        try {
-            Map<Identifier, Boolean> outcomes = conduit.getAttribute(PAGE_OUTCOMES);
-            if (outcomes == null) {
-                outcomes = new HashMap<>();
-                conduit.setAttribute(PAGE_OUTCOMES, outcomes);
-            }
-            outcomes.put(entry, unavailable);
-        } catch (UnsupportedOperationException attributeless) {
-            // An attribute-less conduit keeps no outcome: the notice falls back to the client's presence.
-        }
+        // An attribute-less conduit keeps no outcome: the notice falls back to the client's presence.
+        CmsSupport.memo(conduit, PAGE_OUTCOMES, HashMap::new).put(entry, unavailable);
     }
 
     private static @Nullable Boolean outcome(@NonNull Identifier entry, @NonNull AccessContext access) {
@@ -246,11 +239,6 @@ final class SpamserviceRemoteStore {
         } catch (IllegalArgumentException invalid) {
             return null;
         }
-    }
-
-    /** @return the value, or "" for a remote field the service left out */
-    static @NonNull Object orBlank(@Nullable Object value) {
-        return value != null ? value : "";
     }
 
     /** @return a remote map as the {@code name}/{@code value} rows of a two-column table, each value as text */

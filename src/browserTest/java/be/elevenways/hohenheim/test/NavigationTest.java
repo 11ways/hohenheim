@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -47,7 +47,7 @@ class NavigationTest extends HohenheimTestBase {
 
         // Soft nav into a cluster: the Domains entry lands on its first member, Addresses, whose page heads with
         // the cluster's tabs; a tab soft-navigates to a sibling member. The URL, the heading and the shell survive.
-        page.locator("pl-app-sidebar a[href='/admin/" + HohenheimPanel.DOMAINS_CLUSTER + "']").click();
+        page.locator("pl-app-sidebar a[href='/admin/" + HohenheimSlugs.Cluster.DOMAIN_NAMES + "']").click();
         waitForHeading("Addresses");
         assertThat(page.url()).endsWith("/admin/domains");
         page.locator("[data-cms-cluster-tabs] a[href='/admin/certificates']").first().click();

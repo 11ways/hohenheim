@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.VariableTypeRegistry;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -29,7 +29,8 @@ public class InstanceTemplateVariableModel extends Model {
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
     public static final IntegerField TEMPLATE_ID = SCHEMA.addField(
-        IntegerField.builder().name("template_id").build());
+        IntegerField.builder().name("template_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("template")).build());
 
     /** The owning template, declared so its delete takes the variables along (InstanceCatalogGuards). */
     public static final BelongsTo<InstanceTemplateModel> TEMPLATE = SCHEMA.addRelation(
@@ -43,45 +44,45 @@ public class InstanceTemplateVariableModel extends Model {
     // config-file content. Uppercase env spelling enforced by a typed validator.
     public static final StringField KEY = SCHEMA.addField(StringField.builder().name("key")
         .required()
-        .validator(Regex.of("^[A-Z][A-Z0-9_]*$", HohenheimViolations.text("variable_key_format")))
-        .label(HohenheimFormCopy.label("variable_key"))
-        .help(HohenheimFormCopy.help("variable_key"))
+        .validator(Regex.of("^[A-Z][A-Z0-9_]*$", HohenheimMicrocopy.VIOLATIONS.of("variable_key_format")))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_key"))
+        .help(HohenheimMicrocopy.HELP.of("variable_key"))
         .build());
 
     // Catalog data that travels in exports: plain strings, never localized content.
     public static final StringField LABEL = SCHEMA.addField(StringField.builder().name("label")
-        .label(HohenheimFormCopy.label("variable_label"))
-        .help(HohenheimFormCopy.help("variable_label"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_label"))
+        .help(HohenheimMicrocopy.HELP.of("variable_label"))
         .build());
 
     public static final StringField DESCRIPTION = SCHEMA.addField(StringField.builder().name("description")
-        .label(HohenheimFormCopy.label("description"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("description"))
         .build());
 
     public static final EnumField TYPE = SCHEMA.addField(
         RegistryMemberField.builder("type")
             .registry(VariableTypeRegistry.REGISTRY)
-            .label(HohenheimFormCopy.label("variable_type"))
-            .help(HohenheimFormCopy.help("variable_type"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_type"))
+            .help(HohenheimMicrocopy.HELP.of("variable_type"))
             .build());
 
     /** Per-type constraint settings (min/max, options, pattern, generate...). */
     public static final SchemaField SETTINGS = SCHEMA.addField(
         SchemaField.builder("settings")
             .schemaFrom("type")
-            .label(HohenheimFormCopy.label("settings"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("settings"))
             .build());
 
     public static final BooleanField REQUIRED = SCHEMA.addField(BooleanField.builder("required")
         .defaultValue(false)
-        .label(HohenheimFormCopy.label("variable_required"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_required"))
         .build());
 
     /** Default value (string form; coerced through the type's field like any submission). */
     public static final StringField DEFAULT_VALUE = SCHEMA.addField(
         StringField.builder().name("default_value")
-            .label(HohenheimFormCopy.label("variable_default"))
-            .help(HohenheimFormCopy.help("variable_default"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_default"))
+            .help(HohenheimMicrocopy.HELP.of("variable_default"))
             .build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());

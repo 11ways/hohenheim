@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -84,7 +85,7 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
 
             // 2. Before any dump: where it runs, who uses it, "Never" for the persistent one, and the temporary one
             //    is "Not backed up".
-            HttpResponse<String> list = adminGet("/admin/" + DatabaseParts.SLUG);
+            HttpResponse<String> list = adminGet("/admin/" + HohenheimSlugs.DATABASES);
             assertThat(list.statusCode()).as("step 2: the Databases list renders").isEqualTo(200);
             assertThat(list.body()).as("step 2: where each database runs, under its name")
                 .contains("Own container on " + host)
@@ -109,11 +110,12 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
             assertThat(DatabaseBackups.stored(PREFIX + "shop")).extracting(DatabaseBackups.Stored::file)
                 .as("step 3: the dumps on disk, newest first")
                 .containsExactly("20261003-030000.sql", "20261002-030000.sql", "20261001-030000.sql");
-            list = adminGet("/admin/" + DatabaseParts.SLUG);
+            list = adminGet("/admin/" + HohenheimSlugs.DATABASES);
             assertThat(list.body()).as("step 3: the list reads the newest dump's size").contains("18.0 MB")
                 .as("step 3: a dump from last night is not overdue").doesNotContain(OVERDUE);
 
-            HttpResponse<String> overview = adminGet("/admin/" + DatabaseParts.SLUG + "/" + shop.get(DatabaseModel.ID)
+            HttpResponse<String> overview = adminGet("/admin/" + HohenheimSlugs.DATABASES + "/" + shop
+                .get(DatabaseModel.ID)
                 + "/page/overview");
             assertThat(overview.statusCode()).as("step 3: the database's overview renders").isEqualTo(200);
             assertThat(overview.body()).as("step 3: the connection names, never the password")
@@ -129,14 +131,14 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
 
             // 4. The front door: a database row opens its overview, and the overview is the landing tab.
             assertThat(list.body()).as("step 4: a row opens the overview")
-                .contains("/admin/" + DatabaseParts.SLUG + "/" + shop.get(DatabaseModel.ID) + "/page/overview");
+                .contains("/admin/" + HohenheimSlugs.DATABASES + "/" + shop.get(DatabaseModel.ID) + "/page/overview");
 
             // 5. The nightly backup stopped: the newest dump is three days old, so the list warns instead of
             //    reading it as done.
             Files.delete(directory.resolve("20261003-030000.sql"));
             Files.delete(directory.resolve("20261002-030000.sql"));
             dump(directory, "20260930-030000.sql", 1024, now.minus(3, ChronoUnit.DAYS));
-            list = adminGet("/admin/" + DatabaseParts.SLUG);
+            list = adminGet("/admin/" + HohenheimSlugs.DATABASES);
             assertThat(list.body()).as("step 5: an old newest dump says the nightly backup stopped")
                 .contains("1.0 KB; " + OVERDUE);
 
@@ -152,15 +154,15 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
 
             // 7. The board's words around the rows: the lead, the create button, and Used by linking each app to
             //    its overview, the overview card's own link.
-            list = adminGet("/admin/" + DatabaseParts.SLUG);
+            list = adminGet("/admin/" + HohenheimSlugs.DATABASES);
             assertThat(list.body()).as("step 7: the list's lead in the board's words")
                 .contains("Managed databases your apps use, with their backups.")
                 .as("step 7: the header button reads as the board's")
                 .containsPattern(Pattern.compile("data-cms-create[^>]*>.{0,1000}?Create database", Pattern.DOTALL));
             String appOverview = InstanceParts.recordRoute("admin", app, null).toUrl();
             assertThat(appOverview).as("step 7: the app's front door is its overview")
-                .isEqualTo("/admin/" + InstanceParts.SLUG + "/" + app.get(InstanceModel.ID) + "/page/"
-                    + InstanceOverview.SLUG);
+                .isEqualTo("/admin/" + HohenheimSlugs.INSTANCES + "/" + app.get(InstanceModel.ID) + "/page/"
+                    + RecordOverview.SLUG);
             assertThat(list.body()).as("step 7: Used by links the app to that overview")
                 .contains("class=\"cms-record-link\" href=\"" + appOverview + "\">" + PREFIX + "app</a>");
 
@@ -178,7 +180,7 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
                 DatabaseModel.DB_PASSWORD.getName(), "shared-secret-password",
                 DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId(),
                 DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
-            String withEngine = adminGet("/admin/" + DatabaseParts.SLUG).body();
+            String withEngine = adminGet("/admin/" + HohenheimSlugs.DATABASES).body();
             int card = withEngine.indexOf("data-cms-list-card");
             int engines = withEngine.indexOf("data-cms-list-widgets-below");
             assertThat(engines).as("step 8: the Engines card renders").isPositive();
@@ -190,7 +192,8 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
                 .as("step 8: how many databases it holds and what its engine does, never the stored \"active\"")
                 .contains("1 database, not running")
                 .as("step 8: opening the engine")
-                .contains("/admin/" + DatabaseParts.ENGINES_SLUG + "/" + engine.get(DatabaseEngineModel.ID) + "/open");
+                .contains("/admin/" + HohenheimSlugs.DATABASE_ENGINES + "/" + engine.get(DatabaseEngineModel.ID)
+                + "/open");
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();
@@ -327,7 +330,7 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
             assertThat(say(root.heldBack())).as("step 2: naming the apps it holds back").isEqualTo("2 apps use it");
             assertThat(say(root.action())).as("step 2: with its action").isEqualTo("Open the database");
             assertThat(root.target().toUrl()).as("step 2: opening the database's front door")
-                .isEqualTo("/admin/" + DatabaseParts.SLUG + "/" + sharedId + "/open");
+                .isEqualTo("/admin/" + HohenheimSlugs.DATABASES + "/" + sharedId + "/open");
 
             // 3. Each app's own item names the database as its cause and folds under it: the dashboard's band and the
             //    Databases band draw the root alone, never "Instance Shop" twice over.
@@ -341,7 +344,7 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
                 .noneSatisfy(item -> assertThat(item.causedBy()).isEqualTo(AttentionSubject.database(sharedId)));
             assertThat(DashboardAttention.band(tier)).as("step 3: the Databases band folds them the same way")
                 .noneSatisfy(item -> assertThat(item.causedBy()).isEqualTo(AttentionSubject.database(sharedId)));
-            String list = adminGet("/admin/" + DatabaseParts.SLUG).body();
+            String list = adminGet("/admin/" + HohenheimSlugs.DATABASES).body();
             assertThat(list).as("step 3: the Databases page leads with the database's item")
                 .contains("Database " + PREFIX + "d12-shop is not running").contains("2 apps use it")
                 .doesNotContain(PREFIX + "d12-shop-app cannot use its database");
@@ -351,9 +354,18 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
             assertThat(list).as("step 4: the list's state cell reads not running")
                 .contains("data-state=\"" + DatabaseVerdict.State.NOT_RUNNING.token() + "\"")
                 .as("step 4: the Engines card says the same").contains("1 database, not running");
-            assertThat(say(DatabaseParts.backUpUnavailable(shared))).as("step 4: Back up now is offered dead")
-                .isEqualTo("Only a running database can be backed up.");
-            String appTab = adminGet("/admin/" + InstanceParts.SLUG + "/" + shopApp.get(InstanceModel.ID)
+            String cannotBackUp = "No backup can be made now. Its engine is not running.";
+            assertThat(say(DatabaseParts.backUpUnavailable(shared))).as("step 4: Back up now is offered dead, saying why")
+                .isEqualTo(cannotBackUp);
+            assertThat(say(DatabaseParts.neverBackedUpDetail(shared)))
+                .as("step 4: Last backup reads the same reason, never \"Back up now\"").isEqualTo(cannotBackUp);
+            assertThat(list).as("step 4: the list's Last backup cell says it").contains(cannotBackUp);
+            // 4b. Delete is dead while the apps hold it, naming them in words: the Used by cell is where they link.
+            assertThat(say(DeleteImpact.databaseInUse(shared))).as("step 4b: the in-use reason names the apps")
+                .isEqualTo("Database '" + PREFIX + "d12-shop' is attached to " + PREFIX + "d12-shop-app, " + PREFIX
+                    + "d12-blog-app. Detach it on each instance's Databases tab first.")
+                .as("step 4b: and pastes no path into the sentence").doesNotContain("/admin/");
+            String appTab = adminGet("/admin/" + HohenheimSlugs.INSTANCES + "/" + shopApp.get(InstanceModel.ID)
                 + "/page/databases").body();
             assertThat(appTab).as("step 4: the app's Databases tab reads the same words").contains("Not running</a>");
 
@@ -362,8 +374,22 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
             assertThat(rootOf(AttentionCollector.databases(), sharedId)).as("step 5: nothing left to say").isNull();
             assertThat(AttentionCollector.databases()).as("step 5: no app is held back")
                 .noneSatisfy(item -> assertThat(item.causedBy()).isEqualTo(AttentionSubject.database(sharedId)));
-            assertThat(adminGet("/admin/" + DatabaseParts.SLUG).body()).as("step 5: the list reads running")
+            assertThat(adminGet("/admin/" + HohenheimSlugs.DATABASES).body()).as("step 5: the list reads running")
                 .contains("data-state=\"" + DatabaseVerdict.State.RUNNING.token() + "\"");
+            assertThat(DatabaseParts.backUpUnavailable(shared)).as("step 5: Back up now is live again").isNull();
+            assertThat(say(DatabaseParts.neverBackedUpDetail(shared))).as("step 5: Last backup offers it again")
+                .isEqualTo("Back up now, or wait for the nightly backup");
+            assertThat(DatabaseParts.moveUnavailable(shared)).as("step 5: a serving database may move").isNull();
+
+            // 6. A dedicated database with no engine to run on cannot move onto a shared engine either (the move dumps
+            //    it from the engine it leaves): Move to shared engine is offered dead, in the verdict's words.
+            Row dedicated = database(cleanup, "d12-own", false);
+            String cannotMove = "It cannot move now. It has no engine to run on.";
+            assertThat(say(DatabaseParts.moveUnavailable(dedicated))).as("step 6: the move says why it is dead")
+                .isEqualTo(cannotMove);
+            assertThat(adminGet("/admin/" + HohenheimSlugs.DATABASES + "/" + dedicated.get(DatabaseModel.ID)
+                + "/page/overview").body()).as("step 6: its record menu carries the reason")
+                .contains("data-cms-action-reason").contains(cannotMove);
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();

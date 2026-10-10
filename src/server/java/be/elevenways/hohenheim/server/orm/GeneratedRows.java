@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.orm;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.protoblast.common.time.Now;
@@ -175,7 +176,7 @@ public final class GeneratedRows {
             }
             if (changesAttribution(row, stored, columns)) {
                 throw Violations.ofField(columns.by().getName(), row.get(columns.by()),
-                    CmsSupport.violationText(attributionKey));
+                    HohenheimMicrocopy.VIOLATIONS.of(attributionKey));
             }
         });
         schema.addBeforeRemoveHook(context -> {
@@ -193,7 +194,7 @@ public final class GeneratedRows {
     private static @NonNull Violations readOnly(@NonNull Columns columns, @NonNull Row stored,
                                                 @NonNull String readOnlyKey) {
         return Violations.ofField(columns.by().getName(), stored.get(columns.by()),
-            CmsSupport.violationText(readOnlyKey)
+            HohenheimMicrocopy.VIOLATIONS.of(readOnlyKey)
                 .withArg("source", String.valueOf((Object) stored.get(columns.by()))));
     }
 

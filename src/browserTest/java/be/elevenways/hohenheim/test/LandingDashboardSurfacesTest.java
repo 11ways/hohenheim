@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.SystemUserModel;
 import be.elevenways.hohenheim.server.ServerMain;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.dns.DnsServer;
 import be.elevenways.hohenheim.server.docker.DockerHealth;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
@@ -64,19 +64,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * slug address, a PanelDashboard only to its id token: P07, no slug alias) and the /manage landing's surface, which
  * W9b redrew on purpose ({@link #redrawn}).
  *
- * AIDEV-NOTE: intended differences, hand-edited (D7f, 2026-10-08): the /manage landing's title is the panel's
- * "Your services" (its nav row still reads Overview), and the operator's "Put your first app online" step is TODO
- * with its Open link, because the fixture's only site has no address and so serves nobody. No other fact moved.
- *
- * AIDEV-NOTE: intended differences, hand-edited (D8, 2026-10-08): the operator's checklist ticks enrolment (naming
- * "local, Docker") and its open admission and backups steps present the attention items stating their stage (their
- * words and worded action), so the band, holding nothing else, is not drawn under the open checklist.
- *
- * AIDEV-NOTE: intended differences, hand-edited (D10a, 2026-10-08): the checklist reads board Empty-Dashboard's
- * "Before your first app" / "Each step ticks itself off.", and the count tiles are board Main's Apps, Hosts,
- * Certificates and Backups (Hohenheim's own stat widget, each with the line its facts back: "1 with a problem" for
- * the address-less site, "1 waiting" for the never-checked host, none for no certificate, "No app has a backup
- * target"), replacing Sites, Certificates, Access lists and Active bans.
+ * AIDEV-NOTE: the fixture decides the operator's checklist and tiles. Its only site has no address and so serves
+ * nobody: "Put your first app online" stays TODO with its Open link and the Apps tile reads "1 with a problem". Its
+ * never-checked host makes the Hosts tile "1 waiting". The open admission and backups steps present the attention
+ * items stating their stage, so the attention band, holding nothing else, is not drawn under the open checklist.
  *
  * AIDEV-NOTE: the attention widget reads JVM-global inputs other classes of a lane change (decided 2026-10-03: pin
  * every input the test does not own, never compare host state). {@link #pinAttentionInputs} sets the settings and
@@ -130,7 +121,7 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
         site.set(SiteModel.ENABLED, true);
         sites.save(site);
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, site.get(SiteModel.ID),
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         tenant = sessionFor(tenantId);
         outsider = sessionFor(outsiderId);
         seedRecentActivity();

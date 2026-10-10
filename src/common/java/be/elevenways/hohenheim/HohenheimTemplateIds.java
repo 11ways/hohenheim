@@ -24,7 +24,6 @@ public final class HohenheimTemplateIds {
     public static final Identifier DNS_ZONE_FILE = Identifier.of("hohenheim", "cms/dns-zone-file");
     public static final Identifier DNS_ZONE_RECORDS = Identifier.of("hohenheim", "cms/dns-zone-records");
     public static final Identifier DNS_ZONE_REMOTE_RECORDS = Identifier.of("hohenheim", "cms/dns-zone-remote-records");
-    public static final Identifier DNS_ZONE_SECONDARIES = Identifier.of("hohenheim", "cms/dns-zone-secondaries");
     public static final Identifier INBOX = Identifier.of("hohenheim", "cms/inbox");
     public static final Identifier INSTANCE_CONSOLE = Identifier.of("hohenheim", "cms/instance-console");
     public static final Identifier INSTANCE_DATABASES = Identifier.of("hohenheim", "cms/instance-databases");
@@ -49,7 +48,6 @@ public final class HohenheimTemplateIds {
         Identifier.of("hohenheim", "cms/spamservice-sample-analysis");
     public static final Identifier STACK_DEPLOYMENTS = Identifier.of("hohenheim", "cms/stack-deployments");
     public static final Identifier STACK_SERVICES = Identifier.of("hohenheim", "cms/stack-services");
-    public static final Identifier TEMPLATE_CONTENTS = Identifier.of("hohenheim", "cms/template-contents");
     public static final Identifier TEMPLATE_IMPORT = Identifier.of("hohenheim", "cms/template-import");
 
     // Dashboard and overview widget display templates (HohenheimWidgets).
@@ -70,16 +68,12 @@ public final class HohenheimTemplateIds {
     public static final Identifier WIDGET_TENANT_USAGE = Identifier.of("hohenheim", "cms/widget-tenant-usage");
 
     // List-cell partials; a column names one through its String renderer.
-    public static final String CELL_APP_FIX = "hohenheim:cms/cell/app-fix";
-    public static final String CELL_BAN_STATE = "hohenheim:cms/cell/ban-state";
-    public static final String CELL_DOMAIN_CERTIFICATE = "hohenheim:cms/cell/domain-certificate";
     public static final String CELL_STATE_LINE = "hohenheim:cms/cell/state-line";
     public static final String CELL_HOST_STATUS = "hohenheim:cms/cell/host-status";
     public static final String CELL_HOST_MEMORY = "hohenheim:cms/cell/host-memory";
     public static final String CELL_MANAGED_BY = "hohenheim:cms/cell/managed-by";
     public static final String CELL_INSTALL_STATE = "hohenheim:cms/cell/install-state";
     public static final String CELL_SITE_HOSTNAMES = "hohenheim:cms/cell/site-hostnames";
-    public static final String CELL_SITE_TLS = "hohenheim:cms/cell/site-tls";
     public static final String CELL_SITE_UPSTREAM = "hohenheim:cms/cell/site-upstream";
 
     private HohenheimTemplateIds() {

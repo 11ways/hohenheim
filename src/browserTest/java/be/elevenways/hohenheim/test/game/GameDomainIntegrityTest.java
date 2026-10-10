@@ -9,7 +9,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.game.VelocityConfigs;
@@ -89,10 +89,10 @@ class GameDomainIntegrityTest extends HohenheimTestBase {
 
         tenantId = ApiSupport.user("tenant@game-integrity.test");
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         for (int instance : List.of(backendId, proxyId, secondProxyId)) {
             RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instance,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
         }
 
         primaryZoneId = zone(PRIMARY_ORIGIN, DnsZoneModel.ROLE_PRIMARY);

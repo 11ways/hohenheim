@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.GitProviderModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -24,16 +23,6 @@ public final class GitlabProviderKind implements GitProviderKind {
     @Override public @NonNull Identifier typeId() { return ID; }
 
     @Override public @NonNull String getDisplayName() { return "GitLab"; }
-
-    @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("gitlab").withFilter("scope", "git_provider_kind");
-    }
-
-    @Override
-    public @NonNull Microcopy getDescription() {
-        return Microcopy.of("gitlab").withFilter("scope", "git_provider_kind_description");
-    }
 
     @Override public Icon getIcon() { return Icon.of("gitlab"); }
 

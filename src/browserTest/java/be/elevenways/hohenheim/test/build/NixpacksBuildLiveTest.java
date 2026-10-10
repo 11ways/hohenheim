@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.build;
 
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -256,7 +257,7 @@ class NixpacksBuildLiveTest {
             assertThat(result.succeeded()).as("step 1: an undetectable repo is not a success")
                 .isFalse();
             assertThat(result.status()).as("step 1: it is REFUSED, not merely failed")
-                .isEqualTo(BuildOperationModel.STATUS_REFUSED);
+                .isEqualTo(BuildOperationModel.LIFECYCLE.stored(OperationStatus.REFUSED));
             assertThat(result.failureReason())
                 .as("step 1: and the reason names the detector's finding")
                 .contains("nixpacks detected no provider");

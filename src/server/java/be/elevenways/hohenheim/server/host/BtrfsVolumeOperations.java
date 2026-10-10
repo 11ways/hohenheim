@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.server.util.PosixPaths;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.validation.Violations;
@@ -49,7 +51,7 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
         // take no quota and no snapshot, which is the failure this whole tier exists to
         // make impossible. Only an absent path or an existing subvolume is acceptable.
         run(privileged(PrivilegedHelper.Verb.VOLUME_CREATE,
-            this.sudo + "mkdir -p " + HostShell.quote(HostShell.parentOf(hostPath))
+            this.sudo + "mkdir -p " + HostShell.quote(PosixPaths.parentOf(hostPath))
                 + " && { " + this.sudo + "btrfs subvolume show " + quoted + " >/dev/null 2>&1"
                 + " || " + this.sudo + "btrfs subvolume create " + quoted + "; }", hostPath),
             "volume_create_failed", hostPath);
@@ -101,7 +103,7 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
     public @NonNull String snapshot(@NonNull String hostPath, @NonNull String label) {
         String target = snapshotPathFor(hostPath, label);
         run(privileged(PrivilegedHelper.Verb.VOLUME_SNAPSHOT,
-            this.sudo + "mkdir -p " + HostShell.quote(HostShell.parentOf(target))
+            this.sudo + "mkdir -p " + HostShell.quote(PosixPaths.parentOf(target))
                 + " && " + this.sudo + "btrfs subvolume snapshot -r " + HostShell.quote(hostPath) + " "
                 + HostShell.quote(target), hostPath, target),
             "volume_snapshot_failed", hostPath);
@@ -141,17 +143,17 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
      */
     public static @NonNull String snapshotPathFor(@NonNull String hostPath,
                                                   @NonNull String label) {
-        String parent = HostShell.parentOf(hostPath);
-        String name = hostPath.substring(hostPath.lastIndexOf('/') + 1);
+        String parent = PosixPaths.parentOf(hostPath);
+        String name = PosixPaths.nameOf(hostPath);
         String stamp = Now.instant().toString().replace(':', '-').replace('.', '-');
-        return HostShell.parentOf(parent) + "/" + SNAPSHOT_DIRECTORY + "/"
-            + parent.substring(parent.lastIndexOf('/') + 1) + "/" + name + "@"
+        return PosixPaths.parentOf(parent) + "/" + SNAPSHOT_DIRECTORY + "/"
+            + PosixPaths.nameOf(parent) + "/" + name + "@"
             + sanitize(label) + "-" + stamp;
     }
 
     /** The btrfs filesystem a path lives on; the whole volume root is one filesystem. */
     private static @NonNull String mountpointOf(@NonNull String hostPath) {
-        return HostShell.parentOf(HostShell.parentOf(hostPath));
+        return PosixPaths.parentOf(PosixPaths.parentOf(hostPath));
     }
 
 
@@ -176,7 +178,7 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
                      @NonNull String hostPath) {
         HostShell.Result result = this.shell.run(script);
         if (!result.ok()) {
-            throw Violations.ofForm(HohenheimViolations.text(violation)
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of(violation)
                 .withArg("path", hostPath)
                 .withArg("backend", VolumeBackend.BTRFS.label())
                 .withArg("reason", result.text()));

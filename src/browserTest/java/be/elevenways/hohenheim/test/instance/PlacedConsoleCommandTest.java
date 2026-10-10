@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.server.cms.InstanceParts;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -113,7 +113,7 @@ class PlacedConsoleCommandTest {
             // 3. A schedule step sends its stored line through the same operation, recorded the same way.
             int runAs = ApiSupport.user("placed-console-runner@test", "Console Runner");
             RecordGrants.grant(GrantSubjectType.USER, runAs, InstanceModel.MODEL_ID, instanceId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             int schedule = schedule(instanceId, (long) runAs);
             step(schedule, Map.of(InstanceOperations.COMMAND.getName(), "say scheduled"));
             Row run = new RecordSchedules(datasource).runNow(schedule);

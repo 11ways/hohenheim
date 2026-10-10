@@ -1,8 +1,12 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Optional, OPERATOR-CONFIGURED cgroup caps: memory in MiB and CPUs as a decimal
@@ -43,11 +47,11 @@ public record ResourceLimits(@Nullable Integer memoryMb, @Nullable Double cpus) 
         return new ResourceLimits(memoryMb, cpus);
     }
 
-    /** Read {@code memory_limit_mb} / {@code cpu_limit} out of a site-settings map. */
+    /** Read the {@link InstanceKindFields#MEMORY_LIMIT_MB} and {@link InstanceKindFields#CPU_LIMIT} settings. */
     public static ResourceLimits fromSettings(Map<String, Object> settings) {
         return new ResourceLimits(
-            asInteger(settings.get("memory_limit_mb")),
-            asDouble(settings.get("cpu_limit")));
+            RawValues.positiveInt(settings.get(InstanceKindFields.MEMORY_LIMIT_MB)),
+            RawValues.parsedDouble(settings.get(InstanceKindFields.CPU_LIMIT)));
     }
 
     /**
@@ -65,10 +69,25 @@ public record ResourceLimits(@Nullable Integer memoryMb, @Nullable Double cpus) 
      */
     public static ResourceLimits fromSettings(Map<String, Object> settings,
                                               int defaultMemoryMb) {
-        Integer declared = asInteger(settings.get("memory_limit_mb"));
         return new ResourceLimits(
-            declared != null && declared > 0 ? declared : defaultMemoryMb,
-            asDouble(settings.get("cpu_limit")));
+            Objects.requireNonNullElse(RawValues.positiveInt(settings.get(InstanceKindFields.MEMORY_LIMIT_MB)),
+                defaultMemoryMb),
+            RawValues.parsedDouble(settings.get(InstanceKindFields.CPU_LIMIT)));
+    }
+
+    /**
+     * Copies the positive numeric limits of an instance's settings into the settings of a workload derived from it.
+     *
+     * AIDEV-NOTE: a number only, never text {@link #fromSettings(Map)} would parse: a release and a preview carry the
+     * limits exactly as the instance stores them.
+     */
+    public static void carry(@NonNull Map<String, Object> settings, @NonNull Map<String, Object> into) {
+        if (settings.get(InstanceKindFields.MEMORY_LIMIT_MB) instanceof Number memory && memory.intValue() > 0) {
+            into.put(InstanceKindFields.MEMORY_LIMIT_MB, memory.intValue());
+        }
+        if (settings.get(InstanceKindFields.CPU_LIMIT) instanceof Number cpu && cpu.doubleValue() > 0) {
+            into.put(InstanceKindFields.CPU_LIMIT, cpu.doubleValue());
+        }
     }
 
     /** The memory this configuration is booked and capped at (MB). */
@@ -84,33 +103,5 @@ public record ResourceLimits(@Nullable Integer memoryMb, @Nullable Double cpus) 
         if (cpus != null && cpus > 0) {
             hostConfig.put("NanoCpus", (long) (cpus * 1_000_000_000L));
         }
-    }
-
-    private static @Nullable Integer asInteger(Object value) {
-        if (value instanceof Number n) {
-            return n.intValue();
-        }
-        if (value instanceof String s && !s.isBlank()) {
-            try {
-                return Integer.parseInt(s.trim());
-            } catch (NumberFormatException ignored) {
-                return null;
-            }
-        }
-        return null;
-    }
-
-    private static @Nullable Double asDouble(Object value) {
-        if (value instanceof Number n) {
-            return n.doubleValue();
-        }
-        if (value instanceof String s && !s.isBlank()) {
-            try {
-                return Double.parseDouble(s.trim());
-            } catch (NumberFormatException ignored) {
-                return null;
-            }
-        }
-        return null;
     }
 }

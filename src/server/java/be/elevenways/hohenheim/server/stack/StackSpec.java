@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
@@ -85,10 +86,10 @@ public record StackSpec(
                 readAll(mounts, MountSpec::read), readAll(ports, PortSpec::read),
                 readAll(dependsOn, DependsSpec::read), readAll(files, FileSpec::read),
                 Texts.blankAsNull(field.apply(StackServiceModel.HEALTH_CMD.getName())),
-                intOr(field.apply(StackServiceModel.HEALTH_INTERVAL_SECONDS.getName()), 10),
-                intOr(field.apply(StackServiceModel.HEALTH_TIMEOUT_SECONDS.getName()), 5),
-                intOr(field.apply(StackServiceModel.HEALTH_RETRIES.getName()), 5),
-                intOr(field.apply(StackServiceModel.HEALTH_START_PERIOD_SECONDS.getName()), 0),
+                RawValues.intOr(field.apply(StackServiceModel.HEALTH_INTERVAL_SECONDS.getName()), 10),
+                RawValues.intOr(field.apply(StackServiceModel.HEALTH_TIMEOUT_SECONDS.getName()), 5),
+                RawValues.intOr(field.apply(StackServiceModel.HEALTH_RETRIES.getName()), 5),
+                RawValues.intOr(field.apply(StackServiceModel.HEALTH_START_PERIOD_SECONDS.getName()), 0),
                 Texts.orIfBlank(field.apply(StackServiceModel.RESTART_POLICY.getName()), "unless-stopped"),
                 field.apply(StackServiceModel.MEMORY_LIMIT_MB.getName()) instanceof Number memory
                     ? memory.intValue() : null,
@@ -284,7 +285,7 @@ public record StackSpec(
     private static ServiceSpec serviceOf(Row serviceRow, StackFileModel fileModel) {
         Integer serviceId = serviceRow.get(StackServiceModel.ID);
         List<Row> files = serviceId == null ? List.of() : fileModel.findByServiceId(serviceId);
-        return ServiceSpec.read(intOr(serviceId, 0), serviceRow::get,
+        return ServiceSpec.read(RawValues.intOr(serviceId, 0), serviceRow::get,
             serviceRow.getRecords(StackServiceModel.MOUNTS),
             serviceRow.getRecords(StackServiceModel.PORTS),
             serviceRow.getRecords(StackServiceModel.DEPENDS_ON),
@@ -371,19 +372,19 @@ public record StackSpec(
     @SuppressWarnings("unchecked")
     public static @NonNull StackSpec fromMap(@NonNull Map<String, Object> root) {
         List<ServiceSpec> services = new ArrayList<>();
-        for (Object entry : listOf(root.get("services"))) {
+        for (Object entry : RawValues.list(root.get("services"))) {
             if (!(entry instanceof Map<?, ?> map)) {
                 continue;
             }
-            services.add(ServiceSpec.read(intOr(map.get(SNAPSHOT_SERVICE_ID), 0), map::get,
-                listOf(map.get(StackServiceModel.MOUNTS.getName())),
-                listOf(map.get(StackServiceModel.PORTS.getName())),
-                listOf(map.get(StackServiceModel.DEPENDS_ON.getName())),
-                listOf(map.get(SNAPSHOT_FILES))));
+            services.add(ServiceSpec.read(RawValues.intOr(map.get(SNAPSHOT_SERVICE_ID), 0), map::get,
+                RawValues.list(map.get(StackServiceModel.MOUNTS.getName())),
+                RawValues.list(map.get(StackServiceModel.PORTS.getName())),
+                RawValues.list(map.get(StackServiceModel.DEPENDS_ON.getName())),
+                RawValues.list(map.get(SNAPSHOT_FILES))));
         }
 
         return new StackSpec(
-            intOr(root.get("stack_id"), 0),
+            RawValues.intOr(root.get("stack_id"), 0),
             Texts.orIfBlank(root.get("name"), ""),
             Texts.orIfBlank(root.get("server_name"), "local"),
             Texts.blankAsNull(root.get("registry_server")),
@@ -425,13 +426,5 @@ public record StackSpec(
             maps.add(writer.apply(value));
         }
         return maps;
-    }
-
-    private static @NonNull List<?> listOf(@Nullable Object value) {
-        return value instanceof List<?> list ? list : List.of();
-    }
-
-    private static int intOr(@Nullable Object value, int fallback) {
-        return value instanceof Number number ? number.intValue() : fallback;
     }
 }

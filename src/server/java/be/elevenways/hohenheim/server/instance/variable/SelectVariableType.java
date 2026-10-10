@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.instance.variable;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -28,8 +28,8 @@ public final class SelectVariableType implements VariableTypeHandler {
 
     public static final ListField<String> OPTIONS = SETTINGS_SCHEMA.addField(
         ListField.builder(StringField.builder().name("option").build()).name("options")
-            .label(HohenheimFormCopy.label("variable_options"))
-            .help(HohenheimFormCopy.help("variable_options"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("variable_options"))
+            .help(HohenheimMicrocopy.HELP.of("variable_options"))
             .build());
 
     @Override
@@ -37,11 +37,6 @@ public final class SelectVariableType implements VariableTypeHandler {
 
     @Override
     public @NonNull String getDisplayName() { return "Choice"; }
-
-    @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("select").withFilter("scope", "variable_type");
-    }
 
     @Override
     public Icon getIcon() { return Icon.of("list"); }

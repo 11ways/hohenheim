@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.DoomedRows;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
@@ -117,7 +118,7 @@ public final class InstanceDatabaseLinks {
                 names.add(String.valueOf((Object) instance.get(InstanceModel.NAME)));
             }
         }
-        throw Violations.ofForm(CmsSupport.violationText("database_in_use")
+        throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("database_in_use")
             .withArg("name", database != null
                 ? String.valueOf((Object) database.get(DatabaseModel.NAME)) : "")
             .withArg("workloads", String.join(", ", names)));
@@ -164,12 +165,12 @@ public final class InstanceDatabaseLinks {
             String failure = database.get(DatabaseModel.FAILURE_REASON);
             if (DatabaseModel.STATUS_FAILED.equals(status) && failure != null
                     && !failure.isBlank()) {
-                return CmsSupport.violationText("database_not_ready")
+                return HohenheimMicrocopy.VIOLATIONS.of("database_not_ready")
                     .withFilter("state", DatabaseModel.STATUS_FAILED)
                     .withArg("name", name)
                     .withArg("reason", failure);
             }
-            return CmsSupport.violationText("database_not_ready")
+            return HohenheimMicrocopy.VIOLATIONS.of("database_not_ready")
                 .withArg("name", name)
                 .withArg("state", String.valueOf(status));
         }

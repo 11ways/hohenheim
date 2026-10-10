@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.instance.InstanceSnapshotOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceSnapshotModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
@@ -21,7 +22,7 @@ public final class InstanceSnapshotOperationHandlers {
         OperationHandlers.attach(InstanceSnapshotOperations.RESTORE)
             .applies(row -> InstanceSnapshotModel.STATUS_COMPLETE.equals(row.get(InstanceSnapshotModel.STATUS)))
             .authorize((row, input, access) -> HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID,
-                row.get(InstanceSnapshotModel.INSTANCE_ID), HohenheimAccess.SNAPSHOTS) ? null
+                row.get(InstanceSnapshotModel.INSTANCE_ID), HohenheimCapabilities.SNAPSHOTS) ? null
                 : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "Snapshot restoration requires its instance capability"))
             .handle(call -> {
                 // AIDEV-NOTE: restore records the instance-level act itself; its updateAll writes fire no save hook.
@@ -30,7 +31,7 @@ public final class InstanceSnapshotOperationHandlers {
             });
         OperationHandlers.attach(InstanceSnapshotOperations.DELETE)
             .authorize((row, input, access) -> HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID,
-                row.get(InstanceSnapshotModel.INSTANCE_ID), HohenheimAccess.SNAPSHOTS) ? null
+                row.get(InstanceSnapshotModel.INSTANCE_ID), HohenheimCapabilities.SNAPSHOTS) ? null
                 : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "Snapshot deletion requires its instance capability"))
             .handle(call -> {
                 ActivityLog.withAction(ZenitActivityAction.DELETE, "delete_snapshot",

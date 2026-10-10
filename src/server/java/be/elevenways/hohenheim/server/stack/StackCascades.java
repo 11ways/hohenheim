@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.stack;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StackDeploymentModel;
 import be.elevenways.hohenheim.model.StackFileModel;
@@ -78,7 +79,7 @@ public final class StackCascades {
         String name = service != null
             ? String.valueOf((Object) service.get(StackServiceModel.NAME))
             : String.valueOf((Object) running.get(InstanceModel.NAME));
-        throw Violations.ofForm(CmsSupport.violationText("stack_service_running")
+        throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("stack_service_running")
             .withArg("service", name));
     }
 }

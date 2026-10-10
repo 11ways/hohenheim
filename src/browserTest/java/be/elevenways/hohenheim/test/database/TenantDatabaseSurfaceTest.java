@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.database;
 
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -8,6 +9,7 @@ import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.cms.DatabaseParts;
 import be.elevenways.hohenheim.server.database.DatabaseInstances;
@@ -17,10 +19,8 @@ import be.elevenways.hohenheim.server.database.TenantDatabases;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
-import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
-import be.elevenways.hohenheim.server.quota.DatabaseQuota;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.PanelAction;
@@ -173,18 +173,18 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         int siteA = site(PREFIX + n + "-site-a");
         int siteB = site(PREFIX + n + "-site-b");
         RecordGrants.grant(GrantSubjectType.USER, tenantA, SiteModel.MODEL_ID, siteA,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantB, SiteModel.MODEL_ID, siteB,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         // A database attaches to the WORKLOAD that consumes it, which since brief 7 is an
         // application instance rather than a site.
         int applicationA = application(PREFIX + n + "-app-a");
         int applicationB = application(PREFIX + n + "-app-b");
         RecordGrants.grant(GrantSubjectType.USER, tenantA, InstanceModel.MODEL_ID,
-            applicationA, HohenheimAccess.MANAGE, true);
+            applicationA, HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, tenantB, InstanceModel.MODEL_ID,
-            applicationB, HohenheimAccess.MANAGE, true);
+            applicationB, HohenheimCapabilities.MANAGE, true);
 
         if (mayAllocate) {
             grantAllocation(tenantA);
@@ -281,12 +281,12 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
 
     /** The tenant's INSTANCE (workload) bucket, which a shared database never spends. */
     private static String instanceBucketOf(int userId) {
-        return InstanceQuota.bucketKeyOf(packedOf(userId));
+        return OwnerBudget.INSTANCES.bucketOf(packedOf(userId));
     }
 
     /** The tenant's DATABASE bucket, the one a shared record is charged to. */
     private static String databaseBucketOf(int userId) {
-        return DatabaseQuota.bucketKeyOf(packedOf(userId));
+        return OwnerBudget.DATABASES.bucketOf(packedOf(userId));
     }
 
     private static boolean offersAction(List<PanelAction<Row>> actions, String actionName) {
@@ -383,7 +383,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         assertThat(engineInstance).as("step 6: the engine owns the instance row").isNotNull();
         assertThat((String) engineInstance.get(InstanceModel.QUOTA_BUCKET))
             .as("step 6: booked against the OPERATOR bucket, never the tenant's")
-            .isEqualTo(InstanceQuota.bucketKeyOf(""))
+            .isEqualTo(OwnerBudget.INSTANCES.bucketOf(""))
             .isNotEqualTo(instanceBucketOf(tenantAId));
         assertThat((String) database.get(DatabaseModel.QUOTA_BUCKET))
             .as("step 6: while the record itself is charged to the tenant's DATABASE bucket")
@@ -477,7 +477,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
 
         // 1. The teammate is granted VIEW and nothing else. They reach the record.
         RecordGrants.grant(GrantSubjectType.USER, viewerId, DatabaseModel.MODEL_ID, databaseAId,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
         HttpResponse<String> detail = get(sessionViewer, "/manage/databases/" + databaseAId);
         assertThat(detail.statusCode()).as("step 1: a view grant opens the record")
             .isEqualTo(200);
@@ -506,12 +506,12 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
 
         // 4. Granting the teammate CREDENTIALS explicitly opens exactly that one door.
         RecordGrants.grant(GrantSubjectType.USER, viewerId, DatabaseModel.MODEL_ID, databaseAId,
-            HohenheimAccess.CREDENTIALS, true);
+            HohenheimCapabilities.CREDENTIALS, true);
         assertThat(get(sessionViewer, credentialsUrl).body())
             .as("step 4: an explicit credentials grant is what opens it")
             .contains(password);
         RecordGrants.revoke(GrantSubjectType.USER, viewerId, DatabaseModel.MODEL_ID, databaseAId,
-            HohenheimAccess.CREDENTIALS);
+            HohenheimCapabilities.CREDENTIALS);
         assertThat(get(sessionViewer, credentialsUrl).statusCode())
             .as("step 4: and revoking it closes the door again, same request")
             .isEqualTo(404);
@@ -529,7 +529,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         // The teammate holds VIEW on the record, so step 4's "not offered" is judged on a
         // list that really shows them the row.
         RecordGrants.grant(GrantSubjectType.USER, cast.viewer(), DatabaseModel.MODEL_ID,
-            databaseAId, HohenheimAccess.VIEW, true);
+            databaseAId, HohenheimCapabilities.VIEW, true);
         assertThat(get(sessionViewer, "/manage/databases").body())
             .as("fixture: the view-only teammate's list shows the database")
             .contains(databaseAName);
@@ -760,7 +760,7 @@ class TenantDatabaseSurfaceTest extends HohenheimTestBase {
         assertThat(Quotas.usedOf(databaseBucketOf(tenantAId)))
             .as("step 2: used == limit, not limit + 1")
             .isEqualTo(used + 1);
-        assertThat(DatabaseQuota.limitFor(packed))
+        assertThat(OwnerBudget.DATABASES.limitFor(packed))
             .as("step 2: against the tenant's OWN cap, not a shared one")
             .isEqualTo((int) used + 1);
         assertThat(Quotas.usedOf(instanceBucketOf(tenantAId)))

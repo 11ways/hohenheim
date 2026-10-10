@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.GrantSubjects;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -52,7 +53,7 @@ class OwnerSubjectsTest extends HohenheimTestBase {
         // 1. A live grant makes its holder the owner, spelled in the STORED token format
         //    production's packed owner sets already carry.
         RecordGrants.grant(GrantSubjectType.USER, holder, SiteModel.MODEL_ID, tenantSite,
-            HohenheimAccess.MANAGE, true, Now.instant().plusSeconds(3_600));
+            HohenheimCapabilities.MANAGE, true, Now.instant().plusSeconds(3_600));
         assertThat(HohenheimAccess.manageSubjectsOf(tenantSite))
             .as("step 1: a live grant is ownership").containsExactly("user:" + holder);
         assertThat(GrantSubjects.userToken(holder)).as("step 1: the token format never moves")
@@ -62,7 +63,7 @@ class OwnerSubjectsTest extends HohenheimTestBase {
 
         // 2. The same grant, expired, decides nothing -- in the walk AND here.
         RecordGrants.grant(GrantSubjectType.USER, holder, SiteModel.MODEL_ID, tenantSite,
-            HohenheimAccess.MANAGE, true, Now.instant().minusSeconds(60));
+            HohenheimCapabilities.MANAGE, true, Now.instant().minusSeconds(60));
         assertThat(HohenheimAccess.manageSubjectsOf(tenantSite))
             .as("step 2: an expired grant is no longer ownership").isEmpty();
         assertThat(HohenheimAccess.sameOwner(tenantSite, operatorSite))
@@ -103,7 +104,7 @@ class OwnerSubjectsTest extends HohenheimTestBase {
 
         // 1. Before the grant the request memo answers "not yours" (and caches it).
         assertThat(HohenheimAccess.reachesRecord(ctx, SiteModel.MODEL_ID, created,
-            HohenheimAccess.MANAGE)).as("step 1: nothing planted yet").isFalse();
+            HohenheimCapabilities.MANAGE)).as("step 1: nothing planted yet").isFalse();
 
         // 2. The funnel plants manage for exactly the creation owner...
         HohenheimAccess.grantCreatorManage(SiteModel.MODEL_ID, created, ctx);
@@ -113,7 +114,7 @@ class OwnerSubjectsTest extends HohenheimTestBase {
 
         // 3. ...and drops the memo, so the SAME request now sees its own grant.
         assertThat(HohenheimAccess.reachesRecord(ctx, SiteModel.MODEL_ID, created,
-            HohenheimAccess.MANAGE)).as("step 3: the stale memo was dropped").isTrue();
+            HohenheimCapabilities.MANAGE)).as("step 3: the stale memo was dropped").isTrue();
 
         // 4. The compensation removes exactly that grant again.
         HohenheimAccess.revokeCreatorManage(SiteModel.MODEL_ID, created, ctx);

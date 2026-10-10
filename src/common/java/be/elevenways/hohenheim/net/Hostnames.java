@@ -5,6 +5,8 @@ import be.elevenways.protoblast.common.util.BlastString;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import static be.elevenways.hohenheim.RawValues.trimmed;
+
 /**
  * THE hostname syntax authority: what a name may be SPELLED like, for every tier that
  * stores one.
@@ -226,6 +228,6 @@ public final class Hostnames {
 
     /** Trim, case-fold and drop the root dot, so every predicate judges the stored form. */
     private static @NonNull String normalize(@Nullable String value) {
-        return value == null ? "" : stripTrailingDots(BlastString.lower(value.trim()));
+        return stripTrailingDots(BlastString.lower(trimmed(value)));
     }
 }

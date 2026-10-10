@@ -1,16 +1,13 @@
 package be.elevenways.hohenheim.test.quota;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.database.DatabaseService;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.docker.ServerService;
-import be.elevenways.hohenheim.server.instance.InstanceDeviceQuota;
-import be.elevenways.hohenheim.server.preview.PreviewQuota;
-import be.elevenways.hohenheim.server.quota.DatabaseQuota;
 import be.elevenways.hohenheim.server.quota.QuotaReconciler;
-import be.elevenways.hohenheim.server.quota.SiteQuota;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -63,7 +60,7 @@ class QuotaDimensionsReconcileTest {
     @Test
     void aFailedCreateSpendsNothingAndEveryDimensionReconcilesToItsRows() {
         DatabaseService service = new DatabaseService();
-        String databaseBucket = DatabaseQuota.bucketKeyOf("");
+        String databaseBucket = OwnerBudget.DATABASES.bucketOf("");
         long before = Quotas.usedOf(databaseBucket);
 
         // 1. A create that lands spends one database slot.
@@ -89,27 +86,27 @@ class QuotaDimensionsReconcileTest {
 
         // 3. Leaks in every dimension the reconciler used to skip: buckets no row names
         //    (the lost-race shape for an owner with no other record) and counts above the rows.
-        Quotas.reserve(DatabaseQuota.bucketKeyOf(STRANGER), 1, Long.MAX_VALUE);
-        Quotas.reserve(SiteQuota.bucketKeyOf(""), 2, Long.MAX_VALUE);
-        Quotas.reserve(PreviewQuota.bucketKeyOf(STRANGER), 1, Long.MAX_VALUE);
-        Quotas.reserve(InstanceDeviceQuota.nicBucketOf(STRANGER), 1, Long.MAX_VALUE);
-        Quotas.reserve(InstanceDeviceQuota.diskBucketOf(STRANGER), 20, Long.MAX_VALUE);
+        Quotas.reserve(OwnerBudget.DATABASES.bucketOf(STRANGER), 1, Long.MAX_VALUE);
+        Quotas.reserve(OwnerBudget.SITES.bucketOf(""), 2, Long.MAX_VALUE);
+        Quotas.reserve(OwnerBudget.PREVIEWS.bucketOf(STRANGER), 1, Long.MAX_VALUE);
+        Quotas.reserve(OwnerBudget.NICS.bucketOf(STRANGER), 1, Long.MAX_VALUE);
+        Quotas.reserve(OwnerBudget.DISK_GB.bucketOf(STRANGER), 20, Long.MAX_VALUE);
 
         QuotaReconciler.Result result = QuotaReconciler.reconcile();
         assertThat(result.abstained()).as("step 3: nothing moved under the scan").isFalse();
-        assertThat(Quotas.usedOf(DatabaseQuota.bucketKeyOf(STRANGER)))
+        assertThat(Quotas.usedOf(OwnerBudget.DATABASES.bucketOf(STRANGER)))
             .as("step 3: a database bucket no record names goes to zero").isZero();
         assertThat(Quotas.usedOf(databaseBucket))
             .as("step 3: the operator's database bucket equals its records")
             .isEqualTo(operatorCount(DatabaseModel.class, DatabaseModel.QUOTA_BUCKET, databaseBucket, false));
-        assertThat(Quotas.usedOf(SiteQuota.bucketKeyOf("")))
+        assertThat(Quotas.usedOf(OwnerBudget.SITES.bucketOf("")))
             .as("step 3: the operator's site bucket equals its live sites")
-            .isEqualTo(operatorCount(SiteModel.class, SiteModel.QUOTA_BUCKET, SiteQuota.bucketKeyOf(""), true));
-        assertThat(Quotas.usedOf(PreviewQuota.bucketKeyOf(STRANGER)))
+            .isEqualTo(operatorCount(SiteModel.class, SiteModel.QUOTA_BUCKET, OwnerBudget.SITES.bucketOf(""), true));
+        assertThat(Quotas.usedOf(OwnerBudget.PREVIEWS.bucketOf(STRANGER)))
             .as("step 3: a preview bucket no deployment names goes to zero").isZero();
-        assertThat(Quotas.usedOf(InstanceDeviceQuota.nicBucketOf(STRANGER)))
+        assertThat(Quotas.usedOf(OwnerBudget.NICS.bucketOf(STRANGER)))
             .as("step 3: and so do a NIC bucket").isZero();
-        assertThat(Quotas.usedOf(InstanceDeviceQuota.diskBucketOf(STRANGER)))
+        assertThat(Quotas.usedOf(OwnerBudget.DISK_GB.bucketOf(STRANGER)))
             .as("step 3: and a disk bucket nothing is charged to").isZero();
 
         // 4. A second pass over an honest ledger moves nothing.

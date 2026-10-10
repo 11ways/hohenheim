@@ -1,13 +1,15 @@
 package be.elevenways.hohenheim.server;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.domino.common.DominoFile;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.server.cms.HohenheimFlash;
 import be.elevenways.hohenheim.server.database.DatabaseService;
+import be.elevenways.hohenheim.server.util.Closeables;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
@@ -70,17 +72,14 @@ final class DatabaseHandlers {
                 // A real failure for a caller who PASSED the gate (daemon down, no engine
                 // instance yet): they may know, so this stays the operator's redirect.
                 Blast.log("DB: backup of", name, "failed -", e.getMessage());
-                return HandlerSupport.redirect(CmsRoutes.list(HandlerSupport.ADMIN, "databases"));
+                return HandlerSupport.redirect(CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.DATABASES));
             }
             try {
                 ActivityLog.record(Models.get(DatabaseModel.class), name, HohenheimActivityAction.BACKUP_DOWNLOADED, name);
             } catch (RuntimeException | Error failed) {
                 // Nothing will serve the stream now; its unlinked file is freed on close.
-                try {
-                    dump.close();
-                } catch (IOException ignored) {
-                    // the record failure is the one worth reporting
-                }
+                // The record failure is the one worth reporting.
+                Closeables.closeQuietly(dump);
                 throw failed;
             }
             return HandlerSupport.downloadStream(dump.contentType(), dump.filename(),
@@ -91,7 +90,8 @@ final class DatabaseHandlers {
             String name = conduit.getParameter(HohenheimEndpoints.DATABASE_NAME);
             RouteTarget restorePage = restorePageTarget(name);
             if (!(conduit.getFormData().get("dump") instanceof DominoFile file) || file.getSize() == 0) {
-                HohenheimFlash.error(conduit, databaseMessage("dump_required", name));
+                HohenheimFlash.error(conduit, HohenheimMicrocopy.DATABASE_TAB.of("dump_required")
+                    .withArg("name", name));
                 return HandlerSupport.redirect(restorePage);
             }
             try {
@@ -104,30 +104,28 @@ final class DatabaseHandlers {
                 }
             } catch (UnsupportedOperationException e) {
                 Blast.log("DB: restore of", name, "rejected -", e.getMessage());
-                HohenheimFlash.error(conduit, databaseMessage("restore_unsupported", name));
+                HohenheimFlash.error(conduit, HohenheimMicrocopy.DATABASE_TAB.of("restore_unsupported")
+                    .withArg("name", name));
                 return HandlerSupport.redirect(restorePage);
             } catch (IOException e) {
                 Blast.log("DB: restore of", name, "failed -", e.getMessage());
-                HohenheimFlash.error(conduit, databaseMessage("restore_failed", name));
+                HohenheimFlash.error(conduit, HohenheimMicrocopy.DATABASE_TAB.of("restore_failed")
+                    .withArg("name", name));
                 return HandlerSupport.redirect(restorePage);
             }
             ActivityLog.record(Models.get(DatabaseModel.class), name, ZenitActivityAction.RESTORE, name);
-            HohenheimFlash.success(conduit, databaseMessage("restored", name));
+            HohenheimFlash.success(conduit, HohenheimMicrocopy.DATABASE_TAB.of("restored").withArg("name", name));
             return HandlerSupport.redirect(restorePage);
         });
-    }
-
-    /** A managed-database outcome message, named after the database it is about. */
-    private static Microcopy databaseMessage(String key, String name) {
-        return Microcopy.of(key).withFilter("scope", "database_tab").withArg("name", name);
     }
 
     /** The CMS restore tab for a named database (falls back to the list when unknown). */
     private static @NonNull RouteTarget restorePageTarget(String name) {
         Row row = Models.get(DatabaseModel.class).find().where(DatabaseModel.NAME.eq(name)).first();
         if (row == null) {
-            return CmsRoutes.list(HandlerSupport.ADMIN, "databases");
+            return CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.DATABASES);
         }
-        return CmsRoutes.subpage(HandlerSupport.ADMIN, "databases", row.get(DatabaseModel.ID), "restore");
+        return CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.DATABASES, row.get(DatabaseModel.ID),
+            HohenheimSlugs.Tab.RESTORE);
     }
 }

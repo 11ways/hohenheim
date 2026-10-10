@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.behaviour.OptimisticLockingBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -35,27 +35,27 @@ public class GameDomainModel extends Model {
 
     public static final IntegerField SITE_DOMAIN_ID = SCHEMA.addField(
         IntegerField.builder().name("site_domain_id").required()
-            .label(HohenheimFormCopy.label("game_domain"))
-            .help(HohenheimFormCopy.help("game_domain")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("game_domain"))
+            .help(HohenheimMicrocopy.HELP.of("game_domain")).build());
 
     public static final IntegerField BACKEND_INSTANCE_ID = SCHEMA.addField(
         IntegerField.builder().name("backend_instance_id").required()
-            .label(HohenheimFormCopy.label("game_backend"))
-            .help(HohenheimFormCopy.help("game_backend")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("game_backend"))
+            .help(HohenheimMicrocopy.HELP.of("game_backend")).build());
 
     public static final IntegerField PROXY_INSTANCE_ID = SCHEMA.addField(
         IntegerField.builder().name("proxy_instance_id").required()
-            .label(HohenheimFormCopy.label("game_proxy"))
-            .help(HohenheimFormCopy.help("game_proxy")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("game_proxy"))
+            .help(HohenheimMicrocopy.HELP.of("game_proxy")).build());
 
     public static final IntegerField BACKEND_PORT = SCHEMA.addField(
         IntegerField.builder().name("backend_port").defaultValue(25565)
-            .label(HohenheimFormCopy.label("game_backend_port"))
-            .help(HohenheimFormCopy.help("game_backend_port")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("game_backend_port"))
+            .help(HohenheimMicrocopy.HELP.of("game_backend_port")).build());
 
     public static final BooleanField ENABLED = SCHEMA.addField(
         BooleanField.builder("enabled").defaultValue(true)
-            .label(HohenheimFormCopy.label("enabled")).build());
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("enabled")).build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("created_at").build());

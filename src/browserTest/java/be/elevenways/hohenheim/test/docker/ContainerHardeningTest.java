@@ -854,7 +854,7 @@ class ContainerHardeningTest {
                 .isEqualTo(24L);
         } finally {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Security.CONTAINER_PIDS_LIMIT,
-                original != null ? original : ContainerHardening.DEFAULT_PIDS_LIMIT);
+                original != null ? original : HohenheimSettings.Security.CONTAINER_PIDS_LIMIT.getDefaultValue());
             try {
                 docker.removeContainer(name, true);
             } catch (IOException ignored) {

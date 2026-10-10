@@ -47,30 +47,6 @@ public final class InstanceDeviceQuota {
     private InstanceDeviceQuota() {
     }
 
-    /** The disk bucket for one packed subject set (191-char fold, the instance shape). */
-    public static @NonNull String diskBucketOf(@NonNull String packedSubjects) {
-        return OwnerBudget.DISK_GB.bucketOf(packedSubjects);
-    }
-
-    /** The NIC bucket for one packed subject set. */
-    public static @NonNull String nicBucketOf(@NonNull String packedSubjects) {
-        return OwnerBudget.NICS.bucketOf(packedSubjects);
-    }
-
-    /**
-     * The disk cap for one owner (GB): per-owner override else the global default;
-     * override 0 = nothing allowed, global 0-or-less = uncapped (the max_instances
-     * semantics exactly).
-     */
-    public static @Nullable Integer diskLimitFor(@NonNull String packedSubjects) {
-        return OwnerBudget.DISK_GB.limitFor(packedSubjects);
-    }
-
-    /** The extra-NIC cap for one owner; same override/default semantics. */
-    public static @Nullable Integer nicLimitFor(@NonNull String packedSubjects) {
-        return OwnerBudget.NICS.limitFor(packedSubjects);
-    }
-
     /** The dimension of ONE device charge, holding only on rows whose type declares it. */
     private static final class DeviceDimension extends OwnerDimension {
 

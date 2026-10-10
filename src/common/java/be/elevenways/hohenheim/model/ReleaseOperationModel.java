@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.DateTimeField;
@@ -15,9 +15,8 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Predicate;
+import java.util.Set;
 
 /**
  * THE release-operation record (the BuildOperationModel shape): one row per attempt to
@@ -48,148 +47,60 @@ public class ReleaseOperationModel extends Model {
     /** A release of the RETAINED prior spec, pinned by digest -- never a rebuild. */
     public static final String KIND_ROLLBACK = "rollback";
 
-    /** Row written, no daemon work yet. */
-    public static final String STATUS_PENDING = "pending";
-    /** Candidate instance created and deploying. */
-    public static final String STATUS_DEPLOYING = "deploying";
-    /** Candidate running; the health gate is interrogating it. */
-    public static final String STATUS_PROBING = "probing";
-    /** Probe passed; roles are being flipped. */
-    public static final String STATUS_SWITCHING = "switching";
-    /** Traffic switched; the superseded release drains before its stop + reclaim. */
-    public static final String STATUS_DRAINING = "draining";
-    public static final String STATUS_SUCCEEDED = "succeeded";
-    /** The candidate never took traffic; the prior release kept serving. */
-    public static final String STATUS_FAILED = "failed";
-    /** Found in flight at boot; recovery settled the runtime state and stamped this. */
-    public static final String STATUS_INTERRUPTED = "interrupted";
-
     /**
-     * THE phase facts of every status: whether an operation in it is still IN FLIGHT (a
-     * controller is, or was until a crash, driving it) and whether its candidate has TAKEN
-     * TRAFFIC. Every reader of either question derives from here, never from a hand-spelled
-     * status list.
-     *
-     * AIDEV-NOTE: one member per {@link #STATUS} value, and ReleaseOperationPhaseDriftTest
-     * binds the two, so a new status is one edit here or the build breaks.
+     * The statuses a release operation stores in {@link #STATUS}. Every reader of "still in flight" or "took traffic"
+     * derives from the members' facts, never from a hand-spelled status list.
      */
-    public enum Phase {
-        PENDING(STATUS_PENDING, true, false),
-        DEPLOYING(STATUS_DEPLOYING, true, false),
-        PROBING(STATUS_PROBING, true, false),
-        SWITCHING(STATUS_SWITCHING, true, true),
-        DRAINING(STATUS_DRAINING, true, true),
-        SUCCEEDED(STATUS_SUCCEEDED, false, true),
-        FAILED(STATUS_FAILED, false, false),
-        INTERRUPTED(STATUS_INTERRUPTED, false, false);
+    public static final OperationLifecycle LIFECYCLE = OperationLifecycle.of(OperationStatus.PENDING,
+        OperationStatus.DEPLOYING, OperationStatus.PROBING, OperationStatus.SWITCHING, OperationStatus.DRAINING,
+        OperationStatus.SUCCEEDED, OperationStatus.FAILED, OperationStatus.INTERRUPTED);
 
-        private final String token;
-        private final boolean inFlight;
-        private final boolean tookTraffic;
+    /** The statuses whose candidate has been switched to: it serves, or served, the traffic. */
+    public static final Set<OperationStatus> TOOK_TRAFFIC =
+        Set.of(OperationStatus.SWITCHING, OperationStatus.DRAINING, OperationStatus.SUCCEEDED);
 
-        Phase(String token, boolean inFlight, boolean tookTraffic) {
-            this.token = token;
-            this.inFlight = inFlight;
-            this.tookTraffic = tookTraffic;
-        }
+    /** Every status an operation is still in flight in, derived from {@link OperationStatus#inFlight()}. */
+    public static final List<String> IN_FLIGHT_STATUSES = LIFECYCLE.stored(OperationStatus::inFlight);
 
-        /** @return the stored status value */
-        public String token() {
-            return this.token;
-        }
-
-        public boolean inFlight() {
-            return this.inFlight;
-        }
-
-        /** Whether the candidate has been switched to (it serves, or served, the traffic). */
-        public boolean tookTraffic() {
-            return this.tookTraffic;
-        }
-
-        /** @return the phase of a stored status, or null for a value no member declares */
-        public static Phase of(String token) {
-            for (Phase phase : values()) {
-                if (phase.token.equals(token)) {
-                    return phase;
-                }
-            }
-            return null;
-        }
-    }
-
-    /** Every status an operation is still in flight in, derived from {@link Phase#inFlight()}. */
-    public static final List<String> IN_FLIGHT_STATUSES = tokensWhere(Phase::inFlight);
-
-    /** Every status whose candidate has taken traffic, derived from {@link Phase#tookTraffic()}. */
-    public static final List<String> TRAFFIC_TAKEN_STATUSES = tokensWhere(Phase::tookTraffic);
-
-    private static List<String> tokensWhere(Predicate<Phase> fact) {
-        List<String> tokens = new ArrayList<>();
-        for (Phase phase : Phase.values()) {
-            if (fact.test(phase)) {
-                tokens.add(phase.token());
-            }
-        }
-        return List.copyOf(tokens);
-    }
+    /** Every status whose candidate has taken traffic, derived from {@link #TOOK_TRAFFIC}. */
+    public static final List<String> TRAFFIC_TAKEN_STATUSES = LIFECYCLE.stored(TOOK_TRAFFIC::contains);
 
     public static final IntegerField ID = SCHEMA.addField(
         IntegerField.builder().name("id").build());
 
     public static final EnumField KIND = SCHEMA.addField(EnumField.builder("kind")
         .value(KIND_RELEASE, v -> v.displayName("Release")
-            .label(kindLabel(KIND_RELEASE)).icon("rocket").color(BadgeVariant.INFO))
+            .label(HohenheimMicrocopy.RELEASE_KIND.of(KIND_RELEASE)).icon("rocket").color(BadgeVariant.INFO))
         .value(KIND_ROLLBACK, v -> v.displayName("Rollback")
-            .label(kindLabel(KIND_ROLLBACK)).icon("clock-rotate-left").color(BadgeVariant.WARNING))
+            .label(HohenheimMicrocopy.RELEASE_KIND.of(KIND_ROLLBACK)).icon("clock-rotate-left")
+            .color(BadgeVariant.WARNING))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("kind"))
         .build());
-
-    /** The translation token for a release kind; the key IS the stored value. */
-    private static Microcopy kindLabel(String kind) {
-        return Microcopy.of(kind).withFilter("scope", "release_kind");
-    }
 
     public static final StringField FOR_MODEL = SCHEMA.addField(
-        StringField.builder().name("for_model").build());
+        StringField.builder().name("for_model")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("for_model")).build());
 
     public static final IntegerField FOR_ID = SCHEMA.addField(
-        IntegerField.builder().name("for_id").build());
+        IntegerField.builder().name("for_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("for_id")).build());
 
-    public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
-        .value(STATUS_PENDING, v -> v.displayName("Pending")
-            .label(statusLabel(STATUS_PENDING)).icon("clock").color(BadgeVariant.SECONDARY))
-        .value(STATUS_DEPLOYING, v -> v.displayName("Deploying")
-            .label(statusLabel(STATUS_DEPLOYING)).icon("rotate").color(BadgeVariant.INFO))
-        .value(STATUS_PROBING, v -> v.displayName("Probing")
-            .label(statusLabel(STATUS_PROBING)).icon("stethoscope").color(BadgeVariant.INFO))
-        .value(STATUS_SWITCHING, v -> v.displayName("Switching")
-            .label(statusLabel(STATUS_SWITCHING)).icon("shuffle").color(BadgeVariant.INFO))
-        .value(STATUS_DRAINING, v -> v.displayName("Draining")
-            .label(statusLabel(STATUS_DRAINING)).icon("hourglass-half").color(BadgeVariant.INFO))
-        .value(STATUS_SUCCEEDED, v -> v.displayName("Succeeded")
-            .label(statusLabel(STATUS_SUCCEEDED)).icon("check").color(BadgeVariant.SUCCESS))
-        .value(STATUS_FAILED, v -> v.displayName("Failed")
-            .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color(BadgeVariant.DESTRUCTIVE))
-        .value(STATUS_INTERRUPTED, v -> v.displayName("Interrupted")
-            .label(statusLabel(STATUS_INTERRUPTED)).icon("power-off").color(BadgeVariant.WARNING))
-        .build());
-
-    /** The translation token for a release status; the key IS the stored value. */
-    private static Microcopy statusLabel(String status) {
-        return Microcopy.of(status).withFilter("scope", "release_status");
-    }
+    public static final EnumField STATUS = SCHEMA.addField(LIFECYCLE.field("status"));
 
     /** The content-addressed image the candidate ran; THE pinned artifact identity. */
     public static final StringField IMAGE_ID = SCHEMA.addField(
-        StringField.builder().name("image_id").build());
+        StringField.builder().name("image_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("image")).build());
 
     /** The instance row deployed as this operation's candidate. */
     public static final IntegerField CANDIDATE_INSTANCE_ID = SCHEMA.addField(
-        IntegerField.builder().name("candidate_instance_id").build());
+        IntegerField.builder().name("candidate_instance_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("candidate_instance")).build());
 
     /** The previously-serving instance this operation retired (the rollback target). */
     public static final IntegerField RETIRED_INSTANCE_ID = SCHEMA.addField(
-        IntegerField.builder().name("retired_instance_id").build());
+        IntegerField.builder().name("retired_instance_id")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("retired_instance")).build());
 
     /** Source identity of the SITE's settings at operation time (the pin key). */
     public static final StringField OWNER_FINGERPRINT = SCHEMA.addField(
@@ -200,18 +111,21 @@ public class ReleaseOperationModel extends Model {
         StringField.builder().name("spec_fingerprint").filterable(false).build());
 
     public static final StringField FAILURE_REASON = SCHEMA.addField(
-        StringField.builder().name("failure_reason").build());
+        StringField.builder().name("failure_reason")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("failure_reason")).build());
 
     /** Timestamped step lines; every phase of the operation is visible here. */
     public static final TextField STEP_LOG = SCHEMA.addField(
-        TextField.builder().name("step_log").build());
+        TextField.builder().name("step_log")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("step_log")).build());
 
     public static final DateTimeField STARTED_AT = SCHEMA.addField(
         DateTimeField.builder().name("started_at").build());
     public static final DateTimeField FINISHED_AT = SCHEMA.addField(
         DateTimeField.builder().name("finished_at").build());
     public static final IntegerField DURATION_MS = SCHEMA.addField(
-        IntegerField.builder().name("duration_ms").build());
+        IntegerField.builder().name("duration_ms")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("duration_ms")).build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(
@@ -229,12 +143,17 @@ public class ReleaseOperationModel extends Model {
 
     /** The newest SUCCEEDED operation of one owning record, or null. */
     public Row latestSuccess(String forModel, int forId) {
-        return this.history(forModel, forId).where(STATUS.eq(STATUS_SUCCEEDED)).first();
+        return this.history(forModel, forId).where(STATUS.eq(LIFECYCLE.stored(OperationStatus.SUCCEEDED))).first();
     }
 
     /** Every operation of one owning record still claiming to be in flight. */
     public List<Row> findInFlight(String forModel, int forId) {
         return this.history(forModel, forId).where(STATUS.in(IN_FLIGHT_STATUSES)).all();
+    }
+
+    /** Keep the newest {@code keep} operations of one owning record and delete the rest. */
+    public void pruneHistory(String forModel, int forId, int keep) {
+        Retention.keepNewest(this, this.history(forModel, forId), ID, keep);
     }
 
     static {

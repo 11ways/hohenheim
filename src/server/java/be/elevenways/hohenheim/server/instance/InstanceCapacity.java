@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -148,15 +149,11 @@ public final class InstanceCapacity {
         return new HostCapacityView(
             budget != null,
             budget == null && hasReading,
-            budget != null ? clampInt(budget) : 0,
-            clampInt(bookedMbOn(serverId)),
-            budget != null ? clampInt(bookableMbOn(serverId, budget)) : 0,
+            budget != null ? Math.clamp(budget, 0, Integer.MAX_VALUE) : 0,
+            Math.clamp(bookedMbOn(serverId), 0, Integer.MAX_VALUE),
+            budget != null ? Math.clamp(bookableMbOn(serverId, budget), 0, Integer.MAX_VALUE) : 0,
             measuredAt != null ? measuredAt.toString() : null,
             maxAge != null ? maxAge : 0);
-    }
-
-    private static int clampInt(long value) {
-        return (int) Math.min(Integer.MAX_VALUE, Math.max(0, value));
     }
 
     // -- the budget -----------------------------------------------------------
@@ -274,7 +271,7 @@ public final class InstanceCapacity {
                 budget == null ? Long.MAX_VALUE
                     : bookableMbOn(serverId, budget) + pendingReleaseOn(serverId));
         } catch (QuotaExceeded full) {
-            throw Violations.ofForm(HohenheimViolations.text("host_capacity_reached")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_capacity_reached")
                 .withArg("name", ServerModel.labelOf(serverId))
                 .withArg("needed", amountMb)
                 .withArg("free", Math.max(0, full.getLimit() - full.getUsed())));
@@ -461,7 +458,7 @@ public final class InstanceCapacity {
         @Override
         public @Nullable Charge claim(@NonNull Row row, @Nullable Row stored,
                                       @NonNull Transition transition) {
-            Integer serverId = effectiveServerId(row, stored);
+            Integer serverId = row.afterWrite(InstanceModel.SERVER_ID, stored);
             Charge claim = serverId == null ? null
                 : new Charge(bucketOf(serverId), effectiveFootprintMb(row, stored), false);
             if (transition == Transition.REBOOK && stored != null) {
@@ -520,8 +517,7 @@ public final class InstanceCapacity {
         ChargedDimension.Charge held = HOST_MEMORY.held(stored);
         boolean moves = held == null ? claim != null : !held.sameBooking(claim);
         if (moves && InstanceModel.STATUS_MIGRATING.equals(stored.get(InstanceModel.STATUS))) {
-            throw Violations.ofForm(HohenheimViolations.text("instance_busy")
-                .withArg("name", String.valueOf((Object) stored.get(InstanceModel.NAME)))
+            throw Violations.ofForm(HohenheimViolations.instanceRefusalText("instance_busy", stored, null)
                 .withArg("status", InstanceModel.STATUS_MIGRATING));
         }
     }
@@ -563,17 +559,9 @@ public final class InstanceCapacity {
         return bookedMbOf(stored);
     }
 
-    /** The server_id the write will END UP with: staged when carried, else stored. */
-    private static @Nullable Integer effectiveServerId(@NonNull Row row, @Nullable Row stored) {
-        if (row.has(InstanceModel.SERVER_ID.getName())) {
-            return row.get(InstanceModel.SERVER_ID);
-        }
-        return stored != null ? stored.get(InstanceModel.SERVER_ID) : null;
-    }
-
     /**
      * The footprint the write will END UP being charged -- a partial CMS update carries
-     * only the changed keys (the SiteDomainModel.effective idiom), so pricing the staged
+     * only the changed keys (the {@code Row.afterWrite} idiom), so pricing the staged
      * row alone would charge a settings-less edit as a zero-footprint workload.
      *
      * AIDEV-NOTE: package-visible because {@link InstanceQuota}'s per-OWNER memory budget
@@ -582,9 +570,7 @@ public final class InstanceCapacity {
      * not, and charge == cap only holds while there is ONE answer.
      */
     static int effectiveFootprintMb(@NonNull Row row, @Nullable Row stored) {
-        String kind = row.has(InstanceModel.KIND.getName()) || stored == null
-            ? row.get(InstanceModel.KIND) : stored.get(InstanceModel.KIND);
-        InstanceKindHandler handler = InstanceKinds.getHandler(kind);
+        InstanceKindHandler handler = InstanceKinds.getHandler(row.afterWrite(InstanceModel.KIND, stored));
         if (handler == null) {
             return 0;
         }

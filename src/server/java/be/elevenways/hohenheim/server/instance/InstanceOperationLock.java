@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -223,9 +224,8 @@ public final class InstanceOperationLock {
     private static @NonNull Violations refusalFor(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
         if (row == null) {
-            return Violations.ofForm(HohenheimViolations.text("instance_not_found").withArg("id", instanceId));
+            return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_not_found").withArg("id", instanceId));
         }
-        return Violations.ofForm(HohenheimViolations.text("instance_operation_in_progress")
-            .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME))));
+        return HohenheimViolations.instanceRefusal("instance_operation_in_progress", row, null);
     }
 }

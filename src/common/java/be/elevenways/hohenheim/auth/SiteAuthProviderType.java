@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.auth;
 
-import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.orm.field.TypeDefinition;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.WordedKind;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
@@ -12,10 +12,17 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * @author Jelle De Loecker <jelle@elevenways.be>
  * @since 0.1.0
  */
-public interface SiteAuthProviderType extends TypeDefinition {
+public interface SiteAuthProviderType extends WordedKind {
 
-    /** @return the registry identifier; its string form is the stored column value */
-    @NonNull Identifier typeId();
+    @Override
+    default @NonNull HohenheimMicrocopy labelScope() {
+        return HohenheimMicrocopy.AUTH_PROVIDER_TYPE;
+    }
+
+    @Override
+    default @NonNull HohenheimMicrocopy descriptionScope() {
+        return HohenheimMicrocopy.AUTH_PROVIDER_TYPE_DESCRIPTION;
+    }
 
     /**
      * Whether the provider record's {@code required_permission} column is meaningful. True for

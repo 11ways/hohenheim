@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -7,7 +9,6 @@ import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
@@ -58,9 +59,6 @@ import java.util.Objects;
  */
 public final class ReleasedClaimParts {
 
-    /** The released hostname entry's slug, which the panel's clusters name. */
-    public static final String SLUG = "released-claims";
-
     /** Virtual column names (computed cells). */
     static final String FORMER_SITE_COLUMN = "former_site";
     static final String FORMER_OWNER_COLUMN = "former_owner";
@@ -70,7 +68,7 @@ public final class ReleasedClaimParts {
     /** Removes a quarantine before its window ends, freeing the hostname for any owner. */
     public static final Operation<Row, Void, Void> LIFT = Operation.declare(HohenheimIds.id("lift_quarantine"))
         .happened(OperationSentences.of("lift_quarantine"))
-        .label(Microcopy.of("lift").withFilter("scope", "released_claim"))
+        .label(HohenheimMicrocopy.RELEASED_CLAIM.of("lift"))
         .icon(Icon.of("unlock"))
         .one(SUBJECT)
         .gate(OperationGate.open())
@@ -123,10 +121,10 @@ public final class ReleasedClaimParts {
             .add(ReleasedRouteClaimModel.FORMER_SUBJECTS)
             .add(ReleasedRouteClaimModel.RELEASED_AT)
             .build();
-        return PanelResource.builder(HohenheimIds.id("released_claim"), SLUG, SUBJECT)
-            .label(Microcopy.of("plural").withFilter("scope", "released_claim"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "released_claim"))
-            .description(Microcopy.of("nav_hint").withFilter("scope", "released_claim"))
+        return PanelResource.builder(HohenheimIds.id("released_claim"), HohenheimSlugs.RELEASED_CLAIMS, SUBJECT)
+            .label(HohenheimMicrocopy.RELEASED_CLAIM.of("plural"))
+            .recordLabel(HohenheimMicrocopy.RELEASED_CLAIM.of("singular"))
+            .description(HohenheimMicrocopy.RELEASED_CLAIM.of("nav_hint"))
             .icon(Icon.of("hourglass-half"))
             .navGroup(HohenheimPanel.NETWORK_GROUP)
             .navOrder(40)
@@ -157,24 +155,13 @@ public final class ReleasedClaimParts {
     }
 
     private static @NonNull PanelAction<Row> liftAction() {
+        ConfirmationSpec lift = Confirmations.of(HohenheimMicrocopy.RELEASED_CLAIM.of("lift"),
+            HohenheimMicrocopy.RELEASED_CLAIM.of("lift_confirm"), ActionStyle.DESTRUCTIVE);
         return PanelAction.<Row, Void>places(LIFT, ActionPlacement.ROW, (request, result) ->
-                CmsActionResult.refreshWithToast(Microcopy.of("lifted_toast").withFilter("scope", "released_claim")))
-            .description(Microcopy.of("lift_hint").withFilter("scope", "released_claim"))
-            .confirmation(liftConfirmation(null))
-            .dynamicConfirmation(claim -> liftConfirmation(
-                String.valueOf((Object) claim.get(ReleasedRouteClaimModel.HOSTNAME))))
+                CmsActionResult.refreshWithToast(HohenheimMicrocopy.RELEASED_CLAIM.of("lifted_toast")))
+            .description(HohenheimMicrocopy.RELEASED_CLAIM.of("lift_hint"))
+            .confirmation(lift)
+            .dynamicConfirmation(claim -> Confirmations.typed(lift, claim.get(ReleasedRouteClaimModel.HOSTNAME)))
             .build();
-    }
-
-    /** @param hostname the hostname the operator must type, null for the record-less fallback */
-    private static @NonNull ConfirmationSpec liftConfirmation(@Nullable String hostname) {
-        ConfirmationSpec.Builder builder = ConfirmationSpec.builder()
-            .title(Microcopy.of("lift").withFilter("scope", "released_claim"))
-            .body(Microcopy.of("lift_confirm").withFilter("scope", "released_claim"))
-            .style(ActionStyle.DESTRUCTIVE);
-        if (hostname != null && !hostname.isBlank()) {
-            builder.requireTypedConfirmation(hostname);
-        }
-        return builder.build();
     }
 }

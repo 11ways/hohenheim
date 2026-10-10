@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
@@ -14,6 +15,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * THE localized rendering of one access rule: what the node decides, in one line, plus
@@ -37,7 +39,7 @@ final class AccessRuleSummaries {
     static @NonNull Microcopy summaryOf(@NonNull Row rule, @Nullable String type) {
         Map<String, Object> data = AccessRuleModel.dataOf(rule);
         return switch (type == null ? "" : type) {
-            case AccessRuleModel.TYPE_GROUP -> ruleText(
+            case AccessRuleModel.TYPE_GROUP -> HohenheimMicrocopy.ACCESS_RULE.of(
                 AccessListModel.SATISFY_ALL.equals(
                     Texts.trimmedOrNull(data.get(AccessRuleModel.GROUP_SATISFY.getName())))
                     ? "summary_group_all" : "summary_group_any");
@@ -49,12 +51,12 @@ final class AccessRuleSummaries {
             case AccessRuleModel.TYPE_AUTH_PROVIDER -> {
                 String permission = Texts.trimmedOrNull(
                     data.get(AccessRuleModel.PROVIDER_REQUIRED_PERMISSION.getName()));
-                Microcopy summary = ruleText(permission == null
+                Microcopy summary = HohenheimMicrocopy.ACCESS_RULE.of(permission == null
                     ? "summary_auth_provider" : "summary_auth_provider_permission")
                     .withArg("provider", providerName(data.get(AccessRuleModel.PROVIDER_ID.getName())));
                 yield permission == null ? summary : summary.withArg("permission", permission);
             }
-            default -> ruleText("summary_unknown");
+            default -> HohenheimMicrocopy.ACCESS_RULE.of("summary_unknown");
         };
     }
 
@@ -71,7 +73,7 @@ final class AccessRuleSummaries {
         if (kind == null || summary == null) {
             return null;
         }
-        return CmsSupport.resolvedText(ruleText("summary_line")
+        return CmsSupport.resolvedText(HohenheimMicrocopy.ACCESS_RULE.of("summary_line")
             .withArg("kind", kind)
             .withArg("summary", summary));
     }
@@ -88,8 +90,10 @@ final class AccessRuleSummaries {
      */
     static @NonNull EnumBadgeState enabledBadge(boolean enabled) {
         return enabled
-            ? new EnumBadgeState("on", ruleText("state_on"), null, "check", BadgeVariant.SUCCESS, null, true)
-            : new EnumBadgeState("off", ruleText("state_off"), null, "xmark", BadgeVariant.SECONDARY, null, true);
+            ? new EnumBadgeState("on", HohenheimMicrocopy.ACCESS_RULE.of("state_on"), null, "check",
+                BadgeVariant.SUCCESS, null, true)
+            : new EnumBadgeState("off", HohenheimMicrocopy.ACCESS_RULE.of("state_off"), null, "xmark",
+                BadgeVariant.SECONDARY, null, true);
     }
 
     /** The on/off cue of one stored rule row. */
@@ -103,18 +107,15 @@ final class AccessRuleSummaries {
         }
         Row provider = Models.get(SiteAuthProviderModel.class).find()
             .where(SiteAuthProviderModel.ID.eq(number.intValue())).first();
-        return provider != null ? blank(provider.get(SiteAuthProviderModel.NAME)) : "";
+        return provider != null ? Objects.toString(provider.get(SiteAuthProviderModel.NAME), "") : "";
     }
 
     /** @return the summary carrying the value, or the missing-value sentence when the rule has none yet */
     private static @NonNull Microcopy valued(@NonNull String key, @NonNull String arg, @Nullable Object value,
                                              @NonNull String missingKey) {
         String text = Texts.trimmedOrNull(value == null ? null : String.valueOf(value));
-        return text == null ? ruleText(missingKey) : ruleText(key).withArg(arg, text);
-    }
-
-    private static @NonNull String blank(@Nullable Object value) {
-        return value == null ? "" : String.valueOf(value);
+        return text == null ? HohenheimMicrocopy.ACCESS_RULE.of(missingKey) : HohenheimMicrocopy.ACCESS_RULE.of(key)
+            .withArg(arg, text);
     }
 
     /**
@@ -148,13 +149,13 @@ final class AccessRuleSummaries {
             }
         }
         if (people == rules.size()) {
-            return ruleText("protection_password").withArg("count", people);
+            return HohenheimMicrocopy.ACCESS_RULE.of("protection_password").withArg("count", people);
         }
         if (networks == rules.size()) {
-            return ruleText("protection_network").withArg("count", networks);
+            return HohenheimMicrocopy.ACCESS_RULE.of("protection_network").withArg("count", networks);
         }
         if (provider != null && rules.size() == 1) {
-            return ruleText("protection_sign_in").withArg("provider",
+            return HohenheimMicrocopy.ACCESS_RULE.of("protection_sign_in").withArg("provider",
                 providerName(AccessRuleModel.dataOf(provider).get(AccessRuleModel.PROVIDER_ID.getName())));
         }
         return null;
@@ -170,10 +171,7 @@ final class AccessRuleSummaries {
             return plain;
         }
         long rules = DeleteImpact.rulesOfAccessList(listId);
-        return rules == 0 ? ruleText("lets_in_nothing") : ruleText("lets_in_rules").withArg("count", rules);
-    }
-
-    static @NonNull Microcopy ruleText(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "access_rule");
+        return rules == 0 ? HohenheimMicrocopy.ACCESS_RULE.of("lets_in_nothing")
+            : HohenheimMicrocopy.ACCESS_RULE.of("lets_in_rules").withArg("count", rules);
     }
 }

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.api;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ArtifactOperationModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
@@ -14,6 +15,7 @@ import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -24,9 +26,7 @@ import be.elevenways.hohenheim.server.instance.InstanceApi;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.project.Projects;
-import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.protoblast.common.util.BlastString;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -47,6 +47,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 
 /**
@@ -114,7 +115,7 @@ public final class PaasApi {
         Integer projectId = project.get(ProjectModel.ID);
         entry.put("id", projectId);
         entry.put("name", project.get(ProjectModel.NAME));
-        entry.put("description", stringOrEmpty(project.get(ProjectModel.DESCRIPTION)));
+        entry.put("description", Objects.toString(project.get(ProjectModel.DESCRIPTION), ""));
         entry.put("created_at", String.valueOf((Object) project.get(ProjectModel.CREATED_AT)));
         List<Map<String, Object>> environments = new ArrayList<>();
         for (Row environment : Models.get(EnvironmentModel.class).find()
@@ -123,7 +124,7 @@ public final class PaasApi {
             Map<String, Object> env = new LinkedHashMap<>();
             env.put("id", environment.get(EnvironmentModel.ID));
             env.put("name", environment.get(EnvironmentModel.NAME));
-            env.put("description", stringOrEmpty(environment.get(EnvironmentModel.DESCRIPTION)));
+            env.put("description", Objects.toString(environment.get(EnvironmentModel.DESCRIPTION), ""));
             environments.add(env);
         }
         entry.put("environments", environments);
@@ -163,7 +164,7 @@ public final class PaasApi {
             if (applicationId == null) {
                 // Only a site that exposes an application has anything to deploy.
                 return ApiConduits.refusal(conduit, Violations.ofForm(
-                    ApiConduits.violationText("deploy_not_available")));
+                    HohenheimMicrocopy.VIOLATIONS.of("deploy_not_available")));
             }
             return queueDeploy(conduit, applicationId, Map.of("id", siteId, "status", "queued"));
         });
@@ -175,7 +176,7 @@ public final class PaasApi {
             int applicationId = target.applicationId();
             if (!(conduit instanceof HttpConduit http)) {
                 return ApiConduits.refusal(conduit, Violations.ofForm(
-                    ApiConduits.violationText("artifact_upload_failed")));
+                    HohenheimMicrocopy.VIOLATIONS.of("artifact_upload_failed")));
             }
             // AIDEV-NOTE: the deploy admission (power on a tenant-originated call, every
             // attached database ready) runs HERE, on the request thread and before a byte of
@@ -194,7 +195,7 @@ public final class PaasApi {
                 upload = ArtifactDeploys.uploadPathFor(applicationId);
                 if (http.streamBodyTo(upload, maxUploadBytes()) == 0) {
                     return ApiConduits.refusal(conduit, Violations.ofForm(
-                        ApiConduits.violationText("artifact_upload_empty")));
+                        HohenheimMicrocopy.VIOLATIONS.of("artifact_upload_empty")));
                 }
                 // Reauthorize after a long upload too: grants/site target may have changed.
                 ArtifactTarget current = artifactTarget(conduit, AccessContext.of(conduit));
@@ -216,14 +217,14 @@ public final class PaasApi {
                     "artifact_sha256", operation.get(ArtifactOperationModel.ARTIFACT_SHA256)));
             } catch (RequestBodyTooLargeException tooLarge) {
                 return ApiConduits.refusal(conduit, Violations.ofForm(
-                    ApiConduits.violationText("artifact_too_large")));
+                    HohenheimMicrocopy.VIOLATIONS.of("artifact_too_large")));
             } catch (Violations refused) {
                 if (operation != null) ArtifactDeploys.handoffFailed(operation);
                 return ApiConduits.refusal(conduit, refused);
             } catch (Exception failed) {
                 if (operation != null) ArtifactDeploys.handoffFailed(operation);
                 return ApiConduits.refusal(conduit, Violations.ofForm(
-                    ApiConduits.violationText("artifact_upload_failed")));
+                    HohenheimMicrocopy.VIOLATIONS.of("artifact_upload_failed")));
             } finally {
                 if (!handedOff) ArtifactDeploys.deleteUpload(upload);
             }
@@ -262,7 +263,7 @@ public final class PaasApi {
             Integer applicationId = applicationIdOf(site);
             if (applicationId == null) {
                 return ApiConduits.refusal(conduit, Violations.ofForm(
-                    ApiConduits.violationText("rollback_not_available")));
+                    HohenheimMicrocopy.VIOLATIONS.of("rollback_not_available")));
             }
             try {
                 requireReleaseAuthority(applicationId);
@@ -331,7 +332,7 @@ public final class PaasApi {
         }
         Integer applicationId = applicationIdOf(site);
         if (applicationId == null || !ctx.hasCapability(InstanceModel.MODEL_ID,
-                applicationId, HohenheimAccess.CONFIG)) {
+                applicationId, HohenheimCapabilities.CONFIG)) {
             conduit.notFound();
             return null;
         }
@@ -396,8 +397,7 @@ public final class PaasApi {
             entry.put("application_id", applicationId);
             Row serving = ApplicationReleases.ownedServing(applicationId);
             if (serving != null) {
-                entry.put("current_commit", stringOrEmpty(
-                    ApplicationReleases.storedSettings(serving).get("commit_sha")));
+                entry.put("current_commit", Objects.toString(ApplicationReleases.storedSettings(serving).get("commit_sha"), ""));
             }
         }
         Row project = siteId == null ? null : Projects.projectOf(SiteModel.MODEL_ID, siteId);
@@ -451,7 +451,7 @@ public final class PaasApi {
                 return null;
             }
             return ApiConduits.json(Map.of("id", deployment.get(ReleaseOperationModel.ID),
-                "log", stringOrEmpty(deployment.get(ReleaseOperationModel.STEP_LOG))));
+                "log", Objects.toString(deployment.get(ReleaseOperationModel.STEP_LOG), "")));
         });
 
         HohenheimEndpoints.API_V1_SITE_RELEASES.setHandler(conduit ->
@@ -507,7 +507,7 @@ public final class PaasApi {
             // BuildCredentials already redacted per-build tokens out of this log at
             // capture time; serving it raw introduces nothing the record does not hold.
             return ApiConduits.json(Map.of("id", build.get(BuildOperationModel.ID),
-                "log", stringOrEmpty(build.get(BuildOperationModel.LOG))));
+                "log", Objects.toString(build.get(BuildOperationModel.LOG), "")));
         });
     }
 
@@ -585,13 +585,13 @@ public final class PaasApi {
         entry.put("id", row.get(ReleaseOperationModel.ID));
         entry.put("kind", String.valueOf((Object) row.get(ReleaseOperationModel.KIND)));
         entry.put("status", String.valueOf((Object) row.get(ReleaseOperationModel.STATUS)));
-        entry.put("image", stringOrEmpty(row.get(ReleaseOperationModel.IMAGE_ID)));
-        entry.put("failure_reason", stringOrEmpty(row.get(ReleaseOperationModel.FAILURE_REASON)));
+        entry.put("image", Objects.toString(row.get(ReleaseOperationModel.IMAGE_ID), ""));
+        entry.put("failure_reason", Objects.toString(row.get(ReleaseOperationModel.FAILURE_REASON), ""));
         entry.put("started_at", String.valueOf((Object) row.get(ReleaseOperationModel.STARTED_AT)));
         entry.put("finished_at", String.valueOf((Object) row.get(ReleaseOperationModel.FINISHED_AT)));
         entry.put("duration_ms", row.get(ReleaseOperationModel.DURATION_MS));
         if (withStepLog) {
-            entry.put("step_log", stringOrEmpty(row.get(ReleaseOperationModel.STEP_LOG)));
+            entry.put("step_log", Objects.toString(row.get(ReleaseOperationModel.STEP_LOG), ""));
         }
         return entry;
     }
@@ -601,10 +601,10 @@ public final class PaasApi {
         entry.put("id", row.get(BuildOperationModel.ID));
         entry.put("builder_kind", String.valueOf((Object) row.get(BuildOperationModel.BUILDER_KIND)));
         entry.put("status", String.valueOf((Object) row.get(BuildOperationModel.STATUS)));
-        entry.put("source_ref", stringOrEmpty(row.get(BuildOperationModel.SOURCE_REF)));
-        entry.put("image", stringOrEmpty(row.get(BuildOperationModel.IMAGE_ID)));
+        entry.put("source_ref", Objects.toString(row.get(BuildOperationModel.SOURCE_REF), ""));
+        entry.put("image", Objects.toString(row.get(BuildOperationModel.IMAGE_ID), ""));
         entry.put("exit_code", row.get(BuildOperationModel.EXIT_CODE));
-        entry.put("failure_reason", stringOrEmpty(row.get(BuildOperationModel.FAILURE_REASON)));
+        entry.put("failure_reason", Objects.toString(row.get(BuildOperationModel.FAILURE_REASON), ""));
         entry.put("started_at", String.valueOf((Object) row.get(BuildOperationModel.STARTED_AT)));
         entry.put("finished_at", String.valueOf((Object) row.get(BuildOperationModel.FINISHED_AT)));
         entry.put("duration_ms", row.get(BuildOperationModel.DURATION_MS));
@@ -653,7 +653,7 @@ public final class PaasApi {
             String key = ApiConduits.formValue(conduit, "key");
             if (!new InstanceVariables().removeValue(null, environmentId, key)) {
                 return ApiConduits.refusal(conduit, Violations.ofField("key", key,
-                    ApiConduits.violationText("variable_not_found")));
+                    HohenheimMicrocopy.VIOLATIONS.of("variable_not_found")));
             }
             ActivityLog.record(Models.get(EnvironmentModel.class), environmentId,
                 HohenheimActivityAction.VARIABLE_DELETED, key);
@@ -709,14 +709,9 @@ public final class PaasApi {
 
     // -- plumbing -------------------------------------------------------------
 
-    private static @NonNull String stringOrEmpty(@Nullable Object value) {
-        return value == null ? "" : String.valueOf(value);
-    }
-
     /** The upload cap in bytes; a DISK guard, since the body never enters the heap. */
     private static long maxUploadBytes() {
-        Integer mb = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Builds.MAX_UPLOAD_MB);
-        return (mb == null || mb < 1 ? 512L : mb.longValue()) * 1024L * 1024L;
+        return HohenheimSettings.positiveMbAsBytes(HohenheimSettings.Builds.MAX_UPLOAD_MB);
     }
 
 

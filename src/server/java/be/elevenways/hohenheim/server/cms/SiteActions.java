@@ -1,12 +1,12 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.site.ProtectPath;
 import be.elevenways.hohenheim.site.SiteOperations;
-import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
@@ -93,7 +93,7 @@ final class SiteActions {
                                                     @NonNull Function<Row, @Nullable String> url,
                                                     @NonNull Predicate<Row> serves) {
         return PanelAction.<Row>link(id, ActionPlacement.ROW)
-            .label(Microcopy.of("open_site").withFilter("scope", "app_overview"))
+            .label(HohenheimMicrocopy.APP_OVERVIEW.of("open_site"))
             .icon(Icon.of("up-right-from-square"))
             .inlineInRow(false)
             .openInNewTab()
@@ -115,11 +115,11 @@ final class SiteActions {
     private static @NonNull PanelAction<Row> stopForcingHttpsAction() {
         return PanelAction.<Row, Void>places(SiteOperations.STOP_FORCING_HTTPS, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.refreshWithToast(
-                    Microcopy.of("stop_forcing_https_toast").withFilter("scope", "site")))
+                    HohenheimMicrocopy.SITE.of("stop_forcing_https_toast")))
             .inlineOnRecord(false)
             .inlineInRow(false)
             .confirmation(ConfirmationSpec.generic(
-                Microcopy.of("stop_forcing_https_confirm").withFilter("scope", "site"), false))
+                HohenheimMicrocopy.SITE.of("stop_forcing_https_confirm"), false))
             .build();
     }
 
@@ -138,8 +138,8 @@ final class SiteActions {
     private static @NonNull PanelAction<Row> protectPathAction() {
         return CmsSupport.opensWhatItMade(ProtectPath.OPERATION,
                 (panel, pathId) -> SiteParts.recordRoute(panel, siteOfPath(pathId)).toUrl(),
-                Microcopy.of("action").withFilter("scope", "protect_path"),
-                Microcopy.of("description").withFilter("scope", "protect_path"), null)
+                HohenheimMicrocopy.PROTECT_PATH.of("action"),
+                HohenheimMicrocopy.PROTECT_PATH.of("description"))
             .inlineOnRecord(true)
             .inSheet()
             .build();
@@ -163,7 +163,8 @@ final class SiteActions {
 
     /** To the site's protected paths, for a path whose protection lets everyone in. */
     private static @NonNull PanelAction<Row> fixProtectionAction() {
-        return fixLink(FIX_PROTECTION, "fix_protection", "lock", ProtectedPathParts.SLUG, AppHealth::hasOpenPath);
+        return fixLink(FIX_PROTECTION, "fix_protection", "lock", HohenheimSlugs.PROTECTED_PATHS,
+            AppHealth::hasOpenPath);
     }
 
     private static @NonNull PanelAction<Row> fixLink(@NonNull Identifier id, @NonNull String key, @NonNull String icon,
@@ -177,7 +178,7 @@ final class SiteActions {
                                                      @NonNull Predicate<Row> applies,
                                                      @NonNull BiFunction<Row, PanelRequest, RouteTarget> route) {
         return PanelAction.<Row>link(id, ActionPlacement.ROW)
-            .label(Microcopy.of(key).withFilter("scope", "app_health"))
+            .label(HohenheimMicrocopy.APP_HEALTH.of(key))
             .icon(Icon.of(icon))
             .inlineOnRecord(false)
             .inlineInRow(false)
@@ -187,60 +188,49 @@ final class SiteActions {
     }
 
     private static @NonNull PanelAction<Row> enableAction() {
+        ConfirmationSpec enable = Confirmations.of(HohenheimMicrocopy.SITE.of("enable"),
+            HohenheimMicrocopy.SITE.of("toggle_confirm"), ActionStyle.DEFAULT);
         return PanelAction.<Row, Void>places(SiteOperations.ENABLE, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.refreshWithToast(
-                    Microcopy.of("enabled_toast").withFilter("scope", "site")))
+                    HohenheimMicrocopy.SITE.of("enabled_toast")))
             .inlineInRow(false)
             // The record-less fallback: a surface drawn without a row still confirms.
-            .confirmation(toggleConfirmation(false, null))
-            .dynamicConfirmation(site -> toggleConfirmationFor(false, site))
+            .confirmation(enable)
+            .dynamicConfirmation(site -> enable.withBody(toggleBody(false, site)))
             .build();
     }
 
     private static @NonNull PanelAction<Row> disableAction() {
+        ConfirmationSpec disable = Confirmations.of(HohenheimMicrocopy.SITE.of("disable"),
+            HohenheimMicrocopy.SITE.of("toggle_confirm"), ActionStyle.DESTRUCTIVE);
         return PanelAction.<Row, Void>places(SiteOperations.DISABLE, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.refreshWithToast(
-                    Microcopy.of("disabled_toast").withFilter("scope", "site")))
+                    HohenheimMicrocopy.SITE.of("disabled_toast")))
             .inlineInRow(false)
-            .confirmation(toggleConfirmation(true, null))
-            .dynamicConfirmation(site -> toggleConfirmationFor(true, site))
+            .confirmation(disable)
+            .dynamicConfirmation(site -> disable.withBody(toggleBody(true, site)))
             .build();
     }
 
     /**
-     * The switch dialog over one site: the direction's verb, and a body naming the site and its hostnames.
+     * The switch dialog's body over one site, naming the site and its hostnames.
      *
      * AIDEV-NOTE: the four bodies are a deliberate 2x2 (direction x hostnames yes/no): microcopy args echo verbatim,
      * so an empty hostname list would render a dangling colon.
      */
-    static @NonNull ConfirmationSpec toggleConfirmationFor(boolean disabling, @NonNull Row site) {
+    private static @NonNull Microcopy toggleBody(boolean disabling, @NonNull Row site) {
         String hostnames = DeleteImpact.join(DeleteImpact.hostnamesOfSite(site.get(SiteModel.ID)));
-        Microcopy body = Microcopy.of((disabling ? "disable_confirm" : "enable_confirm")
+        Microcopy body = HohenheimMicrocopy.SITE.of((disabling ? "disable_confirm" : "enable_confirm")
                 + (hostnames.isEmpty() ? "_no_hostnames" : ""))
-            .withFilter("scope", "site")
             .withArg("name", String.valueOf((Object) site.get(SiteModel.NAME)));
-        if (!hostnames.isEmpty()) {
-            body = body.withArg("hostnames", hostnames);
-        }
-        return toggleConfirmation(disabling, body);
-    }
-
-    /** @param body the per-site body, null for the record-less fallback */
-    private static @NonNull ConfirmationSpec toggleConfirmation(boolean disabling, @Nullable Microcopy body) {
-        Microcopy verb = Microcopy.of(disabling ? "disable" : "enable").withFilter("scope", "site");
-        return ConfirmationSpec.builder()
-            .title(verb)
-            .body(body != null ? body : Microcopy.of("toggle_confirm").withFilter("scope", "site"))
-            .confirmLabel(verb)
-            .style(disabling ? ActionStyle.DESTRUCTIVE : ActionStyle.DEFAULT)
-            .build();
+        return hostnames.isEmpty() ? body : body.withArg("hostnames", hostnames);
     }
 
     /** The record-creating clone; the form opens on {@link #freeCloneName}, and the copy's page is where it lands. */
     private static @NonNull PanelAction<Row> cloneAction() {
         return CmsSupport.opensWhatItMade(SiteOperations.CLONE, (panel, id) -> SiteParts.recordRoute(panel, id).toUrl(),
-                Microcopy.of("clone").withFilter("scope", "site"),
-                Microcopy.of("clone_confirm").withFilter("scope", "site"), null)
+                HohenheimMicrocopy.SITE.of("clone"),
+                HohenheimMicrocopy.SITE.of("clone_confirm"))
             .inputValues((site, request) -> Map.of(SiteOperations.CLONE_NAME.getName(), freeCloneName(site)))
             .build();
     }
@@ -271,14 +261,11 @@ final class SiteActions {
     private static @NonNull PanelAction<Row> rollbackAction() {
         return PanelAction.<Row, Void>places(SiteOperations.ROLLBACK_RELEASE, ActionPlacement.ROW,
                 (request, result) -> CmsActionResult.refreshWithToast(
-                    Microcopy.of("rollback_done").withFilter("scope", "site")))
+                    HohenheimMicrocopy.SITE.of("rollback_done").withArg("name", request.subject().get(SiteModel.NAME))))
             .inlineInRow(false)
-            .description(Microcopy.of("rollback_hint").withFilter("scope", "site"))
-            .confirmation(ConfirmationSpec.builder()
-                .title(Microcopy.of("rollback").withFilter("scope", "site"))
-                .body(Microcopy.of("rollback_confirm").withFilter("scope", "site"))
-                .style(ActionStyle.DESTRUCTIVE)
-                .build())
+            .description(HohenheimMicrocopy.SITE.of("rollback_hint"))
+            .confirmation(Confirmations.of(HohenheimMicrocopy.SITE.of("rollback"),
+                HohenheimMicrocopy.SITE.of("rollback_confirm"), ActionStyle.DESTRUCTIVE))
             .build();
     }
 }

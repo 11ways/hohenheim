@@ -1,10 +1,9 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -14,6 +13,8 @@ import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.model.relation.BelongsTo;
 import be.elevenways.zenit.common.ui.BadgeVariant;
 import be.elevenways.zenit.common.ui.ColorHue;
+import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
 
@@ -50,8 +51,8 @@ public class DatabaseModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
-        .label(HohenheimFormCopy.label("name"))
-        .help(HohenheimFormCopy.help("database_name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
+        .help(HohenheimMicrocopy.HELP.of("database_name"))
         .build());
     /** {@link #ENGINE} token of the PostgreSQL engine. */
     public static final String ENGINE_POSTGRES = "postgres";
@@ -66,8 +67,8 @@ public class DatabaseModel extends Model {
     public static final String ENGINE_MONGO = "mongo";
 
     public static final EnumField ENGINE = SCHEMA.addField(engineFieldBuilder("engine")
-        .label(HohenheimFormCopy.label("engine"))
-        .help(HohenheimFormCopy.help("engine"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("engine"))
+        .help(HohenheimMicrocopy.HELP.of("engine"))
         .build());
 
     /**
@@ -78,52 +79,41 @@ public class DatabaseModel extends Model {
     public static EnumField.Builder engineFieldBuilder(String name) {
         return EnumField.builder(name)
             .value(ENGINE_POSTGRES, v -> v.displayName("PostgreSQL")
-                .label(engineLabel(ENGINE_POSTGRES)).icon("database").color(ColorHue.BLUE))
+                .label(HohenheimMicrocopy.DB_ENGINE.of(ENGINE_POSTGRES)).icon("database").color(ColorHue.BLUE))
             .value(ENGINE_MYSQL, v -> v.displayName("MySQL")
-                .label(engineLabel(ENGINE_MYSQL)).icon("database").color(ColorHue.ORANGE))
+                .label(HohenheimMicrocopy.DB_ENGINE.of(ENGINE_MYSQL)).icon("database").color(ColorHue.ORANGE))
             .value(ENGINE_REDIS, v -> v.displayName("Redis")
-                .label(engineLabel(ENGINE_REDIS)).icon("bolt").color(ColorHue.RED))
+                .label(HohenheimMicrocopy.DB_ENGINE.of(ENGINE_REDIS)).icon("bolt").color(ColorHue.RED))
             .value(ENGINE_MONGO, v -> v.displayName("MongoDB")
-                .label(engineLabel(ENGINE_MONGO)).icon("leaf").color(ColorHue.GREEN));
-    }
-
-    /** The translation token for a database engine; the key IS the stored value. */
-    private static Microcopy engineLabel(String engine) {
-        return Microcopy.of(engine).withFilter("scope", "db_engine");
+                .label(HohenheimMicrocopy.DB_ENGINE.of(ENGINE_MONGO)).icon("leaf").color(ColorHue.GREEN));
     }
 
     public static final StringField IMAGE = SCHEMA.addField(StringField.builder().name("image")
-        .label(HohenheimFormCopy.label("image"))
-        .help(HohenheimFormCopy.help("image"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("image"))
+        .help(HohenheimMicrocopy.HELP.of("image"))
         .build());
     public static final StringField DB_USER = SCHEMA.addField(StringField.builder().name("db_user")
-        .label(HohenheimFormCopy.label("db_user"))
-        .help(HohenheimFormCopy.help("db_user"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("db_user"))
+        .help(HohenheimMicrocopy.HELP.of("db_user"))
         .build());
     public static final StringField DB_PASSWORD = SCHEMA.addField(StringField.builder().name("db_password")
         .secret()
         .encrypted()
-        .label(HohenheimFormCopy.label("db_password"))
-        .help(HohenheimFormCopy.help("db_password"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("db_password"))
+        .help(HohenheimMicrocopy.HELP.of("db_password"))
         .build());
     public static final StringField DB_NAME = SCHEMA.addField(StringField.builder().name("db_name")
-        .label(HohenheimFormCopy.label("db_name"))
-        .help(HohenheimFormCopy.help("db_name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("db_name"))
+        .help(HohenheimMicrocopy.HELP.of("db_name"))
         .build());
     public static final BooleanField EPHEMERAL = SCHEMA.addField(BooleanField.builder("ephemeral")
         .defaultValue(false)
-        .label(HohenheimFormCopy.label("ephemeral"))
-        .help(HohenheimFormCopy.help("ephemeral"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("ephemeral"))
+        .help(HohenheimMicrocopy.HELP.of("ephemeral"))
         .build());
     // Optional container resource caps (null = unlimited).
-    public static final IntegerField MEMORY_LIMIT_MB = SCHEMA.addField(IntegerField.builder().name("memory_limit_mb")
-        .label(HohenheimFormCopy.label("memory_limit"))
-        .help(HohenheimFormCopy.help("memory_limit"))
-        .build());
-    public static final DoubleField CPU_LIMIT = SCHEMA.addField(DoubleField.builder().name("cpu_limit")
-        .label(HohenheimFormCopy.label("cpu_limit"))
-        .help(HohenheimFormCopy.help("cpu_limit"))
-        .build());
+    public static final IntegerField MEMORY_LIMIT_MB = SCHEMA.addField(InstanceKindFields.memoryLimit());
+    public static final DoubleField CPU_LIMIT = SCHEMA.addField(InstanceKindFields.cpuLimit());
     /**
      * The provisioning state, with the badge facets every surface renders it through.
      *
@@ -133,7 +123,8 @@ public class DatabaseModel extends Model {
      * no icon, exactly where an operator looks for it. Every surface now derives an
      * EnumBadgeState from here; nothing re-spells the colours.
      */
-    public static final EnumField STATUS = SCHEMA.addField(statusFieldBuilder("status").build());
+    public static final EnumField STATUS = SCHEMA.addField(statusFieldBuilder("status")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("status")).build());
 
     /**
      * The schema-field builder carrying the provisioning-status vocabulary, so a second
@@ -143,19 +134,17 @@ public class DatabaseModel extends Model {
     public static EnumField.Builder statusFieldBuilder(String name) {
         return EnumField.builder(name)
             .value(STATUS_PROVISIONING, v -> v.displayName("Provisioning")
-                .label(statusLabel(STATUS_PROVISIONING)).icon("rotate").color(BadgeVariant.WARNING))
+                .label(HohenheimMicrocopy.DATABASE_STATUS.of(STATUS_PROVISIONING)).icon("rotate")
+                .color(BadgeVariant.WARNING))
             .value(STATUS_ACTIVE, v -> v.displayName("Active")
-                .label(statusLabel(STATUS_ACTIVE)).icon("circle-check").color(BadgeVariant.SUCCESS))
+                .label(HohenheimMicrocopy.DATABASE_STATUS.of(STATUS_ACTIVE)).icon("circle-check")
+                .color(BadgeVariant.SUCCESS))
             .value(STATUS_FAILED, v -> v.displayName("Failed")
-                .label(statusLabel(STATUS_FAILED)).icon("circle-xmark").color(BadgeVariant.DESTRUCTIVE))
+                .label(HohenheimMicrocopy.DATABASE_STATUS.of(STATUS_FAILED)).icon("circle-xmark")
+                .color(BadgeVariant.DESTRUCTIVE))
             .value(STATUS_DESTROY_FAILED, v -> v.displayName("Destroy failed")
-                .label(statusLabel(STATUS_DESTROY_FAILED)).icon("triangle-exclamation")
+                .label(HohenheimMicrocopy.DATABASE_STATUS.of(STATUS_DESTROY_FAILED)).icon("triangle-exclamation")
                 .color(BadgeVariant.DESTRUCTIVE));
-    }
-
-    /** The translation token for a status; the key IS the stored value. */
-    private static Microcopy statusLabel(String status) {
-        return Microcopy.of(status).withFilter("scope", "database_status");
     }
 
     /** {@link #outcomeOf} value: work is still in flight, so a watcher keeps waiting. */
@@ -213,17 +202,13 @@ public class DatabaseModel extends Model {
      */
     public static final EnumField PLACEMENT = SCHEMA.addField(EnumField.builder("placement")
         .value(PLACEMENT_DEDICATED, v -> v.displayName("Dedicated")
-            .label(placementLabel(PLACEMENT_DEDICATED)).icon("box").color(BadgeVariant.SECONDARY))
+            .label(HohenheimMicrocopy.DATABASE_PLACEMENT.of(PLACEMENT_DEDICATED)).icon("box")
+            .color(BadgeVariant.SECONDARY))
         .value(PLACEMENT_SHARED, v -> v.displayName("Shared")
-            .label(placementLabel(PLACEMENT_SHARED)).icon("layer-group").color(ColorHue.BLUE))
-        .label(HohenheimFormCopy.label("placement"))
-        .help(HohenheimFormCopy.help("database_placement"))
+            .label(HohenheimMicrocopy.DATABASE_PLACEMENT.of(PLACEMENT_SHARED)).icon("layer-group").color(ColorHue.BLUE))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("placement"))
+        .help(HohenheimMicrocopy.HELP.of("database_placement"))
         .build());
-
-    /** The translation token for a placement; the key IS the stored value. */
-    private static Microcopy placementLabel(String placement) {
-        return Microcopy.of(placement).withFilter("scope", "database_placement");
-    }
 
     /**
      * The shared engine ({@code database_engines.id}) a SHARED record is a logical
@@ -233,8 +218,8 @@ public class DatabaseModel extends Model {
      */
     public static final IntegerField ENGINE_ID = SCHEMA.addField(IntegerField.builder()
         .name("engine_id")
-        .label(HohenheimFormCopy.label("database_engine"))
-        .help(HohenheimFormCopy.help("database_engine"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("database_engine"))
+        .help(HohenheimMicrocopy.HELP.of("database_engine"))
         .build());
 
     /** The shared engine relation, declared so an engine delete can correlate its dependents. */
@@ -256,14 +241,14 @@ public class DatabaseModel extends Model {
      */
     public static final TextField FAILURE_REASON = SCHEMA.addField(TextField.builder()
         .name("failure_reason")
-        .label(HohenheimFormCopy.label("failure_reason"))
-        .help(HohenheimFormCopy.help("database_failure_reason"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("failure_reason"))
+        .help(HohenheimMicrocopy.HELP.of("database_failure_reason"))
         .filterable(false)
         .build());
     /** The host this database's container runs on: a {@code servers.id} FK, never a name. */
     public static final IntegerField SERVER_ID = SCHEMA.addField(IntegerField.builder().name("server_id")
-        .label(HohenheimFormCopy.label("server"))
-        .help(HohenheimFormCopy.help("server"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("server"))
+        .help(HohenheimMicrocopy.HELP.of("server"))
         .build());
     /**
      * The owner database-count bucket this record's reservation was charged to, stamped by
@@ -325,7 +310,25 @@ public class DatabaseModel extends Model {
     }
 
     /** Docker's object-name ceiling, and generous for a directory name. */
-    private static final int MAX_NAME_LENGTH = 64;
+    public static final int MAX_NAME_LENGTH = 64;
+
+    /**
+     * THE name rule of a database and an engine record, every create lane's and both model hooks'.
+     *
+     * @param maxLength a lane's tighter ceiling (the tenant label leaves room for its owner prefix)
+     * @throws Violations {@code database_name_invalid} on {@code field}
+     */
+    public static void requireValidName(@NonNull String field, @Nullable Object name, int maxLength) {
+        String text = name == null ? "" : String.valueOf(name);
+        if (text.length() > maxLength || !isValidName(text)) {
+            throw Violations.ofField(field, name, HohenheimMicrocopy.VIOLATIONS.of("database_name_invalid"));
+        }
+    }
+
+    /** @throws Violations {@code database_name_invalid} on {@code field} */
+    public static void requireValidName(@NonNull String field, @Nullable Object name) {
+        requireValidName(field, name, MAX_NAME_LENGTH);
+    }
 
     static {
         // A row written before M009 carries no placement; it READS as dedicated -- the
@@ -344,9 +347,8 @@ public class DatabaseModel extends Model {
                 return;
             }
             Object name = row.get(NAME.getName());
-            if (name != null && !isValidName(String.valueOf(name))) {
-                throw Violations.ofField(NAME.getName(), name,
-                    HohenheimViolations.text("database_name_invalid"));
+            if (name != null) {
+                requireValidName(NAME.getName(), name);
             }
         });
         // A managed database always has a concrete host; default the FK at create time

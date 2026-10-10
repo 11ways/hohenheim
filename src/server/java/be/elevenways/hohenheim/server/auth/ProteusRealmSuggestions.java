@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.zenit.common.edit.PermissionSuggestion;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
@@ -58,11 +59,7 @@ public final class ProteusRealmSuggestions {
         if (!(rootValues.get(AccessRuleModel.DATA.getName()) instanceof Map<?, ?> data)) {
             return List.of();
         }
-        Object rawId = data.get(AccessRuleModel.PROVIDER_ID.getName());
-        if (rawId == null) {
-            return List.of();
-        }
-        Integer providerId = rawId instanceof Number number ? number.intValue() : parseId(rawId);
+        Integer providerId = RawValues.parsedInt(data.get(AccessRuleModel.PROVIDER_ID.getName()));
         if (providerId == null) {
             return List.of();
         }
@@ -74,21 +71,13 @@ public final class ProteusRealmSuggestions {
         return resolve(Map.of(SiteAuthProviderModel.CONFIG.getName(), config), context);
     }
 
-    private static @Nullable Integer parseId(@NonNull Object value) {
-        try {
-            return Integer.valueOf(String.valueOf(value).trim());
-        } catch (NumberFormatException notANumber) {
-            return null;
-        }
-    }
-
     static @NonNull List<PermissionSuggestion> resolve(@NonNull Map<String, Object> rootValues,
                                                   @NonNull EditContext context) {
         if (!(rootValues.get(SiteAuthProviderModel.CONFIG.getName()) instanceof Map<?, ?> config)) {
             return List.of();
         }
-        String endpoint = stringOf(config.get(ProteusAuthProviderType.ENDPOINT));
-        String realmClient = stringOf(config.get(ProteusAuthProviderType.REALM_CLIENT));
+        String endpoint = RawValues.nonBlankString(config.get(ProteusAuthProviderType.ENDPOINT));
+        String realmClient = RawValues.nonBlankString(config.get(ProteusAuthProviderType.REALM_CLIENT));
         if (endpoint == null || realmClient == null) {
             return List.of();
         }
@@ -121,7 +110,7 @@ public final class ProteusRealmSuggestions {
 
     /** A form-supplied access key is only usable when it is a REAL value, not the mask. */
     private static @Nullable String usableAccessKey(@Nullable Object value) {
-        String key = stringOf(value);
+        String key = RawValues.nonBlankString(value);
         return key != null && !FormSecrets.STORED_MARKER.equals(key) ? key : null;
     }
 
@@ -135,19 +124,15 @@ public final class ProteusRealmSuggestions {
             if (!(row.get(SiteAuthProviderModel.CONFIG) instanceof Map<?, ?> config)) {
                 continue;
             }
-            if (endpoint.equals(stringOf(config.get(ProteusAuthProviderType.ENDPOINT)))
-                && realmClient.equals(stringOf(config.get(ProteusAuthProviderType.REALM_CLIENT)))) {
-                String key = stringOf(config.get(ProteusAuthProviderType.ACCESS_KEY));
+            if (endpoint.equals(RawValues.nonBlankString(config.get(ProteusAuthProviderType.ENDPOINT)))
+                && realmClient.equals(RawValues.nonBlankString(config.get(ProteusAuthProviderType.REALM_CLIENT)))) {
+                String key = RawValues.nonBlankString(config.get(ProteusAuthProviderType.ACCESS_KEY));
                 if (key != null) {
                     return key;
                 }
             }
         }
         return null;
-    }
-
-    private static @Nullable String stringOf(@Nullable Object value) {
-        return value instanceof String text && !text.isBlank() ? text : null;
     }
 
     /** Test hook. */

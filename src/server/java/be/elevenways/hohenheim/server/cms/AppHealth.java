@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.CertCoverage;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -21,10 +22,13 @@ import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.common.resource.ResourceHealth;
+import be.elevenways.zenit.cms.server.page.RecordHealthReads;
+import be.elevenways.zenit.cms.server.panel.PanelGate;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -75,7 +79,7 @@ final class AppHealth {
         return ResourceHealth.batch((instances, access) -> {
             InstanceFacts facts = InstanceFacts.of(instances);
             return instance -> spokenTo(instanceVerdict(instance, facts, delegated, access).health(), delegated,
-                InstanceParts.SLUG, instance, access);
+                HohenheimSlugs.INSTANCES, instance, access);
         });
     }
 
@@ -92,11 +96,14 @@ final class AppHealth {
         if (!delegated || health.fixes().isEmpty()) {
             return health;
         }
-        Panel manage = PanelRegistry.getBySlug(ManagePanel.SLUG);
-        if (manage != null && AppDirectory.fixOf(manage, reader, ownSlug, own, health) != null) {
+        // The fix list cell's own answer (RecordHealthReads.fixCell); a verdict read off-request offers none.
+        Panel manage = PanelRegistry.getBySlug(HohenheimSlugs.MANAGE);
+        PanelEntry entry = manage != null ? manage.entryBySlug(ownSlug) : null;
+        if (entry != null && reader.conduit() != null
+                && RecordHealthReads.fixCell(PanelGate.request(manage, reader), entry, own, health) != null) {
             return health;
         }
-        Microcopy who = copy("operator_fixes");
+        Microcopy who = HohenheimMicrocopy.APP_HEALTH.of("operator_fixes");
         return health.detail(health.detail() == null ? who
             : Microcopy.concat(List.of(health.detail(), Microcopy.literal(" "), who)));
     }
@@ -113,7 +120,8 @@ final class AppHealth {
         if (headline.isLiteral() || headline.isComposed()) {
             return headline;
         }
-        return Microcopy.of(headline.key(), headline.filters().with("scope", "attention_title"),
+        return Microcopy.of(headline.key(),
+            headline.filters().with("scope", HohenheimMicrocopy.ATTENTION_TITLE.scope()),
             headline.args().with("name", name));
     }
 
@@ -137,11 +145,11 @@ final class AppHealth {
         Map<Integer, HeldBack> held = new LinkedHashMap<>();
         for (Row instance : instances) {
             AttentionSubject cause = instanceVerdict(instance, facts, false, null).cause();
-            Microcopy refusal = OwnedInstances.placementRefusal(instance);
+            Microcopy refusal = OwnedInstances.placementReasonOf(instance, false, null);
             if (cause != null && ServerModel.MODEL_ID.equals(cause.model()) && refusal != null) {
                 // The gate's own words, never the verdict's headline: a held app whose site is broken on its own
                 // (HTTPS forced without a certificate) leads with that site, while the host still holds it back.
-                held.merge(cause.id(), new HeldBack(1, OwnedInstances.placementReason(refusal, false, null)),
+                held.merge(cause.id(), new HeldBack(1, refusal),
                     (first, next) -> new HeldBack(first.apps() + 1, first.reason()));
             }
         }
@@ -181,7 +189,17 @@ final class AppHealth {
 
     /** Whether this instance runs and serves what visitors reach of it: its verdict's serving half. */
     static boolean instanceServes(@NonNull Row instance) {
-        return instanceVerdict(instance, InstanceFacts.of(List.of(instance)), false, null).serving();
+        return instanceReading(instance, false, null).serving();
+    }
+
+    /**
+     * This instance's whole verdict for one reader: what its overview's Status reads and what its dashboard item folds
+     * under (the cause half).
+     *
+     * @param viewer who reads the words, null where only the serving half or the cause is asked
+     */
+    static @NonNull Verdict instanceReading(@NonNull Row instance, boolean delegated, @Nullable AccessContext viewer) {
+        return instanceVerdict(instance, InstanceFacts.of(List.of(instance)), delegated, viewer);
     }
 
     /**
@@ -220,16 +238,16 @@ final class AppHealth {
                                                 @Nullable AccessContext viewer) {
         Integer siteId = site.get(SiteModel.ID);
         if (site.get(SiteModel.DELETED_AT) != null) {
-            return Verdict.notServing(RecordHealth.unknown(copy("in_trash")));
+            return Verdict.notServing(RecordHealth.unknown(HohenheimMicrocopy.APP_HEALTH.of("in_trash")));
         }
         if (!Boolean.TRUE.equals(site.get(SiteModel.ENABLED))) {
             return Verdict.notServing(RecordHealth.attention(Headline.SWITCHED_OFF.copy())
-                .detail(copy("switched_off_detail")).fixedBy(SiteOperations.ENABLE.id()));
+                .detail(HohenheimMicrocopy.APP_HEALTH.of("switched_off_detail")).fixedBy(SiteOperations.ENABLE.id()));
         }
         List<Row> domains = facts.domains.getOrDefault(siteId, List.of());
         if (domains.isEmpty()) {
             return Verdict.notServing(RecordHealth.attention(Headline.NO_ADDRESS.copy())
-                .detail(copy("no_address_detail")).fixedBy(SiteActions.ADD_ADDRESS));
+                .detail(HohenheimMicrocopy.APP_HEALTH.of("no_address_detail")).fixedBy(SiteActions.ADD_ADDRESS));
         }
         List<RoutingProblem> problems = facts.problems.getOrDefault(siteId, List.of());
         for (RoutingProblem problem : problems) {
@@ -250,7 +268,8 @@ final class AppHealth {
             return Verdict.causedBy(httpsTerminates() ? AttentionSubject.address(forced.get(SiteDomainModel.ID))
                     : AttentionSubject.httpsTermination(),
                 RecordHealth.broken(Headline.ERROR_PAGE.copy())
-                    .detail(copy("forced_without_certificate").withArg("host", forced.get(SiteDomainModel.HOSTNAME)))
+                    .detail(HohenheimMicrocopy.APP_HEALTH.of("forced_without_certificate")
+                        .withArg("host", forced.get(SiteDomainModel.HOSTNAME)))
                     .fixedBy(SiteActions.FIX_HTTPS, SiteOperations.STOP_FORCING_HTTPS.id()));
         }
         Row instance = facts.instances.get(site.get(SiteModel.INSTANCE_ID));
@@ -267,18 +286,20 @@ final class AppHealth {
             Row database = instance == null ? null : DatabaseAttention.firstNotServing(instance.get(InstanceModel.ID));
             if (database != null) {
                 return Verdict.causedBy(AttentionSubject.database(database.get(DatabaseModel.ID)),
-                    RecordHealth.broken(Headline.ERROR_PAGE.copy()).detail(copy("database_not_serving")
+                    RecordHealth.broken(Headline.ERROR_PAGE.copy())
+                        .detail(HohenheimMicrocopy.APP_HEALTH.of("database_not_serving")
                         .withArg("name", database.get(DatabaseModel.NAME))
                         .withArg("state", DatabaseVerdict.ofDatabase(database).state().label()
                             .withFilter("case", "sentence"))));
             }
-            return Verdict.notServing(RecordHealth.broken(Headline.ERROR_PAGE.copy()).detail(copy("upstream_down")));
+            return Verdict.notServing(RecordHealth.broken(Headline.ERROR_PAGE.copy())
+                .detail(HohenheimMicrocopy.APP_HEALTH.of("upstream_down")));
         }
         Row open = firstOpenPath(facts.paths.getOrDefault(siteId, List.of()));
         if (open != null) {
             return Verdict.serving(RecordHealth.attention(Headline.PATH_OPEN.copy()
                     .withArg("path", open.get(ProtectedPathModel.PATH)))
-                .detail(copy("path_open_detail"))
+                .detail(HohenheimMicrocopy.APP_HEALTH.of("path_open_detail"))
                 .fixedBy(SiteActions.FIX_PROTECTION));
         }
         if (!problems.isEmpty()) {
@@ -286,7 +307,8 @@ final class AppHealth {
                 .detail(ProxyAttention.reasonOf(problems.get(0))));
         }
         if (live == SiteHealth.DEGRADED) {
-            return Verdict.serving(RecordHealth.attention(Headline.DEGRADED.copy()).detail(copy("degraded_detail")));
+            return Verdict.serving(RecordHealth.attention(Headline.DEGRADED.copy())
+                .detail(HohenheimMicrocopy.APP_HEALTH.of("degraded_detail")));
         }
         // A name its stored certificate cannot be served for: plain HTTP works, HTTPS ends in an error. The verdict
         // says it in the HTTPS cell's own reason, so an app row never reads OK beside a "Not working" HTTPS badge.
@@ -306,11 +328,10 @@ final class AppHealth {
      */
     private static @Nullable Verdict workloadVerdict(@NonNull Row instance, boolean delegated,
                                                      @Nullable AccessContext viewer) {
-        Microcopy refusal = OwnedInstances.placementRefusal(instance);
+        Microcopy refusal = OwnedInstances.placementReasonOf(instance, delegated, viewer);
         if (refusal != null) {
             return Verdict.heldBy(OwnedInstances.placementHost(instance),
-                RecordHealth.broken(Headline.ERROR_PAGE.copy())
-                    .detail(OwnedInstances.placementReason(refusal, delegated, viewer)));
+                RecordHealth.broken(Headline.ERROR_PAGE.copy()).detail(refusal));
         }
         InstanceStatus status = InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
         if (status != null && workloadServes(status)) {
@@ -319,7 +340,8 @@ final class AppHealth {
         // The workload is the cause: a crashed or failed-to-deploy workload's own item is the root, never the site's.
         return Verdict.causedBy(AttentionSubject.instance(instance.get(InstanceModel.ID)),
             RecordHealth.broken(Headline.ERROR_PAGE.copy())
-                .detail(copy("workload_not_running").withArg("name", instance.get(InstanceModel.NAME))));
+                .detail(HohenheimMicrocopy.APP_HEALTH.of("workload_not_running")
+                    .withArg("name", instance.get(InstanceModel.NAME))));
     }
 
     /**
@@ -340,13 +362,13 @@ final class AppHealth {
         String installError = instance.get(InstanceModel.INSTALL_ERROR);
         if (installError != null && !installError.isBlank()) {
             return Verdict.notServing(RecordHealth.broken(Headline.INSTALL_FAILED.copy())
-                .detail(copy("install_failed_detail")));
+                .detail(HohenheimMicrocopy.APP_HEALTH.of("install_failed_detail")));
         }
-        Microcopy refusal = OwnedInstances.placementRefusal(instance);
+        // The host is the root while it refuses the start: an older recorded failure (the ERROR status a failed start
+        // stamped) is history, Recent's to tell, never a second current verdict beside this one.
+        Microcopy refusal = OwnedInstances.placementReasonOf(instance, delegated, viewer);
         if (refusal != null) {
-            RecordHealth blocked = RecordHealth.attention(
-                    Headline.CANNOT_START.copy().withArg("name", instance.get(InstanceModel.NAME)))
-                .detail(OwnedInstances.placementReason(refusal, delegated, viewer));
+            RecordHealth blocked = RecordHealth.attention(Headline.CANNOT_START.copy()).detail(refusal);
             RecordHealth broken = siteBrokenOnItsOwn(facts.sitesByInstance.get(instance.get(InstanceModel.ID)),
                 facts.sites, delegated, viewer);
             return Verdict.heldBy(OwnedInstances.placementHost(instance),
@@ -354,8 +376,11 @@ final class AppHealth {
         }
         InstanceStatus status = InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
         if (status == null) {
-            return Verdict.notServing(RecordHealth.unknown(copy("status_unknown")));
+            return Verdict.notServing(RecordHealth.unknown(HohenheimMicrocopy.APP_HEALTH.of("status_unknown")));
         }
+        // An errored workload's own root (the host that refused its start, the database whose old engine it is) is the
+        // cause its dashboard item folds under.
+        AttentionSubject root = status == InstanceStatus.ERROR ? WorkloadErrors.rootOf(instance) : null;
         RecordHealth health = switch (status) {
             case RUNNING -> runningVerdict(facts.sitesByInstance.get(instance.get(InstanceModel.ID)), facts.sites,
                 delegated, viewer);
@@ -367,19 +392,19 @@ final class AppHealth {
                 // Restart is its fix, unless its root is another record's (the host that refuses its start, the
                 // database whose old engine it is): a restart would be refused or bring back what should go. On
                 // /manage it is offered to a holder of power; everyone else reads who can (spokenTo).
-                yield WorkloadErrors.rootOf(instance) != null ? stopped
-                    : stopped.fixedBy(InstanceOperations.RESTART.id());
+                yield root != null ? stopped : stopped.fixedBy(InstanceOperations.RESTART.id());
             }
             case STOPPED, CREATED -> {
                 RecordHealth broken = siteBrokenOnItsOwn(facts.sitesByInstance.get(instance.get(InstanceModel.ID)),
                     facts.sites, delegated, viewer);
                 yield broken != null ? broken : RecordHealth.attention(Headline.NOT_RUNNING.copy())
-                    .detail(copy("not_running_detail")).fixedBy(InstanceOperations.START.id());
+                    .detail(HohenheimMicrocopy.APP_HEALTH.of("not_running_detail"))
+                    .fixedBy(InstanceOperations.START.id());
             }
             case STARTING, CAPTURING, RESTORING, MIGRATING -> RecordHealth.unknown(status.label());
         };
         // A running workload whose site turns visitors away serves nothing, though it runs.
-        return new Verdict(health, workloadServes(status) && health.tone() != HealthTone.BROKEN, null);
+        return new Verdict(health, workloadServes(status) && health.tone() != HealthTone.BROKEN, root);
     }
 
     // -- stacks ----------------------------------------------------------------------
@@ -406,7 +431,7 @@ final class AppHealth {
     private static @NonNull RecordHealth stackVerdict(@NonNull Row stack) {
         String status = stack.get(StackModel.STATUS);
         if (StackModel.STATUS_ACTIVE.equals(status)) {
-            return RecordHealth.ok(copy("running"));
+            return RecordHealth.ok(HohenheimMicrocopy.APP_HEALTH.of("running"));
         }
         Stoppage stoppage = stackStoppage(stack);
         if (stoppage != null) {
@@ -416,18 +441,20 @@ final class AppHealth {
                     .detail(reason == null ? null : Microcopy.literal(reason));
                 // A stack's stoppage is never a start that failed (stackStoppage); its services stopped either way.
                 case AFTER_ERROR, START_FAILED -> RecordHealth.broken(stoppage.headline())
-                    .detail(copy("stack_failed_detail"));
+                    .detail(HohenheimMicrocopy.APP_HEALTH.of("stack_failed_detail"));
             };
         }
         if (StackModel.STATUS_DEGRADED.equals(status)) {
-            return RecordHealth.attention(Headline.DEGRADED.copy()).detail(copy("stack_degraded_detail"));
+            return RecordHealth.attention(Headline.DEGRADED.copy())
+                .detail(HohenheimMicrocopy.APP_HEALTH.of("stack_degraded_detail"));
         }
         if (StackModel.STATUS_STOPPED.equals(status) || StackModel.STATUS_INACTIVE.equals(status)) {
-            return RecordHealth.attention(Headline.NOT_RUNNING.copy()).detail(copy("not_running_detail"));
+            return RecordHealth.attention(Headline.NOT_RUNNING.copy())
+                .detail(HohenheimMicrocopy.APP_HEALTH.of("not_running_detail"));
         }
         // Deploying, and any status a later version stores: nobody can tell yet.
-        return RecordHealth.unknown(status == null ? copy("status_unknown")
-            : Microcopy.of(status).withFilter("scope", "stack_status"));
+        return RecordHealth.unknown(status == null ? HohenheimMicrocopy.APP_HEALTH.of("status_unknown")
+            : HohenheimMicrocopy.STACK_STATUS.of(status));
     }
 
     /**
@@ -502,7 +529,7 @@ final class AppHealth {
                 }
             }
         }
-        return copy("running");
+        return HohenheimMicrocopy.APP_HEALTH.of("running");
     }
 
     // -- the rules the verdict and its fix actions share ----------------------------------
@@ -636,7 +663,6 @@ final class AppHealth {
 
     // -- shared ----------------------------------------------------------------------
 
-
     /**
      * Where a serving site is live, in words: "Live at" the first exact name with the scheme that works for it, or,
      * for a site answering only patterns (a catch-all), what it catches.
@@ -646,8 +672,9 @@ final class AppHealth {
      */
     static @NonNull Microcopy liveWords(@NonNull List<Row> domains, @NonNull Set<String> working, boolean passthrough) {
         String url = exactUrl(domains, working, passthrough);
-        return url != null ? copy("live_at").withArg("address", url)
-            : copy("catches").withArg("pattern", String.valueOf((Object) domains.get(0).get(SiteDomainModel.HOSTNAME)));
+        return url != null ? HohenheimMicrocopy.APP_HEALTH.of("live_at").withArg("address", url)
+            : HohenheimMicrocopy.APP_HEALTH.of("catches")
+                .withArg("pattern", String.valueOf((Object) domains.get(0).get(SiteDomainModel.HOSTNAME)));
     }
 
     /**
@@ -721,10 +748,6 @@ final class AppHealth {
         return byKey;
     }
 
-    private static @NonNull Microcopy copy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "app_health");
-    }
-
     /**
      * The headlines of a verdict that has a problem, each one key in {@code app_health} with its naming variant in
      * {@code attention_title} ({@link #titleOf}); a verdict that is fine or unknown reads its own words.
@@ -750,7 +773,7 @@ final class AppHealth {
 
         /** @return the verdict's headline on the app's own page */
         @NonNull Microcopy copy() {
-            return AppHealth.copy(this.key);
+            return HohenheimMicrocopy.APP_HEALTH.of(this.key);
         }
     }
 
@@ -783,12 +806,12 @@ final class AppHealth {
 
         /** @return the verdict's headline on the workload's own page */
         @NonNull Microcopy headline() {
-            return copy(this.key);
+            return HohenheimMicrocopy.APP_HEALTH.of(this.key);
         }
 
         /** @return the same words naming the workload, for a surface that lists many (the attention band) */
         @NonNull Microcopy title(@Nullable Object name) {
-            return Microcopy.of(this.key).withFilter("scope", "attention_title").withArg("name", name);
+            return HohenheimMicrocopy.ATTENTION_TITLE.of(this.key).withArg("name", name);
         }
     }
 

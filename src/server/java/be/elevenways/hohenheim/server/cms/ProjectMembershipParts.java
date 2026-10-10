@@ -1,11 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -27,7 +27,6 @@ import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -46,31 +45,29 @@ public final class ProjectMembershipParts {
                              @NonNull String subjectType, int subjectId, @NonNull String member) {}
 
     private static final StringField PROJECT = StringField.builder("project")
-        .label(HohenheimFormCopy.label("project")).build();
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("project")).build();
     private static final StringField MEMBER = StringField.builder("member")
-        .label(Microcopy.of("member").withFilter("scope", "project")).build();
+        .label(HohenheimMicrocopy.PROJECT.of("member")).build();
     private static final StringField KIND = StringField.builder("kind")
-        .label(Microcopy.of("member_kind").withFilter("scope", "project")).build();
+        .label(HohenheimMicrocopy.PROJECT.of("member_kind")).build();
     private static final StorePages<Membership> PAGES = new StorePages<>() {
         @Override public @NonNull List<Field<?, ?>> fields() { return List.of(PROJECT, MEMBER, KIND); }
         @Override public @NonNull RecordPage<Membership> page(TableView.@NonNull Applied<Membership> applied,
                                                                @NonNull AccessContext access) {
-            return inMemory(applied, memberships(access), ProjectMembershipParts::cell, access);
+            return inMemory(applied, memberships(access), (row, column) -> values(row).get(column.name()), access);
         }
     };
-
-    /** The entry's slug, a member of the /manage Team cluster. */
-    public static final String SLUG = "project-members";
 
     private ProjectMembershipParts() {}
 
     public static @NonNull PanelResource<Membership> manage() {
-        return PanelResource.builder(HohenheimIds.id("manage_project_member"), SLUG,
-                SubjectType.of(HohenheimIds.id("project_membership"), Membership.class, Membership::key))
-            .label(Microcopy.of("members").withFilter("scope", "project"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "project_member"))
-            .description(CmsSupport.navHint("project_member")).navOrder(41).icon(Icon.of("users"))
-            .hasInScopeRecords(access -> !Projects.visibleTo(access).isEmpty())
+        // A Team cluster member with no admin twin, shown while the tenant is in a project.
+        return ManageTwin.listed(PanelResource.builder(ManageTwin.id("project_member"), HohenheimSlugs.PROJECT_MEMBERS,
+                    SubjectType.of(HohenheimIds.id("project_membership"), Membership.class, Membership::key)),
+                access -> !Projects.visibleTo(access).isEmpty())
+            .label(HohenheimMicrocopy.PROJECT.of("members"))
+            .recordLabel(HohenheimMicrocopy.PROJECT_MEMBER.of("singular"))
+            .description(CmsSupport.navHint(HohenheimMicrocopy.PROJECT_MEMBER)).navOrder(41).icon(Icon.of("users"))
             .form(ResourceForm.<Membership>of(FormSpec.builder().add(PROJECT).add(MEMBER).add(KIND).build()).build())
             .list(ResourceList.store(TableSpec.<Membership>builder()
                     .column(ColumnSpec.fromField(PROJECT).filterable().build())
@@ -83,18 +80,14 @@ public final class ProjectMembershipParts {
             .reads(ResourceReads.<Membership>typed(Membership::key)
                 .load((key, access) -> memberships(access).stream().filter(row -> row.key().equals(key))
                     .findFirst().orElse(null))
-                .values(row -> Map.of("project", row.projectName(), "member", row.member(), "kind", row.subjectType()))
-                .cells(ProjectMembershipParts::cell).build().title(Membership::member))
+                .values(ProjectMembershipParts::values).build().title(Membership::member))
             .build();
     }
 
-    private static @Nullable Object cell(Membership row, ColumnSpec column) {
-        return switch (column.name()) {
-            case "project" -> row.projectName();
-            case "member" -> row.member();
-            case "kind" -> row.subjectType();
-            default -> null;
-        };
+    /** @return the membership's value of each declared field */
+    private static @NonNull Map<String, Object> values(@NonNull Membership row) {
+        return Map.of(PROJECT.getName(), row.projectName(), MEMBER.getName(), row.member(),
+            KIND.getName(), row.subjectType());
     }
 
     private static List<Membership> memberships(AccessContext access) {

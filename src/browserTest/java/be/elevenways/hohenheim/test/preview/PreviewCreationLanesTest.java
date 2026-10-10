@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.preview;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
@@ -8,7 +9,7 @@ import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.source.TestSources;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.cms.PreviewParts;
 import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
@@ -189,7 +190,7 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         int strangerId = ApiSupport.user("preview-stranger@test");
         int managerId = ApiSupport.user("preview-manager@test");
         RecordGrants.grant(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID,
-            applicationId, HohenheimAccess.MANAGE, true);
+            applicationId, HohenheimCapabilities.MANAGE, true);
         AccessContext stranger = contextOf(strangerId, "Stranger");
         AccessContext manager = contextOf(managerId, "Manager");
         Map<String, Object> coerced = new LinkedHashMap<>();
@@ -203,7 +204,7 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         assertThat(ungated)
             .as("step 1: ungated, a stranger creates a preview on a foreign application")
             .isNotNull();
-        assertThat(catchThrowable(() -> PanelResourceCalls.create("admin", PreviewParts.SLUG, coerced, stranger)))
+        assertThat(catchThrowable(() -> PanelResourceCalls.create("admin", HohenheimSlugs.PREVIEWS, coerced, stranger)))
             .as("step 1: the admin parts' operator permission protects their actual create lane")
             .isInstanceOf(AccessRefusedException.class);
         PreviewDeployments.destroy(((Number) ungated).intValue(), "operator");
@@ -250,7 +251,7 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
         // 4. Revoking MANAGE removes that same writer's authority again; neither a successful earlier create nor
         //    the retained destroyed rows are a permit to create the next preview.
         RecordGrants.revoke(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID,
-            applicationId, HohenheimAccess.MANAGE);
+            applicationId, HohenheimCapabilities.MANAGE);
         assertThat(catchThrowable(() -> PreviewParts.manage().writes().rowWriter(ResourceVerb.CREATE).write(
                 new RowWriteCall(ResourceVerb.CREATE, null, coerced, manager))))
             .as("step 4: the delegated writer rechecks the revoked application grant")
@@ -349,7 +350,7 @@ class PreviewCreationLanesTest extends HohenheimTestBase {
             int managerId = ApiSupport.user("preview-expire-manager@test");
             int strangerId = ApiSupport.user("preview-expire-stranger@test");
             RecordGrants.grant(GrantSubjectType.USER, managerId, InstanceModel.MODEL_ID, applicationId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             AccessContext manager = contextOf(managerId, "Expire Manager");
             AccessContext stranger = contextOf(strangerId, "Expire Stranger");
 

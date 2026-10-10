@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
@@ -68,7 +69,7 @@ public final class HostAdmission {
             // an admin reading /manage is not a tenant, and the PAGE makes that projection
             // separately by surface. Same withholding as InstanceBackups.backupNow.
             if (TenantWrites.isTenantOriginated()) {
-                throw Violations.ofForm(HohenheimViolations.text("instance_placement_blocked"));
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_placement_blocked"));
             }
             throw refused;
         }
@@ -360,7 +361,7 @@ public final class HostAdmission {
             // The local daemon has no wire identity to pin at all: a directory on the
             // controller is the FILESYSTEM kind, which says out loud that it shares the
             // controller's failure domain instead of pretending to be off-host.
-            throw Violations.ofForm(HohenheimViolations.text("host_not_ssh")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_not_ssh")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
         requireTrustedSlot(server, HostTrustSlot.SSH);
@@ -387,7 +388,7 @@ public final class HostAdmission {
         // for an operator whose preflight ran and passed under the old posture.
         requirePreflightVerdictForPosture(server);
         if (!Boolean.TRUE.equals(server.get(ServerModel.PREFLIGHT_OK))) {
-            throw Violations.ofForm(HohenheimViolations.text("admit_needs_preflight")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("admit_needs_preflight")
                 .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME))));
         }
     }

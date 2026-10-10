@@ -22,6 +22,6 @@ public final class OperationSentences {
 
     /** @return the sentence of the operation whose id path is {@code operation} */
     public static @NonNull Microcopy of(@NonNull String operation) {
-        return Microcopy.of(operation).withFilter("scope", HohenheimMicrocopy.SCOPE).withFilter("target", "happened");
+        return HohenheimMicrocopy.HOHENHEIM.of(operation).withFilter("target", "happened");
     }
 }

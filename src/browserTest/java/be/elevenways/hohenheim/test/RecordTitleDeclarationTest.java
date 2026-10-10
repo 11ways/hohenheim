@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
@@ -50,7 +50,7 @@ class RecordTitleDeclarationTest extends HohenheimTestBase {
     @Test
     void everyResourceCanTitleItsOwnRecords() throws Exception {
         List<PanelResource<?>> resources = new ArrayList<>();
-        for (String slug : List.of("admin", ManagePanel.SLUG)) {
+        for (String slug : List.of("admin", HohenheimSlugs.MANAGE)) {
             Panel panel = PanelRegistry.getBySlug(slug);
             assertThat(panel).as("step 1: the '" + slug + "' panel is registered").isNotNull();
             for (PanelEntry entry : panel.entries()) {

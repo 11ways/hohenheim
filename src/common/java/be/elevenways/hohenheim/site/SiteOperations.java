@@ -1,9 +1,9 @@
 package be.elevenways.hohenheim.site;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
@@ -40,7 +40,7 @@ public final class SiteOperations {
     /** Puts a disabled site's hostnames into the route table; the enable route invariant may refuse it. */
     public static final Operation<Row, Void, Void> ENABLE = Operation.declare(HohenheimIds.id("enable_site"))
         .happened(OperationSentences.of("enable_site"))
-        .label(label("enable", "Enable"))
+        .label(HohenheimMicrocopy.SITE.of("enable").withFallback("Enable"))
         .icon(Icon.of("power-off"))
         .one(SITE)
         .gate(OperationGate.open())
@@ -51,7 +51,7 @@ public final class SiteOperations {
     /** Takes an enabled site's hostnames out of the route table. */
     public static final Operation<Row, Void, Void> DISABLE = Operation.declare(HohenheimIds.id("disable_site"))
         .happened(OperationSentences.of("disable_site"))
-        .label(label("disable", "Disable"))
+        .label(HohenheimMicrocopy.SITE.of("disable").withFallback("Disable"))
         .icon(Icon.of("power-off"))
         .one(SITE)
         .gate(OperationGate.open())
@@ -67,7 +67,7 @@ public final class SiteOperations {
     public static final Operation<Row, Void, Void> STOP_FORCING_HTTPS =
         Operation.declare(HohenheimIds.id("stop_forcing_https"))
             .happened(OperationSentences.of("stop_forcing_https"))
-            .label(label("stop_forcing_https", "Stop forcing HTTPS"))
+            .label(HohenheimMicrocopy.SITE.of("stop_forcing_https").withFallback("Stop forcing HTTPS"))
             .icon(Icon.of("unlock"))
             .one(SITE)
             .gate(OperationGate.open())
@@ -77,14 +77,14 @@ public final class SiteOperations {
 
     /** The copy's name, the one thing a clone asks. */
     public static final StringField CLONE_NAME = StringField.builder("name")
-        .label(Microcopy.of("clone_name").withFilter("scope", "site"))
+        .label(HohenheimMicrocopy.SITE.of("clone_name"))
         .required()
         .build();
 
     /** Copies a site and its hostnames under a new name; the copy starts disabled. Its result is the copy's id. */
     public static final Operation<Row, CloneInput, Integer> CLONE = Operation.declare(HohenheimIds.id("clone_site"))
         .happened(OperationSentences.of("clone_site"))
-        .label(label("clone", "Clone"))
+        .label(HohenheimMicrocopy.SITE.of("clone").withFallback("Clone"))
         .icon(Icon.of("copy"))
         .one(SITE)
         .gate(OperationGate.open())
@@ -102,7 +102,7 @@ public final class SiteOperations {
     public static final Operation<Row, Void, Void> ROLLBACK_RELEASE =
         Operation.declare(HohenheimIds.id("rollback_release"))
             .happened(OperationSentences.of("rollback_release"))
-            .label(label("rollback", "Roll back"))
+            .label(HohenheimMicrocopy.SITE.of("rollback").withFallback("Roll back"))
             .icon(Icon.of("clock-rotate-left"))
             .one(SITE)
             .gate(OperationGate.open())
@@ -111,9 +111,5 @@ public final class SiteOperations {
             .register();
 
     private SiteOperations() {
-    }
-
-    private static @NonNull Microcopy label(@NonNull String key, @NonNull String fallback) {
-        return Microcopy.of(key).withFilter("scope", "site").withFallback(fallback);
     }
 }

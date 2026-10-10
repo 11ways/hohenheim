@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -46,28 +45,28 @@ public class InstanceBackupModel extends Model {
 
     public static final IntegerField INSTANCE_ID = SCHEMA.addField(
         IntegerField.builder().name("instance_id")
-            .label(HohenheimFormCopy.label("instance"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("instance"))
             .build());
 
     public static final IntegerField TARGET_ID = SCHEMA.addField(
         IntegerField.builder().name("target_id")
-            .label(HohenheimFormCopy.label("backup_target"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("backup_target"))
             .build());
 
     public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
         .value(STATUS_UPLOADING, v -> v.displayName("Uploading").icon("cloud-arrow-up")
-            .label(Microcopy.of("uploading").withFilter("scope", "backup_status")).color(ColorHue.BLUE))
+            .label(HohenheimMicrocopy.BACKUP_STATUS.of("uploading")).color(ColorHue.BLUE))
         .value(STATUS_COMPLETE, v -> v.displayName("Complete").icon("circle-check")
-            .label(Microcopy.of("complete").withFilter("scope", "backup_status")).color(ColorHue.GREEN))
+            .label(HohenheimMicrocopy.BACKUP_STATUS.of("complete")).color(ColorHue.GREEN))
         .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-exclamation")
-            .label(Microcopy.of("failed").withFilter("scope", "backup_status")).color(ColorHue.RED))
+            .label(HohenheimMicrocopy.BACKUP_STATUS.of("failed")).color(ColorHue.RED))
         .defaultValue(STATUS_FAILED)
         .build());
 
     /** The committed key on the target (the .part staging key is never recorded). */
     public static final StringField REMOTE_KEY = SCHEMA.addField(
         StringField.builder().name("remote_key").filterable(false)
-            .label(HohenheimFormCopy.label("remote_key"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("remote_key"))
             .build());
 
     /** sha256 of the encrypted archive as re-read FROM THE TARGET after commit. */

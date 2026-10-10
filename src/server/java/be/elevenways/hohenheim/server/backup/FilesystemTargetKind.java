@@ -1,8 +1,7 @@
 package be.elevenways.hohenheim.server.backup;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -28,8 +27,8 @@ public final class FilesystemTargetKind implements BackupTargetKindHandler {
 
     public static final StringField PATH = SETTINGS_SCHEMA.addField(
         StringField.builder().name("path")
-            .label(HohenheimFormCopy.label("directory"))
-            .help(HohenheimFormCopy.help("backup_target_path"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("directory"))
+            .help(HohenheimMicrocopy.HELP.of("backup_target_path"))
             .build());
 
     @Override
@@ -37,16 +36,6 @@ public final class FilesystemTargetKind implements BackupTargetKindHandler {
 
     @Override
     public @NonNull String getDisplayName() { return "Filesystem directory"; }
-
-    @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("filesystem").withFilter("scope", "backup_target_kind");
-    }
-
-    @Override
-    public @NonNull Microcopy getDescription() {
-        return Microcopy.of("filesystem").withFilter("scope", "backup_target_kind_description");
-    }
 
     @Override
     public Icon getIcon() { return Icon.of("folder"); }

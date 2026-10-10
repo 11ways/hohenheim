@@ -13,7 +13,7 @@ import be.elevenways.hohenheim.model.InstanceSnapshotModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.server.api.ApiConduits;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
@@ -136,7 +136,7 @@ class InstancePowerOperationsTest {
                 row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
                 row.set(InstanceModel.BACKUP_TARGET_ID, fixture.targetId);
                 Models.get(InstanceModel.class).save(row);
-                for (String capability : List.of(HohenheimAccess.VIEW, HohenheimAccess.BACKUPS)) {
+                for (String capability : List.of(HohenheimCapabilities.VIEW, HohenheimCapabilities.BACKUPS)) {
                     RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, id, capability, true);
                 }
                 AccessContext tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(tenantId, "Power Operator")));
@@ -231,8 +231,8 @@ class InstancePowerOperationsTest {
     void theInstanceOperationsRunFromEverySurfaceJourney() {
         Db.run(datasource, () -> {
             int instanceId = BackupLaneFixture.instanceRecord("ops-target", fixture.hostId);
-            for (String capability : List.of(HohenheimAccess.VIEW, HohenheimAccess.POWER, HohenheimAccess.BACKUPS,
-                    HohenheimAccess.SNAPSHOTS)) {
+            for (String capability : List.of(HohenheimCapabilities.VIEW, HohenheimCapabilities.POWER,
+                HohenheimCapabilities.BACKUPS, HohenheimCapabilities.SNAPSHOTS)) {
                 RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, instanceId, capability,
                     true);
             }
@@ -240,7 +240,7 @@ class InstancePowerOperationsTest {
                 new UserPrincipal(tenantId, "Power Operator")));
             assertThat(RecordCapabilityRules.of(InstanceModel.MODEL_ID).visibilityCapability())
                 .as("instances declare their existing view capability for concealment")
-                .isEqualTo(HohenheimAccess.VIEW);
+                .isEqualTo(HohenheimCapabilities.VIEW);
 
             // 1. The slice one migration rewrites stored power steps by their stored operation (start, stop,
             //    restart, and a blank one as the old default restart), names the backup and snapshot operations,
@@ -398,7 +398,7 @@ class InstancePowerOperationsTest {
             //    is due again rather than refused for good.
             int waiting = BackupLaneFixture.instanceRecord("ops-waiting", fixture.hostId);
             RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, waiting,
-                HohenheimAccess.POWER, true);
+                HohenheimCapabilities.POWER, true);
             linkWaitingDatabase(waiting);
             Microcopy notReady = InstanceDatabaseLinks.notReadyReason(waiting);
             assertThat(notReady).as("step 8: the fixture database is not ready").isNotNull();

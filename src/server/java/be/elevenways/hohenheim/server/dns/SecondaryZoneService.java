@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -89,7 +90,7 @@ public final class SecondaryZoneService {
             ZoneState zs = state.computeIfAbsent(zoneId, k -> new ZoneState());
             zs.lastSuccessEpochMs = lastTransfer.toEpochMilli();
 
-            int expire = valueOr(zone.get(DnsZoneModel.SOA_EXPIRE), 1209600);
+            int expire = Objects.requireNonNullElse(zone.get(DnsZoneModel.SOA_EXPIRE), 1209600);
             if (Now.millis() - zs.lastSuccessEpochMs > expire * 1000L) {
                 // The replica outlived its SOA expire while we were down: do not serve it.
                 zone.set(DnsZoneModel.TRANSFER_STATUS, DnsZoneModel.TRANSFER_EXPIRED);
@@ -252,7 +253,7 @@ public final class SecondaryZoneService {
             markError(zone, zs, "peer has no transfer host");
             return false;
         }
-        int port = valueOr(peer.get(DnsPeerModel.TRANSFER_PORT), 53);
+        int port = Objects.requireNonNullElse(peer.get(DnsPeerModel.TRANSFER_PORT), 53);
         TSIG tsig;
         try {
             tsig = DnsTsig.forPeer(peer);
@@ -265,7 +266,7 @@ public final class SecondaryZoneService {
 
         try {
             Name origin = Name.fromString(originString + ".");
-            long localSerial = valueOr(zone.get(DnsZoneModel.SERIAL), 0);
+            long localSerial = Objects.requireNonNullElse(zone.get(DnsZoneModel.SERIAL), 0);
 
             if (!force) {
                 Long remoteSerial = DnsSoaProbe.serial(host.trim(), port, origin);
@@ -307,7 +308,7 @@ public final class SecondaryZoneService {
     }
 
     private void expireOrRetry(@NonNull Row zone, @NonNull ZoneState zs, @Nullable String message) {
-        int expire = valueOr(zone.get(DnsZoneModel.SOA_EXPIRE), 1209600);
+        int expire = Objects.requireNonNullElse(zone.get(DnsZoneModel.SOA_EXPIRE), 1209600);
 
         // The expire clock runs from the last SUCCESSFUL transfer, surviving
         // restarts via the persisted timestamp. A zone that never transferred
@@ -332,7 +333,7 @@ public final class SecondaryZoneService {
         zone.set(DnsZoneModel.LAST_CHECKED_AT, Now.instant());
         Models.get(DnsZoneModel.class).save(zone);
 
-        int retry = valueOr(zone.get(DnsZoneModel.SOA_RETRY), 3600);
+        int retry = Objects.requireNonNullElse(zone.get(DnsZoneModel.SOA_RETRY), 3600);
         zs.nextAttemptEpochMs = Now.millis() + retry * 1000L;
     }
 
@@ -345,7 +346,7 @@ public final class SecondaryZoneService {
     }
 
     private static void scheduleRefresh(@NonNull Row zone, @NonNull ZoneState zs) {
-        int refresh = valueOr(zone.get(DnsZoneModel.SOA_REFRESH), 7200);
+        int refresh = Objects.requireNonNullElse(zone.get(DnsZoneModel.SOA_REFRESH), 7200);
         zs.nextAttemptEpochMs = Now.millis() + refresh * 1000L;
     }
 
@@ -425,9 +426,5 @@ public final class SecondaryZoneService {
             return null;
         }
         return message.length() > 480 ? message.substring(0, 480) : message;
-    }
-
-    private static int valueOr(@Nullable Integer value, int fallback) {
-        return value != null ? value : fallback;
     }
 }

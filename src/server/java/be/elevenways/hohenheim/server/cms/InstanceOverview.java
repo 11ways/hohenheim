@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.instance.InstanceDiskView;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
@@ -12,6 +14,7 @@ import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
@@ -23,6 +26,7 @@ import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.server.GrantAdministration;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.render.table.HealthCellState;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
@@ -67,14 +71,12 @@ import java.util.Objects;
  */
 public final class InstanceOverview {
 
-    public static final String SLUG = RecordOverview.SLUG;
-
     private InstanceOverview() {
     }
 
     /** The tab both instance entries declare; loading it reads the stored evidence afresh. */
     static @NonNull RecordOverview<Row> tab() {
-        return RecordOverview.<Row>fields(SLUG, Microcopy.of("overview").withFilter("scope", "instance"))
+        return RecordOverview.<Row>fields(RecordOverview.SLUG, HohenheimMicrocopy.INSTANCE.of("overview"))
             .withoutFields()
             .widgets(InstanceOverview::widgets);
     }
@@ -101,7 +103,8 @@ public final class InstanceOverview {
         String installError = instance.get(InstanceModel.INSTALL_ERROR);
         if (!delegated && installError != null && !installError.isBlank()) {
             top.add(new WidgetInstance(AlertWidget.ID, Map.of("variant", AlertVariant.DESTRUCTIVE.token()))
-                .withData(NoticeData.of(text("install_error", "instance_overview", locales, resolver), installError)));
+                .withData(NoticeData.of(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("install_error")
+                    .resolve(locales, resolver), installError)));
         }
 
         // The sites whose hostname serves THIS instance (the sites.instance_id reverse lookup the column exists
@@ -118,8 +121,8 @@ public final class InstanceOverview {
         List<InstanceEndpointView> ports = endpointsOf(instanceId, delegated);
         if (!ports.isEmpty()) {
             main.add(new WidgetInstance(CardWidget.ID, Map.of(
-                    "title", Microcopy.of("endpoint").withFilter("scope", "instance_overview"),
-                    "lead", Microcopy.of("endpoint_hint").withFilter("scope", "instance_overview")),
+                    "title", HohenheimMicrocopy.INSTANCE_OVERVIEW.of("endpoint"),
+                    "lead", HohenheimMicrocopy.INSTANCE_OVERVIEW.of("endpoint_hint")),
                 new WidgetTree(List.of(new WidgetInstance(HohenheimWidgets.INSTANCE_ENDPOINTS.id(), Map.of())
                     .withData(ports)))));
         }
@@ -127,13 +130,13 @@ public final class InstanceOverview {
         // someone watches the Metrics tab; never a stream opened by this render.
         List<UsageData> live = liveUsage(instance, InstanceStats.history(instanceId), locales, resolver);
         main.add(AppOverview.resources(List.of(
-            AppOverview.gauge(Microcopy.of("memory").withFilter("scope", "instance_overview"), live.get(0)),
-            AppOverview.gauge(Microcopy.of("disk").withFilter("scope", "instance_overview"),
+            AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("memory"), live.get(0)),
+            AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("disk"),
                 diskUsage(instance, serverId, locales, resolver)),
-            AppOverview.gauge(Microcopy.of("cpu").withFilter("scope", "instance_overview"), live.get(1)))));
+            AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("cpu"), live.get(1)))));
 
         List<WidgetInstance> side = new ArrayList<>();
-        side.add(AppOverview.details(facts(instance, serverId, panelSlug, delegated, locales, resolver)));
+        side.add(AppOverview.details(facts(instance, serverId, panelSlug, delegated, accessContext)));
         // AIDEV-NOTE: the per-record RECENT ACTIVITY card. It was blocked until zenit-cms's
         // `zenit.activity` source started PROJECTING record_id: a source's rule vocabulary is
         // derived from its projection, so `ActivityRules.forRecord` failed validation with
@@ -154,18 +157,25 @@ public final class InstanceOverview {
     }
 
     /**
-     * The Details card: the stored status with how old that claim is, the kind, and (for the operator) the host.
+     * The Details card: the app's verdict as its Status with how old the stored status is, the kind, and (for the
+     * operator) the host.
+     *
+     * AIDEV-NOTE: the Status is the band's verdict (AppHealth), never the stored status token: D13f's shop read "Cannot
+     * start yet" in the band beside a red "Error" here, an older failed start the host's refusal had since overtaken.
      *
      * AIDEV-NOTE: the host is operator inventory, and BOTH halves leak it -- the name is the machine's identity and
      * the link carries its numeric server id, which is the id every host-scoped admin route is keyed on. A tenant is
      * told WHAT their workload is doing, never WHERE it runs; the censoring is the fact simply NOT BEING ADDED.
      */
     private static @NonNull List<WidgetFact> facts(@NonNull Row instance, int serverId, @NonNull String panelSlug,
-                                                   boolean delegated, @NonNull LocaleChain locales,
-                                                   @Nullable MessageResolver resolver) {
+                                                   boolean delegated, @NonNull AccessContext viewer) {
+        LocaleChain locales = viewer.conduit().getLocales();
+        MessageResolver resolver = viewer.conduit().getMessageResolver();
         List<WidgetFact> facts = new ArrayList<>();
+        HealthCellState verdict = HealthCellState.of(AppHealth.instanceReading(instance, delegated, viewer).health(),
+            viewer);
         facts.add(WidgetFact.badge(AppOverview.text("state", locales, resolver),
-            WidgetBadge.of(InstanceModel.STATUS, instance.get(InstanceModel.STATUS), locales, resolver)));
+            new WidgetBadge(verdict.label(), verdict.variant(), null, verdict.icon(), true)));
         Object kind = instance.get(InstanceModel.KIND);
         if (kind != null) {
             facts.add(WidgetFact.badge(AppOverview.text("kind", locales, resolver),
@@ -178,7 +188,7 @@ public final class InstanceOverview {
             facts.add(WidgetFact.badge(AppOverview.text("install", locales, resolver),
                 WidgetBadge.of(InstanceModel.INSTALL_STATE, installState, locales, resolver)));
         }
-        // The badge above renders a STORED column, and a stored column is a claim about
+        // The verdict above reads the STORED status, and a stored column is a claim about
         // the past. This says how old that claim is, from the only write that means "a
         // runtime actually answered" (InstanceStatusReconciler). It is a stored fact too,
         // deliberately: reading it costs nothing, while dialling the daemon per render is
@@ -188,13 +198,14 @@ public final class InstanceOverview {
         Instant started = InstanceModel.STATUS_RUNNING.equals(instance.get(InstanceModel.STATUS))
             ? lastStartOf(instance.get(InstanceModel.ID)) : null;
         if (started != null) {
-            facts.add(WidgetFact.instant(text("started", "instance_overview", locales, resolver), started.toString()));
+            facts.add(WidgetFact.instant(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("started")
+                .resolve(locales, resolver), started.toString()));
         }
         if (!delegated) {
             facts.add(WidgetFact.link(
-                text("host", "instance_overview", locales, resolver),
+                HohenheimMicrocopy.INSTANCE_OVERVIEW.of("host").resolve(locales, resolver),
                 ServerModel.nameOf(serverId),
-                CmsRoutes.subpage(panelSlug, "servers", serverId, ServerOverviewState.SLUG).toUrl()));
+                CmsRoutes.subpage(panelSlug, HohenheimSlugs.SERVERS, serverId, RecordOverview.SLUG).toUrl()));
         }
         facts.addAll(databaseFacts(instance.get(InstanceModel.ID), panelSlug, delegated, locales, resolver));
         facts.add(backupFact(instance, locales, resolver));
@@ -241,7 +252,7 @@ public final class InstanceOverview {
                                                            boolean delegated, @NonNull LocaleChain locales,
                                                            @Nullable MessageResolver resolver) {
         List<WidgetFact> facts = new ArrayList<>();
-        String label = text("database", "instance_overview", locales, resolver);
+        String label = HohenheimMicrocopy.INSTANCE_OVERVIEW.of("database").resolve(locales, resolver);
         for (Row link : Models.get(InstanceDatabaseModel.class).find()
                 .where(InstanceDatabaseModel.INSTANCE_ID.eq(instanceId)).all()) {
             Integer databaseId = link.get(InstanceDatabaseModel.DATABASE_ID);
@@ -252,15 +263,16 @@ public final class InstanceOverview {
             DatabaseVerdict verdict = DatabaseVerdict.ofDatabase(database);
             Microcopy state = verdict.state().label().withFilter("case", "sentence");
             Microcopy value = (verdict.state().serves()
-                    ? Microcopy.of("database_value").withFilter("scope", "instance_overview")
-                    : Microcopy.of("database_value_state").withFilter("scope", "instance_overview")
+                    ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("database_value")
+                    : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("database_value_state")
                         .withArg("state", state))
                 .withArg("name", database.get(DatabaseModel.NAME))
                 .withArg("engine", WidgetBadge.of(DatabaseModel.ENGINE, database.get(DatabaseModel.ENGINE), locales,
                     resolver).label());
             String words = value.resolve(locales, resolver);
             facts.add(delegated ? WidgetFact.of(label, words)
-                : WidgetFact.link(label, words, CmsRoutes.open(panelSlug, DatabaseParts.SLUG, databaseId).toUrl()));
+                : WidgetFact.link(label, words, CmsRoutes.open(panelSlug, HohenheimSlugs.DATABASES, databaseId)
+                .toUrl()));
         }
         return facts;
     }
@@ -271,22 +283,24 @@ public final class InstanceOverview {
      */
     private static @NonNull WidgetFact backupFact(@NonNull Row instance, @NonNull LocaleChain locales,
                                                   @Nullable MessageResolver resolver) {
-        String label = text("backups", "instance_overview", locales, resolver);
+        String label = HohenheimMicrocopy.INSTANCE_OVERVIEW.of("backups").resolve(locales, resolver);
         if (instance.get(InstanceModel.BACKUP_TARGET_ID) == null) {
-            return WidgetFact.of(label, text("backups_no_target", "instance_overview", locales, resolver));
+            return WidgetFact.of(label, HohenheimMicrocopy.INSTANCE_OVERVIEW.of("backups_no_target")
+                .resolve(locales, resolver));
         }
         Row newest = Models.get(InstanceBackupModel.class).newestOf(instance.get(InstanceModel.ID));
         Instant at = newest == null ? null : newest.get(InstanceBackupModel.CREATED_AT);
         if (newest == null || at == null) {
-            return WidgetFact.of(label, text("backups_none_yet", "instance_overview", locales, resolver));
+            return WidgetFact.of(label, HohenheimMicrocopy.INSTANCE_OVERVIEW.of("backups_none_yet")
+                .resolve(locales, resolver));
         }
-        RelativeTimeWording wording = resolver == null ? null : RelativeTimeWording.resolve(locales, resolver);
+        RelativeTimeWording wording = RelativeTimeWording.resolve(locales, resolver);
         boolean made = InstanceBackupModel.STATUS_COMPLETE.equals(newest.get(InstanceBackupModel.STATUS));
         Long size = newest.get(InstanceBackupModel.SIZE_BYTES);
         Microcopy words = made
-            ? Microcopy.of("backups_last").withFilter("scope", "instance_overview")
+            ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("backups_last")
                 .withArg("size", size == null ? "-" : ByteText.human(size))
-            : Microcopy.of("backups_last_failed").withFilter("scope", "instance_overview");
+            : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("backups_last_failed");
         return WidgetFact.of(label, words.withArg("ago", RelativeTime.ago(at, wording)).resolve(locales, resolver));
     }
 
@@ -307,11 +321,13 @@ public final class InstanceOverview {
     static @NonNull List<UsageData> liveUsage(@NonNull Row instance, @NonNull List<InstanceStats.Sample> samples,
                                               @NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
         if (!InstanceModel.STATUS_RUNNING.equals(instance.get(InstanceModel.STATUS))) {
-            UsageData idle = UsageData.unmeasured(text("live_not_running", "instance_overview", locales, resolver));
+            UsageData idle = UsageData.unmeasured(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("live_not_running")
+                .resolve(locales, resolver));
             return List.of(idle, idle);
         }
         if (samples.isEmpty()) {
-            UsageData unwatched = UsageData.unmeasured(text("live_unwatched", "instance_overview", locales, resolver));
+            UsageData unwatched = UsageData.unmeasured(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("live_unwatched")
+                .resolve(locales, resolver));
             return List.of(unwatched, unwatched);
         }
         InstanceStats.Sample last = samples.get(samples.size() - 1);
@@ -321,11 +337,12 @@ public final class InstanceOverview {
         UsageData memory = limit > 0
             ? UsageData.measured(last.memoryBytes(), limit, ByteText.human(last.memoryBytes()), ByteText.human(limit),
                 observed)
-            : UsageData.unmeasured(Microcopy.of("memory_no_limit").withFilter("scope", "instance_overview")
+            : UsageData.unmeasured(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("memory_no_limit")
                 .withArg("used", ByteText.human(last.memoryBytes())).resolve(locales, resolver));
         if (samples.size() < 2) {
             return List.of(memory,
-                UsageData.unmeasured(text("cpu_first_reading", "instance_overview", locales, resolver)));
+                UsageData.unmeasured(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("cpu_first_reading")
+                    .resolve(locales, resolver)));
         }
         double total = 0;
         for (InstanceStats.Sample sample : samples.subList(1, samples.size())) {
@@ -333,7 +350,7 @@ public final class InstanceOverview {
         }
         long mean = Math.round(total / (samples.size() - 1));
         UsageData cpu = UsageData.measured(mean, 100L * last.cores(), mean + "%",
-            Microcopy.of("cores").withFilter("scope", "instance_overview").withArg("count", last.cores())
+            HohenheimMicrocopy.INSTANCE_OVERVIEW.of("cores").withArg("count", last.cores())
                 .resolve(locales, resolver), observed);
         return List.of(memory, cpu);
     }
@@ -353,11 +370,11 @@ public final class InstanceOverview {
     private static @NonNull WidgetFact statusConfirmation(@NonNull Row instance,
                                                           @NonNull LocaleChain locales,
                                                           @Nullable MessageResolver resolver) {
-        String label = text("status_confirmed", "instance_overview", locales, resolver);
+        String label = HohenheimMicrocopy.INSTANCE_OVERVIEW.of("status_confirmed").resolve(locales, resolver);
         Instant observedAt = instance.get(InstanceModel.STATUS_OBSERVED_AT);
         if (observedAt == null) {
             return WidgetFact.of(label,
-                text("status_never_confirmed", "instance_overview", locales, resolver));
+                HohenheimMicrocopy.INSTANCE_OVERVIEW.of("status_never_confirmed").resolve(locales, resolver));
         }
         return WidgetFact.instant(label, observedAt.toString());
     }
@@ -382,7 +399,7 @@ public final class InstanceOverview {
         InstanceDiskView disk = diskOf(instance, serverId);
         if (!disk.measured() || !disk.enforced()) {
             return UsageData.unmeasured(
-                Microcopy.of("not_measured_body").withFilter("scope", "instance_overview")
+                HohenheimMicrocopy.INSTANCE_OVERVIEW.of("not_measured_body")
                     .withArg("runtime", disk.runtime())
                     .resolve(locales, resolver));
         }
@@ -434,13 +451,13 @@ public final class InstanceOverview {
             endpoints.add(new InstanceEndpointView(
                 address,
                 port,
-                blankable(claim.get(PortAllocationModel.PROTOCOL)),
+                Objects.toString(claim.get(PortAllocationModel.PROTOCOL), ""),
                 state.key(),
                 state.words(),
                 PortLedger.isPreallocated(claim),
                 !address.isBlank() ? null
-                    : delegated ? Microcopy.of("no_public_address_delegated").withFilter("scope", "instance_overview")
-                    : Microcopy.of("no_public_address").withFilter("scope", "instance_overview")));
+                    : delegated ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("no_public_address_delegated")
+                    : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("no_public_address")));
         }
         return endpoints;
     }
@@ -451,19 +468,19 @@ public final class InstanceOverview {
         static @NonNull PortState of(@NonNull Row claim) {
             if (PortLedger.isPreallocated(claim)) {
                 return new PortState("reserved",
-                    Microcopy.of("reserved").withFilter("scope", "instance_overview"));
+                    HohenheimMicrocopy.INSTANCE_OVERVIEW.of("reserved"));
             }
             String status = claim.get(PortAllocationModel.STATUS);
             if (PortAllocationModel.STATUS_HELD.equals(status)) {
                 return new PortState("port_in_use",
-                    Microcopy.of("port_in_use").withFilter("scope", "instance_overview"));
+                    HohenheimMicrocopy.INSTANCE_OVERVIEW.of("port_in_use"));
             }
             if (PortAllocationModel.STATUS_RELEASING.equals(status)) {
                 return new PortState("port_freeing",
-                    Microcopy.of("port_freeing").withFilter("scope", "instance_overview"));
+                    HohenheimMicrocopy.INSTANCE_OVERVIEW.of("port_freeing"));
             }
             return new PortState("port_unknown",
-                Microcopy.of("port_unknown").withFilter("scope", "instance_overview"));
+                HohenheimMicrocopy.INSTANCE_OVERVIEW.of("port_unknown"));
         }
     }
 
@@ -501,7 +518,7 @@ public final class InstanceOverview {
                                                     @NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
         List<KnownCapability> holds = new ArrayList<>();
         for (KnownCapability capability : KnownCapabilities.forModel(InstanceModel.MODEL_ID)) {
-            if (capability.label() != null && !HohenheimAccess.VIEW.equals(capability.capability())
+            if (capability.label() != null && !HohenheimCapabilities.VIEW.equals(capability.capability())
                 && HohenheimAccess.hasInstanceCapability(access, instanceId, capability.capability())) {
                 holds.add(capability);
             }
@@ -521,10 +538,11 @@ public final class InstanceOverview {
         boolean shares = GrantAdministration.mayAdministerRecordAccess(access, InstanceModel.MODEL_ID, instanceId);
         String can;
         if (held.isEmpty()) {
-            can = text(shares ? "you_can_look_share" : "you_can_look", "instance_overview", locales, resolver);
+            can = HohenheimMicrocopy.INSTANCE_OVERVIEW.of(shares ? "you_can_look_share" : "you_can_look")
+                .resolve(locales, resolver);
         } else {
             if (shares) {
-                held.add(Microcopy.of("you_can_share").withFilter("scope", "instance_overview")
+                held.add(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("you_can_share")
                     .withFilter("case", "sentence").resolve(locales, resolver));
             }
             String sentence = String.join(", ", held);
@@ -532,26 +550,17 @@ public final class InstanceOverview {
         }
         boolean removes = HohenheimAccess.destroyUnavailableReason(access, instanceId) == null;
         List<WidgetFact> facts = new ArrayList<>();
-        facts.add(WidgetFact.of(text("you_can", "instance_overview", locales, resolver), can));
+        facts.add(WidgetFact.of(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("you_can").resolve(locales, resolver), can));
         String operators = removes && shares ? null
             : removes ? "operator_decides_access" : shares ? "operator_decides_removal" : "operator_decides_detail";
         if (operators != null) {
-            facts.add(WidgetFact.of(text("operator_decides", "instance_overview", locales, resolver),
-                text(operators, "instance_overview", locales, resolver)));
+            facts.add(WidgetFact.of(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("operator_decides")
+                .resolve(locales, resolver),
+                HohenheimMicrocopy.INSTANCE_OVERVIEW.of(operators).resolve(locales, resolver)));
         }
-        return CardWidget.of(Microcopy.of("your_part").withFilter("scope", "instance_overview"),
+        return CardWidget.of(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("your_part"),
             new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(facts))));
     }
 
     // -- helpers ---------------------------------------------------------------------
-
-    private static @NonNull String text(@NonNull String key, @NonNull String scope,
-                                        @NonNull LocaleChain locales,
-                                        @Nullable MessageResolver resolver) {
-        return Microcopy.of(key).withFilter("scope", scope).resolve(locales, resolver);
-    }
-
-    private static @NonNull String blankable(@Nullable String value) {
-        return value != null ? value : "";
-    }
 }

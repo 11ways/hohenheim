@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.process;
 
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
@@ -149,8 +150,7 @@ public final class ProcessGroupSupport {
             }
             return new HelperResult(outcome.exitCode(), outcome.stdout().text().trim());
         } catch (RuntimeException e) {
-            return new HelperResult(-1,
-                e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+            return new HelperResult(-1, HohenheimViolations.reasonOf(e));
         } finally {
             if (interrupted) {
                 Thread.currentThread().interrupt();

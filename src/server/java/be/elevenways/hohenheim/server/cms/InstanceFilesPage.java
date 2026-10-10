@@ -1,16 +1,20 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.files.HohenheimSftp;
 import be.elevenways.hohenheim.server.files.InstanceFiles;
 import be.elevenways.hohenheim.server.files.InstanceSftpRealm;
+import be.elevenways.hohenheim.server.util.PosixPaths;
 import be.elevenways.zenit.auth.AuthEndpoints;
 import be.elevenways.zenit.auth.model.SshKeyModel;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -55,14 +59,12 @@ import java.util.Objects;
  */
 public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
 
-    public static final String SLUG = "files";
-
     /** Above this, the inline editor is not offered -- a browser is not a hex editor. */
     private static final long INLINE_EDIT_LIMIT = 512 * 1024;
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_files_browser"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("files").withFilter("scope", "instance"); }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE.of("files"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.FILES; }
     @Override public @NonNull Icon icon() { return Icon.of("folder-tree"); }
 
     /**
@@ -81,7 +83,7 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
         // declared instance_volumes rows, so a docker_container legitimately has files to
         // browse. The page itself renders the named no-lane/no-volumes states.
         return HohenheimAccess.hasInstanceCapability(
-            accessContext, record.get(InstanceModel.ID), HohenheimAccess.FILES_READ);
+            accessContext, record.get(InstanceModel.ID), HohenheimCapabilities.FILES_READ);
     }
 
     @Override
@@ -103,7 +105,7 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
         vars.put("actionTarget", HohenheimEndpoints.INSTANCE_FILE_ACTION
             .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
         vars.put("canWrite", HohenheimAccess.hasInstanceCapability(accessContext, instanceId,
-            HohenheimAccess.FILES_WRITE));
+            HohenheimCapabilities.FILES_WRITE));
         vars.put("maxFileBytes", InstanceFiles.maxFileBytes());
 
         vars.put("entries", List.of());
@@ -186,7 +188,7 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
      */
     private static void putSftpCard(@NonNull Map<String, Object> vars, @NonNull Conduit conduit,
                                     @NonNull AccessContext accessContext, int instanceId) {
-        boolean enabled = HohenheimSftp.isEnabled();
+        boolean enabled = HohenheimSettings.isOn(HohenheimSettings.Sftp.ENABLED);
         SftpServer server = HohenheimSftp.server();
         boolean canWrite = Boolean.TRUE.equals(vars.get("canWrite"));
         vars.put("sftpShown", true);
@@ -288,7 +290,7 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
             .with(CmsEndpoints.PANEL_PARAM, panel)
             .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.INSTANCES)
             .with(CmsEndpoints.RESOURCE_ID_PARAM, String.valueOf(instanceId))
-            .with(CmsEndpoints.SUBPAGE_PARAM, SLUG);
+            .with(CmsEndpoints.SUBPAGE_PARAM, HohenheimSlugs.Tab.FILES);
     }
 
     /** The parent path, clamped at the volume root (never "" and never outside it). */
@@ -297,8 +299,7 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
         if (listing.path().equals(root)) {
             return "";
         }
-        int slash = listing.path().lastIndexOf('/');
-        return slash <= 0 ? root : listing.path().substring(0, slash);
+        return PosixPaths.parentOf(listing.path());
     }
 
     private static @NonNull String rootOf(InstanceFiles.@NonNull Listing listing) {

@@ -7,13 +7,14 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 
 /**
@@ -67,7 +68,7 @@ public final class InstanceReadiness {
             ? null : Models.get(InstanceTemplateModel.class).findById(templateId);
         String target = template == null
             ? null : template.get(InstanceTemplateModel.READINESS_TARGET);
-        return target == null ? "" : target.trim();
+        return trimmed(target);
     }
 
     /**
@@ -109,7 +110,8 @@ public final class InstanceReadiness {
             // operator wrote down, and there is no honest way to answer it without a port,
             // so it refuses rather than reporting a probe it never ran.
             if (kind == ReadinessKind.HTTP) {
-                throw Violations.ofForm(refusal("readiness_needs_port", instance, kind, ""));
+                throw Violations.ofForm(HohenheimViolations.instanceRefusalText("readiness_needs_port", instance, null)
+                    .withArg("kind", kind.label()).withArg("reason", ""));
             }
             Blast.log("READINESS:", instance.get(InstanceModel.NAME),
                 "declares port readiness but publishes no port; nothing to wait for");
@@ -144,20 +146,11 @@ public final class InstanceReadiness {
         }
 
         Blast.log("READINESS: port", port, "never opened -", lastReason);
-        throw Violations.ofForm(refusal("readiness_timed_out", instance, ReadinessKind.PORT,
-            lastReason));
+        throw Violations.ofForm(HohenheimViolations.instanceRefusalText("readiness_timed_out", instance, null)
+            .withArg("kind", ReadinessKind.PORT.label()).withArg("reason", lastReason));
     }
 
     private static @Nullable Integer publishedPortOf(@NonNull InstanceStatus status) {
         return status.publishedPort();
-    }
-
-    private static @NonNull Microcopy refusal(@NonNull String key, @NonNull Row instance,
-                                              @NonNull ReadinessKind kind,
-                                              @NonNull String reason) {
-        return HohenheimViolations.text(key)
-            .withArg("name", String.valueOf((Object) instance.get(InstanceModel.NAME)))
-            .withArg("kind", kind.label())
-            .withArg("reason", reason);
     }
 }

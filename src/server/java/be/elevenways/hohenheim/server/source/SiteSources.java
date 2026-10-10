@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.source.GitSourceSchema;
@@ -49,7 +50,6 @@ public final class SiteSources {
     }
 
     /** @return the source settings ON an instance row, or null when its kind carries none */
-    @SuppressWarnings("unchecked")
     public static @Nullable Map<String, Object> settingsOfInstance(@Nullable Row instance) {
 
         if (instance == null || !SOURCED_KINDS.contains(instance.get(InstanceModel.KIND))) {
@@ -57,7 +57,7 @@ public final class SiteSources {
         }
 
         Object settings = instance.get(InstanceModel.SETTINGS);
-        return settings instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
+        return RawValues.mapOrNull(settings);
     }
 
     /** @return whether the site exposes an instance whose source is a git repository */

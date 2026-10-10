@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
-import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.app.DashboardStat;
 import be.elevenways.hohenheim.host.HostStanding;
 import be.elevenways.hohenheim.model.CertificateModel;
@@ -18,7 +18,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.text.ByteText;
-import be.elevenways.zenit.common.ui.BadgeVariant;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -54,17 +53,17 @@ final class DashboardStats {
                                              @NonNull AccessContext access) {
         AppDirectory.Wording words = AppDirectory.Wording.of(access);
         List<DashboardStat> tiles = new ArrayList<>(4);
-        if (AppDirectory.offers(panel, AppParts.SLUG, access)) {
+        if (AppDirectory.offers(panel, HohenheimSlugs.APPS, access)) {
             tiles.add(apps(panel, apps, words));
         }
-        if (AppDirectory.offers(panel, ServerParts.SLUG, access)) {
+        if (AppDirectory.offers(panel, HohenheimSlugs.SERVERS, access)) {
             tiles.add(hosts(panel, access, words));
         }
         if (AppDirectory.offers(panel, HohenheimSlugs.CERTIFICATES, access)) {
             tiles.add(certificates(panel, access, words));
         }
-        if (AppDirectory.offers(panel, InstanceBackupParts.SLUG, access)
-                || AppDirectory.offers(panel, DatabaseParts.SLUG, access)) {
+        if (AppDirectory.offers(panel, HohenheimSlugs.INSTANCE_BACKUPS, access)
+                || AppDirectory.offers(panel, HohenheimSlugs.DATABASES, access)) {
             tiles.add(backups(panel, access, words));
         }
         return tiles;
@@ -82,27 +81,28 @@ final class DashboardStats {
         int problems = AppDirectory.withProblem(apps);
         List<Microcopy> parts = new ArrayList<>(2);
         if (live > 0) {
-            parts.add(copy("stat_apps_live").withArg("count", live));
+            parts.add(HohenheimMicrocopy.DASHBOARD.of("stat_apps_live").withArg("count", live));
         }
         if (problems > 0) {
-            parts.add(copy("stat_apps_problem").withArg("count", problems));
+            parts.add(HohenheimMicrocopy.DASHBOARD.of("stat_apps_problem").withArg("count", problems));
         }
-        return tile("apps", words.say(copy("apps")), String.valueOf(apps.size()), words.join(parts), "cubes",
-            panel, AppParts.SLUG);
+        return tile("apps", words.say(HohenheimMicrocopy.DASHBOARD.of("apps")), String.valueOf(apps.size()),
+            words.join(parts), "cubes",
+            panel, HohenheimSlugs.APPS);
     }
 
     /** Every host, tallied by its verdict's standing (the Hosts list's state cell). */
     private static @NonNull DashboardStat hosts(@NonNull Panel panel, @NonNull AccessContext access,
                                                 AppDirectory.@NonNull Wording words) {
-        List<Row> servers = AppDirectory.listed(panel, ServerParts.SLUG, access);
+        List<Row> servers = AppDirectory.listed(panel, HohenheimSlugs.SERVERS, access);
         Map<HostStanding, Integer> tally = new EnumMap<>(HostStanding.class);
         for (Row server : servers) {
             tally.merge(HostVerdict.of(server).standing(), 1, Integer::sum);
         }
         List<Microcopy> parts = new ArrayList<>(tally.size());
         tally.forEach((standing, count) -> parts.add(standing.tally(count)));
-        return tile("hosts", words.say(Microcopy.of("plural").withFilter("scope", "server")),
-            String.valueOf(servers.size()), words.join(parts), "server", panel, ServerParts.SLUG);
+        return tile("hosts", words.say(HohenheimMicrocopy.SERVER.of("plural")),
+            String.valueOf(servers.size()), words.join(parts), "server", panel, HohenheimSlugs.SERVERS);
     }
 
     /**
@@ -115,8 +115,7 @@ final class DashboardStats {
         int attention = 0;
         Instant next = null;
         for (Row certificate : certificates) {
-            StateLineCell state = CertificateParts.stateCell(certificate);
-            if (state.variant() != BadgeVariant.SUCCESS) {
+            if (!CertificateParts.stateCell(certificate).is(CertificateState.WORKS)) {
                 attention++;
                 continue;
             }
@@ -125,10 +124,12 @@ final class DashboardStats {
                 next = expires;
             }
         }
-        Microcopy detail = attention > 0 ? copy("stat_certs_attention").withArg("count", attention)
-            : next != null ? copy("stat_certs_next").withArg("expiry", CertificateExpiry.inSentence(next))
+        Microcopy detail = attention > 0 ? HohenheimMicrocopy.DASHBOARD.of("stat_certs_attention")
+            .withArg("count", attention)
+            : next != null ? HohenheimMicrocopy.DASHBOARD.of("stat_certs_next")
+                .withArg("expiry", CertificateExpiry.inSentence(next))
             : null;
-        return tile("certificates", words.say(Microcopy.of("plural").withFilter("scope", "certificate")),
+        return tile("certificates", words.say(HohenheimMicrocopy.CERTIFICATE.of("plural")),
             String.valueOf(certificates.size()), detail == null ? null : words.say(detail), "lock", panel,
             HohenheimSlugs.CERTIFICATES);
     }
@@ -149,7 +150,7 @@ final class DashboardStats {
         int complete = 0;
         Instant newestAt = null;
         Long newestSize = null;
-        for (Row instance : AppDirectory.listed(panel, InstanceParts.SLUG, access)) {
+        for (Row instance : AppDirectory.listed(panel, HohenheimSlugs.INSTANCES, access)) {
             if (InstanceParts.isGenerated(instance) || instance.get(InstanceModel.BACKUP_TARGET_ID) == null) {
                 continue;
             }
@@ -165,7 +166,7 @@ final class DashboardStats {
                 newestSize = latest.get(InstanceBackupModel.SIZE_BYTES);
             }
         }
-        for (Row database : AppDirectory.listed(panel, DatabaseParts.SLUG, access)) {
+        for (Row database : AppDirectory.listed(panel, HohenheimSlugs.DATABASES, access)) {
             DatabaseParts.BackupReading reading = DatabaseParts.backupOf(database);
             if (!reading.state().expectsBackups()) {
                 continue;
@@ -180,18 +181,22 @@ final class DashboardStats {
                 newestSize = dump.bytes();
             }
         }
-        String slug = AppDirectory.offers(panel, InstanceBackupParts.SLUG, access) ? InstanceBackupParts.SLUG
-            : DatabaseParts.SLUG;
-        String label = words.say(copy("stat_backups"));
+        String slug = AppDirectory.offers(panel, HohenheimSlugs.INSTANCE_BACKUPS, access)
+            ? HohenheimSlugs.INSTANCE_BACKUPS
+            : HohenheimSlugs.DATABASES;
+        String label = words.say(HohenheimMicrocopy.DASHBOARD.of("stat_backups"));
         if (total == 0) {
-            return tile("backups", label, "0", words.say(copy("stat_backups_none")), "box-archive", panel, slug);
+            return tile("backups", label, "0", words.say(HohenheimMicrocopy.DASHBOARD.of("stat_backups_none")),
+                "box-archive", panel, slug);
         }
         // "0 of 2" said what is not backed up and never why: with no copy at all the line says none was made yet.
-        String detail = newestAt == null ? words.say(copy("stat_backups_never")) : words.say(copy("stat_backups_newest")
-            .withArg("ago", RelativeTime.ago(newestAt, wording(words)))
+        String detail = newestAt == null ? words.say(HohenheimMicrocopy.DASHBOARD.of("stat_backups_never"))
+            : words.say(HohenheimMicrocopy.DASHBOARD.of("stat_backups_newest")
+            .withArg("ago", RelativeTime.ago(newestAt, RelativeTimeWording.resolve(words.locales(), words.resolver())))
             .withArg("size", ByteText.human(newestSize)));
         return tile("backups", label,
-            words.say(copy("stat_backups_value").withArg("ok", complete).withArg("total", total)), detail,
+            words.say(HohenheimMicrocopy.DASHBOARD.of("stat_backups_value").withArg("ok", complete)
+                .withArg("total", total)), detail,
             "box-archive", panel, slug);
     }
 
@@ -199,13 +204,5 @@ final class DashboardStats {
                                                @Nullable String detail, @NonNull String icon, @NonNull Panel panel,
                                                @NonNull String slug) {
         return new DashboardStat(key, label, value, detail, icon, CmsRoutes.list(panel.slug(), slug).toUrl());
-    }
-
-    private static @Nullable RelativeTimeWording wording(AppDirectory.@NonNull Wording words) {
-        return words.resolver() == null ? null : RelativeTimeWording.resolve(words.locales(), words.resolver());
-    }
-
-    private static @NonNull Microcopy copy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "dashboard");
     }
 }

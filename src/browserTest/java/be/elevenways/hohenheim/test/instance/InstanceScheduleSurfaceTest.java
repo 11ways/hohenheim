@@ -1,19 +1,18 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.cms.InstanceAttachmentParts;
 import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.schedule.ScheduleRunView;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.cms.InstanceBackupParts;
-import be.elevenways.hohenheim.server.cms.InstanceSnapshotParts;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleRunParts;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepsPage;
 import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleParts;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleStepParts;
-import be.elevenways.hohenheim.server.cms.ManagePanel;
 import be.elevenways.zenit.common.edit.Discriminated;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.edit.EditContext;
@@ -29,6 +28,9 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.server.panel.PartsLists;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
@@ -134,9 +136,9 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         instanceId = instance.get(InstanceModel.ID);
 
         RecordGrants.grant(GrantSubjectType.USER, ownerId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, viewerId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.VIEW, true);
+            HohenheimCapabilities.VIEW, true);
 
         Model schedules = Models.get(RecordScheduleModel.class);
         Row schedule = schedules.createEmptyRow();
@@ -260,9 +262,11 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
     void scheduleAndStepAffordancesFollowConfig() {
         Row schedule = Models.get(RecordScheduleModel.class).findById(scheduleId);
         Row step = Models.get(RecordScheduleStepModel.class).findById(stepId);
-        PanelResource<Row> scheduleResource = PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleParts.SLUG);
-        PanelResource<Row> stepResource = PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleStepParts.SLUG);
-        Panel panel = PanelRegistry.getBySlug(ManagePanel.SLUG);
+        PanelResource<Row> scheduleResource = PanelEntryViews.of(HohenheimSlugs.MANAGE,
+            HohenheimSlugs.INSTANCE_SCHEDULES);
+        PanelResource<Row> stepResource = PanelEntryViews.of(HohenheimSlugs.MANAGE,
+            HohenheimSlugs.INSTANCE_SCHEDULE_STEPS);
+        Panel panel = PanelRegistry.getBySlug(HohenheimSlugs.MANAGE);
 
         AccessContext viewer = contextOf(viewerId, "Schedule Viewer");
         AccessContext owner = contextOf(ownerId, "Schedule Owner");
@@ -296,7 +300,7 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         //    revoke, never grant(false) -- a planted deny is STICKY (deny beats a later
         //    allow), so grant(false) would poison the owner for every later test.
         RecordGrants.revoke(GrantSubjectType.USER, ownerId, InstanceModel.MODEL_ID, instanceId,
-            HohenheimAccess.MANAGE);
+            HohenheimCapabilities.MANAGE);
         try {
             AccessContext revoked = contextOf(ownerId, "Schedule Owner");
             assertThat(ResourceVerbs.permitsBy(panel, scheduleResource, ResourceVerb.UPDATE, schedule, revoked))
@@ -306,7 +310,7 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
                 .as("step 3: and the step delete button").isFalse();
         } finally {
             RecordGrants.grant(GrantSubjectType.USER, ownerId, InstanceModel.MODEL_ID, instanceId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
         }
     }
 
@@ -360,19 +364,33 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
                 .contains("Step " + step.get(RecordScheduleStepModel.ID) + ": 1 attempts; started ", "; ended ")
                 .doesNotContain("null");
 
-            // 3. The schedule's Steps tab shows the same verdict for that run.
+            // 3. The schedule's Steps tab shows the same verdict for that run, and its start as the framework's
+            //     datetime cell (a relative time, as every list reads one), never a raw ISO string.
             Conduit conduit = TenantConduits.stubFor(new UserPrincipal(ownerId, "Schedule Owner"));
-            PanelRequest request = new PanelRequest(Objects.requireNonNull(PanelRegistry.getBySlug(ManagePanel.SLUG)),
+            PanelRequest request = new PanelRequest(Objects.requireNonNull(PanelRegistry
+                .getBySlug(HohenheimSlugs.MANAGE)),
                 conduit, AccessContext.of(conduit), null);
             Map<String, Object> vars = (Map<String, Object>) new InstanceScheduleStepsPage()
                 .render(request, scheduleModel.findById(readScheduleId)).get();
             List<ScheduleRunView> runs = (List<ScheduleRunView>) vars.get("runs");
             int runId = run.get(RecordScheduleRunModel.ID);
-            assertThat(runs).as("step 3: the Steps tab lists the run with its steps")
-                .filteredOn(view -> view.id() == runId)
-                .singleElement()
-                .extracting(ScheduleRunView::summary)
-                .isEqualTo(summary);
+            ScheduleRunView view = runs.stream().filter(listed -> listed.id() == runId).findFirst().orElse(null);
+            assertThat(view).as("step 3: the Steps tab lists the run").isNotNull();
+            assertThat(view.summary()).as("step 3: with its steps").isEqualTo(summary);
+            assertThat(view.startedAt()).as("step 3: its start is a datetime cell").isNotNull();
+            assertThat(view.startedAt().iso()).as("step 3: of the moment it started")
+                .isEqualTo(String.valueOf(run.get(RecordScheduleRunModel.STARTED_AT)));
+            assertThat(view.startedAt().absolute()).as("step 3: read relatively, like a list's datetime column")
+                .isFalse();
+
+            // 4. The step's offset reads with its unit (under its action on the Steps tab), never a bare number.
+            PanelResource<Row> stepResource = InstanceScheduleStepParts.admin();
+            ColumnSpec offsetColumn = PartsLists.tableSpec(stepResource).column("offset");
+            assertThat(offsetColumn).as("step 4: the steps list declares an offset column").isNotNull();
+            Object offset = PartsReads.cellValue(request, stepResource, null, step, offsetColumn);
+            assertThat(offset).as("step 4: worded copy").isInstanceOf(Microcopy.class);
+            assertThat(((Microcopy) offset).resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 4: in seconds").isEqualTo("0 seconds");
         } finally {
             schedules.deleteSchedule(readScheduleId);
         }
@@ -395,12 +413,12 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         // grant-holding tenant. The scope throwing here is exactly the 500 the
         // hand-rolled idiom would produce once a type-level row exists.
         for (var resource : List.of(
-                PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleParts.SLUG),
-                PanelEntryViews.of(ManagePanel.SLUG, InstanceSnapshotParts.SLUG),
+                PanelEntryViews.of(HohenheimSlugs.MANAGE, HohenheimSlugs.INSTANCE_SCHEDULES),
+                PanelEntryViews.of(HohenheimSlugs.MANAGE, HohenheimSlugs.INSTANCE_SNAPSHOTS),
                 InstanceBackupParts.manage(),
-                PanelEntryViews.of(ManagePanel.SLUG, InstanceAttachmentParts.DEVICES),
-                PanelEntryViews.of(ManagePanel.SLUG, InstanceAttachmentParts.DATABASES),
-                PanelEntryViews.of(ManagePanel.SLUG, InstanceScheduleStepParts.SLUG))) {
+                PanelEntryViews.of(HohenheimSlugs.MANAGE, HohenheimSlugs.INSTANCE_DEVICES),
+                PanelEntryViews.of(HohenheimSlugs.MANAGE, HohenheimSlugs.INSTANCE_DATABASES),
+                PanelEntryViews.of(HohenheimSlugs.MANAGE, HohenheimSlugs.INSTANCE_SCHEDULE_STEPS))) {
             assertThat(resource.rowScope().accessCriteria(operator))
                 .as("%s translates ALL without enumerating", resource.id()).isNull();
             assertThat(resource.rowScope().accessCriteria(viewer))

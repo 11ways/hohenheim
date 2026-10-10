@@ -1,12 +1,14 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceScheduleOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -60,9 +62,6 @@ import java.util.Map;
  */
 public final class InstanceScheduleParts {
 
-    /** Both twins' slug, shared with the step entry's parent link. */
-    public static final String SLUG = "instance-schedules";
-
     /** INSTANCE schedules only; the /manage scope narrows this same base per principal. */
     public static final RowScope ROWS = RowScope.within(
         () -> RecordScheduleModel.MODEL.eq(InstanceModel.MODEL_ID.toString()));
@@ -86,9 +85,8 @@ public final class InstanceScheduleParts {
 
     /** @return the tenant's instance schedules; the admin history stays off the delegated surface */
     public static @NonNull PanelResource<Row> manage() {
-        return base(HohenheimIds.id("manage_instance_schedule"))
-            .scope(TenantScopes.INSTANCE_SCHEDULES)
-            .tabs(ResourceTabs.<Row>of(List.of(new InstanceScheduleStepsPage())).withContributions())
+        return ManageTwin.reached(base(ManageTwin.id("instance_schedule")), TenantScopes.INSTANCE_SCHEDULES,
+                ResourceTabs.<Row>of(List.of(new InstanceScheduleStepsPage())).withContributions())
             .build();
     }
 
@@ -113,9 +111,9 @@ public final class InstanceScheduleParts {
             .column(ColumnSpec.fromField(RecordScheduleModel.ENABLED).filterable().subtext("disabled_reason").build())
             .column(ColumnSpec.fromField(RecordScheduleModel.DISABLED_REASON).hidden().build())
             .build();
-        return PanelResource.builder(id, SLUG, InstanceScheduleOperations.SCHEDULE)
-            .label(Microcopy.of("plural").withFilter("scope", "instance_schedule"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "instance_schedule"))
+        return PanelResource.builder(id, HohenheimSlugs.INSTANCE_SCHEDULES, InstanceScheduleOperations.SCHEDULE)
+            .label(HohenheimMicrocopy.INSTANCE_SCHEDULE.of("plural"))
+            .recordLabel(HohenheimMicrocopy.INSTANCE_SCHEDULE.of("singular"))
             .icon(Icon.of("clock"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(18)
@@ -123,7 +121,7 @@ public final class InstanceScheduleParts {
             .standsUnder(HohenheimSlugs.INSTANCES)
             // A record schedule's owner is polymorphic (model + record id); this panel's schedules are instances'.
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, RecordScheduleModel.RECORD_ID, RecordScheduleModel.MODEL)
-                .tab(InstanceParts.BACKUPS_TAB))
+                .tab(HohenheimSlugs.Tab.BACKUPS))
             .reads(ResourceReads.rows())
             .form(ResourceForm.<Row>of(form)
                 // The target instance is chosen once: an existing schedule never moves to another instance (every
@@ -138,7 +136,7 @@ public final class InstanceScheduleParts {
                 .quickCreate(QUICK_CREATE)
                 .quickCreatePresets(InstanceScheduleParts::quickCreatePresets)
                 // A schedule's front door is its chain: a fresh schedule runs NOTHING until it has a step.
-                .landingTab(InstanceScheduleStepsPage.SLUG)
+                .landingTab(HohenheimSlugs.Tab.STEPS)
                 .build())
             // A schedule is found by its name or by the cron expression an operator remembers writing.
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL)
@@ -190,7 +188,7 @@ public final class InstanceScheduleParts {
         int instanceId = parseInstanceId(recordId);
         if (instanceId <= 0
                 || Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId)).count() == 0) {
-            throw Violations.ofField("record_id", recordId, CmsSupport.violationText("unknown_instance"));
+            throw Violations.ofField("record_id", recordId, HohenheimMicrocopy.VIOLATIONS.of("unknown_instance"));
         }
         requireManage(save.access(), instanceId);
         schedule.set(RecordScheduleModel.MODEL, InstanceModel.MODEL_ID.toString());
@@ -198,10 +196,10 @@ public final class InstanceScheduleParts {
             RecordSchedules.editedBy(schedule, save.access());
         } catch (DateTimeException unknownZone) {
             throw Violations.ofField("timezone", schedule.get(RecordScheduleModel.TIMEZONE),
-                CmsSupport.violationText("invalid_timezone"));
+                HohenheimMicrocopy.VIOLATIONS.of("invalid_timezone"));
         } catch (IllegalArgumentException unparseable) {
             throw Violations.ofField("cron", schedule.get(RecordScheduleModel.CRON),
-                CmsSupport.violationText("invalid_cron"));
+                HohenheimMicrocopy.VIOLATIONS.of("invalid_cron"));
         }
     }
 
@@ -214,15 +212,16 @@ public final class InstanceScheduleParts {
      */
     public static boolean writableBy(@NonNull Row schedule, @NonNull AccessContext access) {
         return isInstanceSchedule(schedule) && HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID,
-            parseInstanceId(schedule.get(RecordScheduleModel.RECORD_ID)), HohenheimAccess.CONFIG);
+            parseInstanceId(schedule.get(RecordScheduleModel.RECORD_ID)), HohenheimCapabilities.CONFIG);
     }
 
     /** Run the chain off-cron, offered on an enabled schedule to a CONFIG holder. */
     private static @NonNull PanelAction<Row> runNow() {
         return PanelAction.<Row, String>places(InstanceScheduleOperations.RUN_SCHEDULE, ActionPlacement.ROW,
-                (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("run_finished")
-                    .withFilter("scope", "instance_schedule").withArg("status", result.value())))
-            .label(Microcopy.of("run_now").withFilter("scope", "instance_schedule"))
+                (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_SCHEDULE
+                    .of("run_finished")
+                    .withArg("status", result.value())))
+            .label(HohenheimMicrocopy.INSTANCE_SCHEDULE.of("run_now"))
             .icon(Icon.of("play"))
             .build();
     }
@@ -234,10 +233,10 @@ public final class InstanceScheduleParts {
      * @throws Violations naming the refusal
      */
     static void requireManage(@NonNull AccessContext access, int instanceId) {
-        if (HohenheimAccess.hasInstanceCapability(access, instanceId, HohenheimAccess.CONFIG)) {
+        if (HohenheimAccess.hasInstanceCapability(access, instanceId, HohenheimCapabilities.CONFIG)) {
             return;
         }
-        throw Violations.ofForm(CmsSupport.violationText("schedule_not_allowed"));
+        throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("schedule_not_allowed"));
     }
 
     /**
@@ -250,11 +249,7 @@ public final class InstanceScheduleParts {
 
     /** @return the instance id a schedule's polymorphic record id names, -1 when it names none */
     static int parseInstanceId(@Nullable Object recordId) {
-        try {
-            return Integer.parseInt(String.valueOf(recordId));
-        } catch (NumberFormatException e) {
-            return -1;
-        }
+        return RawValues.intOr(recordId, -1);
     }
 
     static @NonNull RecordSchedules recordSchedules() {

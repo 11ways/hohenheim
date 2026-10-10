@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.docker;
 
+import be.elevenways.hohenheim.server.util.Closeables;
 import be.elevenways.hohenheim.server.util.Watchdog;
 
 import java.io.ByteArrayOutputStream;
@@ -40,7 +41,7 @@ public class UnixSocketDockerTransport implements DockerTransport, DockerStreamT
     @Override
     public byte[] roundTrip(byte[] request, long timeoutMs, long maxResponseBytes) throws IOException {
         SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX);
-        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> closeQuietly(channel), timeoutMs);
+        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel), timeoutMs);
         try {
             channel.connect(address);
             try {
@@ -71,7 +72,7 @@ public class UnixSocketDockerTransport implements DockerTransport, DockerStreamT
             throw new IOException("Docker request timed out after " + timeoutMs + "ms");
         } finally {
             watchdog.cancel(false);
-            closeQuietly(channel);
+            Closeables.closeQuietly(channel);
         }
     }
 
@@ -109,21 +110,13 @@ public class UnixSocketDockerTransport implements DockerTransport, DockerStreamT
         return out.toByteArray();
     }
 
-    private static void closeQuietly(SocketChannel channel) {
-        try {
-            channel.close();
-        } catch (IOException ignored) {
-            // best effort
-        }
-    }
-
     @Override
     public DockerStreamConnection openStream(byte[] request, long connectTimeoutMs)
             throws IOException {
         SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX);
         // The watchdog covers connect + request write ONLY: once the stream is
         // handed over, its lifetime is the consumer's decision, not a deadline's.
-        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> closeQuietly(channel),
+        ScheduledFuture<?> watchdog = Watchdog.schedule(() -> Closeables.closeQuietly(channel),
             connectTimeoutMs);
         try {
             channel.connect(address);
@@ -131,7 +124,7 @@ public class UnixSocketDockerTransport implements DockerTransport, DockerStreamT
         } catch (ClosedChannelException e) {
             throw new IOException("Docker stream connect timed out after " + connectTimeoutMs + "ms");
         } catch (IOException e) {
-            closeQuietly(channel);
+            Closeables.closeQuietly(channel);
             throw e;
         } finally {
             watchdog.cancel(false);
@@ -161,7 +154,7 @@ public class UnixSocketDockerTransport implements DockerTransport, DockerStreamT
 
         @Override
         public void close() {
-            closeQuietly(this.channel);
+            Closeables.closeQuietly(this.channel);
         }
 
         @Override

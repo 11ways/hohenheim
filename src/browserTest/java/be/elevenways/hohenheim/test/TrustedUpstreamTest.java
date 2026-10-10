@@ -5,7 +5,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -97,7 +97,7 @@ class TrustedUpstreamTest extends HohenheimTestBase {
             // 2. A manage grant makes it tenant-owned, and without the flag the dial refuses
             //    the private backend.
             RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             proxy.reload();
             assertThat(proxyStatus(proxyPort, HOST))
                 .as("step 2: a tenant-owned site without the flag may not dial loopback").isEqualTo(503);
@@ -159,7 +159,7 @@ class TrustedUpstreamTest extends HohenheimTestBase {
             proxy.stop();
             upstream.stop(0);
             RecordGrants.revoke(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
-                HohenheimAccess.MANAGE);
+                HohenheimCapabilities.MANAGE);
             for (Row d : domainModel.findBySiteId(siteId)) domainModel.delete(d);
             HardDeletes.row(siteModel, site);
             Models.get(ReleasedRouteClaimModel.class).find().delete();

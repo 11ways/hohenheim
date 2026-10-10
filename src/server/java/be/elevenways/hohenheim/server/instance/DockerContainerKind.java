@@ -1,22 +1,20 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.ContainerSettings;
-import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
-import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
 import be.elevenways.hohenheim.server.util.EnvVars;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DoubleField;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -34,6 +32,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * The first instance kind: a Docker container on an inventoried host. The kind key is
@@ -70,24 +70,22 @@ public final class DockerContainerKind implements InstanceKindHandler {
      */
     public static final ContainerHardening.Profile HARDENING = ContainerHardening.SERVICE;
 
-    public static final StringField IMAGE = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("image").label(HohenheimFormCopy.label("image"))
-            .help(HohenheimFormCopy.help("image")).build());
+    public static final StringField IMAGE = SETTINGS_SCHEMA.addField(InstanceKindFields.image());
 
     public static final StringField TAG = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("tag").label(HohenheimFormCopy.label("image_tag"))
-            .help(HohenheimFormCopy.help("image_tag")).build());
+        StringField.builder().name("tag").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("image_tag"))
+            .help(HohenheimMicrocopy.HELP.of("image_tag")).build());
 
     public static final StringField COMMAND = SETTINGS_SCHEMA.addField(
-        StringField.builder().name("command").label(HohenheimFormCopy.label("container_command"))
-            .help(HohenheimFormCopy.help("container_command")).build());
+        StringField.builder().name("command").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_command"))
+            .help(HohenheimMicrocopy.HELP.of("container_command")).build());
 
     // The port requirement lives HERE, in the kind settings (and therefore in every
     // template's settings baseline): container_port names the port, the two enums below
     // declare its protocol and exposure, host_port optionally fixes the host-side number.
     public static final IntegerField CONTAINER_PORT = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("container_port").label(HohenheimFormCopy.label("container_port"))
-            .help(HohenheimFormCopy.help("instance_container_port")).build());
+        IntegerField.builder().name("container_port").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_port"))
+            .help(HohenheimMicrocopy.HELP.of("instance_container_port")).build());
 
     /** {@link #PORT_EXPOSURE}: published on 127.0.0.1 only (the default, the safe posture). */
     public static final String EXPOSURE_LOOPBACK = "loopback";
@@ -100,57 +98,48 @@ public final class DockerContainerKind implements InstanceKindHandler {
     public static final EnumField PORT_PROTOCOL = SETTINGS_SCHEMA.addField(
         EnumField.builder("port_protocol")
             .value("tcp", v -> v.displayName("TCP").icon("right-left")
-                .label(Microcopy.of("tcp").withFilter("scope", "port_protocol")))
+                .label(HohenheimMicrocopy.PORT_PROTOCOL.of("tcp")))
             .value("udp", v -> v.displayName("UDP").icon("paper-plane")
-                .label(Microcopy.of("udp").withFilter("scope", "port_protocol")))
+                .label(HohenheimMicrocopy.PORT_PROTOCOL.of("udp")))
             .defaultValue("tcp")
-            .label(HohenheimFormCopy.label("port_protocol"))
-            .help(HohenheimFormCopy.help("port_protocol"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("port_protocol"))
+            .help(HohenheimMicrocopy.HELP.of("port_protocol"))
             .build());
 
     public static final EnumField PORT_EXPOSURE = SETTINGS_SCHEMA.addField(
         EnumField.builder("port_exposure")
             .value(EXPOSURE_LOOPBACK, v -> v.displayName("Loopback only").icon("house-lock")
-                .label(Microcopy.of("loopback").withFilter("scope", "port_exposure"))
+                .label(HohenheimMicrocopy.PORT_EXPOSURE.of("loopback"))
                 .color(ColorHue.TEAL))
             .value(EXPOSURE_PUBLIC, v -> v.displayName("Public").icon("globe")
-                .label(Microcopy.of("public").withFilter("scope", "port_exposure"))
+                .label(HohenheimMicrocopy.PORT_EXPOSURE.of("public"))
                 .color(ColorHue.ORANGE))
             .defaultValue(EXPOSURE_LOOPBACK)
-            .label(HohenheimFormCopy.label("port_exposure"))
-            .help(HohenheimFormCopy.help("port_exposure"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("port_exposure"))
+            .help(HohenheimMicrocopy.HELP.of("port_exposure"))
             .build());
 
     // Optional fixed host port; declaring one always pre-allocates it in the ledger.
     public static final IntegerField HOST_PORT = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("host_port").label(HohenheimFormCopy.label("host_port"))
-            .help(HohenheimFormCopy.help("host_port")).build());
+        IntegerField.builder().name("host_port").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("host_port"))
+            .help(HohenheimMicrocopy.HELP.of("host_port")).build());
 
     // secret(): redacted on derived surfaces, masked in forms, kept on blank submit.
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
-        StringMapField.builder("environment_variables")
-            .label(HohenheimFormCopy.label("environment_variables"))
-            .help(HohenheimFormCopy.help("environment_variables")).secret().build());
+        InstanceKindFields.environmentVariables());
 
     // Persistent named volumes: logical name -> container path, materialized as
     // hohenheim-instance-{id}-vol-{name}, owner-labelled at birth.
     public static final StringMapField VOLUMES = SETTINGS_SCHEMA.addField(
-        StringMapField.builder("volumes").label(HohenheimFormCopy.label("volumes"))
-            .help(HohenheimFormCopy.help("instance_volumes")).build());
+        StringMapField.builder("volumes").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("volumes"))
+            .help(HohenheimMicrocopy.HELP.of("instance_volumes")).build());
 
-    public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("memory_limit_mb").label(HohenheimFormCopy.label("memory_limit"))
-            .help(HohenheimFormCopy.help("memory_limit")).build());
+    public static final IntegerField MEMORY_LIMIT_MB = SETTINGS_SCHEMA.addField(InstanceKindFields.memoryLimit());
 
-    public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(
-        DoubleField.builder().name("cpu_limit").label(HohenheimFormCopy.label("cpu_limit"))
-            .help(HohenheimFormCopy.help("cpu_limit")).build());
+    public static final DoubleField CPU_LIMIT = SETTINGS_SCHEMA.addField(InstanceKindFields.cpuLimit());
 
     /** Which console the primary process gets; {@link ConsoleKind} is the vocabulary's home. */
-    public static final EnumField CONSOLE_KIND = SETTINGS_SCHEMA.addField(
-        ConsoleKind.fieldBuilder(ConsoleKind.SETTING)
-            .label(HohenheimFormCopy.label("console_kind"))
-            .help(HohenheimFormCopy.help("console_kind")).build());
+    public static final EnumField CONSOLE_KIND = SETTINGS_SCHEMA.addField(InstanceKindFields.consoleKind());
 
     // Image, tag, command, port and what the container carries are the create decisions;
     // HOW the port is published and what it may consume have safe defaults and fold.
@@ -171,18 +160,6 @@ public final class DockerContainerKind implements InstanceKindHandler {
     @Override
     public @NonNull String getDisplayName() { return "Docker container"; }
 
-    // Declared explicitly: the TypeDefinition default silently renders the raw English
-    // display name when the microcopy key is missing, which is how localization rots.
-    @Override
-    public @NonNull Microcopy getLabel() {
-        return Microcopy.of("docker_container").withFilter("scope", "instance_kind");
-    }
-
-    @Override
-    public @NonNull Microcopy getDescription() {
-        return Microcopy.of("docker_container").withFilter("scope", "instance_kind_description");
-    }
-
     @Override
     public Icon getIcon() { return Icon.of("box"); }
 
@@ -199,8 +176,7 @@ public final class DockerContainerKind implements InstanceKindHandler {
 
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
-        return new DockerInstanceRuntime(new ServerService().clientFor(serverName),
-            WorkloadNetworkPolicy.forServer(serverName));
+        return DockerInstanceRuntime.onServer(serverName, Egress.OPEN);
     }
 
     @Override
@@ -236,8 +212,8 @@ public final class DockerContainerKind implements InstanceKindHandler {
         Object port = settings.get("container_port");
         Integer containerPort = port instanceof Number number && number.intValue() > 0
             ? number.intValue() : null;
-        String protocol = str(settings.get("port_protocol"));
-        String exposure = str(settings.get("port_exposure"));
+        String protocol = trimmed(settings.get("port_protocol"));
+        String exposure = trimmed(settings.get("port_exposure"));
         Object host = settings.get("host_port");
         Integer hostPort = host instanceof Number number && number.intValue() > 0
             ? number.intValue() : null;
@@ -246,16 +222,12 @@ public final class DockerContainerKind implements InstanceKindHandler {
                 || EXPOSURE_PUBLIC.equals(exposure) || hostPort != null;
             if (declaresShape) {
                 throw Violations.ofField("settings.container_port", null,
-                    HohenheimViolations.text("port_shape_without_port"));
+                    HohenheimMicrocopy.VIOLATIONS.of("port_shape_without_port"));
             }
             return null;
         }
         return new PortPublication(containerPort,
             "udp".equals(protocol) ? PortPublication.UDP : PortPublication.TCP,
             EXPOSURE_PUBLIC.equals(exposure), hostPort, null);
-    }
-
-    private static String str(Object value) {
-        return value == null ? "" : value.toString().trim();
     }
 }

@@ -22,7 +22,7 @@ final class DomainMissLog {
 
     /** Append one domain-miss line when the setting asks for the file. */
     static void record(String clientIp, String domain, String path, String userAgent) {
-        if (!LogFile.enabled(HohenheimSettings.Logging.DOMAIN_MISSES_TO_FILE)) {
+        if (!HohenheimSettings.isOn(HohenheimSettings.Logging.DOMAIN_MISSES_TO_FILE)) {
             return;
         }
         try {

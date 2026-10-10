@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.server;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -69,7 +68,7 @@ public final class HohenheimRoles {
     public static synchronized void capture() {
         EnumSet<Role> enabled = EnumSet.noneOf(Role.class);
         for (Role role : Role.values()) {
-            if (Boolean.TRUE.equals(Zenit.SETTINGS_VALUES.getValue(role.setting))) {
+            if (HohenheimSettings.isOn(role.setting)) {
                 enabled.add(role);
             }
         }

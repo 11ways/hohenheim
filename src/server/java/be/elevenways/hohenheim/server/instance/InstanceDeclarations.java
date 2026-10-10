@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StoredRows;
@@ -13,6 +14,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * The instance declarations that must be refused AT THE WRITE, on the form the operator
@@ -107,7 +110,7 @@ public final class InstanceDeclarations {
 
         if (row.afterWrite(InstanceModel.RUNTIME_IMAGE_ID, stored) == null) {
             throw Violations.ofField(InstanceModel.RUNTIME_IMAGE_ID.getName(), null,
-                HohenheimViolations.text("runtime_image_required"));
+                HohenheimMicrocopy.VIOLATIONS.of("runtime_image_required"));
         }
     }
 
@@ -136,10 +139,10 @@ public final class InstanceDeclarations {
         // provider binding); one git would read as an option, or that is no ref at all, is
         // refused where it is typed rather than at the next checkout.
         Object branch = InstanceModel.settingsOf(row).get(GitSourceSchema.BRANCH);
-        String named = branch == null ? "" : branch.toString().trim();
+        String named = trimmed(branch);
         if (!named.isEmpty() && !GitRefNames.isValid(named)) {
             throw Violations.ofField(GitSourceSchema.BRANCH, named,
-                HohenheimViolations.text("source_branch_invalid"));
+                HohenheimMicrocopy.VIOLATIONS.of("source_branch_invalid"));
         }
 
         // The build command runs in this directory under the checkout; one that climbs out
@@ -147,7 +150,7 @@ public final class InstanceDeclarations {
         SourceBuildDetail.requireContainedDirectory(InstanceModel.settingsOf(row));
 
         Object declared = InstanceModel.settingsOf(row).get(GitSourceSchema.REPOSITORY_URL);
-        String url = declared == null ? "" : declared.toString().trim();
+        String url = trimmed(declared);
 
         if (url.isEmpty()) {
             return;
@@ -156,13 +159,13 @@ public final class InstanceDeclarations {
         // A credentialed value is never echoed back: it is the secret this refusal is about.
         if (GitRepository.embeddedCredential(url) != null) {
             throw Violations.ofField(GitSourceSchema.REPOSITORY_URL, null,
-                HohenheimViolations.text("repository_url_credential"));
+                HohenheimMicrocopy.VIOLATIONS.of("repository_url_credential"));
         }
 
         // A malformed one is only a typo, and the operator corrects it in place.
         if (!GitRepository.isSupportedCloneUrl(url)) {
             throw Violations.ofField(GitSourceSchema.REPOSITORY_URL, url,
-                HohenheimViolations.text("repository_url_invalid"));
+                HohenheimMicrocopy.VIOLATIONS.of("repository_url_invalid"));
         }
 
         // AIDEV-NOTE: a LOCAL source (a path or file:// URL on the controller) is an operator
@@ -177,7 +180,7 @@ public final class InstanceDeclarations {
                 && (id == null || SourceOwnership.isOperatorOwned(InstanceModel.MODEL_ID, id));
             if (!operatorOwned) {
                 throw Violations.ofField(GitSourceSchema.REPOSITORY_URL, url,
-                    HohenheimViolations.text("repository_url_local_refused"));
+                    HohenheimMicrocopy.VIOLATIONS.of("repository_url_local_refused"));
             }
         }
     }

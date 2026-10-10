@@ -1,12 +1,13 @@
 package be.elevenways.hohenheim.test.project;
 
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.InstanceQuotaModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ReleasedRouteClaimModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
-import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.project.ProjectAdoption;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -80,19 +81,19 @@ class ProjectAdoptionTest extends HohenheimTestBase {
 
         // The pre-project world: direct per-user manage grants.
         RecordGrants.grant(GrantSubjectType.USER, userXId, InstanceModel.MODEL_ID, instanceX1,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, userXId, InstanceModel.MODEL_ID, instanceX2,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, userYId, InstanceModel.MODEL_ID, instanceY1,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, userZId, InstanceModel.MODEL_ID, instanceZ1,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, userXId, SiteModel.MODEL_ID, siteSharedId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, userYId, SiteModel.MODEL_ID, siteSharedId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         RecordGrants.grant(GrantSubjectType.USER, userXId, SiteModel.MODEL_ID, siteXId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
 
         // A per-owner quota override keyed on the OLD packing.
         Row cap = Models.get(InstanceQuotaModel.class).createEmptyRow();
@@ -171,7 +172,7 @@ class ProjectAdoptionTest extends HohenheimTestBase {
      * database that same-fork sibling classes also write to.
      */
     private static int operatorChargedAdoptees() {
-        String operatorBucket = InstanceQuota.bucketKeyOf("");
+        String operatorBucket = OwnerBudget.INSTANCES.bucketOf("");
         int count = 0;
         for (Row row : Models.get(InstanceModel.class).find().all()) {
             if (row.get(InstanceModel.DELETED_AT) != null) {
@@ -217,8 +218,8 @@ class ProjectAdoptionTest extends HohenheimTestBase {
         assertThat(HohenheimAccess.canManageInstance(principalX, instanceY1))
             .as("step 1: X never reached Y's instance").isFalse();
 
-        long operatorUsedBefore = InstanceQuota.usedBy("");
-        long operatorMemoryBefore = InstanceQuota.memoryUsedBy("");
+        long operatorUsedBefore = OwnerBudget.INSTANCES.usedBy("");
+        long operatorMemoryBefore = OwnerBudget.OWNER_MEMORY.usedBy("");
         // The operator bucket is SHARED across every class in this fork's database, and
         // the heal is deliberately global: it also adopts any live user-granted instance
         // a sibling class left behind, releasing THAT slot from the same bucket. The
@@ -298,25 +299,25 @@ class ProjectAdoptionTest extends HohenheimTestBase {
         //    adoptee it lost -- ours plus any same-fork residue, per the derived count.
         String packX = HohenheimAccess.packSubjects(Projects.ownerSubjectsOf(projectX));
         String packY = HohenheimAccess.packSubjects(Projects.ownerSubjectsOf(projectY));
-        assertThat(InstanceQuota.usedBy(packX))
+        assertThat(OwnerBudget.INSTANCES.usedBy(packX))
             .as("step 7: X's project bucket carries its two live instances")
             .isEqualTo(2);
-        assertThat(InstanceQuota.usedBy(packY))
+        assertThat(OwnerBudget.INSTANCES.usedBy(packY))
             .as("step 7: Y's project bucket carries its one live instance")
             .isEqualTo(1);
         assertThat((String) Models.get(InstanceModel.class).findById(instanceX1)
                 .get(InstanceModel.QUOTA_BUCKET))
             .as("step 7: the charged-bucket column was restamped")
-            .isEqualTo(InstanceQuota.bucketKeyOf(packX));
+            .isEqualTo(OwnerBudget.INSTANCES.bucketOf(packX));
         assertThat((String) Models.get(InstanceModel.class).findById(instanceY1)
                 .get(InstanceModel.QUOTA_BUCKET))
             .as("step 7: y1's charged-bucket column was restamped too")
-            .isEqualTo(InstanceQuota.bucketKeyOf(packY));
+            .isEqualTo(OwnerBudget.INSTANCES.bucketOf(packY));
         assertThat((String) Models.get(InstanceModel.class).findById(instanceOperator)
                 .get(InstanceModel.QUOTA_BUCKET))
             .as("step 7: the operator-owned instance keeps its operator stamp")
-            .isEqualTo(InstanceQuota.bucketKeyOf(""));
-        assertThat(InstanceQuota.usedBy(""))
+            .isEqualTo(OwnerBudget.INSTANCES.bucketOf(""));
+        assertThat(OwnerBudget.INSTANCES.usedBy(""))
             .as("step 7: the operator bucket released exactly one slot per"
                 + " operator-charged adoptee (x1, x2, y1, z1, plus any fork residue)")
             .isEqualTo(operatorUsedBefore - operatorAdoptees);
@@ -326,14 +327,14 @@ class ProjectAdoptionTest extends HohenheimTestBase {
         //     owner charged nothing -- and the eventual release then landed on the NEW
         //     bucket, which is the over-release that clamps a bucket to zero and wipes
         //     every other workload booked in it.
-        assertThat(InstanceQuota.memoryUsedBy(packX))
+        assertThat(OwnerBudget.OWNER_MEMORY.usedBy(packX))
             .as("step 7b: X's project carries the WORKLOAD MEMORY of its two instances,"
                 + " not just their slots")
             .isEqualTo(2 * 512);
-        assertThat(InstanceQuota.memoryUsedBy(packY))
+        assertThat(OwnerBudget.OWNER_MEMORY.usedBy(packY))
             .as("step 7b: and Y's project carries its one instance's memory")
             .isEqualTo(512);
-        assertThat(InstanceQuota.memoryUsedBy(""))
+        assertThat(OwnerBudget.OWNER_MEMORY.usedBy(""))
             .as("step 7b: while the operator bucket handed back at least this class's four"
                 + " adopted footprints -- a charge left behind is charged forever")
             .isLessThanOrEqualTo(operatorMemoryBefore - 4 * 512);
@@ -343,7 +344,7 @@ class ProjectAdoptionTest extends HohenheimTestBase {
         assertThat((String) cap.get(InstanceQuotaModel.SUBJECTS))
             .as("step 8: the override row is keyed to the project now")
             .isEqualTo(packX);
-        assertThat(InstanceQuota.limitFor(packX))
+        assertThat(OwnerBudget.INSTANCES.limitFor(packX))
             .as("step 8: and the project inherits the cap")
             .isEqualTo(7);
 
@@ -355,7 +356,7 @@ class ProjectAdoptionTest extends HohenheimTestBase {
 
         // 10. Running the heal again moves NOTHING: adopted sets are recognized, not
         //     re-adopted.
-        long memoryBefore = InstanceQuota.memoryUsedBy(packX);
+        long memoryBefore = OwnerBudget.OWNER_MEMORY.usedBy(packX);
         ProjectAdoption.Result second = ProjectAdoption.run();
         assertThat(second.projectsCreated())
             .as("step 10: a second run creates no projects").isZero();
@@ -363,7 +364,7 @@ class ProjectAdoptionTest extends HohenheimTestBase {
             .as("step 10: and adopts no records").isZero();
         assertThat(second.bucketsMoved())
             .as("step 10: and moves no reservations").isZero();
-        assertThat(InstanceQuota.memoryUsedBy(packX))
+        assertThat(OwnerBudget.OWNER_MEMORY.usedBy(packX))
             .as("step 10: the memory charge is not re-reserved either -- a heal that ran"
                 + " twice would double-charge the project")
             .isEqualTo(memoryBefore);

@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -63,40 +65,41 @@ public final class PutOnline {
 
     /** The address visitors type. Named like the site create's first hostname, so route refusals path on it. */
     public static final StringField HOSTNAME = StringField.builder(SiteDomainModel.HOSTNAME.getName())
-        .label(copy("address"))
-        .help(copy("address_help"))
+        .label(HohenheimMicrocopy.PUT_ONLINE.of("address"))
+        .help(HohenheimMicrocopy.PUT_ONLINE.of("address_help"))
         .placeholder("shop.example.com")
         .build();
 
     /** The same address for the address kinds, which have nothing to serve without one (so no "leave it empty"). */
     public static final StringField ADDRESS_HOSTNAME = StringField.builder(SiteDomainModel.HOSTNAME.getName())
-        .label(copy("address"))
-        .help(copy("address_help_required"))
+        .label(HohenheimMicrocopy.PUT_ONLINE.of("address"))
+        .help(HohenheimMicrocopy.PUT_ONLINE.of("address_help_required"))
         .placeholder("shop.example.com")
         .build();
 
-    public static final StringField HTTPS = StringField.builder("https").label(copy("certificate")).build();
+    public static final StringField HTTPS = StringField.builder("https")
+        .label(HohenheimMicrocopy.PUT_ONLINE.of("certificate")).build();
 
     /* The journey's step names, one home: the chooser, the wizard's own steps and the run that ends it. */
-    static final Microcopy STEP_WHAT = copy("step_what");
-    static final Microcopy STEP_WHERE = copy("step_where");
-    static final Microcopy STEP_OPTIONS = copy("step_options");
-    static final Microcopy STEP_HTTPS = copy("step_https");
-    static final Microcopy STEP_LIVE = copy("step_live");
+    static final Microcopy STEP_WHAT = HohenheimMicrocopy.PUT_ONLINE.of("step_what");
+    static final Microcopy STEP_WHERE = HohenheimMicrocopy.PUT_ONLINE.of("step_where");
+    static final Microcopy STEP_OPTIONS = HohenheimMicrocopy.PUT_ONLINE.of("step_options");
+    static final Microcopy STEP_HTTPS = HohenheimMicrocopy.PUT_ONLINE.of("step_https");
+    static final Microcopy STEP_LIVE = HohenheimMicrocopy.PUT_ONLINE.of("step_live");
 
     /** The run's steps for a template: the app, its install, its website, its certificate, then live. */
     private static final OperationSteps APP_STEPS = OperationSteps.of(
-        OperationSteps.step("app", copy("run_app")),
-        OperationSteps.step("install", copy("run_install")),
-        OperationSteps.step("website", copy("run_website")),
-        OperationSteps.step("certificate", copy("run_certificate")),
-        OperationSteps.step("live", copy("run_live")))
+        OperationSteps.step("app", HohenheimMicrocopy.PUT_ONLINE.of("run_app")),
+        OperationSteps.step("install", HohenheimMicrocopy.PUT_ONLINE.of("run_install")),
+        OperationSteps.step("website", HohenheimMicrocopy.PUT_ONLINE.of("run_website")),
+        OperationSteps.step("certificate", HohenheimMicrocopy.PUT_ONLINE.of("run_certificate")),
+        OperationSteps.step("live", HohenheimMicrocopy.PUT_ONLINE.of("run_live")))
         .inJourney(List.of(STEP_WHAT, STEP_WHERE, STEP_OPTIONS, STEP_HTTPS), STEP_LIVE);
 
     /** The run's steps for an address: its website and its certificate. */
     private static final OperationSteps ADDRESS_STEPS = OperationSteps.of(
-        OperationSteps.step("website", copy("run_website")),
-        OperationSteps.step("certificate", copy("run_certificate")))
+        OperationSteps.step("website", HohenheimMicrocopy.PUT_ONLINE.of("run_website")),
+        OperationSteps.step("certificate", HohenheimMicrocopy.PUT_ONLINE.of("run_certificate")))
         .inJourney(List.of(STEP_WHAT, STEP_WHERE, STEP_HTTPS), STEP_LIVE);
 
     private static final FormSpec TEMPLATE_INPUT = FormSpec.builder()
@@ -109,10 +112,13 @@ public final class PutOnline {
         .add(httpsChoice())
         .step(FormStep.of("where", STEP_WHERE, InstanceTemplateOperations.NAME.getName(), HOSTNAME.getName(),
             InstanceTemplateOperations.SERVER_ID.getName(), InstanceTemplateOperations.PROJECT_ID.getName(),
-            InstanceTemplateOperations.ENVIRONMENT_ID.getName()).describe(copy("step_where_lead")))
-        .step(new FormStep(InstanceTemplateOperations.VARIABLES, STEP_OPTIONS, copy("step_options_lead"),
+            InstanceTemplateOperations.ENVIRONMENT_ID.getName())
+                .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_where_lead")))
+        .step(new FormStep(InstanceTemplateOperations.VARIABLES, STEP_OPTIONS,
+            HohenheimMicrocopy.PUT_ONLINE.of("step_options_lead"),
             List.of(InstanceTemplateOperations.VARIABLES)))
-        .step(FormStep.of("https", STEP_HTTPS, HTTPS.getName()).describe(copy("step_https_lead"))
+        .step(FormStep.of("https", STEP_HTTPS, HTTPS.getName())
+            .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_https_lead"))
             .summarizedBy(PutOnline::templateSummary))
         .build();
 
@@ -128,8 +134,10 @@ public final class PutOnline {
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(SiteModel.SETTINGS))
         .add(httpsChoice())
         .step(FormStep.of("where", STEP_WHERE, SiteModel.NAME.getName(), ADDRESS_HOSTNAME.getName(),
-            SiteModel.UPSTREAM_KIND.getName(), SiteModel.SETTINGS.getName()).describe(copy("step_where_lead")))
-        .step(FormStep.of("https", STEP_HTTPS, HTTPS.getName()).describe(copy("step_https_lead"))
+            SiteModel.UPSTREAM_KIND.getName(), SiteModel.SETTINGS.getName())
+                .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_where_lead")))
+        .step(FormStep.of("https", STEP_HTTPS, HTTPS.getName())
+            .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_https_lead"))
             .summarizedBy(PutOnline::addressSummary))
         .build();
 
@@ -153,8 +161,8 @@ public final class PutOnline {
     /** Puts one template online: the app, its address, its certificate, then the first deploy. */
     public static final Operation<Row, FromTemplate, Integer> PUT_ONLINE =
         Operation.declare(HohenheimIds.id("put_online"))
-            .label(copy("put_online"))
-            .happened(Microcopy.of("happened").withFilter("scope", "put_online"))
+            .label(HohenheimMicrocopy.PUT_ONLINE.of("put_online"))
+            .happened(HohenheimMicrocopy.PUT_ONLINE.of("happened"))
             .icon(Icon.of("rocket"))
             .one(InstanceTemplateOperations.TEMPLATE)
             .gate(OperationGate.open())
@@ -174,14 +182,14 @@ public final class PutOnline {
     /** Puts one address online that needs no workload: its website, then its certificate. */
     public static final Operation<Void, Address, Integer> PUT_ADDRESS_ONLINE =
         Operation.declare(HohenheimIds.id("put_address_online"))
-            .label(copy("put_online"))
-            .happened(Microcopy.of("happened").withFilter("scope", "put_online"))
+            .label(HohenheimMicrocopy.PUT_ONLINE.of("put_online"))
+            .happened(HohenheimMicrocopy.PUT_ONLINE.of("happened"))
             .icon(Icon.of("rocket"))
             .noSubject()
             .gate(OperationGate.open())
             .input(OperationInput.of(ADDRESS_INPUT, Address.class, values -> new Address(values.get(SiteModel.NAME),
                 values.get(HOSTNAME), values.get(SiteModel.UPSTREAM_KIND),
-                SiteWrites.settings(values.get(SiteModel.SETTINGS.getName())), values.get(HTTPS))))
+                RawValues.mapOrNull(values.get(SiteModel.SETTINGS.getName())), values.get(HTTPS))))
             .result(Integer.class)
             .facts(OperationFact.REACHES_OUTSIDE)
             .command(CmsCommands.EXTERNAL)
@@ -208,13 +216,14 @@ public final class PutOnline {
         List<SummaryLine> lines = new ArrayList<>();
         String name = answers.text(InstanceTemplateOperations.NAME.getName());
         if (name != null) {
-            lines.add(new SummaryLine(copy("summary_name"), Microcopy.literal(name)));
+            lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_name"), Microcopy.literal(name)));
         }
         String hostname = answers.text(HOSTNAME.getName());
         lines.add(addressLine(hostname));
         Integer serverId = answers.get(InstanceTemplateOperations.SERVER_ID.getName(), Integer.class);
-        lines.add(new SummaryLine(copy("summary_runs_on"),
-            serverId == null ? copy("summary_runs_on_auto") : Microcopy.literal(serverName(serverId))));
+        lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_runs_on"),
+            serverId == null ? HohenheimMicrocopy.PUT_ONLINE.of("summary_runs_on_auto")
+                : Microcopy.literal(serverName(serverId))));
         if (hostname != null) {
             lines.add(reachLine(hostname));
         }
@@ -228,11 +237,11 @@ public final class PutOnline {
         Identifier kindId = kind == null ? null : Identifier.tryParse(kind);
         UpstreamKindInfo info = kindId == null ? null : UpstreamKinds.REGISTRY.get(kindId);
         if (info != null) {
-            lines.add(new SummaryLine(copy("summary_serves"), info.getLabel()));
+            lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_serves"), info.getLabel()));
         }
         String name = answers.text(SiteModel.NAME.getName());
         if (name != null) {
-            lines.add(new SummaryLine(copy("summary_name"), Microcopy.literal(name)));
+            lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_name"), Microcopy.literal(name)));
         }
         String hostname = answers.text(ADDRESS_HOSTNAME.getName());
         lines.add(addressLine(hostname));
@@ -243,8 +252,8 @@ public final class PutOnline {
     }
 
     private static @NonNull SummaryLine addressLine(@Nullable String hostname) {
-        return new SummaryLine(copy("summary_address"),
-            hostname == null ? copy("summary_address_none") : Microcopy.literal(hostname));
+        return new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_address"),
+            hostname == null ? HohenheimMicrocopy.PUT_ONLINE.of("summary_address_none") : Microcopy.literal(hostname));
     }
 
     /**
@@ -254,14 +263,14 @@ public final class PutOnline {
     private static @NonNull SummaryLine reachLine(@NonNull String hostname) {
         HostnameReach.Reach reach = HostnameReach.recent(hostname);
         Microcopy verdict = switch (reach.verdict()) {
-            case POINTS_HERE -> copy("reach_here");
-            case POINTS_ELSEWHERE -> copy("reach_elsewhere");
-            case UNRESOLVED -> copy("reach_unresolved");
-            case UNKNOWN -> copy("reach_unknown");
-            case CHECKING -> copy("reach_checking");
-            case NOT_CHECKED -> copy("reach_not_checked");
+            case POINTS_HERE -> HohenheimMicrocopy.PUT_ONLINE.of("reach_here");
+            case POINTS_ELSEWHERE -> HohenheimMicrocopy.PUT_ONLINE.of("reach_elsewhere");
+            case UNRESOLVED -> HohenheimMicrocopy.PUT_ONLINE.of("reach_unresolved");
+            case UNKNOWN -> HohenheimMicrocopy.PUT_ONLINE.of("reach_unknown");
+            case CHECKING -> HohenheimMicrocopy.PUT_ONLINE.of("reach_checking");
+            case NOT_CHECKED -> HohenheimMicrocopy.PUT_ONLINE.of("reach_not_checked");
         };
-        return new SummaryLine(copy("reach_label"), verdict.withArg("hostname", hostname)
+        return new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("reach_label"), verdict.withArg("hostname", hostname)
             .withArg("addresses", String.join(", ", reach.addresses())));
     }
 
@@ -273,14 +282,12 @@ public final class PutOnline {
     private static @NonNull Select<String> httpsChoice() {
         return Select.of(HTTPS)
             .options(OptionSource.of(
-                FieldOption.of(HTTPS_AUTOMATIC, copy("https_automatic")).withDescription(copy("https_automatic_help")),
-                FieldOption.of(HTTPS_LATER, copy("https_later")).withDescription(copy("https_later_help"))))
+                FieldOption.of(HTTPS_AUTOMATIC, HohenheimMicrocopy.PUT_ONLINE.of("https_automatic"))
+                    .withDescription(HohenheimMicrocopy.PUT_ONLINE.of("https_automatic_help")),
+                FieldOption.of(HTTPS_LATER, HohenheimMicrocopy.PUT_ONLINE.of("https_later"))
+                    .withDescription(HohenheimMicrocopy.PUT_ONLINE.of("https_later_help"))))
             .presentation(Select.Presentation.CARDS)
             .clearable(false)
             .build();
-    }
-
-    static @NonNull Microcopy copy(@NonNull String key) {
-        return Microcopy.of(key).withFilter("scope", "put_online");
     }
 }

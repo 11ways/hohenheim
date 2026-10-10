@@ -33,21 +33,12 @@ final class AttentionItems {
     /**
      * An item that leads somewhere, saying what going there does.
      *
-     * @param action the worded fix ("Check and admit"), from {@link #action}
+     * @param action the worded fix ("Check and admit"), under {@code HohenheimMicrocopy.ATTENTION_ACTION}
      */
     static @NonNull AttentionItem item(@NonNull AttentionSeverity severity, @NonNull String icon,
                                        @NonNull Microcopy title, @Nullable Microcopy detail,
                                        @NonNull RouteTarget target, @NonNull Microcopy action) {
         return new AttentionItem(severity, icon, title, detail, target, action);
-    }
-
-    /**
-     * An item's worded fix, a catalog key under the {@code attention_action} scope.
-     *
-     * @param args name/value pairs, in that order
-     */
-    static @NonNull Microcopy action(@NonNull String key, Object... args) {
-        return copy(key, "attention_action", args);
     }
 
     /** A verbatim detail (an error message, a reason); blank folds to no detail at all. */
@@ -56,19 +47,6 @@ final class AttentionItems {
             return null;
         }
         return Microcopy.literal(String.valueOf(value));
-    }
-
-    /**
-     * A catalog key under a {@code scope} filter.
-     *
-     * @param args name/value pairs, in that order
-     */
-    static @NonNull Microcopy copy(@NonNull String key, @NonNull String scope, Object... args) {
-        Microcopy copy = Microcopy.of(key).withFilter("scope", scope);
-        for (int i = 0; i + 1 < args.length; i += 2) {
-            copy = copy.withArg(String.valueOf(args[i]), args[i + 1]);
-        }
-        return copy;
     }
 
     /**

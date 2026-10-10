@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
@@ -26,6 +28,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * Versioned template export/import: a public catalog must never be stranded as
@@ -199,24 +203,24 @@ public final class TemplatePortability {
         try {
             parsed = Zenit.DRY.parse(json);
         } catch (RuntimeException unparseable) {
-            throw Violations.ofForm(HohenheimViolations.text("template_import_unparseable"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("template_import_unparseable"));
         }
         if (!(parsed instanceof Map<?, ?> document)) {
-            throw Violations.ofForm(HohenheimViolations.text("template_import_unparseable"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("template_import_unparseable"));
         }
         if (!FORMAT.equals(document.get("format"))) {
-            throw Violations.ofForm(HohenheimViolations.text("template_import_format"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("template_import_format"));
         }
         Object version = document.get("format_version");
         if (!(version instanceof Number number) || number.intValue() != FORMAT_VERSION) {
-            throw Violations.ofForm(HohenheimViolations.text("template_import_version")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("template_import_version")
                 .withArg("version", String.valueOf(version))
                 .withArg("supported", FORMAT_VERSION));
         }
         if (!(document.get("template") instanceof Map<?, ?> rawBody)) {
-            throw Violations.ofForm(HohenheimViolations.text("template_import_unparseable"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("template_import_unparseable"));
         }
-        Map<String, Object> body = castMap(rawBody);
+        Map<String, Object> body = RawValues.map(rawBody);
 
         // Integrity: the declared checksum must match the body as parsed. A missing or
         // wrong checksum is a refusal, never a shrug -- unverifiable provenance on an
@@ -225,18 +229,18 @@ public final class TemplatePortability {
             && checksum.get("value") instanceof String value ? value : null;
         String computed = checksumOf(body);
         if (declared == null || !SecureTokens.constantTimeEquals(declared, computed)) {
-            throw Violations.ofForm(HohenheimViolations.text("template_import_checksum"));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("template_import_checksum"));
         }
 
-        String name = str(body.get("name"));
+        String name = trimmed(body.get("name"));
         if (name.isEmpty()) {
-            throw Violations.ofField("name", name, HohenheimViolations.text("name_required"));
+            throw Violations.ofField("name", name, HohenheimMicrocopy.VIOLATIONS.of("name_required"));
         }
-        String kind = str(body.get("kind"));
+        String kind = trimmed(body.get("kind"));
         Identifier kindId = Identifier.tryParse(kind);
         if (kindId == null || InstanceKindRegistry.REGISTRY.get(kindId) == null) {
             throw Violations.ofField("kind", kind,
-                HohenheimViolations.text("instance_kind_unknown").withArg("kind", kind));
+                HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown").withArg("kind", kind));
         }
 
         // Registered is not the same question as authorable: an imported document must not
@@ -244,36 +248,40 @@ public final class TemplatePortability {
         InstanceKinds.requireAuthorable(kind);
 
         List<Map<String, Object>> variables = entryList(body.get("variables"));
+        // Each variable's settings typed by its type's schema, in document order, judged before anything is written.
+        List<Map<String, Object>> variableSettings = new ArrayList<>();
         for (Map<String, Object> variable : variables) {
-            String key = str(variable.get("key"));
+            String key = trimmed(variable.get("key"));
             if (!key.matches("^[A-Z][A-Z0-9_]*$")) {
-                throw Violations.ofField("key", key, HohenheimViolations.text("variable_key_format"));
+                throw Violations.ofField("key", key, HohenheimMicrocopy.VIOLATIONS.of("variable_key_format"));
             }
-            String type = str(variable.get("type"));
+            String type = trimmed(variable.get("type"));
             if (VariableTypes.getHandler(type) == null) {
                 throw Violations.ofField("type", type,
-                    HohenheimViolations.text("variable_type_unknown").withArg("type", type));
+                    HohenheimMicrocopy.VIOLATIONS.of("variable_type_unknown").withArg("type", type));
             }
+            variableSettings.add(InstanceKindFields.typedNumbers(InstanceTemplateVariableModel.SETTINGS, type,
+                RawValues.map(variable.get("settings"))));
         }
         List<Map<String, Object>> files = entryList(body.get("files"));
         // The template file model's own rule, judged before anything is written: a refusal at save time would leave
         // the template half imported.
         for (Map<String, Object> file : files) {
-            ContainerFileRules.checkedPath("container_path", str(file.get("container_path")));
+            ContainerFileRules.checkedPath("container_path", trimmed(file.get("container_path")));
             ContainerFileRules.checkMode("mode", file.get("mode"));
         }
         // A declared database is judged by the SAME vocabulary the record column stores:
         // an engine token no engine carries fails closed here, never at create time.
         List<Map<String, Object>> databases = entryList(body.get("databases"));
         for (Map<String, Object> database : databases) {
-            String engine = str(database.get("engine"));
+            String engine = trimmed(database.get("engine"));
             if (ManagedDatabase.Engine.forToken(engine) == null) {
                 throw Violations.ofField("engine", engine,
-                    HohenheimViolations.text("unknown_engine").withArg("engine", engine));
+                    HohenheimMicrocopy.VIOLATIONS.of("unknown_engine").withArg("engine", engine));
             }
-            String prefix = str(database.get("env_prefix"));
+            String prefix = trimmed(database.get("env_prefix"));
             if (!prefix.matches(InstanceDatabaseModel.PREFIX_PATTERN)) {
-                throw Violations.ofField("env_prefix", prefix, HohenheimViolations.text("prefix_format"));
+                throw Violations.ofField("env_prefix", prefix, HohenheimMicrocopy.VIOLATIONS.of("prefix_format"));
             }
         }
         // A declared volume is judged by the SAME rules the create-from-template copy
@@ -286,26 +294,27 @@ public final class TemplatePortability {
         InstanceTemplateModel templates = Models.get(InstanceTemplateModel.class);
         Row template = templates.createEmptyRow();
         template.set(InstanceTemplateModel.NAME, name);
-        template.set(InstanceTemplateModel.DESCRIPTION, str(body.get("description")));
+        template.set(InstanceTemplateModel.DESCRIPTION, trimmed(body.get("description")));
         template.set(InstanceTemplateModel.KIND, kind);
-        template.set(InstanceTemplateModel.SETTINGS,
-            body.get("settings") instanceof Map<?, ?> settings ? castMap(settings) : Map.of());
+        template.set(InstanceTemplateModel.SETTINGS, InstanceKindFields.typedNumbers(
+            InstanceTemplateModel.SETTINGS, kind,
+            RawValues.map(body.get("settings"))));
         template.set(InstanceTemplateModel.VERSION,
             body.get("version") instanceof Number v && v.intValue() > 0 ? v.intValue() : 1);
-        template.set(InstanceTemplateModel.INSTALL_IMAGE, str(body.get("install_image")));
-        template.set(InstanceTemplateModel.INSTALL_SCRIPT, str(body.get("install_script")));
-        template.set(InstanceTemplateModel.UPDATE_SCRIPT, str(body.get("update_script")));
+        template.set(InstanceTemplateModel.INSTALL_IMAGE, trimmed(body.get("install_image")));
+        template.set(InstanceTemplateModel.INSTALL_SCRIPT, trimmed(body.get("install_script")));
+        template.set(InstanceTemplateModel.UPDATE_SCRIPT, trimmed(body.get("update_script")));
         template.set(InstanceTemplateModel.REINSTALL_POLICY,
             InstanceTemplateModel.REINSTALL_CLEAR.equals(body.get("reinstall_policy"))
                 ? InstanceTemplateModel.REINSTALL_CLEAR : InstanceTemplateModel.REINSTALL_PRESERVE);
         // An unknown token fails CLOSED to the column default rather than to a guess;
         // the model then refuses the document if it also carried a readiness line.
-        ReadinessKind readinessKind = ReadinessKind.forToken(str(body.get("readiness_kind")));
+        ReadinessKind readinessKind = ReadinessKind.forToken(trimmed(body.get("readiness_kind")));
         template.set(InstanceTemplateModel.READINESS_KIND,
             readinessKind == null ? ReadinessKind.PORT.token() : readinessKind.token());
-        template.set(InstanceTemplateModel.READINESS_LINE, str(body.get("readiness_line")));
-        template.set(InstanceTemplateModel.READINESS_TARGET, str(body.get("readiness_target")));
-        template.set(InstanceTemplateModel.STOP_COMMAND, str(body.get("stop_command")));
+        template.set(InstanceTemplateModel.READINESS_LINE, trimmed(body.get("readiness_line")));
+        template.set(InstanceTemplateModel.READINESS_TARGET, trimmed(body.get("readiness_target")));
+        template.set(InstanceTemplateModel.STOP_COMMAND, trimmed(body.get("stop_command")));
         // NEVER approved by import -- that is the operator's explicit act.
         template.set(InstanceTemplateModel.SOURCE,
             source == null || source.isBlank() ? "import" : source.trim());
@@ -315,18 +324,18 @@ public final class TemplatePortability {
         int templateId = template.get(InstanceTemplateModel.ID);
 
         InstanceTemplateVariableModel variableModel = Models.get(InstanceTemplateVariableModel.class);
-        for (Map<String, Object> variable : variables) {
+        for (int index = 0; index < variables.size(); index++) {
+            Map<String, Object> variable = variables.get(index);
             Row row = variableModel.createEmptyRow();
             row.set(InstanceTemplateVariableModel.TEMPLATE_ID, templateId);
-            row.set(InstanceTemplateVariableModel.KEY, str(variable.get("key")));
-            row.set(InstanceTemplateVariableModel.LABEL, str(variable.get("label")));
-            row.set(InstanceTemplateVariableModel.DESCRIPTION, str(variable.get("description")));
-            row.set(InstanceTemplateVariableModel.TYPE, str(variable.get("type")));
-            row.set(InstanceTemplateVariableModel.SETTINGS,
-                variable.get("settings") instanceof Map<?, ?> settings ? castMap(settings) : Map.of());
+            row.set(InstanceTemplateVariableModel.KEY, trimmed(variable.get("key")));
+            row.set(InstanceTemplateVariableModel.LABEL, trimmed(variable.get("label")));
+            row.set(InstanceTemplateVariableModel.DESCRIPTION, trimmed(variable.get("description")));
+            row.set(InstanceTemplateVariableModel.TYPE, trimmed(variable.get("type")));
+            row.set(InstanceTemplateVariableModel.SETTINGS, variableSettings.get(index));
             row.set(InstanceTemplateVariableModel.REQUIRED,
                 Boolean.TRUE.equals(variable.get("required")));
-            row.set(InstanceTemplateVariableModel.DEFAULT_VALUE, str(variable.get("default_value")));
+            row.set(InstanceTemplateVariableModel.DEFAULT_VALUE, trimmed(variable.get("default_value")));
             variableModel.save(row);
         }
 
@@ -334,9 +343,9 @@ public final class TemplatePortability {
         for (Map<String, Object> file : files) {
             Row row = fileModel.createEmptyRow();
             row.set(InstanceTemplateFileModel.TEMPLATE_ID, templateId);
-            row.set(InstanceTemplateFileModel.CONTAINER_PATH, str(file.get("container_path")));
-            row.set(InstanceTemplateFileModel.CONTENT, str(file.get("content")));
-            String mode = str(file.get("mode"));
+            row.set(InstanceTemplateFileModel.CONTAINER_PATH, trimmed(file.get("container_path")));
+            row.set(InstanceTemplateFileModel.CONTENT, trimmed(file.get("content")));
+            String mode = trimmed(file.get("mode"));
             row.set(InstanceTemplateFileModel.MODE, mode.isEmpty() ? "0644" : mode);
             fileModel.save(row);
         }
@@ -345,9 +354,9 @@ public final class TemplatePortability {
         for (Map<String, Object> database : databases) {
             Row row = databaseModel.createEmptyRow();
             row.set(InstanceTemplateDatabaseModel.TEMPLATE_ID, templateId);
-            row.set(InstanceTemplateDatabaseModel.ENGINE, str(database.get("engine")));
-            row.set(InstanceTemplateDatabaseModel.ENV_PREFIX, str(database.get("env_prefix")));
-            String image = str(database.get("image"));
+            row.set(InstanceTemplateDatabaseModel.ENGINE, trimmed(database.get("engine")));
+            row.set(InstanceTemplateDatabaseModel.ENV_PREFIX, trimmed(database.get("env_prefix")));
+            String image = trimmed(database.get("image"));
             row.set(InstanceTemplateDatabaseModel.IMAGE, image.isEmpty() ? null : image);
             databaseModel.save(row);
         }
@@ -385,19 +394,14 @@ public final class TemplatePortability {
             Object quota = entry.get("quota_bytes");
             if (quota != null && !(quota instanceof Number)) {
                 throw Violations.ofField("quota_bytes", quota,
-                    HohenheimViolations.text("volume_quota_invalid"));
+                    HohenheimMicrocopy.VIOLATIONS.of("volume_quota_invalid"));
             }
-            declared.add(new VolumeDeclaration(str(entry.get("name")),
-                str(entry.get("container_path")),
+            declared.add(new VolumeDeclaration(trimmed(entry.get("name")),
+                trimmed(entry.get("container_path")),
                 quota == null ? null : ((Number) quota).longValue(),
                 Boolean.TRUE.equals(entry.get("exclusive"))));
         }
         return declared;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static @NonNull Map<String, Object> castMap(Map<?, ?> map) {
-        return (Map<String, Object>) map;
     }
 
     private static @NonNull List<Map<String, Object>> entryList(@Nullable Object value) {
@@ -405,15 +409,11 @@ public final class TemplatePortability {
         if (value instanceof List<?> list) {
             for (Object item : list) {
                 if (item instanceof Map<?, ?> map) {
-                    entries.add(castMap(map));
+                    entries.add(RawValues.map(map));
                 }
             }
         }
         return entries;
-    }
-
-    private static @NonNull String str(@Nullable Object value) {
-        return value == null ? "" : String.valueOf(value).trim();
     }
 
 }

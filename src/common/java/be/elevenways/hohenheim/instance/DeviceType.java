@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.zenit.common.validation.Violations;
@@ -99,7 +100,7 @@ public enum DeviceType {
         DeviceType type = parse(token);
         if (type == null) {
             throw Violations.ofField("type", token == null ? null : token.toString(),
-                HohenheimViolations.text("device_type_unknown")
+                HohenheimMicrocopy.VIOLATIONS.of("device_type_unknown")
                     .withArg("type", String.valueOf(token)));
         }
         return type;

@@ -13,11 +13,9 @@ import be.elevenways.zenit.common.orm.model.Schema;
 public class ArtifactOperationModel extends Model {
     public static final Identifier MODEL_ID = HohenheimIds.id("artifact_operation");
     public static final Schema SCHEMA = new Schema();
-    public static final String PENDING = "pending";
-    public static final String RUNNING = "running";
-    public static final String SUCCEEDED = "succeeded";
-    public static final String FAILED = "failed";
-    public static final String INTERRUPTED = "interrupted";
+    /** The statuses an upload receipt stores in {@link #STATUS}. */
+    public static final OperationLifecycle LIFECYCLE = OperationLifecycle.of(OperationStatus.PENDING,
+        OperationStatus.RUNNING, OperationStatus.SUCCEEDED, OperationStatus.FAILED, OperationStatus.INTERRUPTED);
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final IntegerField APPLICATION_ID = SCHEMA.addField(IntegerField.builder().name("application_id").build());
     public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id").build());

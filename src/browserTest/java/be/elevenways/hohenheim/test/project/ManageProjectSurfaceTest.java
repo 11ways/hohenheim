@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.project;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.ApiSupport;
@@ -75,8 +76,8 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
         Projects.addMember(Models.get(ProjectModel.class).findById(projectTwoId), memberBId);
 
         keyPaasA = ApiKeyService.create(memberAId, PREFIX + "paas", List.of(
-            CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE),
-            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimAccess.MANAGE)),
+            CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE),
+            CapabilityScopes.format(InstanceModel.MODEL_ID, HohenheimCapabilities.MANAGE)),
             null).plaintext();
         keyNarrowA = ApiKeyService.create(memberAId, PREFIX + "narrow",
             List.of("shortlink.*"), null).plaintext();
@@ -122,6 +123,14 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
         assertThat(members.body()).as("step 2b: the roster renders the shared subject label")
             .contains(HohenheimAccess.subjectLabel("user:" + memberAId));
 
+        // 2c. A membership opens as its own record by its packed key, and another project's membership does not.
+        HttpResponse<String> membership = httpGet("/manage/project-members/" + projectOneId + ":user:" + memberAId,
+            sessionA);
+        assertThat(membership.statusCode()).as("step 2c: the member's own membership record opens").isEqualTo(200);
+        assertThat(membership.body()).as("step 2c: naming the project").contains(PREFIX + "one");
+        assertThat(httpGet("/manage/project-members/" + projectTwoId + ":user:" + memberBId, sessionA).statusCode())
+            .as("step 2c: another project's membership reads as missing").isEqualTo(404);
+
         // 3. The mirror image, so step 2 is not just "A sees the first row of everything":
         //    B sees exactly the other side.
         HttpResponse<String> mirror = httpGet("/manage/project-members", sessionB);
@@ -159,7 +168,7 @@ class ManageProjectSurfaceTest extends HohenheimTestBase {
         // 2. A key of the same owner CARRYING the vocabulary project-owned records
         //    answer to keeps that answer.
         assertThat(names(Projects.visibleTo(contextOf(key(List.of(
-            CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimAccess.MANAGE)))))))
+            CapabilityScopes.format(SiteModel.MODEL_ID, HohenheimCapabilities.MANAGE)))))))
             .as("step 2: a covering key still enumerates its owner's project")
             .contains(PREFIX + "one");
 

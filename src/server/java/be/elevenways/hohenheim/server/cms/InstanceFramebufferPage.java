@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.HohenheimEndpoints;
@@ -27,8 +29,6 @@ import java.util.Map;
  */
 public final class InstanceFramebufferPage implements ConsoleModes.Mode {
 
-    public static final String SLUG = "framebuffer";
-
     private final @NonNull ConsoleModes modes;
 
     InstanceFramebufferPage(@NonNull ConsoleModes modes) {
@@ -36,8 +36,8 @@ public final class InstanceFramebufferPage implements ConsoleModes.Mode {
     }
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_framebuffer"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("framebuffer").withFilter("scope", "instance"); }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE.of("framebuffer"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.FRAMEBUFFER; }
     @Override public @NonNull Icon icon() { return Icon.of("display"); }
 
     /** A mode of the Console tab, reached through its mode switch. */
@@ -45,7 +45,7 @@ public final class InstanceFramebufferPage implements ConsoleModes.Mode {
 
     @Override
     public @NonNull Microcopy hint() {
-        return Microcopy.of("screen").withFilter("scope", "console_mode");
+        return HohenheimMicrocopy.CONSOLE_MODE.of("screen");
     }
 
     /**

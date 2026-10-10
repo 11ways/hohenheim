@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.api;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimEndpoints;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -12,7 +13,6 @@ import be.elevenways.zenit.cms.common.access.AccessRefusedException;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.page.ResourceWrites;
-import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -145,11 +145,11 @@ public final class SiteApi {
                 // The URL names the site; a body that names another one is a contradiction
                 // to refuse, never a value to prefer.
                 return ApiConduits.refusal(conduit, Violations.ofField(siteKey, submittedSite,
-                    ApiConduits.violationText("domain_site_mismatch")));
+                    HohenheimMicrocopy.VIOLATIONS.of("domain_site_mismatch")));
             }
             raw.put(siteKey, String.valueOf(siteId));
             Panel panel = ApiConduits.adminPanel();
-            PanelResource<Row> domains = ApiConduits.rowEntry(conduit, panel, DomainParts.SLUG);
+            PanelResource<Row> domains = ApiConduits.rowEntry(conduit, panel, HohenheimSlugs.DOMAINS);
             if (domains == null) {
                 return null;
             }
@@ -189,7 +189,7 @@ public final class SiteApi {
                 return null;
             }
             Panel panel = ApiConduits.adminPanel();
-            PanelResource<Row> domains = ApiConduits.rowEntry(conduit, panel, DomainParts.SLUG);
+            PanelResource<Row> domains = ApiConduits.rowEntry(conduit, panel, HohenheimSlugs.DOMAINS);
             if (domains == null) {
                 return null;
             }
@@ -230,8 +230,8 @@ public final class SiteApi {
         entry.put("site_id", domain.get(SiteDomainModel.SITE_ID));
         entry.put("hostname", domain.get(SiteDomainModel.HOSTNAME));
         entry.put("match_type", String.valueOf((Object) domain.get(SiteDomainModel.MATCH_TYPE)));
-        entry.put("listen_on", stringOrEmpty(domain.get(SiteDomainModel.LISTEN_ON)));
-        entry.put("path", stringOrEmpty(domain.get(SiteDomainModel.PATH)));
+        entry.put("listen_on", Objects.toString(domain.get(SiteDomainModel.LISTEN_ON), ""));
+        entry.put("path", Objects.toString(domain.get(SiteDomainModel.PATH), ""));
         entry.put("strip_path", Boolean.TRUE.equals(domain.get(SiteDomainModel.STRIP_PATH)));
         entry.put("force_ssl", Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL)));
         entry.put("certificate_id", domain.get(SiteDomainModel.CERTIFICATE_ID));
@@ -250,13 +250,9 @@ public final class SiteApi {
         Map<String, Object> headers = new LinkedHashMap<>();
         if (value instanceof Map<?, ?> map) {
             for (Map.Entry<?, ?> header : map.entrySet()) {
-                headers.put(String.valueOf(header.getKey()), stringOrEmpty(header.getValue()));
+                headers.put(String.valueOf(header.getKey()), Objects.toString(header.getValue(), ""));
             }
         }
         return headers;
-    }
-
-    private static @NonNull String stringOrEmpty(@Nullable Object value) {
-        return value == null ? "" : String.valueOf(value);
     }
 }

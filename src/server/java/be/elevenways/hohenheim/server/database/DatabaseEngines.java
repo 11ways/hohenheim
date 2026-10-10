@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.database;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DatabaseEngineModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -81,7 +82,7 @@ public final class DatabaseEngines {
                                                   @Nullable String requestedImage) {
         if (!engine.supportsLogicalDatabases()) {
             throw Violations.ofField(DatabaseModel.PLACEMENT.getName(), DatabaseModel.PLACEMENT_SHARED,
-                CmsSupport.violationText("database_placement_unsupported")
+                HohenheimMicrocopy.VIOLATIONS.of("database_placement_unsupported")
                     .withArg("engine", engine.token()));
         }
         Row existing = model().findOnHost(serverId, engine.token());
@@ -136,7 +137,7 @@ public final class DatabaseEngines {
         String running = EngineHost.ofEngine(engineRow).resolvedImage();
         if (!running.equals(requestedImage.trim())) {
             throw Violations.ofField(DatabaseModel.IMAGE.getName(), requestedImage,
-                CmsSupport.violationText("database_image_engine_mismatch")
+                HohenheimMicrocopy.VIOLATIONS.of("database_image_engine_mismatch")
                     .withArg("image", requestedImage.trim())
                     .withArg("engine", String.valueOf((Object) engineRow.get(DatabaseEngineModel.NAME)))
                     .withArg("running", running));
@@ -308,7 +309,7 @@ public final class DatabaseEngines {
         Row row = require(engineId);
         List<Row> hosted = databasesOn(engineId);
         if (!hosted.isEmpty()) {
-            throw Violations.ofForm(CmsSupport.violationText("database_engine_in_use")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("database_engine_in_use")
                 .withArg("name", String.valueOf((Object) row.get(DatabaseEngineModel.NAME)))
                 .withArg("databases", names(hosted)));
         }
@@ -327,7 +328,7 @@ public final class DatabaseEngines {
         Row row = require(engineId);
         List<Row> hosted = databasesOn(engineId);
         if (!hosted.isEmpty()) {
-            throw Violations.ofForm(CmsSupport.violationText("database_engine_in_use")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("database_engine_in_use")
                 .withArg("name", String.valueOf((Object) row.get(DatabaseEngineModel.NAME)))
                 .withArg("databases", names(hosted)));
         }

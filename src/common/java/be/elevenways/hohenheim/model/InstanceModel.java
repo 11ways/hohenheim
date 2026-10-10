@@ -1,11 +1,11 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeFunction;
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.ports.PortLedger;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.behaviour.SoftDeleteBehaviour;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -136,7 +136,7 @@ public class InstanceModel extends Model {
 
     // User data, NOT localized (the plan's explicit call: names are the user's own words).
     public static final StringField NAME = SCHEMA.addField(StringField.builder().name("name")
-        .label(HohenheimFormCopy.label("name"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("name"))
         .build());
 
     // ONE discriminator: the kind implies the runtime (docker_container now; system_container
@@ -144,8 +144,8 @@ public class InstanceModel extends Model {
     public static final EnumField KIND = SCHEMA.addField(
         RegistryMemberField.builder("kind")
             .registry(InstanceKindRegistry.REGISTRY)
-            .label(HohenheimFormCopy.label("kind"))
-            .help(HohenheimFormCopy.help("instance_kind"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("kind"))
+            .help(HohenheimMicrocopy.HELP.of("instance_kind"))
             .build());
 
     // Polymorphic per-kind settings. AIDEV-NOTE: the dynamic (schemaFrom) form entry
@@ -154,21 +154,24 @@ public class InstanceModel extends Model {
     public static final SchemaField SETTINGS = SCHEMA.addField(
         SchemaField.builder("settings")
             .schemaFrom("kind")
-            .label(HohenheimFormCopy.label("settings"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("settings"))
             .build());
 
     /** @return the row's kind settings as they stand on it, empty when it carries none; never mutate the result */
-    @SuppressWarnings("unchecked")
     public static @NonNull Map<String, Object> settingsOf(@Nullable Row instance) {
-        return instance != null && instance.get(SETTINGS) instanceof Map<?, ?> map
-            ? (Map<String, Object>) map : Map.of();
+        return instance != null ? RawValues.map(instance.get(SETTINGS)) : Map.of();
+    }
+
+    /** @return the instance's display name, "null" for a row without one */
+    public static @NonNull String nameOf(@NonNull Row instance) {
+        return String.valueOf((Object) instance.get(NAME));
     }
 
     // The host FK (servers.id). Every write folds through ServerModel.canonicalServerId
     // (the beforeValidate hook below) -- never a re-spelling; null means the local daemon.
     public static final IntegerField SERVER_ID = SCHEMA.addField(
         IntegerField.builder().name("server_id")
-            .label(HohenheimFormCopy.label("server"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("server"))
             .build());
 
     public static final EnumField STATUS = SCHEMA.addField(statusField());
@@ -206,7 +209,7 @@ public class InstanceModel extends Model {
      */
     public static final IntegerField TEMPLATE_ID = SCHEMA.addField(
         IntegerField.builder().name("template_id")
-            .label(HohenheimFormCopy.label("template"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("template"))
             .build());
 
     /**
@@ -220,8 +223,8 @@ public class InstanceModel extends Model {
      */
     public static final IntegerField RUNTIME_IMAGE_ID = SCHEMA.addField(
         IntegerField.builder().name("runtime_image_id")
-            .label(HohenheimFormCopy.label("runtime_image"))
-            .help(HohenheimFormCopy.help("instance_runtime_image"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("runtime_image"))
+            .help(HohenheimMicrocopy.HELP.of("instance_runtime_image"))
             .build());
 
     /**
@@ -231,15 +234,15 @@ public class InstanceModel extends Model {
      */
     public static final EnumField INSTALL_STATE = SCHEMA.addField(EnumField.builder("install_state")
         .value(INSTALL_NONE, v -> v.displayName("None")
-            .label(Microcopy.of("none").withFilter("scope", "install_state")).color(ColorHue.GRAY))
+            .label(HohenheimMicrocopy.INSTALL_STATE.of("none")).color(ColorHue.GRAY))
         .value(INSTALL_PENDING, v -> v.displayName("Install pending").icon("clock")
-            .label(Microcopy.of("pending").withFilter("scope", "install_state")).color(ColorHue.ORANGE))
+            .label(HohenheimMicrocopy.INSTALL_STATE.of("pending")).color(ColorHue.ORANGE))
         .value(INSTALL_INSTALLING, v -> v.displayName("Installing").icon("hourglass-half")
-            .label(Microcopy.of("installing").withFilter("scope", "install_state")).color(ColorHue.BLUE))
+            .label(HohenheimMicrocopy.INSTALL_STATE.of("installing")).color(ColorHue.BLUE))
         .value(INSTALL_INSTALLED, v -> v.displayName("Installed").icon("circle-check")
-            .label(Microcopy.of("installed").withFilter("scope", "install_state")).color(ColorHue.GREEN))
+            .label(HohenheimMicrocopy.INSTALL_STATE.of("installed")).color(ColorHue.GREEN))
         .value(INSTALL_FAILED, v -> v.displayName("Install failed").icon("circle-exclamation")
-            .label(Microcopy.of("install_failed").withFilter("scope", "install_state")).color(ColorHue.RED))
+            .label(HohenheimMicrocopy.INSTALL_STATE.of("install_failed")).color(ColorHue.RED))
         .defaultValue(INSTALL_NONE)
         .build());
 
@@ -303,12 +306,12 @@ public class InstanceModel extends Model {
      */
     public static final EnumField CRASH_POLICY = SCHEMA.addField(EnumField.builder("crash_policy")
         .value(CRASH_NONE, v -> v.displayName("None")
-            .label(Microcopy.of("none").withFilter("scope", "crash_policy")).color(ColorHue.GRAY))
+            .label(HohenheimMicrocopy.CRASH_POLICY.of("none")).color(ColorHue.GRAY))
         .value(CRASH_RESTART, v -> v.displayName("Restart on crash").icon("rotate")
-            .label(Microcopy.of("restart").withFilter("scope", "crash_policy")).color(ColorHue.GREEN))
+            .label(HohenheimMicrocopy.CRASH_POLICY.of("restart")).color(ColorHue.GREEN))
         .defaultValue(CRASH_DEFAULT)
-        .label(HohenheimFormCopy.label("crash_policy"))
-        .help(HohenheimFormCopy.help("crash_policy"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("crash_policy"))
+        .help(HohenheimMicrocopy.HELP.of("crash_policy"))
         .build());
 
     /** Tail of the failed install run's output (operator diagnosis; cleared on success). */
@@ -318,7 +321,7 @@ public class InstanceModel extends Model {
     /** The backup target (backup_targets.id) exports of this instance are written to. */
     public static final IntegerField BACKUP_TARGET_ID = SCHEMA.addField(
         IntegerField.builder().name("backup_target_id")
-            .label(HohenheimFormCopy.label("backup_target"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("backup_target"))
             .build());
 
     /**
@@ -329,7 +332,7 @@ public class InstanceModel extends Model {
      */
     public static final IntegerField ENVIRONMENT_ID = SCHEMA.addField(
         IntegerField.builder().name("environment_id")
-            .label(HohenheimFormCopy.label("environment"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("environment"))
             .build());
 
     /**
@@ -480,11 +483,11 @@ public class InstanceModel extends Model {
      */
     public static final EnumField RUNTIME_ROLE = SCHEMA.addField(EnumField.builder("runtime_role")
         .value(ROLE_SERVING, v -> v.displayName("Serving").icon("circle-play")
-            .label(Microcopy.of("serving").withFilter("scope", "runtime_role")).color(ColorHue.GREEN))
+            .label(HohenheimMicrocopy.RUNTIME_ROLE.of("serving")).color(ColorHue.GREEN))
         .value(ROLE_CANDIDATE, v -> v.displayName("Candidate").icon("stethoscope")
-            .label(Microcopy.of("candidate").withFilter("scope", "runtime_role")).color(ColorHue.BLUE))
+            .label(HohenheimMicrocopy.RUNTIME_ROLE.of("candidate")).color(ColorHue.BLUE))
         .value(ROLE_RETIRED, v -> v.displayName("Retired").icon("box-archive")
-            .label(Microcopy.of("retired").withFilter("scope", "runtime_role")).color(ColorHue.GRAY))
+            .label(HohenheimMicrocopy.RUNTIME_ROLE.of("retired")).color(ColorHue.GRAY))
         .defaultValue(ROLE_SERVING)
         .build());
 

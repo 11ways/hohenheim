@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.model.PreviewDeploymentModel;
 import be.elevenways.hohenheim.model.ProtectedPathModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.auth.HostnameAuthority;
 import be.elevenways.hohenheim.server.dns.DnsNames;
@@ -98,7 +99,7 @@ public final class TenantScopes {
      */
     public static final RowScope CERTIFICATES = CertificateParts.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(CertificateModel.class),
-            CertificateModel.MODEL_ID, HohenheimAccess.VIEW, CertificateModel.ID::in));
+            CertificateModel.MODEL_ID, HohenheimCapabilities.VIEW, CertificateModel.ID::in));
 
     /**
      * Live AUTHORED instances; tenants only the ones the walk confirms {@code view} on.
@@ -108,7 +109,7 @@ public final class TenantScopes {
      * list -- THE {@link InstanceModel#liveAuthored} clause the instance and file APIs read too.
      */
     public static final RowScope INSTANCES = RowScope.within(InstanceModel::liveAuthored).andPerPrincipal(
-        ctx -> HohenheimAccess.instanceScope(ctx, HohenheimAccess.VIEW));
+        ctx -> HohenheimAccess.instanceScope(ctx, HohenheimCapabilities.VIEW));
 
     /** The template catalog: operators browse everything, everyone else only APPROVED rows. */
     public static final RowScope INSTANCE_TEMPLATES = RowScope.perPrincipal(
@@ -117,7 +118,7 @@ public final class TenantScopes {
     /** Instance schedules; tenants only those of viewable instances. */
     public static final RowScope INSTANCE_SCHEDULES = InstanceScheduleParts.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(RecordScheduleModel.class),
-            InstanceModel.MODEL_ID, HohenheimAccess.VIEW, TenantScopes::recordIdIn));
+            InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW, TenantScopes::recordIdIn));
 
     /**
      * Schedule steps, visible exactly when their PARENT schedule is: an unconstrained parent scope
@@ -134,12 +135,12 @@ public final class TenantScopes {
 
     /** Managed databases; tenants only the ones they hold {@code view} on. */
     public static final RowScope DATABASES = RowScope.perPrincipal(
-        ctx -> HohenheimAccess.databaseScope(ctx, HohenheimAccess.VIEW));
+        ctx -> HohenheimAccess.databaseScope(ctx, HohenheimCapabilities.VIEW));
 
     /** Devices attached to an instance; tenants only those of viewable instances. */
     public static final RowScope INSTANCE_DEVICES = InstanceAttachmentParts.DEVICE_ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceDeviceModel.class),
-            InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceDeviceModel.INSTANCE_ID::in));
+            InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW, InstanceDeviceModel.INSTANCE_ID::in));
 
     /**
      * Instance-owned variables; tenants only those of viewable instances. VIEW, never MANAGE or CONFIG: the list is
@@ -147,22 +148,22 @@ public final class TenantScopes {
      */
     public static final RowScope INSTANCE_VARIABLES = InstanceVariableParts.ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceVariableModel.class),
-            InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceVariableModel.INSTANCE_ID::in));
+            InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW, InstanceVariableModel.INSTANCE_ID::in));
 
     /** Instance-database attachments; tenants only those of viewable instances. */
     public static final RowScope INSTANCE_DATABASES = InstanceAttachmentParts.DATABASE_ROWS.andPerPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceDatabaseModel.class),
-            InstanceModel.MODEL_ID, HohenheimAccess.VIEW, InstanceDatabaseModel.INSTANCE_ID::in));
+            InstanceModel.MODEL_ID, HohenheimCapabilities.VIEW, InstanceDatabaseModel.INSTANCE_ID::in));
 
     /** Snapshots of the instances the principal holds {@code snapshots} on. */
     public static final RowScope INSTANCE_SNAPSHOTS = RowScope.perPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceSnapshotModel.class),
-            InstanceModel.MODEL_ID, HohenheimAccess.SNAPSHOTS, InstanceSnapshotModel.INSTANCE_ID::in));
+            InstanceModel.MODEL_ID, HohenheimCapabilities.SNAPSHOTS, InstanceSnapshotModel.INSTANCE_ID::in));
 
     /** Backups of the instances the principal holds {@code backups} on. */
     public static final RowScope INSTANCE_BACKUPS = RowScope.perPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(InstanceBackupModel.class),
-            InstanceModel.MODEL_ID, HohenheimAccess.BACKUPS, InstanceBackupModel.INSTANCE_ID::in));
+            InstanceModel.MODEL_ID, HohenheimCapabilities.BACKUPS, InstanceBackupModel.INSTANCE_ID::in));
 
     /**
      * Live previews (trashed ones are hidden by the model's SoftDeleteBehaviour); tenants only
@@ -170,12 +171,12 @@ public final class TenantScopes {
      */
     public static final RowScope PREVIEWS = RowScope.perPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(PreviewDeploymentModel.class),
-            InstanceModel.MODEL_ID, HohenheimAccess.MANAGE, PreviewDeploymentModel.APPLICATION_ID::in));
+            InstanceModel.MODEL_ID, HohenheimCapabilities.MANAGE, PreviewDeploymentModel.APPLICATION_ID::in));
 
     /** The access lists a tenant OWNS: the /manage list. */
     public static final RowScope MANAGED_ACCESS_LISTS = RowScope.perPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(AccessListModel.class),
-            AccessListModel.MODEL_ID, HohenheimAccess.MANAGE, AccessListModel.ID::in));
+            AccessListModel.MODEL_ID, HohenheimCapabilities.MANAGE, AccessListModel.ID::in));
 
     /** The access lists a tenant may ATTACH: shared rows plus the managed ones (the pickers). */
     public static final RowScope USABLE_ACCESS_LISTS = RowScope.perPrincipal(HohenheimAccess::accessListScope);
@@ -183,12 +184,12 @@ public final class TenantScopes {
     /** The rules of the access lists a tenant manages. */
     public static final RowScope ACCESS_RULES = RowScope.perPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(AccessRuleModel.class),
-            AccessListModel.MODEL_ID, HohenheimAccess.MANAGE, AccessRuleModel.ACCESS_LIST_ID::in));
+            AccessListModel.MODEL_ID, HohenheimCapabilities.MANAGE, AccessRuleModel.ACCESS_LIST_ID::in));
 
     /** The git providers a tenant OWNS: the /manage list. */
     public static final RowScope MANAGED_GIT_PROVIDERS = RowScope.perPrincipal(
         ctx -> HohenheimAccess.grantScope(ctx, Models.get(GitProviderModel.class),
-            GitProviderModel.MODEL_ID, HohenheimAccess.MANAGE, GitProviderModel.ID::in));
+            GitProviderModel.MODEL_ID, HohenheimCapabilities.MANAGE, GitProviderModel.ID::in));
 
     /** The git providers a tenant may USE: shared rows plus the managed ones (the pickers). */
     public static final RowScope USABLE_GIT_PROVIDERS = RowScope.perPrincipal(HohenheimAccess::gitProviderScope);
@@ -249,14 +250,14 @@ public final class TenantScopes {
         // spellings of rows the walk owns. The composite itself cannot fold onto
         // grantScope: the derived-hostname half is not a grant question.
         RecordCapabilityScope granted = HohenheimAccess.capabilityScope(ctx,
-            DnsRecordModel.MODEL_ID, HohenheimAccess.VIEW);
+            DnsRecordModel.MODEL_ID, HohenheimCapabilities.VIEW);
         if (granted.isAll()) {
             return null;
         }
 
         List<Criteria> reachable = new ArrayList<>(zoneScopedNameCriteria(ctx));
         Set<Integer> grantedIds = HohenheimAccess.grantedRecordIds(ctx,
-            DnsRecordModel.MODEL_ID, HohenheimAccess.VIEW);
+            DnsRecordModel.MODEL_ID, HohenheimCapabilities.VIEW);
         if (!grantedIds.isEmpty()) {
             reachable.add(DnsRecordModel.ID.in(grantedIds));
         }
@@ -278,7 +279,7 @@ public final class TenantScopes {
      */
     private static @NonNull List<Criteria> zoneScopedNameCriteria(@NonNull AccessContext ctx) {
         RecordCapabilityScope sites = HohenheimAccess.capabilityScope(ctx, SiteModel.MODEL_ID,
-            HohenheimAccess.MANAGE);
+            HohenheimCapabilities.MANAGE);
         if (sites.isNone()) {
             return List.of();
         }

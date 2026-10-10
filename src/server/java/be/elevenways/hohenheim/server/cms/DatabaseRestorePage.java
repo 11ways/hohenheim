@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
@@ -32,8 +33,8 @@ import java.util.Map;
 public final class DatabaseRestorePage implements RecordTab.Rendered<Row> {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("database_restore"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("restore").withFilter("scope", "database"); }
-    @Override public @NonNull String slug() { return "restore"; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.DATABASE.of("restore"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.RESTORE; }
     @Override public @NonNull Icon icon() { return Icon.of("upload"); }
 
     @Override
@@ -41,7 +42,7 @@ public final class DatabaseRestorePage implements RecordTab.Rendered<Row> {
         Conduit conduit = request.conduit();
         String name = record.get(DatabaseModel.NAME);
         Map<String, Object> vars = new HashMap<>(DatabaseConnectionCard.facts(record, conduit));
-        vars.put("title", CmsSupport.pageTitle(conduit, "database_restore", name));
+        vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.DATABASE_RESTORE, name));
         vars.put("restoreUrl", HohenheimEndpoints.DATABASES_RESTORE
             .with(HohenheimEndpoints.DATABASE_NAME, name).toUrl());
         vars.put("recordId", record.get(DatabaseModel.ID));

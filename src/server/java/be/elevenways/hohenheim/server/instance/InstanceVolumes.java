@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVolumeModel;
@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.host.VolumeOperations;
+import be.elevenways.hohenheim.server.util.PosixPaths;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -207,7 +208,7 @@ public final class InstanceVolumes {
             .first();
         if (volume == null) {
             if (reviewedVersion != null) {
-                throw HohenheimViolations.ofForm("unknown_instance");
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("unknown_instance"));
             }
             volume = model.createEmptyRow();
             volume.set(InstanceVolumeModel.INSTANCE_ID, instanceId);
@@ -263,10 +264,10 @@ public final class InstanceVolumes {
             if (containerPath.equals(mounted.getValue())
                     && !hostPath.equals(mounted.getKey())) {
                 throw Violations.ofField(InstanceVolumeModel.CONTAINER_PATH.getName(),
-                    containerPath, HohenheimViolations.text("volume_container_path_conflict")
+                    containerPath, HohenheimMicrocopy.VIOLATIONS.of("volume_container_path_conflict")
                         .withArg("path", containerPath)
-                        .withArg("first", nameOfHostPath(mounted.getKey()))
-                        .withArg("second", nameOfHostPath(hostPath)));
+                        .withArg("first", PosixPaths.nameOf(mounted.getKey()))
+                        .withArg("second", PosixPaths.nameOf(hostPath)));
             }
         }
         mounts.put(hostPath, containerPath);
@@ -359,7 +360,7 @@ public final class InstanceVolumes {
         VolumeBackend backend = ServerModel.volumeBackendOf(server);
 
         if (!backend.supportsSnapshot()) {
-            throw Violations.ofForm(HohenheimViolations.text("volume_no_snapshot_support")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("volume_no_snapshot_support")
                 .withArg("name", serverName)
                 .withArg("backend", backend.label()));
         }
@@ -467,7 +468,7 @@ public final class InstanceVolumes {
             .where(InstanceVolumeModel.NAME.eq(name))
             .first();
         if (volume == null) {
-            throw Violations.ofForm(HohenheimViolations.text("volume_unknown").withArg("name", name));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("volume_unknown").withArg("name", name));
         }
         Row server = requireServer(serverName);
         String hostPath = hostPathFor(ownerInstanceId, name);
@@ -498,10 +499,6 @@ public final class InstanceVolumes {
         return hostPath;
     }
 
-    /** The volume name a minted host path ends in; see {@link #hostPathFor}. */
-    private static @NonNull String nameOfHostPath(@NonNull String hostPath) {
-        return hostPath.substring(hostPath.lastIndexOf('/') + 1);
-    }
 
     private static @NonNull VolumeOperations operationsFor(@NonNull Row server) {
         return VolumeOperations.forBackend(ServerModel.volumeBackendOf(server),
@@ -511,7 +508,8 @@ public final class InstanceVolumes {
     private static @NonNull Row requireServer(@NonNull String serverName) {
         Row server = Models.get(ServerModel.class).findByName(serverName);
         if (server == null) {
-            throw Violations.ofForm(HohenheimViolations.text("volume_host_unknown").withArg("name", serverName));
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("volume_host_unknown")
+                .withArg("name", serverName));
         }
         return server;
     }
@@ -529,7 +527,7 @@ public final class InstanceVolumes {
         if (name.isBlank() || name.contains("/") || name.contains("\\")
                 || name.equals(".") || name.equals("..") || name.startsWith("-")) {
             throw Violations.ofField(InstanceVolumeModel.NAME.getName(), name,
-                HohenheimViolations.text("volume_name_invalid")
+                HohenheimMicrocopy.VIOLATIONS.of("volume_name_invalid")
                     .withArg("name", name));
         }
     }

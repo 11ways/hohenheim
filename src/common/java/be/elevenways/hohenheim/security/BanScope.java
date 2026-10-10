@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.security;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
 import be.elevenways.zenit.common.ui.BadgeColor;
@@ -80,7 +81,7 @@ public enum BanScope {
 
     /** The localized label an operator reads. */
     public @NonNull Microcopy label() {
-        return Microcopy.of(this.token).withFilter("scope", "ban_scope");
+        return HohenheimMicrocopy.BAN_SCOPE.of(this.token);
     }
 
     /** Every token, in declaration order, for surfaces that enumerate the vocabulary. */

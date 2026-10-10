@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -17,19 +18,19 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 public enum PlacementRefusal {
 
-    NOT_ADMITTED(HohenheimViolations.text("host_not_admitted"), Remedy.CHECK_AND_ADMIT),
-    KEY_UNVERIFIED(HohenheimViolations.text("host_key_unverified"), Remedy.CONFIRM_KEY),
-    QUARANTINED(HohenheimViolations.text("host_quarantined"), Remedy.REVIEW_KEY),
-    POSTURE_REFUSES(HohenheimViolations.text("host_posture_refuses"), Remedy.OPEN_HOST),
-    POSTURE_REQUIRES_VM(HohenheimViolations.text("host_posture_requires_vm"), Remedy.OPEN_HOST),
-    POSTURE_UNACKNOWLEDGED(HohenheimViolations.text("host_posture_unacknowledged"), Remedy.OPEN_HOST),
-    DEDICATED_TO_OTHER(HohenheimViolations.text("host_dedicated_to_other"), Remedy.OPEN_HOST),
-    KERNEL_LANE_MISSING(HohenheimViolations.text("host_kernel_lane_missing"), Remedy.OPEN_HOST),
-    KERNEL_LANE_UNPROVEN(HohenheimViolations.text("host_kernel_lane_unproven"), Remedy.CHECK_AGAIN),
-    CHECK_NOW_REQUIRED(HohenheimViolations.text("host_preflight_check_now_required"), Remedy.CHECK_AGAIN),
-    CONTACT_LAPSED(HohenheimViolations.text("host_contact_lapsed"), Remedy.OPEN_HOST),
+    NOT_ADMITTED(HohenheimMicrocopy.VIOLATIONS.of("host_not_admitted"), Remedy.CHECK_AND_ADMIT),
+    KEY_UNVERIFIED(HohenheimMicrocopy.VIOLATIONS.of("host_key_unverified"), Remedy.CONFIRM_KEY),
+    QUARANTINED(HohenheimMicrocopy.VIOLATIONS.of("host_quarantined"), Remedy.REVIEW_KEY),
+    POSTURE_REFUSES(HohenheimMicrocopy.VIOLATIONS.of("host_posture_refuses"), Remedy.OPEN_HOST),
+    POSTURE_REQUIRES_VM(HohenheimMicrocopy.VIOLATIONS.of("host_posture_requires_vm"), Remedy.OPEN_HOST),
+    POSTURE_UNACKNOWLEDGED(HohenheimMicrocopy.VIOLATIONS.of("host_posture_unacknowledged"), Remedy.OPEN_HOST),
+    DEDICATED_TO_OTHER(HohenheimMicrocopy.VIOLATIONS.of("host_dedicated_to_other"), Remedy.OPEN_HOST),
+    KERNEL_LANE_MISSING(HohenheimMicrocopy.VIOLATIONS.of("host_kernel_lane_missing"), Remedy.OPEN_HOST),
+    KERNEL_LANE_UNPROVEN(HohenheimMicrocopy.VIOLATIONS.of("host_kernel_lane_unproven"), Remedy.CHECK_AGAIN),
+    CHECK_NOW_REQUIRED(HohenheimMicrocopy.VIOLATIONS.of("host_preflight_check_now_required"), Remedy.CHECK_AGAIN),
+    CONTACT_LAPSED(HohenheimMicrocopy.VIOLATIONS.of("host_contact_lapsed"), Remedy.OPEN_HOST),
     /** No memory reading inside the freshness bound: the chooser cannot ration the host, so it never picks it. */
-    CAPACITY_UNPROVEN(HohenheimViolations.text("host_capacity_unproven"), Remedy.CHECK_AGAIN);
+    CAPACITY_UNPROVEN(HohenheimMicrocopy.VIOLATIONS.of("host_capacity_unproven"), Remedy.CHECK_AGAIN);
 
     /** What clears a refusal, as the operator does it on the host. */
     public enum Remedy {

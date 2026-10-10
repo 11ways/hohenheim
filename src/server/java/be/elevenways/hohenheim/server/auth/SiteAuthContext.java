@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.SiteAuthProviderModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.session.SessionStore;
@@ -22,9 +23,7 @@ public record SiteAuthContext(Row config, @Nullable String requiredPermission,
                               int providerId) {
 
     /** @return the provider type's settings on the provider record, empty when it carries none */
-    @SuppressWarnings("unchecked")
     public @NonNull Map<String, Object> providerSettings() {
-        return this.config.get(SiteAuthProviderModel.CONFIG) instanceof Map<?, ?> map
-            ? (Map<String, Object>) map : Map.of();
+        return RawValues.map(this.config.get(SiteAuthProviderModel.CONFIG));
     }
 }

@@ -1,10 +1,13 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
@@ -38,13 +41,13 @@ import java.util.Map;
 public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_devices"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "instance_device"); }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE_DEVICE.of("plural"); }
     /**
      * Housekeeping, not an everyday destination: the tab lives in the strip's "More"
      * menu so the visible strip stays the handful of tabs an operator opens daily.
      */
     @Override public boolean secondaryTab() { return true; }
-    @Override public @NonNull String slug() { return "devices"; }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.DEVICES; }
     @Override public @NonNull Icon icon() { return Icon.of("hard-drive"); }
 
     /**
@@ -84,20 +87,20 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
             entry.put("sizeGb", device.get(InstanceDeviceModel.SIZE_GB));
             entry.put("cdrom", type == DeviceType.CDROM);
             entry.put("sourceMedia", device.get(InstanceDeviceModel.SOURCE_MEDIA));
-            entry.put("editTarget", CmsRoutes.detail(panel, "instance-devices",
+            entry.put("editTarget", CmsRoutes.detail(panel, HohenheimSlugs.INSTANCE_DEVICES,
                 device.get(InstanceDeviceModel.ID)));
             devices.add(entry);
         }
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", CmsSupport.pageTitle(conduit, "instance_device",
+        vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.INSTANCE_DEVICE,
             instance.get(InstanceModel.NAME)));
         vars.put("instanceId", instanceId);
         vars.put("instanceName", instance.get(InstanceModel.NAME));
         vars.put("devices", devices);
         boolean canEdit = HohenheimAccess.isAdmin(accessContext)
             || HohenheimAccess.hasInstanceCapability(
-                accessContext, instanceId, HohenheimAccess.CONFIG);
+                accessContext, instanceId, HohenheimCapabilities.CONFIG);
         vars.put("canEdit", canEdit);
         // Create form + two prefill query parameters: composed off CmsEndpoints because
         // CmsRoutes.create returns the RouteTarget interface, which has no with(...).
@@ -127,7 +130,7 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
                                                         @NonNull Integer instanceId) {
         return CmsEndpoints.CREATE_FORM
             .with(CmsEndpoints.PANEL_PARAM, panel)
-            .with(CmsEndpoints.RESOURCE_PARAM, "instance-devices")
+            .with(CmsEndpoints.RESOURCE_PARAM, HohenheimSlugs.INSTANCE_DEVICES)
             .with(HohenheimParams.DEVICE_TYPE_PREFILL, type.token())
             .with(HohenheimParams.INSTANCE_ID_PREFILL, instanceId);
     }

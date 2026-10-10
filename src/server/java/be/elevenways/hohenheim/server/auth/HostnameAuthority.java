@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.protoblast.common.key.IdentifierKey;
@@ -21,6 +23,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * THE "does this caller answer for this hostname" predicate, shared by every tier that
@@ -90,20 +94,7 @@ public final class HostnameAuthority {
          */
         public static @NonNull Snapshot memoized(@NonNull AccessContext ctx) {
             Conduit conduit = ctx.conduit();
-            if (conduit == null) {
-                return load();
-            }
-            Snapshot cached = conduit.getAttribute(MEMO);
-            if (cached != null) {
-                return cached;
-            }
-            Snapshot snapshot = load();
-            try {
-                conduit.setAttribute(MEMO, snapshot);
-            } catch (UnsupportedOperationException attributeless) {
-                // A conduit without attribute storage just pays the load each call.
-            }
-            return snapshot;
+            return conduit == null ? load() : CmsSupport.memo(conduit, MEMO, Snapshot::load);
         }
 
         /** @return the site a domain row hangs off, or null when it is gone or trashed */
@@ -118,7 +109,7 @@ public final class HostnameAuthority {
          * ({@code HohenheimAccess.declareGrantableModels}), so neither may its hostnames.
          */
         public @NonNull List<Row> covering(@Nullable String hostname) {
-            String needle = BlastString.lower(hostname != null ? hostname.trim() : "");
+            String needle = BlastString.lower(trimmed(hostname));
             List<Row> covering = new ArrayList<>();
             if (needle.isEmpty()) {
                 return covering;
@@ -329,7 +320,7 @@ public final class HostnameAuthority {
     /**
      * Whether the context answers for a hostname: at least one live domain row must cover it
      * (this installation has to serve the name at all) and the context must hold
-     * {@link HohenheimAccess#MANAGE} on the site of EVERY row that {@link Snapshot#deciding
+     * {@link HohenheimCapabilities#MANAGE} on the site of EVERY row that {@link Snapshot#deciding
      * decides} it -- the most specific covering tier, as routing resolves it.
      *
      * @return false for an unserved name, so it fails closed on absence
@@ -356,7 +347,7 @@ public final class HostnameAuthority {
         for (Row domain : deciding) {
             Integer siteId = domain.get(SiteDomainModel.SITE_ID);
             if (siteId == null
-                    || !HohenheimAccess.reachesRecord(ctx, SiteModel.MODEL_ID, siteId, HohenheimAccess.MANAGE)) {
+                    || !HohenheimAccess.reachesRecord(ctx, SiteModel.MODEL_ID, siteId, HohenheimCapabilities.MANAGE)) {
                 return false;
             }
         }

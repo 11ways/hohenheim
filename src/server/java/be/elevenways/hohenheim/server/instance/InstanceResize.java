@@ -111,10 +111,8 @@ public final class InstanceResize {
      * values and compares it AFTER, and a live view of the row's own map would answer the
      * new value to both reads -- a resize that then silently never recreated anything.
      */
-    @SuppressWarnings("unchecked")
     public static @NonNull Map<String, Object> settingsOf(@Nullable Row row) {
-        return row != null && row.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
-            ? new LinkedHashMap<>((Map<String, Object>) map) : Map.of();
+        return new LinkedHashMap<>(InstanceModel.settingsOf(row));
     }
 
     private static void deployNow(int instanceId) {

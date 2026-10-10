@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.source;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.data.DataProvider;
 import be.elevenways.zenit.common.edit.EmptyNarrowingReason;
@@ -9,6 +11,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Map;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * Branch picker resolver: needs BOTH a usable {@code provider_id} and a chosen
@@ -19,9 +23,9 @@ public record GitBranchResolver() implements SiblingProviderResolver, EmptyNarro
 
     @Override
     public @Nullable DataProvider resolve(@NonNull Map<String, Object> siblingValues) {
-        Integer providerId = GitRepositoryResolver.providerIdOf(siblingValues.get("provider_id"));
-        Object repository = siblingValues.get("repository");
-        String repositoryPath = repository == null ? "" : String.valueOf(repository).trim();
+        Integer providerId = RawValues.positiveInt(siblingValues.get(GitSourceSchema.PROVIDER_ID));
+        Object repository = siblingValues.get(GitSourceSchema.REPOSITORY);
+        String repositoryPath = trimmed(repository);
         if (providerId == null || repositoryPath.isEmpty()) {
             return null;
         }
@@ -31,6 +35,6 @@ public record GitBranchResolver() implements SiblingProviderResolver, EmptyNarro
     /** A resolvable repository listing no branches means the token cannot read it. */
     @Override
     public @Nullable Microcopy reasonNothingQualifies(@NonNull Map<String, Object> siblingValues) {
-        return Microcopy.of("no_branches").withFilter("scope", "git_provider");
+        return HohenheimMicrocopy.GIT_PROVIDER.of("no_branches");
     }
 }

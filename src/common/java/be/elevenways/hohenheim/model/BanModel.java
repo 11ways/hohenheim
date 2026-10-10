@@ -1,9 +1,8 @@
 package be.elevenways.hohenheim.model;
 
-import be.elevenways.hohenheim.HohenheimFormCopy;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.security.BanScope;
-import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -37,19 +36,19 @@ public class BanModel extends Model {
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
     public static final StringField IP = SCHEMA.addField(StringField.builder().name("ip")
-        .label(HohenheimFormCopy.label("ip"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("ip"))
         .build());
     public static final StringField REASON = SCHEMA.addField(StringField.builder().name("reason")
-        .label(HohenheimFormCopy.label("ban_reason"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("ban_reason"))
         .build());
     public static final EnumField SOURCE = SCHEMA.addField(EnumField.builder("source")
         .value(SOURCE_AUTO, v -> v.displayName("Auto")
-            .label(Microcopy.of("auto").withFilter("scope", "ban_source"))
+            .label(HohenheimMicrocopy.BAN_SOURCE.of("auto"))
             .icon("robot").color(ColorHue.ORANGE))
         .value(SOURCE_MANUAL, v -> v.displayName("Manual")
-            .label(Microcopy.of("manual").withFilter("scope", "ban_source"))
+            .label(HohenheimMicrocopy.BAN_SOURCE.of("manual"))
             .icon("pen").color(ColorHue.BLUE))
-        .label(HohenheimFormCopy.label("ban_source"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("ban_source"))
         .build());
     /**
      * WHICH traffic this ban refuses; the vocabulary lives on {@link BanScope}, never as a
@@ -65,27 +64,27 @@ public class BanModel extends Model {
                 .label(scope.label()).icon(scope.icon()).color(scope.color()));
         }
         return builder.defaultValue(BanScope.WEB.token())
-            .label(HohenheimFormCopy.label("ban_scope"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("ban_scope"))
             .build();
     }
     public static final StringField EVENT_TYPE = SCHEMA.addField(StringField.builder().name("event_type")
-        .label(HohenheimFormCopy.label("event_type"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("event_type"))
         .build());
     public static final DateTimeField EXPIRES_AT = SCHEMA.addField(
         DateTimeField.builder().name("expires_at")
-            .label(HohenheimFormCopy.label("expires_at"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("expires_at"))
             .build());
     public static final BooleanField ACTIVE = SCHEMA.addField(BooleanField.builder("active")
         .defaultValue(true)
-        .label(HohenheimFormCopy.label("active"))
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("active"))
         .build());
     public static final DateTimeField LIFTED_AT = SCHEMA.addField(
         DateTimeField.builder().name("lifted_at")
-            .label(HohenheimFormCopy.label("lifted_at"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("lifted_at"))
             .build());
     public static final StringField LIFTED_BY = SCHEMA.addField(
         StringField.builder().name("lifted_by")
-            .label(HohenheimFormCopy.label("lifted_by"))
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("lifted_by"))
             .build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(
         DateTimeField.builder().name("created_at").build());
@@ -130,7 +129,7 @@ public class BanModel extends Model {
     public static @NonNull VariableDefinition blockedNowVariable() {
         return VariableDefinition.bool(BLOCKED_NOW, (call, context) -> call.truth()
                 ? blockedNow(Now.instant()) : Criteria.not(blockedNow(Now.instant())))
-            .label(Microcopy.of("blocked_now").withFilter("scope", "ban"))
+            .label(HohenheimMicrocopy.BAN.of("blocked_now"))
             .build();
     }
 

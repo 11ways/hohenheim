@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.seed.SeedContext;
@@ -46,15 +47,15 @@ public final class GameTemplateSeeder implements Seeder {
             "Fronts Minecraft backends: forced hosts, modern player-info forwarding"
                 + " and the public entry port. Backends attach via game-domain mappings.",
             Map.of(
-                "image", "dockcenter/velocity",
+                InstanceKindFields.IMAGE, "dockcenter/velocity",
                 "tag", "latest",
                 "container_port", 25577,
                 // The proxy IS the public entry: players connect to its pre-allocated
                 // public port (the SRV rides it). The backend template stays unpublished.
                 "port_exposure", "public",
-                "environment_variables", Map.of("JAVA_MEMORY", "512M"),
+                InstanceKindFields.ENVIRONMENT_VARIABLES, Map.of("JAVA_MEMORY", "512M"),
                 "volumes", Map.of("data", "/data"),
-                "memory_limit_mb", 768),
+                InstanceKindFields.MEMORY_LIMIT_MB, 768),
             "Done (",
             "shutdown");
         variable(templateId, GameDomains.PROXY_SECRET_KEY, "Forwarding secret",
@@ -71,15 +72,15 @@ public final class GameTemplateSeeder implements Seeder {
             "A Paper Minecraft backend behind Velocity: no published port of its own,"
                 + " reachable only through the proxy's link network.",
             Map.of(
-                "image", "itzg/minecraft-server",
+                InstanceKindFields.IMAGE, "itzg/minecraft-server",
                 "tag", "latest",
-                "environment_variables", Map.of(
+                InstanceKindFields.ENVIRONMENT_VARIABLES, Map.of(
                     "EULA", "TRUE",
                     "TYPE", "PAPER",
                     "MEMORY", "1G",
                     "ONLINE_MODE", "FALSE"),
                 "volumes", Map.of("data", "/data"),
-                "memory_limit_mb", 1536),
+                InstanceKindFields.MEMORY_LIMIT_MB, 1536),
             ")! For help, type",
             "stop");
         variable(templateId, GameDomains.BACKEND_SECRET_KEY, "Velocity forwarding secret",

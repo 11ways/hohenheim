@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
@@ -13,7 +15,6 @@ import be.elevenways.protoblast.common.typed.rule.Operand;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
-import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
@@ -49,11 +50,10 @@ import java.util.Map;
  * @since 0.1.0
  */
 public final class ReconcileFindingParts {
-    public static final String SLUG = "reconcile-findings";
-    public static final Microcopy LABEL = Microcopy.of("plural").withFilter("scope", "reconcile_finding");
+    public static final Microcopy LABEL = HohenheimMicrocopy.RECONCILE_FINDING.of("plural");
     public static final Operation<Row, Void, Void> REMOVE = Operation.declare(HohenheimIds.id("remove_orphan"))
         .happened(OperationSentences.of("remove_orphan"))
-        .label(Microcopy.of("remove_orphan").withFilter("scope", "reconcile_finding"))
+        .label(HohenheimMicrocopy.RECONCILE_FINDING.of("remove_orphan"))
         .one(SubjectType.record(ReconcileFindingModel.MODEL_ID)).gate(OperationGate.permission(HohenheimPanel.ACCESS))
         .facts(OperationFact.DESTRUCTIVE, OperationFact.REACHES_OUTSIDE).command(CmsCommands.EXTERNAL).register();
     static {
@@ -64,26 +64,24 @@ public final class ReconcileFindingParts {
     }
     private ReconcileFindingParts() {}
     public static @NonNull PanelResource<Row> admin() {
-        return PanelResource.builder(HohenheimIds.id("reconcile_finding"), SLUG,
+        return PanelResource.builder(HohenheimIds.id("reconcile_finding"), HohenheimSlugs.RECONCILE_FINDINGS,
                 SubjectType.record(ReconcileFindingModel.MODEL_ID))
-            .label(LABEL).recordLabel(Microcopy.of("singular").withFilter("scope", "reconcile_finding"))
-            .description(CmsSupport.navHint("reconcile_finding")).navGroup(NavGroup.SYSTEM)
+            .label(LABEL).recordLabel(HohenheimMicrocopy.RECONCILE_FINDING.of("singular"))
+            .description(CmsSupport.navHint(HohenheimMicrocopy.RECONCILE_FINDING)).navGroup(NavGroup.SYSTEM)
             .navOrder(25).showInNav(false).icon(Icon.of("magnifying-glass"))
-            .standsUnder(ServerParts.SLUG)
+            .standsUnder(HohenheimSlugs.SERVERS)
             .form(ResourceForm.<Row>of(formSpec()).build()).reads(ResourceReads.rows())
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL.withAdvancedFilter(true).withFacetRail(true))
                 .facets().ruleFilters().exportable(true).widgets(ReconcileFindingParts::widgets)
                 .search(ReconcileFindingModel.SERVER_NAME, ReconcileFindingModel.RESOURCE_NAME, ReconcileFindingModel.DETAIL).build())
             .actions(List.of(PanelAction.<Row, Void>places(REMOVE, ActionPlacement.ROW,
-                    (request, result) -> CmsActionResult.refreshWithToast(Microcopy.of("orphan_removed")
-                        .withFilter("scope", "reconcile_finding")
+                    (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.RECONCILE_FINDING
+                        .of("orphan_removed")
                         .withArg("name", request.subject().get(ReconcileFindingModel.RESOURCE_NAME))))
                 .icon(Icon.of("trash")).style(ActionStyle.DESTRUCTIVE)
-                .confirmation(ConfirmationSpec.builder()
-                    .title(Microcopy.of("remove_orphan").withFilter("scope", "reconcile_finding"))
-                    .body(Microcopy.of("remove_orphan_confirm").withFilter("scope", "reconcile_finding"))
-                    .confirmLabel(Microcopy.of("remove_orphan").withFilter("scope", "reconcile_finding"))
-                    .style(ActionStyle.DESTRUCTIVE).build()).build())).build();
+                .confirmation(Confirmations.of(HohenheimMicrocopy.RECONCILE_FINDING.of("remove_orphan"),
+                    HohenheimMicrocopy.RECONCILE_FINDING.of("remove_orphan_confirm"), ActionStyle.DESTRUCTIVE))
+                .build())).build();
     }
     static FormSpec formSpec() {
         return FormSpec.builder().add(ReconcileFindingModel.SERVER_NAME).add(ReconcileFindingModel.KIND)
@@ -105,9 +103,10 @@ public final class ReconcileFindingParts {
                 .label(FieldLabels.labelFor(ReconcileFindingModel.KIND)).build()).build();
     }
     static WidgetTree widgets(ListScope scope) {
-        return new WidgetTree(List.of(tile(scope, HohenheimWidgetCopy.localized("orphaned_filtered", "reconcile_finding"),
+        return new WidgetTree(List.of(tile(scope,
+            HohenheimWidgetCopy.localized(HohenheimMicrocopy.RECONCILE_FINDING.of("orphaned_filtered")),
                 ReconcileFindingModel.BUCKET_ORPHANED, "trash"),
-            tile(scope, HohenheimWidgetCopy.localized("colliding_filtered", "reconcile_finding"),
+            tile(scope, HohenheimWidgetCopy.localized(HohenheimMicrocopy.RECONCILE_FINDING.of("colliding_filtered")),
                 ReconcileFindingModel.BUCKET_FOREIGN_COLLIDING, "triangle-exclamation")));
     }
     private static WidgetInstance tile(ListScope scope, Map<Locale, String> label, String bucket, String icon) {

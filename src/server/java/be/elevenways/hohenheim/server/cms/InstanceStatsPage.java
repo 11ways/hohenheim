@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimStatsFunctions;
 import be.elevenways.hohenheim.HohenheimStatsFunctions.Metric;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
@@ -36,11 +38,9 @@ import java.util.function.ToDoubleFunction;
  */
 public final class InstanceStatsPage implements RecordTab.Rendered<Row> {
 
-    public static final String SLUG = "stats";
-
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_stats"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("stats").withFilter("scope", "instance"); }
-    @Override public @NonNull String slug() { return SLUG; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE.of("stats"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.STATS; }
     @Override public @NonNull Icon icon() { return Icon.of("chart-line"); }
 
     @Override

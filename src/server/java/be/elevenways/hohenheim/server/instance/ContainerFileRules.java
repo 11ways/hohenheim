@@ -1,15 +1,18 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Set;
+
+import static be.elevenways.hohenheim.RawValues.trimmed;
 
 /**
  * THE rule for a file staged into a container: its path is absolute and never climbs, its mode is octal. One home for
@@ -64,9 +67,9 @@ public final class ContainerFileRules {
      * @throws be.elevenways.zenit.common.validation.Violations {@code file_path_absolute}, anchored on {@code field}
      */
     static @NonNull String checkedPath(@NonNull String field, @Nullable Object path) {
-        String trimmed = path == null ? "" : String.valueOf(path).trim();
+        String trimmed = trimmed(path);
         if (!trimmed.startsWith("/") || trimmed.contains("..")) {
-            throw HohenheimViolations.ofField(field, trimmed, "file_path_absolute");
+            throw Violations.ofField(field, trimmed, HohenheimMicrocopy.VIOLATIONS.of("file_path_absolute"));
         }
         return trimmed;
     }
@@ -81,7 +84,7 @@ public final class ContainerFileRules {
             try {
                 Integer.parseInt(String.valueOf(mode).trim(), 8);
             } catch (NumberFormatException notOctal) {
-                throw HohenheimViolations.ofField(field, mode, "file_mode_format");
+                throw Violations.ofField(field, mode, HohenheimMicrocopy.VIOLATIONS.of("file_mode_format"));
             }
         }
     }

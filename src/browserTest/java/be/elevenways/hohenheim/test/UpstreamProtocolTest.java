@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.proxy.SiteDispatcher;
 import be.elevenways.hohenheim.server.tls.UpstreamTrust;
@@ -228,7 +228,7 @@ class UpstreamProtocolTest {
         addDomain(site, "tenant-tls.test", "exact", null, false);
         int owner = ApiSupport.user("tenant-tls@hohenheim.local");
         RecordGrants.grant(GrantSubjectType.USER, owner, SiteModel.MODEL_ID, site.get(SiteModel.ID),
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         assertThat(TenantUpstreams.publicOnly(site)).as("step 1: the site is tenant-owned").isTrue();
 
         proxy = startProxy();
@@ -268,7 +268,7 @@ class UpstreamProtocolTest {
             addDomain(site, "tenant-plain.front.test", "exact", null, false);
             int owner = ApiSupport.user("tenant-plain@hohenheim.local");
             RecordGrants.grant(GrantSubjectType.USER, owner, SiteModel.MODEL_ID, site.get(SiteModel.ID),
-                HohenheimAccess.MANAGE, true);
+                HohenheimCapabilities.MANAGE, true);
             assertThat(TenantUpstreams.publicOnly(site)).as("step 1: the site is tenant-owned").isTrue();
             proxy = startProxy();
 

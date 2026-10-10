@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
@@ -12,7 +13,6 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.action.InvokeActionState;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -52,10 +52,9 @@ import java.util.function.Function;
  */
 public final class AccessListRulesPage implements RecordTab.Rendered<Row> {
 
-
     @Override public @NonNull Identifier id() { return HohenheimIds.id("access_list_rules"); }
-    @Override public @NonNull Microcopy label() { return Microcopy.of("plural").withFilter("scope", "access_rule"); }
-    @Override public @NonNull String slug() { return "rules"; }
+    @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.ACCESS_RULE.of("plural"); }
+    @Override public @NonNull String slug() { return HohenheimSlugs.Tab.RULES; }
     @Override public @NonNull Icon icon() { return Icon.of("sitemap"); }
 
     @Override
@@ -83,17 +82,18 @@ public final class AccessListRulesPage implements RecordTab.Rendered<Row> {
         Panel cmsPanel = request.panel();
         @SuppressWarnings("unchecked")
         PanelResource<Row> rulesEntry = (PanelResource<Row>) Objects.requireNonNull(
-            cmsPanel.entryBySlug(AccessRuleParts.SLUG), "panel " + panel + " declares no access-rule entry");
+            cmsPanel.entryBySlug(HohenheimSlugs.ACCESS_RULES), "panel " + panel + " declares no access-rule entry");
         Function<Row, List<RowOffer>> offers = PanelActionOffers.rowsForRender(request, rulesEntry, null, rules,
             accessContext, ReturnPath.of(pageUrl));
 
         List<AccessRuleView> views = new ArrayList<>();
         List<AccessRuleOption> parents = new ArrayList<>();
-        parents.add(new AccessRuleOption("", ruleText("root_group")));
+        parents.add(new AccessRuleOption("", HohenheimMicrocopy.ACCESS_RULE.of("root_group")));
         flatten(roots, childrenByParent, 0, "", views, parents, accessContext, panel, pageUrl, offers);
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("title", CmsSupport.pageTitle(conduit, "access_rule", list.get(AccessListModel.NAME)));
+        vars.put("title",
+            CmsSupport.pageTitle(conduit, HohenheimMicrocopy.ACCESS_RULE, list.get(AccessListModel.NAME)));
         vars.put("listName", list.get(AccessListModel.NAME));
         vars.put("satisfy", list.get(AccessListModel.SATISFY));
         vars.put("rules", views);
@@ -110,8 +110,9 @@ public final class AccessListRulesPage implements RecordTab.Rendered<Row> {
         List<Microcopy> protects = new ArrayList<>();
         for (DeleteImpact.AccessListUse use : DeleteImpact.usesOfAccessList(listId)) {
             protects.add(use.path() == null
-                ? AccessListParts.listText("protects_site").withArg("site", use.site())
-                : AccessListParts.listText("protects_path").withArg("path", use.path()).withArg("site", use.site()));
+                ? HohenheimMicrocopy.ACCESS_LIST.of("protects_site").withArg("site", use.site())
+                : HohenheimMicrocopy.ACCESS_LIST.of("protects_path").withArg("path", use.path())
+                    .withArg("site", use.site()));
         }
         vars.put("protects", protects);
         vars.put("shared", Boolean.TRUE.equals(list.get(AccessListModel.SHARED)));
@@ -145,7 +146,7 @@ public final class AccessListRulesPage implements RecordTab.Rendered<Row> {
                 "--hh-rule-depth: " + depth,
                 path,
                 type != null ? type : "",
-                declared != null ? declared.getLabel() : ruleText("unknown_type"),
+                declared != null ? declared.getLabel() : HohenheimMicrocopy.ACCESS_RULE.of("unknown_type"),
                 declared != null && declared.getIcon() != null
                     ? declared.getIcon().name() : "circle-exclamation",
                 AccessRuleSummaries.summaryOf(rule, type),
@@ -153,12 +154,12 @@ public final class AccessListRulesPage implements RecordTab.Rendered<Row> {
                 isGroup,
                 // The edit link carries the tab as its return target, like the invokes:
                 // a rule's Cancel/Delete then come back here, not to the global rule list.
-                ReturnTarget.bind(CmsRoutes.detail(panel, AccessRuleParts.SLUG, id), pageUrl),
+                ReturnTarget.bind(CmsRoutes.detail(panel, HohenheimSlugs.ACCESS_RULES, id), pageUrl),
                 invokesFor(rule, accessContext, offers)));
 
             if (isGroup) {
                 parents.add(new AccessRuleOption(String.valueOf(id),
-                    ruleText("group_at").withArg("path", path)));
+                    HohenheimMicrocopy.ACCESS_RULE.of("group_at").withArg("path", path)));
                 flatten(childrenByParent.getOrDefault(id, List.of()), childrenByParent,
                     depth + 1, path, views, parents, accessContext, panel, pageUrl, offers);
             }
@@ -179,9 +180,5 @@ public final class AccessListRulesPage implements RecordTab.Rendered<Row> {
             options.add(new AccessRuleOption(value.getKey(), value.getValue().getLabel()));
         }
         return options;
-    }
-
-    private static @NonNull Microcopy ruleText(@NonNull String key) {
-        return AccessRuleSummaries.ruleText(key);
     }
 }

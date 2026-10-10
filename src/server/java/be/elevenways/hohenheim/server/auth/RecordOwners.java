@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.auth;
 
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
@@ -19,11 +20,11 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.TreeSet;
 
-import static be.elevenways.hohenheim.server.auth.HohenheimAccess.MANAGE;
+import static be.elevenways.hohenheim.HohenheimCapabilities.MANAGE;
 import static be.elevenways.hohenheim.server.auth.HohenheimAccess.SUBJECT_SEPARATOR;
 
 /**
- * Record ownership as the set of {@link HohenheimAccess#MANAGE} grant subjects: comparison,
+ * Record ownership as the set of {@link HohenheimCapabilities#MANAGE} grant subjects: comparison,
  * packing, labelling and the creation-owner derivation; reached through {@link HohenheimAccess}.
  *
  * @author Jelle De Loecker
@@ -47,7 +48,7 @@ final class RecordOwners {
      * Whether two records of one model answer to the SAME owner, which is what separates
      * a deliberate configuration from a cross-tenant seizure.
      *
-     * AIDEV-NOTE: ownership is the record's set of {@link HohenheimAccess#MANAGE} grant
+     * AIDEV-NOTE: ownership is the record's set of {@link HohenheimCapabilities#MANAGE} grant
      * SUBJECTS, never an owner column -- InstanceModel deliberately has NO owner_principal_id,
      * and this method is THE one derivation every tier (routes, released claims, instances)
      * answers from; a second spelling is how two authorities drift. Two records an operator
@@ -79,7 +80,7 @@ final class RecordOwners {
     }
 
     /**
-     * THE owner identity of a record: the subjects holding {@link HohenheimAccess#MANAGE} on
+     * THE owner identity of a record: the subjects holding {@link HohenheimCapabilities#MANAGE} on
      * it, spelled {@code subjectType:subjectId}. An EMPTY set means operator-owned (nobody was
      * granted anything), which is why it is a legitimate value and never an error.
      *
@@ -248,7 +249,7 @@ final class RecordOwners {
     }
 
     /**
-     * Hand the creation owner ({@link #creationOwnerSubjects}) {@link HohenheimAccess#MANAGE}
+     * Hand the creation owner ({@link #creationOwnerSubjects}) {@link HohenheimCapabilities#MANAGE}
      * on a record it just created, then drop the request memo the grant just made stale.
      * Operator and system creates plant nothing: an empty subject set IS operator ownership,
      * and a grant there would make one admin's record look tenant-held to sameOwner.

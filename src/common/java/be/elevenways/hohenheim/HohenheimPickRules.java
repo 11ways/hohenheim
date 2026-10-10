@@ -133,7 +133,7 @@ public final class HohenheimPickRules {
             String key = this.volumeQuotaKinds.contains(kind)
                 ? "no_quota_capable_host"
                 : "no_runtime_host";
-            return Microcopy.of(key).withFilter("scope", "instance")
+            return HohenheimMicrocopy.INSTANCE.of(key)
                 .withArg("runtimes", String.join(", ", runtimes));
         }
     }
@@ -220,7 +220,7 @@ public final class HohenheimPickRules {
             } else {
                 key = "no_enabled_runtime_image";
             }
-            return Microcopy.of(key).withFilter("scope", "instance");
+            return HohenheimMicrocopy.INSTANCE.of(key);
         }
     }
 
@@ -268,7 +268,7 @@ public final class HohenheimPickRules {
             String key = this.instanceKindValue.equals(kind)
                 ? "no_exposable_instance"
                 : "instance_upstream_not_applicable";
-            return Microcopy.of(key).withFilter("scope", "site");
+            return HohenheimMicrocopy.SITE.of(key);
         }
     }
 }

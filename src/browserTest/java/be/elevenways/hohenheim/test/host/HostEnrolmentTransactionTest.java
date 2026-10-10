@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.host;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.cms.HostEnrolment;
@@ -200,7 +201,7 @@ class HostEnrolmentTransactionTest {
         public void mintIdentities(@NonNull Row server) {
             this.record("mint");
             if (this.failMint) {
-                throw Violations.ofForm(CmsSupport.violationText("identity_generation_failed")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("identity_generation_failed")
                     .withArg("detail", "ssh-keygen is not installed"));
             }
         }
@@ -215,7 +216,7 @@ class HostEnrolmentTransactionTest {
         public void enrollWithToken(@NonNull Row server, @NonNull String token) {
             this.record("enroll:" + token);
             if (!this.acceptToken) {
-                throw Violations.ofForm(CmsSupport.violationText("incus_enroll_failed")
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("incus_enroll_failed")
                     .withArg("name", String.valueOf((Object) server.get(ServerModel.NAME)))
                     .withArg("detail", "token already spent"));
             }

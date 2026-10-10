@@ -48,7 +48,7 @@ public final class ConsoleModes {
         /** A mode kept out of the strip stands under the Console hub, so the strip keeps Console marked. */
         @Override
         default @Nullable String standsUnder() {
-            return this.inTabs() ? null : InstanceConsolePage.SLUG;
+            return this.inTabs() ? null : HohenheimSlugs.Tab.CONSOLE;
         }
     }
 

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.devtunnel;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
@@ -312,8 +313,7 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
             if (!typeId.equals(site.get(SiteModel.UPSTREAM_KIND))) {
                 continue;
             }
-            @SuppressWarnings("unchecked")
-            Map<String, Object> settings = (Map<String, Object>) site.get(SiteModel.SETTINGS);
+            Map<String, Object> settings = RawValues.mapOrNull(site.get(SiteModel.SETTINGS));
             String siteToken = settings != null
                 ? (String) settings.get(DevNamespaceUpstreamKind.REGISTRATION_TOKEN_KEY) : null;
             String siteDigest = siteToken != null ? SecureTokens.sha256Hex(siteToken) : null;

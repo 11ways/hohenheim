@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.host.HostShell;
@@ -51,7 +52,7 @@ public final class WorkspaceUids {
         int base = configuredBase();
 
         if (base < LOWEST_SAFE_BASE || base >= INCUS_SUBUID_START) {
-            throw Violations.ofForm(HohenheimViolations.text("workspace_uid_base_invalid")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("workspace_uid_base_invalid")
                 .withArg("base", String.valueOf(base))
                 .withArg("lowest", String.valueOf(LOWEST_SAFE_BASE))
                 .withArg("highest", String.valueOf(INCUS_SUBUID_START)));
@@ -60,7 +61,7 @@ public final class WorkspaceUids {
         int uid = base + instanceId;
 
         if (uid >= INCUS_SUBUID_START) {
-            throw Violations.ofForm(HohenheimViolations.text("workspace_uid_out_of_range")
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("workspace_uid_out_of_range")
                 .withArg("uid", String.valueOf(uid))
                 .withArg("highest", String.valueOf(INCUS_SUBUID_START)));
         }
@@ -115,7 +116,7 @@ public final class WorkspaceUids {
             }
         }
 
-        throw Violations.ofForm(HohenheimViolations.text("workspace_host_no_subuid_range")
+        throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("workspace_host_no_subuid_range")
             .withArg("name", serverName));
     }
 

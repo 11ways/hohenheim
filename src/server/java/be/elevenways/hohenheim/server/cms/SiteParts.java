@@ -1,11 +1,17 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.StateLineCell;
 import be.elevenways.hohenheim.server.HohenheimRoles;
 import be.elevenways.hohenheim.server.HohenheimRoles.Role;
+import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -15,12 +21,13 @@ import be.elevenways.hohenheim.server.upstream.UpstreamKindHandler;
 import be.elevenways.hohenheim.server.upstream.UpstreamKindHandlers;
 import be.elevenways.hohenheim.site.SiteHostnamesCell;
 import be.elevenways.hohenheim.site.SiteOperations;
-import be.elevenways.hohenheim.site.SiteTlsCell;
+import be.elevenways.hohenheim.site.SiteTls;
 import be.elevenways.hohenheim.site.SiteUpstreamCell;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.zenit.cms.common.CmsMicrocopy;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -48,6 +55,7 @@ import be.elevenways.zenit.common.edit.FieldAccess;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.security.AccessContext;
@@ -90,7 +98,7 @@ public final class SiteParts {
     }
 
     /** The Addresses tab's slug, which the domain entries name as their parent tab. */
-    public static final String DOMAINS_TAB = DomainParts.SLUG;
+    public static final String DOMAINS_TAB = HohenheimSlugs.DOMAINS;
 
     /**
      * The Addresses tab, in the overview card's word: the framework's child list over the panel's domain entry (its
@@ -103,16 +111,16 @@ public final class SiteParts {
      * own empty description (DomainParts).
      */
     public static final ChildList<Row> DOMAINS = ChildList.<Row>sections(DOMAINS_TAB,
-            AppOverview.copy("addresses"), DomainParts.SLUG)
-        .hide(DomainParts.SLUG, DomainParts.APP_COLUMN);
+            HohenheimMicrocopy.APP_OVERVIEW.of("addresses"), HohenheimSlugs.DOMAINS)
+        .hide(HohenheimSlugs.DOMAINS, DomainParts.APP_COLUMN);
 
     /**
      * The Protection tab, in the overview card's word: the framework's child list over the panel's protected-path entry
      * (its /manage twin there), under the site. A TLS passthrough site terminates nothing here, so it has no paths to
      * protect and no tab.
      */
-    public static final ChildList<Row> PROTECTED_PATHS = ChildList.<Row>of(ProtectedPathParts.SLUG)
-        .label(AppOverview.copy("protection"))
+    public static final ChildList<Row> PROTECTED_PATHS = ChildList.<Row>of(HohenheimSlugs.PROTECTED_PATHS)
+        .label(HohenheimMicrocopy.APP_OVERVIEW.of("protection"))
         .visibleWhen((site, access) -> !tlsPassthrough(site));
 
     private SiteParts() {
@@ -120,16 +128,16 @@ public final class SiteParts {
 
     /** @return the operator's site resource: every site, the full form, the trash and the history */
     public static @NonNull PanelResource<Row> admin() {
-        return entry("site")
+        return entry(HohenheimIds.id("site"))
             // Reached through the Apps list, whose toolbar links this list (HohenheimPanel's sidebar note); its pages
             // mark Apps in the sidebar.
             .showInNav(false)
-            .standsUnder(AppParts.SLUG)
+            .standsUnder(HohenheimSlugs.APPS)
             .health(AppHealth.sites(false))
             .list(adminList())
             .form(ResourceForm.<Row>of(SiteWrites.ADMIN_FORM)
-                .landingTab(AppOverview.SLUG)
-                .tabLabel(AppOverview.copy("configuration"))
+                .landingTab(RecordOverview.SLUG)
+                .tabLabel(HohenheimMicrocopy.APP_OVERVIEW.of("configuration"))
                 .lead(SiteParts::lead)
                 // The instance pick shows only for the instance kind (SiteWrites.ADMIN_FORM's showWhen); switching a
                 // site away from that kind clears its link instead of leaving it unreachable.
@@ -156,9 +164,9 @@ public final class SiteParts {
             .relatedPages(
                 // The hostname catalog itself: nav-hidden, so without this entry the only way to the cross-site
                 // domain list was a hand-typed URL.
-                RelatedPage.toPeer(DomainParts.SLUG),
-                RelatedPage.toPeer("auth-providers"),
-                RelatedPage.toPeer("previews"))
+                RelatedPage.toPeer(HohenheimSlugs.DOMAINS),
+                RelatedPage.toPeer(HohenheimSlugs.AUTH_PROVIDERS),
+                RelatedPage.toPeer(HohenheimSlugs.PREVIEWS))
             .build();
     }
 
@@ -167,14 +175,13 @@ public final class SiteParts {
      *         delete, clone, rollback, trash or history
      */
     public static @NonNull PanelResource<Row> manage() {
-        return entry("manage_site")
-            // Reached from the Apps list's toolbar (ManagePanel's sidebar note); its pages mark Apps in the sidebar.
-            .showInNav(false)
-            .standsUnder(AppParts.SLUG)
+        // Reached from the Apps list's toolbar (ManagePanel's sidebar note); its pages mark Apps in the sidebar. The
+        // operator tabs a delegate needs plus the CONTRIBUTED ones (the generic access matrix, so a manage holder can
+        // delegate from /manage).
+        return ManageTwin.reached(entry(ManageTwin.id("site")), TenantScopes.SITES,
+                ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS, PROTECTED_PATHS)).withContributions())
+            .standsUnder(HohenheimSlugs.APPS)
             .health(AppHealth.sites(true))
-            .scope(TenantScopes.SITES)
-            // NAV-ONLY (zero granted sites hide the empty list); the route itself stays scoped.
-            .hasInScopeRecords(ManagePanel::hasManageScope)
             .list(ResourceList.rows(TableSpec.<Row>builder()
                     .column(ColumnSpec.fromField(SiteModel.NAME).build())
                     .column(ColumnSpec.fromField(SiteModel.ENABLED).build())
@@ -184,8 +191,8 @@ public final class SiteParts {
                 .search(SiteModel.NAME, SiteModel.SLUG, SiteModel.DESCRIPTION)
                 .build())
             .form(ResourceForm.<Row>of(SiteWrites.MANAGE_FORM)
-                .landingTab(AppOverview.SLUG)
-                .tabLabel(AppOverview.copy("configuration"))
+                .landingTab(RecordOverview.SLUG)
+                .tabLabel(HohenheimMicrocopy.APP_OVERVIEW.of("configuration"))
                 .lead(SiteParts::lead)
                 .bindings(List.of(
                     ResourceFieldBinding.of(SiteModel.NAME.getName(), FieldAccess.ALWAYS_EDITABLE),
@@ -196,18 +203,15 @@ public final class SiteParts {
                 .update(SiteWrites.MANAGE_UPDATE, SiteOperationHandlers::revisionOf)
                 .build())
             .actions(SiteActions.delegated())
-            // The operator tabs a delegate needs plus the CONTRIBUTED ones (the generic access matrix, so a manage
-            // holder can delegate from /manage); never the admin history.
-            .tabs(ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS, PROTECTED_PATHS)).withContributions())
             .build();
     }
 
     /** The identity, nav placement and plain row reads both twins share. */
-    private static PanelResource.@NonNull Builder<Row> entry(@NonNull String id) {
-        return PanelResource.builder(HohenheimIds.id(id), HohenheimSlugs.SITES, SiteOperations.SITE)
-            .label(Microcopy.of("plural").withFilter("scope", "site"))
-            .recordLabel(Microcopy.of("singular").withFilter("scope", "site"))
-            .description(Microcopy.of("nav_hint").withFilter("scope", "site"))
+    private static PanelResource.@NonNull Builder<Row> entry(@NonNull Identifier id) {
+        return PanelResource.builder(id, HohenheimSlugs.SITES, SiteOperations.SITE)
+            .label(HohenheimMicrocopy.SITE.of("plural"))
+            .recordLabel(HohenheimMicrocopy.SITE.of("singular"))
+            .description(HohenheimMicrocopy.SITE.of("nav_hint"))
             .icon(Icon.of("globe"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(20)
@@ -230,12 +234,12 @@ public final class SiteParts {
             .column(ColumnSpec.fromField(SiteModel.NAME).filterable().subtext("slug").build())
             .column(ResourceHealth.column())
             .column(ColumnSpec.fromField(SiteModel.SLUG).hidden().build())
-            .column(ColumnSpec.virtual(HOSTNAMES_COLUMN, Microcopy.of("hostnames").withFilter("scope", "site"))
+            .column(ColumnSpec.virtual(HOSTNAMES_COLUMN, HohenheimMicrocopy.SITE.of("hostnames"))
                 .renderer(HohenheimTemplateIds.CELL_SITE_HOSTNAMES).build())
-            .column(ColumnSpec.virtual(UPSTREAM_COLUMN, Microcopy.of("upstream").withFilter("scope", "site"))
+            .column(ColumnSpec.virtual(UPSTREAM_COLUMN, HohenheimMicrocopy.SITE.of("upstream"))
                 .renderer(HohenheimTemplateIds.CELL_SITE_UPSTREAM).build())
-            .column(ColumnSpec.virtual(TLS_COLUMN, Microcopy.of("tls").withFilter("scope", "site"))
-                .renderer(HohenheimTemplateIds.CELL_SITE_TLS).build())
+            .column(ColumnSpec.virtual(TLS_COLUMN, HohenheimMicrocopy.SITE.of("tls"))
+                .renderer(HohenheimTemplateIds.CELL_STATE_LINE).build())
             // Enabled reads as ROW STATE (a disabled site renders muted, the strip keeps the tri-state filter)
             // instead of costing a column; the picker still offers it.
             .column(ColumnSpec.fromField(SiteModel.ENABLED).filterable().hidden().build())
@@ -255,7 +259,7 @@ public final class SiteParts {
             .filter(FilterSpec.leaf(SiteModel.CREATED_AT, CoreTypes.BETWEEN, CoreTypes.GTE, CoreTypes.LTE)
                 .label(FieldLabels.labelFor(SiteModel.CREATED_AT)).build())
             .filter(FilterSpec.globalLeaf(ResourceList.ARCHIVED_FILTER,
-                Microcopy.of("trashed").withFilter("scope", "cms").withFilter("target", "filter"),
+                CmsMicrocopy.of("trashed").withFilter("target", "filter"),
                 ResourceList.ARCHIVED_FILTER, CoreTypes.IS_TRUE, CoreTypes.IS_FALSE).build())
             .defaultSort(SortSpec.desc(SiteModel.CREATED_AT.getName()))
             .rowClasses(row -> Boolean.TRUE.equals(row.get(SiteModel.ENABLED)) ? "" : "hh-site-disabled")
@@ -271,7 +275,8 @@ public final class SiteParts {
             .trash()
             .computed(Objects.requireNonNull(table.column(HOSTNAMES_COLUMN)), (row, request) -> hostnamesCellOf(row))
             .computed(Objects.requireNonNull(table.column(UPSTREAM_COLUMN)), (row, request) -> upstreamCellOf(row))
-            .computed(Objects.requireNonNull(table.column(TLS_COLUMN)), (row, request) -> tlsCellOf(row))
+            .computed(Objects.requireNonNull(table.column(TLS_COLUMN)),
+                (row, request) -> StateLineCell.of(tlsOf(row), null))
             .build();
     }
 
@@ -305,7 +310,7 @@ public final class SiteParts {
      * edit, that URL is the edit form; see {@link InstanceParts#recordRoute}).
      */
     static @NonNull RouteTarget recordRoute(@NonNull String panel, @NonNull Object siteId) {
-        return CmsRoutes.subpage(panel, HohenheimSlugs.SITES, siteId, AppOverview.SLUG);
+        return CmsRoutes.subpage(panel, HohenheimSlugs.SITES, siteId, RecordOverview.SLUG);
     }
 
     /**
@@ -329,10 +334,9 @@ public final class SiteParts {
         String hostnames = site == null ? ""
             : DeleteImpact.join(DeleteImpact.hostnamesOfSite(site.get(SiteModel.ID)));
         if (site == null || hostnames.isEmpty()) {
-            return DeleteConfirmation.body(Microcopy.of("delete_confirm").withFilter("scope", "site"));
+            return DeleteConfirmation.body(HohenheimMicrocopy.SITE.of("delete_confirm"));
         }
-        return DeleteConfirmation.body(Microcopy.of("delete_confirm_hostnames")
-            .withFilter("scope", "site")
+        return DeleteConfirmation.body(HohenheimMicrocopy.SITE.of("delete_confirm_hostnames")
             .withArg("name", String.valueOf((Object) site.get(SiteModel.NAME)))
             .withArg("hostnames", hostnames));
     }
@@ -353,7 +357,27 @@ public final class SiteParts {
         if (host == null) {
             return null;
         }
-        return Microcopy.of(key).withFilter("scope", "site").withArg("host", host);
+        return HohenheimMicrocopy.SITE.of(key).withArg("host", host);
+    }
+
+    /**
+     * Writing a row under a site (a domain, a protected path) demands {@code manage} on that site, and so does a create
+     * under it (its tab's add link, the create form, the submit).
+     *
+     * AIDEV-NOTE: reachesRecord, never canManageSite: this runs once per RENDERED ROW, and the per-record walk would
+     * be a grant-store round trip per row on a page whose own scope criteria already asked the same question
+     * set-wise. The write pipeline's {@code TenantWrites} freeze stays the gate; this decides the affordance, so a
+     * view-only delegate is never shown a control that can only refuse.
+     *
+     * @param siteId the child model's site column
+     */
+    static @NonNull ResourceAuthority<Row> childAuthority(@NonNull IntegerField siteId) {
+        return ResourceAuthority.<Row>builder()
+            .write(null, (row, access) -> HohenheimAccess.reachesRecord(access, SiteModel.MODEL_ID, row.get(siteId),
+                HohenheimCapabilities.MANAGE))
+            .createUnder((site, access) -> site instanceof Integer id
+                && HohenheimAccess.reachesRecord(access, SiteModel.MODEL_ID, id, HohenheimCapabilities.MANAGE))
+            .build();
     }
 
     static @NonNull List<Row> domainsOf(@NonNull Row site) {
@@ -377,27 +401,26 @@ public final class SiteParts {
      * Whether HTTPS works for the site's names: read from the certificates that cover them, never from force_ssl, so a
      * name forced without a working certificate is the one red state.
      */
-    static @NonNull SiteTlsCell tlsCellOf(@NonNull Row site) {
-        return tlsCellOf(domainsOf(site), tlsPassthrough(site), AppHealth.workingNames());
+    static @NonNull SiteTls tlsOf(@NonNull Row site) {
+        return tlsOf(domainsOf(site), tlsPassthrough(site), AppHealth.workingNames());
     }
 
     /**
-     * {@link #tlsCellOf(Row)} over names already read, so a list of apps reads its domains and the working
+     * {@link #tlsOf(Row)} over names already read, so a list of apps reads its domains and the working
      * certificates once.
      *
      * @param passthrough whether these names belong to a TLS passthrough site, which terminates nothing here
      */
-    static @NonNull SiteTlsCell tlsCellOf(@NonNull List<Row> domains, boolean passthrough,
-                                          @NonNull Set<String> working) {
+    static @NonNull SiteTls tlsOf(@NonNull List<Row> domains, boolean passthrough, @NonNull Set<String> working) {
         if (domains.isEmpty()) {
-            return new SiteTlsCell(SiteTlsCell.NONE);
+            return SiteTls.NONE;
         }
         if (passthrough) {
-            return new SiteTlsCell(SiteTlsCell.NOT_USED);
+            return SiteTls.NOT_USED;
         }
         // The one red state is the health verdict's own rule, so this cell and the site's health can never disagree.
         if (AppHealth.forcedWithoutCertificate(domains, working, false) != null) {
-            return new SiteTlsCell(SiteTlsCell.BROKEN);
+            return SiteTls.BROKEN;
         }
         int exact = 0;
         int covered = 0;
@@ -411,17 +434,16 @@ public final class SiteParts {
             }
         }
         if (exact == 0) {
-            return new SiteTlsCell(SiteTlsCell.PATTERNS);
+            return SiteTls.PATTERNS;
         }
-        return new SiteTlsCell(covered == exact ? SiteTlsCell.WORKS
-            : covered > 0 ? SiteTlsCell.PARTIAL : SiteTlsCell.MISSING);
+        return covered == exact ? SiteTls.WORKS : covered > 0 ? SiteTls.PARTIAL : SiteTls.MISSING;
     }
 
     /** What the site's upstream is, in the words its list cell, its overview and the Apps list use. */
     static @NonNull Microcopy upstreamLabel(@NonNull Row site) {
         UpstreamKindHandler handler = UpstreamKindHandlers.getHandler(
             String.valueOf((Object) site.get(SiteModel.UPSTREAM_KIND)));
-        return handler != null ? handler.getLabel() : Microcopy.of("upstream").withFilter("scope", "site");
+        return handler != null ? handler.getLabel() : HohenheimMicrocopy.SITE.of("upstream");
     }
 
     static @NonNull SiteUpstreamCell upstreamCellOf(@NonNull Row site) {
@@ -438,15 +460,13 @@ public final class SiteParts {
             Row instance = Models.get(InstanceModel.class).findById(instanceId);
             if (instance != null) {
                 instanceName = Models.get(InstanceModel.class).getDisplayTitle(instance);
-                instanceUrl = InstanceParts.recordRoute(HohenheimPanel.SLUG, instance, null).toUrl();
+                instanceUrl = InstanceParts.recordRoute(HohenheimSlugs.ADMIN, instance, null).toUrl();
             }
         }
 
         String summary = null;
         if (handler != null && instanceName == null) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> settings = site.get(SiteModel.SETTINGS) instanceof Map<?, ?> map
-                ? (Map<String, Object>) map : Map.of();
+            Map<String, Object> settings = RawValues.map(site.get(SiteModel.SETTINGS));
             summary = handler.upstreamSummary(settings);
         }
         return new SiteUpstreamCell(kindKey, label, icon, color, summary, instanceName, instanceUrl);

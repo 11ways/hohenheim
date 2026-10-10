@@ -3,7 +3,7 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.model.DnsRecordModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.dns.DnsZoneStore;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService;
 import be.elevenways.hohenheim.server.dns.DynamicDnsService.Status;
@@ -151,7 +151,7 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
 
         int userId = ApiSupport.user("release-grant@hohenheim.local", "Grant Holder");
         RecordGrants.grant(GrantSubjectType.USER, userId, DnsRecordModel.MODEL_ID, recordId,
-            HohenheimAccess.EDIT, true);
+            HohenheimCapabilities.EDIT, true);
         assertThat(grantCount(recordId)).as("the grant landed").isGreaterThan(0);
 
         softDeleteSite(siteId);
@@ -180,7 +180,7 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
         // the authority the /manage DNS surface grants, and the one that used to reach the
         // dynamic columns because only the form omitted them.
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, siteId,
-            HohenheimAccess.MANAGE, true);
+            HohenheimCapabilities.MANAGE, true);
         UserPrincipal tenantPrincipal = new UserPrincipal(tenantId, "Arm Tenant");
         Model model = Models.get(DnsRecordModel.class);
 
@@ -203,7 +203,7 @@ class ReleasedHostnameDnsTest extends HohenheimTestBase {
         // 3. WITH a dyndns grant it is allowed -- the counter-proof the refusal is about the
         //    missing capability, not the value.
         RecordGrants.grant(GrantSubjectType.USER, tenantId, DnsRecordModel.MODEL_ID, recordId,
-            HohenheimAccess.DYNDNS, true);
+            HohenheimCapabilities.DYNDNS, true);
         assertThatCode(() -> TenantConduits.as(tenantPrincipal,
             () -> DynamicDnsService.mintFor(recordId)))
             .as("3. the dyndns holder may arm the token").doesNotThrowAnyException();
