@@ -170,8 +170,10 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
             assertThat(on).as("step 2: a read-only viewer's password scopes name files.read only")
                 .contains("cap:hohenheim:instance#files.read")
                 .doesNotContain("instance#files.write");
-            assertThat(on).as("step 2: the password is minted on the account's own API key page")
-                .contains("href=\"/account/api-keys\"");
+            assertThat(on).as("step 2: the password is minted in place, posted to the account's API key form")
+                .contains("action=\"/account/api-keys\"").contains("data-sftp-password");
+            assertThat(on).as("step 2: its scopes travel with the form, never as a row to copy")
+                .doesNotContain("SFTP password scopes").doesNotContain("Copy the scopes");
             assertThat(on).as("step 2: a server that is not running says so")
                 .contains("data-sftp-not-running");
         } finally {

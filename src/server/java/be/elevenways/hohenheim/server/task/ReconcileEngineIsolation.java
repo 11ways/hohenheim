@@ -33,8 +33,6 @@ import java.util.List;
  */
 public class ReconcileEngineIsolation extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION = "Re-assert tenant isolation on shared database engines";
-
     /** How this sweep names itself to an operator, in alerts and in the failure it throws. */
     public static final String SWEEP = "Database engine isolation";
 
@@ -61,8 +59,8 @@ public class ReconcileEngineIsolation extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

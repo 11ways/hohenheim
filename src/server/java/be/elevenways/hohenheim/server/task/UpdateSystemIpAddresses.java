@@ -23,8 +23,6 @@ import java.util.List;
  */
 public class UpdateSystemIpAddresses extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION = "Discover local IP addresses";
-
     private static volatile List<String> localAddresses = List.of();
 
     @Override
@@ -50,8 +48,8 @@ public class UpdateSystemIpAddresses extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

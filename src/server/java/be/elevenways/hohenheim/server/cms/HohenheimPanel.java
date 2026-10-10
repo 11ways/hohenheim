@@ -203,7 +203,7 @@ public final class HohenheimPanel extends Panel {
         // What is this server running: every bundled module's git commit.
         PanelEntry buildInfo = new BuildInfoPage();
         peers.add(buildInfo);
-        SettingsPage settings = settingsPage();
+        SettingsPage settings = settingsPage(peers);
         if (settings != null) {
             peers.add(settings);
         }
@@ -227,8 +227,7 @@ public final class HohenheimPanel extends Panel {
             activity.slug(), inbox.slug(), deliveries.slug());
         addCluster(peers, cluster("settings", HohenheimSlugs.Cluster.CONFIGURE, "gear", 80), SettingsPage.DEFAULT_SLUG,
             HohenheimSlugs.INSTANCE_TEMPLATES, HohenheimSlugs.RUNTIME_IMAGES, HohenheimSlugs.GIT_PROVIDERS,
-            HohenheimSlugs.DATABASE_ENGINES, HohenheimSlugs.NOTIFICATIONS, HohenheimSlugs.BACKUP_TARGETS,
-            TaskAdmin.SCHEDULES_SLUG, TaskAdmin.RUNS_SLUG, buildInfo.slug());
+            HohenheimSlugs.DATABASE_ENGINES, TaskAdmin.SCHEDULES_SLUG, TaskAdmin.RUNS_SLUG, buildInfo.slug());
         return peers;
     }
 
@@ -278,14 +277,20 @@ public final class HohenheimPanel extends Panel {
     }
 
     /**
-     * The settings editor: Hohenheim's operator sections first (HohenheimSettingsSections, in its order), then
-     * zenit's own settings behind "Framework (advanced)". A mount whose settings file this boot never loaded is left
-     * out.
+     * The settings editor: Hohenheim's operator sections first (HohenheimSettingsSections, in its order), each under
+     * its icon and holding the lists of its own records, the Settings cluster's other pages listed where a section
+     * says they follow, then zenit's own settings behind "Framework (advanced)". A mount whose settings file this boot
+     * never loaded is left out, and so is a records list this node registered no resource for.
      */
-    private static @Nullable SettingsPage settingsPage() {
+    private static @Nullable SettingsPage settingsPage(@NonNull List<PanelEntry> peers) {
         SettingsPage.Standard page = SettingsPage.standard(HohenheimIds.id("settings"));
         for (HohenheimSettingsSections section : HohenheimSettingsSections.values()) {
-            page.mount(section.mount());
+            SettingsPage.Mount mount = section.mount();
+            List<String> records = present(peers, section.records().toArray(String[]::new));
+            page.mount(mount == null || records.isEmpty() ? mount : mount.withRecords(records.toArray(String[]::new)));
+            if (section.clusterMembersFollow()) {
+                page.clusterMembers();
+            }
         }
         return page.frameworkAdvanced()
             // The operator-trusted keys carry their own authority (host-only, or hohenheim.admin.system for the

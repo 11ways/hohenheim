@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.zenit.kvm.common.ScreenProtocol;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -7,6 +8,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.websocket.WebSocketSession;
 import be.elevenways.zenit.kvm.server.ScreenAccess;
 import be.elevenways.zenit.kvm.server.ScreenEndpoint;
 import be.elevenways.zenit.kvm.server.ScreenOptions;
@@ -25,7 +27,9 @@ import java.util.Map;
  * (CONSOLE, which MANAGE implies) see and may drive the screen, anyone else is closed 1008 at open and on the next
  * revalidation. Who drives at a given moment is the session's call: the first viewer, until it hands control over.
  * One session per VM, so a second viewer never forces a second console over the first; a viewer past
- * {@link #MAX_VIEWERS} reads that the screen is full.
+ * {@link #MAX_VIEWERS} reads that the screen is full. A new session opens the console without force: one someone else
+ * holds reads HELD, and only a viewer reconnecting with {@link ScreenProtocol#TAKE_OVER_PARAM} (the "Take over"
+ * button, which the gate's CONSOLE holders alone reach) ends it.
  *
  * @author Jelle De Loecker
  * @since 0.2.0
@@ -45,16 +49,28 @@ public final class VmScreens {
 
     /** Puts the screens on their socket; called once while the handlers are installed. */
     public static void install() {
-        ScreenEndpoint.on(HohenheimEndpoints.VM_FRAMEBUFFER,
-                socket -> socket.getParameter(HohenheimEndpoints.INSTANCE_ID))
-            .gate((principal, instanceId) -> InstanceOperationHandlers.offered(InstanceOperations.OPEN_FRAMEBUFFER,
-                principal, instanceId) ? ScreenAccess.CONTROL : ScreenAccess.NONE)
+        ScreenEndpoint.on(HohenheimEndpoints.VM_FRAMEBUFFER, VmScreens::subject)
+            .gate((principal, screen) -> InstanceOperationHandlers.offered(InstanceOperations.OPEN_FRAMEBUFFER,
+                principal, screen.instanceId()) ? ScreenAccess.CONTROL : ScreenAccess.NONE)
             .sessions(VmScreens::session)
             .install();
     }
 
+    /** Which VM's screen a socket names, and whether its viewer asked to take a held console over. */
+    record Screen(int instanceId, boolean takeOver) {
+    }
+
+    /** @return the socket's screen, null when it names no instance */
+    private static @Nullable Screen subject(@NonNull WebSocketSession socket) {
+        Integer instanceId = socket.getParameter(HohenheimEndpoints.INSTANCE_ID);
+        return instanceId == null ? null
+            : new Screen(instanceId, socket.getHandshake() != null
+                && "1".equals(socket.getHandshake().queryParam(ScreenProtocol.TAKE_OVER_PARAM)));
+    }
+
     /** @return the running VM's screen session, opened for its first viewer; null while the VM is not running */
-    private static @Nullable ScreenSession session(@NonNull Integer instanceId) {
+    private static @Nullable ScreenSession session(@NonNull Screen screen) {
+        int instanceId = screen.instanceId();
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
         String status = instance == null ? null : instance.get(InstanceModel.STATUS);
         if (!InstanceModel.STATUS_RUNNING.equals(status) && !InstanceModel.STATUS_STARTING.equals(status)) {
@@ -69,7 +85,7 @@ public final class VmScreens {
                 return live;
             }
             opened = ScreenSession.open(new SpiceScreenSource(() -> VmSpice.SEAM.require().connect(serverName,
-                handle)), OPTIONS);
+                handle, screen.takeOver())), OPTIONS);
             LIVE.put(instanceId, opened);
         }
         opened.onEnd(() -> {

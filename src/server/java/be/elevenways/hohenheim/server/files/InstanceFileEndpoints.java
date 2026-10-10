@@ -43,6 +43,9 @@ import java.util.Map;
  */
 public final class InstanceFileEndpoints {
 
+    /** The files page's action ending one of the viewer's open SFTP sessions on the app. */
+    public static final String END_SFTP_SESSION = "end_sftp_session";
+
     private InstanceFileEndpoints() {
     }
 
@@ -82,7 +85,11 @@ public final class InstanceFileEndpoints {
             String path = string(form, "path");
             String back = string(form, "directory");
             try {
-                perform(instanceId, action, form, path);
+                if (END_SFTP_SESSION.equals(action)) {
+                    HohenheimSftp.end(AccessContext.of(conduit), instanceId, string(form, "session"));
+                } else {
+                    perform(instanceId, action, form, path);
+                }
             } catch (Violations refused) {
                 return HandlerSupport.redirectUntyped(filesUrl(conduit, instanceId,
                     back.isEmpty() ? parentOf(path) : back, refused));

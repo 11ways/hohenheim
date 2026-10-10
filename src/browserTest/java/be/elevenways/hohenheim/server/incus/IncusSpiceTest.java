@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.zenit.kvm.server.ScreenRefusalReason;
+import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.pepperglass.Pepperglass;
 import be.elevenways.pepperglass.fixture.ScriptedSpiceServer;
 import be.elevenways.pepperglass.session.DisplaySurface;
@@ -70,15 +72,16 @@ class IncusSpiceTest {
             FakeVgaConsoleDaemon daemon = new FakeVgaConsoleDaemon(spice.port());
             CountDownLatch drawn = new CountDownLatch(1);
 
-            // 1. The daemon is asked for the instance's VGA console, forced over one left open, and the console's
-            //    control websocket links before any channel: the daemon keeps the operation only while it is open.
-            IncusSpice.Console console = IncusSpice.open(new IncusClient(daemon), "hohenheim-instance-9");
+            // 1. The daemon is asked for the instance's VGA console, never forced over one someone else holds, and the
+            //    console's control websocket links before any channel: the daemon keeps the operation only while it
+            //    is open.
+            IncusSpice.Console console = IncusSpice.open(new IncusClient(daemon), "hohenheim-instance-9", false);
             assertThat(daemon.requests).as("step 1: one console request").hasSize(1);
             assertThat(daemon.requests.getFirst())
-                .as("step 1: a forced VGA console of the instance")
+                .as("step 1: a VGA console of the instance, not forced")
                 .contains("POST /1.0/instances/hohenheim-instance-9/console")
                 .contains("\"type\":\"vga\"")
-                .contains("\"force\":true");
+                .contains("\"force\":false");
             assertThat(daemon.sockets).as("step 1: the control websocket linked at once")
                 .containsExactly("/1.0/operations/op-vga-1/websocket?secret=control-secret-1");
 
@@ -120,9 +123,33 @@ class IncusSpiceTest {
         IncusClient incus = new IncusClient(daemon);
 
         // 2. Opening the console fails, and the operation it started is cancelled rather than left to the daemon.
-        assertThatThrownBy(() -> IncusSpice.open(incus, "hohenheim-instance-9"))
+        assertThatThrownBy(() -> IncusSpice.open(incus, "hohenheim-instance-9", false))
             .as("step 2: the console refuses").hasMessageContaining("websocket upgrade failed");
         assertThat(daemon.started()).as("step 2: one operation was started").isEqualTo(1);
         assertThat(daemon.running()).as("step 2: and none is left running").isEmpty();
+    }
+
+    @Test
+    void aConsoleSomeoneElseHoldsIsRefusedAsHeldUntilTakenOver() throws Exception {
+        // 1. An operator holds the VM's VGA console (the daemon runs a console operation of it).
+        FakeVgaConsoleDaemon daemon = new FakeVgaConsoleDaemon(1);
+        IncusClient incus = new IncusClient(daemon);
+        IncusSpice.Console operators = IncusSpice.open(incus, "hohenheim-instance-9", false);
+        assertThat(daemon.running()).as("step 1: the operator's console runs").hasSize(1);
+
+        // 2. Opening it without taking over is refused as HELD, the screen status whose viewer may take it over, and
+        //    the operator's console keeps running.
+        assertThatThrownBy(() -> IncusSpice.open(incus, "hohenheim-instance-9", false))
+            .as("step 2: someone else holds it").isInstanceOfSatisfying(DomainRefusal.class,
+                refusal -> assertThat(refusal.reason()).isEqualTo(ScreenRefusalReason.HELD));
+        assertThat(daemon.running()).as("step 2: the operator's console is untouched").hasSize(1);
+
+        // 3. Taking over forces it: the operator's console ends and ours runs.
+        IncusSpice.Console ours = IncusSpice.open(incus, "hohenheim-instance-9", true);
+        assertThat(daemon.requests.getLast()).as("step 3: the take-over is forced").contains("\"force\":true");
+        assertThat(daemon.running()).as("step 3: only the taken-over console runs")
+            .containsExactly("/1.0/operations/op-vga-2");
+        ours.close();
+        operators.close();
     }
 }

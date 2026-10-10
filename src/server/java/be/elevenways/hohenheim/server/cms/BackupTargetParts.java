@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
@@ -11,7 +12,6 @@ import be.elevenways.protoblast.common.dry.BlastDrySerializers;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
@@ -118,12 +118,12 @@ public final class BackupTargetParts {
         return PanelResource.builder(HohenheimIds.id("backup_target"), HohenheimSlugs.BACKUP_TARGETS, SUBJECT)
             .label(HohenheimMicrocopy.BACKUP_TARGET.of("plural"))
             .recordLabel(HohenheimMicrocopy.BACKUP_TARGET.of("singular"))
-            // A sidebar entry of its own in System, beside Settings, whose control-plane backup setting names one of
-            // these targets: without it the page was reachable only from the instance list's related pages.
+            // Listed inside the settings page's Backups section (board Settings), beside the control-plane backup
+            // setting that names one of these targets, never a sidebar row of its own.
             .description(CmsSupport.navHint(HohenheimMicrocopy.BACKUP_TARGET))
             .icon(Icon.of("box-archive"))
-            .navGroup(NavGroup.SYSTEM)
-            .navOrder(94)
+            .showInNav(false)
+            .standsUnder(SettingsPage.DEFAULT_SLUG)
             .reads(ResourceReads.rows())
             // The name is the only text a target carries; the credentials live in a secret settings blob.
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()

@@ -1,5 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.zenit.common.text.ByteText;
+import be.elevenways.protoblast.common.time.RelativeTimeWording;
+import be.elevenways.zenit.sftp.server.SftpSessionInfo;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -105,7 +108,7 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
             .with(HohenheimEndpoints.INSTANCE_ID, instanceId));
         vars.put("canWrite", HohenheimAccess.hasInstanceCapability(accessContext, instanceId,
             HohenheimCapabilities.FILES_WRITE));
-        vars.put("maxFileBytes", InstanceFiles.maxFileBytes());
+        vars.put("maxFileSize", ByteText.human(InstanceFiles.maxFileBytes()));
 
         vars.put("entries", List.of());
         vars.put("crumbs", List.of());
@@ -211,13 +214,28 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
         List<String> keys = new ArrayList<>();
         if (user != null) {
             for (Row key : SshKeys.of(user.get(UserModel.ID))) {
-                keys.add(key.get(SshKeyModel.LABEL));
+                keys.add('"' + key.get(SshKeyModel.LABEL) + '"');
             }
         }
         vars.put("sftpKeys", String.join(", ", keys));
-        vars.put("sftpPasswordTarget", AuthEndpoints.GET_ACCOUNT_API_KEYS);
+        // "Create an SFTP password" mints it in place: the account's API key form, posted with this app's scopes and
+        // name, answers the one-time password on the account page.
+        vars.put("sftpPasswordTarget", AuthEndpoints.POST_ACCOUNT_API_KEY_CREATE);
         vars.put("sftpPasswordScopes", String.join(" ", InstanceSftpRealm.passwordScopes(canWrite)));
+        vars.put("sftpPasswordLabel", "SFTP " + vars.get("instanceName"));
         vars.put("sftpKeysTarget", AuthEndpoints.GET_ACCOUNT_SSH_KEYS);
+        List<Map<String, Object>> sessions = new ArrayList<>();
+        for (SftpSessionInfo session : HohenheimSftp.openOn(accessContext, instanceId)) {
+            Map<String, Object> shown = new HashMap<>();
+            shown.put("id", session.id());
+            shown.put("who", session.attribution());
+            shown.put("address", Objects.toString(session.address(), ""));
+            shown.put("since", session.since().toString());
+            shown.put("operations", session.operations());
+            sessions.add(shown);
+        }
+        vars.put("sftpSessions", sessions);
+        vars.put("timeWording", RelativeTimeWording.resolve(conduit));
     }
 
     /** One crumb per path segment from the volume root down, each a browsable target. */

@@ -20,9 +20,6 @@ import java.util.List;
  */
 public class ReconcileInstanceStatus extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION =
-        "Reconcile instance status against what the runtimes actually run";
-
     @Override
     public @NonNull Identifier id() {
         return HohenheimIds.id("reconcile_instance_status");
@@ -66,8 +63,8 @@ public class ReconcileInstanceStatus extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

@@ -63,7 +63,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         HohenheimSlugs.Cluster.ACCESS, List.of("access-lists", "bans", "users", "auth-providers", "spamservice"),
         HohenheimSlugs.Cluster.LOG, List.of("activity", "inbox", "deliveries"),
         HohenheimSlugs.Cluster.CONFIGURE, List.of("settings", "instance-templates", "runtime-images", "git-providers",
-            "database-engines", "notifications", "backup-targets", "task-schedules", "task-runs", "build-info"));
+            "database-engines", "task-schedules", "task-runs", "build-info"));
 
     /**
      * Every peer demoted out of the sidebar, with the surface that adopted it. showInNav(false) removes an ENTRY,
@@ -81,6 +81,8 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         "environments", "environment-variables", "reconcile-findings", "dns-peers",
         // Access: the People list's Roles card and Role column.
         "roles",
+        // Settings: the Notifications and Backups sections list them.
+        "notifications", "backup-targets",
         // Access: the abuse-protection overview page.
         "spamservice-installation", "spamservice-clients", "spamservice-samples",
         "spamservice-security-events", "spamservice-words", "spamservice-reputation");
@@ -162,6 +164,10 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
 
         // 5. And each demoted peer is REACHABLE BY CLICKING, not only by typing: the Apps list's toolbar links what
         //    an app is made of, and the abuse-protection front door every spamservice sub-surface it swallowed.
+        String settingsPage = adminGet("/admin/settings").body();
+        for (String slug : List.of("notifications", "backup-targets")) {
+            assertThat(settingsPage).as("step 5: the settings page lists /admin/" + slug).contains("/admin/" + slug);
+        }
         String apps = adminGet("/admin/apps").body();
         for (String slug : List.of("sites", "instances", "stacks", "projects")) {
             assertThat(apps).as("step 5: the Apps list links /admin/" + slug).contains("/admin/" + slug);

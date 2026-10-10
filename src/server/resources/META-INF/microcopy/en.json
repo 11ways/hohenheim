@@ -1396,111 +1396,258 @@
     "text": "No certificate is stored yet, so nothing can be answered over HTTPS.",
     "scope": "attention_detail"
   },
-  "verify_workload_isolation": {
-    "text": "Check app isolation",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "verify_incus_isolation": {
-    "text": "Check Incus app isolation",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "update_system_users": {
-    "text": "Find this machine's users",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "update_system_ip_addresses": {
-    "text": "Find this machine's IP addresses",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "supervise_proxy_listeners": {
-    "text": "Watch the proxy listeners",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "security_sweep": {
-    "text": "Security sweep",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "resign_dnssec_zones": {
-    "text": "Re-sign DNSSEC zones",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "reconcile_instance_status": {
-    "text": "Check which apps run",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "reconcile_engine_isolation": {
-    "text": "Check database engine isolation",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "reconcile_docker_resources": {
-    "text": "Tidy Docker",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "reclaim_docker_images": {
-    "text": "Remove old Docker images",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "reap_incus_controllers": {
-    "text": "Tidy Incus controllers",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "probe_dns_secondaries": {
-    "text": "Check DNS secondaries",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "observe_instance_disk": {
-    "text": "Measure app disk use",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "monitor_stacks": {
-    "text": "Watch stack health",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "clean_orphan_certificates": {
-    "text": "Clean unused certificates",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "clean_old_instance_logs": {
-    "text": "Clean old console output",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "check_foreign_keys": {
-    "text": "Check the database for orphaned rows",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "check_dns_delegations": {
-    "text": "Check DNS delegations",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "backup_databases": {
-    "text": "Back up databases",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "backup_control_plane": {
-    "text": "Back up the control panel",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
+  "verify_workload_isolation": [
+    {
+      "text": "Check app isolation",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Whether apps are walled off from each other and the host",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "verify_incus_isolation": [
+    {
+      "text": "Check Incus app isolation",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Whether Incus apps are walled off from each other and the host",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "update_system_users": [
+    {
+      "text": "Find this machine's users",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "The user accounts on this machine",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "update_system_ip_addresses": [
+    {
+      "text": "Find this machine's IP addresses",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "The addresses this machine answers on",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "supervise_proxy_listeners": [
+    {
+      "text": "Watch the proxy listeners",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "The proxy's ports, restarted when one stops listening",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "security_sweep": [
+    {
+      "text": "Security sweep",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Expire bans, score repeat visitors",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "resign_dnssec_zones": [
+    {
+      "text": "Re-sign DNSSEC zones",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Fresh signatures for every DNSSEC-signed zone",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "reconcile_instance_status": [
+    {
+      "text": "Check which apps run",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Each app's status, set to what its host really runs",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "reconcile_engine_isolation": [
+    {
+      "text": "Check database engine isolation",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Each app's database stays walled off from the others on shared engines",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "reconcile_docker_resources": [
+    {
+      "text": "Tidy Docker",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Containers and volumes no record owns",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "reclaim_docker_images": [
+    {
+      "text": "Remove old Docker images",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Docker images no app uses any more, to free disk space",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "reap_incus_controllers": [
+    {
+      "text": "Tidy Incus controllers",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "This control panel's Incus presence, and what departed panels left behind",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "probe_dns_secondaries": [
+    {
+      "text": "Check DNS secondaries",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Whether the secondary DNS servers serve the latest zones",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "observe_instance_disk": [
+    {
+      "text": "Measure app disk use",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "How much disk each app uses, where its host can measure it",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "monitor_stacks": [
+    {
+      "text": "Watch stack health",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Whether every service of each stack runs",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "clean_orphan_certificates": [
+    {
+      "text": "Clean unused certificates",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Certificates no address uses",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "clean_old_instance_logs": [
+    {
+      "text": "Clean old console output",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Saved console runs past their age",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "check_foreign_keys": [
+    {
+      "text": "Check the database for orphaned rows",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Rows in Hohenheim's own database that point at nothing",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "check_dns_delegations": [
+    {
+      "text": "Check DNS delegations",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Whether each DNS zone is still delegated to this server",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "backup_databases": [
+    {
+      "text": "Back up databases",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Every managed database to its backup target",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "backup_control_plane": [
+    {
+      "text": "Back up the control panel",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Its database and keys, needed to rebuild Hohenheim on a new machine",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
   "act_show_run": {
     "text": "Show the run",
     "scope": "attention_action"
@@ -7903,7 +8050,7 @@
     "scope": "instance_files"
   },
   "upload_limit": {
-    "text": "Files up to {$bytes} bytes",
+    "text": "Files up to {$size}",
     "scope": "instance_files"
   },
   "cpu_description": {
@@ -10441,11 +10588,11 @@
   ],
   "not_measured_body": [
     {
-      "text": "The {$runtime} runtime enforces no root-disk quota and reports no usage, so nothing here is rationed and nothing measures it. This is the declared contract, not a failed reading.",
+      "text": "No disk limit applies to this app, so its disk use is not measured.",
       "scope": "instance_overview"
     },
     {
-      "text": "The {$runtime} runtime enforces no root-disk quota and reports no usage, so nothing here is rationed and nothing measures it.",
+      "text": "No disk limit applies to this app, so its disk use is not measured.",
       "scope": "instance_stats"
     }
   ],
@@ -13369,6 +13516,10 @@
   ],
   "app_filter": {
     "text": "App",
+    "scope": "hohenheim"
+  },
+  "app_filter_all": {
+    "text": "All apps",
     "scope": "hohenheim"
   },
   "people_only": {
@@ -16510,7 +16661,7 @@
     "scope": "instance_files"
   },
   "sftp_with_keys": {
-    "text": "Your SSH key ({$keys}), or an SFTP password",
+    "text": "Your SSH key {$keys}, or an SFTP password",
     "scope": "instance_files"
   },
   "sftp_with_password": {
@@ -16522,15 +16673,7 @@
     "scope": "instance_files"
   },
   "sftp_no_login_password": {
-    "text": "Your sign-in password does not work here: create an SFTP password, an API key with the scopes below, which you can revoke on its own.",
-    "scope": "instance_files"
-  },
-  "sftp_password_scopes": {
-    "text": "SFTP password scopes",
-    "scope": "instance_files"
-  },
-  "sftp_copy_scopes": {
-    "text": "Copy the scopes",
+    "text": "Your sign-in password does not work here: create an SFTP password for this app, which you can revoke on its own.",
     "scope": "instance_files"
   },
   "sftp_create_password": {
@@ -17256,5 +17399,37 @@
   "used_bytes": {
     "text": "Used",
     "scope": "hohenheim_field"
+  },
+  "sftp_sessions": {
+    "text": "Open sessions",
+    "scope": "instance_files"
+  },
+  "sftp_connected": {
+    "text": "Connected",
+    "scope": "instance_files"
+  },
+  "sftp_session_from": {
+    "text": "{$who}, from {$address}",
+    "scope": "instance_files"
+  },
+  "sftp_session_since": {
+    "text": "since",
+    "scope": "instance_files"
+  },
+  "sftp_session_requests": {
+    "text": "{$count} requests",
+    "scope": "instance_files"
+  },
+  "sftp_end": {
+    "text": "End",
+    "scope": "instance_files"
+  },
+  "sftp_session_gone": {
+    "text": "That SFTP session is no longer open.",
+    "scope": "violations"
+  },
+  "take_over": {
+    "text": "Take over",
+    "scope": "instance_framebuffer"
   }
 }

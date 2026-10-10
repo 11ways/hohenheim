@@ -35,8 +35,6 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class CheckForeignKeys extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION = "Check the control-plane database for orphaned rows";
-
     /** The last reported summary; null while clean. In memory, so a restart re-announces. */
     private static final AtomicReference<String> LAST_REPORTED = new AtomicReference<>();
 
@@ -61,8 +59,8 @@ public class CheckForeignKeys extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

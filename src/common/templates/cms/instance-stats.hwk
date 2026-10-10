@@ -66,7 +66,7 @@
         <pl-card-content data-disk-state="not-measured">
             <p class="hh-disk-unmeasured">
                 <pl-badge variant="secondary">{{ t("not_measured", scope: "instance_stats") }}</pl-badge>
-                {{ t("not_measured_body", scope: "instance_stats", runtime: disk.runtime) }}
+                {{ t("not_measured_body", scope: "instance_stats") }}
             </p>
         </pl-card-content>
         {% /if %}

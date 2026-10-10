@@ -26,8 +26,6 @@ import java.util.Map;
  */
 public class ReclaimDockerImages extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION = "Reclaim disk from superseded Docker images";
-
     private static final int MIN_AGE_FLOOR_HOURS = 1;
 
     @Override
@@ -55,8 +53,8 @@ public class ReclaimDockerImages extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

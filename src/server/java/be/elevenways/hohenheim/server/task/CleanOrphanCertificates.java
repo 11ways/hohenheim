@@ -31,8 +31,6 @@ import java.util.Set;
  */
 public class CleanOrphanCertificates extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION = "Delete orphaned Let's Encrypt certificates";
-
     @Override
     public @NonNull Identifier id() {
         return HohenheimIds.id("clean_orphan_certificates");
@@ -56,8 +54,8 @@ public class CleanOrphanCertificates extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

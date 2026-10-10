@@ -399,9 +399,7 @@ public final class InstanceOverview {
         InstanceDiskView disk = diskOf(instance, serverId);
         if (!disk.measured() || !disk.enforced()) {
             return UsageData.unmeasured(
-                HohenheimMicrocopy.INSTANCE_OVERVIEW.of("not_measured_body")
-                    .withArg("runtime", disk.runtime())
-                    .resolve(locales, resolver));
+                HohenheimMicrocopy.INSTANCE_OVERVIEW.of("not_measured_body").resolve(locales, resolver));
         }
         return UsageData.measured(disk.usedBytes(), disk.limitBytes(),
             ByteText.human(disk.usedBytes()), ByteText.human(disk.limitBytes()),

@@ -1396,111 +1396,258 @@
     "text": "Er is nog geen certificaat opgeslagen, dus niets kan via HTTPS antwoorden.",
     "scope": "attention_detail"
   },
-  "verify_workload_isolation": {
-    "text": "Isolatie van apps controleren",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "verify_incus_isolation": {
-    "text": "Isolatie van Incus-apps controleren",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "update_system_users": {
-    "text": "Gebruikers van deze machine zoeken",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "update_system_ip_addresses": {
-    "text": "IP-adressen van deze machine zoeken",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "supervise_proxy_listeners": {
-    "text": "Proxy-listeners bewaken",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "security_sweep": {
-    "text": "Beveiligingsronde",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "resign_dnssec_zones": {
-    "text": "DNSSEC-zones opnieuw ondertekenen",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "reconcile_instance_status": {
-    "text": "Controleren welke apps draaien",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "reconcile_engine_isolation": {
-    "text": "Isolatie van database-engines controleren",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "reconcile_docker_resources": {
-    "text": "Docker opruimen",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "reclaim_docker_images": {
-    "text": "Oude Docker-images verwijderen",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "reap_incus_controllers": {
-    "text": "Incus-controllers opruimen",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "probe_dns_secondaries": {
-    "text": "Secundaire DNS-servers controleren",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "observe_instance_disk": {
-    "text": "Schijfgebruik van apps meten",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "monitor_stacks": {
-    "text": "Stackgezondheid bewaken",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "clean_orphan_certificates": {
-    "text": "Ongebruikte certificaten opruimen",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "clean_old_instance_logs": {
-    "text": "Oude console-uitvoer opruimen",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "check_foreign_keys": {
-    "text": "De database controleren op verweesde rijen",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "check_dns_delegations": {
-    "text": "DNS-delegaties controleren",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "backup_databases": {
-    "text": "Databases back-uppen",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
-  "backup_control_plane": {
-    "text": "Het controlepaneel back-uppen",
-    "scope": "hohenheim",
-    "target": "task_label"
-  },
+  "verify_workload_isolation": [
+    {
+      "text": "Isolatie van apps controleren",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Of apps afgeschermd zijn van elkaar en van de host",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "verify_incus_isolation": [
+    {
+      "text": "Isolatie van Incus-apps controleren",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Of Incus-apps afgeschermd zijn van elkaar en van de host",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "update_system_users": [
+    {
+      "text": "Gebruikers van deze machine zoeken",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "De gebruikersaccounts op deze machine",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "update_system_ip_addresses": [
+    {
+      "text": "IP-adressen van deze machine zoeken",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "De adressen waarop deze machine antwoordt",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "supervise_proxy_listeners": [
+    {
+      "text": "Proxy-listeners bewaken",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "De poorten van de proxy, herstart wanneer er een stopt met luisteren",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "security_sweep": [
+    {
+      "text": "Beveiligingsronde",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Verlopen blokkades opheffen, herhaalbezoekers beoordelen",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "resign_dnssec_zones": [
+    {
+      "text": "DNSSEC-zones opnieuw ondertekenen",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Nieuwe handtekeningen voor elke DNSSEC-ondertekende zone",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "reconcile_instance_status": [
+    {
+      "text": "Controleren welke apps draaien",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "De status van elke app, gelijkgezet met wat de host echt draait",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "reconcile_engine_isolation": [
+    {
+      "text": "Isolatie van database-engines controleren",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Elke database van een app blijft afgeschermd van de andere op gedeelde engines",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "reconcile_docker_resources": [
+    {
+      "text": "Docker opruimen",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Containers en volumes die bij geen record horen",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "reclaim_docker_images": [
+    {
+      "text": "Oude Docker-images verwijderen",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Docker-images die geen app nog gebruikt, om schijfruimte vrij te maken",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "reap_incus_controllers": [
+    {
+      "text": "Incus-controllers opruimen",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "De aanwezigheid van dit beheerpaneel op Incus, en wat vertrokken panelen achterlieten",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "probe_dns_secondaries": [
+    {
+      "text": "Secundaire DNS-servers controleren",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Of de secundaire DNS-servers de nieuwste zones uitserveren",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "observe_instance_disk": [
+    {
+      "text": "Schijfgebruik van apps meten",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Hoeveel schijf elke app gebruikt, waar de host dat kan meten",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "monitor_stacks": [
+    {
+      "text": "Stackgezondheid bewaken",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Of elke dienst van elke stack draait",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "clean_orphan_certificates": [
+    {
+      "text": "Ongebruikte certificaten opruimen",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Certificaten die geen adres gebruikt",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "clean_old_instance_logs": [
+    {
+      "text": "Oude console-uitvoer opruimen",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Bewaarde consoleruns die te oud zijn",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "check_foreign_keys": [
+    {
+      "text": "De database controleren op verweesde rijen",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Rijen in de eigen database van Hohenheim die nergens naar verwijzen",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "check_dns_delegations": [
+    {
+      "text": "DNS-delegaties controleren",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Of elke DNS-zone nog naar deze server gedelegeerd is",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "backup_databases": [
+    {
+      "text": "Databases back-uppen",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Elke beheerde database naar zijn back-updoel",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "backup_control_plane": [
+    {
+      "text": "Het controlepaneel back-uppen",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Zijn database en sleutels, nodig om Hohenheim op een nieuwe machine op te bouwen",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
   "act_show_run": {
     "text": "De uitvoering tonen",
     "scope": "attention_action"
@@ -7903,7 +8050,7 @@
     "scope": "instance_files"
   },
   "upload_limit": {
-    "text": "Bestanden tot {$bytes} bytes",
+    "text": "Bestanden tot {$size}",
     "scope": "instance_files"
   },
   "cpu_description": {
@@ -10441,11 +10588,11 @@
   ],
   "not_measured_body": [
     {
-      "text": "De {$runtime}-runtime handhaaft geen quota voor de hoofdschijf en rapporteert geen verbruik, dus er wordt hier niets gerantsoeneerd en niets gemeten. Dat is het afgesproken contract, geen mislukte meting.",
+      "text": "Voor deze app geldt geen schijflimiet, dus het schijfgebruik wordt niet gemeten.",
       "scope": "instance_overview"
     },
     {
-      "text": "De {$runtime}-runtime handhaaft geen quota voor de hoofdschijf en rapporteert geen verbruik, dus er wordt hier niets gerantsoeneerd en niets gemeten.",
+      "text": "Voor deze app geldt geen schijflimiet, dus het schijfgebruik wordt niet gemeten.",
       "scope": "instance_stats"
     }
   ],
@@ -13369,6 +13516,10 @@
   ],
   "app_filter": {
     "text": "App",
+    "scope": "hohenheim"
+  },
+  "app_filter_all": {
+    "text": "Alle apps",
     "scope": "hohenheim"
   },
   "people_only": {
@@ -16510,7 +16661,7 @@
     "scope": "instance_files"
   },
   "sftp_with_keys": {
-    "text": "Je SSH-sleutel ({$keys}), of een SFTP-wachtwoord",
+    "text": "Je SSH-sleutel {$keys}, of een SFTP-wachtwoord",
     "scope": "instance_files"
   },
   "sftp_with_password": {
@@ -16522,15 +16673,7 @@
     "scope": "instance_files"
   },
   "sftp_no_login_password": {
-    "text": "Je aanmeldwachtwoord werkt hier niet: maak een SFTP-wachtwoord aan, een API-sleutel met de scopes hieronder, die je apart kunt intrekken.",
-    "scope": "instance_files"
-  },
-  "sftp_password_scopes": {
-    "text": "Scopes voor een SFTP-wachtwoord",
-    "scope": "instance_files"
-  },
-  "sftp_copy_scopes": {
-    "text": "Scopes kopiëren",
+    "text": "Je aanmeldwachtwoord werkt hier niet: maak een SFTP-wachtwoord voor deze app, dat je los kunt intrekken.",
     "scope": "instance_files"
   },
   "sftp_create_password": {
@@ -17256,5 +17399,37 @@
   "used_bytes": {
     "text": "Gebruikt",
     "scope": "hohenheim_field"
+  },
+  "sftp_sessions": {
+    "text": "Open sessies",
+    "scope": "instance_files"
+  },
+  "sftp_connected": {
+    "text": "Verbonden",
+    "scope": "instance_files"
+  },
+  "sftp_session_from": {
+    "text": "{$who}, vanaf {$address}",
+    "scope": "instance_files"
+  },
+  "sftp_session_since": {
+    "text": "sinds",
+    "scope": "instance_files"
+  },
+  "sftp_session_requests": {
+    "text": "{$count} verzoeken",
+    "scope": "instance_files"
+  },
+  "sftp_end": {
+    "text": "Stoppen",
+    "scope": "instance_files"
+  },
+  "sftp_session_gone": {
+    "text": "Die SFTP-sessie is niet meer open.",
+    "scope": "violations"
+  },
+  "take_over": {
+    "text": "Overnemen",
+    "scope": "instance_framebuffer"
   }
 }

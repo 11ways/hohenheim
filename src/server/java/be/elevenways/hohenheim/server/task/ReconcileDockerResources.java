@@ -23,9 +23,6 @@ import java.util.Map;
  */
 public class ReconcileDockerResources extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION =
-        "Reconcile Docker resources against record ownership";
-
     @Override
     public @NonNull Identifier id() {
         return HohenheimIds.id("reconcile_docker_resources");
@@ -53,8 +50,8 @@ public class ReconcileDockerResources extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

@@ -20,24 +20,27 @@ public interface VmSpice {
 
     /** The seam a test points at a scripted SPICE server. */
     PlatformSeam<VmSpice> SEAM = PlatformSeam.withDefault(VmSpice.class,
-        (serverName, handle) -> incus(new ServerService().incusClientFor(serverName), handle));
+        (serverName, handle, takeOver) -> incus(new ServerService().incusClientFor(serverName), handle, takeOver));
 
     /**
      * Opens the instance's VGA console on its Incus daemon, released by ending that console.
      *
+     * @param takeOver whether to end a console someone else holds ({@link IncusSpice#open})
      * @throws IOException when the daemon refuses the console
      */
-    static @NonNull Link incus(@NonNull IncusClient incus, @NonNull String handle) throws IOException {
-        IncusSpice.Console console = IncusSpice.open(incus, handle);
+    static @NonNull Link incus(@NonNull IncusClient incus, @NonNull String handle, boolean takeOver)
+            throws IOException {
+        IncusSpice.Console console = IncusSpice.open(incus, handle, takeOver);
         return new Link(console.options(), console::close);
     }
 
     /**
      * Called on the screen session's start thread, once per session.
      *
+     * @param takeOver whether the viewer that opened the session asked to take a held console over
      * @throws IOException when the host refuses the console
      */
-    @NonNull Link connect(@NonNull String serverName, @NonNull String handle) throws IOException;
+    @NonNull Link connect(@NonNull String serverName, @NonNull String handle, boolean takeOver) throws IOException;
 
     /**
      * One way into a VM's SPICE server, held until the screen session ends.

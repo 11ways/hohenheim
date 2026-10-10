@@ -2,7 +2,8 @@
     /* A VM's live screen with its control buttons: every viewer the gate admits may drive it, one at a time, so a
        watcher asks for control and the one holding it can give it back. Which button shows follows the role the
        viewer reflects on kvm-screen. The controller's element size goes to the guest, whose SPICE agent lays its
-       display out at it; a guest without the agent keeps its own size. */
+       display out at it; a guest without the agent keeps its own size. A console someone else holds (an operator's
+       incus console) reads "held", and only then does Take over show: it reconnects ending that console. */
     public required endpoint: String
     public label: String = ""
 
@@ -17,6 +18,7 @@
             margin-block-start: var(--pl-space-sm);
         }
 
+        kvm-screen:not([data-screen-status="held"]) ~ .hh-vm-screen-controls .hh-vm-screen-take-over,
         kvm-screen:not([data-screen-role="watcher"]) ~ .hh-vm-screen-controls .hh-vm-screen-take,
         kvm-screen:not([data-screen-role="controller"]) ~ .hh-vm-screen-controls .hh-vm-screen-release {
             display: none;
@@ -30,6 +32,8 @@
                        event:click={% Kvm.control(screenEl, true) %}>{{ t("take_control", scope: "instance_framebuffer") }}</pl-button>
             <pl-button class="hh-vm-screen-release" variant="outline"
                        event:click={% Kvm.control(screenEl, false) %}>{{ t("release_control", scope: "instance_framebuffer") }}</pl-button>
+            <pl-button class="hh-vm-screen-take-over" variant="destructive"
+                       event:click={% Kvm.takeOver(screenEl) %}>{{ t("take_over", scope: "instance_framebuffer") }}</pl-button>
         </div>
     }
 } %}

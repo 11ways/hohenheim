@@ -1,5 +1,13 @@
 package be.elevenways.hohenheim.server.files;
 
+import java.util.List;
+import java.util.ArrayList;
+import be.elevenways.zenit.sftp.server.SftpSessionInfo;
+import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.common.security.PrincipalRef;
+import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.protoblast.common.Blast;
@@ -99,6 +107,41 @@ public final class HohenheimSftp {
     /** @return the running server, null while SFTP is off, failed or stopped */
     public static synchronized @Nullable SftpServer server() {
         return running;
+    }
+
+    /**
+     * The open SFTP sessions on one app the viewer may see: their own, and every one for an operator.
+     *
+     * @return oldest first; empty while SFTP is off or stopped
+     */
+    public static @NonNull List<SftpSessionInfo> openOn(@NonNull AccessContext access, int instanceId) {
+        SftpServer server = server();
+        if (server == null) {
+            return List.of();
+        }
+        String mount = String.valueOf(instanceId);
+        PrincipalRef viewer = access.principal().reference();
+        boolean operator = HohenheimAccess.isAdmin(access);
+        List<SftpSessionInfo> shown = new ArrayList<>();
+        for (SftpSessionInfo session : server.sessions().open()) {
+            if (mount.equals(session.mountName()) && (operator || session.account().equals(viewer))) {
+                shown.add(session);
+            }
+        }
+        return shown;
+    }
+
+    /**
+     * Ends one session the viewer may see on this app ({@link #openOn}); its connection closes at once.
+     *
+     * @throws Violations when no such session is open there for this viewer
+     */
+    public static void end(@NonNull AccessContext access, int instanceId, @NonNull String sessionId) {
+        SftpServer server = server();
+        boolean seen = openOn(access, instanceId).stream().anyMatch(session -> session.id().equals(sessionId));
+        if (!seen || server == null || !server.sessions().end(sessionId)) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("sftp_session_gone"));
+        }
     }
 
     /** @return why the enabled server did not start, null when it runs or was never asked to */

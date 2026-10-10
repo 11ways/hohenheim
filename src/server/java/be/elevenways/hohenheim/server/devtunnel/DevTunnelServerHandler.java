@@ -73,7 +73,6 @@ public final class DevTunnelServerHandler implements WebSocketHandler, TunnelTra
 
     public DevTunnelServerHandler(WebSocketSession session) {
         this.session = session;
-        TunnelMessage.init();
     }
 
     // ------------------------------------------------------------------

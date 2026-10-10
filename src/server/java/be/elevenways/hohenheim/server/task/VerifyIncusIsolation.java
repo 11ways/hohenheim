@@ -55,9 +55,6 @@ import java.util.Map;
  */
 public class VerifyIncusIsolation extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION =
-        "Verify Incus workload isolation in the daemon host's kernel";
-
     /** One host's outcome; every list names workloads, never a bare count. */
     public record HostOutcome(@NonNull String server, boolean verifiable,
                               @NonNull List<String> enforced, @NonNull List<String> repaired,
@@ -90,8 +87,8 @@ public class VerifyIncusIsolation extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     /** How this sweep names itself to an operator, in alerts and in the failure it throws. */

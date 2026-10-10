@@ -35,8 +35,6 @@ import java.util.Set;
  */
 public class UpdateSystemUsers extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION = "Discover system users";
-
     /** Record used when parsing /etc/passwd before we hit the DB. */
     private record ParsedUser(String name, int uid, int gid, String home, String gecos) {}
 
@@ -66,8 +64,8 @@ public class UpdateSystemUsers extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

@@ -42,9 +42,6 @@ import java.util.List;
  */
 public class ObserveInstanceDisk extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION =
-        "Observe instance root-disk usage on the drivers that can measure it";
-
     /** One instance's outcome; MEASURED only where a driver really answered. */
     public record Observation(int instanceId, boolean measured, long usedBytes,
                               long limitBytes) {
@@ -75,8 +72,8 @@ public class ObserveInstanceDisk extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

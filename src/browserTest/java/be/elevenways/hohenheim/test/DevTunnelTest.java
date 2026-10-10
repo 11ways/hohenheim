@@ -274,7 +274,6 @@ class DevTunnelTest {
      */
     @Test
     void invalidTokenNeverRegisters() throws Exception {
-        TunnelMessage.init();
         CompletableFuture<String> firstText = new CompletableFuture<>();
         CompletableFuture<Integer> closed = new CompletableFuture<>();
         WebSocket.Listener listener = new WebSocket.Listener() {

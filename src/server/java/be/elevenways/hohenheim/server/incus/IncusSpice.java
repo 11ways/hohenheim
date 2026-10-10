@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.incus;
 
+import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.kvm.server.ScreenRefusalReason;
 import be.elevenways.pepperglass.session.ChannelStream;
 import be.elevenways.pepperglass.session.SessionOptions;
 import be.elevenways.protoblast.server.io.BulkInputStream;
@@ -19,8 +21,10 @@ import java.util.logging.Logger;
  * Reaches a virtual machine's SPICE server through its host's Incus daemon: one VGA console operation, held open by
  * its control websocket, and per SPICE channel one websocket on it, each a fresh connection to the server.
  *
- * AIDEV-NOTE: the console is started with force, so it takes over a VGA console someone else left open; the ticket is
- * empty because the daemon's proxy is the authority, not SPICE. The daemon ends a VGA console operation only when its
+ * AIDEV-NOTE: the console is started WITHOUT force unless the viewer asked to take it over: Incus refuses a console
+ * while another console operation of the instance runs (an operator's {@code incus console --type=vga}, or one an
+ * older Hohenheim leaked on 6.0-6.16), and that refusal reads as {@link ScreenRefusalReason#HELD}, whose viewer may
+ * take the console over. The ticket is empty because the daemon's proxy is the authority, not SPICE. The daemon ends a VGA console operation only when its
  * control websocket closes: Incus 6.0 through 6.16 keep one whose control never connected running forever, and later
  * releases fail it after 10 seconds, closing every SPICE channel with it. So the control socket is linked at once and
  * {@link Console#close} closes it and cancels the operation.
@@ -32,17 +36,32 @@ public final class IncusSpice {
 
     private static final Logger LOG = Logger.getLogger(IncusSpice.class.getName());
 
+    /** The words Incus refuses a console with while another one runs (instance_console.go, without force). */
+    static final String HELD_REFUSAL = "Force is required to take it over";
+
     private IncusSpice() {
     }
 
     /**
      * Starts the instance's VGA console and links its control socket.
      *
-     * @throws IOException when the daemon refuses the console or its control socket; the operation is cancelled then
+     * @param takeOver whether to end a console someone else holds; without it, a held console is refused
+     * @throws DomainRefusal {@link ScreenRefusalReason#HELD} when someone else holds the console and this is no
+     *                       take-over
+     * @throws IOException   when the daemon refuses the console or its control socket; the operation is cancelled then
      */
-    public static @NonNull Console open(@NonNull IncusClient incus, @NonNull String handle) throws IOException {
+    public static @NonNull Console open(@NonNull IncusClient incus, @NonNull String handle, boolean takeOver)
+            throws IOException {
         String what = "VGA console operation of '" + handle + "'";
-        Map<String, Object> operation = incus.startVgaConsole(handle, true);
+        Map<String, Object> operation;
+        try {
+            operation = incus.startVgaConsole(handle, takeOver);
+        } catch (IncusClient.ApiException refused) {
+            if (!takeOver && String.valueOf(refused.getMessage()).contains(HELD_REFUSAL)) {
+                throw ScreenRefusalReason.HELD.refusal("the VGA console of '" + handle + "' is held elsewhere");
+            }
+            throw refused;
+        }
         IncusClient.OperationSocket channels = IncusClient.OperationSocket.of(operation,
             IncusClient.OperationSocket.DATA, what);
         IncusWebSocket control;

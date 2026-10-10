@@ -20,8 +20,6 @@ import java.util.List;
  */
 public class CheckDnsDelegations extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION = "Check DNS delegations";
-
     @Override
     public @NonNull Identifier id() {
         return HohenheimIds.id("check_dns_delegations");
@@ -45,8 +43,8 @@ public class CheckDnsDelegations extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

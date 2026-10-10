@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
@@ -14,7 +15,6 @@ import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.PanelAction;
-import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -143,10 +143,10 @@ public final class NotificationChannelParts {
             .recordLabel(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("singular"))
             .description(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("nav_hint"))
             .icon(Icon.of("bell"))
-            // System, between the activity log (90) and the settings editor (95): where this installation talks
-            // about ITSELF; the channels carry alerts, not traffic.
-            .navGroup(NavGroup.SYSTEM)
-            .navOrder(92)
+            // Listed inside the settings page's Notifications section (board Settings-Notifications), never a
+            // sidebar row of its own: the channels carry alerts about this installation, not traffic.
+            .showInNav(false)
+            .standsUnder(SettingsPage.DEFAULT_SLUG)
             .reads(ResourceReads.rows())
             // The name only: the url is a bearer credential.
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).facets().ruleFilters()

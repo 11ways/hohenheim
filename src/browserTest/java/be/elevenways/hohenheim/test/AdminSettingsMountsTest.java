@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.test.support.SettingGroupIcons;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.cms.HohenheimSettingsSections;
@@ -55,6 +56,24 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
                 "spamservice", "proxy", SettingsPage.FRAMEWORK_MOUNT_KEY);
         assertThat(mounts).filteredOn(SettingsPage.Mount::advanced).extracting(SettingsPage.Mount::key)
             .as("step 2: only the framework mount is advanced").containsExactly(SettingsPage.FRAMEWORK_MOUNT_KEY);
+
+        // 2b. Each operator section heads with its icon, Backups and Notifications hold their own records lists, the
+        //     Settings cluster's other pages are listed right after Notifications, and every group names its icon.
+        assertThat(mounts).filteredOn(mount -> !mount.advanced()).extracting(mount -> mount.icon().name())
+            .as("step 2b: the board's section icons").containsExactly("sliders", "lock", "box-archive", "bell",
+                "cubes", "server", "sitemap", "shield-halved", "robot", "route");
+        assertThat(mounts.get(2).records()).as("step 2b: Backups lists the backup targets")
+            .containsExactly(HohenheimSlugs.BACKUP_TARGETS);
+        assertThat(mounts.get(3).records()).as("step 2b: Notifications lists the channels")
+            .containsExactly(HohenheimSlugs.NOTIFICATIONS);
+        for (String slug : List.of(HohenheimSlugs.BACKUP_TARGETS, HohenheimSlugs.NOTIFICATIONS)) {
+            assertThat(admin.entryBySlug(slug).standsUnder()).as("step 2b: " + slug + " stands under Settings")
+                .isEqualTo(SettingsPage.DEFAULT_SLUG);
+        }
+        assertThat(((SettingsPage) peer).listsClusterMembers()).as("step 2b: the page lists its cluster").isTrue();
+        assertThat(((SettingsPage) peer).membersAt()).as("step 2b: right after Notifications").isEqualTo(4);
+        assertThat(SettingGroupIcons.unmarked(HohenheimSettings.HOHENHEIM)).as("step 2b: no group without its icon")
+            .isEmpty();
 
         // 3. The page lists the operator sections and folds the framework's groups into one disclosure.
         navigateToApp("/admin/settings");

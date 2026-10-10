@@ -31,8 +31,6 @@ public class BackupControlPlane extends ScheduledTask {
     /** The task's catalog id, also the {@code system_task_history.task_type} its runs are stored under. */
     public static final Identifier ID = HohenheimIds.id("backup_control_plane");
 
-    public static final String STATIC_DESCRIPTION = "Back up the control-plane database and keyring";
-
     @Override
     public @NonNull Identifier id() {
         return ID;
@@ -55,8 +53,8 @@ public class BackupControlPlane extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

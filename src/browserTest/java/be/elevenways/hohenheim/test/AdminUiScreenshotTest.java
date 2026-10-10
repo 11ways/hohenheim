@@ -8,6 +8,9 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.zenit.cms.common.resource.ActivitySources;
+import be.elevenways.zenit.cms.server.page.SettingsPage;
+import be.elevenways.zenit.cms.server.task.TaskAdmin;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
@@ -346,5 +349,11 @@ class AdminUiScreenshotTest extends HohenheimTestBase {
             + applicationId, "site-create-expose-prefill");
         capture("/admin/runtime-images", "runtime-images-list");
         capture("/admin/servers/" + dockerHostId + "/page/overview", "host-overview");
+        capture("/admin/dashboard", "dashboard");
+        capture("/admin/" + ActivitySources.ENTRY_SLUG, "activity-log");
+        capture("/admin/" + SettingsPage.DEFAULT_SLUG, "settings");
+        capture("/admin/" + TaskAdmin.SCHEDULES_SLUG, "task-schedules");
+        capture("/manage/instances/" + workspaceId + "/page/overview", "manage-instance-overview", null,
+            tenantSession);
     }
 }

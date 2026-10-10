@@ -80,9 +80,6 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
     /** The task's catalog id, also the {@code system_task_history.task_type} its runs are stored under. */
     public static final Identifier ID = HohenheimIds.id("verify_workload_isolation");
 
-    public static final String STATIC_DESCRIPTION =
-        "Verify workload isolation in the host kernel";
-
     /**
      * One host's outcome; every list names workloads, never a bare count.
      *
@@ -138,8 +135,8 @@ public class VerifyWorkloadIsolation extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     /** How this sweep names itself to an operator, in alerts and in the failure it throws. */

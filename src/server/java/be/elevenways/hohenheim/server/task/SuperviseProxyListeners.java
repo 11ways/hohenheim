@@ -21,8 +21,6 @@ import java.util.List;
  */
 public class SuperviseProxyListeners extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION = "Supervise proxy listeners";
-
     @Override
     public @NonNull Identifier id() {
         return HohenheimIds.id("supervise_proxy_listeners");
@@ -46,8 +44,8 @@ public class SuperviseProxyListeners extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

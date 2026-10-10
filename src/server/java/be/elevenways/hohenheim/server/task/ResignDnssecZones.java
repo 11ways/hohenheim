@@ -27,8 +27,6 @@ import java.util.List;
  */
 public class ResignDnssecZones extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION = "Re-sign DNSSEC zones";
-
     @Override
     public @NonNull Identifier id() {
         return HohenheimIds.id("resign_dnssec_zones");
@@ -52,8 +50,8 @@ public class ResignDnssecZones extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

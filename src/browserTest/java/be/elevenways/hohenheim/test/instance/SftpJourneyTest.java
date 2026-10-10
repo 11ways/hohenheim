@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.sftp.server.SftpSessionInfo;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -313,6 +315,23 @@ class SftpJourneyTest {
             SftpException revoked = sftpRefusal(catchThrowable(() -> names(write.sftp, "/data")));
             assertThat(revoked.getStatus()).as("step 9: the next request after the revocation is refused")
                 .isEqualTo(SftpConstants.SSH_FX_PERMISSION_DENIED);
+        }
+
+        // 9b. The Files tab lists a viewer's own open session and no one else's; End closes it at once.
+        AccessContext readerAccess = AccessContext.detached(new UserPrincipal((long) reader, "user-" + reader));
+        AccessContext writerAccess = AccessContext.detached(new UserPrincipal((long) writer, "user-" + writer));
+        try (Connection read = signIn(client, port, InstanceSftpRealm.username("sftp-reader@live.test", id),
+            readerPassword)) {
+            List<SftpSessionInfo> own = HohenheimSftp.openOn(readerAccess, id);
+            assertThat(own).as("step 9b: the reader's session is listed for the reader").hasSize(1);
+            assertThat(own.get(0).attribution()).as("step 9b: named by who signed in")
+                .contains("sftp-reader@live.test");
+            assertThat(HohenheimSftp.openOn(writerAccess, id)).as("step 9b: never for another person").isEmpty();
+            assertThat(catchThrowable(() -> HohenheimSftp.end(writerAccess, id, own.get(0).id())))
+                .as("step 9b: nor can another person end it").isInstanceOf(Violations.class);
+            HohenheimSftp.end(readerAccess, id, own.get(0).id());
+            assertThat(catchThrowable(() -> names(read.sftp, "/data")))
+                .as("step 9b: once ended, the connection answers nothing more").isNotNull();
         }
 
         // 10. While SFTP is on, its port joins the SSH ban rule; off, it leaves it.

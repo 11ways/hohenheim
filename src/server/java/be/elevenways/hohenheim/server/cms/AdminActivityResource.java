@@ -58,7 +58,8 @@ public final class AdminActivityResource {
 
     /**
      * The framework's own columns and filters, plus every filter an operator needs to reach one record: the app it is
-     * about, the record id and the origin that flips the default scope.
+     * about, the record id and the origin that flips the default scope. The row draws only who, the app and internal
+     * records (board Activity); the rest keep narrowing through their chips and a link's parameters.
      *
      * AIDEV-NOTE: an app is its workload's record, so the app filter offers instances through the
      * instance record source, whose row scope decides which a reader is offered; a site-only app has no workload and is
@@ -66,9 +67,10 @@ public final class AdminActivityResource {
      */
     private static final TableSpec<Row> TABLE = ActivityAdmin.table().toBuilder()
         .filter(ActivityAdmin.subjectFilter(APP_FILTER, InstanceModel.MODEL_ID,
-            HohenheimMicrocopy.HOHENHEIM.of("app_filter")))
+            HohenheimMicrocopy.HOHENHEIM.of("app_filter"), HohenheimMicrocopy.HOHENHEIM.of("app_filter_all")))
         .filter(FilterSpec.leaf(ActivityModel.RECORD_ID, CoreTypes.CONTAINS).build())
         .filter(FilterSpec.leaf(ActivityModel.ORIGIN, CoreTypes.CONTAINS).build())
+        .filterRow(ActivityAdmin.ACTOR_FILTER, APP_FILTER, ActivityAdmin.INTERNAL_FILTER)
         .build();
 
     private AdminActivityResource() {

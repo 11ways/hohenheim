@@ -22,8 +22,6 @@ import java.util.List;
  */
 public class SecuritySweep extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION = "Expire bans";
-
     @Override
     public @NonNull Identifier id() {
         return HohenheimIds.id("security_sweep");
@@ -47,8 +45,8 @@ public class SecuritySweep extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

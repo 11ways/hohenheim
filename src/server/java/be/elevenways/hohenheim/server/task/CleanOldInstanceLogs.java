@@ -20,8 +20,6 @@ import java.util.List;
  */
 public class CleanOldInstanceLogs extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION = "Delete old instance console logs";
-
     private static final int RETENTION_DAYS = 30;
 
     @Override
@@ -47,8 +45,8 @@ public class CleanOldInstanceLogs extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

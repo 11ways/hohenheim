@@ -27,7 +27,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * An Incus daemon serving VGA console operations the way Incus does: each POST starts an operation with a data and a
  * control secret, a data websocket reaches a SPICE server's port, and the operation runs until its control websocket
  * closes or it is cancelled, which also closes its data websockets; cancelling an operation that already ended is
- * refused. Every channel's link capabilities are kept, read from the first message it sends.
+ * refused. Every channel's link capabilities are kept, read from the first message it sends. A POST without force
+ * while a console operation runs is refused with Incus's own words (instance_console.go); with force it cancels the
+ * running one first.
  *
  * @author Jelle De Loecker
  * @since 0.2.0
@@ -103,6 +105,15 @@ public final class FakeVgaConsoleDaemon implements IncusTransport {
                                                      @Nullable String jsonBody, long timeoutMs) throws IOException {
         this.requests.add(method + " " + pathAndQuery + " " + jsonBody);
         if ("POST".equals(method) && pathAndQuery.matches("/1\\.0/instances/[^/]+/console")) {
+            boolean force = jsonBody != null && jsonBody.matches("(?s).*\"force\"\\s*:\\s*true.*");
+            List<Operation> running = this.byPath.values().stream().filter(op -> op.running).toList();
+            if (!running.isEmpty() && !force) {
+                return envelope(500, Map.of("type", "error", "error_code", 500,
+                    "error", "This console is already connected. Force is required to take it over."));
+            }
+            for (Operation taken : running) {
+                this.end(taken);
+            }
             int number = this.operations.incrementAndGet();
             Operation operation = new Operation("/1.0/operations/op-vga-" + number, "data-secret-" + number,
                 "control-secret-" + number);

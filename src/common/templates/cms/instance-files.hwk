@@ -15,7 +15,7 @@
     RENDERED: the page used to stash it in a variable the template never declared, so
     every refusal drew an empty page with nothing but the tabs on it. -#}
 {% declare error: String = "" %}
-{% declare maxFileBytes: Long = 0 %}
+{% declare maxFileSize: String = "" %}
 {% declare editPath: String = "" %}
 {% declare editContent: String = "" %}
 {% declare actionTarget: RouteTarget %}
@@ -37,6 +37,10 @@
 {% declare sftpFingerprint: String = "" %}
 {% declare sftpKeys: String = "" %}
 {% declare sftpPasswordScopes: String = "" %}
+{% declare sftpPasswordLabel: String = "" %}
+{#- The viewer's open SFTP sessions on this app (every one for an operator): id, who, address, since, operations. -#}
+{% declare sftpSessions: List = null %}
+{% declare timeWording: RelativeTimeWording = null %}
 {% declare sftpPasswordTarget: RouteTarget = null %}
 {% declare sftpKeysTarget: RouteTarget = null %}
 {% declare sftpSettingsTarget: RouteTarget = null %}
@@ -185,13 +189,6 @@
                         <pl-table-cell>{{ t("sftp_sign_in_with", scope: "instance_files") }}</pl-table-cell>
                         <pl-table-cell data-sftp-credentials="1">{% if sftpKeys != "" %}{{ t("sftp_with_keys", scope: "instance_files", keys: sftpKeys) }}{% else %}{{ t("sftp_with_password", scope: "instance_files") }}{% /if %}</pl-table-cell>
                     </pl-table-row>
-                    <pl-table-row>
-                        <pl-table-cell>{{ t("sftp_password_scopes", scope: "instance_files") }}</pl-table-cell>
-                        <pl-table-cell>
-                            <code data-sftp-scopes="1">{{ sftpPasswordScopes }}</code>
-                            <pl-copy-button value={% sftpPasswordScopes %} ariaLabel={% t("sftp_copy_scopes", scope: "instance_files") %}></pl-copy-button>
-                        </pl-table-cell>
-                    </pl-table-row>
                     {% if sftpFingerprint != "" %}
                     <pl-table-row>
                         <pl-table-cell>{{ t("sftp_fingerprint", scope: "instance_files") }}</pl-table-cell>
@@ -200,11 +197,48 @@
                     {% /if %}
                 </pl-table-body>
             </pl-table>
+            {% if sftpSessions %}
+            <h3 class="hh-sftp-sessions-title">{{ t("sftp_sessions", scope: "instance_files") }}</h3>
+            <pl-table data-sftp-sessions="1">
+                <pl-table-body>
+                    {% each sftpSessions as session key session.get("id") %}
+                    <pl-table-row data-sftp-session={% session.get("id") %}>
+                        <pl-table-cell><pl-badge variant="success">{{ t("sftp_connected", scope: "instance_files") }}</pl-badge></pl-table-cell>
+                        <pl-table-cell>
+                            {% if session.get("address") != "" %}
+                            {{ t("sftp_session_from", scope: "instance_files", who: session.get("who"), address: session.get("address")) }}
+                            {% else %}
+                            {{ session.get("who") }}
+                            {% /if %}
+                            <div class="hh-sftp-session-meta">
+                                {{ t("sftp_session_since", scope: "instance_files") }}
+                                <pl-relative-time datetime={% session.get("since") %} wording={% timeWording %}></pl-relative-time>
+                                &middot; {{ t("sftp_session_requests", scope: "instance_files", count: session.get("operations")) }}
+                            </div>
+                        </pl-table-cell>
+                        <pl-table-cell>
+                            <form use:Zenit.form={% actionTarget %}>
+                                <input type="hidden" name={% returnParam %} value={% returnUrl %}>
+                                <input type="hidden" name="action" value="end_sftp_session">
+                                <input type="hidden" name="directory" value={% path %}>
+                                <input type="hidden" name="session" value={% session.get("id") %}>
+                                <pl-button variant="outline" size="sm" type={% "submit" %} data-sftp-end="1">{{ t("sftp_end", scope: "instance_files") }}</pl-button>
+                            </form>
+                        </pl-table-cell>
+                    </pl-table-row>
+                    {% /each %}
+                </pl-table-body>
+            </pl-table>
+            {% /if %}
         </pl-card-content>
         {% /if %}
         <pl-card-footer>
             {% if sftpEnabled %}
-            <pl-button variant="primary" use:Zenit.route={% sftpPasswordTarget %} data-sftp-password="1">{{ t("sftp_create_password", scope: "instance_files") }}</pl-button>
+            <form use:Zenit.form={% sftpPasswordTarget %} class="hh-sftp-password-form">
+                <input type="hidden" name="label" value={% sftpPasswordLabel %}>
+                <input type="hidden" name="scopes" value={% sftpPasswordScopes %} data-sftp-scopes="1">
+                <pl-button variant="primary" type={% "submit" %} data-sftp-password="1">{{ t("sftp_create_password", scope: "instance_files") }}</pl-button>
+            </form>
             <pl-button variant="outline" use:Zenit.route={% sftpKeysTarget %}>{{ t("sftp_add_key", scope: "instance_files") }}</pl-button>
             {% /if %}
             {% if sftpOperator && (!sftpEnabled || !sftpRunning) %}
@@ -243,7 +277,7 @@
     <pl-card>
         <pl-card-header>
             <pl-card-title>{{ t("add", scope: "instance_files") }}</pl-card-title>
-            <pl-card-description>{{ t("upload_limit", scope: "instance_files", bytes: maxFileBytes) }}</pl-card-description>
+            <pl-card-description>{{ t("upload_limit", scope: "instance_files", size: maxFileSize) }}</pl-card-description>
         </pl-card-header>
         <pl-card-content>
             <form use:Zenit.form={% actionTarget %} enctype="multipart/form-data">

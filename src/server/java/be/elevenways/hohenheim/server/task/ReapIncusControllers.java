@@ -52,10 +52,6 @@ import java.util.List;
  */
 public class ReapIncusControllers extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION =
-        "Refresh this controller's Incus presence and reap departed controllers' shared objects";
-
-
     /** One host's outcome; every list names objects, never a bare count. */
     public record HostOutcome(@NonNull String server, boolean reachable,
                               @NonNull List<IncusReaper.Candidate> plan,
@@ -90,8 +86,8 @@ public class ReapIncusControllers extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     @Override

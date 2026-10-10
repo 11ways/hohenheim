@@ -22,8 +22,6 @@ import java.util.List;
  */
 public class BackupDatabases extends ScheduledTask {
 
-    public static final String STATIC_DESCRIPTION = "Back up managed databases";
-
     @Override
     public @NonNull Identifier id() {
         return HohenheimIds.id("backup_databases");
@@ -47,8 +45,8 @@ public class BackupDatabases extends ScheduledTask {
     }
 
     @Override
-    public @NonNull String description() {
-        return STATIC_DESCRIPTION;
+    public @NonNull Microcopy description() {
+        return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
     /** One run's honest tally: what was dumped, and every database that was not, with why. */

@@ -37,7 +37,8 @@ public class HohenheimSettings {
     public static final SettingGroup HOHENHEIM = Zenit.SETTINGS.createGroup("hohenheim")
         .readPermission(HohenheimSources.ADMIN_ACCESS)
         .writePermission(HohenheimSources.ADMIN_ACCESS)
-        .label(Microcopy.of("settings.hohenheim.label"));
+        .label(Microcopy.of("settings.hohenheim.label"))
+        .icon("sliders");
 
     /** @return the configured value, or the setting's own default when it is unset or not positive */
     public static int positiveOrDefault(@NonNull SettingDefinition<Integer> setting) {
