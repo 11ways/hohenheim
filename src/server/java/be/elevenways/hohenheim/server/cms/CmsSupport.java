@@ -4,7 +4,6 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import java.util.function.BiFunction;
-import java.util.function.Supplier;
 import java.util.Objects;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
@@ -15,7 +14,6 @@ import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.zenit.cms.common.resource.RecordTab;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
@@ -303,29 +301,6 @@ public final class CmsSupport {
     public static @NonNull String panelSlug(@NonNull Conduit conduit) {
         String slug = conduit.getParameter(CmsEndpoints.PANEL_PARAM);
         return slug != null && !slug.isBlank() ? slug : HohenheimSlugs.ADMIN;
-    }
-
-    /**
-     * A per-request read: computed once per rendered list, again per row on an attribute-less conduit.
-     */
-    public static <V> @NonNull V memo(@NonNull Conduit conduit, @NonNull IdentifierKey<V> key,
-                                      @NonNull Supplier<V> read) {
-        V value = conduit.getAttribute(key);
-        if (value == null) {
-            value = read.get();
-            try {
-                conduit.setAttribute(key, value);
-            } catch (UnsupportedOperationException attributeless) {
-                // An attribute-less conduit reads again per row.
-            }
-        }
-        return value;
-    }
-
-    /** {@link #memo(Conduit, IdentifierKey, Supplier)} on the current request; without one, a fresh read per call. */
-    public static <V> @NonNull V memo(@NonNull IdentifierKey<V> key, @NonNull Supplier<V> read) {
-        Conduit conduit = RouteScope.currentConduit();
-        return conduit == null ? read.get() : memo(conduit, key, read);
     }
 
     /**

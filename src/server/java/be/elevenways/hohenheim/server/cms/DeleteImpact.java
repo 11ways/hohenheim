@@ -49,7 +49,7 @@ import java.util.Set;
  *
  * AIDEV-NOTE: a delete's confirmation and its availability are asked once per ROW while a list page renders, so a
  * naive implementation would issue a query per row. Every table a delete warning or refusal consults is read ONCE
- * per request through {@link CmsSupport#memo} and every record on the page is then answered in memory. A
+ * per request through {@link RouteScope#memo} and every record on the page is then answered in memory. A
  * conduit-less caller (a test, a detail render outside a request) degrades to reading the tables directly rather
  * than failing. The {@code *InUse} methods are the ONE home of a delete's dead reason; each resource's delete
  * operation reads its own here.
@@ -185,9 +185,9 @@ public final class DeleteImpact {
         if (id == null) {
             return null;
         }
-        long instances = CmsSupport.memo(IMAGE_INSTANCES, () -> GroupedCounts.of(Models.get(InstanceModel.class).find(),
+        long instances = RouteScope.memo(IMAGE_INSTANCES, () -> GroupedCounts.of(Models.get(InstanceModel.class).find(),
             InstanceModel.RUNTIME_IMAGE_ID)).getOrDefault(id, 0L);
-        long templates = CmsSupport.memo(IMAGE_TEMPLATES, () -> GroupedCounts.of(Models.get(InstanceTemplateModel.class).find(),
+        long templates = RouteScope.memo(IMAGE_TEMPLATES, () -> GroupedCounts.of(Models.get(InstanceTemplateModel.class).find(),
             InstanceTemplateModel.RUNTIME_IMAGE_ID)).getOrDefault(id, 0L);
         return instances > 0 || templates > 0 ? HohenheimMicrocopy.RUNTIME_IMAGE.of("delete_in_use")
             .withArg("instances", instances).withArg("templates", templates) : null;
@@ -202,12 +202,12 @@ public final class DeleteImpact {
         if (id == null) {
             return null;
         }
-        Row migrating = CmsSupport.memo(MIGRATIONS, ServerModel::migrationsByTarget).get(id);
+        Row migrating = RouteScope.memo(MIGRATIONS, ServerModel::migrationsByTarget).get(id);
         if (migrating != null) {
             return HohenheimMicrocopy.SERVER.of("delete_migrating")
                 .withArg("instance", String.valueOf((Object) migrating.get(InstanceModel.NAME)));
         }
-        ServerModel.References references = CmsSupport.memo(SERVER_REFERENCES, ServerModel::referencesByServer)
+        ServerModel.References references = RouteScope.memo(SERVER_REFERENCES, ServerModel::referencesByServer)
             .getOrDefault(id, ServerModel.References.NONE);
         return references.any() ? references.describe(HohenheimMicrocopy.SERVER.of("delete_in_use")) : null;
     }
@@ -215,7 +215,7 @@ public final class DeleteImpact {
     /** @return the live instance rows a database is attached to, in link order */
     static @NonNull List<Row> liveInstancesOf(@Nullable Integer databaseId) {
         return databaseId == null ? List.of()
-            : CmsSupport.memo(ATTACHED, InstanceDatabaseLinks::liveInstancesByDatabase).getOrDefault(databaseId, List.of());
+            : RouteScope.memo(ATTACHED, InstanceDatabaseLinks::liveInstancesByDatabase).getOrDefault(databaseId, List.of());
     }
 
     /**
@@ -568,48 +568,48 @@ public final class DeleteImpact {
     }
 
     private static @NonNull List<Row> domains() {
-        return CmsSupport.memo(DOMAINS, () -> Models.get(SiteDomainModel.class).find().all());
+        return RouteScope.memo(DOMAINS, () -> Models.get(SiteDomainModel.class).find().all());
     }
 
     private static @NonNull List<Row> certificates() {
-        return CmsSupport.memo(CERTIFICATES, () -> Models.get(CertificateModel.class).find().all());
+        return RouteScope.memo(CERTIFICATES, () -> Models.get(CertificateModel.class).find().all());
     }
 
     private static @NonNull List<Row> zones() {
-        return CmsSupport.memo(ZONES, () -> Models.get(DnsZoneModel.class).find().all());
+        return RouteScope.memo(ZONES, () -> Models.get(DnsZoneModel.class).find().all());
     }
 
     /** LIVE sites only (the soft-delete find hook): a trashed site gates and names nothing. */
     private static @NonNull List<Row> sites() {
-        return CmsSupport.memo(SITES, () -> Models.get(SiteModel.class).find().all());
+        return RouteScope.memo(SITES, () -> Models.get(SiteModel.class).find().all());
     }
 
     private static @NonNull List<Row> paths() {
-        return CmsSupport.memo(PATHS, () -> Models.get(ProtectedPathModel.class).find().all());
+        return RouteScope.memo(PATHS, () -> Models.get(ProtectedPathModel.class).find().all());
     }
 
     private static @NonNull List<Row> rules() {
-        return CmsSupport.memo(RULES, () -> Models.get(AccessRuleModel.class).find().all());
+        return RouteScope.memo(RULES, () -> Models.get(AccessRuleModel.class).find().all());
     }
 
     private static @NonNull List<Row> zonePeers() {
-        return CmsSupport.memo(ZONE_PEERS, () -> Models.get(DnsZonePeerModel.class).find().all());
+        return RouteScope.memo(ZONE_PEERS, () -> Models.get(DnsZonePeerModel.class).find().all());
     }
 
     private static @NonNull List<Row> environments() {
-        return CmsSupport.memo(ENVIRONMENTS, () -> Models.get(EnvironmentModel.class).find().all());
+        return RouteScope.memo(ENVIRONMENTS, () -> Models.get(EnvironmentModel.class).find().all());
     }
 
     private static @NonNull List<Row> databases() {
-        return CmsSupport.memo(DATABASES, () -> Models.get(DatabaseModel.class).find().all());
+        return RouteScope.memo(DATABASES, () -> Models.get(DatabaseModel.class).find().all());
     }
 
     /** Soft-deleted instances included: an attachment to a destroyed workload still names it. */
     private static @NonNull List<Row> instances() {
-        return CmsSupport.memo(INSTANCES, () -> Models.get(InstanceModel.class).find().withTrashed().all());
+        return RouteScope.memo(INSTANCES, () -> Models.get(InstanceModel.class).find().withTrashed().all());
     }
 
     private static @NonNull List<Row> variables() {
-        return CmsSupport.memo(VARIABLES, () -> Models.get(InstanceVariableModel.class).find().all());
+        return RouteScope.memo(VARIABLES, () -> Models.get(InstanceVariableModel.class).find().all());
     }
 }

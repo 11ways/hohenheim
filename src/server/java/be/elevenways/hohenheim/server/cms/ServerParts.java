@@ -222,7 +222,7 @@ public final class ServerParts {
     /** How many apps and managed databases the host runs, counted once per rendered list. */
     private static @NonNull String runsCellOf(@NonNull Row server, @NonNull PanelRequest request) {
         Conduit conduit = request.conduit();
-        Map<Integer, int[]> counts = CmsSupport.memo(conduit, RUNS_COUNTS, ServerParts::runsCounts);
+        Map<Integer, int[]> counts = conduit.memo(RUNS_COUNTS, ServerParts::runsCounts);
         int[] runs = counts.getOrDefault(server.get(ServerModel.ID), new int[2]);
         Microcopy text = runs[0] == 0 && runs[1] == 0 ? HohenheimMicrocopy.HOST_LIST.of("runs_nothing")
             : HohenheimMicrocopy.HOST_LIST.of("runs_count")

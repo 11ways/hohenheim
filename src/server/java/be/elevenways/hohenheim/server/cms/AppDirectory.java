@@ -158,7 +158,7 @@ final class AppDirectory {
         if (conduit == null) {
             return readUncached(panel, access);
         }
-        return CmsSupport.memo(conduit, IdentifierKey.of("hohenheim", "app_directory_" + panel.slug()),
+        return conduit.memo(IdentifierKey.of("hohenheim", "app_directory_" + panel.slug()),
             () -> readUncached(panel, access));
     }
 

@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
+import java.lang.reflect.InvocationHandler;
+import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.hohenheim.test.LegacyStepPayloads;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimRefusalReason;
@@ -522,7 +524,8 @@ class InstancePowerOperationsTest {
     /** A conduit that answers in English and records the status a refusal sets. */
     private static Conduit answering(int[] status) {
         return (Conduit) Proxy.newProxyInstance(InstancePowerOperationsTest.class.getClassLoader(),
-            new Class<?>[] { Conduit.class }, (proxy, method, args) -> switch (method.getName()) {
+            new Class<?>[] { Conduit.class }, (proxy, method, args) -> TestAccessContexts.isRequestMemo(method)
+                ? InvocationHandler.invokeDefault(proxy, method, args) : switch (method.getName()) {
                 case "setResponseStatus" -> {
                     status[0] = (int) args[0];
                     yield null;

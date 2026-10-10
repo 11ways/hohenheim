@@ -927,7 +927,7 @@ public final class DatabaseParts {
         if (engineId == null) {
             return 0;
         }
-        return CmsSupport.memo(request.conduit(), DATABASE_COUNTS, DatabaseParts::countDatabasesPerEngine)
+        return request.conduit().memo(DATABASE_COUNTS, DatabaseParts::countDatabasesPerEngine)
             .getOrDefault(engineId, 0L);
     }
 

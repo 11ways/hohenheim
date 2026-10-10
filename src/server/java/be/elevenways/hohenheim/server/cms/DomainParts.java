@@ -251,7 +251,7 @@ public final class DomainParts {
     static @Nullable RecordLinksCell appCell(@NonNull Row domain, @NonNull PanelRequest request) {
         Integer siteId = domain.get(SiteDomainModel.SITE_ID);
         Row site = siteId == null ? null
-            : CmsSupport.memo(request.conduit(), SITES_BY_ID, DomainParts::sitesById).get(siteId);
+            : request.conduit().memo(SITES_BY_ID, DomainParts::sitesById).get(siteId);
         if (site == null) {
             return null;
         }
@@ -352,7 +352,7 @@ public final class DomainParts {
     private static long reachWaitMs(@NonNull PanelRequest request) {
         long now = Now.millis();
         // An attribute-less conduit starts a fresh budget per cell, so each still gets one lookup's bound.
-        long deadline = CmsSupport.memo(request.conduit(), REACH_DEADLINE, () -> now + REACH_RENDER_BUDGET_MS);
+        long deadline = request.conduit().memo(REACH_DEADLINE, () -> now + REACH_RENDER_BUDGET_MS);
         return Math.max(0, Math.min(HostnameReach.LOOKUP_WAIT_MS, deadline - now));
     }
 

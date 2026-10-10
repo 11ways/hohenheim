@@ -298,11 +298,11 @@ public final class DnsZoneParts {
             return null;
         }
         Integer id = zone.get(DnsZoneModel.ID);
-        long total = CmsSupport.memo(SECONDARY_COUNTS, DnsZoneParts::secondaryCounts).getOrDefault(id, 0L);
+        long total = RouteScope.memo(SECONDARY_COUNTS, DnsZoneParts::secondaryCounts).getOrDefault(id, 0L);
         if (total == 0) {
             return HohenheimMicrocopy.DNS_ZONE.of("secondaries_none");
         }
-        long current = CmsSupport.memo(CURRENT_SECONDARY_COUNTS, DnsZoneParts::currentSecondaryCounts)
+        long current = RouteScope.memo(CURRENT_SECONDARY_COUNTS, DnsZoneParts::currentSecondaryCounts)
             .getOrDefault(id, 0L);
         return HohenheimMicrocopy.DNS_ZONE.of("secondaries_current")
             .withArg("current", Math.toIntExact(current))
@@ -363,7 +363,7 @@ public final class DnsZoneParts {
         if (DnsZoneModel.ROLE_SECONDARY.equals(DnsZoneModel.roleOf(zone))) {
             return servedRecordCount(zone);
         }
-        return CmsSupport.memo(RECORD_COUNTS, DnsZoneParts::recordCounts).getOrDefault(zone.get(DnsZoneModel.ID), 0L);
+        return RouteScope.memo(RECORD_COUNTS, DnsZoneParts::recordCounts).getOrDefault(zone.get(DnsZoneModel.ID), 0L);
     }
 
     /**

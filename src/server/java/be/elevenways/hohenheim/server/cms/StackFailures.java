@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.routing.RouteScope;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -18,7 +19,7 @@ import java.util.Map;
  * Why a stack reads "Failed": the newest deployment row's error, memoized per request.
  *
  * AIDEV-NOTE: the stacks LIST asks once per rendered row, so the newest deployment per
- * stack is kept ONCE per request in the panel's one request memo ({@link CmsSupport#memo})
+ * stack is kept ONCE per request in the panel's one request memo ({@link RouteScope#memo})
  * rather than queried per row. A conduit-less caller reads the table.
  */
 final class StackFailures {
@@ -62,7 +63,7 @@ final class StackFailures {
         if (stackId == null) {
             return null;
         }
-        Map<Integer, Row> memo = CmsSupport.memo(LATEST, HashMap::new);
+        Map<Integer, Row> memo = RouteScope.memo(LATEST, HashMap::new);
         if (memo.containsKey(stackId)) {
             return memo.get(stackId);
         }

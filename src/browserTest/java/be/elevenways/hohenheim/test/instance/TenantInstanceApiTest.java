@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -594,7 +595,9 @@ class TenantInstanceApiTest extends HohenheimTestBase {
             java.lang.reflect.Proxy.newProxyInstance(
                 TenantInstanceApiTest.class.getClassLoader(),
                 new Class<?>[] { be.elevenways.zenit.common.conduit.Conduit.class },
-                (proxy, method, args) -> switch (method.getName()) {
+                (proxy, method, args) -> TestAccessContexts.isRequestMemo(method)
+                    ? java.lang.reflect.InvocationHandler.invokeDefault(proxy, method, args)
+                    : switch (method.getName()) {
                     case "getAttribute" -> null;
                     case "equals" -> proxy == args[0];
                     case "hashCode" -> System.identityHashCode(proxy);

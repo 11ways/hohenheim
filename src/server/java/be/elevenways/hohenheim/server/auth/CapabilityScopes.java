@@ -6,10 +6,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.cms.CmsSupport;
-import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -22,9 +19,7 @@ import be.elevenways.zenit.common.security.RecordCapabilityScope;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.HashMap;
 import java.util.LinkedHashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -38,10 +33,6 @@ import static be.elevenways.hohenheim.HohenheimCapabilities.MANAGE;
  * @since 0.1.0
  */
 final class CapabilityScopes {
-
-    /** Request-scoped memo of the walk's set-wise answers, keyed by model + capability. */
-    private static final IdentifierKey<Map<String, RecordCapabilityScope>> CAPABILITY_SCOPES =
-        IdentifierKey.of("hohenheim", "capability_scopes");
 
     private CapabilityScopes() {
     }
@@ -220,33 +211,13 @@ final class CapabilityScopes {
      * checks keep answering yes. The hand-rolled candidates-plus-confirm loop that used to
      * live here could not express ALL at all.
      *
-     * Memoized per REQUEST on the conduit (the PermissionResolver WALK_CACHE idiom): panel
-     * eligibility, scope criteria and the nav probes all ask per render, and grants written
-     * mid-request stay next-request-effective. Conduit-less contexts run the walk fresh.
-     *
-     * AIDEV-NOTE: the memo is a MAP keyed by model+capability, not one attribute per set. One
-     * attribute per set is how the second consumer (dns records) quietly ends up outside the
-     * budget the first consumer's test pinned.
+     * Memoized per REQUEST by core ({@link AccessContext#capabilityScope}): panel eligibility, scope criteria and the
+     * nav probes all ask per render, and grants written mid-request stay next-request-effective.
      */
     static @NonNull RecordCapabilityScope capabilityScope(@NonNull AccessContext ctx,
                                                           @NonNull Identifier model,
                                                           @NonNull String capability) {
-        String key = model + "#" + capability;
-        Conduit conduit = ctx.conduit();
-        if (conduit == null) {
-            return ctx.capabilityScope(model, capability);
-        }
-
-        Map<String, RecordCapabilityScope> cache = CmsSupport.memo(conduit, CAPABILITY_SCOPES, HashMap::new);
-
-        RecordCapabilityScope cached = cache.get(key);
-        if (cached != null) {
-            return cached;
-        }
-
-        RecordCapabilityScope scope = ctx.capabilityScope(model, capability);
-        cache.put(key, scope);
-        return scope;
+        return ctx.capabilityScope(model, capability);
     }
 
     /**
@@ -333,17 +304,8 @@ final class CapabilityScopes {
      * {@code out_of_scope} and rolls back a perfectly legitimate allocation. Call it from
      * the funnel that planted the grant, never speculatively;
      * {@link RecordOwners#grantCreatorManage} already does.
-     *
-     * AIDEV-NOTE: core's AccessContext memoizes the same walk beneath this memo (zenit:capability_scopes), so both
-     * are dropped; keeping only this one served the stale "none" from core's.
      */
     static void forgetCapabilityScopes(@NonNull AccessContext ctx) {
-        Conduit conduit = ctx.conduit();
-        Map<String, RecordCapabilityScope> cache = conduit == null ? null
-            : conduit.getAttribute(CAPABILITY_SCOPES);
-        if (cache != null) {
-            cache.clear();
-        }
         ctx.forgetCapabilityScopes();
     }
 

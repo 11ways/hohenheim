@@ -174,7 +174,7 @@ public final class InstanceScheduleStepParts {
         if (conduit == null) {
             return loadSchedule(scheduleId);
         }
-        Map<Integer, Row> cache = CmsSupport.memo(conduit, SCHEDULE_ROWS, LinkedHashMap::new);
+        Map<Integer, Row> cache = conduit.memo(SCHEDULE_ROWS, LinkedHashMap::new);
         if (cache.containsKey(scheduleId)) {
             return cache.get(scheduleId);
         }

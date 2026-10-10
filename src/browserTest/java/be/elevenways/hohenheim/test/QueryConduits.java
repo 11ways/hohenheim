@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.protoblast.common.key.IdentifierKey;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.common.conduit.Conduit;
@@ -33,7 +34,8 @@ public final class QueryConduits {
     public static Conduit request(String panelSlug, Map<String, String> query) {
         Map<IdentifierKey<?>, Object> attributes = new HashMap<>();
         Object[] self = new Object[1];
-        InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
+        InvocationHandler handler = (proxy, method, args) -> TestAccessContexts.isRequestMemo(method)
+            ? InvocationHandler.invokeDefault(proxy, method, args) : switch (method.getName()) {
             case "getAttribute" -> attributes.get(args[0]);
             case "setAttribute" -> {
                 if (args[1] == null) {

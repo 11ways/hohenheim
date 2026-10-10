@@ -191,7 +191,7 @@ final class SpamserviceRemoteStore {
             return;
         }
         // An attribute-less conduit keeps no outcome: the notice falls back to the client's presence.
-        CmsSupport.memo(conduit, PAGE_OUTCOMES, HashMap::new).put(entry, unavailable);
+        conduit.memo(PAGE_OUTCOMES, HashMap::new).put(entry, unavailable);
     }
 
     private static @Nullable Boolean outcome(@NonNull Identifier entry, @NonNull AccessContext access) {

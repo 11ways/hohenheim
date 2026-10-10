@@ -4,7 +4,6 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.model.DnsZoneModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
-import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.dns.DnsNames;
 import be.elevenways.hohenheim.server.proxy.HostnamePatterns;
 import be.elevenways.protoblast.common.key.IdentifierKey;
@@ -94,7 +93,7 @@ public final class HostnameAuthority {
          */
         public static @NonNull Snapshot memoized(@NonNull AccessContext ctx) {
             Conduit conduit = ctx.conduit();
-            return conduit == null ? load() : CmsSupport.memo(conduit, MEMO, Snapshot::load);
+            return conduit == null ? load() : conduit.memo(MEMO, Snapshot::load);
         }
 
         /** @return the site a domain row hangs off, or null when it is gone or trashed */

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.zenit.test.support.TestAccessContexts;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -119,7 +120,8 @@ public final class TenantConduits {
             attributes.put(ConduitAttributes.PRINCIPAL, principal);
         }
         Object[] self = new Object[1];
-        InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
+        InvocationHandler handler = (proxy, method, args) -> TestAccessContexts.isRequestMemo(method)
+            ? InvocationHandler.invokeDefault(proxy, method, args) : switch (method.getName()) {
             case "getAttribute" -> attributes.get(args[0]);
             case "setAttribute" -> {
                 if (args[1] == null) {
