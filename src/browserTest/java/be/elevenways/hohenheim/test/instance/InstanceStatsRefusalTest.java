@@ -13,7 +13,7 @@ import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.channel.ChannelException;
-import be.elevenways.zenit.common.channel.FakeChannelLink;
+import be.elevenways.zenit.test.support.FakeChannelLink;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.orm.datasource.Row;
