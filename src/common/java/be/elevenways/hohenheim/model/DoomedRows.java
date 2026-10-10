@@ -3,9 +3,7 @@ package be.elevenways.hohenheim.model;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.model.Schema;
 import org.checkerframework.checker.nullness.qual.NonNull;
-
-import java.util.function.BiConsumer;
-import java.util.function.Function;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * THE before-remove / after-remove handover: read what matters of the rows a delete is about
@@ -32,6 +30,24 @@ public final class DoomedRows {
     }
 
     /**
+     * Reads what matters of the doomed rows while they still exist; it blocks (it reads them).
+     *
+     * AIDEV-NOTE: a standalone SAM on purpose, never a java.util.function type: on the browser it suspends, and a
+     * suspending JDK callback lets every call through that JDK interface in the bundle suspend (protoblast's
+     * SyncFamilyVerifierPlugin fails such a bundle).
+     */
+    @FunctionalInterface
+    public interface Capture<T> {
+        @Nullable T capture(@NonNull RemoveFromDatasource context);
+    }
+
+    /** Acts on a capture once the delete ran; it blocks for the same reason, a standalone SAM like {@link Capture}. */
+    @FunctionalInterface
+    public interface AfterRemove<T> {
+        void accept(@NonNull RemoveFromDatasource context, @NonNull T captured);
+    }
+
+    /**
      * Register the pair on {@code schema}: {@code capture} reads the pending delete (through
      * {@code doomedRows()} or {@code doomedPrimaryKeys()}) before it runs, and
      * {@code afterRemove} receives its answer once the delete ran.
@@ -41,11 +57,11 @@ public final class DoomedRows {
      */
     @SuppressWarnings("unchecked")
     public static <T> void handOver(@NonNull Schema schema,
-                                    @NonNull Function<RemoveFromDatasource, T> capture,
-                                    @NonNull BiConsumer<RemoveFromDatasource, T> afterRemove) {
+                                    @NonNull Capture<T> capture,
+                                    @NonNull AfterRemove<T> afterRemove) {
         String key = nextKey();
         schema.addBeforeRemoveHook(context -> {
-            T captured = capture.apply(context);
+            T captured = capture.capture(context);
             if (captured != null) {
                 context.setAttribute(key, captured);
             }

@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.orm.datasource.context.SaveToDatasource;
 import be.elevenways.zenit.common.orm.model.GlobalModelHooks;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
+import be.elevenways.zenit.common.orm.model.ModelHook;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.net.OutboundUrlGuard;
@@ -26,7 +27,6 @@ import org.junit.jupiter.api.Test;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.List;
-import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -346,7 +346,7 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
             HardDeletes.byId(users, id + 1_000_000);
         }
         // 2. An after-save hook's next write, even to the same field, remains staged after commit.
-        Consumer<SaveToDatasource> hook = context -> {
+        ModelHook<SaveToDatasource> hook = context -> {
             if (context.getRow() == row) {
                 row.set(UserModel.DISPLAY_NAME, "Staged after save");
             }

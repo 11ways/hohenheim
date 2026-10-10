@@ -314,6 +314,18 @@ public final class PortLedger {
     }
 
     /**
+     * One claim's check-and-write; it blocks (it reads and writes rows).
+     *
+     * AIDEV-NOTE: a standalone SAM on purpose, never a java.util.function type: on the browser it suspends, and a
+     * suspending JDK callback lets every call through that JDK interface in the bundle suspend (protoblast's
+     * SyncFamilyVerifierPlugin fails such a bundle).
+     */
+    @FunctionalInterface
+    private interface ClaimWrite {
+        void write();
+    }
+
+    /**
      * Run one claim's check-and-write under the lease of the kernel resource it contends
      * for, so no rival writer can slip an overlapping row in between.
      *
@@ -321,12 +333,12 @@ public final class PortLedger {
      *         past the wait
      */
     private static void underClaimLease(int serverId, int port, @NonNull String key,
-                                        @NonNull Runnable body) {
+                                        @NonNull ClaimWrite body) {
         Leases leases = Leases.of(Db.currentOrDefault());
         if (!leases.canAcquireHere()) {
             // Inside a write transaction on a single-writer engine: that transaction is
             // already a database-wide exclusion, and a lease statement would block on it.
-            body.run();
+            body.write();
             return;
         }
         Lease lease = leases.acquire(CLAIM_LEASE_PREFIX + serverId + "_" + port + "_"
@@ -335,7 +347,7 @@ public final class PortLedger {
             throw new PortConflict(key, "a concurrent claim of the same port", null);
         }
         try {
-            body.run();
+            body.write();
         } finally {
             lease.release();
         }

@@ -25,7 +25,7 @@ public abstract class DatasourceScoped {
 
     /** Run a value-returning model operation under this service's datasource scope. */
     protected <T> T query(Supplier<T> body) {
-        return datasource == null ? body.get() : Db.supply(datasource, body);
+        return datasource == null ? body.get() : Db.supply(datasource, body::get);
     }
 
     /** Run a void model operation under this service's datasource scope. */
