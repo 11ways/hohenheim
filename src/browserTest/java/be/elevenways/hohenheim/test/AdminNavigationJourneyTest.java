@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.i18n.MicrocopyFilter;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -256,7 +257,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
                 }
                 for (String tag : List.of("en", "nl")) {
                     String plain = label.tryResolve(LocaleChain.ofTags(tag), MessageResolvers.getDefault());
-                    String holder = label.withFilter("context", "holder")
+                    String holder = label.withFilter(MicrocopyFilter.TARGET.filterName(), "holder")
                         .tryResolve(LocaleChain.ofTags(tag), MessageResolvers.getDefault());
                     String sentence = label.withFilter("case", "sentence")
                         .tryResolve(LocaleChain.ofTags(tag), MessageResolvers.getDefault());
@@ -267,7 +268,7 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
             }
         }
         assertThat(unworded).as("step 10: every capability has its holder and sentence spelling").isEmpty();
-        assertThat(HohenheimMicrocopy.CAPABILITY.of("manage").withFilter("context", "holder")
+        assertThat(HohenheimMicrocopy.CAPABILITY.of("manage", "holder")
             .tryResolve(LocaleChain.ofTags("en"), MessageResolvers.getDefault()))
             .as("step 10: who manages a record is its tenant").isEqualTo("Tenant");
         KnownCapability siteManage = KnownCapabilities.forModel(SiteModel.MODEL_ID).get(0);

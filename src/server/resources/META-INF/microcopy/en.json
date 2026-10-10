@@ -272,7 +272,7 @@
     {
       "text": "Credentials holder",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "credentials",
@@ -4283,7 +4283,7 @@
     {
       "text": "Tenant",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "manage",
@@ -4299,7 +4299,7 @@
     {
       "text": "Viewer",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "view",
@@ -4323,7 +4323,7 @@
     {
       "text": "Editor",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "edit",
@@ -4339,7 +4339,7 @@
     {
       "text": "Dynamic DNS user",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "dynamic DNS token",
@@ -6628,7 +6628,7 @@
     {
       "text": "Snapshot keeper",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "snapshots",
@@ -6656,7 +6656,7 @@
     {
       "text": "Backup keeper",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "backups",
@@ -7320,7 +7320,7 @@
     {
       "text": "Image runner",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "run arbitrary images",
@@ -7344,7 +7344,7 @@
     {
       "text": "Console user",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "console",
@@ -7539,7 +7539,7 @@
     {
       "text": "Power operator",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "power",
@@ -7761,7 +7761,7 @@
     {
       "text": "File reader",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "read files",
@@ -7792,7 +7792,7 @@
     {
       "text": "File writer",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "write files",
@@ -9651,7 +9651,7 @@
     {
       "text": "Configurator",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "configure",
@@ -9671,7 +9671,7 @@
     {
       "text": "Remover",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "destroy",
@@ -9701,7 +9701,7 @@
     {
       "text": "Command runner",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "run commands",
@@ -11571,7 +11571,7 @@
     {
       "text": "Shell user",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "shell",

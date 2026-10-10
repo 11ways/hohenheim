@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.source.GitProviderKindRegistry;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
-import be.elevenways.protoblast.common.i18n.MicrocopyFilter;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
@@ -49,21 +48,15 @@ class DeclaredMicrocopyKeysTest {
     private static final LocaleChain EN = LocaleChain.ofTags("en");
 
     /**
-     * AIDEV-NOTE: every {@link HohenheimMicrocopy} constant's {@code of} is declared by its QUALIFIED call text
-     * ({@code HohenheimMicrocopy.VIOLATIONS.of}), so a key read through the scope home is judged like a bare
-     * {@code Microcopy.of}. A factory is matched by call text across every scanned file, which is why no class may
-     * spell a scoped helper of its own: the scan would not see a key it builds.
+     * AIDEV-NOTE: every {@link HohenheimMicrocopy} constant's {@code of} ({@code HohenheimMicrocopy.VIOLATIONS.of}) and
+     * zenit-cms's {@code CmsMicrocopy.COPY.of} are scope constants JavaMicrocopyKeys finds on its own, so a key read
+     * through the scope home is judged like a bare {@code Microcopy.of}. Only a helper of another shape is declared
+     * here, which is why no class may spell a scoped helper of its own: the scan would not see a key it builds.
      */
     private JavaMicrocopyKeys scan() {
-        JavaMicrocopyKeys scan = JavaMicrocopyKeys.in(Path.of("src/common"), Path.of("src/server"))
+        return JavaMicrocopyKeys.in(Path.of("src/common"), Path.of("src/server"))
             // The helpers' own files only FORWARD their parameters; they declare no key.
-            .excluding("HohenheimMicrocopy.java", "HohenheimViolations.java", "HohenheimCounts.java");
-        for (HohenheimMicrocopy scope : HohenheimMicrocopy.values()) {
-            // The literal after the key, when given, is the copy's target (HohenheimMicrocopy.of(key, target)).
-            scan.factory("HohenheimMicrocopy." + scope.name() + ".of", List.of("scope=" + scope.scope()),
-                List.of(MicrocopyFilter.TARGET.filterName()));
-        }
-        return scan
+            .excluding("HohenheimMicrocopy.java", "HohenheimViolations.java", "HohenheimCounts.java")
             // An operation on an instance refused, the instance named.
             .factory("HohenheimViolations.instanceRefusal", List.of("scope=" + HohenheimMicrocopy.VIOLATIONS.scope()),
                 List.of())
@@ -73,8 +66,6 @@ class DeclaredMicrocopyKeysTest {
             .factory("HohenheimCounts.of", List.of("scope=" + HohenheimMicrocopy.COUNT.scope()), List.of())
             // zenit-cms's own words (a "Delete" label) Hohenheim reads under that module's scope.
             .factory("CmsMicrocopy.of", List.of("scope=" + CmsMicrocopy.SCOPE), List.of())
-            .factory("CmsMicrocopy.COPY.of", List.of("scope=" + CmsMicrocopy.SCOPE),
-                List.of(MicrocopyFilter.TARGET.filterName()))
             .factory(JavaMicrocopyKeys.MICROCOPY_OF);
     }
 

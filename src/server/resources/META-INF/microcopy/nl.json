@@ -272,7 +272,7 @@
     {
       "text": "Houder van inloggegevens",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "inloggegevens",
@@ -4283,7 +4283,7 @@
     {
       "text": "Huurder",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "beheren",
@@ -4299,7 +4299,7 @@
     {
       "text": "Kijker",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "bekijken",
@@ -4323,7 +4323,7 @@
     {
       "text": "Bewerker",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "bewerken",
@@ -4339,7 +4339,7 @@
     {
       "text": "Gebruiker van dynamische DNS",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "dynamische DNS-token",
@@ -6628,7 +6628,7 @@
     {
       "text": "Snapshotbeheerder",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "snapshots",
@@ -6656,7 +6656,7 @@
     {
       "text": "Back-upbeheerder",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "back-ups",
@@ -7320,7 +7320,7 @@
     {
       "text": "Imagegebruiker",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "willekeurige images draaien",
@@ -7344,7 +7344,7 @@
     {
       "text": "Consolegebruiker",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "console",
@@ -7539,7 +7539,7 @@
     {
       "text": "Stroombeheerder",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "stroom",
@@ -7761,7 +7761,7 @@
     {
       "text": "Bestandslezer",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "bestanden lezen",
@@ -7792,7 +7792,7 @@
     {
       "text": "Bestandsschrijver",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "bestanden schrijven",
@@ -9651,7 +9651,7 @@
     {
       "text": "Configurator",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "configureren",
@@ -9671,7 +9671,7 @@
     {
       "text": "Verwijderaar",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "vernietigen",
@@ -9701,7 +9701,7 @@
     {
       "text": "Opdrachtuitvoerder",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "opdrachten uitvoeren",
@@ -11571,7 +11571,7 @@
     {
       "text": "Shellgebruiker",
       "scope": "capability",
-      "context": "holder"
+      "target": "holder"
     },
     {
       "text": "shell",
