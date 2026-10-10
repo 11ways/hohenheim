@@ -166,7 +166,6 @@ public final class AccessRuleParts {
             .navGroup(HohenheimPanel.NETWORK_GROUP)
             .navOrder(31)
             .showInNav(false)
-            .standsUnder(HohenheimSlugs.ACCESS_LISTS)
             .parent(ResourceParent.of(HohenheimSlugs.ACCESS_LISTS, AccessRuleModel.ACCESS_LIST_ID)
             .tab(HohenheimSlugs.Tab.RULES))
             .reads(ResourceReads.<Row>rows().title(AccessRuleSummaries::titleOf))

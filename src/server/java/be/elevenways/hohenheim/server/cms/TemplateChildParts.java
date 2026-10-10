@@ -158,7 +158,6 @@ public final class TemplateChildParts {
             .label(scope.of("plural"))
             .recordLabel(scope.of("singular"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP).navOrder(order).icon(icon).showInNav(false)
-            .standsUnder(HohenheimSlugs.INSTANCE_TEMPLATES)
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCE_TEMPLATES, owner).tab(HohenheimSlugs.Tab.CONTENTS))
             .reads(ResourceReads.rows()).writes(ResourceMutations.rows().create().update().delete().build())
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions());

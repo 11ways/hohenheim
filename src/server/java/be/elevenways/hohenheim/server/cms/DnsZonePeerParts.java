@@ -114,7 +114,6 @@ public final class DnsZonePeerParts {
             .navGroup(HohenheimPanel.NETWORK_GROUP)
             .navOrder(45)
             .showInNav(false)
-            .standsUnder(HohenheimSlugs.DNS_ZONES)
             .parent(ResourceParent.of(HohenheimSlugs.DNS_ZONES, DnsZonePeerModel.ZONE_ID)
             .tab(HohenheimSlugs.Tab.SECONDARIES))
             // A link row carries no name of its own, so it borrows the peer's: the zone is already the breadcrumb it

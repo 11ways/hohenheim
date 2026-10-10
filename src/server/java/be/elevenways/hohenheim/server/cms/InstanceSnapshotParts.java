@@ -59,7 +59,6 @@ public final class InstanceSnapshotParts {
             .label(HohenheimMicrocopy.INSTANCE_SNAPSHOT.of("plural"))
             .recordLabel(HohenheimMicrocopy.INSTANCE_SNAPSHOT.of("singular"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP).navOrder(16).icon(Icon.of("camera")).showInNav(false)
-            .standsUnder(HohenheimSlugs.INSTANCES)
             // A snapshot belongs to its instance: listed in the instance's Backups tab, its record page leads back there.
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceSnapshotModel.INSTANCE_ID)
                 .tab(HohenheimSlugs.Tab.BACKUPS))

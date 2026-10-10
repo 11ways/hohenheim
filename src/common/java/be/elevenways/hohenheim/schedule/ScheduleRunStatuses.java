@@ -73,7 +73,7 @@ public final class ScheduleRunStatuses {
      *         (EnumBadgeState's honest-over-pretty stance), never as a wrong colour
      */
     public static @Nullable EnumBadgeState badgeFor(@Nullable Object status) {
-        return status == null ? null : EnumBadgeState.of(FIELD, status);
+        return EnumBadgeState.ofNullable(FIELD, status);
     }
 
     /** The translation token for a status; the key IS the stored value. */

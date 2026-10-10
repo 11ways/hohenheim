@@ -60,7 +60,6 @@ public final class InstanceVariableParts {
             .icon(Icon.of("sliders"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .showInNav(false)
-            .standsUnder(HohenheimSlugs.INSTANCES)
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceVariableModel.INSTANCE_ID)
                 .tab(HohenheimSlugs.Tab.PROVISIONING))
             .reads(ResourceReads.rows())

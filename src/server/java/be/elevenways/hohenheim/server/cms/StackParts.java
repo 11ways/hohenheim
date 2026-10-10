@@ -232,7 +232,6 @@ public final class StackParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(26)
             .showInNav(false)
-            .standsUnder(HohenheimSlugs.STACKS)
             .parent(ResourceParent.of(HohenheimSlugs.STACKS, StackServiceModel.STACK_ID)
             .tab(HohenheimSlugs.Tab.SERVICES))
             .reads(ResourceReads.rows())
@@ -278,7 +277,6 @@ public final class StackParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(27)
             .showInNav(false)
-            .standsUnder(HohenheimSlugs.STACKS)
             // A file reaches its stack through its service: a path parent, which the framework walks and queries.
             .parent(ResourceParent.path(HohenheimSlugs.STACKS,
                     new ResourceParent.Hop(StackFileModel.STACK_SERVICE_ID, StackServiceModel.MODEL_ID),

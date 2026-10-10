@@ -53,7 +53,6 @@ public final class VolumeParts {
             .recordLabel(HohenheimMicrocopy.INSTANCE_VOLUME.of("singular"))
             .description(CmsSupport.navHint(HohenheimMicrocopy.INSTANCE_VOLUME))
             .navGroup(HohenheimPanel.DEPLOY_GROUP).navOrder(19).icon(Icon.of("database")).showInNav(false)
-            .standsUnder(HohenheimSlugs.INSTANCES)
             .scope(RowScope.within(() -> InstanceVolumeModel.INSTANCE_ID.isNotNull()))
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceVolumeModel.INSTANCE_ID)
                 .tab(HohenheimSlugs.Tab.VOLUMES))

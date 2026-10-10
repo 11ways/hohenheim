@@ -507,7 +507,7 @@ public final class ServerOverviewState {
             workloads.add(new WorkloadView(
                 String.valueOf((Object) instance.get(InstanceModel.NAME)),
                 WorkloadTier.INSTANCE,
-                badgeOf(InstanceModel.STATUS, instance.get(InstanceModel.STATUS)),
+                EnumBadgeState.ofNullable(InstanceModel.STATUS, instance.get(InstanceModel.STATUS)),
                 instance.get(InstanceModel.CAPACITY_MB),
                 // A release row is not served by the instance list; the route sends it to
                 // its application's Deploys tab instead of a 404.
@@ -518,7 +518,7 @@ public final class ServerOverviewState {
             workloads.add(new WorkloadView(
                 String.valueOf((Object) stack.get(StackModel.NAME)),
                 WorkloadTier.STACK,
-                badgeOf(StackModel.STATUS, stack.get(StackModel.STATUS)),
+                EnumBadgeState.ofNullable(StackModel.STATUS, stack.get(StackModel.STATUS)),
                 null,
                 CmsRoutes.detail(panel, HohenheimSlugs.STACKS, stack.get(StackModel.ID))));
         }
@@ -552,11 +552,6 @@ public final class ServerOverviewState {
     }
 
     // -- helpers -------------------------------------------------------------------
-
-    private static @Nullable EnumBadgeState badgeOf(@NonNull EnumField field,
-                                                    @Nullable Object raw) {
-        return raw == null ? null : EnumBadgeState.of(field, raw);
-    }
 
     private static @NonNull WidgetInstance alert(@NonNull AlertVariant variant,
                                                  @NonNull NoticeData notice) {

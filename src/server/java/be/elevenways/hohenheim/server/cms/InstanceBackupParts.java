@@ -91,7 +91,6 @@ public final class InstanceBackupParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(17)
             .showInNav(false)
-            .standsUnder(HohenheimSlugs.INSTANCES)
             // A backup belongs to its instance: listed in the instance's Backups tab, its record page leads back there.
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceBackupModel.INSTANCE_ID)
                 .tab(HohenheimSlugs.Tab.BACKUPS))

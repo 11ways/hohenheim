@@ -97,7 +97,6 @@ public final class ProtectedPathParts {
             .navGroup(HohenheimPanel.NETWORK_GROUP)
             .navOrder(32)
             .showInNav(false)
-            .standsUnder(HohenheimSlugs.SITES)
             .parent(ResourceParent.of(HohenheimSlugs.SITES, ProtectedPathModel.SITE_ID)
             .tab(HohenheimSlugs.PROTECTED_PATHS))
             .reads(ResourceReads.rows())

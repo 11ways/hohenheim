@@ -194,7 +194,6 @@ public final class SpamserviceClientKeysResource {
             .navGroup(HohenheimPanel.SECURITY_GROUP)
             .navOrder(40)
             .showInNav(false)
-            .standsUnder(HohenheimSlugs.SPAMSERVICE_CLIENTS)
             .icon(Icon.of("key"))
             .parent(ResourceParent.<ManagedClientKey>of(HohenheimSlugs.SPAMSERVICE_CLIENTS, ManagedClientKey::clientId)
                 .tab(HohenheimSlugs.Tab.KEYS))

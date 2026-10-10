@@ -76,9 +76,9 @@ public final class DnsRecordParts {
                     HohenheimSlugs.DNS_ZONES))
                 .createDefaults(request -> parts.createValues(request.conduit()))
                 .inlineEditable(parts.inlineEditableFields().toArray(Field<?, ?>[]::new)).build())
+            // Its own list is kept out of the sidebar (entry) and stands under the zones through this parent; reached
+            // from a zone's Records tab.
             .parent(parts.parent())
-            // Its own list is kept out of the sidebar (entry); reached from a zone's Records tab.
-            .standsUnder(HohenheimSlugs.DNS_ZONES)
             .writes(ResourceMutations.rows().create(call -> parts.persistRow(call.values(), call.access()))
                 .update(call -> { parts.updateRow(call.record(), call.values(), call.access()); return null; })
                 .delete(DnsOperations.DELETE_RECORD).build())
