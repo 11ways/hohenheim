@@ -32,12 +32,13 @@ class CmsAdminSmokeTest extends HohenheimTestBase {
             .doesNotContain("Instances")
             .doesNotContain("Sign-in providers");
 
-        // The zenit-auth resources are wired into THIS panel, as tabs of the Access cluster. Their own behaviour
+        // The zenit-auth resources are wired into THIS panel: People is a tab of the Access cluster, and Roles are
+        // reached from the People list (AdminNavigationJourneyTest proves that route). Their own behaviour
         // (create/edit/toggle/grants/roles journeys) is zenit-auth's to prove -- AuthCmsResourcesIntegrationTest.
         page.locator("pl-app-sidebar a[href='/admin/" + HohenheimSlugs.Cluster.ACCESS + "']").click();
-        page.waitForCondition(() -> page.locator("[data-cms-cluster-tabs] a[href='/admin/users']").count() > 0);
-        assertThat(page.locator("[data-cms-cluster-tabs] a[href='/admin/roles']").count())
-            .as("zenit-auth's roles resource is mounted in the hohenheim panel")
+        page.waitForCondition(() -> page.locator("[data-cms-cluster-tabs] a").count() > 0);
+        assertThat(page.locator("[data-cms-cluster-tabs] a[href='/admin/users']").count())
+            .as("zenit-auth's people resource is a tab of the Access cluster")
             .isGreaterThan(0);
 
         // Soft nav to the Apps list keeps the page cost down.
