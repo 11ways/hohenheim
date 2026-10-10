@@ -94,6 +94,8 @@ dependencies {
     browserTestImplementation libs.sshd.sftp
     // PanelSurfaces: the stored before/after and twin captures of the /manage entries.
     browserTestImplementation libs.zenit.cms.test.support
+    // FakeTransport: notification-channel tests resolve fake:// DSNs, which production never registers.
+    browserTestImplementation libs.zenit.comms.test.support
     // The permission editor's capture projection, read by the surface captures through its service file.
     browserTestImplementation libs.zenit.auth.test.support
 }

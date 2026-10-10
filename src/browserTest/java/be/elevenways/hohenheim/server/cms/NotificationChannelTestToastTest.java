@@ -11,6 +11,7 @@ import be.elevenways.zenit.comms.server.CommsDeliveryModel;
 import be.elevenways.zenit.comms.server.CommsDispatcher;
 import be.elevenways.zenit.comms.server.NotifyOutcome;
 import be.elevenways.zenit.comms.server.transport.TransportTypes;
+import be.elevenways.zenit.comms.test.support.FakeTransport;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterEach;
@@ -60,6 +61,7 @@ class NotificationChannelTestToastTest {
     }
 
     private static void installWebhookTransport(String dsn) {
+        FakeTransport.install();
         Comms.install(new CommsDispatcher(Map.of(
             CommsChannel.WEBHOOK, List.of(TransportTypes.create(dsn))), 1, true));
     }
