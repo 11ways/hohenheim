@@ -92,7 +92,8 @@ class LandingDashboardSurfacesTest extends HohenheimTestBase {
     private static final Pattern CSRF = Pattern.compile("(name=\"_csrf\"[^>]*value=\")[^\"]*\"");
     private static final Pattern DIGITS = Pattern.compile("\\d+");
     private static final Pattern SPACE = Pattern.compile("\\s+");
-    private static final Pattern START_TAG = Pattern.compile("<([a-z][a-z0-9-]*)((?:\\s+[^\\s=>\"]+(?:=\"[^\"]*\")?)+)\\s*>");
+    private static final Pattern START_TAG =
+            Pattern.compile("<([a-z][a-z0-9-]*)((?:\\s+[^\\s=>\"]+(?:=\"[^\"]*\")?)+)\\s*>");
     private static final Pattern ATTRIBUTE = Pattern.compile("[^\\s=>\"]+(?:=\"[^\"]*\")?");
     private static final Pattern MANAGE_LANDING = Pattern.compile("case [a-z]+ /manage/dashboard\\b");
     private static final Pattern SURFACE_LINE = Pattern.compile("(?m)^  surface .*$");

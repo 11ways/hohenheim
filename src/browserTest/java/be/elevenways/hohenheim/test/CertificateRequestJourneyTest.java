@@ -60,7 +60,8 @@ class CertificateRequestJourneyTest extends HohenheimTestBase {
             // 1. Let's Encrypt is switched off: the certificate list offers the request dead, with the reason, and a
             //    submit is refused before anything is written.
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED, false);
-            // The shipped sentence is "Let's Encrypt is switched off in Settings."; its apostrophe is escaped on the page.
+            // The shipped sentence is "Let's Encrypt is switched off in Settings."; its apostrophe is escaped on the
+            // page.
             String disabled = "is switched off in Settings";
             assertThat(adminGet("/admin/" + HohenheimSlugs.CERTIFICATES).body())
                 .as("step 1: the request is offered with the reason it cannot run").contains(disabled);

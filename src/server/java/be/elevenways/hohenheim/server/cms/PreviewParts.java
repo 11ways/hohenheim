@@ -90,9 +90,11 @@ public final class PreviewParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP).icon(Icon.of("flask"))
             .form(ResourceForm.<Row>of(form).bindings(bindings).createDefaults(PreviewParts::createDefaults).build())
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL)
-                .search(PreviewDeploymentModel.HOSTNAME, PreviewDeploymentModel.REF, PreviewDeploymentModel.HEAD_SHA).build())
+                .search(PreviewDeploymentModel.HOSTNAME, PreviewDeploymentModel.REF,
+                        PreviewDeploymentModel.HEAD_SHA).build())
             .reads(ResourceReads.rows())
-            .writes(ResourceMutations.rows().create(call -> queue(call.values(), call.access(), requireApplicationManage))
+            .writes(ResourceMutations.rows().create(call -> queue(call.values(), call.access(),
+                    requireApplicationManage))
                 .scopeVerifiedBeforeWrite().ownsWriteEnvelope(ResourceVerb.CREATE).build())
             .actions(List.of(destroy()));
     }
@@ -126,7 +128,8 @@ public final class PreviewParts {
 
     static @NonNull TableSpec<Row> tableSpec() {
         return TableSpec.<Row>builder()
-            .column(ColumnSpec.fromField(PreviewDeploymentModel.HOSTNAME).filterable().subtext("ref").copyable().build())
+            .column(ColumnSpec.fromField(PreviewDeploymentModel.HOSTNAME).filterable().subtext("ref")
+                    .copyable().build())
             .column(ColumnSpec.fromField(PreviewDeploymentModel.REF).filterable().hidden().build())
             .column(ColumnSpec.fromField(PreviewDeploymentModel.STATUS).filterable().build())
             .column(ColumnSpec.fromField(PreviewDeploymentModel.EXPIRES_AT).sortable().build())

@@ -370,7 +370,8 @@ public final class DnsRecordParts {
     /** Arms (or re-keys) the record's dyndns credential; the plaintext is disclosed ONCE in the toast. */
     static CmsActionResult mintDynamicToken(@NonNull Row row) {
         String token = DynamicDnsService.mintFor(row.get(DnsRecordModel.ID));
-        ActivityLog.record(Models.get(DnsRecordModel.class), row.get(DnsRecordModel.ID), HohenheimActivityAction.DYNDNS_TOKEN_MINTED, null);
+        ActivityLog.record(Models.get(DnsRecordModel.class), row.get(DnsRecordModel.ID),
+                HohenheimActivityAction.DYNDNS_TOKEN_MINTED, null);
 
         // AIDEV-NOTE: only the digest is at rest (dns_dyndns_credentials), so this
         // toast is the ONLY disclosure. Re-mint is the recovery path. withSecretArg
@@ -384,7 +385,8 @@ public final class DnsRecordParts {
     /** Deletes the credential: the record stops being dynamic and its token dies now. */
     static CmsActionResult revokeDynamicToken(@NonNull Row row) {
         DynamicDnsService.revokeFor(row.get(DnsRecordModel.ID));
-        ActivityLog.record(Models.get(DnsRecordModel.class), row.get(DnsRecordModel.ID), HohenheimActivityAction.DYNDNS_TOKEN_REVOKED, null);
+        ActivityLog.record(Models.get(DnsRecordModel.class), row.get(DnsRecordModel.ID),
+                HohenheimActivityAction.DYNDNS_TOKEN_REVOKED, null);
         return CmsActionResult.refreshWithToast(
             HohenheimMicrocopy.DNS_RECORD.of("dyndns_revoked"));
     }

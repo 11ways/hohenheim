@@ -61,7 +61,8 @@ final class CertificateOperationHandlers {
         OperationHandlers.attach(CertificateOperations.CONTINUE_DNS).authorize(admin())
             .applies(cert -> {
                 ProxyServer proxy = ServerMain.getProxyServer();
-                return proxy != null && proxy.getAcmeService().manualDnsRequestFor(cert.get(CertificateModel.ID)) != null;
+                return proxy != null && proxy.getAcmeService()
+                        .manualDnsRequestFor(cert.get(CertificateModel.ID)) != null;
             })
             .handle(call -> finishManual(call.subject()));
     }
@@ -162,7 +163,8 @@ final class CertificateOperationHandlers {
             Integer certId = outcome.certificateId();
             if (!outcome.issued() || certId == null) {
                 Row failed = Models.get(CertificateModel.class).findById(certId);
-                throw refused(AcmeProblem.sentenceFor(failed != null ? failed.get(CertificateModel.RENEWAL_ERROR) : null));
+                throw refused(AcmeProblem.sentenceFor(failed != null
+                        ? failed.get(CertificateModel.RENEWAL_ERROR) : null));
             }
             ActivityLog.record(Models.get(CertificateModel.class), certId, HohenheimActivityAction.REQUESTED, niceName);
             return certId;
@@ -189,7 +191,8 @@ final class CertificateOperationHandlers {
             Row failed = Models.get(CertificateModel.class).findById(cert.get(CertificateModel.ID));
             throw refused(AcmeProblem.sentenceFor(failed != null ? failed.get(CertificateModel.RENEWAL_ERROR) : null));
         }
-        ActivityLog.record(Models.get(CertificateModel.class), certId, HohenheimActivityAction.REQUESTED, "manual DNS-01");
+        ActivityLog.record(Models.get(CertificateModel.class), certId,
+                HohenheimActivityAction.REQUESTED, "manual DNS-01");
         return certId;
     }
 

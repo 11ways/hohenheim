@@ -50,7 +50,8 @@ public final class SpamserviceSampleAnalysisPage implements RecordTab.Rendered<S
             "name", property.name(), "value", Objects.requireNonNullElse(property.value(), ""),
             "language", Objects.requireNonNullElse(property.language(), ""))).toList());
         vars.put("breakdown", detail.breakdown().stream().map(line -> Map.<String, Object>of(
-            "flag", line.flag(), "points", line.points(), "detail", Objects.requireNonNullElse(line.detail(), ""))).toList());
+            "flag", line.flag(), "points", line.points(), "detail",
+            Objects.requireNonNullElse(line.detail(), ""))).toList());
         vars.put("head", this.recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.SPAMSERVICE_SAMPLE_ANALYSIS, vars);
     }

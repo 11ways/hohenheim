@@ -51,9 +51,9 @@ import java.util.function.Function;
  *
  * AIDEV-NOTE: an app is a READING, never a record: the data model stays sites, instances and stacks, and each app row
  * opens the record page decision J1 picks (the workload's, else the site's, else the stack's). The rows are read
- * through each entry's own panel source ({@link CmsRecordSources#panelSource}) under the entry's admission, so this list
- * can never show a viewer a row the Sites or Instances list hides from them (the /manage twin reads the tenant scopes
- * the same way), and never a raw model find. A generated instance (a database container, a database engine) is
+ * through each entry's own panel source ({@link CmsRecordSources#panelSource}) under the entry's admission, so this
+ * list can never show a viewer a row the Sites or Instances list hides from them (the /manage twin reads the tenant
+ * scopes the same way), and never a raw model find. A generated instance (a database container, a database engine) is
  * managed through its owning record and is never an app; a stack's services are its members, never apps of their own.
  *
  * @author Jelle De Loecker

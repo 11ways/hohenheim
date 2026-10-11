@@ -132,7 +132,8 @@ class SiteTrashJourneyTest extends HohenheimTestBase {
         delete(cedar);
         HttpResponse<String> trashedDomains = adminGet(domainsTab(cedar));
         assertThat(trashedDomains.statusCode()).as("step 6: the Domains tab of a trashed site renders").isEqualTo(200);
-        assertThat(trashedDomains.body()).as("step 6: without its hidden hostname").doesNotContain(PREFIX + "cedar.test")
+        assertThat(trashedDomains.body()).as("step 6: without its hidden hostname")
+                .doesNotContain(PREFIX + "cedar.test")
             .as("step 6: and no add").doesNotContain(DOMAIN_ADD)
             .as("step 6: and no remove").doesNotContain(domainDelete);
         HttpResponse<String> trashedPaths = adminGet(pathsTab(cedar));

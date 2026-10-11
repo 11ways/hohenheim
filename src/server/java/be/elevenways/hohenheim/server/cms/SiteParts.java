@@ -84,7 +84,9 @@ import java.util.Set;
  */
 public final class SiteParts {
 
-    /** The node role under which both panels register the site entries: one fact for the panels and the health fixes. */
+    /**
+     * The node role under which both panels register the site entries: one fact for the panels and the health fixes.
+     */
     static final Role ROLE = Role.PROXY;
 
     /** Virtual column names (renderer cells). */

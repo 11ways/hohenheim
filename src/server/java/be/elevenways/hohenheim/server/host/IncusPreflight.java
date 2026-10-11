@@ -383,7 +383,8 @@ public final class IncusPreflight {
             line.startsWith("Seccomp:") && line.trim().endsWith("2"));
         return HostPreflight.Check.of(SECCOMP_CHECK,
             filtering ? HostPreflight.STATUS_PASS : HostPreflight.STATUS_FAIL, required,
-            filtering ? PreflightFinding.SECCOMP_FILTERING.with() : PreflightFinding.SECCOMP_OFF.with("status", status));
+            filtering ? PreflightFinding.SECCOMP_FILTERING.with()
+            : PreflightFinding.SECCOMP_OFF.with("status", status));
     }
 
     /** The battery itself, injectable for tests. */

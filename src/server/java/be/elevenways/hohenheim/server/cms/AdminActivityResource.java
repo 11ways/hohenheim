@@ -152,8 +152,8 @@ public final class AdminActivityResource {
      * The sentence links the record it names inside /admin and the model token reads as its bare name; every other
      * column keeps the framework's cell (its actor and verb names).
      *
-     * AIDEV-NOTE: the admin-panel walk (AdminRecordLinks): this list lives in /admin, so the record links into /admin --
-     * never into the /manage narrowing of the same model, which the panel-aware walk would fall back to.
+     * AIDEV-NOTE: the admin-panel walk (AdminRecordLinks): this list lives in /admin, so the record links into /admin
+     * -- never into the /manage narrowing of the same model, which the panel-aware walk would fall back to.
      */
     private static @Nullable Object cell(@NonNull Row row, @NonNull ColumnSpec column) {
         String name = column.name();

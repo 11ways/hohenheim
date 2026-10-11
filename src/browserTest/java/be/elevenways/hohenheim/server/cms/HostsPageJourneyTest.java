@@ -65,8 +65,8 @@ class HostsPageJourneyTest extends HohenheimTestBase {
                 new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon"),
                 HostPreflight.Check.of("nftables", HostPreflight.STATUS_FAIL, true,
                     PreflightFinding.NFT_REFUSED.with("error", "nft: command not found")),
-                HostPreflight.Check.of("lsm", HostPreflight.STATUS_FAIL, false, PreflightFinding.PROBE_UNANSWERED.with())),
-                Map.of(), false, Now.instant(), null));
+                HostPreflight.Check.of("lsm", HostPreflight.STATUS_FAIL, false,
+                        PreflightFinding.PROBE_UNANSWERED.with())), Map.of(), false, Now.instant(), null));
             setAdmission(waiting, ServerModel.ADMISSION_BLOCKED);
             forgetMemoryReading(waiting);
 
@@ -134,7 +134,8 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             unreachable.set(ServerModel.LAST_SEEN_AT, Now.instant());
             Models.get(ServerModel.class).save(unreachable);
             assertThat(say(ServerParts.statusCellOf(server(cordoned)).stateText()))
-                .as("step 6: the probe failure in words, with its last contact").isEqualTo("Docker not found, last reached");
+                .as("step 6: the probe failure in words, with its last contact")
+                .isEqualTo("Docker not found, last reached");
             unreachable = server(cordoned);
             unreachable.set(ServerModel.LAST_SEEN_AT, null);
             Models.get(ServerModel.class).save(unreachable);
@@ -151,7 +152,8 @@ class HostsPageJourneyTest extends HohenheimTestBase {
             assertThat(say(failing.detail())).as("step 7: the finding in words, with the probe's own message")
                 .isEqualTo("nftables refused a firewall change: nft: command not found");
             assertThat(failing.detail().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
-                .as("step 7: and in Dutch").isEqualTo("nftables weigerde een firewallwijziging: nft: command not found");
+                .as("step 7: and in Dutch")
+                .isEqualTo("nftables weigerde een firewallwijziging: nft: command not found");
             PreflightCheckView advice = ServerOverviewState.preflightReport(server(waiting)).advice().get(0);
             assertThat(advice.status()).as("step 7: the advisory check stored a failure").isEqualTo("fail");
             assertThat(say(advice.statusLabel())).as("step 7: yet it reads as advice").isEqualTo("Advice");

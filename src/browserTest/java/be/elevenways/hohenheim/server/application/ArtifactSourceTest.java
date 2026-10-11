@@ -70,7 +70,8 @@ class ArtifactSourceTest {
                 assertThat(ArtifactDeploys.operation(site, app, id)).containsEntry("status", "failed");
                 assertThat(failed).doesNotExist();
                 assertThat(ArtifactDeploys.sourceOverrides(app)).isEqualTo(source);
-                assertThatThrownBy(() -> ArtifactDeploys.restoreSource(app, jar)).isInstanceOf(IllegalStateException.class);
+                assertThatThrownBy(() -> ArtifactDeploys.restoreSource(app, jar))
+                        .isInstanceOf(IllegalStateException.class);
             } catch (IOException failed) { throw new RuntimeException(failed); }
         });
     }
@@ -83,7 +84,9 @@ class ArtifactSourceTest {
                 Path old = Files.writeString(ArtifactDeploys.uploadPathFor(app), "old partial upload");
                 Row prior = ArtifactDeploys.accept(site, app, old);
                 int oldId = prior.get(ArtifactOperationModel.ID);
-                datasource.rawUpdate("UPDATE artifact_operations SET created_at = '2000-01-01T00:00:00Z', updated_at = '2000-01-01T00:00:00Z' WHERE id = " + oldId);
+                datasource.rawUpdate(
+                        "UPDATE artifact_operations SET created_at = '2000-01-01T00:00:00Z', updated_at = "
+                        + "'2000-01-01T00:00:00Z' WHERE id = " + oldId);
                 Files.setLastModifiedTime(old, FileTime.from(Instant.EPOCH));
                 Path current = Files.writeString(ArtifactDeploys.uploadPathFor(app), "current upload");
                 Row live = ArtifactDeploys.accept(site, app, current);

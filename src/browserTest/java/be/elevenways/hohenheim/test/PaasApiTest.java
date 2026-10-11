@@ -690,7 +690,8 @@ class PaasApiTest extends HohenheimTestBase {
                 ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.FAILED));
             HttpResponse<String> receipt = keyGet(keyPaasA, path + "/" + id);
             assertThat(receipt.statusCode()).isEqualTo(200);
-            assertThat(receipt.body()).contains("artifact_unreadable").doesNotContain("artifact_path", "environment", "not-a-jar");
+            assertThat(receipt.body()).contains("artifact_unreadable").doesNotContain("artifact_path",
+                    "environment", "not-a-jar");
             assertThat(keyGet(siteOnly, path + "/" + id).statusCode()).isEqualTo(404);
             assertThat(keyGet(keyPaasB, "/api/v1/sites/" + siteBId + "/artifact/" + id).statusCode()).isEqualTo(404);
             assertThat(ArtifactDeploys.sourceOverrides(applicationAId)).isEmpty();

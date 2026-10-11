@@ -51,7 +51,10 @@ public final class HohenheimWidgets {
     public static final DisplayWidget HOST_STATE = register("host_state", HohenheimTemplateIds.WIDGET_HOST_STATE,
         HohenheimMicrocopy.SERVER_OVERVIEW.of("state"), "tower-broadcast");
 
-    /** Per-lane trust state: the pinned fingerprint, what the machine offers now, and this controller's own client material. */
+    /**
+     * Per-lane trust state: the pinned fingerprint, what the machine offers now, and this controller's own client
+     * material.
+     */
     public static final DisplayWidget HOST_TRUST = register("host_trust", HohenheimTemplateIds.WIDGET_HOST_TRUST,
         HohenheimMicrocopy.SERVER_OVERVIEW.of("trust_ssh"), "key");
 
@@ -71,7 +74,8 @@ public final class HohenheimWidgets {
         HohenheimMicrocopy.INSTANCE_OVERVIEW.of("endpoint"), "plug");
 
     /** An app's addresses with whether HTTPS works for each: the body of the overview's Addresses card. */
-    public static final DisplayWidget APP_ADDRESSES = register("app_addresses", HohenheimTemplateIds.WIDGET_APP_ADDRESSES,
+    public static final DisplayWidget APP_ADDRESSES = register("app_addresses",
+            HohenheimTemplateIds.WIDGET_APP_ADDRESSES,
         HohenheimMicrocopy.APP_OVERVIEW.of("addresses"), "globe");
 
     /** An app's protected paths, an open one said as open: the body of the overview's Protection card. */

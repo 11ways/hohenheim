@@ -45,8 +45,8 @@ public class SiteAuthProviderModel extends Model {
             .help(HohenheimMicrocopy.HELP.of("auth_provider_config"))
             .build());
 
-    // Provider-agnostic required permission for claims-based providers (null = hohenheim.site.<slug> of the gated site).
-    // PermissionField: edits with the declared permissions as autocomplete, plus
+    // Provider-agnostic required permission for claims-based providers (null = hohenheim.site.<slug> of the gated
+    // site). PermissionField: edits with the declared permissions as autocomplete, plus
     // the assigned Proteus realm's fetched vocabulary on top.
     public static final StringField REQUIRED_PERMISSION = SCHEMA.addField(
         PermissionField.builder("required_permission")

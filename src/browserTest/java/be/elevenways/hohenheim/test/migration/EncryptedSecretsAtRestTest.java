@@ -38,7 +38,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class EncryptedSecretsAtRestTest {
 
-    private static final String CERT_KEY = "-----BEGIN RSA PRIVATE KEY-----\nhh-cert-secret-A1\n-----END RSA PRIVATE KEY-----";
+    private static final String CERT_KEY =
+            "-----BEGIN RSA PRIVATE KEY-----\nhh-cert-secret-A1\n-----END RSA PRIVATE KEY-----";
     private static final String DNSSEC_KEY = "hh-dnssec-private-B2";
     private static final String TSIG = "hh-tsig-secret-C3";
     private static final String PEER_KEY = "hh-peer-api-key-D4";
@@ -48,7 +49,8 @@ class EncryptedSecretsAtRestTest {
     private static final String CONTROLLER = "hh-controller-key-H8";
     private static final String ENV_VALUE = "hh-env-secret-J9";
     private static final String PROVIDER_TOKEN = "hh-provider-token-K10";
-    private static final String PROVIDER_APP_KEY = "-----BEGIN RSA PRIVATE KEY-----\nhh-app-key-L11\n-----END RSA PRIVATE KEY-----";
+    private static final String PROVIDER_APP_KEY =
+            "-----BEGIN RSA PRIVATE KEY-----\nhh-app-key-L11\n-----END RSA PRIVATE KEY-----";
 
     @BeforeAll
     static void installTempKeyring() throws Exception {

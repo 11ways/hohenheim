@@ -83,8 +83,8 @@ class ManageScopeParityTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.USER, tenantId, SiteModel.MODEL_ID, liveSite,
             HohenheimCapabilities.MANAGE, true);
 
-        // The site serving the authored instance, on which the tenant holds NOTHING (the Starfleet shape: a grant on the
-        // instance alone).
+        // The site serving the authored instance, on which the tenant holds NOTHING (the Starfleet shape: a grant on
+        // the instance alone).
         servingSiteId = site(PREFIX + "serving", false);
         Model sites = Models.get(SiteModel.class);
         Row serving = sites.findById(servingSiteId);
@@ -135,8 +135,8 @@ class ManageScopeParityTest extends HohenheimTestBase {
             Projection.of(ProtectedPathParts.manage()), Projection.of(ManageDnsRecordParts.manage()),
             Projection.of(InstanceTemplateParts.manage()), Projection.of(InstanceScheduleParts.manage()),
             Projection.of(ProjectParts.manage()), Projection.of(DatabaseParts.manage()),
-            Projection.of(InstanceAttachmentParts.devicesManage()), Projection.of(InstanceAttachmentParts.databasesManage()),
-            Projection.of(PreviewParts.manage()));
+            Projection.of(InstanceAttachmentParts.devicesManage()),
+            Projection.of(InstanceAttachmentParts.databasesManage()), Projection.of(PreviewParts.manage()));
         for (Projection resource : paired) {
             for (AccessContext ctx : List.of(tenant, operator)) {
                 assertThat(sourceIds(resource, ctx))

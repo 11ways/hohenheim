@@ -13,8 +13,10 @@ import be.elevenways.zenit.common.orm.model.Schema;
 public class ArtifactSourceModel extends Model {
     public static final Identifier MODEL_ID = HohenheimIds.id("artifact_source");
     public static final Schema SCHEMA = new Schema();
-    public static final IntegerField APPLICATION_ID = SCHEMA.addField(IntegerField.builder().name("application_id").build());
-    public static final StringField ARTIFACT_SHA256 = SCHEMA.addField(StringField.builder().name("artifact_sha256").build());
+    public static final IntegerField APPLICATION_ID = SCHEMA.addField(IntegerField.builder()
+            .name("application_id").build());
+    public static final StringField ARTIFACT_SHA256 = SCHEMA.addField(StringField.builder()
+            .name("artifact_sha256").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     @Override public Identifier getModelId() { return MODEL_ID; }

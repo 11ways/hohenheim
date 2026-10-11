@@ -30,39 +30,46 @@ public final class DnsOperations {
     public static final SubjectType<Row> RECORD = SubjectType.record(DnsRecordModel.MODEL_ID);
     public static final SubjectType<Row> PEER = SubjectType.record(DnsPeerModel.MODEL_ID);
 
-    public static final Operation<Row, Void, Integer> DELETE_ZONE = Operation.declare(HohenheimIds.id("delete_dns_zone"))
+    public static final Operation<Row, Void, Integer> DELETE_ZONE =
+            Operation.declare(HohenheimIds.id("delete_dns_zone"))
         .happened(OperationSentences.of("delete_dns_zone"))
         .label(CmsMicrocopy.of("delete")).icon(Icon.TRASH).one(ZONE)
         .gate(OperationGate.open()).facts(OperationFact.DESTRUCTIVE).result(Integer.class)
         .command(CmsCommands.TRANSACTIONAL).register();
-    public static final Operation<Row, Void, Integer> DELETE_RECORD = Operation.declare(HohenheimIds.id("delete_dns_record"))
+    public static final Operation<Row, Void, Integer> DELETE_RECORD =
+            Operation.declare(HohenheimIds.id("delete_dns_record"))
         .happened(OperationSentences.of("delete_dns_record"))
         .label(CmsMicrocopy.of("delete")).icon(Icon.TRASH).one(RECORD)
         .gate(OperationGate.open()).facts(OperationFact.DESTRUCTIVE).result(Integer.class)
         .command(CmsCommands.TRANSACTIONAL).register();
-    public static final Operation<Row, Void, Integer> DELETE_PEER = Operation.declare(HohenheimIds.id("delete_dns_peer"))
+    public static final Operation<Row, Void, Integer> DELETE_PEER =
+            Operation.declare(HohenheimIds.id("delete_dns_peer"))
         .happened(OperationSentences.of("delete_dns_peer"))
         .label(CmsMicrocopy.of("delete")).icon(Icon.TRASH).one(PEER)
         .gate(OperationGate.open()).facts(OperationFact.DESTRUCTIVE).result(Integer.class)
         .command(CmsCommands.TRANSACTIONAL).register();
-    public static final Operation<Row, Void, CmsActionResult> CHECK_HEALTH = Operation.declare(HohenheimIds.id("check_dns_health"))
+    public static final Operation<Row, Void, CmsActionResult> CHECK_HEALTH =
+            Operation.declare(HohenheimIds.id("check_dns_health"))
         .happened(OperationSentences.of("check_dns_health"))
         .label(HohenheimMicrocopy.DNS_ZONE.of("check_health"))
         .description(HohenheimMicrocopy.DNS_ZONE.of("check_health_hint"))
         .icon(Icon.of("stethoscope")).one(ZONE).gate(OperationGate.open()).result(CmsActionResult.class)
         .command(CmsCommands.EXTERNAL).register();
-    public static final Operation<Row, Void, CmsActionResult> MINT_DYNAMIC_TOKEN = Operation.declare(HohenheimIds.id("dyndns_token"))
+    public static final Operation<Row, Void, CmsActionResult> MINT_DYNAMIC_TOKEN =
+            Operation.declare(HohenheimIds.id("dyndns_token"))
         .happened(OperationSentences.of("dyndns_token"))
         .label(HohenheimMicrocopy.DNS_RECORD.of("dyndns_token")).icon(Icon.of("rotate"))
         .one(RECORD).gate(OperationGate.open()).result(CmsActionResult.class)
         .command(CmsCommands.TRANSACTIONAL).register();
-    public static final Operation<Row, Void, CmsActionResult> REVOKE_DYNAMIC_TOKEN = Operation.declare(HohenheimIds.id("dyndns_revoke"))
+    public static final Operation<Row, Void, CmsActionResult> REVOKE_DYNAMIC_TOKEN =
+            Operation.declare(HohenheimIds.id("dyndns_revoke"))
         .happened(OperationSentences.of("dyndns_revoke"))
         .label(HohenheimMicrocopy.DNS_RECORD.of("dyndns_revoke"))
         .description(HohenheimMicrocopy.DNS_RECORD.of("dyndns_revoke_hint"))
         .icon(Icon.of("ban")).one(RECORD).gate(OperationGate.open()).result(CmsActionResult.class)
         .command(CmsCommands.TRANSACTIONAL).register();
-    public static final Operation<Row, Void, CmsActionResult> NEGOTIATE_KEY = Operation.declare(HohenheimIds.id("negotiate_transfer_key"))
+    public static final Operation<Row, Void, CmsActionResult> NEGOTIATE_KEY =
+            Operation.declare(HohenheimIds.id("negotiate_transfer_key"))
         .happened(OperationSentences.of("negotiate_transfer_key"))
         .label(HohenheimMicrocopy.DNS_PEER.of("negotiate_key"))
         .description(HohenheimMicrocopy.DNS_PEER.of("negotiate_key_hint"))
@@ -74,7 +81,10 @@ public final class DnsOperations {
         Map<String, String> fields() {
             Map<String, String> values = new LinkedHashMap<>();
             values.put("name", name); values.put("type", type); values.put("ttl", ttl); values.put("value", value);
-            values.put("priority", priority); values.put("weight", weight); values.put("port", port); values.put("enabled", enabled);
+            values.put("priority", priority);
+            values.put("weight", weight);
+            values.put("port", port);
+            values.put("enabled", enabled);
             values.values().removeIf(Objects::isNull);
             return values;
         }

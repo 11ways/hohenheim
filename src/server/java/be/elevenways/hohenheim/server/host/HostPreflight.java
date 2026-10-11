@@ -550,7 +550,8 @@ public final class HostPreflight {
         }
         Object detail = storedCheckField(server, checkName, "detail");
         return PreflightFinding.wordsOf(storedCheckField(server, checkName, PreflightFinding.TOKEN_KEY),
-            storedCheckField(server, checkName, PreflightFinding.ARGS_KEY), detail != null ? String.valueOf(detail) : "");
+            storedCheckField(server, checkName, PreflightFinding.ARGS_KEY), detail != null
+            ? String.valueOf(detail) : "");
     }
 
     /** @return whether a stored check name is one the batteries declare, which is what gives it words and a fix */

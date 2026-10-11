@@ -84,7 +84,8 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
     @Test
     void adminAndTenantStepEditorsDeclareTheSamePlacedOperationInput() {
         // 1. Both existing resources retain their registration and authority, sharing the reusable input entry.
-        for (PanelResource<Row> parts : List.of(InstanceScheduleStepParts.admin(), InstanceScheduleStepParts.manage())) {
+        for (PanelResource<Row> parts : List.of(InstanceScheduleStepParts.admin(),
+                InstanceScheduleStepParts.manage())) {
             FormSpec spec = Objects.requireNonNull(parts.form()).spec();
             Discriminated input = (Discriminated) spec.findEntry("input");
             assertThat(input).as("step 1: the existing step surface declares operation input").isNotNull();
@@ -97,9 +98,12 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
             // 2. Every offered action is an operation placed on the scheduler's existing surface.
             Select<?> actions = (Select<?>) spec.findEntry("action");
             for (var option : actions.options().resolve(EditContext.of(AccessContext.anonymous()))) {
-                var member = ((RegistryMemberField) RecordScheduleStepModel.ACTION).memberFor(String.valueOf(option.value()));
-                assertThat(member).as("step 2: no legacy action is offered by the operation input editor").isInstanceOf(Operation.class);
-                assertThat(PlacementSurfaces.isPlaced(ZenitPlacementSurface.SCHEDULE_STEP, ((Operation<?, ?, ?>) member).id()))
+                var member = ((RegistryMemberField) RecordScheduleStepModel.ACTION)
+                        .memberFor(String.valueOf(option.value()));
+                assertThat(member).as("step 2: no legacy action is offered by the operation input editor")
+                        .isInstanceOf(Operation.class);
+                assertThat(PlacementSurfaces.isPlaced(ZenitPlacementSurface.SCHEDULE_STEP,
+                        ((Operation<?, ?, ?>) member).id()))
                     .as("step 2: option belongs to the schedule placement").isTrue();
             }
         }
@@ -196,7 +200,8 @@ class InstanceScheduleSurfaceTest extends HohenheimTestBase {
         // 1. The affordance follows the capability, not merely ENABLED.
         assertThat(OperationPipeline.offer(InstanceScheduleOperations.RUN_SCHEDULE,
                 contextOf(viewerId, "Schedule Viewer"), schedule))
-            .as("step 1: a view-only delegate is not offered run-now").isInstanceOf(OperationPipeline.Offer.Hidden.class);
+            .as("step 1: a view-only delegate is not offered run-now")
+            .isInstanceOf(OperationPipeline.Offer.Hidden.class);
         assertThat(OperationPipeline.offer(InstanceScheduleOperations.RUN_SCHEDULE,
                 contextOf(ownerId, "Schedule Owner"), schedule))
             .as("step 1: while the manage holder (CONFIG implied) is")

@@ -74,7 +74,8 @@ public enum HohenheimActivityAction implements ActivityAction {
     DELETED_DATA("deleted_data"),
     SETTLED_INTERRUPTED("settled_interrupted"),
     // A correction of a record's stored status to what its host answered is bookkeeping: what followed it (the restart
-    // it queued, the cause it recorded) is the row a person reads, and the full log lists it through the internal filter.
+    // it queued, the cause it recorded) is the row a person reads, and the full log lists it through the internal
+    // filter.
     RECONCILED("reconciled", ActivityVisibility.INTERNAL),
     BACKUP("backup"),
     SNAPSHOT("snapshot"),
@@ -117,8 +118,8 @@ public enum HohenheimActivityAction implements ActivityAction {
         MESSAGE,
 
         /**
-         * A cause whose root is its host: per-workload firewall rules are switched off there, so the workload was refused
-         * before it could run; its row carries no detail, the host's own item says why.
+         * A cause whose root is its host: per-workload firewall rules are switched off there, so the workload was
+         * refused before it could run; its row carries no detail, the host's own item says why.
          */
         HOST_ISOLATION;
 

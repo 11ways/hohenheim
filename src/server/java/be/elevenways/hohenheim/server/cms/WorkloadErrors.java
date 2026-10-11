@@ -101,7 +101,8 @@ final class WorkloadErrors {
 
     /**
      * @return how this workload's ERROR reads: a start that failed ("Could not start") or a stop after it ran, by its
-     *         recorded cause's {@link HohenheimActivityAction#errorPhase()}; a stop after an error when none is recorded
+     *         recorded cause's {@link HohenheimActivityAction#errorPhase()}; a stop after an error when none is
+     *         recorded
      */
     static AppHealth.@NonNull Stoppage stoppageOf(@NonNull Row instance) {
         HohenheimActivityAction cause = causeOf(instance);

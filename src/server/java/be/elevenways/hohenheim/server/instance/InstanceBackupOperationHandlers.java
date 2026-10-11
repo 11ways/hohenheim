@@ -14,8 +14,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * The handlers of restore-to-new and the backup delete, attached once per JVM; {@link #init()} only forces the class to load before boot
- * verifies every operation has its handler.
+ * The handlers of restore-to-new and the backup delete, attached once per JVM; {@link #init()} only forces the class to
+ * load before boot verifies every operation has its handler.
  *
  * @author Jelle De Loecker
  * @since  0.9.0

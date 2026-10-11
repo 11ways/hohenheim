@@ -44,13 +44,15 @@ public final class VolumeOperations {
             values.get(InstanceVolumeModel.CONTAINER_PATH), values.get(QUOTA_MB),
             values.get(InstanceVolumeModel.EXCLUSIVE)));
     private static final SubjectType<Row> SUBJECT = SubjectType.record(InstanceVolumeModel.MODEL_ID);
-    public static final Operation<Void, Declaration, Integer> CREATE = Operation.declare(HohenheimIds.id("declare_volume"))
+    public static final Operation<Void, Declaration, Integer> CREATE =
+            Operation.declare(HohenheimIds.id("declare_volume"))
         .happened(OperationSentences.of("declare_volume"))
         .label(HohenheimMicrocopy.INSTANCE_VOLUME.of("singular"))
         .noSubject().gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS)
             .parentCapability("instance_id", InstanceModel.MODEL_ID, HohenheimCapabilities.CONFIG))
         .input(INPUT).result(Integer.class).command(COMMAND.onDatasource("default")).register();
-    public static final Operation<Row, Declaration, Void> UPDATE = Operation.declare(HohenheimIds.id("redeclare_volume"))
+    public static final Operation<Row, Declaration, Void> UPDATE =
+            Operation.declare(HohenheimIds.id("redeclare_volume"))
         .happened(OperationSentences.of("redeclare_volume"))
         .label(HohenheimMicrocopy.INSTANCE_VOLUME.of("singular"))
         .one(SUBJECT).gate(OperationGate.permission(HohenheimSources.ADMIN_ACCESS))

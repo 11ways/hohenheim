@@ -161,7 +161,8 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
             sessionToken, csrfToken);
         assertThat(liveSwitched.statusCode()).as("step 8: selected carrier writes with its kind").isEqualTo(302);
         stored = Models.get(InstanceVariableModel.class).find().where(InstanceVariableModel.ID.eq(variableId)).first();
-        assertThat(stored.get(InstanceVariableModel.PLAIN_VALUE)).as("step 8: new carrier is stored").isEqualTo("new-config");
+        assertThat(stored.get(InstanceVariableModel.PLAIN_VALUE)).as("step 8: new carrier is stored")
+                .isEqualTo("new-config");
         assertThat(stored.get(InstanceVariableModel.SECRET_VALUE)).as("step 8: old secret is retired").isNull();
 
         // 9. Unknown kinds refuse before either physical carrier is touched.
@@ -170,13 +171,15 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
             sessionToken, csrfToken);
         assertThat(unknown.statusCode()).as("step 9: unknown kind is a form refusal").isEqualTo(200);
         stored = Models.get(InstanceVariableModel.class).find().where(InstanceVariableModel.ID.eq(variableId)).first();
-        assertThat(stored.get(InstanceVariableModel.PLAIN_VALUE)).as("step 9: refused write keeps old value").isEqualTo("new-config");
+        assertThat(stored.get(InstanceVariableModel.PLAIN_VALUE)).as("step 9: refused write keeps old value")
+                .isEqualTo("new-config");
         assertThat(stored.get(InstanceVariableModel.SECRET_VALUE)).as("step 9: no hidden carrier write").isNull();
 
         HttpResponse<String> blankKind = httpPostForm("/admin/environment-variables/" + variableId,
             "environment_id=" + environmentId + "&key=CARRIER_PROBE&kind=&secret_value=smuggled",
             sessionToken, csrfToken);
-        assertThat(blankKind.statusCode()).as("step 9: a blank kind refuses instead of retiring plain data").isEqualTo(200);
+        assertThat(blankKind.statusCode()).as("step 9: a blank kind refuses instead of retiring plain data")
+                .isEqualTo(200);
         for (String kind : new String[] {null, "", "unknown"}) {
             Row invalid = Models.get(InstanceVariableModel.class).createEmptyRow();
             invalid.set(InstanceVariableModel.ID, variableId);
@@ -199,12 +202,15 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
         page.waitForFunction("() => document.querySelector('[data-conditional-entry=secret_value]').hidden === false");
         assertThat(page.locator("[data-conditional-entry='plain_value']").isVisible())
             .as("step 10: old carrier is hidden").isFalse();
-        assertThat(page.evaluate("() => new FormData(document.querySelector('textarea[name=plain_value]').form).has('plain_value')"))
+        assertThat(
+                page.evaluate(
+                "() => new FormData(document.querySelector('textarea[name=plain_value]').form).has('plain_value')"))
             .as("step 10: hidden carrier is not a successful control").isEqualTo(false);
         page.locator("zf-select-field pl-select[name='kind'] .pl-select-field").click();
         page.locator("he-bottom .pl-select-popup[data-open] [role='option'][data-value='plain']").click();
         page.waitForFunction("() => document.querySelector('[data-conditional-entry=plain_value]').hidden === false");
-        assertThat(plainInput.inputValue()).as("step 10: switching back retains the native draft").isEqualTo("retained-draft");
+        assertThat(plainInput.inputValue()).as("step 10: switching back retains the native draft")
+                .isEqualTo("retained-draft");
     }
 
     /**
@@ -264,7 +270,9 @@ class VariableCarrierAndKindChoiceTest extends HohenheimTestBase {
         page.locator(quick + "[data-zf-create-field='plain_value'] textarea").fill("inactive-plain-draft");
         page.locator(quick + "[data-zf-create-field='kind'] .pl-select-field").click();
         page.locator("he-bottom .pl-select-popup[data-open] [role='option'][data-value='secret']").click();
-        page.waitForFunction("() => document.querySelector('[data-cms-quick-add] [data-conditional-entry=secret_value]').hidden === false");
+        page.waitForFunction(
+                "() => document.querySelector('[data-cms-quick-add] [data-conditional-entry=secret_value]').hidden "
+                + "=== false");
         assertThat(page.locator(quick + "[data-zf-create-field='plain_value']").isVisible())
             .as("step 5: choosing secret hides the retained plain carrier").isFalse();
         assertThat(page.locator(quick + "[data-zf-create-field='secret_value']").isVisible())

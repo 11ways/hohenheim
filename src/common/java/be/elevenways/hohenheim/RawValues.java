@@ -77,7 +77,9 @@ public final class RawValues {
         return values != null && values.get(key) instanceof Boolean flag ? flag : absent;
     }
 
-    /** @return the field's entry as {@link #isOn(Map, String, boolean)} reads it, absent meaning its declared default */
+    /**
+     * @return the field's entry as {@link #isOn(Map, String, boolean)} reads it, absent meaning its declared default
+     */
     public static boolean isOn(@Nullable Map<String, ?> values, @NonNull BooleanField field) {
         return isOn(values, field.getName(), Boolean.TRUE.equals(field.getDefaultValue()));
     }

@@ -39,7 +39,8 @@ class SiteFormApplicabilityJourneyTest extends HohenheimTestBase {
 
         // 1. The pick applies to the instance kind and to no other.
         assertThat(SiteWrites.ADMIN_FORM.matches(SiteModel.INSTANCE_ID.getName(),
-            Map.of(SiteModel.UPSTREAM_KIND.getName(), instanceKind))).as("step 1: shown for the instance kind").isTrue();
+            Map.of(SiteModel.UPSTREAM_KIND.getName(), instanceKind)))
+            .as("step 1: shown for the instance kind").isTrue();
         assertThat(SiteWrites.ADMIN_FORM.matches(SiteModel.INSTANCE_ID.getName(),
             Map.of(SiteModel.UPSTREAM_KIND.getName(), "hohenheim:static"))).as("step 1: hidden for a static site")
             .isFalse();

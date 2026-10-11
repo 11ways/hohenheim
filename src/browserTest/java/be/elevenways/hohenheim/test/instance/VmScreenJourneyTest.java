@@ -89,7 +89,8 @@ class VmScreenJourneyTest extends HohenheimTestBase {
         VmSpice previous = VmSpice.SEAM.installed();
         BrowserContext tenantContext = null;
         try (ScriptedSpiceServer spice = this.spice()) {
-            VmSpice.SEAM.install((serverName, handle, takeOver) -> VmSpice.Link.direct(SessionOptions.builder("127.0.0.1",
+            VmSpice.SEAM.install((serverName,
+                    handle, takeOver) -> VmSpice.Link.direct(SessionOptions.builder("127.0.0.1",
                 spice.port())));
 
             // 1. The operator opens the screen mode: the VM's screen is drawn, and as its first viewer she drives it.
@@ -166,7 +167,8 @@ class VmScreenJourneyTest extends HohenheimTestBase {
         List<int[]> grants = new ArrayList<>();
         VmSpice previous = VmSpice.SEAM.installed();
         try (ScriptedSpiceServer spice = this.spice()) {
-            VmSpice.SEAM.install((serverName, handle, takeOver) -> VmSpice.Link.direct(SessionOptions.builder("127.0.0.1",
+            VmSpice.SEAM.install((serverName,
+                    handle, takeOver) -> VmSpice.Link.direct(SessionOptions.builder("127.0.0.1",
                 spice.port())));
             for (int instanceId : new int[] {running, stopped, container, generated[0]}) {
                 grants.add(new int[] {consoleId, instanceId});
@@ -228,7 +230,8 @@ class VmScreenJourneyTest extends HohenheimTestBase {
         List<RecordingScreenSocket> viewers = new ArrayList<>();
         try (ScriptedSpiceServer spice = this.spice()) {
             FakeVgaConsoleDaemon daemon = new FakeVgaConsoleDaemon(spice.port());
-            VmSpice.SEAM.install((serverName, handle, takeOver) -> VmSpice.incus(new IncusClient(daemon), handle, takeOver));
+            VmSpice.SEAM.install((serverName, handle, takeOver) -> VmSpice.incus(new IncusClient(daemon),
+                    handle, takeOver));
 
             // 1. Two viewers open the VM's screen at the same moment: both are drawn from ONE console operation,
             //    whose control websocket holds it open.
@@ -302,7 +305,8 @@ class VmScreenJourneyTest extends HohenheimTestBase {
             // 5. A console whose SPICE server cannot be reached fails its source: the viewer reads the screen as
             //    unavailable, and the console it started is ended all the same.
             FakeVgaConsoleDaemon unreachable = new FakeVgaConsoleDaemon(closedPort);
-            VmSpice.SEAM.install((serverName, handle, takeOver) -> VmSpice.incus(new IncusClient(unreachable), handle, takeOver));
+            VmSpice.SEAM.install((serverName, handle, takeOver) -> VmSpice.incus(new IncusClient(unreachable),
+                    handle, takeOver));
             RecordingScreenSocket failed = open(consoleId, instanceId);
             failed.await(ScreenMessage.Status.class, status -> status.status() == ScreenStatus.UNAVAILABLE);
             Poll.until("step 5: the failed console operation ended", WAIT, () -> unreachable.running().isEmpty());

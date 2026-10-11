@@ -15,9 +15,9 @@ import java.util.List;
  * AIDEV-NOTE: the parsing and the CIDR math are zenit's ({@link IpRanges#parseLiteral},
  * {@link IpRanges.Range}); this class only adds what bans need on top: the value is trimmed,
  * because untrusted "ip" strings reach the ban paths. zenit's parser refuses a zone id
- * ({@code fe80::1%eth0}) and a leading-zero octet itself. One rule changed on purpose: an IPv4-mapped literal ({@code ::ffff:203.0.113.5}) now folds to its
- * IPv4 address, where it used to key as the IPv6 network {@code ::/64} and be refused as
- * loopback, so a mapped client is banned as the IPv4 actor it is.
+ * ({@code fe80::1%eth0}) and a leading-zero octet itself. One rule changed on purpose: an IPv4-mapped literal
+ * ({@code ::ffff:203.0.113.5}) now folds to its IPv4 address, where it used to key as the IPv6 network {@code ::/64}
+ * and be refused as loopback, so a mapped client is banned as the IPv4 actor it is.
  */
 public final class IpLiterals {
 

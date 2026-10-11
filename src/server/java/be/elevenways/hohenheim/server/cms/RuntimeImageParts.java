@@ -42,7 +42,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  */
 public final class RuntimeImageParts {
 
-    public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_runtime_image"))
+    public static final Operation<Row, Void, Integer> DELETE =
+            Operation.declare(HohenheimIds.id("delete_runtime_image"))
         .happened(OperationSentences.of("delete_runtime_image"))
         .label(CmsMicrocopy.of("delete"))
         .one(SubjectType.record(RuntimeImageModel.MODEL_ID))

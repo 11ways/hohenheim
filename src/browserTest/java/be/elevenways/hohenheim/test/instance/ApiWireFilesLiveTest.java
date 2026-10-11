@@ -151,7 +151,8 @@ class ApiWireFilesLiveTest extends HohenheimTestBase {
         wire.get("read without a path", tenant, files + "/content");
 
         // 3. The writes: a file and a directory, refused for a path that leaves the volume and an unknown action.
-        wire.post("write a file", tenant, files + "/content", form("path", "/data/written.txt", "content", "written\n"));
+        wire.post("write a file", tenant, files + "/content", form("path", "/data/written.txt",
+                "content", "written\n"));
         wire.post("write outside the volume", tenant, files + "/content",
             form("path", "/data/../etc/passwd", "content", "x"));
         wire.post("make a directory", tenant, files + "/action", form("action", "mkdir", "path", "/data/made"));

@@ -209,7 +209,8 @@ public final class PutOnlinePage extends PanelPage {
     }
 
     /** The chosen template's other versions (its family's other members), each opening its own document. */
-    private static @NonNull List<Map<String, Object>> otherVersions(@NonNull PanelRequest request, @NonNull Row chosen) {
+    private static @NonNull List<Map<String, Object>> otherVersions(@NonNull PanelRequest request,
+            @NonNull Row chosen) {
         List<Map<String, Object>> versions = new ArrayList<>();
         Object chosenId = chosen.get(InstanceTemplateModel.ID);
         for (TemplateFamily family : TemplateFamily.of(request)) {

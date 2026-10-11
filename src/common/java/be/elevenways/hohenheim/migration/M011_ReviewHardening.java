@@ -318,8 +318,8 @@ public class M011_ReviewHardening extends HohenheimMigration {
         return new FrozenModel[] {
             instantScope("sites", "created_at", "updated_at", "deleted_at"),
             instantScope("site_domains", "created_at", "updated_at", "generated_at"),
-            instantScope("certificates", "expires_on", "created_at", "updated_at", "issued_on", "next_attempt_at", "expiry_notified_at"),
-            instantScope("access_lists", "created_at", "updated_at"),
+            instantScope("certificates", "expires_on", "created_at", "updated_at", "issued_on", "next_attempt_at",
+                    "expiry_notified_at"), instantScope("access_lists", "created_at", "updated_at"),
             instantScope("protected_paths", "created_at", "updated_at"),
             instantScope("access_rules", "created_at", "updated_at"),
             instantScope("system_users", "last_seen_at", "created_at", "updated_at"),
@@ -329,10 +329,11 @@ public class M011_ReviewHardening extends HohenheimMigration {
             instantScope("notification_channels", "created_at", "updated_at"),
             instantScope("site_auth_providers", "created_at", "updated_at"),
             instantScope("site_sessions", "created_at", "expires_at"),
-            instantScope("dns_zones", "created_at", "updated_at", "last_checked_at", "last_transfer_at", "delegation_checked_at"),
-            instantScope("dns_records", "created_at", "updated_at", "generated_at"),
+            instantScope("dns_zones", "created_at", "updated_at", "last_checked_at", "last_transfer_at",
+                    "delegation_checked_at"), instantScope("dns_records", "created_at", "updated_at", "generated_at"),
             instantScope("dns_peers", "created_at", "updated_at"),
-            instantScope("dns_zone_peers", "created_at", "updated_at", "probed_at", "behind_since", "stale_alerted_at", "last_axfr_at", "last_notify_at"),
+            instantScope("dns_zone_peers", "created_at", "updated_at", "probed_at", "behind_since", "stale_alerted_at",
+                    "last_axfr_at", "last_notify_at"),
             instantScope("bans", "expires_at", "lifted_at", "created_at", "updated_at"),
             instantScope("spamservice_installations", "created_at", "updated_at"),
             instantScope("stacks", "created_at", "updated_at"),
@@ -350,8 +351,8 @@ public class M011_ReviewHardening extends HohenheimMigration {
             instantScope("instance_templates", "approved_at", "imported_at", "created_at", "updated_at"),
             instantScope("runtime_images", "created_at", "updated_at"),
             instantScope("instance_template_volumes", "created_at", "updated_at"),
-            instantScope("instances", "created_at", "updated_at", "deleted_at", "generated_at", "disk_observed_at", "status_observed_at"),
-            instantScope("instance_volumes", "observed_at", "created_at", "updated_at"),
+            instantScope("instances", "created_at", "updated_at", "deleted_at", "generated_at", "disk_observed_at",
+                    "status_observed_at"), instantScope("instance_volumes", "observed_at", "created_at", "updated_at"),
             instantScope("instance_snapshots", "created_at", "updated_at"),
             instantScope("instance_backups", "created_at", "updated_at"),
             instantScope("instance_template_variables", "created_at", "updated_at"),
@@ -379,8 +380,10 @@ public class M011_ReviewHardening extends HohenheimMigration {
     }
 
     private static FrozenModel instantScope(String table, String... columns) {
-        Field<?, ?> key = table.equals("site_sessions") ? StringField.builder("id").build() : IntegerField.builder("id").build();
-        Field<?, ?>[] dates = Arrays.stream(columns).map(name -> DateTimeField.builder(name).build()).toArray(Field[]::new);
+        Field<?, ?> key = table.equals("site_sessions") ? StringField.builder("id").build()
+                : IntegerField.builder("id").build();
+        Field<?, ?>[] dates = Arrays.stream(columns).map(name -> DateTimeField.builder(name).build())
+                .toArray(Field[]::new);
         return new FrozenModel(table, key, dates);
     }
 
@@ -700,7 +703,8 @@ public class M011_ReviewHardening extends HohenheimMigration {
                     String op = raw == null || String.valueOf(raw).isBlank() ? "restart" : String.valueOf(raw).trim();
                     operation = POWER_OPERATIONS.get(op);
                     if (operation == null) {
-                        throw new IllegalStateException("Schedule step " + step.get(id) + " stores the power operation '"
+                        throw new IllegalStateException("Schedule step " + step.get(id)
+                                + " stores the power operation '"
                             + op + "', which no instance operation replaces");
                     }
                 } else if (BACKUP_ACTION.equals(stored)) {

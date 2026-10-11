@@ -158,7 +158,8 @@ class SpamserviceCmsContractTest {
         assertThat(snapshot.settings().get("datasets.token").secretPresent()).isTrue();
         assertThat(snapshot.settings().get("network.port").readOnly()).isTrue();
         assertThat(snapshot.settings().get("network.port").provenance()).isEqualTo("env:PORT");
-        assertThat(snapshot.rootGroup().getChildGroup("scoring").getDefinition("threshold").isRestartRequired()).isTrue();
+        assertThat(snapshot.rootGroup().getChildGroup("scoring").getDefinition("threshold")
+                .isRestartRequired()).isTrue();
         assertThat(SettingAuthorityTestSupport.problems(definitionsUnder(snapshot.rootGroup())))
             .as("every remote setting declares its read and write authority").isEmpty();
         assertThat(snapshot.rootGroup().getChildGroup("scoring").getDefinition("threshold").getReadPermission())
@@ -182,7 +183,8 @@ class SpamserviceCmsContractTest {
             assertThat(description.key()).isEqualTo("settings.spamservice." + name + ".help");
             assertThat(description.fallback()).as("group copy is declared, not a remote-data fallback").isNull();
             for (String language : List.of("en", "nl")) {
-                assertThat(catalogs.resolveSource(description.key(), LocaleChain.ofTags(language), description.filters()))
+                assertThat(catalogs.resolveSource(description.key(), LocaleChain.ofTags(language),
+                        description.filters()))
                     .as("%s group description is shipped in %s", name, language).isNotNull();
             }
         }
@@ -239,7 +241,9 @@ class SpamserviceCmsContractTest {
         return definitions;
     }
 
-    /** Runs {@code body} as {@code caller} itself; inside the harness's system frame actingFor keeps system authority. */
+    /**
+     * Runs {@code body} as {@code caller} itself; inside the harness's system frame actingFor keeps system authority.
+     */
     private static <T> T as(AccessContext caller, Supplier<T> body) {
         return ExecutionIdentity.supply(ExecutionIdentity.caller(caller, CallerChannel.of(caller)), body);
     }

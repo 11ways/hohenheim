@@ -90,8 +90,8 @@ class DatabaseDnsGitSurfacesBrowserTest extends HohenheimTestBase {
     private static int gitId;
 
     /**
-     * The git providers leave with the class: their rows are options of every git provider pick, so a later class in the
-     * same JVM (the slice-three capture's template settings) would otherwise capture them as its own.
+     * The git providers leave with the class: their rows are options of every git provider pick, so a later class in
+     * the same JVM (the slice-three capture's template settings) would otherwise capture them as its own.
      */
     @AfterAll
     static void removeProviders() {

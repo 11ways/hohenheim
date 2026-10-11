@@ -24,10 +24,10 @@ import java.util.logging.Logger;
  * AIDEV-NOTE: the console is started WITHOUT force unless the viewer asked to take it over: Incus refuses a console
  * while another console operation of the instance runs (an operator's {@code incus console --type=vga}, or one an
  * older Hohenheim leaked on 6.0-6.16), and that refusal reads as {@link ScreenRefusalReason#HELD}, whose viewer may
- * take the console over. The ticket is empty because the daemon's proxy is the authority, not SPICE. The daemon ends a VGA console operation only when its
- * control websocket closes: Incus 6.0 through 6.16 keep one whose control never connected running forever, and later
- * releases fail it after 10 seconds, closing every SPICE channel with it. So the control socket is linked at once and
- * {@link Console#close} closes it and cancels the operation.
+ * take the console over. The ticket is empty because the daemon's proxy is the authority, not SPICE. The daemon ends a
+ * VGA console operation only when its control websocket closes: Incus 6.0 through 6.16 keep one whose control never
+ * connected running forever, and later releases fail it after 10 seconds, closing every SPICE channel with it. So the
+ * control socket is linked at once and {@link Console#close} closes it and cancels the operation.
  *
  * @author Jelle De Loecker
  * @since 0.2.0

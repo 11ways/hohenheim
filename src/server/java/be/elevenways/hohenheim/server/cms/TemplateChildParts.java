@@ -64,7 +64,8 @@ public final class TemplateChildParts {
             .column(ColumnSpec.fromField(InstanceTemplateVariableModel.REQUIRED).build())
             .column(ColumnSpec.fromField(InstanceTemplateVariableModel.DEFAULT_VALUE).build())
             .column(ColumnSpec.fromField(InstanceTemplateVariableModel.TEMPLATE_ID)
-                .relation(RelationPick.of(InstanceTemplateVariableModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID).build()).build())
+                .relation(RelationPick.of(InstanceTemplateVariableModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID)
+                        .build()).build())
             .build();
         return entry(InstanceTemplateVariableModel.MODEL_ID, HohenheimSlugs.INSTANCE_TEMPLATE_VARIABLES,
             HohenheimMicrocopy.TEMPLATE_VARIABLE, 17,
@@ -72,7 +73,8 @@ public final class TemplateChildParts {
                 InstanceTemplateVariableModel.TEMPLATE_ID)
             .form(ResourceForm.<Row>of(spec).quickCreate(QuickCreateSpec.of(InstanceTemplateVariableModel.KEY.getName(),
                     InstanceTemplateVariableModel.LABEL.getName(), InstanceTemplateVariableModel.TYPE.getName(),
-                    InstanceTemplateVariableModel.REQUIRED.getName()).presets(InstanceTemplateVariableModel.TEMPLATE_ID.getName()))
+                    InstanceTemplateVariableModel.REQUIRED.getName())
+                    .presets(InstanceTemplateVariableModel.TEMPLATE_ID.getName()))
                 .quickCreatePresets(access -> CmsSupport.parentPreset(access,
                     InstanceTemplateVariableModel.TEMPLATE_ID.getName(), HohenheimSlugs.INSTANCE_TEMPLATES))
                 .inlineEditable(InstanceTemplateVariableModel.LABEL, InstanceTemplateVariableModel.DESCRIPTION,
@@ -91,7 +93,8 @@ public final class TemplateChildParts {
             .column(ColumnSpec.fromField(InstanceTemplateFileModel.CONTAINER_PATH).subtext("mode").copyable().build())
             .column(ColumnSpec.fromField(InstanceTemplateFileModel.MODE).hidden().build())
             .column(ColumnSpec.fromField(InstanceTemplateFileModel.TEMPLATE_ID)
-                .relation(RelationPick.of(InstanceTemplateFileModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID).build()).build())
+                .relation(RelationPick.of(InstanceTemplateFileModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID)
+                        .build()).build())
             .build();
         return entry(InstanceTemplateFileModel.MODEL_ID, HohenheimSlugs.INSTANCE_TEMPLATE_FILES,
             HohenheimMicrocopy.TEMPLATE_FILE, 18,
@@ -114,7 +117,8 @@ public final class TemplateChildParts {
             .column(ColumnSpec.fromField(InstanceTemplateVolumeModel.QUOTA_BYTES).build())
             .column(ColumnSpec.fromField(InstanceTemplateVolumeModel.EXCLUSIVE).build())
             .column(ColumnSpec.fromField(InstanceTemplateVolumeModel.TEMPLATE_ID)
-                .relation(RelationPick.of(InstanceTemplateVolumeModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID).build()).build())
+                .relation(RelationPick.of(InstanceTemplateVolumeModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID)
+                        .build()).build())
             .build();
         return entry(InstanceTemplateVolumeModel.MODEL_ID, HohenheimSlugs.INSTANCE_TEMPLATE_VOLUMES,
             HohenheimMicrocopy.TEMPLATE_VOLUME, 20,
@@ -135,7 +139,8 @@ public final class TemplateChildParts {
             .column(ColumnSpec.fromField(InstanceTemplateDatabaseModel.ENGINE).build())
             .column(ColumnSpec.fromField(InstanceTemplateDatabaseModel.IMAGE).build())
             .column(ColumnSpec.fromField(InstanceTemplateDatabaseModel.TEMPLATE_ID)
-                .relation(RelationPick.of(InstanceTemplateDatabaseModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID).build()).build())
+                .relation(RelationPick.of(InstanceTemplateDatabaseModel.TEMPLATE_ID, InstanceTemplateModel.MODEL_ID)
+                        .build()).build())
             .build();
         return entry(InstanceTemplateDatabaseModel.MODEL_ID, HohenheimSlugs.INSTANCE_TEMPLATE_DATABASES,
             HohenheimMicrocopy.TEMPLATE_DATABASE, 19,

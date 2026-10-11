@@ -49,7 +49,9 @@ public final class GitSourceSchema {
     public static final List<String> BUILD_DETAIL = List.of(
         BUILD_DIRECTORY, BUILD_TIMEOUT, BUILD_ENVIRONMENT_VARIABLES, SHALLOW_CLONE, SUBMODULES);
 
-    /** When a new revision is picked up, and what proves the webhook that says so (poll_interval is retired, see addTo). */
+    /**
+     * When a new revision is picked up, and what proves the webhook that says so (poll_interval is retired, see addTo).
+     */
     public static final List<String> DELIVERY = List.of(AUTO_DEPLOY, POLL_INTERVAL, WEBHOOK_SECRET);
 
     /** The preview lane: off by default, and three fields nobody sets while creating. */

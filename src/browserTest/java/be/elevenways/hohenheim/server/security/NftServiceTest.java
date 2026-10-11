@@ -49,7 +49,8 @@ class NftServiceTest {
 
         assertThat(runner.commands).containsExactly(
             "add table inet " + NftService.table(),
-            "add chain inet " + NftService.table() + " banned { type filter hook input priority -10 ; policy accept ; }",
+            "add chain inet " + NftService.table()
+            + " banned { type filter hook input priority -10 ; policy accept ; }",
             "add set inet " + NftService.table() + " banned_v4 { type ipv4_addr ; flags timeout ; }",
             "add set inet " + NftService.table() + " banned_v6 { type ipv6_addr ; flags interval, timeout ; }",
             "add set inet " + NftService.table() + " banned_ssh_v4 { type ipv4_addr ; flags timeout ; }",

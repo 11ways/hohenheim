@@ -48,7 +48,8 @@ public class StackDeploymentModel extends Model {
         .build());
 
     public static final DateTimeField STARTED_AT = SCHEMA.addField(DateTimeField.builder().name("started_at").build());
-    public static final DateTimeField FINISHED_AT = SCHEMA.addField(DateTimeField.builder().name("finished_at").build());
+    public static final DateTimeField FINISHED_AT = SCHEMA.addField(DateTimeField.builder()
+            .name("finished_at").build());
     public static final IntegerField DURATION_MS = SCHEMA.addField(IntegerField.builder().name("duration_ms").build());
 
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());

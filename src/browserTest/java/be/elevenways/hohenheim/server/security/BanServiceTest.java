@@ -257,7 +257,8 @@ class BanServiceTest {
         assertThat(ban).isNotNull();
         assertThat(ban.get(BanModel.REASON)).isEqualTo("reputation test reason");
         assertThat(nftCommands).anySatisfy(cmd ->
-            assertThat(cmd).startsWith("add element inet " + NftService.table() + " banned_v4 { 198.51.100.90 timeout "));
+            assertThat(cmd).startsWith("add element inet " + NftService.table()
+                    + " banned_v4 { 198.51.100.90 timeout "));
     }
 
     @Test
@@ -506,7 +507,8 @@ class BanServiceTest {
             "flush set inet " + NftService.table() + " banned_v6",
             "add element inet " + NftService.table() + " banned_v4 { 198.51.100.81 }");
         assertThat(nftCommands).anySatisfy(cmd ->
-            assertThat(cmd).startsWith("add element inet " + NftService.table() + " banned_v4 { 198.51.100.80 timeout "));
+            assertThat(cmd).startsWith("add element inet " + NftService.table()
+                    + " banned_v4 { 198.51.100.80 timeout "));
     }
 
     @Test

@@ -260,7 +260,8 @@ class InstanceSettingsSectionTest {
             }
         }
 
-        // 3. keep_releases is retired the same way: the engine keeps exactly one rollback target whatever it said. And a
+        // 3. keep_releases is retired the same way: the engine keeps exactly one rollback target whatever it said. And
+        // a
         //    workspace keeps its preview fields declared but offers none: the preview lane builds applications only.
         FormSpec workspace = FieldFormEntryRegistry.INSTANCE.deriveSpec(WorkspaceKind.SETTINGS_SCHEMA);
         for (String preview : GitSourceSchema.PREVIEWS) {

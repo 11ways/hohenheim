@@ -93,7 +93,8 @@ public class GiteaProviderClient extends ApiProviderClient {
             case SUCCESS -> "success";
             case FAILURE -> "failure";
         };
-        postStatus(this.apiBase + "/repos/" + repoPath(repository) + "/statuses/" + commitSha, requireToken(), stateToken, context, description, targetUrl);
+        postStatus(this.apiBase + "/repos/" + repoPath(repository) + "/statuses/" + commitSha, requireToken(),
+                stateToken, context, description, targetUrl);
     }
 
     /** {@code owner/repo}, refusing nesting and every path trick. */

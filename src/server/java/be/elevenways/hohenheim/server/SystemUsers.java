@@ -162,7 +162,8 @@ public final class SystemUsers {
             throw new IllegalStateException("System user '" + userKeyObj + "' has no uid");
         }
         if (uid == 0) {
-            throw new IllegalStateException("System user '" + userKeyObj + "' is root (uid 0); refusing to run site processes as root");
+            throw new IllegalStateException("System user '" + userKeyObj
+                    + "' is root (uid 0); refusing to run site processes as root");
         }
         return new RunAsUser(row.get(SystemUserModel.NAME), uid,
             row.get(SystemUserModel.GID), row.get(SystemUserModel.HOME));

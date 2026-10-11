@@ -35,19 +35,24 @@ public class DnsZoneModel extends Model {
         .build());
     public static final IntegerField SERIAL = SCHEMA.addField(IntegerField.builder().name("serial").defaultValue(1)
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("serial")).help(HohenheimMicrocopy.HELP.of("serial")).build());
-    public static final IntegerField DEFAULT_TTL = SCHEMA.addField(IntegerField.builder().name("default_ttl").defaultValue(3600)
+    public static final IntegerField DEFAULT_TTL = SCHEMA.addField(IntegerField.builder().name("default_ttl")
+            .defaultValue(3600)
         .suffix("s").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("default_ttl"))
         .help(HohenheimMicrocopy.HELP.of("default_ttl")).build());
-    public static final IntegerField NEGATIVE_TTL = SCHEMA.addField(IntegerField.builder().name("negative_ttl").defaultValue(300)
+    public static final IntegerField NEGATIVE_TTL = SCHEMA.addField(IntegerField.builder().name("negative_ttl")
+            .defaultValue(300)
         .suffix("s").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("negative_ttl"))
         .help(HohenheimMicrocopy.HELP.of("negative_ttl")).build());
-    public static final IntegerField SOA_REFRESH = SCHEMA.addField(IntegerField.builder().name("soa_refresh").defaultValue(7200)
+    public static final IntegerField SOA_REFRESH = SCHEMA.addField(IntegerField.builder().name("soa_refresh")
+            .defaultValue(7200)
         .suffix("s").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("soa_refresh"))
         .help(HohenheimMicrocopy.HELP.of("soa_refresh")).build());
-    public static final IntegerField SOA_RETRY = SCHEMA.addField(IntegerField.builder().name("soa_retry").defaultValue(3600)
+    public static final IntegerField SOA_RETRY = SCHEMA.addField(IntegerField.builder().name("soa_retry")
+            .defaultValue(3600)
         .suffix("s").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("soa_retry"))
         .help(HohenheimMicrocopy.HELP.of("soa_retry")).build());
-    public static final IntegerField SOA_EXPIRE = SCHEMA.addField(IntegerField.builder().name("soa_expire").defaultValue(1209600)
+    public static final IntegerField SOA_EXPIRE = SCHEMA.addField(IntegerField.builder().name("soa_expire")
+            .defaultValue(1209600)
         .suffix("s").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("soa_expire"))
         .help(HohenheimMicrocopy.HELP.of("soa_expire")).build());
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled").defaultValue(true)

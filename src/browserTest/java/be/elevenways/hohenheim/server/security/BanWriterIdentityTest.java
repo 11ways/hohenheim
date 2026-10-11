@@ -21,8 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The ban writer runs every automatic ban as the system's own reaction, never as the request that tripped it, and admits
- * the task it runs plus a full queue.
+ * The ban writer runs every automatic ban as the system's own reaction, never as the request that tripped it, and
+ * admits the task it runs plus a full queue.
  *
  * @author Jelle De Loecker
  * @since 0.2.0

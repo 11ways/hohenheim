@@ -283,7 +283,8 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             }
 
             // 3. It goes away again and a visitor asks first: their refused dial alone turns the verdict broken.
-            String answer = ProxyTestSupport.rawRequest(ProxyTestSupport.httpPort(proxy), "refused.app-journey.test", "/");
+            String answer = ProxyTestSupport.rawRequest(ProxyTestSupport.httpPort(proxy),
+                    "refused.app-journey.test", "/");
             assertThat(answer).as("step 3: the visitor gets an error status").matches("(?s)HTTP/1\\.1 50[234].*");
             assertThat(adminGet(overview(site)).body()).as("step 3: the verdict is broken")
                 .contains("data-cms-record-health=\"broken\"");

@@ -352,7 +352,8 @@ public class TlsCertificateTest {
         Row accountRow = certModel.createEmptyRow();
         accountRow.set(CertificateModel.NICE_NAME, "ACME Account Key");
         accountRow.set(CertificateModel.PROVIDER, "acme_account");
-        accountRow.set(CertificateModel.PRIVATE_KEY_PEM, "-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----");
+        accountRow.set(CertificateModel.PRIVATE_KEY_PEM,
+                "-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----");
         accountRow.set(CertificateModel.STATUS, "active");
         certModel.save(accountRow);
 

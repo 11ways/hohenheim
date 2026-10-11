@@ -123,7 +123,8 @@ class HostEnrolmentTransactionTest {
             RecordingCeremony keyless = new RecordingCeremony(true, true);
             Object dockerId;
             try (HostEnrolment.Replacement ignored = HostEnrolment.replaceCeremonyForTesting(keyless)) {
-                dockerId = resource.writes().rowWriter(ResourceVerb.CREATE).write(new RowWriteCall(ResourceVerb.CREATE, null, Map.of(
+                dockerId = resource.writes().rowWriter(ResourceVerb.CREATE)
+                        .write(new RowWriteCall(ResourceVerb.CREATE, null, Map.of(
                     "name", "enrol-keyless",
                     "runtime", ServerModel.RUNTIME_DOCKER,
                     "ssh_target", "deploy@keyless.example.test"), operator));
@@ -140,7 +141,8 @@ class HostEnrolmentTransactionTest {
             // 5. A token on a host it can never enrol on is refused BEFORE phase one writes.
             RecordingCeremony untouched = new RecordingCeremony(false, true);
             try (HostEnrolment.Replacement ignored = HostEnrolment.replaceCeremonyForTesting(untouched)) {
-                assertThatThrownBy(() -> resource.writes().rowWriter(ResourceVerb.CREATE).write(new RowWriteCall(ResourceVerb.CREATE, null, Map.of(
+                assertThatThrownBy(() -> resource.writes().rowWriter(ResourceVerb.CREATE)
+                        .write(new RowWriteCall(ResourceVerb.CREATE, null, Map.of(
                         "name", "enrol-wrong-lane",
                         "runtime", ServerModel.RUNTIME_DOCKER,
                         "ssh_target", "deploy@wrong.example.test",

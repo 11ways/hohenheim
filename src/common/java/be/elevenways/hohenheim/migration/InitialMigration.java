@@ -623,7 +623,8 @@ public class InitialMigration extends HohenheimMigration {
             table.addColumn("external_name", ColumnType.STRING,
                 column -> column.nullable(true));
             table.timestamps();
-            table.addIndex("stack_services_mounts_stack_service_id_order_key_index", List.of("stack_service_id", "order_key"));
+            table.addIndex("stack_services_mounts_stack_service_id_order_key_index",
+                    List.of("stack_service_id", "order_key"));
         });
 
         schema.createTable("stack_services_ports", table -> {
@@ -641,7 +642,8 @@ public class InitialMigration extends HohenheimMigration {
             table.addColumn("host_ip", ColumnType.STRING,
                 column -> column.nullable(true));
             table.timestamps();
-            table.addIndex("stack_services_ports_stack_service_id_order_key_index", List.of("stack_service_id", "order_key"));
+            table.addIndex("stack_services_ports_stack_service_id_order_key_index",
+                    List.of("stack_service_id", "order_key"));
         });
 
         schema.createTable("stack_services_depends_on", table -> {
@@ -655,7 +657,8 @@ public class InitialMigration extends HohenheimMigration {
             table.addColumn("condition", ColumnType.STRING,
                 column -> column.nullable(true));
             table.timestamps();
-            table.addIndex("stack_services_depends_on_stack_service_id_order_key_index", List.of("stack_service_id", "order_key"));
+            table.addIndex("stack_services_depends_on_stack_service_id_order_key_index",
+                    List.of("stack_service_id", "order_key"));
         });
 
         schema.createTable("stack_files", table -> {
@@ -670,7 +673,8 @@ public class InitialMigration extends HohenheimMigration {
                 column -> column.nullable(true).maxLength(10));
             table.timestamps();
             table.addIndex("stack_files_stack_service_id_index", List.of("stack_service_id"));
-            table.unique("stack_files_stack_service_id_container_path_unique", List.of("stack_service_id", "container_path"));
+            table.unique("stack_files_stack_service_id_container_path_unique",
+                    List.of("stack_service_id", "container_path"));
         });
 
         schema.createTable("stack_deployments", table -> {

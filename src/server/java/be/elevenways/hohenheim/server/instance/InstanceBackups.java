@@ -87,9 +87,10 @@ import java.util.Set;
  */
 public final class InstanceBackups {
 
-    private static final Retention.InstanceCaptures RETENTION = new Retention.InstanceCaptures(InstanceBackupModel.class,
-        InstanceBackupModel.ID, InstanceBackupModel.INSTANCE_ID, InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_COMPLETE,
-        HohenheimSettings.Backup.RETENTION, "BACKUP");
+    private static final Retention.InstanceCaptures RETENTION = new Retention.InstanceCaptures(
+            InstanceBackupModel.class,
+        InstanceBackupModel.ID, InstanceBackupModel.INSTANCE_ID, InstanceBackupModel.STATUS,
+        InstanceBackupModel.STATUS_COMPLETE, HohenheimSettings.Backup.RETENTION, "BACKUP");
 
     private final @NonNull InstanceService instances;
 

@@ -113,9 +113,12 @@ public final class InstanceScheduleRunParts {
             }
             Microcopy execution = HohenheimMicrocopy.INSTANCE_SCHEDULE.of("step_execution")
                 .withArg("id", text.text(null, RecordScheduleStepRunModel.STEP_ID, step.stepId(), locales, resolver))
-                .withArg("attempts", text.text(null, RecordScheduleStepRunModel.ATTEMPT, step.attempts(), locales, resolver))
-                .withArg("started", text.text(null, RecordScheduleStepRunModel.STARTED_AT, step.startedAt(), locales, resolver))
-                .withArg("ended", text.text(null, RecordScheduleStepRunModel.ENDED_AT, step.endedAt(), locales, resolver));
+                .withArg("attempts", text.text(null, RecordScheduleStepRunModel.ATTEMPT, step.attempts(),
+                        locales, resolver))
+                .withArg("started", text.text(null, RecordScheduleStepRunModel.STARTED_AT, step.startedAt(),
+                        locales, resolver))
+                .withArg("ended", text.text(null, RecordScheduleStepRunModel.ENDED_AT, step.endedAt(),
+                        locales, resolver));
             summary.append(' ').append(execution.resolve(locales, resolver));
         }
         return summary.toString();

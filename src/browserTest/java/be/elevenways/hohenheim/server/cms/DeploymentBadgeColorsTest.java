@@ -39,17 +39,24 @@ class DeploymentBadgeColorsTest {
             assertEquals(colors.known(), row.get("statusKnown"), "step 1: declared-key fact for " + key);
         }
 
-        // 2. The stack's fixed model field cannot substitute this fixture; pin its shared classifier and facet forwarding.
-        String stack = Files.readString(Path.of("src/server/java/be/elevenways/hohenheim/server/cms/StackDeploymentsPage.java"));
-        assertTrue(stack.contains("WidgetBadge.colorsOf(StackDeploymentModel.STATUS"), "step 2: stack uses the same home");
-        assertTrue(stack.contains("entry.put(\"statusColorSet\", colors.colorSet())"), "step 2: stack forwards the hue");
-        assertFalse(stack.contains("private static BadgeVariant statusVariant"), "step 2: no private classification copy");
+        // 2. The stack's fixed model field cannot substitute this fixture; pin its shared classifier and facet
+        // forwarding.
+        String stack =
+                Files.readString(
+                        Path.of("src/server/java/be/elevenways/hohenheim/server/cms/StackDeploymentsPage.java"));
+        assertTrue(stack.contains("WidgetBadge.colorsOf(StackDeploymentModel.STATUS"),
+                "step 2: stack uses the same home");
+        assertTrue(stack.contains("entry.put(\"statusColorSet\", colors.colorSet())"),
+                "step 2: stack forwards the hue");
+        assertFalse(stack.contains("private static BadgeVariant statusVariant"),
+                "step 2: no private classification copy");
 
         // 3. Both actual template sites carry the hue and leave an undeclared key as plain text.
         for (String file : List.of("instance-deployments.hwk", "stack-deployments.hwk")) {
             String template = Files.readString(Path.of("src/common/templates/cms", file));
             assertTrue(template.contains("colorSet={% deploy.get(\"statusColorSet\") %}"), "step 3: hue on " + file);
-            assertTrue(template.contains("deploy.get(\"statusKnown\") == true"), "step 3: unknown-key honesty on " + file);
+            assertTrue(template.contains("deploy.get(\"statusKnown\") == true"),
+                    "step 3: unknown-key honesty on " + file);
         }
     }
 }

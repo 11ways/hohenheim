@@ -413,7 +413,8 @@ class DockerReconcilerTest {
             List<AttentionItem> foreign = new ArrayList<>();
             AttentionCollector.dockerForeignResources(foreign);
             assertThat(foreign).as("one informational row per host with foreign resources").hasSize(1);
-            assertThat(foreign.get(0).severity()).as("foreign resources inform, never warn").isEqualTo(AttentionSeverity.INFO);
+            assertThat(foreign.get(0).severity()).as("foreign resources inform, never warn")
+                    .isEqualTo(AttentionSeverity.INFO);
             assertThat(foreign.get(0).title().key()).isEqualTo("docker_foreign");
             assertThat(foreign.get(0).target()).as("the row leads to the findings list").isNotNull();
 

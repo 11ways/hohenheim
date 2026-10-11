@@ -40,7 +40,8 @@ public final class InstanceSftpRealm implements SftpRealm {
     @Override
     public @Nullable SftpMount mount(@NonNull Principal principal, @NonNull String mountName) {
         Integer instanceId = instanceIdOf(mountName);
-        if (instanceId == null || InstanceFiles.reachableInstance(AccessContext.detached(principal), instanceId) == null) {
+        if (instanceId == null || InstanceFiles.reachableInstance(AccessContext.detached(principal),
+                instanceId) == null) {
             return null;
         }
         InstanceFiles files = new InstanceFiles();

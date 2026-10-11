@@ -9,10 +9,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 /** One typed operational issue rendered by the dashboard attention widget.
  *
  * AIDEV-NOTE: about, causedBy, stage and heldBack are the dashboard's fold, read before anything renders
- * (DashboardAttention): an item {@code causedBy} a subject another shown item is {@code about} is not drawn, its root says how much it holds
- * back ({@code heldBack}) instead; an item declaring a checklist {@code stage} is presented by that stage's open step
- * rather than drawn twice. The Hosts list's band draws every item unfolded; the Databases band folds the apps a shown
- * database holds back (DashboardAttention.band).
+ * (DashboardAttention): an item {@code causedBy} a subject another shown item is {@code about} is not drawn, its root
+ * says how much it holds back ({@code heldBack}) instead; an item declaring a checklist {@code stage} is presented by
+ * that stage's open step rather than drawn twice. The Hosts list's band draws every item unfolded; the Databases band
+ * folds the apps a shown database holds back (DashboardAttention.band).
  *
  * @param action   what following {@code target} does, in words ("Check and admit"); null exactly when target is
  * @param about    the record this item is the root problem of, null when nothing can be caused by it

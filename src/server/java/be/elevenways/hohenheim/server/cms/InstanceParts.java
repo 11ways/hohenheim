@@ -594,8 +594,9 @@ public final class InstanceParts {
      * The delete dialog: this removes the workload but KEEPS its data (the separate delete-with-data verb is the one
      * that does not), and for one record it NAMES the sites the destroy will disable.
      *
-     * AIDEV-NOTE: the wording lives here and the guarantee lives in {@code InstanceExposure.disableForDestroyedInstance},
-     * called by {@code InstanceService.destroy}: a non-UI caller never sees this text and still gets the disable.
+     * AIDEV-NOTE: the wording lives here and the guarantee lives in
+     * {@code InstanceExposure.disableForDestroyedInstance}, called by {@code InstanceService.destroy}: a non-UI caller
+     * never sees this text and still gets the disable.
      *
      * @param instance the instance, null for the record-less fallback
      */

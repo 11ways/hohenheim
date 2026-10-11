@@ -79,9 +79,9 @@ public final class HohenheimViolations {
      * A stored reason as text for its reader: what {@link #reasonOf} stores, or, for a reason stored before it existed,
      * the refusal it debug-rendered ("1 violation(s):  -> workspace_build_failed {reason=...}") in its own words.
      *
-     * AIDEV-NOTE: only ONE violation is read back, because a list of them joins entries AND args with ", " and cannot be
-     * split without guessing. A key this catalog does not hold, or any other shape, keeps the stored text: an old row
-     * reads as it was stored rather than as a different message. A message that changed its arguments since (the
+     * AIDEV-NOTE: only ONE violation is read back, because a list of them joins entries AND args with ", " and cannot
+     * be split without guessing. A key this catalog does not hold, or any other shape, keeps the stored text: an old
+     * row reads as it was stored rather than as a different message. A message that changed its arguments since (the
      * build failure took {@code code} where it stored {@code reason}) cannot be filled from the row: it reads as the
      * row's one stored argument when there is exactly one, else as stored.
      *

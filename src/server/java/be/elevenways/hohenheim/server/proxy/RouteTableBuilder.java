@@ -95,7 +95,9 @@ final class RouteTableBuilder {
                           Map<Integer, Row> authProviders, Map<Integer, List<Row>> protectedPathsBySite,
                           Set<String> certifiedNames) {
 
-        /** @param certificates the proxy's store: the names it loaded are the working ones the global force waits for */
+        /**
+         * @param certificates the proxy's store: the names it loaded are the working ones the global force waits for
+         */
         static Inputs load(@NonNull CertificateStore certificates) {
             List<Row> sites = Models.get(SiteModel.class).findEnabled();
             Map<Integer, List<Row>> domainsBySite = new HashMap<>();
@@ -379,7 +381,8 @@ final class RouteTableBuilder {
 
         // The global force_https waits for a working certificate on an exact name, as a domain's own latch does; a
         // pattern has no one certificate to wait for and keeps failing closed.
-        boolean globalForce = !SiteDomainModel.MATCH_EXACT.equals(SiteDomainModel.effectiveMatchType(hostname, matchType))
+        boolean globalForce = !SiteDomainModel.MATCH_EXACT.equals(SiteDomainModel.effectiveMatchType(hostname,
+                matchType))
             || CertificateCoverage.covers(certifiedNames, hostname);
         RouteEntry entry = new RouteEntry(domainHandler, siteName, domain, accessTree,
             pathGuards, settings, authGate, authProviderName, globalForce);

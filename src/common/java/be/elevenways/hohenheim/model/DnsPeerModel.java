@@ -72,7 +72,8 @@ public class DnsPeerModel extends Model {
     public static final StringField TSIG_ALGORITHM = SCHEMA.addField(StringField.builder().name("tsig_algorithm")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peer_tsig_algorithm"))
         .help(HohenheimMicrocopy.HELP.of("peer_tsig_algorithm")).build());
-    public static final StringField TSIG_SECRET = SCHEMA.addField(StringField.builder().name("tsig_secret").secret().encrypted()
+    public static final StringField TSIG_SECRET = SCHEMA.addField(StringField.builder().name("tsig_secret").secret()
+            .encrypted()
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("peer_tsig_secret"))
         .help(HohenheimMicrocopy.HELP.of("peer_tsig_secret")).build());
     public static final BooleanField ENABLED = SCHEMA.addField(BooleanField.builder("enabled").defaultValue(true)

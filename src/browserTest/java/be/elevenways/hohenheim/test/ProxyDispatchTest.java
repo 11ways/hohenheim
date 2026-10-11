@@ -82,8 +82,10 @@ class ProxyDispatchTest {
                     case "force_ssl" -> domain.set(SiteDomainModel.FORCE_SSL, (Boolean) entry.getValue());
                     case "hsts_enabled" -> domain.set(SiteDomainModel.HSTS_ENABLED, (Boolean) entry.getValue());
                     case "hsts_subdomains" -> domain.set(SiteDomainModel.HSTS_SUBDOMAINS, (Boolean) entry.getValue());
-                    case "custom_headers" -> domain.set(SiteDomainModel.CUSTOM_HEADERS, castHeaderMap(entry.getValue()));
-                    case "response_headers" -> domain.set(SiteDomainModel.RESPONSE_HEADERS, castHeaderMap(entry.getValue()));
+                    case "custom_headers" -> domain.set(SiteDomainModel.CUSTOM_HEADERS,
+                            castHeaderMap(entry.getValue()));
+                    case "response_headers" -> domain.set(SiteDomainModel.RESPONSE_HEADERS,
+                            castHeaderMap(entry.getValue()));
                     case "match_type" -> domain.set(SiteDomainModel.MATCH_TYPE, (String) entry.getValue());
                     case "listen_on" -> domain.set(SiteDomainModel.LISTEN_ON, (String) entry.getValue());
                 }
@@ -135,7 +137,8 @@ class ProxyDispatchTest {
         try (Socket socket = new Socket("127.0.0.1", httpPort)) {
             socket.setSoTimeout(3000);
             OutputStream out = socket.getOutputStream();
-            out.write(("GET / HTTP/1.1\r\nHost: headers.test\r\nX-Remove-Me: delete-me\r\nConnection: close\r\n\r\n").getBytes());
+            out.write(("GET / HTTP/1.1\r\nHost: headers.test\r\nX-Remove-Me: delete-me\r\nConnection: close\r\n\r\n")
+                    .getBytes());
             out.flush();
 
             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));

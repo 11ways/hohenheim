@@ -397,7 +397,8 @@ public final class PaasApi {
             entry.put("application_id", applicationId);
             Row serving = ApplicationReleases.ownedServing(applicationId);
             if (serving != null) {
-                entry.put("current_commit", Objects.toString(ApplicationReleases.storedSettings(serving).get("commit_sha"), ""));
+                entry.put("current_commit", Objects.toString(ApplicationReleases.storedSettings(serving)
+                        .get("commit_sha"), ""));
             }
         }
         Row project = siteId == null ? null : Projects.projectOf(SiteModel.MODEL_ID, siteId);

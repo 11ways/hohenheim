@@ -252,11 +252,11 @@ public final class InstanceOperations {
             .register();
 
     /**
-     * The verified destroy, the instance entry's delete: container removed (or observed absent) and port claims released
-     * before the record is soft-deleted; volumes survive by design, the reconciler surfaces them as orphans.
+     * The verified destroy, the instance entry's delete: container removed (or observed absent) and port claims
+     * released before the record is soft-deleted; volumes survive by design, the reconciler surfaces them as orphans.
      *
-     * AIDEV-NOTE: offered DEAD, never hidden, to a viewer without {@code destroy} on the record: its availability is the
-     * teardown funnel's own refusal, so the button and the POST answer with one decision and one text.
+     * AIDEV-NOTE: offered DEAD, never hidden, to a viewer without {@code destroy} on the record: its availability is
+     * the teardown funnel's own refusal, so the button and the POST answer with one decision and one text.
      */
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_instance"))
         .happened(OperationSentences.of("delete_instance"))
@@ -318,8 +318,8 @@ public final class InstanceOperations {
      * Open an interactive shell inside one instance: what the shell tab offers and the shell socket admits.
      *
      * AIDEV-NOTE: a SESSION, not an invocation. Its effect is the socket the shell tab opens, so no surface invokes it;
-     * the socket asks {@code OperationPipeline.offer} and admits exactly whom the operation is offered to, which carries
-     * the gate, the generated-instance applicability and the authorization of every other instance operation.
+     * the socket asks {@code OperationPipeline.offer} and admits exactly whom the operation is offered to, which
+     * carries the gate, the generated-instance applicability and the authorization of every other instance operation.
      */
     public static final Operation<Row, Void, Void> OPEN_SHELL = Operation.declare(HohenheimIds.id("open_shell"))
         .happened(OperationSentences.of("open_shell"))

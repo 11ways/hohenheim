@@ -315,7 +315,8 @@ class HohenheimUpgradeJourneyTest {
             .as("step 4c: the workload stored with the old default restarts after a crash")
             .isEqualTo(InstanceModel.CRASH_DEFAULT);
         assertThat(scalar(url, "SELECT dflt_value FROM pragma_table_info('instances') WHERE name = 'crash_policy'"))
-            .as("step 4c: the column's default is the restart policy").isEqualTo("'" + InstanceModel.CRASH_DEFAULT + "'");
+            .as("step 4c: the column's default is the restart policy")
+            .isEqualTo("'" + InstanceModel.CRASH_DEFAULT + "'");
 
         // 5. The API key keeps its scopes, its zenit-auth model scope under today's spelling, and authenticates.
         Row key = Models.get(ApiKeyModel.class).find().noCache().where(ApiKeyModel.LABEL.eq("upgrade-key")).first();
@@ -442,7 +443,8 @@ class HohenheimUpgradeJourneyTest {
         }
 
         // 11. A receipt claimed under the old type key replays: the hub send, then the saved view's command.
-        assertThat(scalar(url, "SELECT type_key FROM zenit_command_receipts WHERE command_key = 'comms_hub:1:upgrade-journey'"))
+        assertThat(scalar(url,
+                "SELECT type_key FROM zenit_command_receipts WHERE command_key = 'comms_hub:1:upgrade-journey'"))
             .as("step 11: the receipt keeps the type key it was claimed under").isEqualTo("zenit-comms:hub_send");
         HubIdempotency.Outcome hub = HubIdempotency.begin(Integer.parseInt(facts.getProperty("hub.project")),
             facts.getProperty("hub.key"), facts.getProperty("hub.body"));
@@ -474,7 +476,8 @@ class HohenheimUpgradeJourneyTest {
 
         // 14. The next boot finds nothing left in the old spellings.
         assertThat(strings(url, "SELECT action FROM zenit_record_schedule_steps UNION SELECT model FROM "
-                + "zenit_record_schedules UNION SELECT model FROM auth_record_grants UNION SELECT type FROM system_task"))
+                + "zenit_record_schedules UNION SELECT model FROM auth_record_grants UNION SELECT type FROM "
+                + "system_task"))
             .as("step 14: no stored-id column holds an old spelling")
             .noneMatch(value -> value.startsWith("zenit-") || value.startsWith("be.elevenways."));
     }

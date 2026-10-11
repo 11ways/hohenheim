@@ -81,7 +81,8 @@ class AccessRuleTreeTest {
         // 2. Spend the rest of this client's budget. The remembered pair still passes, which
         //    it could not if it were verified again: a verification now would be refused.
         for (int i = 1; i < ProxyAuthThrottle.POLICY.requests(); i++) {
-            assertThat(ProxyAuthThrottle.spendFor(exchange(client, null), 1)).as("step 2: token %d is available", i).isNull();
+            assertThat(ProxyAuthThrottle.spendFor(exchange(client, null), 1))
+                    .as("step 2: token %d is available", i).isNull();
         }
         assertThat(verdict(tree, client, basic("operator", "s3cret")))
             .as("step 2: a remembered pair passes without spending a token").isEqualTo(AccessRuleTree.Verdict.PASS);
@@ -90,7 +91,8 @@ class AccessRuleTreeTest {
         //    answer is 429 with Retry-After rather than another password prompt.
         HttpServerExchange throttled = exchange(client, basic("operator", "guess"));
         AccessRuleTree.Result throttledResult = tree.evaluate(throttled);
-        assertThat(throttledResult.verdict()).as("step 3: the leaf stays pending").isEqualTo(AccessRuleTree.Verdict.PENDING);
+        assertThat(throttledResult.verdict()).as("step 3: the leaf stays pending")
+                .isEqualTo(AccessRuleTree.Verdict.PENDING);
         SiteAuthDecision tooMany = throttledResult.refusal(throttled);
         assertThat(((SiteAuthDecision.Deny) tooMany).statusCode()).as("step 3: answered 429").isEqualTo(429);
         assertThat(throttled.getResponseHeaders().getFirst(Headers.RETRY_AFTER))
@@ -125,7 +127,8 @@ class AccessRuleTreeTest {
         AccessRuleTree changed = tree(AccessListModel.SATISFY_ANY,
             List.of(credentialLeaf("operator", BasicCredentials.hashIfNeeded("n3w-secret"))));
         assertThat(verdict(changed, client, basic("operator", "s3cret")))
-            .as("step 6: the old password is not remembered across the change").isEqualTo(AccessRuleTree.Verdict.PENDING);
+            .as("step 6: the old password is not remembered across the change")
+            .isEqualTo(AccessRuleTree.Verdict.PENDING);
         assertThat(verdict(changed, client, basic("operator", "n3w-secret")))
             .as("step 6: the new password verifies").isEqualTo(AccessRuleTree.Verdict.PASS);
     }

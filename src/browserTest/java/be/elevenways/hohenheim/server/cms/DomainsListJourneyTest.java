@@ -149,7 +149,8 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             // 5. The Domains area heads its tabs with its own name, the page's one heading (the cluster landing draws
             //    no member h1), and its fourth tab reads Released addresses.
             assertThat(html).as("step 5: the area's name above the tabs").contains("data-cms-cluster-title")
-                .containsPattern("data-cms-cluster-title[^>]*>(<!--[^>]*-->)?<pb-microcopy[^>]*>Domains</pb-microcopy>");
+                .containsPattern(
+                        "data-cms-cluster-title[^>]*>(<!--[^>]*-->)?<pb-microcopy[^>]*>Domains</pb-microcopy>");
             assertThat(html.split("<h1", -1).length - 1).as("step 5: and it is the page's one heading").isEqualTo(1);
             assertThat(html).as("step 5: released names are addresses").contains("Released addresses");
             String strip = html.substring(html.indexOf("data-cms-cluster-tabs"));
@@ -229,8 +230,8 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             assertThat(DomainParts.reachCell(movedRow, HostnameReach.LOOKUP_WAIT_MS).state())
                 .as("step 10: the remembered answer stands until it is checked again").isEqualTo("points_elsewhere");
             HttpResponse<String> checked = adminPostForm("/admin/" + HohenheimSlugs.DOMAINS + "/invoke/"
-                + DomainParts.CHECK_REACH.id().toString().replace(':', '.') + "?ids=" + movedRow.get(SiteDomainModel.ID),
-                "");
+                + DomainParts.CHECK_REACH.id().toString().replace(':', '.') + "?ids="
+                + movedRow.get(SiteDomainModel.ID), "");
             assertThat(checked.statusCode()).as("step 10: the check runs").isLessThan(400);
             assertThat(DomainParts.reachCell(movedRow, HostnameReach.LOOKUP_WAIT_MS).state())
                 .as("step 10: checked again, it points here").isEqualTo("points_here");
@@ -249,7 +250,8 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             local.set(ServerModel.PUBLIC_IPV4, null);
             servers.save(local);
             String heldName = "held-" + suffix + ".test";
-            try (OutboundFixture heldFixture = OutboundFixture.routeResolved(heldName, InetAddress.getByName(held), 9)) {
+            try (OutboundFixture heldFixture = OutboundFixture.routeResolved(heldName,
+                    InetAddress.getByName(held), 9)) {
                 assertThat(DomainParts.reachCell(domain(site, heldName, false), HostnameReach.LOOKUP_WAIT_MS).state())
                     .as("step 11: an address the machine holds is this host's, declared or not")
                     .isEqualTo("points_here");

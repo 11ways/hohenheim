@@ -45,15 +45,17 @@ import java.util.List;
  * that draws the button and by the pipeline on invoke, for an admin and a /manage principal alike; a generated row is
  * outside every operation's {@code applies}, so it is hidden and its invoke reads as missing. Its
  * {@code hiddenWhen}/{@code disabledWhen} are presentation only (stop of a stopped instance is idempotent, start of an
- * instance whose database is not ready, or whose host will refuse it, refuses with the same words). The operator verbs answer to an operator alone
- * through their authorizers (HohenheimAccess.operatorOnly).
+ * instance whose database is not ready, or whose host will refuse it, refuses with the same words). The operator verbs
+ * answer to an operator alone through their authorizers (HohenheimAccess.operatorOnly).
  *
  * @author Jelle De Loecker
  * @since 0.1.0
  */
 final class InstanceActions {
 
-    /** The health band's fix for a blocked instance ({@link AppHealth}): its host's page, where Check and admit lives. */
+    /**
+     * The health band's fix for a blocked instance ({@link AppHealth}): its host's page, where Check and admit lives.
+     */
     static final Identifier CHECK_HOST = HohenheimIds.id("instance_check_host");
 
     /** The address of the site serving this workload, in a new tab ({@link SiteActions#openSiteAction}). */
@@ -187,7 +189,8 @@ final class InstanceActions {
             .icon(Icon.of("stethoscope"))
             .inlineOnRecord(false)
             .inlineInRow(false)
-            .shownWhen((row, ctx) -> OwnedInstances.mayClearPlacement(ctx) && OwnedInstances.placementRefusal(row) != null)
+            .shownWhen((row, ctx) -> OwnedInstances.mayClearPlacement(ctx)
+                    && OwnedInstances.placementRefusal(row) != null)
             .route((row, request) -> CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.SERVERS,
                 OwnedInstances.placementHost(row), RecordOverview.SLUG))
             .build();

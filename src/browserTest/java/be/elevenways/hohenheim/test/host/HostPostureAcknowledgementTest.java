@@ -188,7 +188,8 @@ class HostPostureAcknowledgementTest {
             Row unacknowledged = servers.findById(hostId);
             PanelAction<Row> action = acknowledgeAction();
             var principal = TestAccessContexts.authenticated(7, "Ada Operator");
-            AccessContext operator = AccessContext.of(TenantConduits.stubFor(principal), principal, TestAccessContexts.allowAll());
+            AccessContext operator = AccessContext.of(TenantConduits.stubFor(principal), principal,
+                    TestAccessContexts.allowAll());
             @SuppressWarnings("unchecked")
             Operation<Row, Void, Microcopy> operation = (Operation<Row, Void, Microcopy>) action.operation();
             assertThat(OperationPipeline.offer(operation, operator, unacknowledged))

@@ -89,7 +89,8 @@ public final class HohenheimWriteHooks implements ZenitModule {
         // wrote it (form, inline cell, API, direct save).
         ContainerFileRules.install(InstanceFileModel.SCHEMA, InstanceFileModel.CONTAINER_PATH, InstanceFileModel.MODE);
         ContainerFileRules.install(StackFileModel.SCHEMA, StackFileModel.CONTAINER_PATH, StackFileModel.MODE);
-        ContainerFileRules.install(InstanceTemplateFileModel.SCHEMA, InstanceTemplateFileModel.CONTAINER_PATH, InstanceTemplateFileModel.MODE);
+        ContainerFileRules.install(InstanceTemplateFileModel.SCHEMA, InstanceTemplateFileModel.CONTAINER_PATH,
+                InstanceTemplateFileModel.MODE);
         TemplateDeclarationGuards.init();
         // A game-domains mapping dies with its domain row, and its generated output
         // (forced-hosts config, DNS rows) dies with it.

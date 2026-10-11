@@ -39,7 +39,8 @@ final class ServerInventoryWrites {
         String token = token(values, null);
         Row row = Models.get(ServerModel.class).createEmptyRow();
         assign(row, values);
-        Models.get(ServerModel.class).getResolvedDatasource().withTransaction(tx -> Models.get(ServerModel.class).save(row));
+        Models.get(ServerModel.class).getResolvedDatasource().withTransaction(tx -> Models.get(ServerModel.class)
+                .save(row));
         Object key = row.get(ServerModel.ID);
         report(HostEnrolment.afterCreate(key, token));
         ServerOptions.refresh();
@@ -64,7 +65,8 @@ final class ServerInventoryWrites {
             Models.get(ServerModel.class).getResolvedDatasource().withTransaction(tx -> {
                 apply(row, values, ServerModel.PUBLIC_IPV4);
                 apply(row, values, ServerModel.PUBLIC_IPV6);
-                if (values.get(ServerModel.POSTURE.getName()) instanceof String posture) row.set(ServerModel.POSTURE, posture);
+                if (values.get(ServerModel.POSTURE.getName()) instanceof String posture) row.set(
+                        ServerModel.POSTURE, posture);
                 Models.get(ServerModel.class).save(row);
             });
         } else {
@@ -87,7 +89,8 @@ final class ServerInventoryWrites {
         if (values.containsKey(ServerModel.INCUS_URL.getName())) {
             row.set(ServerModel.INCUS_URL, Texts.trimmedOrNull(values.get(ServerModel.INCUS_URL.getName())));
         }
-        row.set(ServerModel.MODE, (ServerModel.RUNTIME_DOCKER.equals(runtime(values, row)) ? HostMode.SSH : HostMode.LOCAL).token());
+        row.set(ServerModel.MODE, (ServerModel.RUNTIME_DOCKER.equals(runtime(values, row)) ? HostMode.SSH
+                : HostMode.LOCAL).token());
     }
 
     private static void apply(Row row, Map<String, Object> values, Field<String, ?> field) {

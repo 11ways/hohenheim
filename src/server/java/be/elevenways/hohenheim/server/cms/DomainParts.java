@@ -125,7 +125,8 @@ public final class DomainParts {
      * Looks the address's name up again now, past the minute an answer is remembered: the row's way to see a DNS
      * change it just made.
      */
-    public static final Operation<Row, Void, Void> CHECK_REACH = Operation.declare(HohenheimIds.id("check_address_reach"))
+    public static final Operation<Row, Void, Void> CHECK_REACH =
+            Operation.declare(HohenheimIds.id("check_address_reach"))
         .happened(OperationSentences.of("check_address_reach"))
         .label(HohenheimMicrocopy.SITE_DOMAINS.of("check_reach"))
         .icon(Icon.of("rotate"))
@@ -200,9 +201,9 @@ public final class DomainParts {
      * whether the name points at this proxy, and what HTTPS gives it.
      *
      * AIDEV-NOTE: "Points here" reads {@link HostnameReach#recent}, so a list render resolves each name at most once a
-     * minute; a wildcard pattern is answered by a sample name under it ({@link #reachCell(Row, long)}). The HTTPS cell is {@link AppHealth#httpsOf}, the one
-     * per-name rule the app overview and the app's verdict read, so the list never calls a forced name without a
-     * working certificate anything but broken.
+     * minute; a wildcard pattern is answered by a sample name under it ({@link #reachCell(Row, long)}). The HTTPS cell
+     * is {@link AppHealth#httpsOf}, the one per-name rule the app overview and the app's verdict read, so the list
+     * never calls a forced name without a working certificate anything but broken.
      */
     private static @NonNull ResourceList<Row> list() {
         TableSpec<Row> table = TableSpec.<Row>builder()

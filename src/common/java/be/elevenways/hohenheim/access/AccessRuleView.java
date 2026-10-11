@@ -12,8 +12,8 @@ import java.util.List;
 
 /**
  * One node of an access list's rule tree, flattened for rendering: the tree's shape is
- * carried by {@code depth} (and the {@code indentStyle} it renders as) rather than by nesting, so the page renders one loop and the
- * indentation is a style, not a recursive template.
+ * carried by {@code depth} (and the {@code indentStyle} it renders as) rather than by nesting, so the page renders one
+ * loop and the indentation is a style, not a recursive template.
  *
  * @param path     the node's position as a dotted outline number ("1.2" = the second
  *                 child of the first root rule), which is also how the add form's parent

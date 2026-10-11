@@ -120,9 +120,11 @@ class AdminPagesTest extends HohenheimTestBase {
                 .isEqualTo("B");
         }
         assertThat(page.locator(
-            ".cms-setting:has([data-path='proxy.auth_proteus.enabled']) .cms-setting-note-restart").count()).isEqualTo(1);
+            ".cms-setting:has([data-path='proxy.auth_proteus.enabled']) .cms-setting-note-restart").count())
+            .isEqualTo(1);
         assertThat(page.locator(
-            ".cms-setting:has([data-path='proxy.auth_proteus.authenticator']) .cms-setting-note-restart").count()).isEqualTo(1);
+            ".cms-setting:has([data-path='proxy.auth_proteus.authenticator']) .cms-setting-note-restart").count())
+            .isEqualTo(1);
 
         // AIDEV-NOTE: a non-secret string-list setting edits as CHIPS (pl-select's tags mode)
         // since zenit 8487f7f5 (SettingsForms.chips), never the zf-array rows editor: there is

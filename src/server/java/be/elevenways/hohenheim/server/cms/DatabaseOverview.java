@@ -34,8 +34,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A managed database's front door (the right-hand column of the Databases page): how it is reached, which apps use it and
- * the dumps it has on disk. Everything here is a stored fact; nothing dials the engine per render.
+ * A managed database's front door (the right-hand column of the Databases page): how it is reached, which apps use it
+ * and the dumps it has on disk. Everything here is a stored fact; nothing dials the engine per render.
  *
  * AIDEV-NOTE: the password is deliberately not on this tab. The Restore tab's connection card shows it to the operator
  * and the tenant's Credentials tab to a holder of the credentials capability; a fact list has no reveal control, so

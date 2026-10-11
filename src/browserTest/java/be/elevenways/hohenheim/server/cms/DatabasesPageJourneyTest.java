@@ -274,7 +274,8 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
         try {
             // 1. A shared engine running one database that two apps use: nothing to say.
             Row engine = row(cleanup, Models.get(DatabaseEngineModel.class), Map.of(
-                DatabaseEngineModel.NAME.getName(), PREFIX + "shared-engine", DatabaseEngineModel.ENGINE.getName(), "mysql",
+                DatabaseEngineModel.NAME.getName(), PREFIX + "shared-engine",
+                DatabaseEngineModel.ENGINE.getName(), "mysql",
                 DatabaseEngineModel.ROOT_USER.getName(), "root", DatabaseEngineModel.ROOT_PASSWORD.getName(), "rootpw",
                 DatabaseEngineModel.SERVER_ID.getName(), ServerModel.localServerId(),
                 DatabaseEngineModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
@@ -285,13 +286,15 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
                 DatabaseModel.DB_PASSWORD.getName(), "engine-secret-password",
                 DatabaseModel.SERVER_ID.getName(), ServerModel.localServerId(),
                 DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
-            String engineHandle = EngineHandles.plantEngine(engine.get(DatabaseEngineModel.ID), PREFIX + "shared-engine",
+            String engineHandle = EngineHandles.plantEngine(engine.get(DatabaseEngineModel.ID), PREFIX
+                    + "shared-engine",
                 "mysql", InstanceModel.STATUS_RUNNING);
             Row engineInstance = DatabaseInstances.owned(shared.get(DatabaseModel.ID));
             assertThat(engineInstance).as("step 1: the planted engine serves the shared database (" + engineHandle
                 + ")").isNotNull();
             cleanup.add(() -> OwnedInstances.inScopeUnchecked(DatabaseEngines.SOURCE, DatabaseEngineModel.MODEL_ID,
-                engine.get(DatabaseEngineModel.ID), () -> HardDeletes.row(Models.get(InstanceModel.class), engineInstance)));
+                engine.get(DatabaseEngineModel.ID),
+                () -> HardDeletes.row(Models.get(InstanceModel.class), engineInstance)));
             Row shopApp = app(cleanup, PREFIX + "shared-shop-app", shared);
             app(cleanup, PREFIX + "shared-blog-app", shared);
             int sharedId = shared.get(DatabaseModel.ID);
@@ -355,14 +358,16 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
                 .contains("data-state=\"" + DatabaseVerdict.State.NOT_RUNNING.token() + "\"")
                 .as("step 4: the Engines card says the same").contains("1 database, not running");
             String cannotBackUp = "No backup can be made now. Its engine is not running.";
-            assertThat(say(DatabaseParts.backUpUnavailable(shared))).as("step 4: Back up now is offered dead, saying why")
+            assertThat(say(DatabaseParts.backUpUnavailable(shared)))
+                    .as("step 4: Back up now is offered dead, saying why")
                 .isEqualTo(cannotBackUp);
             assertThat(say(DatabaseParts.neverBackedUpDetail(shared)))
                 .as("step 4: Last backup reads the same reason, never \"Back up now\"").isEqualTo(cannotBackUp);
             assertThat(list).as("step 4: the list's Last backup cell says it").contains(cannotBackUp);
             // 4b. Delete is dead while the apps hold it, naming them in words: the Used by cell is where they link.
             assertThat(say(DeleteImpact.databaseInUse(shared))).as("step 4b: the in-use reason names the apps")
-                .isEqualTo("Database '" + PREFIX + "shared-shop' is attached to " + PREFIX + "shared-shop-app, " + PREFIX
+                .isEqualTo("Database '" + PREFIX + "shared-shop' is attached to " + PREFIX
+                        + "shared-shop-app, " + PREFIX
                     + "shared-blog-app. Detach it on each instance's Databases tab first.")
                 .as("step 4b: and pastes no path into the sentence").doesNotContain("/admin/");
             String appTab = adminGet("/admin/" + HohenheimSlugs.INSTANCES + "/" + shopApp.get(InstanceModel.ID)
@@ -436,10 +441,11 @@ class DatabasesPageJourneyTest extends HohenheimTestBase {
 
     private static Row database(List<Runnable> cleanup, String name, boolean ephemeral) {
         return row(cleanup, Models.get(DatabaseModel.class), Map.of(DatabaseModel.NAME.getName(), PREFIX + name,
-            DatabaseModel.ENGINE.getName(), "mysql", DatabaseModel.PLACEMENT.getName(), DatabaseModel.PLACEMENT_DEDICATED,
+            DatabaseModel.ENGINE.getName(), "mysql", DatabaseModel.PLACEMENT.getName(),
+            DatabaseModel.PLACEMENT_DEDICATED,
             DatabaseModel.DB_NAME.getName(), name + "db", DatabaseModel.DB_USER.getName(), name + "user",
-            DatabaseModel.DB_PASSWORD.getName(), name + "-secret-password", DatabaseModel.EPHEMERAL.getName(), ephemeral,
-            DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
+            DatabaseModel.DB_PASSWORD.getName(), name + "-secret-password",
+            DatabaseModel.EPHEMERAL.getName(), ephemeral, DatabaseModel.STATUS.getName(), DatabaseModel.STATUS_ACTIVE));
     }
 
     private static Row row(List<Runnable> cleanup, Model model, Map<String, Object> values) {

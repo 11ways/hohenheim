@@ -10,7 +10,8 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 /** Restores each class's instance-kind declarations, including replacements and the registry's closed state. */
 public final class InstanceKindIsolation implements BeforeAllCallback, AfterAllCallback {
 
-    private static final ExtensionContext.Namespace SCOPE = ExtensionContext.Namespace.create(InstanceKindIsolation.class);
+    private static final ExtensionContext.Namespace SCOPE = ExtensionContext.Namespace.create(
+            InstanceKindIsolation.class);
 
     @Override
     public void beforeAll(ExtensionContext context) {

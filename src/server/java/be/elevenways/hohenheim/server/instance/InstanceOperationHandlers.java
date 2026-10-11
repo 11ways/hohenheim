@@ -49,8 +49,8 @@ import java.util.Map;
  * AIDEV-NOTE: every handler funnels through the service a surface used before ({@link InstanceService},
  * {@link InstanceBackups}, {@link InstanceSnapshots}), which keeps its own gates, its operation lock and its activity
  * rows; a handler takes no lock of its own. The console line is the one handler that writes its activity row itself:
- * {@link InstanceConsoles} is also the product's own lane (GameDomains), whose lines are no operator's act. A restart is {@link InstanceService#restart},
- * ONE lock hold across both halves, from every surface.
+ * {@link InstanceConsoles} is also the product's own lane (GameDomains), whose lines are no operator's act. A restart
+ * is {@link InstanceService#restart}, ONE lock hold across both halves, from every surface.
  *
  * AIDEV-NOTE: attached in a static initializer, so a JVM that boots twice (test hosts) attaches nothing twice;
  * {@link #init()} only forces the class to load before boot verifies every operation has its handler.
@@ -86,11 +86,14 @@ public final class InstanceOperationHandlers {
             .handle(InstanceOperationHandlers::start);
         OperationHandlers.attach(InstanceOperations.STOP).source(SUBJECTS).applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::stop);
-        OperationHandlers.attach(InstanceOperations.RESTART).source(SUBJECTS).applies(InstanceOperationHandlers::authored)
+        OperationHandlers.attach(InstanceOperations.RESTART).source(SUBJECTS)
+                .applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::restart);
-        OperationHandlers.attach(InstanceOperations.BACKUP).source(SUBJECTS).applies(InstanceOperationHandlers::authored)
+        OperationHandlers.attach(InstanceOperations.BACKUP).source(SUBJECTS)
+                .applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::backup);
-        OperationHandlers.attach(InstanceOperations.SNAPSHOT).source(SUBJECTS).applies(InstanceOperationHandlers::authored)
+        OperationHandlers.attach(InstanceOperations.SNAPSHOT).source(SUBJECTS)
+                .applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::snapshot);
         // A generated instance's console is its product's (GameDomains sends through InstanceConsoles directly).
         OperationHandlers.attach(InstanceOperations.CONSOLE_COMMAND).source(SUBJECTS)
@@ -150,7 +153,8 @@ public final class InstanceOperationHandlers {
         OperationHandlers.attach(InstanceOperations.EXEC).source(SUBJECTS)
             .applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::exec);
-        OperationHandlers.attach(InstanceOperations.APP_UPDATE).source(SUBJECTS).applies(InstanceOperationHandlers::authored)
+        OperationHandlers.attach(InstanceOperations.APP_UPDATE).source(SUBJECTS)
+                .applies(InstanceOperationHandlers::authored)
             .handle(InstanceOperationHandlers::appUpdate);
         // Sessions, offered and never invoked: their sockets ask offered() (see InstanceOperations.OPEN_SHELL).
         OperationHandlers.attach(InstanceOperations.OPEN_SHELL).applies(InstanceOperationHandlers::authored)

@@ -47,10 +47,10 @@ public final class HohenheimPanel extends Panel {
     // AIDEV-NOTE: an entry that is neither one of the eight nor a cluster member is showInNav(false), which removes
     // the sidebar row and NOTHING else, and it keeps a declared way in: Sites, Instances, Stacks and Projects from the
     // Apps list's toolbar (and every app row opens its record), the rest from the list or overview that owns them
-    // (AdminNavigationJourneyTest pins both). It also names that home as the row it stands under (PanelEntry.standsUnder,
-    // the entry it is reached from), so its pages mark that row and their titles end with it; the journey's step 11
-    // fails an entry of either panel whose pages would mark no row. A new admin entry therefore picks a cluster or a
-    // home that links it; a ninth sidebar row is a design decision, not a side effect.
+    // (AdminNavigationJourneyTest pins both). It also names that home as the row it stands under
+    // (PanelEntry.standsUnder, the entry it is reached from), so its pages mark that row and their titles end with it;
+    // the journey's step 11 fails an entry of either panel whose pages would mark no row. A new admin entry therefore
+    // picks a cluster or a home that links it; a ninth sidebar row is a design decision, not a side effect.
     //
     // AIDEV-NOTE: membership is read from the entries this node actually registered (clusterOf): a node without a
     // role drops that role's members, and a cluster left with none is not added at all, since the panel refuses a
@@ -174,7 +174,8 @@ public final class HohenheimPanel extends Panel {
         // comms' own permissions (other people's notification history), never the delegable panel grant; an operator
         // holding "*" sees it, a delegated admin only through an explicit comms.deliveries.* grant. Hohenheim is no
         // hub, so the hub's projects entry is not mounted.
-        PanelEntry deliveries = CommsHubAdmin.install(CommsHubAdmin.Permissions.MODULE).deliveryLog(NavGroup.SYSTEM, 93);
+        PanelEntry deliveries = CommsHubAdmin.install(CommsHubAdmin.Permissions.MODULE)
+                .deliveryLog(NavGroup.SYSTEM, 93);
         peers.add(deliveries);
         addIf(peers, BanParts.admin(), Role.FIREWALL);
         // zenit-auth's generated admin resources, wired into THIS panel (the
@@ -208,7 +209,8 @@ public final class HohenheimPanel extends Panel {
             peers.add(settings);
         }
         // zenit's task admin: every scheduled task with Run now, and the live runs. Gated by the scheduler's own
-        // permissions (TaskOperations.VIEW/MANAGE), so an operator holding "*" sees them, a delegated admin only by grant.
+        // permissions (TaskOperations.VIEW/MANAGE), so an operator holding "*" sees them, a delegated admin only by
+        // grant.
         peers.add(TaskAdmin.schedules(NavGroup.SYSTEM, 96));
         peers.add(TaskAdmin.runs(NavGroup.SYSTEM, 97));
         peers.add(AppParts.admin(present(peers, HohenheimSlugs.SITES, HohenheimSlugs.INSTANCES, HohenheimSlugs.STACKS,
@@ -231,7 +233,10 @@ public final class HohenheimPanel extends Panel {
         return peers;
     }
 
-    /** A sidebar cluster in the unlabelled default block, worded under {@code nav_cluster}; both panels build theirs here. */
+    /**
+     * A sidebar cluster in the unlabelled default block, worded under {@code nav_cluster}; both panels build theirs
+     * here.
+     */
     static PanelCluster.@NonNull Builder cluster(@NonNull String key, @NonNull String slug,
                                                  @NonNull String icon, int navOrder) {
         return PanelCluster.builder(HohenheimIds.id("cluster_" + key), slug,

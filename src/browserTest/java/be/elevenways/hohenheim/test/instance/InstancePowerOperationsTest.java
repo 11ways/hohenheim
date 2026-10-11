@@ -141,7 +141,8 @@ class InstancePowerOperationsTest {
                 for (String capability : List.of(HohenheimCapabilities.VIEW, HohenheimCapabilities.BACKUPS)) {
                     RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, id, capability, true);
                 }
-                AccessContext tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(tenantId, "Power Operator")));
+                AccessContext tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(tenantId,
+                        "Power Operator")));
                 String commandKey = InstanceOperations.BACKUP.command().leaseKey().apply(
                     new OperationInvocation(InstanceOperations.BACKUP.id(), List.of(String.valueOf(id)),
                         null, null, null, Map.of()));
@@ -159,7 +160,8 @@ class InstancePowerOperationsTest {
                         Thread.currentThread().interrupt();
                         throw new IllegalStateException("Backup contention journey interrupted", interrupted);
                     }
-                    assertThat(backup.isAlive()).as("step 2: the API refuses after the normal wait, never queues for an hour")
+                    assertThat(backup.isAlive())
+                            .as("step 2: the API refuses after the normal wait, never queues for an hour")
                         .isFalse();
                 });
                 // 2. The production deploy claim yields typed core contention and the frozen instance wire answer.
@@ -167,12 +169,16 @@ class InstancePowerOperationsTest {
                     .isInstanceOfSatisfying(DomainRefusal.class, refusal -> assertThat(refusal.reason())
                         .isEqualTo(ZenitRefusalReason.IN_PROGRESS));
                 int[] status = {0};
-                String body = Json.stringify(ApiConduits.refusal(answering(status), (DomainRefusal) refused.get(), row).get());
+                String body = Json.stringify(ApiConduits.refusal(answering(status),
+                        (DomainRefusal) refused.get(), row).get());
                 assertThat(status[0]).as("step 2: the instance wire remains a 422 refusal").isEqualTo(422);
                 assertThat(body).as("step 2: backup during deploy has the byte-identical instance in-progress body")
-                    .isEqualTo("{\"status\":422,\"code\":\"instance_operation_in_progress\",\"message\":\"Another operation on "
-                        + "instance backup-deploy-target is still running; try again when it has finished\",\"violations\":[{\"code\":"
-                        + "\"instance_operation_in_progress\",\"message\":\"Another operation on instance backup-deploy-target is still "
+                    .isEqualTo(
+                    "{\"status\":422,\"code\":\"instance_operation_in_progress\",\"message\":\"Another operation on "
+                        + "instance backup-deploy-target is still running; try again when it has "
+                        + "finished\",\"violations\":[{\"code\":"
+                        + "\"instance_operation_in_progress\",\"message\":\"Another operation on instance "
+                        + "backup-deploy-target is still "
                         + "running; try again when it has finished\"}]}");
             } finally {
                 localHost.restore();
@@ -217,7 +223,8 @@ class InstancePowerOperationsTest {
             // 2. A schedule with no run_as executes, not just its subject-loading probe.
             new InstanceService().deploy(instanceId);
             assertThat(Models.get(InstanceModel.class).findById(instanceId).get(InstanceModel.STATUS))
-                .as("2: the fixture has a deployed workload and its host fence").isEqualTo(InstanceModel.STATUS_RUNNING);
+                .as("2: the fixture has a deployed workload and its host fence")
+                .isEqualTo(InstanceModel.STATUS_RUNNING);
             step(scheduleId, InstanceOperations.STOP, null, StepFailurePolicy.ABORT);
             Row run = new RecordSchedules(datasource).runNow(scheduleId);
             Row stopped = stepRuns(run).getFirst();
@@ -346,9 +353,12 @@ class InstancePowerOperationsTest {
                 (Violations) rival.get()).get());
             assertThat(refusedStatus[0]).as("step 5: the frozen /api/v1 adapter still answers 422").isEqualTo(422);
             assertThat(refusedBody).as("step 5: start during restart keeps the byte-identical /api/v1 refusal body")
-                .isEqualTo("{\"status\":422,\"code\":\"instance_operation_in_progress\",\"message\":\"Another operation on "
-                    + "instance ops-target is still running; try again when it has finished\",\"violations\":[{\"code\":"
-                    + "\"instance_operation_in_progress\",\"message\":\"Another operation on instance ops-target is still "
+                .isEqualTo(
+                "{\"status\":422,\"code\":\"instance_operation_in_progress\",\"message\":\"Another operation on "
+                    + "instance ops-target is still running; try again when it has "
+                    + "finished\",\"violations\":[{\"code\":"
+                    + "\"instance_operation_in_progress\",\"message\":\"Another operation on instance ops-target is "
+                    + "still "
                     + "running; try again when it has finished\"}]}");
 
             // 6. Stop is idempotent on every surface: the API stops a running instance, a second stop answers

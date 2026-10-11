@@ -178,7 +178,8 @@ public final class ProtectedPathInvariant {
             boolean removed = true;
             while (removed) {
                 removed = after.removeIf(rule -> doomed.contains(rule.get(AccessRuleModel.ID))
-                    || doomed.contains(rule.get(AccessRuleModel.PARENT_ID)) && doomed.add(rule.get(AccessRuleModel.ID)));
+                    || doomed.contains(rule.get(AccessRuleModel.PARENT_ID))
+                    && doomed.add(rule.get(AccessRuleModel.ID)));
             }
             refuseOpening(listId, admitsEveryone(listId, null, before), admitsEveryone(listId, null, after));
         }

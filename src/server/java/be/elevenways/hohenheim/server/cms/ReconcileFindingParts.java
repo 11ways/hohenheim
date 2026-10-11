@@ -74,7 +74,8 @@ public final class ReconcileFindingParts {
             .form(ResourceForm.<Row>of(formSpec()).build()).reads(ResourceReads.rows())
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL.withAdvancedFilter(true).withFacetRail(true))
                 .facets().ruleFilters().exportable(true).widgets(ReconcileFindingParts::widgets)
-                .search(ReconcileFindingModel.SERVER_NAME, ReconcileFindingModel.RESOURCE_NAME, ReconcileFindingModel.DETAIL).build())
+                .search(ReconcileFindingModel.SERVER_NAME, ReconcileFindingModel.RESOURCE_NAME,
+                        ReconcileFindingModel.DETAIL).build())
             .actions(List.of(PanelAction.<Row, Void>places(REMOVE, ActionPlacement.ROW,
                     (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.RECONCILE_FINDING
                         .of("orphan_removed")
@@ -93,7 +94,8 @@ public final class ReconcileFindingParts {
         return TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(ReconcileFindingModel.SERVER_NAME).filterable().build())
             .column(ColumnSpec.fromField(ReconcileFindingModel.KIND).filterable().build())
-            .column(ColumnSpec.fromField(ReconcileFindingModel.RESOURCE_NAME).filterable().subtext("detail").copyable().build())
+            .column(ColumnSpec.fromField(ReconcileFindingModel.RESOURCE_NAME).filterable().subtext("detail")
+                    .copyable().build())
             .column(ColumnSpec.fromField(ReconcileFindingModel.DETAIL).hidden().build())
             .column(ColumnSpec.fromField(ReconcileFindingModel.BUCKET).filterable().build())
             .filter(FilterSpec.leaf(ReconcileFindingModel.SERVER_NAME, CoreTypes.CONTAINS)

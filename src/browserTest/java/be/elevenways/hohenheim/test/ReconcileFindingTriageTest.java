@@ -74,7 +74,8 @@ class ReconcileFindingTriageTest extends HohenheimTestBase {
                 + " .pl-facet-option-text");
             waitForCondition("window.location.search.indexOf('filter.kind=container') !== -1");
             waitForReactiveIdle();
-            String orphanTile = "[data-cms-list-widgets] pl-stat-card:has(.label:text-is('Orphaned under these filters'))"
+            String orphanTile =
+                    "[data-cms-list-widgets] pl-stat-card:has(.label:text-is('Orphaned under these filters'))"
                 + " .value";
             waitForTextEquals(orphanTile, "1");
             assertThat(tile("Orphaned under these filters")).as("step 3: the tile follows the rail tick: one"

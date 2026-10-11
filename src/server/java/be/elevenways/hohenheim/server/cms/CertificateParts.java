@@ -125,7 +125,9 @@ public final class CertificateParts {
         "cert_renewal_error", "renewal");
     private static final StringField NEXT_ATTEMPT_DISPLAY = displayField("next_attempt_display",
         "cert_next_attempt_at", "renewal");
-    /** The TXT records a manual DNS-01 order waits for; "Verify DNS and finish" continues it once they are published. */
+    /**
+     * The TXT records a manual DNS-01 order waits for; "Verify DNS and finish" continues it once they are published.
+     */
     private static final StringField DNS_RECORDS_DISPLAY = displayField("dns_records_display",
         "cert_dns_records", "coverage");
 
@@ -442,7 +444,8 @@ public final class CertificateParts {
         // "Not scheduled" beside an enabled auto-renew read like a fault; the absence
         // sentence says what the schedule will DO, which depends on the switch.
         values.put(NEXT_ATTEMPT_DISPLAY.getName(), instantText(row.get(CertificateModel.NEXT_ATTEMPT_AT),
-            copy(Boolean.TRUE.equals(row.get(CertificateModel.AUTO_RENEW)) ? "next_attempt_auto" : "next_attempt_manual")));
+            copy(Boolean.TRUE.equals(row.get(CertificateModel.AUTO_RENEW)) ? "next_attempt_auto"
+                    : "next_attempt_manual")));
         return values;
     }
 

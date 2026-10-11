@@ -77,7 +77,9 @@ public final class AttentionCollector {
      * installation-health surface, so its links keep the panel slug they always had.
      */
 
-    /** The settings anchor of the group holding the control-plane backup target (the Backups section's database group). */
+    /**
+     * The settings anchor of the group holding the control-plane backup target (the Backups section's database group).
+     */
     static final String CONTROL_PLANE_BACKUP_SECTION =
         HohenheimSettingsSections.BACKUPS.anchorOf(HohenheimSettings.Database.GROUP);
 
@@ -357,9 +359,9 @@ public final class AttentionCollector {
     }
 
     /**
-     * Latest history row per DECLARED task type; a failed one surfaces by the task's worded name, with why it failed and
-     * the way to that run, whose page offers Run now. Public for the same reason the instance collectors are: a test
-     * proves the projection.
+     * Latest history row per DECLARED task type; a failed one surfaces by the task's worded name, with why it failed
+     * and the way to that run, whose page offers Run now. Public for the same reason the instance collectors are: a
+     * test proves the projection.
      */
     public static void failedTasks(List<AttentionItem> items) {
         // The task system registers its datasource-scoped model at its own boot

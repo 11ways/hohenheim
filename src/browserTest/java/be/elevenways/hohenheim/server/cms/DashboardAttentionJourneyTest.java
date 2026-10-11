@@ -153,7 +153,8 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             for (int i = 1; i <= 2; i++) {
                 Row instance = instance(PREFIX + "app-" + i, local);
                 instances.add(instance);
-                Row site = setupInstanceSite(PREFIX + "site-" + i, PREFIX + "site-" + i, instance.get(InstanceModel.ID));
+                Row site = setupInstanceSite(PREFIX + "site-" + i, PREFIX + "site-" + i,
+                        instance.get(InstanceModel.ID));
                 sites.add(site);
                 addDomain(site, "app-" + i + ".d8.test", "exact", null, false);
             }
@@ -193,9 +194,11 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             AttentionItem refusing = rootOf(AttentionCollector.collect(), localHost);
             assertThat(refusing).as("step 4: an admitted host that still holds apps back is their root").isNotNull();
             assertThat(say(refusing.detail())).as("step 4: saying why in the apps' own verdict words")
-                .isEqualTo(say(AppHealth.siteHealth(Models.get(SiteModel.class).findById(sites.get(0).get(SiteModel.ID)))
+                .isEqualTo(say(AppHealth.siteHealth(Models.get(SiteModel.class)
+                        .findById(sites.get(0).get(SiteModel.ID)))
                     .detail()));
-            assertThat(say(refusing.action())).as("step 4: leading to the host").isEqualTo("Open " + ServerModel.nameOf(local));
+            assertThat(say(refusing.action())).as("step 4: leading to the host")
+                    .isEqualTo("Open " + ServerModel.nameOf(local));
             DashboardAttention.Reading refused = DashboardAttention.read();
             assertThat(mine(refused.attention())).as("step 4: the apps' items fold under it").isEmpty();
             assertThat(say(step(refused, OnboardingStage.ADMISSION).heldBack()))
@@ -300,7 +303,8 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 proxy.stop();
             }
             for (Row site : sites) {
-                HardDeletes.row(Models.get(SiteModel.class), Models.get(SiteModel.class).findById(site.get(SiteModel.ID)));
+                HardDeletes.row(Models.get(SiteModel.class), Models.get(SiteModel.class)
+                        .findById(site.get(SiteModel.ID)));
             }
             for (Row instance : instances) {
                 HardDeletes.row(Models.get(InstanceModel.class), instance);
@@ -472,7 +476,8 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             AttentionItem task = tasks.stream().filter(item -> item.target() != null && item.target().toUrl()
                 .equals("/admin/task-runs/" + run.get(SystemTaskHistoryModel.ID) + "/open")).findFirst().orElse(null);
             assertThat(task).as("step 7: the failed run raises an item leading to that run").isNotNull();
-            assertThat(say(task.title())).as("step 7: titled by the task's worded name").isEqualTo("Check app isolation failed");
+            assertThat(say(task.title())).as("step 7: titled by the task's worded name")
+                    .isEqualTo("Check app isolation failed");
             assertThat(task.title().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
                 .as("step 7: in Dutch too").isEqualTo("Isolatie van apps controleren is mislukt");
             assertThat(say(task.detail())).as("step 7: with the finding in words, never the sweep's tokens")
@@ -512,7 +517,8 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 Models.unregisterInstance(registeredHistory);
             }
             for (Row site : sites) {
-                HardDeletes.row(Models.get(SiteModel.class), Models.get(SiteModel.class).findById(site.get(SiteModel.ID)));
+                HardDeletes.row(Models.get(SiteModel.class), Models.get(SiteModel.class)
+                        .findById(site.get(SiteModel.ID)));
             }
             for (Row instance : instances) {
                 HardDeletes.row(Models.get(InstanceModel.class), instance);
@@ -611,7 +617,8 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             List<AttentionItem> databases = new ArrayList<>();
             DatabaseAttention.failedDatabases(databases);
             AttentionItem left = titled(databases, "Database " + PREFIX + "moved is not running");
-            assertThat(left.about()).as("step 4: the database is the root").isEqualTo(AttentionSubject.database(movedId));
+            assertThat(left.about()).as("step 4: the database is the root")
+                    .isEqualTo(AttentionSubject.database(movedId));
             assertThat(say(left.detail())).as("step 4: saying why it does not run")
                 .isEqualTo("It has no engine to run on");
             assertThat(say(left.note())).as("step 4: and, under it, the leftover and its host")
@@ -667,7 +674,8 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             // Local takes new apps, so nothing but its firewall rules holds the app back.
             HostFixtures.makeLocalPlaceable(16L * 1024);
 
-            // 1. The deploy lane's refusal for switched-off enforcement is typed, also when another failure wraps it, so
+            // 1. The deploy lane's refusal for switched-off enforcement is typed, also when another failure wraps it,
+            // so
             //    a start it refused records that host fact (WORKLOAD_ISOLATION_REFUSED) instead of the English.
             assertThat(IsolationUnenforceable.in(new IOException("create failed",
                 new IsolationUnenforceable("REFUSED to deploy 'x-net'")))).as("step 1: the refusal is typed").isTrue();
@@ -696,7 +704,8 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             assertThat(refused.causedBy()).as("step 2: its root is local").isEqualTo(localHost);
             RecordHealth verdict = AppHealth.instances(false)
                 .read(Models.get(InstanceModel.class).findById(appId), TenantConduits.operator());
-            assertThat(say(verdict.headline())).as("step 2: its verdict reads a failed start").isEqualTo("Could not start");
+            assertThat(say(verdict.headline())).as("step 2: its verdict reads a failed start")
+                    .isEqualTo("Could not start");
             assertThat(say(verdict.detail())).as("step 2: for the same reason").isEqualTo(say(refused.detail()));
 
             // 3. local is ONE item, the root: the condition in words, the setting and the sudo need as its technical
@@ -781,7 +790,8 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             .as("step 2: in Dutch too").contains("1 stack, 0 databases, 0 gedeelde database-engines, 2 instanties "
                 + "en 1 poortclaim");
         Microcopy template = HohenheimMicrocopy.VIOLATIONS.of("template_in_use").withArg("name", "Blog");
-        assertThat(say(template.withArg("count", 1))).as("step 2: one").isEqualTo("Template Blog is still used by 1 instance");
+        assertThat(say(template.withArg("count", 1))).as("step 2: one")
+                .isEqualTo("Template Blog is still used by 1 instance");
         assertThat(template.withArg("count", 3).resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
             .as("step 2: several, in Dutch").isEqualTo("Sjabloon Blog wordt nog gebruikt door 3 instanties");
 
@@ -822,7 +832,8 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             cleanup.add(() -> HardDeletes.row(Models.get(SiteModel.class), fresh(refusedSite)));
             addDomain(refusedSite, "refused.conflict.test", "exact", null, false);
             ActivityLog.record(Models.get(InstanceModel.class), refusedId,
-                HohenheimActivityAction.WORKLOAD_START_FAILED, "Conflict. The container name /conflict is already in use");
+                HohenheimActivityAction.WORKLOAD_START_FAILED,
+                "Conflict. The container name /conflict is already in use");
             errored(refusedId);
             String dashboard = adminGet("/admin/dashboard").body();
             assertThat(appRow(dashboard, PREFIX + "refused"))

@@ -66,13 +66,16 @@ public final class TemplateDeclarationGuards {
         Integer id = row.get(InstanceTemplateVolumeModel.ID);
         Row stored = StoredRows.of(Models.get(InstanceTemplateVolumeModel.class), row);
         Row draft = new Row(stored == null ? row : stored);
-        if (row.has(InstanceTemplateVolumeModel.TEMPLATE_ID.getName())) draft.set(InstanceTemplateVolumeModel.TEMPLATE_ID,
+        if (row.has(InstanceTemplateVolumeModel.TEMPLATE_ID.getName())) draft.set(
+                InstanceTemplateVolumeModel.TEMPLATE_ID,
             row.get(InstanceTemplateVolumeModel.TEMPLATE_ID));
         if (row.has(InstanceTemplateVolumeModel.NAME.getName())) draft.set(InstanceTemplateVolumeModel.NAME,
             row.get(InstanceTemplateVolumeModel.NAME));
-        if (row.has(InstanceTemplateVolumeModel.CONTAINER_PATH.getName())) draft.set(InstanceTemplateVolumeModel.CONTAINER_PATH,
+        if (row.has(InstanceTemplateVolumeModel.CONTAINER_PATH.getName())) draft.set(
+                InstanceTemplateVolumeModel.CONTAINER_PATH,
             row.get(InstanceTemplateVolumeModel.CONTAINER_PATH));
-        if (row.has(InstanceTemplateVolumeModel.QUOTA_BYTES.getName())) draft.set(InstanceTemplateVolumeModel.QUOTA_BYTES,
+        if (row.has(InstanceTemplateVolumeModel.QUOTA_BYTES.getName())) draft.set(
+                InstanceTemplateVolumeModel.QUOTA_BYTES,
             row.get(InstanceTemplateVolumeModel.QUOTA_BYTES));
         if (row.has(InstanceTemplateVolumeModel.EXCLUSIVE.getName())) draft.set(InstanceTemplateVolumeModel.EXCLUSIVE,
             row.get(InstanceTemplateVolumeModel.EXCLUSIVE));
@@ -85,9 +88,11 @@ public final class TemplateDeclarationGuards {
         List<VolumeDeclaration> declared = new ArrayList<>();
         declared.add(VolumeDeclaration.of(draft));
         for (Row sibling : Models.get(InstanceTemplateVolumeModel.class).findByTemplateId(templateId)) {
-            if (!Objects.equals(id, sibling.get(InstanceTemplateVolumeModel.ID))) declared.add(VolumeDeclaration.of(sibling));
+            if (!Objects.equals(id, sibling.get(InstanceTemplateVolumeModel.ID))) declared.add(
+                    VolumeDeclaration.of(sibling));
         }
-        InstanceTemplates.requireVolumesDeclarable(InstanceKinds.getHandler(template.get(InstanceTemplateModel.KIND)), declared);
+        InstanceTemplates.requireVolumesDeclarable(
+                InstanceKinds.getHandler(template.get(InstanceTemplateModel.KIND)), declared);
     }
 
     private static void database(@NonNull Row row) {
@@ -121,6 +126,7 @@ public final class TemplateDeclarationGuards {
                     HohenheimMicrocopy.VIOLATIONS.of("template_database_prefix_taken").withArg("prefix", prefix));
             }
         }
-        if (row.has(InstanceTemplateDatabaseModel.ENV_PREFIX.getName())) row.set(InstanceTemplateDatabaseModel.ENV_PREFIX, prefix);
+        if (row.has(InstanceTemplateDatabaseModel.ENV_PREFIX.getName())) row.set(
+                InstanceTemplateDatabaseModel.ENV_PREFIX, prefix);
     }
 }

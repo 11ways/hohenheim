@@ -75,7 +75,8 @@ final class DatabaseHandlers {
                 return HandlerSupport.redirect(CmsRoutes.list(HohenheimSlugs.ADMIN, HohenheimSlugs.DATABASES));
             }
             try {
-                ActivityLog.record(Models.get(DatabaseModel.class), name, HohenheimActivityAction.BACKUP_DOWNLOADED, name);
+                ActivityLog.record(Models.get(DatabaseModel.class), name,
+                        HohenheimActivityAction.BACKUP_DOWNLOADED, name);
             } catch (RuntimeException | Error failed) {
                 // Nothing will serve the stream now; its unlinked file is freed on close.
                 // The record failure is the one worth reporting.

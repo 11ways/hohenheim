@@ -436,7 +436,10 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
         return out.toString();
     }
 
-    /** A capture value is safe to splice into a socket path only if it names no separator, no {@code ..} and no control char. */
+    /**
+     * A capture value is safe to splice into a socket path only if it names no separator, no {@code ..} and no control
+     * char.
+     */
     private static boolean isSafePathSegment(String value) {
         if (value.isEmpty() || value.equals(".") || value.contains("..")) {
             return false;

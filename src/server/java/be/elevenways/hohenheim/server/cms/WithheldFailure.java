@@ -75,7 +75,9 @@ public final class WithheldFailure {
         return this.delegated;
     }
 
-    /** @return the reason as this panel may show it: blank stays blank, a delegated reader gets the tenant-safe sentence */
+    /**
+     * @return the reason as this panel may show it: blank stays blank, a delegated reader gets the tenant-safe sentence
+     */
     @NonNull String shown(@Nullable String reason) {
         if (reason == null || reason.isBlank()) {
             return "";

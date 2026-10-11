@@ -299,7 +299,8 @@ class DeleteConfirmationTest {
                 .as("step 4: an empty host is deletable").isInstanceOf(OperationPipeline.Offer.Available.class);
 
             stack("payments", hostId);
-            Microcopy inUse = ((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(ServerParts.DELETE, operator, host)).reason();
+            Microcopy inUse = ((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(ServerParts.DELETE,
+                    operator, host)).reason();
             assertThat(inUse).as("step 4: a host with workloads is not").isNotNull();
             assertThat(inUse.key()).isEqualTo("delete_in_use");
             assertThat(inUse.args().get("workloads"))
@@ -316,7 +317,8 @@ class DeleteConfirmationTest {
             assertThat(local.get(ServerModel.NAME))
                 .as("step 5: and it is the reserved local name")
                 .isEqualTo(ServerService.LOCAL_HOST_NAME);
-            assertThat(((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(ServerParts.DELETE, operator, local)).reason())
+            assertThat(((OperationPipeline.Offer.Unavailable) OperationPipeline.offer(ServerParts.DELETE, operator,
+                    local)).reason())
                 .as("step 5: the local host explains itself instead of failing on click")
                 .isNotNull()
                 .extracting(Microcopy::key).isEqualTo("delete_local");

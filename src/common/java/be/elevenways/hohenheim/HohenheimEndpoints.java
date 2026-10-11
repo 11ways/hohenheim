@@ -506,7 +506,9 @@ public class HohenheimEndpoints {
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .build();
 
-    /** csrfExempt is safe: the handler refuses non-API-key principals, so an ambient session cookie can never act here. */
+    /**
+     * csrfExempt is safe: the handler refuses non-API-key principals, so an ambient session cookie can never act here.
+     */
     public static final Endpoint<Object> API_SITES_DEPLOY = Endpoint.<Object>builder()
         .identifier(HohenheimIds.id("api_sites_deploy"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)
@@ -1247,7 +1249,9 @@ public class HohenheimEndpoints {
         .requiresPermission(HohenheimSources.ADMIN_ACCESS)
         .build();
 
-    /** csrfExempt is safe: the handlers refuse non-API-key principals, so an ambient session cookie can never act here. */
+    /**
+     * csrfExempt is safe: the handlers refuse non-API-key principals, so an ambient session cookie can never act here.
+     */
     public static final Endpoint<Object> API_DNS_RECORD_CREATE = Endpoint.<Object>builder()
         .identifier(HohenheimIds.id("api_dns_record_create"))
         .addRoute(EndpointRoute.builder().setMethod(HttpMethod.POST)

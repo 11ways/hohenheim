@@ -23,7 +23,8 @@ public final class InstanceSnapshotOperationHandlers {
             .applies(row -> InstanceSnapshotModel.STATUS_COMPLETE.equals(row.get(InstanceSnapshotModel.STATUS)))
             .authorize((row, input, access) -> HohenheimAccess.reachesRecord(access, InstanceModel.MODEL_ID,
                 row.get(InstanceSnapshotModel.INSTANCE_ID), HohenheimCapabilities.SNAPSHOTS) ? null
-                : new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "Snapshot restoration requires its instance capability"))
+                : new DomainRefusal(ZenitRefusalReason.FORBIDDEN,
+                        "Snapshot restoration requires its instance capability"))
             .handle(call -> {
                 // AIDEV-NOTE: restore records the instance-level act itself; its updateAll writes fire no save hook.
                 new InstanceSnapshots().restore(call.subject().get(InstanceSnapshotModel.ID));

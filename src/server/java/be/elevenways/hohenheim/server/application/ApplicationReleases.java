@@ -159,7 +159,8 @@ public final class ApplicationReleases {
         int serverId = ServerModel.canonicalServerId(application.get(InstanceModel.SERVER_ID));
         try {
             return inScope(applicationId, () -> {
-                Map<String, Object> desired = desiredSettings(new ServerService().clientFor(serverId), application, imported);
+                Map<String, Object> desired = desiredSettings(new ServerService().clientFor(serverId),
+                        application, imported);
                 for (String key : List.of("artifact_path", "commit_sha")) {
                     if (source.containsKey(key)) {
                         desired.put(key, source.get(key));

@@ -6,7 +6,8 @@ import be.elevenways.zenit.common.orm.field.TypeDefinition;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
- * A registry kind whose name and description are its family's words keyed by its id's path, so a kind states only its id.
+ * A registry kind whose name and description are its family's words keyed by its id's path, so a kind states only its
+ * id.
  *
  * AIDEV-NOTE: never TypeDefinition's default label, which renders the English display name as literal text in every
  * locale; this is the app home the framework phase moves onto TypeDefinition. DeclaredMicrocopyKeysTest requires both

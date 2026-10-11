@@ -51,9 +51,10 @@ import java.util.Map;
  */
 public final class InstanceSnapshots {
 
-    private static final Retention.InstanceCaptures RETENTION = new Retention.InstanceCaptures(InstanceSnapshotModel.class,
-        InstanceSnapshotModel.ID, InstanceSnapshotModel.INSTANCE_ID, InstanceSnapshotModel.STATUS, InstanceSnapshotModel.STATUS_COMPLETE,
-        HohenheimSettings.Backup.SNAPSHOT_RETENTION, "SNAPSHOT");
+    private static final Retention.InstanceCaptures RETENTION = new Retention.InstanceCaptures(
+            InstanceSnapshotModel.class,
+        InstanceSnapshotModel.ID, InstanceSnapshotModel.INSTANCE_ID, InstanceSnapshotModel.STATUS,
+        InstanceSnapshotModel.STATUS_COMPLETE, HohenheimSettings.Backup.SNAPSHOT_RETENTION, "SNAPSHOT");
 
     private final @NonNull InstanceService instances;
 

@@ -106,7 +106,8 @@ public final class CertificateOperations {
         values.get(CHALLENGE), values.get(DNS_PUBLISHER)));
 
     /** A new certificate for the names the operator lists; the certificate list's header action. */
-    public static final Operation<Void, Order, Integer> REQUEST = Operation.declare(HohenheimIds.id("request_certificate"))
+    public static final Operation<Void, Order, Integer> REQUEST =
+            Operation.declare(HohenheimIds.id("request_certificate"))
         .happened(OperationSentences.of("request_certificate"))
         .label(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("get_certificate"))
         .description(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("uses_production"))
@@ -137,7 +138,8 @@ public final class CertificateOperations {
             .register();
 
     /** A new order written back into an existing Let's Encrypt certificate: how names or the challenge change. */
-    public static final Operation<Row, Order, Integer> REISSUE = Operation.declare(HohenheimIds.id("reissue_certificate"))
+    public static final Operation<Row, Order, Integer> REISSUE =
+            Operation.declare(HohenheimIds.id("reissue_certificate"))
         .happened(OperationSentences.of("reissue_certificate"))
         .label(HohenheimMicrocopy.CERTIFICATE.of("reissue"))
         .description(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("uses_production"))
@@ -152,7 +154,8 @@ public final class CertificateOperations {
         .register();
 
     /** Finishes a manual DNS-01 order after its TXT records are published. */
-    public static final Operation<Row, Void, Integer> CONTINUE_DNS = Operation.declare(HohenheimIds.id("continue_dns_order"))
+    public static final Operation<Row, Void, Integer> CONTINUE_DNS =
+            Operation.declare(HohenheimIds.id("continue_dns_order"))
         .happened(OperationSentences.of("continue_dns_order"))
         .label(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("verify_dns"))
         .description(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("verify_dns_hint"))

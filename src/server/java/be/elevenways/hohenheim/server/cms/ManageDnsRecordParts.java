@@ -61,7 +61,8 @@ public final class ManageDnsRecordParts {
                 .mapValues((row, values) -> parts.valuesFromRow(row)))
             .list(ResourceList.rows(parts.tableSpec()).chrome(CmsSupport.FILTERABLE_LIST).facets().ruleFilters()
                 .search(DnsRecordModel.NAME, DnsRecordModel.VALUE)
-                .searchTerm(term -> { String relative = relativeTerm(term); return relative == null ? term : relative; })
+                .searchTerm(term -> { String relative = relativeTerm(term); return relative == null ? term
+                        : relative; })
                 .build())
             .form(ResourceForm.<Row>of(parts.formSpec()).inlineEditable(DnsRecordModel.NAME, DnsRecordModel.VALUE,
                 DnsRecordModel.TTL, DnsRecordModel.ENABLED).build())

@@ -71,10 +71,10 @@ public final class InstanceAttention {
      * AIDEV-NOTE: the crashed workload is the ROOT of what its sites' visitors get: each such site's verdict names the
      * workload as its cause ({@link AppHealth}), so the dashboard folds their "error page" items under this one, which
      * says how many sites it keeps from their visitors and keeps the workload's own action.
-     * Its own root, where it has one (its verdict's cause half, {@link AppHealth#instanceReading}: the host that refuses
-     * its start now, the database whose old engine it is), holds it in turn, so a whole chain reads as that one item.
-     * A failed start on a host that is not admitted once read as its own red item beside the host's; the host is the
-     * root, and the failure stays in the app's Recent.
+     * Its own root, where it has one (its verdict's cause half, {@link AppHealth#instanceReading}: the host that
+     * refuses its start now, the database whose old engine it is), holds it in turn, so a whole chain reads as that one
+     * item. A failed start on a host that is not admitted once read as its own red item beside the host's; the host is
+     * the root, and the failure stays in the app's Recent.
      *
      * @param sitesHeld what each record keeps from visitors ({@link AppHealth#sitesHeldBack}), read once for the tier
      */

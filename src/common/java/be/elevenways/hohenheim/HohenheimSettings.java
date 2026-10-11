@@ -75,7 +75,8 @@ public class HohenheimSettings {
             .restartRequired()
             .build();
 
-        public static final SettingDefinition<String> HTTP_SOCKET_PATH = GROUP.buildSetting("http_socket_path", String.class)
+        public static final SettingDefinition<String> HTTP_SOCKET_PATH = GROUP.buildSetting("http_socket_path",
+                String.class)
             .hostOnly()
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.ANY)
             .description("Optional Unix socket path for the HTTP proxy instead of a public TCP listener. "
@@ -87,7 +88,8 @@ public class HohenheimSettings {
             .restartRequired()
             .build();
 
-        public static final SettingDefinition<String> HTTP_SOCKET_PERMISSIONS = GROUP.buildSetting("http_socket_permissions", String.class)
+        public static final SettingDefinition<String> HTTP_SOCKET_PERMISSIONS =
+                GROUP.buildSetting("http_socket_permissions", String.class)
             .hostOnly()
             .defaultValue("0660")
             .description("Octal permissions applied to the HTTP proxy Unix socket (limits socket access only, "
@@ -155,7 +157,8 @@ public class HohenheimSettings {
             .restartRequired()
             .build();
 
-        public static final SettingDefinition<String> FALLBACK_ADDRESS = GROUP.buildSetting("fallback_address", String.class)
+        public static final SettingDefinition<String> FALLBACK_ADDRESS = GROUP.buildSetting("fallback_address",
+                String.class)
             .hostOnly()
             .description("Address for requests that match no site")
             .build();
@@ -171,7 +174,8 @@ public class HohenheimSettings {
             .restartRequired()
             .build();
 
-        public static final SettingDefinition<String> NOT_FOUND_MESSAGE = GROUP.buildSetting("not_found_message", String.class)
+        public static final SettingDefinition<String> NOT_FOUND_MESSAGE = GROUP.buildSetting("not_found_message",
+                String.class)
             .defaultValue("")
             .description("Error message for unmatched domains. Leave blank for the "
                 + "localized default; a value here is the operator's own copy and is "
@@ -179,7 +183,8 @@ public class HohenheimSettings {
             .multiline()
             .build();
 
-        public static final SettingDefinition<String> UNREACHABLE_MESSAGE = GROUP.buildSetting("unreachable_message", String.class)
+        public static final SettingDefinition<String> UNREACHABLE_MESSAGE = GROUP.buildSetting("unreachable_message",
+                String.class)
             .defaultValue("")
             .description("Error message for unreachable upstreams. Leave blank for the "
                 + "localized default; a value here is the operator's own copy and is "
@@ -285,16 +290,19 @@ public class HohenheimSettings {
             .describe(Microcopy.of("settings.hohenheim.ssl.help"))
             .icon("lock");
 
-        public static final SettingDefinition<Boolean> LETSENCRYPT_ENABLED = GROUP.buildSetting("letsencrypt_enabled", Boolean.class)
+        public static final SettingDefinition<Boolean> LETSENCRYPT_ENABLED = GROUP.buildSetting("letsencrypt_enabled",
+                Boolean.class)
             .defaultValue(true)
             .description("Enable automatic Let's Encrypt certificates")
             .build();
 
-        public static final SettingDefinition<String> LETSENCRYPT_EMAIL = GROUP.buildSetting("letsencrypt_email", String.class)
+        public static final SettingDefinition<String> LETSENCRYPT_EMAIL = GROUP.buildSetting("letsencrypt_email",
+                String.class)
             .description("Email address for Let's Encrypt account")
             .build();
 
-        public static final SettingDefinition<Boolean> LETSENCRYPT_STAGING = GROUP.buildSetting("letsencrypt_staging", Boolean.class)
+        public static final SettingDefinition<Boolean> LETSENCRYPT_STAGING = GROUP.buildSetting("letsencrypt_staging",
+                Boolean.class)
             .defaultValue(false)
             .description("Use Let's Encrypt staging server")
             .build();
@@ -316,13 +324,15 @@ public class HohenheimSettings {
                 + "Let's Encrypt (production or staging per the staging switch)")
             .build();
 
-        public static final SettingDefinition<String> DNS_HOOK_COMMAND = GROUP.buildSetting("dns_hook_command", String.class)
+        public static final SettingDefinition<String> DNS_HOOK_COMMAND = GROUP.buildSetting("dns_hook_command",
+                String.class)
             .hostOnly()
             .description("Executable DNS-01 hook; called as: command present|cleanup record-name record-value")
             .restartRequired()
             .build();
 
-        public static final SettingDefinition<Integer> DNS_PROPAGATION_SECONDS = GROUP.buildSetting("dns_propagation_seconds", Integer.class)
+        public static final SettingDefinition<Integer> DNS_PROPAGATION_SECONDS =
+                GROUP.buildSetting("dns_propagation_seconds", Integer.class)
             .defaultValue(30)
             .suffix("s")
             .description("Seconds to wait after publishing DNS-01 TXT records")
@@ -426,7 +436,8 @@ public class HohenheimSettings {
             .describe(Microcopy.of("settings.hohenheim.logging.help"))
             .icon("align-left");
 
-        public static final SettingDefinition<Boolean> ACCESS_TO_FILE = GROUP.buildSetting("access_to_file", Boolean.class)
+        public static final SettingDefinition<Boolean> ACCESS_TO_FILE = GROUP.buildSetting("access_to_file",
+                Boolean.class)
             .defaultValue(true)
             .description("Log access requests to file")
             .build();
@@ -438,12 +449,14 @@ public class HohenheimSettings {
             .description("Access log file path")
             .build();
 
-        public static final SettingDefinition<Boolean> DOMAIN_MISSES_TO_FILE = GROUP.buildSetting("domain_misses_to_file", Boolean.class)
+        public static final SettingDefinition<Boolean> DOMAIN_MISSES_TO_FILE =
+                GROUP.buildSetting("domain_misses_to_file", Boolean.class)
             .defaultValue(true)
             .description("Log suspicious unknown-domain requests to a file for fail2ban")
             .build();
 
-        public static final SettingDefinition<String> DOMAIN_MISSES_PATH = GROUP.buildSetting("domain_misses_path", String.class)
+        public static final SettingDefinition<String> DOMAIN_MISSES_PATH = GROUP.buildSetting("domain_misses_path",
+                String.class)
             .hostOnly()
             .defaultValue("/var/log/hohenheim/domain-misses.log")
             .filesystemPath(HohenheimPaths.SERVER_FILES, PathKind.FILE)
@@ -622,7 +635,8 @@ public class HohenheimSettings {
             .description("Directory for scheduled managed-database dumps")
             .build();
 
-        public static final SettingDefinition<Integer> BACKUP_RETENTION = GROUP.buildSetting("backup_retention", Integer.class)
+        public static final SettingDefinition<Integer> BACKUP_RETENTION = GROUP.buildSetting("backup_retention",
+                Integer.class)
             .defaultValue(7)
             .description("Number of dumps to keep per managed database")
             .build();
@@ -703,7 +717,8 @@ public class HohenheimSettings {
                 + "the default")
             .build();
 
-        public static final SettingDefinition<Integer> RELEASE_QUARANTINE_DAYS = GROUP.buildSetting("release_quarantine_days", Integer.class)
+        public static final SettingDefinition<Integer> RELEASE_QUARANTINE_DAYS =
+                GROUP.buildSetting("release_quarantine_days", Integer.class)
             .defaultValue(30)
             .suffix("d")
             .description("Days a hostname stays reserved for its former owner after the site "
@@ -715,23 +730,27 @@ public class HohenheimSettings {
                 + "here from a zone we do not host. 0 disables the quarantine entirely")
             .build();
 
-        public static final SettingDefinition<Integer> DOMAIN_MISS_THRESHOLD = GROUP.buildSetting("domain_miss_threshold", Integer.class)
+        public static final SettingDefinition<Integer> DOMAIN_MISS_THRESHOLD =
+                GROUP.buildSetting("domain_miss_threshold", Integer.class)
             .defaultValue(5)
             .description("In-window domain misses before an IP's misses are recorded as security events")
             .build();
 
-        public static final SettingDefinition<Integer> DOMAIN_MISS_WINDOW_SECONDS = GROUP.buildSetting("domain_miss_window_seconds", Integer.class)
+        public static final SettingDefinition<Integer> DOMAIN_MISS_WINDOW_SECONDS =
+                GROUP.buildSetting("domain_miss_window_seconds", Integer.class)
             .defaultValue(300)
             .suffix("s")
             .description("Sliding window for counting weighted security events towards a ban")
             .build();
 
-        public static final SettingDefinition<Integer> DOMAIN_MISS_BAN_THRESHOLD = GROUP.buildSetting("domain_miss_ban_threshold", Integer.class)
+        public static final SettingDefinition<Integer> DOMAIN_MISS_BAN_THRESHOLD =
+                GROUP.buildSetting("domain_miss_ban_threshold", Integer.class)
             .defaultValue(25)
             .description("In-window weighted event score before an IP is auto-banned")
             .build();
 
-        public static final SettingDefinition<Integer> DOMAIN_MISS_DECAY_PER_HIT = GROUP.buildSetting("domain_miss_decay_per_hit", Integer.class)
+        public static final SettingDefinition<Integer> DOMAIN_MISS_DECAY_PER_HIT =
+                GROUP.buildSetting("domain_miss_decay_per_hit", Integer.class)
             .defaultValue(2)
             .description("Score forgiven for each successful route hit")
             .build();
@@ -771,21 +790,24 @@ public class HohenheimSettings {
             return SettingDefinition.CoercionResult.accepted(List.copyOf(result));
         }
 
-        public static final SettingDefinition<Boolean> NFTABLES_ENABLED = GROUP.buildSetting("nftables_enabled", Boolean.class)
+        public static final SettingDefinition<Boolean> NFTABLES_ENABLED = GROUP.buildSetting("nftables_enabled",
+                Boolean.class)
             .hostOnly()
             .defaultValue(false)
             .description("Also enforce bans in the kernel via nftables (requires passwordless "
                 + "sudo for nft; the table 'inet hohenheim' is owned by Hohenheim)")
             .build();
 
-        public static final SettingDefinition<String> NFTABLES_PORTS = GROUP.buildSetting("nftables_ports", String.class)
+        public static final SettingDefinition<String> NFTABLES_PORTS = GROUP.buildSetting("nftables_ports",
+                String.class)
             .hostOnly()
             .defaultValue("80,443")
             .description("Comma-separated TCP ports the nftables ban rule is scoped to; "
                 + "never widen this to ports like 22 or 53 that other services depend on")
             .build();
 
-        public static final SettingDefinition<String> NFTABLES_SSH_PORTS = GROUP.buildSetting("nftables_ssh_ports", String.class)
+        public static final SettingDefinition<String> NFTABLES_SSH_PORTS = GROUP.buildSetting("nftables_ssh_ports",
+                String.class)
             .hostOnly()
             .defaultValue("22")
             .description("Comma-separated TCP ports the SECOND nftables ban rule is scoped to, "
@@ -794,7 +816,8 @@ public class HohenheimSettings {
                 + "off a customer's website, and a web scanner must not be locked out of SSH")
             .build();
 
-        public static final SettingDefinition<Boolean> SSH_WATCH_ENABLED = GROUP.buildSetting("ssh_watch_enabled", Boolean.class)
+        public static final SettingDefinition<Boolean> SSH_WATCH_ENABLED = GROUP.buildSetting("ssh_watch_enabled",
+                Boolean.class)
             .hostOnly()
             .defaultValue(false)
             .description("Watch the local sshd journal for brute-force patterns (invalid users, "
@@ -805,13 +828,15 @@ public class HohenheimSettings {
             .restartRequired()
             .build();
 
-        public static final SettingDefinition<Integer> AUTO_BAN_TTL_HOURS = GROUP.buildSetting("auto_ban_ttl_hours", Integer.class)
+        public static final SettingDefinition<Integer> AUTO_BAN_TTL_HOURS = GROUP.buildSetting("auto_ban_ttl_hours",
+                Integer.class)
             .defaultValue(24)
             .suffix("h")
             .description("Lifetime of an automatically created ban")
             .build();
 
-        public static final SettingDefinition<Integer> AUTO_BAN_BUDGET_PER_HOUR = GROUP.buildSetting("auto_ban_budget_per_hour", Integer.class)
+        public static final SettingDefinition<Integer> AUTO_BAN_BUDGET_PER_HOUR =
+                GROUP.buildSetting("auto_ban_budget_per_hour", Integer.class)
             .defaultValue(50)
             .description("Maximum automatic bans (any trigger: threat scorer, reputation) in a "
                 + "sliding hour; when exhausted further auto-bans are suppressed and logged "
@@ -819,31 +844,36 @@ public class HohenheimSettings {
                 + "ban of all visitors (minimum 1; manual bans are never limited)")
             .build();
 
-        public static final SettingDefinition<Integer> DEFAULT_EVENT_WEIGHT = GROUP.buildSetting("default_event_weight", Integer.class)
+        public static final SettingDefinition<Integer> DEFAULT_EVENT_WEIGHT = GROUP.buildSetting("default_event_weight",
+                Integer.class)
             .defaultValue(1)
             .description("Ban-score weight for event types without a built-in weight")
             .build();
 
-        public static final SettingDefinition<String> REPUTATION_BAN_CATEGORIES = GROUP.buildSetting("reputation_ban_categories", String.class)
+        public static final SettingDefinition<String> REPUTATION_BAN_CATEGORIES =
+                GROUP.buildSetting("reputation_ban_categories", String.class)
             .defaultValue("spam,auth")
             .description("Comma-separated, case-insensitive behavioral event categories whose spamservice counts "
                 + "feed the reputation ban decision; dataset flags (vpn/hosting/tor/proxy) "
                 + "NEVER count")
             .build();
 
-        public static final SettingDefinition<Integer> REPUTATION_BAN_THRESHOLD = GROUP.buildSetting("reputation_ban_threshold", Integer.class)
+        public static final SettingDefinition<Integer> REPUTATION_BAN_THRESHOLD =
+                GROUP.buildSetting("reputation_ban_threshold", Integer.class)
             .defaultValue(25)
             .description("Ban an IP when its weighted net spamservice event count across the "
                 + "configured categories reaches this value (minimum 1)")
             .build();
 
-        public static final SettingDefinition<Integer> REPUTATION_POSITIVE_EVENT_WEIGHT = GROUP.buildSetting("reputation_positive_event_weight", Integer.class)
+        public static final SettingDefinition<Integer> REPUTATION_POSITIVE_EVENT_WEIGHT =
+                GROUP.buildSetting("reputation_positive_event_weight", Integer.class)
             .defaultValue(10)
             .description("Number of negative events offset by one positive event in the SAME "
                 + "category (minimum 0; 0 disables positive credit)")
             .build();
 
-        public static final SettingDefinition<Integer> REPUTATION_TTL_SECONDS = GROUP.buildSetting("reputation_ttl_seconds", Integer.class)
+        public static final SettingDefinition<Integer> REPUTATION_TTL_SECONDS =
+                GROUP.buildSetting("reputation_ttl_seconds", Integer.class)
             .defaultValue(300)
             .suffix("s")
             .description("How long a spamservice reputation answer is cached in-process "
@@ -922,21 +952,23 @@ public class HohenheimSettings {
             .describe(Microcopy.of("settings.hohenheim.proxy_auth.help"))
             .icon("id-badge");
 
-        public static final SettingDefinition<Long> SESSION_TTL_SECONDS = GROUP.buildSetting("session_ttl_seconds", Long.class)
+        public static final SettingDefinition<Long> SESSION_TTL_SECONDS = GROUP.buildSetting("session_ttl_seconds",
+                Long.class)
             .defaultValue(86400L)
             .suffix("s")
             .description("Lifetime of a proxy-auth session (seconds)")
             .build();
 
-        public static final SettingDefinition<Long> PERSISTENT_TTL_SECONDS = GROUP.buildSetting("persistent_ttl_seconds", Long.class)
+        public static final SettingDefinition<Long> PERSISTENT_TTL_SECONDS =
+                GROUP.buildSetting("persistent_ttl_seconds", Long.class)
             .defaultValue(1209600L)
             .suffix("s")
             .description("Lifetime of a proxy-auth persistent (remember-me) cookie (seconds)")
             .build();
 
         /**
-         * Explicit operator opt-in for site auth providers whose Proteus realm is on a private network. Declared without
-         * a label, as it always was: the settings page keeps its fallback name.
+         * Explicit operator opt-in for site auth providers whose Proteus realm is on a private network. Declared
+         * without a label, as it always was: the settings page keeps its fallback name.
          */
         public static final Consumer PROTEUS_ALLOW_PRIVATE_NETWORKS = PrivateNetworkOptIn.consumer(
             HohenheimIds.id("proteus_private_networks"), "hohenheim.proxy_auth.proteus_allow_private_networks");

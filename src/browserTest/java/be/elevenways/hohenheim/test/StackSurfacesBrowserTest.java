@@ -35,8 +35,9 @@ import static be.elevenways.hohenheim.HohenheimSlugs.ADMIN;
  *
  * AIDEV-NOTE: the stored set ({@code /panel-surfaces/stacks.txt}) is the behaviour captured before the legacy
  * StackResource, StackServiceResource and StackFileResource moved onto StackParts. The accepted differences are the
- * declared placed operation moves: each legacy action kept its id and moved only its route. The active stack carries a successful deployment, so it is offered stop and rollback; the inactive one is offered
- * neither. A failing comparison is a changed surface, never a file to refresh.
+ * declared placed operation moves: each legacy action kept its id and moved only its route. The active stack carries a
+ * successful deployment, so it is offered stop and rollback; the inactive one is offered neither. A failing comparison
+ * is a changed surface, never a file to refresh.
  */
 class StackSurfacesBrowserTest extends HohenheimTestBase {
 

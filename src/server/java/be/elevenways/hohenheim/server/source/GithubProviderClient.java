@@ -134,7 +134,8 @@ public class GithubProviderClient extends ApiProviderClient {
             case SUCCESS -> "success";
             case FAILURE -> "failure";
         };
-        postStatus(this.apiBase + "/repos/" + repoPath(repository) + "/statuses/" + commitSha, anyToken(), stateToken, context, description, targetUrl);
+        postStatus(this.apiBase + "/repos/" + repoPath(repository) + "/statuses/" + commitSha, anyToken(), stateToken,
+                context, description, targetUrl);
     }
 
     // -- installation-token minting -------------------------------------------

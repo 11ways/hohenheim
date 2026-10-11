@@ -98,7 +98,8 @@ class EncryptionRekeyJourneyTest {
             // 3. Retirement is refused BY NAME, and it names the hohenheim columns at stake.
             assertThatThrownBy(() -> EncryptionRekey.retire(firstKey))
                 .as("step 3: the old key cannot be retired while real secrets still need it")
-                .isInstanceOfSatisfying(DomainRefusal.class, refusal -> assertThat(refusal.is(ZenitRefusalReason.IN_USE))
+                .isInstanceOfSatisfying(DomainRefusal.class,
+                        refusal -> assertThat(refusal.is(ZenitRefusalReason.IN_USE))
                     .as("step 3: an operator refusal, never the bug an IllegalStateException means").isTrue())
                 .hasMessageContaining(firstKey)
                 .hasMessageContaining("hohenheim:notification_channel.url")

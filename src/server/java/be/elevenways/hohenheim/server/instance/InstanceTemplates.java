@@ -197,7 +197,8 @@ public final class InstanceTemplates {
                                   InstanceTemplateOperations.@NonNull CreateFromTemplate input,
                                   @Nullable AccessContext ctx) {
         Map<String, Object> variables = new LinkedHashMap<>();
-        // The pipeline sealed every secret as a Secret; the variable writer stores its text, so it is revealed once here.
+        // The pipeline sealed every secret as a Secret; the variable writer stores its text, so it is revealed once
+        // here.
         input.variables().forEach((key, value) -> variables.put(key, value instanceof Secret secret
             ? secret.reveal() : value));
         String name = input.name() == null ? "" : input.name();

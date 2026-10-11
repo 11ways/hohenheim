@@ -120,7 +120,8 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
         String quoted = HostShell.quote(hostPath);
         run(privileged(PrivilegedHelper.Verb.VOLUME_DESTROY,
             "if " + this.sudo + "btrfs subvolume show " + quoted + " >/dev/null 2>&1; then"
-                + " " + this.sudo + "btrfs subvolume delete " + quoted + "; else " + this.sudo + "rm -rf " + quoted + "; fi",
+                + " " + this.sudo + "btrfs subvolume delete " + quoted + "; else " + this.sudo + "rm -rf "
+                + quoted + "; fi",
             hostPath),
             "volume_destroy_failed", hostPath);
     }

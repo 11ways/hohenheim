@@ -123,7 +123,8 @@ class DashboardVocabularyDriftTest {
             assertThat(state.loud()).as("step 2: %s loud", state).isEqualTo(state == HostState.QUARANTINED);
             assertThat(state.namesDaemon()).as("step 2: %s names its daemon", state)
                 .isEqualTo(state == HostState.SILENT || state == HostState.OK);
-            assertThat(state.dot() == StatusDotStatus.ONLINE).as("step 2: %s green", state).isEqualTo(state == HostState.OK);
+            assertThat(state.dot() == StatusDotStatus.ONLINE).as("step 2: %s green", state)
+                    .isEqualTo(state == HostState.OK);
         }
     }
 

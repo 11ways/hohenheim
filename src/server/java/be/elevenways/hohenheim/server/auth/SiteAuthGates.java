@@ -69,7 +69,8 @@ public final class SiteAuthGates {
         }
 
         try {
-            return new Built(handler.createGate(new SiteAuthContext(providerRow, effectivePermission(requiredPermission, siteSlug),
+            return new Built(handler.createGate(new SiteAuthContext(providerRow,
+                    effectivePermission(requiredPermission, siteSlug),
                 sessionStore, siteId, providerType, providerId)), null, null);
         } catch (Exception failure) {
             // createGate must be pure; if it throws anyway, the caller fails closed.

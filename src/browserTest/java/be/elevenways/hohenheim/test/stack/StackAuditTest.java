@@ -134,7 +134,8 @@ class StackAuditTest {
             GrantService.createDirectGrant(GrantSubjectType.USER, id, "*", true);
             return id;
         });
-        Db.run(datasource, () -> Accountability.runAs(operator(String.valueOf(clicker)), () -> PanelResourceCalls.invoke(
+        Db.run(datasource, () -> Accountability.runAs(operator(String.valueOf(clicker)),
+                () -> PanelResourceCalls.invoke(
             HohenheimSlugs.ADMIN, HohenheimSlugs.STACKS, StackOperations.DEPLOY.id(), panelId,
             CmsConfirmation.PLAIN_PROOF,
             AccessContext.of(TenantConduits.stubFor(new UserPrincipal(clicker, "Stack Clicker"))))));

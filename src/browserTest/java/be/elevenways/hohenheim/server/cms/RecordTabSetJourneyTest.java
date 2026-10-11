@@ -154,7 +154,8 @@ class RecordTabSetJourneyTest extends HohenheimTestBase {
             assertThat(strip).as("step 2: the tabs read as the overview's cards do")
                 .contains("Addresses").contains("Protection")
                 .doesNotContain(">Domains<").doesNotContain("Protected paths");
-            // A strip tab is the anchor the width fit measures (data-pl-fit-item); its hidden copy in More is not a tab.
+            // A strip tab is the anchor the width fit measures (data-pl-fit-item); its hidden copy in More is not a
+            // tab.
             String accessTab = "data-pl-fit-item=\"" + siteRecord + "/page/access\"";
             assertThat(strip.split(Pattern.quote(accessTab), -1).length - 1)
                 .as("step 2: one Access tab, the contributed one").isEqualTo(1);

@@ -187,7 +187,8 @@ public final class DeleteImpact {
         }
         long instances = RouteScope.memo(IMAGE_INSTANCES, () -> GroupedCounts.of(Models.get(InstanceModel.class).find(),
             InstanceModel.RUNTIME_IMAGE_ID)).getOrDefault(id, 0L);
-        long templates = RouteScope.memo(IMAGE_TEMPLATES, () -> GroupedCounts.of(Models.get(InstanceTemplateModel.class).find(),
+        long templates = RouteScope.memo(IMAGE_TEMPLATES,
+                () -> GroupedCounts.of(Models.get(InstanceTemplateModel.class).find(),
             InstanceTemplateModel.RUNTIME_IMAGE_ID)).getOrDefault(id, 0L);
         return instances > 0 || templates > 0 ? HohenheimMicrocopy.RUNTIME_IMAGE.of("delete_in_use")
             .withArg("instances", instances).withArg("templates", templates) : null;
@@ -215,7 +216,8 @@ public final class DeleteImpact {
     /** @return the live instance rows a database is attached to, in link order */
     static @NonNull List<Row> liveInstancesOf(@Nullable Integer databaseId) {
         return databaseId == null ? List.of()
-            : RouteScope.memo(ATTACHED, InstanceDatabaseLinks::liveInstancesByDatabase).getOrDefault(databaseId, List.of());
+            : RouteScope.memo(ATTACHED, InstanceDatabaseLinks::liveInstancesByDatabase)
+            .getOrDefault(databaseId, List.of());
     }
 
     /**

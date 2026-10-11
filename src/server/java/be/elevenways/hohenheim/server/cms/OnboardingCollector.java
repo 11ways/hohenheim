@@ -137,8 +137,9 @@ public final class OnboardingCollector {
      * Done once a host is ENROLLED, naming it ("local, Docker"): admission is the next stage's step.
      *
      * AIDEV-NOTE: the "done only once admitted" rule is gone. It made this step say "enrolled but not admitted yet"
-     * right above the admission step saying the same, one problem twice; the checklist ticks enrolment and leaves admission
-     * to its own step, which is BLOCKED (warning tone) while no host accepts work, so nothing reads as false progress.
+     * right above the admission step saying the same, one problem twice; the checklist ticks enrolment and leaves
+     * admission to its own step, which is BLOCKED (warning tone) while no host accepts work, so nothing reads as false
+     * progress.
      */
     private static OnboardingStep hostEnrolled(List<Row> servers) {
         if (servers.isEmpty()) {

@@ -533,7 +533,8 @@ public final class DatabaseParts {
 
     /** An operator holds {@code destroy} on every record; a delegate on the records it was granted it on. */
     static boolean mayDestroy(@NonNull Row database, @NonNull AccessContext access) {
-        return HohenheimAccess.hasDatabaseCapability(access, database.get(DatabaseModel.ID), HohenheimCapabilities.DESTROY);
+        return HohenheimAccess.hasDatabaseCapability(access, database.get(DatabaseModel.ID),
+                HohenheimCapabilities.DESTROY);
     }
 
     /**

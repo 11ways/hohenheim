@@ -286,11 +286,13 @@ public final class ArtifactDeploys {
             String digest = settings.get("artifact_path") == null ? null : (String) settings.get("commit_sha");
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("status", digest == null ? "absent"
-                : new InstanceService().liveStatus(applicationId).state() == ContainerState.RUNNING ? "running" : "stopped");
+                : new InstanceService().liveStatus(applicationId).state() == ContainerState.RUNNING ? "running"
+                : "stopped");
             result.put("artifact_sha256", digest);
             result.put("instance_id", digest == null ? null : serving.get(InstanceModel.ID));
             result.put("image_id", digest == null ? null : settings.get(InstanceKindFields.IMAGE));
-            result.put("stamps", digest == null ? null : readStamp(artifactPath(directoryFor(applicationId).toPath(), digest)));
+            result.put("stamps", digest == null ? null
+                    : readStamp(artifactPath(directoryFor(applicationId).toPath(), digest)));
             return result;
         });
     }
@@ -317,7 +319,8 @@ public final class ArtifactDeploys {
                             InstanceOperationLock.Contention.QUEUE, () -> {
                         finish(operation, ArtifactOperationModel.LIFECYCLE.stored(OperationStatus.INTERRUPTED),
                             "artifact_interrupted");
-                        cleanupUploads(directoryFor(applicationId).toPath().resolve("uploads"), BootSettle.processStart());
+                        cleanupUploads(directoryFor(applicationId).toPath().resolve("uploads"),
+                                BootSettle.processStart());
                     });
                 });
         }
@@ -365,7 +368,8 @@ public final class ArtifactDeploys {
                 long offset = little(end, i + 16, 4);
                 if (entries == 0 || entries == 65535 || bytes > MAX_DIRECTORY_BYTES
                         || little(end, i + 4, 4) != 0 || little(end, i + 8, 2) != entries
-                        || offset + bytes != file.length() - length + i) throw new IOException("Unsupported archive bounds");
+                        || offset + bytes != file.length() - length + i) throw new IOException(
+                        "Unsupported archive bounds");
                 return;
             }
             throw new IOException("Missing archive directory");
@@ -388,7 +392,8 @@ public final class ArtifactDeploys {
             byte[] buffer = new byte[65536];
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
-                if (++count > 65534 || entry.getSize() > MAX_INFLATED_BYTES - total) throw new IOException("Archive too large");
+                if (++count > 65534 || entry.getSize() > MAX_INFLATED_BYTES - total) throw new IOException(
+                        "Archive too large");
                 var crc = new CRC32();
                 long size = 0;
                 try (InputStream in = jar.getInputStream(entry)) {
@@ -400,7 +405,8 @@ public final class ArtifactDeploys {
                         if (total > MAX_INFLATED_BYTES) throw new IOException("Archive too large");
                     }
                 }
-                if (size != entry.getSize() || crc.getValue() != entry.getCrc()) throw new IOException("Corrupt archive member");
+                if (size != entry.getSize() || crc.getValue() != entry.getCrc()) throw new IOException(
+                        "Corrupt archive member");
             }
         }
     }

@@ -52,7 +52,8 @@ class ProtectPathInPlaceJourneyTest extends HohenheimTestBase {
             Map.of("username", "anna", "password", "first-secret"),
             Map.of("username", "ben", "password", "second-secret")));
         Row protectedByPassword = protect(site, password);
-        Row list = Models.get(AccessListModel.class).findById(protectedByPassword.get(ProtectedPathModel.ACCESS_LIST_ID));
+        Row list = Models.get(AccessListModel.class)
+                .findById(protectedByPassword.get(ProtectedPathModel.ACCESS_LIST_ID));
         assertThat((Boolean) list.get(AccessListModel.SHARED)).as("step 1: the list is the path's own").isFalse();
         List<Row> rules = Models.get(AccessRuleModel.class).findForAccessList(list.get(AccessListModel.ID));
         assertThat(rules).as("step 1: one rule per person").hasSize(2);
@@ -68,7 +69,8 @@ class ProtectPathInPlaceJourneyTest extends HohenheimTestBase {
         Map<String, Object> network = form("/internal", ProtectPath.METHOD_NETWORK);
         network.put(ProtectPath.NETWORKS.getName(), List.of("203.0.113.0/24"));
         Row protectedByNetwork = protect(site, network);
-        List<Row> networkRules = Models.get(AccessRuleModel.class).findForAccessList(protectedByNetwork.get(ProtectedPathModel.ACCESS_LIST_ID));
+        List<Row> networkRules = Models.get(AccessRuleModel.class)
+                .findForAccessList(protectedByNetwork.get(ProtectedPathModel.ACCESS_LIST_ID));
         assertThat(networkRules).as("step 2: one rule for the one network").hasSize(1);
         assertThat((String) networkRules.getFirst().get(AccessRuleModel.TYPE)).as("step 2: an allow rule")
             .isEqualTo(AccessRuleModel.TYPE_IP_ALLOW);

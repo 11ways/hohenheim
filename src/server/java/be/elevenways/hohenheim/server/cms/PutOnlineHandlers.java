@@ -70,7 +70,8 @@ final class PutOnlineHandlers {
     }
 
     /** Claiming an address is an operator act; anyone the template admits may put it online without one. */
-    private static @Nullable DomainRefusal addressAuthority(@NonNull Row template, PutOnline.@Nullable FromTemplate input,
+    private static @Nullable DomainRefusal addressAuthority(@NonNull Row template,
+            PutOnline.@Nullable FromTemplate input,
                                                            @NonNull AccessContext access) {
         if (input == null || Texts.trimmedOrNull(input.hostname()) == null || HohenheimAccess.isAdmin(access)) {
             return null;

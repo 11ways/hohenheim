@@ -68,7 +68,8 @@ public final class InstanceTemplateHandlers {
     private static final JobRunner INSTALL_RUNNER = JobRunner.create("hh-template-install");
 
     /** The templates a caller may create from: every operation over one selected template reads through it. */
-    private static final RecordSource<InstanceTemplateModel> SELECTABLE_TEMPLATES = RecordSource.of(InstanceTemplateModel.class)
+    private static final RecordSource<InstanceTemplateModel> SELECTABLE_TEMPLATES =
+            RecordSource.of(InstanceTemplateModel.class)
         .id(HohenheimIds.id("selectable_template"))
         .project(InstanceTemplateModel.NAME, InstanceTemplateModel.KIND)
         .scopedBy(TenantScopes.INSTANCE_TEMPLATES).build();
@@ -152,8 +153,9 @@ public final class InstanceTemplateHandlers {
     // -- approval: the operator act that makes a template tenant-selectable ------------------------------------
 
     /**
-     * Stamps who approved the template and when, after the approval-time lane of the vocabulary gate: a function-library
-     * script calling helpers the shim lacks must not become tenant-selectable, refused BY NAME before the stamp.
+     * Stamps who approved the template and when, after the approval-time lane of the vocabulary gate: a
+     * function-library script calling helpers the shim lacks must not become tenant-selectable, refused BY NAME before
+     * the stamp.
      */
     private static @Nullable Void approve(@NonNull OperationCall<Row, Void> call) {
         Row template = call.subject();

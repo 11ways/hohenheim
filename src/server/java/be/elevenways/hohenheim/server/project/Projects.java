@@ -105,7 +105,8 @@ public final class Projects {
         String slug = group == null ? null : group.get(PermissionGroupModel.SLUG);
         if (slug == null) {
             throw new IllegalStateException("Project " + project.get(ProjectModel.ID)
-                + (group == null ? " references a missing permission group " : " references a slugless permission group ")
+                + (group == null ? " references a missing permission group "
+                        : " references a slugless permission group ")
                 + groupId);
         }
         return GroupMembershipToken.of(slug);

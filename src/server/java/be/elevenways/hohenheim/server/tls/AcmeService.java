@@ -878,7 +878,8 @@ public class AcmeService {
         OrderFlight existing = inFlightOrders.putIfAbsent(orderKey, leader);
         if (existing != null) {
             if (!existing.joinable()) {
-                throw new IllegalStateException("A manual certificate order for these hostnames is already in progress");
+                throw new IllegalStateException(
+                        "A manual certificate order for these hostnames is already in progress");
             }
             try {
                 return existing.result().get();

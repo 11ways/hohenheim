@@ -17,15 +17,18 @@ public class ArtifactOperationModel extends Model {
     public static final OperationLifecycle LIFECYCLE = OperationLifecycle.of(OperationStatus.PENDING,
         OperationStatus.RUNNING, OperationStatus.SUCCEEDED, OperationStatus.FAILED, OperationStatus.INTERRUPTED);
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
-    public static final IntegerField APPLICATION_ID = SCHEMA.addField(IntegerField.builder().name("application_id").build());
+    public static final IntegerField APPLICATION_ID = SCHEMA.addField(IntegerField.builder()
+            .name("application_id").build());
     public static final IntegerField SITE_ID = SCHEMA.addField(IntegerField.builder().name("site_id").build());
     public static final StringField STATUS = SCHEMA.addField(StringField.builder().name("status").build());
-    public static final StringField ARTIFACT_SHA256 = SCHEMA.addField(StringField.builder().name("artifact_sha256").build());
+    public static final StringField ARTIFACT_SHA256 = SCHEMA.addField(StringField.builder()
+            .name("artifact_sha256").build());
     public static final IntegerField INSTANCE_ID = SCHEMA.addField(IntegerField.builder().name("instance_id").build());
     public static final StringField IMAGE_ID = SCHEMA.addField(StringField.builder().name("image_id").build());
     /** Safe machine error code only: exception messages can contain paths or credentials. */
     public static final StringField ERROR = SCHEMA.addField(StringField.builder().name("error").build());
-    public static final DateTimeField FINISHED_AT = SCHEMA.addField(DateTimeField.builder().name("finished_at").build());
+    public static final DateTimeField FINISHED_AT = SCHEMA.addField(DateTimeField.builder()
+            .name("finished_at").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at").build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());
     @Override public Identifier getModelId() { return MODEL_ID; }

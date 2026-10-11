@@ -82,7 +82,8 @@ final class ServerTrustActions {
                         .withArg("pinned", String.valueOf(result.previous())).withArg("offered", result.fingerprint()));
                 }
                 return HohenheimMicrocopy.SERVER.of(result.outcome() == HostKeys.ScanOutcome.PINNED
-                    ? lane.copy().pinnedToast() : lane.copy().unchangedToast()).withArg("fingerprint", result.fingerprint());
+                    ? lane.copy().pinnedToast() : lane.copy().unchangedToast())
+                    .withArg("fingerprint", result.fingerprint());
             }, lane.applies()).description(HohenheimMicrocopy.SERVER.of(lane.copy().scan() + "_hint"))
                 .icon(Icon.of("fingerprint")).inlineInRow(false).build());
             actions.add(ServerLifecycleActions.place("confirm_" + lane.id(),

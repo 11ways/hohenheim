@@ -124,10 +124,12 @@ public final class ServerParts {
             .form(ResourceForm.<Row>of(formSpec()).bindings(bindings).landingTab(RecordOverview.SLUG)
                 .tabLabel(HohenheimMicrocopy.APP_OVERVIEW.of("configuration")).build())
             .list(hostList(tableSpec()))
-            .reads(ResourceReads.rows().mapCells((row, column) -> "host_status".equals(column.name()) ? statusCellOf(row) : null))
+            .reads(ResourceReads.rows().mapCells((row, column) -> "host_status".equals(column.name())
+                    ? statusCellOf(row) : null))
             .writes(ResourceMutations.rows().create(call -> ServerInventoryWrites.create(call.values()))
                 .update(call -> { ServerInventoryWrites.update(call.record(), call.values()); return null; })
-                .delete(DELETE).scopeVerifiedBeforeWrite().ownsWriteEnvelope(ResourceVerb.CREATE, ResourceVerb.UPDATE).build())
+                .delete(DELETE).scopeVerifiedBeforeWrite().ownsWriteEnvelope(ResourceVerb.CREATE,
+                        ResourceVerb.UPDATE).build())
             .deleteConfirmation(DeleteConfirmation.of(
                 DeleteConfirmation.body(HohenheimMicrocopy.SERVER.of("delete_confirm"))))
             .actions(actions)
@@ -152,7 +154,8 @@ public final class ServerParts {
                 ServerModel.RUNTIME_INCUS.equals(values.get("runtime")) ? "trust_notice_body_incus"
                     : "trust_notice_body")))
                 .dependsOn("runtime").build())
-            .section(FormSection.advanced(ServerModel.PUBLIC_IPV4.getName(), ServerModel.PUBLIC_IPV6.getName())).build();
+            .section(FormSection.advanced(ServerModel.PUBLIC_IPV4.getName(),
+                    ServerModel.PUBLIC_IPV6.getName())).build();
     }
 
     /**
@@ -178,10 +181,14 @@ public final class ServerParts {
             .column(ColumnSpec.fromField(ServerModel.RUNTIME).filterable().hidden().build())
             .column(ColumnSpec.fromField(ServerModel.SSH_TARGET).filterable().copyable().hidden().build())
             .column(ColumnSpec.fromField(ServerModel.ADMISSION).filterable().hidden().build())
-            .filter(FilterSpec.leaf(ServerModel.NAME, CoreTypes.CONTAINS).label(FieldLabels.labelFor(ServerModel.NAME)).build())
-            .filter(FilterSpec.leaf(ServerModel.RUNTIME, CoreTypes.EQUALS).label(FieldLabels.labelFor(ServerModel.RUNTIME)).build())
-            .filter(FilterSpec.leaf(ServerModel.ADMISSION, CoreTypes.EQUALS).label(FieldLabels.labelFor(ServerModel.ADMISSION)).build())
-            .filter(FilterSpec.leaf(ServerModel.SSH_TARGET, CoreTypes.CONTAINS).label(FieldLabels.labelFor(ServerModel.SSH_TARGET)).build())
+            .filter(FilterSpec.leaf(ServerModel.NAME, CoreTypes.CONTAINS)
+                    .label(FieldLabels.labelFor(ServerModel.NAME)).build())
+            .filter(FilterSpec.leaf(ServerModel.RUNTIME, CoreTypes.EQUALS)
+                    .label(FieldLabels.labelFor(ServerModel.RUNTIME)).build())
+            .filter(FilterSpec.leaf(ServerModel.ADMISSION, CoreTypes.EQUALS)
+                    .label(FieldLabels.labelFor(ServerModel.ADMISSION)).build())
+            .filter(FilterSpec.leaf(ServerModel.SSH_TARGET, CoreTypes.CONTAINS)
+                    .label(FieldLabels.labelFor(ServerModel.SSH_TARGET)).build())
             .build();
     }
 
@@ -244,7 +251,8 @@ public final class ServerParts {
             }
         }
         for (Row stack : Models.get(StackModel.class).find().all()) {
-            counts.computeIfAbsent(ServerModel.canonicalServerId(stack.get(StackModel.SERVER_ID)), id -> new int[2])[0]++;
+            counts.computeIfAbsent(ServerModel.canonicalServerId(stack.get(StackModel.SERVER_ID)),
+                    id -> new int[2])[0]++;
         }
         for (Row database : Models.get(DatabaseModel.class).find().all()) {
             counts.computeIfAbsent(ServerModel.canonicalServerId(database.get(DatabaseModel.SERVER_ID)),
@@ -259,7 +267,8 @@ public final class ServerParts {
         String daemon = ServerModel.isIncus(row) ? "Incus" : "Docker";
         Object capabilities = row.get(ServerModel.CAPABILITIES);
         String versionKey = ServerModel.isIncus(row) ? "incus_version" : "docker_version";
-        if (capabilities instanceof Map<?, ?> values && values.get(versionKey) instanceof String version && !version.isBlank()) {
+        if (capabilities instanceof Map<?, ?> values && values.get(versionKey) instanceof String version
+                && !version.isBlank()) {
             daemon += " " + version;
         }
         if (row.get(ServerModel.QUARANTINED_AT) != null) return new HostStatusCell(HostState.QUARANTINED, daemon, null,

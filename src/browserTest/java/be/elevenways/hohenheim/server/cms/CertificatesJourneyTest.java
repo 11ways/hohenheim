@@ -103,7 +103,8 @@ class CertificatesJourneyTest extends HohenheimTestBase {
         assertThat(lateCell.variant()).as("step 1: needs a look, so the dashboard tile counts it")
             .isNotEqualTo(BadgeVariant.SUCCESS);
         assertThat(lateCell.detail().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
-            .as("step 1: not renewed yet, in the one expiry wording").matches("Not renewed yet; expires in (9|10) days");
+            .as("step 1: not renewed yet, in the one expiry wording")
+            .matches("Not renewed yet; expires in (9|10) days");
         Row upload = certificate("upload-" + suffix, CertificateModel.STATUS_ACTIVE, 0, 10,
             CertificateModel.CHALLENGE_HTTP, null);
         upload.set(CertificateModel.PROVIDER, CertificateModel.PROVIDER_CUSTOM);
@@ -143,7 +144,8 @@ class CertificatesJourneyTest extends HohenheimTestBase {
         //    "Works" (the dashboard's HTTPS verdicts read the same store).
         Row works = certificate("works-" + suffix, CertificateModel.STATUS_ACTIVE, 0, 80,
             CertificateModel.CHALLENGE_HTTP, null);
-        assertThat(CertificateParts.stateCell(works).state()).as("step 3: without a proxy the stored row is all there is")
+        assertThat(CertificateParts.stateCell(works).state())
+                .as("step 3: without a proxy the stored row is all there is")
             .isEqualTo("works");
         ProxyServer previous = ServerMain.getProxyServer();
         ProxyServer proxy = ProxyTestSupport.startProxy();

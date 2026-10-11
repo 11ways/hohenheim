@@ -596,7 +596,8 @@ public class SiteDispatcher implements HttpHandler {
         Runnable dispatch = () -> entry.handler.handleRequest(exchange, upstream -> {
             exchange.putAttachment(UpstreamProxyClient.UPSTREAM_URI, upstream);
             if (siteId > 0) {
-                exchange.putAttachment(UpstreamProxyClient.DIAL_OUTCOME, answered -> upstreamAnswered.put(siteId, answered));
+                exchange.putAttachment(UpstreamProxyClient.DIAL_OUTCOME,
+                        answered -> upstreamAnswered.put(siteId, answered));
             }
             // Only the proxy path may commit early: ProxyHandler copies the upstream status
             // and headers before it acquires the response channel, so a flush can never

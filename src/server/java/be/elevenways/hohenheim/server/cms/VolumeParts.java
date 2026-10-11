@@ -65,7 +65,8 @@ public final class VolumeParts {
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL).build())
             .reads(ResourceReads.rows().mapValues((row, base) -> {
                 Map<String, Object> values = new LinkedHashMap<>(base);
-                values.put(VolumeOperations.QUOTA_MB.getName(), VolumeDeclarationOperations.declaration(row).quota_mb());
+                values.put(VolumeOperations.QUOTA_MB.getName(), VolumeDeclarationOperations.declaration(row)
+                        .quota_mb());
                 return values;
             }))
             .writes(ResourceMutations.rows().create(VolumeOperations.CREATE)

@@ -384,8 +384,8 @@ final class AppHealth {
         RecordHealth health = switch (status) {
             case RUNNING -> runningVerdict(facts.sitesByInstance.get(instance.get(InstanceModel.ID)), facts.sites,
                 delegated, viewer);
-            // What stopped it, as its recorded cause says (the dashboard item's detail too); a tenant reads the sentence
-            // without the daemon's own message.
+            // What stopped it, as its recorded cause says (the dashboard item's detail too); a tenant reads the
+            // sentence without the daemon's own message.
             case ERROR -> {
                 RecordHealth stopped = RecordHealth.broken(WorkloadErrors.stoppageOf(instance).headline())
                     .detail(WorkloadErrors.detailOf(instance, !delegated));
@@ -460,8 +460,8 @@ final class AppHealth {
     /**
      * A running workload is only as healthy as what its visitors get: the first serving site (switched on, with an
      * address) whose own verdict is not OK speaks for it, broken before attention. Its words and its fixes carry over,
-     * the fixes still the site's own row actions ({@link RecordHealth#on}), offered on the workload's page wherever this
-     * node registers the sites entry at all.
+     * the fixes still the site's own row actions ({@link RecordHealth#on}), offered on the workload's page wherever
+     * this node registers the sites entry at all.
      */
     private static @NonNull RecordHealth runningVerdict(@Nullable List<Row> sites, @NonNull SiteFacts facts,
                                                         boolean delegated, @Nullable AccessContext viewer) {
@@ -588,7 +588,8 @@ final class AppHealth {
             return CertCoverage.ACTIVE;
         }
         Row cert = CertificateCoverage.coveringCertificate(hostname);
-        CertCoverage coverage = CertCoverage.ofCertificateStatus(cert == null ? null : cert.get(CertificateModel.STATUS));
+        CertCoverage coverage = CertCoverage.ofCertificateStatus(cert == null ? null
+                : cert.get(CertificateModel.STATUS));
         // A certificate stored as active that the working names leave out is one the proxy cannot serve.
         return coverage == CertCoverage.ACTIVE || Boolean.TRUE.equals(domain.get(SiteDomainModel.FORCE_SSL))
             ? CertCoverage.ERROR : coverage;

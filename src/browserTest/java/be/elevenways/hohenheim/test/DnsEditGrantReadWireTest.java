@@ -44,7 +44,8 @@ class DnsEditGrantReadWireTest extends HohenheimTestBase {
         try {
             // 1. Admit the account to the delegated surface, with exactly one record grant: EDIT, never VIEW.
             // No site or hostname authority is granted, so the source cannot admit this record by another path.
-            GrantService.createDirectGrant(GrantSubjectType.USER, account, HohenheimSources.MANAGE_ACCESS.value(), true);
+            GrantService.createDirectGrant(GrantSubjectType.USER, account,
+                    HohenheimSources.MANAGE_ACCESS.value(), true);
             RecordGrants.grant(GrantSubjectType.USER, account, DnsRecordModel.MODEL_ID, editable,
                 HohenheimCapabilities.EDIT, true);
             TestSession caller = sessionFor(account);

@@ -242,7 +242,8 @@ public final class HostAttention {
             })
             .toList();
         byHost(stuck, claim -> serverNameOf(claim.get(PortAllocationModel.SERVER_ID)),
-            claim -> claim.get(PortAllocationModel.PORT) + "/" + claim.get(PortAllocationModel.PROTOCOL)).forEach((server, ports) -> items.add(item(AttentionSeverity.WARNING, "ethernet",
+            claim -> claim.get(PortAllocationModel.PORT) + "/" + claim.get(PortAllocationModel.PROTOCOL))
+            .forEach((server, ports) -> items.add(item(AttentionSeverity.WARNING, "ethernet",
             HohenheimMicrocopy.ATTENTION_TITLE.of("ports_releasing").withArg("server", server),
             HohenheimMicrocopy.ATTENTION_DETAIL.of("ports_releasing").withArg("count", ports.size())
                 .withArg("hours", RELEASING_STUCK_AFTER.toHours()).withArg("ports", String.join(", ", ports)))));

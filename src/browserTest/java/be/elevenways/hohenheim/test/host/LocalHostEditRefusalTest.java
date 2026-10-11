@@ -80,7 +80,8 @@ class LocalHostEditRefusalTest {
                 .isNull();
 
             // 2. A submitted identity change is REFUSED by field, never dropped silently.
-            assertThatThrownBy(() -> resource.writes().rowWriter(ResourceVerb.UPDATE).write(new RowWriteCall(ResourceVerb.UPDATE, local,
+            assertThatThrownBy(() -> resource.writes().rowWriter(ResourceVerb.UPDATE)
+                    .write(new RowWriteCall(ResourceVerb.UPDATE, local,
                     Map.of("ssh_target", "evil@intruder.example.test"), operator)))
                 .as("step 2: changing the local host's ssh target is refused")
                 .isInstanceOf(Violations.class)
@@ -90,7 +91,8 @@ class LocalHostEditRefusalTest {
                 .isNull();
 
             // 3. The editable half saves -- and a resubmitted UNCHANGED identity is no refusal.
-            resource.writes().rowWriter(ResourceVerb.UPDATE).write(new RowWriteCall(ResourceVerb.UPDATE, servers.findById(localId), Map.of(
+            resource.writes().rowWriter(ResourceVerb.UPDATE)
+                    .write(new RowWriteCall(ResourceVerb.UPDATE, servers.findById(localId), Map.of(
                 "name", "local",
                 "posture", ServerModel.POSTURE_DEDICATED,
                 "public_ipv4", "203.0.113.7"), operator));

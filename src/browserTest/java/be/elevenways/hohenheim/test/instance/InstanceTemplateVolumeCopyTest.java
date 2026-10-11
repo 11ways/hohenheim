@@ -232,7 +232,8 @@ class InstanceTemplateVolumeCopyTest extends HohenheimTestBase {
 
     private static void volume(int templateId, String name, String containerPath,
                                 Long quotaBytes, boolean exclusive) {
-        saveVolume(Models.get(InstanceTemplateVolumeModel.class), templateId, name, containerPath, quotaBytes, exclusive);
+        saveVolume(Models.get(InstanceTemplateVolumeModel.class), templateId, name, containerPath,
+                quotaBytes, exclusive);
     }
 
     /** Seeds the declaration shape stored before authoring guards existed, without invoking today's live hooks. */

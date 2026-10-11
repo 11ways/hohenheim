@@ -363,7 +363,8 @@ public final class HohenheimAccess {
     /**
      * THE operation-funnel gate for a capability-sensitive managed-database act.
      *
-     * @throws Violations {@link HohenheimViolations#databaseNotPermitted}, the one answer for an invisible, absent or denied database
+     * @throws Violations {@link HohenheimViolations#databaseNotPermitted}, the one answer for an invisible, absent or
+     *                    denied database
      * @see OperationGates#requireDatabaseCapability
      */
     public static void requireDatabaseCapability(int databaseId, @NonNull String capability) {

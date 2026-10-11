@@ -182,7 +182,8 @@ public class SiteDomainModel extends Model {
      *
      * AIDEV-NOTE: a NEW row starts OFF and armed through {@link #FORCE_SSL_AUTO}: forcing HTTPS on a name no
      * certificate covers yet sent every visitor to an error page behind a green badge. The column default in
-     * InitialMigration stays true (frozen), so a raw insert keeps the old meaning; the ORM default is what new rows get.
+     * InitialMigration stays true (frozen), so a raw insert keeps the old meaning; the ORM default is what new rows
+     * get.
      */
     public static final BooleanField FORCE_SSL = SCHEMA.addField(BooleanField.builder("force_ssl")
         .defaultValue(false)
@@ -234,7 +235,8 @@ public class SiteDomainModel extends Model {
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("response_headers"))
         .help(HohenheimMicrocopy.HELP.of("response_headers"))
         .build());
-    public static final BooleanField EXCLUDE_FROM_LETSENCRYPT = SCHEMA.addField(BooleanField.builder("exclude_from_letsencrypt")
+    public static final BooleanField EXCLUDE_FROM_LETSENCRYPT =
+            SCHEMA.addField(BooleanField.builder("exclude_from_letsencrypt")
         .defaultValue(false)
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("exclude_from_letsencrypt"))
         .help(HohenheimMicrocopy.HELP.of("exclude_from_letsencrypt"))

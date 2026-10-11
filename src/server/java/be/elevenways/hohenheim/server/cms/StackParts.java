@@ -551,10 +551,12 @@ public final class StackParts {
                 continue;   // an untouched blank row the editor added
             }
             if (container == null) {
-                throw Violations.ofField("ports." + index + ".container_port", port.get(StackServiceModel.PORT_CONTAINER),
+                throw Violations.ofField("ports." + index + ".container_port",
+                        port.get(StackServiceModel.PORT_CONTAINER),
                     HohenheimMicrocopy.VIOLATIONS.of("port_container_required"));
             }
-            for (String key : List.of(StackServiceModel.PORT_CONTAINER.getName(), StackServiceModel.PORT_HOST.getName())) {
+            for (String key : List.of(StackServiceModel.PORT_CONTAINER.getName(),
+                    StackServiceModel.PORT_HOST.getName())) {
                 Integer value = RawValues.parsedInt(port.get(key));
                 if (value != null && (value < 1 || value > 65535)) {
                     throw Violations.ofField("ports." + index + "." + key, value,

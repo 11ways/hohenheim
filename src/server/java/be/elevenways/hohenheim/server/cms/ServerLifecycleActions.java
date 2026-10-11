@@ -77,7 +77,8 @@ final class ServerLifecycleActions {
                 if (summary == null || !summary.reachable()) throw Violations.ofForm(
                     HohenheimMicrocopy.VIOLATIONS.of("host_probe_failed").withArg("name", name)
                     .withArg("kind", summary != null && summary.errorKind() != null
-                        ? HostProbe.FailureKind.labelOf(summary.errorKind()) : HostProbe.FailureKind.UNREACHABLE.label()));
+                        ? HostProbe.FailureKind.labelOf(summary.errorKind())
+                        : HostProbe.FailureKind.UNREACHABLE.label()));
                 return HohenheimMicrocopy.SERVER.of("host_probe_ok").withArg("name", name)
                     .withArg("summary", formatSummary(summary, label));
             // Check again is the host page's one verb: it measures everything a probe does and the
@@ -193,7 +194,8 @@ final class ServerLifecycleActions {
     private static Microcopy formatSummary(ServerService.Summary summary, String label) {
         String docker = summary.daemonVersion().isBlank() ? label : label + " " + summary.daemonVersion();
         String platform = summary.osType();
-        if (!summary.architecture().isBlank()) platform = platform.isBlank() ? summary.architecture() : platform + "/" + summary.architecture();
+        if (!summary.architecture().isBlank()) platform = platform.isBlank() ? summary.architecture() : platform + "/"
+                + summary.architecture();
         String os = summary.operatingSystem().isBlank() ? platform : summary.operatingSystem();
         if (!platform.isBlank() && !os.equals(platform)) os += " (" + platform + ")";
         double memory = Math.round(summary.memoryBytes() / 1_073_741_824.0 * 10) / 10.0;

@@ -318,7 +318,8 @@ class DnsCentralEditTest extends HohenheimTestBase {
         stub.calls.clear();
         var unknownAction = adminPostForm(remoteSubmit(zoneId), invocation() + "action=unsupported&record_id=6");
         assertThat(unknownAction.statusCode()).as("an unknown DNS action is a field refusal").isEqualTo(422);
-        assertThat(unknownAction.body()).as("the DNS-owned refusal resolves locally").contains("Unknown DNS record action");
+        assertThat(unknownAction.body()).as("the DNS-owned refusal resolves locally")
+                .contains("Unknown DNS record action");
         assertThat(stub.calls).as("a refused action never reaches the peer").isEmpty();
 
         // The owner's validation refusal (by microcopy key) resolves locally.
@@ -459,7 +460,8 @@ class DnsCentralEditTest extends HohenheimTestBase {
         stub.body = "{\"status\":\"ok\",\"key_name\":\"" + keyName + "\",\"peer\":\"us\","
             + "\"transfer_host\":\"198.51.100.7\",\"transfer_port\":53,\"transfer_kept\":false}";
 
-        var negotiated = adminPostForm("/admin/dns-peers/invoke/hohenheim.negotiate_transfer_key?ids=" + peerId, confirmed(""));
+        var negotiated = adminPostForm("/admin/dns-peers/invoke/hohenheim.negotiate_transfer_key?ids="
+                + peerId, confirmed(""));
         assertThat(negotiated.statusCode()).describedAs("the action runs").isIn(200, 302, 303);
 
         // 2. The peer was called on the symmetric endpoint, with the API key.

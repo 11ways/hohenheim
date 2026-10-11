@@ -209,12 +209,14 @@ class OperatorTrustedTargetsTest extends HohenheimTestBase {
         try {
             RecordGrants.grant(GrantSubjectType.USER, admin, GitProviderModel.MODEL_ID, id,
                 HohenheimCapabilities.MANAGE, true);
-            assertThat(write(delegated, providers, id, GitProviderModel.BASE_URL, "https://delegate.example.test")).isNull();
+            assertThat(write(delegated, providers, id, GitProviderModel.BASE_URL,
+                    "https://delegate.example.test")).isNull();
             assertThat(providers.findById(id).get(GitProviderModel.TARGET_TRUSTED)).isEqualTo(false);
             RecordGrants.revoke(GrantSubjectType.USER, admin, GitProviderModel.MODEL_ID, id,
                 HohenheimCapabilities.MANAGE);
             // 1. An operator changes a target through a map row, with no setter history.
-            Row mapped = new Row(new LinkedHashMap<>(Map.of("id", id, "base_url", "https://map.example.test")), providers);
+            Row mapped = new Row(new LinkedHashMap<>(Map.of("id", id, "base_url", "https://map.example.test")),
+                    providers);
             assertThat(mapped.isWritten(GitProviderModel.BASE_URL)).as("step 1: no setter history").isFalse();
             TenantConduits.as(operator(), () -> providers.save(mapped));
             assertThat(providers.findById(id).get(GitProviderModel.TARGET_TRUSTED))

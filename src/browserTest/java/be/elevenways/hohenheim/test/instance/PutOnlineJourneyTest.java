@@ -126,7 +126,8 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         //     operator wrote keeps its own words.
         Row starter = Models.get(InstanceTemplateModel.class).createEmptyRow();
         starter.set(InstanceTemplateModel.NAME, "WordPress (PHP 99.9)");
-        starter.set(InstanceTemplateModel.DESCRIPTION, "Catalogue form: official Apache image, PHP 99.9, a docroot volume");
+        starter.set(InstanceTemplateModel.DESCRIPTION,
+                "Catalogue form: official Apache image, PHP 99.9, a docroot volume");
         starter.set(InstanceTemplateModel.KIND, FakeNativeDaemons.FakeNativeKind.ID.toString());
         starter.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "fake/image")));
         starter.set(InstanceTemplateModel.SOURCE, InstanceTemplateModel.SOURCE_STARTER);
@@ -150,7 +151,8 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
             .as("step 1: Continue with a card opens that card's flow")
             .contains(HohenheimSlugs.PUT_ONLINE).contains("kind=hohenheim%3Aredirect");
         assertThat(adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?choice=https://elsewhere.example").body())
-            .as("step 1: a value the chooser did not draw only redraws the chooser").contains("data-hh-put-online-chooser");
+            .as("step 1: a value the chooser did not draw only redraws the chooser")
+            .contains("data-hh-put-online-chooser");
 
         // 2. Choosing opens the stepped wizard: where, the template's options, HTTPS.
         String wizard = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?template=" + template
@@ -188,7 +190,8 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
             .caller(TenantConduits.operator()).subjects(List.of(template)).form(form));
         assertThat(answer.run()).as("step 3: the answer is a run, before the work").isNotNull();
         OperationRun run = ended(runOf(answer), operator, "step 3");
-        assertThat(run.status()).as("step 3: the run succeeded (%s)", run.outcome()).isEqualTo(OperationRunStatus.SUCCEEDED);
+        assertThat(run.status()).as("step 3: the run succeeded (%s)", run.outcome())
+                .isEqualTo(OperationRunStatus.SUCCEEDED);
         assertThat(run.stepsDone()).as("step 3: every step passed").isEqualTo(5L);
         assertThat(Objects.requireNonNull(run.steps()).journeyBefore())
             .as("step 3: the run ends the journey the wizard walked: what, where, options, https").hasSize(4);
@@ -201,13 +204,15 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         assertThat(app).as("step 3: the app exists").isNotNull();
         assertThat(String.valueOf((Object) app.get(InstanceModel.STATUS))).as("step 3: and was started")
             .isEqualTo(InstanceModel.STATUS_RUNNING);
-        assertThat(OperationRuns.recentFor(InstanceOperations.INSTANCE, String.valueOf((Object) app.get(InstanceModel.ID)),
+        assertThat(OperationRuns.recentFor(InstanceOperations.INSTANCE,
+                String.valueOf((Object) app.get(InstanceModel.ID)),
                 5, operator)).as("step 3: the run is found from the app it made").extracting(OperationRun::id)
             .contains(run.id());
         Row website = Models.get(SiteModel.class).find().where(SiteModel.INSTANCE_ID.eq(app.get(InstanceModel.ID)))
             .first();
         assertThat(website).as("step 3: a website serves the app").isNotNull();
-        assertThat(Models.get(SiteDomainModel.class).find().where(SiteDomainModel.HOSTNAME.eq("shop." + PREFIX + "test"))
+        assertThat(Models.get(SiteDomainModel.class).find()
+                .where(SiteDomainModel.HOSTNAME.eq("shop." + PREFIX + "test"))
             .first()).as("step 3: on the address given").isNotNull();
 
         // 4. A redirect needs no workload: one run creates only its website and address.

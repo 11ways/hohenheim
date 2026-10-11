@@ -39,8 +39,8 @@ import java.util.Set;
  * container -- naming it after the consumer would mint a fresh, empty network on every
  * deploy, exactly the defect owner-keyed volumes exist to avoid.
  *
- * AIDEV-NOTE: link networks carry {@link Egress#NONE} -- the database's own network was DECLARED egress-NONE and a second interface must
- * not silently widen that. The instance's own egress rides its primary per-workload
+ * AIDEV-NOTE: link networks carry {@link Egress#NONE} -- the database's own network was DECLARED egress-NONE and a
+ * second interface must not silently widen that. The instance's own egress rides its primary per-workload
  * network, untouched; members still reach each other because the own-subnet accept
  * precedes the egress drop.
  *

@@ -118,7 +118,8 @@ class SecurityEventTypeLabelsTest {
             .as("step 3: and in Dutch").isEqualTo("Vroeg naar namen die deze server niet bedient");
         assertThat(HohenheimSecurity.legacyCause("score 26 over threshold", "ws.something_new")
                 .resolve(LocaleChain.ofTags("en"), catalogs))
-            .as("step 3: an undescribed type names its own spelling").isEqualTo("Set off security events: ws.something_new");
+            .as("step 3: an undescribed type names its own spelling")
+            .isEqualTo("Set off security events: ws.something_new");
         assertThat(HohenheimSecurity.legacyCause("Login attempts on /wp-admin", SecurityEventTypes.DOMAIN_MISS))
             .as("step 3: an operator's own reason is never rewritten").isNull();
     }

@@ -95,8 +95,10 @@ public final class ReputationBanPolicy {
         this.clock = Now::millis;
         this.availabilitySource = () -> SpamserviceManager.get().client() != null;
         this.clientSource = () -> SpamserviceManager.get().client();
-        this.categoriesSource = () -> Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.REPUTATION_BAN_CATEGORIES);
-        this.thresholdSource = () -> Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.REPUTATION_BAN_THRESHOLD);
+        this.categoriesSource = () -> Zenit.SETTINGS_VALUES.getValue(
+                HohenheimSettings.Security.REPUTATION_BAN_CATEGORIES);
+        this.thresholdSource = () -> Zenit.SETTINGS_VALUES.getValue(
+                HohenheimSettings.Security.REPUTATION_BAN_THRESHOLD);
         this.positiveWeightSource = () -> Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Security.REPUTATION_POSITIVE_EVENT_WEIGHT);
         this.lookupOverride = null;

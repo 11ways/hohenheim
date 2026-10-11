@@ -96,7 +96,8 @@ class AccessLogTest {
             .anyMatch(line -> line.contains("\"GET /app/two%20x "));
         assertThat(first).as("step 1: the line is the original's: host prefix, date, request, referer, agent")
             .anyMatch(line -> line.matches("log\\.access\\.test: \\S+ - - \\[\\d{2}/\\w{3}/\\d{4}:\\d{2}:\\d{2}:\\d{2} "
-                + "[+-]\\d{4}\\] \"GET /app/one HTTP/1\\.1\" 200 \\d+ \"https://from\\.example/page\" \"probe/1\\.0\""));
+                + "[+-]\\d{4}\\] \"GET /app/one HTTP/1\\.1\" 200 \\d+ \"https://from\\.example/page\" "
+                + "\"probe/1\\.0\""));
 
         // Step 2: logrotate moves the file away; the next line starts a fresh file at the path
         // instead of vanishing into the moved one.

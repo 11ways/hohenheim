@@ -97,8 +97,10 @@ public final class UnixSocketBridge {
         }
         // One virtual thread per direction; the first to see EOF/error closes both so the peer's
         // copy loop unblocks.
-        Thread.ofVirtual().start(() -> { copy(tcp, unix); Closeables.closeQuietly(tcp); Closeables.closeQuietly(unix); });
-        Thread.ofVirtual().start(() -> { copy(unix, tcp); Closeables.closeQuietly(tcp); Closeables.closeQuietly(unix); });
+        Thread.ofVirtual().start(() -> { copy(tcp, unix); Closeables.closeQuietly(tcp);
+                Closeables.closeQuietly(unix); });
+        Thread.ofVirtual().start(() -> { copy(unix, tcp); Closeables.closeQuietly(tcp);
+                Closeables.closeQuietly(unix); });
     }
 
     private SocketChannel connectUpstream() throws IOException {

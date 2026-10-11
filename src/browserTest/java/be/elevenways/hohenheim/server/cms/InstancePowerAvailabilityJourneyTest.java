@@ -48,7 +48,8 @@ class InstancePowerAvailabilityJourneyTest extends HohenheimTestBase {
 
         // 2. The operator's Deploy and Restart are offered dead with exactly those words.
         AccessContext operator = TenantConduits.operator();
-        for (String verb : List.of(InstanceOperations.START.id().toString(), InstanceOperations.RESTART.id().toString())) {
+        for (String verb : List.of(InstanceOperations.START.id().toString(), InstanceOperations.RESTART.id()
+                .toString())) {
             PanelAction<Row> action = action(InstanceActions.placedOperator(), verb);
             assertThat(action.disabledFor(instance, operator))
                 .as("step 2: " + verb + " is dead with the host's reason").isNotNull();
@@ -57,7 +58,8 @@ class InstancePowerAvailabilityJourneyTest extends HohenheimTestBase {
 
         // 3. On /manage the same Deploy is dead too, but its words never name the host: a tenant reads that the
         //    operator has to clear it.
-        PanelAction<Row> delegated = action(InstanceActions.placedDelegated(), InstanceOperations.START.id().toString());
+        PanelAction<Row> delegated = action(InstanceActions.placedDelegated(), InstanceOperations.START.id()
+                .toString());
         AccessContext tenant = AccessContext.of(TenantConduits.stubFor(new UserPrincipal(
             ApiSupport.user("power-availability-tenant@hohenheim.local", "Power Tenant"), "Power Tenant")));
         assertThat(delegated.disabledFor(instance, tenant).key())

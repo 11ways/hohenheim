@@ -342,7 +342,8 @@ public final class ServerOverviewState {
         List<PreflightCheckView> mustPass = new ArrayList<>();
         List<PreflightCheckView> advice = new ArrayList<>();
         for (PreflightCheckView check : preflightChecks(server)) {
-            (check.required() ? mustPass : advice).add(check.withLabel(HostPreflight.checkLabel(check.name())).withFix(fixFor(check)));
+            (check.required() ? mustPass : advice).add(check.withLabel(HostPreflight.checkLabel(check.name()))
+                    .withFix(fixFor(check)));
         }
         // What blocks comes first; within each half the stored order stays.
         Comparator<PreflightCheckView> failingFirst = Comparator.comparing(check -> !check.notPassing());
@@ -362,8 +363,8 @@ public final class ServerOverviewState {
      *
      * AIDEV-NOTE: the check names are the batteries' own declarations (HostPreflight.DOCKER_BATTERY,
      * IncusPreflight.BATTERY); HostCheckAndAdmitJourneyTest asserts every one of them has this copy and its
-     * {@link HostPreflight#checkLabel} in both shipped catalogs, so a new check fails the build until it is named and says how to
-     * fix it.
+     * {@link HostPreflight#checkLabel} in both shipped catalogs, so a new check fails the build until it is named and
+     * says how to fix it.
      */
     static @Nullable Microcopy fixFor(@NonNull PreflightCheckView check) {
         if (!check.notPassing() || !HostPreflight.declaredCheck(check.name())) {

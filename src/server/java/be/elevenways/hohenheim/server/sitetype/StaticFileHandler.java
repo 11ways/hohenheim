@@ -163,7 +163,8 @@ public class StaticFileHandler implements SiteRequestHandler {
             // Attribute escaping (the double quote too) in every position keeps the listing byte-identical to before.
             String safeRelPath = HtmlEscape.attribute(relativePath);
             html.append("<title>Index of ").append(safeRelPath).append("</title>");
-            html.append("<style>:root{color-scheme:light dark}body{font-family:monospace;padding:2rem}a{color:LinkText}");
+            html.append(
+                    "<style>:root{color-scheme:light dark}body{font-family:monospace;padding:2rem}a{color:LinkText}");
             html.append("table{border-collapse:collapse}td{padding:0.25rem 1rem}</style>");
             html.append("</head><body><h1>Index of ").append(safeRelPath).append("</h1>");
             html.append("<table>");

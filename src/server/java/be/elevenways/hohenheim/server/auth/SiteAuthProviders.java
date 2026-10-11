@@ -38,7 +38,8 @@ public final class SiteAuthProviders {
             return null;
         }
         Identifier id = Identifier.tryParse(typeIdentifier);
-        return id != null && SiteAuthProviderTypeRegistry.REGISTRY.get(id) instanceof SiteAuthProviderTypeHandler handler
+        return id != null
+                && SiteAuthProviderTypeRegistry.REGISTRY.get(id) instanceof SiteAuthProviderTypeHandler handler
             ? handler : null;
     }
 

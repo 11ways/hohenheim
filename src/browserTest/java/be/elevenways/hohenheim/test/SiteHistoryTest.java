@@ -57,10 +57,12 @@ class SiteHistoryTest extends HohenheimTestBase {
         click("pl-timeline-item[data-activity-action='zenit:update'] pl-collapsible-trigger button");
         waitForSelector("pl-timeline-item[data-activity-action='zenit:update'] pl-table-row[data-diff-field='name']");
         assertThat(page.locator(
-                "pl-timeline-item[data-activity-action='zenit:update'] pl-table-row[data-diff-field='name'] .cms-diff-before")
+                "pl-timeline-item[data-activity-action='zenit:update'] pl-table-row[data-diff-field='name'] "
+                + ".cms-diff-before")
             .textContent()).contains("History Site");
         assertThat(page.locator(
-                "pl-timeline-item[data-activity-action='zenit:update'] pl-table-row[data-diff-field='name'] .cms-diff-after")
+                "pl-timeline-item[data-activity-action='zenit:update'] pl-table-row[data-diff-field='name'] "
+                + ".cms-diff-after")
             .textContent()).contains("Renamed Site");
 
         // Restoring revision 1 from the same feed render brings the old name back.

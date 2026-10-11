@@ -72,7 +72,8 @@ class InstanceConfigurationSaveTest extends HohenheimTestBase {
             DURING_WRITE.set(() -> outcome(id, InstanceModel.STATUS_STOPPED, 8L));
             var response = adminPostForm("/manage/instances/" + id,
                 "name=configuration-request-renamed&crash_policy="
-                    + URLEncoder.encode(String.valueOf((Object) loaded.get(InstanceModel.CRASH_POLICY)), StandardCharsets.UTF_8)
+                    + URLEncoder.encode(String.valueOf((Object) loaded.get(InstanceModel.CRASH_POLICY)),
+                            StandardCharsets.UTF_8)
                     + "&cms__snapshot=" + URLEncoder.encode(snapshot, StandardCharsets.UTF_8));
             assertThat(response.statusCode()).as("step 1: the real configuration request succeeds").isIn(200, 302, 303);
             assertThat(DURING_WRITE.get()).as("step 1: the winner ran inside the request's write").isNull();
@@ -111,7 +112,8 @@ class InstanceConfigurationSaveTest extends HohenheimTestBase {
 
     private static void assertWinner(int id, String step) {
         Row winner = Models.get(InstanceModel.class).findById(id);
-        assertThat(winner.get(InstanceModel.STATUS)).as(step + ": winner's status stands").isEqualTo(InstanceModel.STATUS_STOPPED);
+        assertThat(winner.get(InstanceModel.STATUS)).as(step + ": winner's status stands")
+                .isEqualTo(InstanceModel.STATUS_STOPPED);
         assertThat(winner.get(InstanceModel.CLAIM_FENCE)).as(step + ": winner's fence stands").isEqualTo(8L);
         assertThat(Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(id))
             .and(InstanceModel.CLAIM_FENCE.eq(7L)).assign(InstanceModel.STATUS, InstanceModel.STATUS_ERROR).updateAll())

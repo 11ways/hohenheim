@@ -59,7 +59,8 @@ public final class InstanceSnapshotParts {
             .label(HohenheimMicrocopy.INSTANCE_SNAPSHOT.of("plural"))
             .recordLabel(HohenheimMicrocopy.INSTANCE_SNAPSHOT.of("singular"))
             .navGroup(HohenheimPanel.DEPLOY_GROUP).navOrder(16).icon(Icon.of("camera")).showInNav(false)
-            // A snapshot belongs to its instance: listed in the instance's Backups tab, its record page leads back there.
+            // A snapshot belongs to its instance: listed in the instance's Backups tab, its record page leads back
+            // there.
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceSnapshotModel.INSTANCE_ID)
                 .tab(HohenheimSlugs.Tab.BACKUPS))
             .form(ResourceForm.<Row>of(FormSpec.builder().add(InstanceSnapshotModel.NOTE).build())
@@ -67,7 +68,8 @@ public final class InstanceSnapshotParts {
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL).search(InstanceSnapshotModel.NOTE).build())
             .reads(ResourceReads.rows().title(InstanceSnapshotParts::title))
             .writes(ResourceMutations.rows().update().delete(InstanceSnapshotOperations.DELETE).build())
-            .authority(ResourceAuthority.<Row>builder().write(null, (row, access) -> HohenheimAccess.reachesRecord(access,
+            .authority(ResourceAuthority.<Row>builder().write(null,
+                    (row, access) -> HohenheimAccess.reachesRecord(access,
                 InstanceModel.MODEL_ID, row.get(InstanceSnapshotModel.INSTANCE_ID),
                     HohenheimCapabilities.SNAPSHOTS)).build())
             .actions(List.of(restore()));
@@ -102,6 +104,7 @@ public final class InstanceSnapshotParts {
     }
     private static String instanceName(Row row) {
         Row owner = StoredRows.byId(Models.get(InstanceModel.class), row.get(InstanceSnapshotModel.INSTANCE_ID));
-        return String.valueOf((Object) (owner == null ? row.get(InstanceSnapshotModel.INSTANCE_ID) : owner.get(InstanceModel.NAME)));
+        return String.valueOf((Object) (owner == null ? row.get(InstanceSnapshotModel.INSTANCE_ID)
+                : owner.get(InstanceModel.NAME)));
     }
 }

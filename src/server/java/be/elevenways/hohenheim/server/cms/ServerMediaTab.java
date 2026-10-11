@@ -38,8 +38,8 @@ import java.util.Map;
 /**
  * Install media tab on an Incus host: the ISO volumes of its managed pool (LIVE
  * daemon truth, the store the cdrom device rows reference by name), the stored state of
- * the background fetches (InstallMediaFetches), a fetch-from-URL form and per-medium delete. Hidden and 404d on Docker hosts -- their daemon has no
- * ISO volume to hold (the devices-tab hide-AND-enforce shape).
+ * the background fetches (InstallMediaFetches), a fetch-from-URL form and per-medium delete. Hidden and 404d on Docker
+ * hosts -- their daemon has no ISO volume to hold (the devices-tab hide-AND-enforce shape).
  */
 public final class ServerMediaTab implements RecordTab.Rendered<Row> {
 

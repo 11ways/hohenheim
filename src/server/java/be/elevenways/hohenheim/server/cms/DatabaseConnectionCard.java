@@ -15,7 +15,8 @@ import java.util.Objects;
  * admin Restore tab and the tenant Credentials tab draw.
  *
  * AIDEV-NOTE: this reads the plaintext password. Each caller is the gate: the Restore tab sits on the admin panel, the
- * Credentials tab answers only to the {@code credentials} capability ({@link ManageDatabaseCredentialsPage#visibleFor}).
+ * Credentials tab answers only to the {@code credentials} capability
+ * ({@link ManageDatabaseCredentialsPage#visibleFor}).
  *
  * @author Jelle De Loecker
  * @since  0.9.0

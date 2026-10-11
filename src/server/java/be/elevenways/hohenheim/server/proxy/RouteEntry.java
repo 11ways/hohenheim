@@ -32,7 +32,9 @@ final class RouteEntry {
     final String path;
     final boolean stripPath;
     final boolean forceSsl;
-    /** Whether the global force_https applies here: a pattern, or an exact name a working (loaded) certificate covers. */
+    /**
+     * Whether the global force_https applies here: a pattern, or an exact name a working (loaded) certificate covers.
+     */
     final boolean globalForce;
     final int requestDelayMs;
     final int requestTimeoutMs;

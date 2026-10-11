@@ -119,7 +119,8 @@ public class CertificateModel extends Model {
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("cert_domain_names")).build());
 
     /** Per-cert ACME account email override; null means the global account. */
-    public static final StringField LETSENCRYPT_EMAIL = SCHEMA.addField(StringField.builder().name("letsencrypt_email").build());
+    public static final StringField LETSENCRYPT_EMAIL = SCHEMA.addField(StringField.builder()
+            .name("letsencrypt_email").build());
     /**
      * THE challenge-type vocabulary, declared once for the stored column and for the certificate request's input
      * (CertificateOperations), which must offer it in a create-like view the column hides.
@@ -179,7 +180,8 @@ public class CertificateModel extends Model {
     public static final PrincipalField REQUESTER = PrincipalField.of(REQUESTED_BY_KIND, REQUESTED_BY_USER_ID);
 
     /** Dedup stamp for the expiring-soon alert; a renewal moves expires_on forward, re-arming it. */
-    public static final DateTimeField EXPIRY_NOTIFIED_AT = SCHEMA.addField(DateTimeField.builder().name("expiry_notified_at").build());
+    public static final DateTimeField EXPIRY_NOTIFIED_AT = SCHEMA.addField(DateTimeField.builder()
+            .name("expiry_notified_at").build());
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("created_at")).build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

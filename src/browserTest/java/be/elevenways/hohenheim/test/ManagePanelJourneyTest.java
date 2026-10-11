@@ -68,7 +68,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ManagePanelJourneyTest extends HohenheimTestBase {
 
-    private static final Pattern NAV_LINK = Pattern.compile("<pl-nav-item\\b[^>]*>\\s*<a\\b[^>]*href=\"(/manage/[^\"]*)\"");
+    private static final Pattern NAV_LINK =
+            Pattern.compile("<pl-nav-item\\b[^>]*>\\s*<a\\b[^>]*href=\"(/manage/[^\"]*)\"");
 
     private int tenantId;
     private int appId;
