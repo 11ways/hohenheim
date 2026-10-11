@@ -210,9 +210,11 @@ final class AppHealth {
      * its visitors (a redirect or a proxy needs no workload). The first-run checklist's "Put your first app online".
      */
     static boolean anyOnline() {
-        if (Models.get(InstanceModel.class).find().where(InstanceModel.liveAuthored())
-                .where(InstanceModel.STATUS.eq(InstanceModel.STATUS_RUNNING)).count() > 0) {
-            return true;
+        List<Row> authored = Models.get(InstanceModel.class).find().where(InstanceModel.liveAuthored()).all();
+        for (Row runtime : ApplicationReleases.runtimeRows(authored).values()) {
+            if (InstanceModel.STATUS_RUNNING.equals(runtime.get(InstanceModel.STATUS))) {
+                return true;
+            }
         }
         List<Row> sites = Models.get(SiteModel.class).find().all();
         SiteFacts facts = SiteFacts.of(sites);
@@ -277,7 +279,8 @@ final class AppHealth {
         }
         Row instance = facts.instances.get(site.get(SiteModel.INSTANCE_ID));
         if (instance != null) {
-            Verdict workload = workloadVerdict(instance, delegated, viewer);
+            Verdict workload = workloadVerdict(instance, facts.runtimes.get(instance.get(InstanceModel.ID)), delegated,
+                viewer);
             if (workload != null) {
                 return workload;
             }
@@ -328,15 +331,17 @@ final class AppHealth {
     /**
      * Why a site's workload keeps visitors out, or null when it serves: the site page says it in the site's words and
      * leaves the fix to the instance page, where the host check lives.
+     *
+     * @param runtime the row whose status speaks for the workload's runtime (ApplicationReleases.runtimeRows)
      */
-    private static @Nullable Verdict workloadVerdict(@NonNull Row instance, boolean delegated,
+    private static @Nullable Verdict workloadVerdict(@NonNull Row instance, @NonNull Row runtime, boolean delegated,
                                                      @Nullable AccessContext viewer) {
         Microcopy refusal = OwnedInstances.placementReasonOf(instance, delegated, viewer);
         if (refusal != null) {
             return Verdict.heldBy(OwnedInstances.placementHost(instance),
                 RecordHealth.broken(Headline.ERROR_PAGE.copy()).detail(refusal));
         }
-        InstanceStatus status = InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
+        InstanceStatus status = InstanceStatus.forToken(runtime.get(InstanceModel.STATUS));
         if (status != null && workloadServes(status)) {
             return null;
         }
@@ -367,7 +372,8 @@ final class AppHealth {
             return Verdict.notServing(RecordHealth.broken(Headline.INSTALL_FAILED.copy())
                 .detail(HohenheimMicrocopy.APP_HEALTH.of("install_failed_detail")));
         }
-        if (deployingWhileStopped(instance)) {
+        Row runtime = facts.runtimeOf(instance);
+        if (deployingWhileStopped(instance, runtime)) {
             return Verdict.notServing(RecordHealth.unknown(HohenheimMicrocopy.APP_HEALTH.of("deploying"))
                 .detail(HohenheimMicrocopy.APP_HEALTH.of("deploying_detail")));
         }
@@ -381,21 +387,21 @@ final class AppHealth {
             return Verdict.heldBy(OwnedInstances.placementHost(instance),
                 broken != null ? broken : delegated ? blocked : blocked.fixedBy(InstanceActions.CHECK_HOST));
         }
-        InstanceStatus status = InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
+        InstanceStatus status = InstanceStatus.forToken(runtime.get(InstanceModel.STATUS));
         if (status == null) {
             return Verdict.notServing(RecordHealth.unknown(HohenheimMicrocopy.APP_HEALTH.of("status_unknown")));
         }
         // An errored workload's own root (the host that refused its start, the database whose old engine it is) is the
-        // cause its dashboard item folds under.
-        AttentionSubject root = status == InstanceStatus.ERROR ? WorkloadErrors.rootOf(instance) : null;
+        // cause its dashboard item folds under. An application's is its serving release's (ApplicationReleases).
+        AttentionSubject root = status == InstanceStatus.ERROR ? WorkloadErrors.rootOf(runtime) : null;
         RecordHealth health = switch (status) {
             case RUNNING -> runningVerdict(facts.sitesByInstance.get(instance.get(InstanceModel.ID)), facts.sites,
                 delegated, viewer);
             // What stopped it, as its recorded cause says (the dashboard item's detail too), the failure's own message
             // as the band's technical line; a tenant reads the sentence without the daemon's own message.
             case ERROR -> {
-                WorkloadErrors.Reading reading = WorkloadErrors.readingOf(instance, !delegated);
-                RecordHealth stopped = RecordHealth.broken(WorkloadErrors.stoppageOf(instance).headline())
+                WorkloadErrors.Reading reading = WorkloadErrors.readingOf(runtime, !delegated);
+                RecordHealth stopped = RecordHealth.broken(WorkloadErrors.stoppageOf(runtime).headline())
                     .detail(reading.worded()).technical(reading.technical());
                 // Restart is its fix, unless its root is another record's (the host that refuses its start, the
                 // database whose old engine it is): a restart would be refused or bring back what should go. On
@@ -418,9 +424,11 @@ final class AppHealth {
     /**
      * Whether an application that serves nothing yet has a release on its way: its build or release runs, so it is
      * deploying, whatever its host would say about a start and however stopped its record still reads.
+     *
+     * @param runtime the row whose status speaks for its runtime: its serving release, else its own record
      */
-    private static boolean deployingWhileStopped(@NonNull Row instance) {
-        InstanceStatus status = InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
+    private static boolean deployingWhileStopped(@NonNull Row instance, @NonNull Row runtime) {
+        InstanceStatus status = InstanceStatus.forToken(runtime.get(InstanceModel.STATUS));
         InstanceKindHandler kind = InstanceKinds.handlerOf(instance);
         return (status == InstanceStatus.STOPPED || status == InstanceStatus.CREATED)
             && kind != null && kind.releaseManaged() && ApplicationReleases.deploying(instance.get(InstanceModel.ID));
@@ -867,8 +875,12 @@ final class AppHealth {
         }
     }
 
-    /** Everything a page of instance verdicts reads: the sites serving each, and those sites' own facts. */
-    private record InstanceFacts(@NonNull Map<Integer, List<Row>> sitesByInstance, @NonNull SiteFacts sites) {
+    /**
+     * Everything a page of instance verdicts reads: the sites serving each, those sites' own facts, and the row whose
+     * status speaks for each one's runtime.
+     */
+    private record InstanceFacts(@NonNull Map<Integer, List<Row>> sitesByInstance, @NonNull SiteFacts sites,
+                                 @NonNull Map<Integer, Row> runtimes) {
 
         static @NonNull InstanceFacts of(@NonNull List<Row> instances) {
             Map<Integer, List<Row>> sitesByInstance = sitesServing(instances);
@@ -876,13 +888,19 @@ final class AppHealth {
             for (List<Row> sites : sitesByInstance.values()) {
                 serving.addAll(sites);
             }
-            return new InstanceFacts(sitesByInstance, SiteFacts.of(serving));
+            return new InstanceFacts(sitesByInstance, SiteFacts.of(serving), ApplicationReleases.runtimeRows(instances));
+        }
+
+        /** @return the row whose status speaks for this instance's runtime, the instance itself when none other */
+        @NonNull Row runtimeOf(@NonNull Row instance) {
+            return this.runtimes.getOrDefault((Integer) instance.get(InstanceModel.ID), instance);
         }
     }
 
     /** Everything a page of site verdicts reads, read once for the page. */
     private record SiteFacts(@NonNull Map<Integer, List<Row>> domains, @NonNull Map<Integer, List<Row>> paths,
-                             @NonNull Map<Integer, Row> instances, @NonNull Map<Integer, SiteHealth> live,
+                             @NonNull Map<Integer, Row> instances, @NonNull Map<Integer, Row> runtimes,
+                             @NonNull Map<Integer, SiteHealth> live,
                              @NonNull Map<Integer, List<RoutingProblem>> problems, @NonNull Set<String> working) {
 
         static @NonNull SiteFacts of(@NonNull List<Row> sites) {
@@ -924,7 +942,8 @@ final class AppHealth {
                     instances.put(instance.get(InstanceModel.ID), instance);
                 }
             }
-            return new SiteFacts(domains, paths, instances, live, problems, workingNames());
+            return new SiteFacts(domains, paths, instances, ApplicationReleases.runtimeRows(new ArrayList<>(
+                instances.values())), live, problems, workingNames());
         }
     }
 }

@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.test.host;
 
+import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPostureAcknowledgement;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
+import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -51,6 +53,12 @@ public final class HostFixtures {
             true, Now.instant(), null));
     }
 
+    /** Give the implicit local host a quota-capable volume root, which a workspace and an application need. */
+    public static void giveLocalVolumeQuota() {
+        VolumeBackends.store(Models.get(ServerModel.class).findById(ServerModel.localServerId()),
+            new VolumeBackends.Detection(VolumeBackend.BTRFS, "/fixture/volumes", "fixture: btrfs"));
+    }
+
     /** Withdraw the implicit local host's admission, the state a fresh installation is in. */
     public static void blockLocal() {
         Row row = Models.get(ServerModel.class).findById(ServerModel.localServerId());
@@ -67,7 +75,7 @@ public final class HostFixtures {
      * {@code @BeforeAll} and never restores decides what every LATER class in that fork
      * sees. TenantInstanceSurfaceTest failed exactly that way on 2026-09-24 once
      * InstanceQuotaTest happened to run before it. {@link #CAPTURED} must name every column
-     * {@link #admitLocal}, {@link #makeLocalPlaceable}, {@link #blockLocal} and
+     * {@link #admitLocal}, {@link #makeLocalPlaceable}, {@link #giveLocalVolumeQuota}, {@link #blockLocal} and
      * {@link #acknowledgePosture} write, including what {@link HostPreflight#store} and the
      * probe it drives stamp.
      *
@@ -98,7 +106,11 @@ public final class HostFixtures {
         ServerModel.ACKNOWLEDGED_AT,
         ServerModel.ACKNOWLEDGED_BY,
         ServerModel.ACKNOWLEDGED_BY_KIND,
-        ServerModel.ACKNOWLEDGED_BY_LABEL);
+        ServerModel.ACKNOWLEDGED_BY_LABEL,
+        ServerModel.VOLUME_BACKEND,
+        ServerModel.VOLUME_ROOT,
+        ServerModel.VOLUME_BACKEND_DETAIL,
+        ServerModel.VOLUME_PROBED_AT);
 
     /**
      * The implicit local host's fixture-written columns at one moment.

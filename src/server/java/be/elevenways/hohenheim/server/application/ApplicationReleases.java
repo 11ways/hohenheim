@@ -37,6 +37,7 @@ import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -44,6 +45,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -367,12 +370,49 @@ public final class ApplicationReleases {
      * probe just passed; boot recovery completes the flip.
      */
     public static @Nullable Row ownedServing(int applicationId) {
-        return Models.get(InstanceModel.class).find()
-            .where(InstanceModel.GENERATED_FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
+        return servingReleases()
             .where(InstanceModel.GENERATED_FOR_ID.eq(applicationId))
-            .where(InstanceModel.RUNTIME_ROLE.eq(InstanceModel.ROLE_SERVING))
             .orderBy(InstanceModel.ID, SortOrder.DESC)
             .first();
+    }
+
+    /**
+     * The row whose stored status speaks for each instance's runtime, keyed by instance id: an application's serving
+     * release, its own record while nothing serves (which never runs), any other instance itself.
+     *
+     * AIDEV-NOTE: an application's record never runs and nothing stamps its status, so a page that read that status
+     * called a live application "Not running" beside the release serving its visitors.
+     */
+    public static @NonNull Map<Integer, Row> runtimeRows(@NonNull List<Row> instances) {
+        Map<Integer, Row> runtimes = new HashMap<>();
+        List<Integer> applicationIds = new ArrayList<>();
+        for (Row instance : instances) {
+            Integer id = instance.get(InstanceModel.ID);
+            runtimes.put(id, instance);
+            if (InstanceKinds.isReleaseManaged(instance.get(InstanceModel.KIND))) {
+                applicationIds.add(id);
+            }
+        }
+        if (!applicationIds.isEmpty()) {
+            // Oldest first, so the newest of a half-flipped switch's two serving rows wins, as in ownedServing.
+            for (Row release : servingReleases().where(InstanceModel.GENERATED_FOR_ID.in(applicationIds))
+                    .orderBy(InstanceModel.ID, SortOrder.ASC).all()) {
+                runtimes.put(release.get(InstanceModel.GENERATED_FOR_ID), release);
+            }
+        }
+        return runtimes;
+    }
+
+    /** {@link #runtimeRows} of one instance. */
+    public static @NonNull Row runtimeRowOf(@NonNull Row instance) {
+        return runtimeRows(List.of(instance)).get((Integer) instance.get(InstanceModel.ID));
+    }
+
+    /** Every application's serving releases. */
+    private static @NonNull QueryBuilder<Row> servingReleases() {
+        return Models.get(InstanceModel.class).find()
+            .where(InstanceModel.GENERATED_FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
+            .where(InstanceModel.RUNTIME_ROLE.eq(InstanceModel.ROLE_SERVING));
     }
 
     /** Every live release of the application, whatever its role, newest first. */

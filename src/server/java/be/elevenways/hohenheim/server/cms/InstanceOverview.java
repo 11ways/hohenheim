@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
@@ -127,8 +128,11 @@ public final class InstanceOverview {
                     .withData(ports)))));
         }
         // Memory, disk, CPU. Memory and CPU are the live stats hub's held samples, read while
-        // someone watches the Metrics tab; never a stream opened by this render.
-        List<UsageData> live = liveUsage(instance, InstanceStats.history(instanceId), locales, resolver);
+        // someone watches the Metrics tab; never a stream opened by this render. An application's
+        // are its serving release's, the container that runs (ApplicationReleases.runtimeRows).
+        Row runtime = ApplicationReleases.runtimeRowOf(instance);
+        List<UsageData> live = liveUsage(runtime, InstanceStats.history(runtime.get(InstanceModel.ID)), locales,
+            resolver);
         main.add(AppOverview.resources(List.of(
             AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("memory"), live.get(0)),
             AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("disk"),
@@ -136,7 +140,7 @@ public final class InstanceOverview {
             AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("cpu"), live.get(1)))));
 
         List<WidgetInstance> side = new ArrayList<>();
-        side.add(AppOverview.details(facts(instance, serverId, panelSlug, delegated, accessContext)));
+        side.add(AppOverview.details(facts(instance, runtime, serverId, panelSlug, delegated, accessContext)));
         // AIDEV-NOTE: the per-record RECENT ACTIVITY card. It was blocked until zenit-cms's
         // `zenit.activity` source started PROJECTING record_id: a source's rule vocabulary is
         // derived from its projection, so `ActivityRules.forRecord` failed validation with
@@ -166,9 +170,12 @@ public final class InstanceOverview {
      * AIDEV-NOTE: the host is operator inventory, and BOTH halves leak it -- the name is the machine's identity and
      * the link carries its numeric server id, which is the id every host-scoped admin route is keyed on. A tenant is
      * told WHAT their workload is doing, never WHERE it runs; the censoring is the fact simply NOT BEING ADDED.
+     *
+     * @param runtime the row whose status speaks for its runtime: an application's serving release, else itself
      */
-    private static @NonNull List<WidgetFact> facts(@NonNull Row instance, int serverId, @NonNull String panelSlug,
-                                                   boolean delegated, @NonNull AccessContext viewer) {
+    private static @NonNull List<WidgetFact> facts(@NonNull Row instance, @NonNull Row runtime, int serverId,
+                                                   @NonNull String panelSlug, boolean delegated,
+                                                   @NonNull AccessContext viewer) {
         LocaleChain locales = viewer.conduit().getLocales();
         MessageResolver resolver = viewer.conduit().getMessageResolver();
         List<WidgetFact> facts = new ArrayList<>();
@@ -193,9 +200,9 @@ public final class InstanceOverview {
         // runtime actually answered" (InstanceStatusReconciler). It is a stored fact too,
         // deliberately: reading it costs nothing, while dialling the daemon per render is
         // the thing the disk gauge already refuses to do.
-        facts.add(statusConfirmation(instance, locales, resolver));
+        facts.add(statusConfirmation(runtime, locales, resolver));
         // How long it has run ("Running for 2 hours"): since its last start.
-        Instant started = InstanceModel.STATUS_RUNNING.equals(instance.get(InstanceModel.STATUS))
+        Instant started = InstanceModel.STATUS_RUNNING.equals(runtime.get(InstanceModel.STATUS))
             ? lastStartOf(instance.get(InstanceModel.ID)) : null;
         if (started != null) {
             facts.add(WidgetFact.instant(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("started")

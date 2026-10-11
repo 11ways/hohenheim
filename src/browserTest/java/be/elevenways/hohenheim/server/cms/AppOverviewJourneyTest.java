@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HardDeletes;
@@ -555,6 +556,66 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 builds.delete(build.get(BuildOperationModel.ID));
             }
             HardDeletes.byId(instances, id);
+        }
+    }
+
+    /**
+     * An application runs as its serving release: the release's status is the app's, never its own record's, which
+     * nothing starts (a live app read "Not running" beside the release serving its visitors).
+     */
+    @Test
+    void anApplicationReadsAsItsServingRelease() throws Exception {
+        var instances = Models.get(InstanceModel.class);
+        HostFixtures.LocalHostState localBefore = HostFixtures.captureLocal();
+        // A host that takes an application: what follows is about its runtime, never its placement.
+        HostFixtures.makeLocalPlaceable(16L * 1024);
+        HostFixtures.giveLocalVolumeQuota();
+        Row app = instances.createEmptyRow();
+        app.set(InstanceModel.NAME, "app-journey-released");
+        app.set(InstanceModel.KIND, "hohenheim:application");
+        app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("repository_url",
+            "https://git.example.test/acme/released.git")));
+        app.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        int[] release = new int[1];
+        try {
+            instances.save(app);
+            int id = app.get(InstanceModel.ID);
+            // 1. Nothing serves yet: it is not running.
+            assertThat(headlineOf(id)).as("step 1: no release, so it is not running").isEqualTo("not_running");
+
+            // 2. Its serving release runs: the app is live, and its overview says so.
+            ApplicationReleases.inScopeUnchecked(id, () -> {
+                Row row = instances.createEmptyRow();
+                row.set(InstanceModel.NAME, "app-journey-released");
+                row.set(InstanceModel.KIND, "hohenheim:release");
+                row.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine")));
+                row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+                row.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);
+                instances.save(row);
+                release[0] = row.get(InstanceModel.ID);
+            });
+            status(release[0], InstanceModel.STATUS_RUNNING);
+            assertThat(headlineOf(id)).as("step 2: the running release is the app's state")
+                .isNotEqualTo("not_running");
+            assertThat(AppHealth.instanceServes(instances.findById(id))).as("step 2: and it serves").isTrue();
+            String live = adminGet("/admin/instances/" + id + "/page/overview").body();
+            assertThat(live).as("step 2: the overview's band reads healthy, its resources running")
+                .contains("data-cms-record-health=\"ok\"")
+                .doesNotContain("It is not running, so it uses none.");
+
+            // 3. The release stopped: so is the app.
+            status(release[0], InstanceModel.STATUS_STOPPED);
+            assertThat(headlineOf(id)).as("step 3: a stopped release is a stopped app").isEqualTo("not_running");
+        } finally {
+            if (release[0] != 0) {
+                // A generated row is the application's to remove: its own scope, as the release engine deletes.
+                ApplicationReleases.inScopeUnchecked(app.get(InstanceModel.ID),
+                    () -> HardDeletes.byId(instances, release[0]));
+            }
+            if (app.get(InstanceModel.ID) != null) {
+                HardDeletes.byId(instances, app.get(InstanceModel.ID));
+            }
+            localBefore.restore();
         }
     }
 
