@@ -598,7 +598,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Maximum container memory in megabytes. Leave blank for no limit.",
+      "text": "Maximum memory in megabytes; its host reserves the same amount. Leave blank for the default limit of its kind.",
       "scope": "help"
     }
   ],
@@ -7879,8 +7879,12 @@
     "scope": "violations"
   },
   "no_placement_capacity": {
-    "text": "Every host that accepts this workload is out of memory: it needs {$needed} MB and the emptiest one has {$free} MB free. Free a workload or admit another host",
+    "text": "Every host that accepts this workload is out of memory: it needs {$needed} MB and the emptiest one has {$free} MB free. Choose a smaller memory limit, free a workload, or admit another host",
     "scope": "violations"
+  },
+  "host_help": {
+    "text": "Leave it empty and an admitted host with room for it is picked.",
+    "scope": "instance_from_template"
   },
   "instance_create_not_permitted": {
     "text": "You are not allowed to create instances",
@@ -8602,7 +8606,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Repository at the provider, as owner/name.",
+      "text": "The repository the Git connection lists: owner/name at a forge, the clone URL for an SSH connection.",
       "scope": "help"
     }
   ],

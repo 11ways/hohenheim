@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.BuildOperationModel;
+import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.source.GitSourceSchema;
@@ -194,12 +195,12 @@ public final class ApplicationKind implements InstanceKindHandler {
     @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 
     /**
-     * A gated swap runs the candidate BESIDE the serving release, so placement asks room for
-     * both -- the same number DockerContainerKind charges, doubled. The record itself books
-     * nothing ({@link #releaseManaged}); its releases book what they run.
+     * What its first release will book, so placement picks a host that holds it. The record itself books nothing
+     * ({@link #releaseManaged}); a later gated swap books its candidate beside the serving release, and is refused by
+     * name (the serving release stays) when the host has no room for both.
      */
     @Override public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
-        return 1024;
+        return ReleaseKind.DEFAULT_FOOTPRINT_MB;
     }
 
     /** Its declared volumes mount into every release; placement demands quota via the default. */

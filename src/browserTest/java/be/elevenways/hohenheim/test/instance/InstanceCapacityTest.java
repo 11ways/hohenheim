@@ -5,9 +5,13 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -230,7 +234,7 @@ class InstanceCapacityTest {
 
     /**
      * An application owns no container: its releases book the host, the record never does,
-     * so its memory is never charged twice.
+     * so its memory is never charged twice, and placement prices it at what its first release books.
      */
     @Test
     void anApplicationRecordBooksNothingItsReleasesDo() {
@@ -259,6 +263,17 @@ class InstanceCapacityTest {
             stale.set(InstanceModel.CAPACITY_MB, 512);
             assertThat(InstanceCapacity.bookedMbOf(stale))
                 .as("step 3: a stale 512 MB stamp on an application books nothing").isEqualTo(0);
+
+            // 4. Placement prices the record at what its first release books: a release's own default
+            //    without a memory limit (never a doubled swap, which refused every small host), its limit with one.
+            InstanceKindHandler applicationKind = InstanceKinds.getHandler(ApplicationKind.ID.toString());
+            InstanceKindHandler releaseKind = InstanceKinds.getHandler(ReleaseKind.ID.toString());
+            assertThat(InstanceCapacity.footprintMbOf(applicationKind, Map.of()))
+                .as("step 4: without a limit it is priced at a release's default")
+                .isEqualTo(releaseKind.defaultFootprintMb(Map.of()));
+            assertThat(InstanceCapacity.footprintMbOf(applicationKind,
+                    Map.of(InstanceKindFields.MEMORY_LIMIT_MB, 48)))
+                .as("step 4: with one, at that limit").isEqualTo(48);
         });
     }
 

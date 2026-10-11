@@ -194,6 +194,9 @@ public final class ReleaseKind implements InstanceKindHandler {
             .build();
     }
 
+    /** What a release declaring no memory limit is booked and capped at. */
+    public static final int DEFAULT_FOOTPRINT_MB = 512;
+
     /**
      * An application's lowered release container. It books like any other workload even though it
      * is operator-authored and skips the admission gate -- capacity is physics, not
@@ -201,6 +204,6 @@ public final class ReleaseKind implements InstanceKindHandler {
      */
     @Override
     public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
-        return 512;
+        return DEFAULT_FOOTPRINT_MB;
     }
 }

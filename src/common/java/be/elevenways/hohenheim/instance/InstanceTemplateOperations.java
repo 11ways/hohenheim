@@ -51,7 +51,8 @@ public final class InstanceTemplateOperations {
 
     /** The host; an operator's choice, fixed to null for everyone else (InstancePlacement decides). */
     public static final IntegerField SERVER_ID = IntegerField.builder("serverId")
-        .label(HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("host")).build();
+        .label(HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("host"))
+        .help(HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("host_help")).build();
 
     public static final IntegerField PROJECT_ID = IntegerField.builder("projectId")
         .label(HohenheimMicrocopy.INSTANCE_FROM_TEMPLATE.of("project")).build();

@@ -598,7 +598,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Maximaal containergeheugen in megabytes. Leeg betekent onbeperkt.",
+      "text": "Maximaal geheugen in megabytes; de host reserveert evenveel. Laat leeg voor de standaardlimiet van dit soort.",
       "scope": "help"
     }
   ],
@@ -7879,8 +7879,12 @@
     "scope": "violations"
   },
   "no_placement_capacity": {
-    "text": "Elke host die deze workload aanvaardt zit vol: er is {$needed} MB nodig en de leegste heeft {$free} MB vrij. Maak een workload vrij of laat een extra host toe",
+    "text": "Elke host die deze workload aanvaardt zit vol: er is {$needed} MB nodig en de leegste heeft {$free} MB vrij. Kies een kleinere geheugenlimiet, maak een workload vrij of laat een extra host toe",
     "scope": "violations"
+  },
+  "host_help": {
+    "text": "Laat het leeg en er wordt een toegelaten host met plaats gekozen.",
+    "scope": "instance_from_template"
   },
   "instance_create_not_permitted": {
     "text": "Je mag geen instanties aanmaken",
@@ -8602,7 +8606,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Repository bij de provider, als eigenaar/naam.",
+      "text": "De repository die de Git-verbinding toont: eigenaar/naam bij een forge, de clone-URL bij een SSH-verbinding.",
       "scope": "help"
     }
   ],
