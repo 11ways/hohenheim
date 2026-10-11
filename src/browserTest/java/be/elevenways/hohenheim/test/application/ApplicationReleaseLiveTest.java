@@ -439,6 +439,11 @@ class ApplicationReleaseLiveTest {
             assertThat((String) rollbackOp.get(ReleaseOperationModel.IMAGE_ID))
                 .as("step 4: the operation pins the artifact it released")
                 .isEqualTo(digest1);
+            // The superseded release drains under its own claim; destroying the application before the drain
+            // settles is refused as an operation in progress.
+            await("step 4: the rollback completes after drain", 12_000,
+                () -> ReleaseOperationModel.LIFECYCLE.is(
+                    reload(rollbackOp).get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED));
         } finally {
             ApplicationReleases.destroyFor(applicationId);
             removeQuietly(docker, tagRef);
