@@ -9333,7 +9333,7 @@
       "case": "sentence"
     },
     {
-      "text": "project",
+      "text": "Project",
       "scope": "project"
     },
     {
@@ -9342,7 +9342,7 @@
       "case": "sentence"
     },
     {
-      "text": "toegangslijst",
+      "text": "Toegangslijst",
       "scope": "access_list"
     },
     {
@@ -9351,7 +9351,7 @@
       "case": "sentence"
     },
     {
-      "text": "regel",
+      "text": "Regel",
       "scope": "access_rule"
     },
     {
@@ -9360,7 +9360,7 @@
       "case": "sentence"
     },
     {
-      "text": "aanmeldprovider",
+      "text": "Aanmeldprovider",
       "scope": "auth_provider"
     },
     {
@@ -9369,7 +9369,7 @@
       "case": "sentence"
     },
     {
-      "text": "back-updoel",
+      "text": "Back-updoel",
       "scope": "backup_target"
     },
     {
@@ -9378,7 +9378,7 @@
       "case": "sentence"
     },
     {
-      "text": "geblokkeerd adres",
+      "text": "Geblokkeerd adres",
       "scope": "ban"
     },
     {
@@ -9387,7 +9387,7 @@
       "case": "sentence"
     },
     {
-      "text": "build",
+      "text": "Build",
       "scope": "build_operation"
     },
     {
@@ -9396,7 +9396,7 @@
       "case": "sentence"
     },
     {
-      "text": "certificaat",
+      "text": "Certificaat",
       "scope": "certificate"
     },
     {
@@ -9405,7 +9405,7 @@
       "case": "sentence"
     },
     {
-      "text": "databank",
+      "text": "Databank",
       "scope": "database"
     },
     {
@@ -9432,7 +9432,7 @@
       "case": "sentence"
     },
     {
-      "text": "zone-secondary",
+      "text": "Zone-secondary",
       "scope": "dns_zone_peer"
     },
     {
@@ -9450,7 +9450,7 @@
       "case": "sentence"
     },
     {
-      "text": "omgeving",
+      "text": "Omgeving",
       "scope": "environment"
     },
     {
@@ -9459,7 +9459,7 @@
       "case": "sentence"
     },
     {
-      "text": "omgevingsvariabele",
+      "text": "Omgevingsvariabele",
       "scope": "environment_variable"
     },
     {
@@ -9468,7 +9468,7 @@
       "case": "sentence"
     },
     {
-      "text": "gamedomein",
+      "text": "Gamedomein",
       "scope": "game_domain"
     },
     {
@@ -9486,7 +9486,7 @@
       "case": "sentence"
     },
     {
-      "text": "instantieback-up",
+      "text": "Instantieback-up",
       "scope": "instance_backup"
     },
     {
@@ -9495,7 +9495,7 @@
       "case": "sentence"
     },
     {
-      "text": "gekoppelde databank",
+      "text": "Gekoppelde databank",
       "scope": "instance_database"
     },
     {
@@ -9504,7 +9504,7 @@
       "case": "sentence"
     },
     {
-      "text": "apparaat",
+      "text": "Apparaat",
       "scope": "instance_device"
     },
     {
@@ -9513,7 +9513,7 @@
       "case": "sentence"
     },
     {
-      "text": "instantiebestand",
+      "text": "Instantiebestand",
       "scope": "instance_file"
     },
     {
@@ -9522,7 +9522,7 @@
       "case": "sentence"
     },
     {
-      "text": "instantiequotum",
+      "text": "Instantiequotum",
       "scope": "instance_quota"
     },
     {
@@ -9531,7 +9531,7 @@
       "case": "sentence"
     },
     {
-      "text": "stap",
+      "text": "Stap",
       "scope": "schedule_step"
     },
     {
@@ -9540,7 +9540,7 @@
       "case": "sentence"
     },
     {
-      "text": "instantiesnapshot",
+      "text": "Instantiesnapshot",
       "scope": "instance_snapshot"
     },
     {
@@ -9549,7 +9549,7 @@
       "case": "sentence"
     },
     {
-      "text": "sjabloonbestand",
+      "text": "Sjabloonbestand",
       "scope": "template_file"
     },
     {
@@ -9558,7 +9558,7 @@
       "case": "sentence"
     },
     {
-      "text": "app-sjabloon",
+      "text": "App-sjabloon",
       "scope": "instance_template"
     },
     {
@@ -9567,7 +9567,7 @@
       "case": "sentence"
     },
     {
-      "text": "sjabloonvariabele",
+      "text": "Sjabloonvariabele",
       "scope": "template_variable"
     },
     {
@@ -9576,7 +9576,7 @@
       "case": "sentence"
     },
     {
-      "text": "volume",
+      "text": "Volume",
       "scope": "instance_volume"
     },
     {
@@ -9585,7 +9585,7 @@
       "case": "sentence"
     },
     {
-      "text": "projectlid",
+      "text": "Projectlid",
       "scope": "project_member"
     },
     {
@@ -9594,7 +9594,7 @@
       "case": "sentence"
     },
     {
-      "text": "meldingskanaal",
+      "text": "Meldingskanaal",
       "scope": "notification_channel"
     },
     {
@@ -9603,7 +9603,7 @@
       "case": "sentence"
     },
     {
-      "text": "preview-deployment",
+      "text": "Preview-deployment",
       "scope": "preview_deployment"
     },
     {
@@ -9612,7 +9612,7 @@
       "case": "sentence"
     },
     {
-      "text": "onverwachte workload",
+      "text": "Onverwachte workload",
       "scope": "reconcile_finding"
     },
     {
@@ -9621,7 +9621,7 @@
       "case": "sentence"
     },
     {
-      "text": "release",
+      "text": "Release",
       "scope": "release_operation"
     },
     {
@@ -9630,7 +9630,7 @@
       "case": "sentence"
     },
     {
-      "text": "vrijgegeven adres",
+      "text": "Vrijgegeven adres",
       "scope": "released_claim"
     },
     {
@@ -9639,7 +9639,7 @@
       "case": "sentence"
     },
     {
-      "text": "runtime-image",
+      "text": "Runtime-image",
       "scope": "runtime_image"
     },
     {
@@ -9648,7 +9648,7 @@
       "case": "sentence"
     },
     {
-      "text": "host",
+      "text": "Host",
       "scope": "server"
     },
     {
@@ -9657,7 +9657,7 @@
       "case": "sentence"
     },
     {
-      "text": "adres",
+      "text": "Adres",
       "scope": "site_domain"
     },
     {
@@ -9666,7 +9666,7 @@
       "case": "sentence"
     },
     {
-      "text": "site",
+      "text": "Site",
       "scope": "site"
     },
     {
@@ -9675,7 +9675,7 @@
       "case": "sentence"
     },
     {
-      "text": "clientsleutel",
+      "text": "Clientsleutel",
       "scope": "spamservice_key"
     },
     {
@@ -9693,7 +9693,7 @@
       "case": "sentence"
     },
     {
-      "text": "voorbeeld",
+      "text": "Voorbeeld",
       "scope": "spamservice_sample"
     },
     {
@@ -9702,7 +9702,7 @@
       "case": "sentence"
     },
     {
-      "text": "beveiligingsgebeurtenis",
+      "text": "Beveiligingsgebeurtenis",
       "scope": "spamservice_event"
     },
     {
@@ -9711,7 +9711,7 @@
       "case": "sentence"
     },
     {
-      "text": "spamwoord",
+      "text": "Spamwoord",
       "scope": "spamservice_word"
     },
     {
@@ -9720,7 +9720,7 @@
       "case": "sentence"
     },
     {
-      "text": "stack-bestand",
+      "text": "Stack-bestand",
       "scope": "stack_file"
     },
     {
@@ -9729,7 +9729,7 @@
       "case": "sentence"
     },
     {
-      "text": "stack",
+      "text": "Stack",
       "scope": "stack"
     },
     {
@@ -9738,7 +9738,7 @@
       "case": "sentence"
     },
     {
-      "text": "stack-service",
+      "text": "Stack-service",
       "scope": "stack_service"
     },
     {
@@ -9747,7 +9747,7 @@
       "case": "sentence"
     },
     {
-      "text": "beschermd pad",
+      "text": "Beschermd pad",
       "scope": "protected_path"
     },
     {
@@ -9756,7 +9756,7 @@
       "case": "sentence"
     },
     {
-      "text": "sjabloondatabank",
+      "text": "Sjabloondatabank",
       "scope": "template_database"
     },
     {
@@ -9765,7 +9765,7 @@
       "case": "sentence"
     },
     {
-      "text": "sjabloonvolume",
+      "text": "Sjabloonvolume",
       "scope": "template_volume"
     },
     {
@@ -9774,7 +9774,7 @@
       "case": "sentence"
     },
     {
-      "text": "database-engine",
+      "text": "Database-engine",
       "scope": "database_engine"
     },
     {
@@ -9783,7 +9783,7 @@
       "case": "sentence"
     },
     {
-      "text": "app",
+      "text": "App",
       "scope": "app_list"
     },
     {

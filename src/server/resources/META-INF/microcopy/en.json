@@ -9333,7 +9333,7 @@
       "case": "sentence"
     },
     {
-      "text": "project",
+      "text": "Project",
       "scope": "project"
     },
     {
@@ -9342,7 +9342,7 @@
       "case": "sentence"
     },
     {
-      "text": "access list",
+      "text": "Access list",
       "scope": "access_list"
     },
     {
@@ -9351,7 +9351,7 @@
       "case": "sentence"
     },
     {
-      "text": "rule",
+      "text": "Rule",
       "scope": "access_rule"
     },
     {
@@ -9360,7 +9360,7 @@
       "case": "sentence"
     },
     {
-      "text": "sign-in provider",
+      "text": "Sign-in provider",
       "scope": "auth_provider"
     },
     {
@@ -9369,7 +9369,7 @@
       "case": "sentence"
     },
     {
-      "text": "backup target",
+      "text": "Backup target",
       "scope": "backup_target"
     },
     {
@@ -9378,7 +9378,7 @@
       "case": "sentence"
     },
     {
-      "text": "blocked address",
+      "text": "Blocked address",
       "scope": "ban"
     },
     {
@@ -9387,7 +9387,7 @@
       "case": "sentence"
     },
     {
-      "text": "build",
+      "text": "Build",
       "scope": "build_operation"
     },
     {
@@ -9396,7 +9396,7 @@
       "case": "sentence"
     },
     {
-      "text": "certificate",
+      "text": "Certificate",
       "scope": "certificate"
     },
     {
@@ -9405,7 +9405,7 @@
       "case": "sentence"
     },
     {
-      "text": "database",
+      "text": "Database",
       "scope": "database"
     },
     {
@@ -9432,7 +9432,7 @@
       "case": "sentence"
     },
     {
-      "text": "zone secondary",
+      "text": "Zone secondary",
       "scope": "dns_zone_peer"
     },
     {
@@ -9450,7 +9450,7 @@
       "case": "sentence"
     },
     {
-      "text": "environment",
+      "text": "Environment",
       "scope": "environment"
     },
     {
@@ -9459,7 +9459,7 @@
       "case": "sentence"
     },
     {
-      "text": "environment variable",
+      "text": "Environment variable",
       "scope": "environment_variable"
     },
     {
@@ -9468,7 +9468,7 @@
       "case": "sentence"
     },
     {
-      "text": "game domain",
+      "text": "Game domain",
       "scope": "game_domain"
     },
     {
@@ -9486,7 +9486,7 @@
       "case": "sentence"
     },
     {
-      "text": "instance backup",
+      "text": "Instance backup",
       "scope": "instance_backup"
     },
     {
@@ -9495,7 +9495,7 @@
       "case": "sentence"
     },
     {
-      "text": "attached database",
+      "text": "Attached database",
       "scope": "instance_database"
     },
     {
@@ -9504,7 +9504,7 @@
       "case": "sentence"
     },
     {
-      "text": "device",
+      "text": "Device",
       "scope": "instance_device"
     },
     {
@@ -9513,7 +9513,7 @@
       "case": "sentence"
     },
     {
-      "text": "instance file",
+      "text": "Instance file",
       "scope": "instance_file"
     },
     {
@@ -9522,7 +9522,7 @@
       "case": "sentence"
     },
     {
-      "text": "instance quota",
+      "text": "Instance quota",
       "scope": "instance_quota"
     },
     {
@@ -9531,7 +9531,7 @@
       "case": "sentence"
     },
     {
-      "text": "step",
+      "text": "Step",
       "scope": "schedule_step"
     },
     {
@@ -9540,7 +9540,7 @@
       "case": "sentence"
     },
     {
-      "text": "instance snapshot",
+      "text": "Instance snapshot",
       "scope": "instance_snapshot"
     },
     {
@@ -9549,7 +9549,7 @@
       "case": "sentence"
     },
     {
-      "text": "template file",
+      "text": "Template file",
       "scope": "template_file"
     },
     {
@@ -9558,7 +9558,7 @@
       "case": "sentence"
     },
     {
-      "text": "app template",
+      "text": "App template",
       "scope": "instance_template"
     },
     {
@@ -9567,7 +9567,7 @@
       "case": "sentence"
     },
     {
-      "text": "template variable",
+      "text": "Template variable",
       "scope": "template_variable"
     },
     {
@@ -9576,7 +9576,7 @@
       "case": "sentence"
     },
     {
-      "text": "volume",
+      "text": "Volume",
       "scope": "instance_volume"
     },
     {
@@ -9585,7 +9585,7 @@
       "case": "sentence"
     },
     {
-      "text": "project member",
+      "text": "Project member",
       "scope": "project_member"
     },
     {
@@ -9594,7 +9594,7 @@
       "case": "sentence"
     },
     {
-      "text": "notification channel",
+      "text": "Notification channel",
       "scope": "notification_channel"
     },
     {
@@ -9603,7 +9603,7 @@
       "case": "sentence"
     },
     {
-      "text": "preview deployment",
+      "text": "Preview deployment",
       "scope": "preview_deployment"
     },
     {
@@ -9612,7 +9612,7 @@
       "case": "sentence"
     },
     {
-      "text": "unexpected workload",
+      "text": "Unexpected workload",
       "scope": "reconcile_finding"
     },
     {
@@ -9621,7 +9621,7 @@
       "case": "sentence"
     },
     {
-      "text": "release",
+      "text": "Release",
       "scope": "release_operation"
     },
     {
@@ -9630,7 +9630,7 @@
       "case": "sentence"
     },
     {
-      "text": "released address",
+      "text": "Released address",
       "scope": "released_claim"
     },
     {
@@ -9639,7 +9639,7 @@
       "case": "sentence"
     },
     {
-      "text": "runtime image",
+      "text": "Runtime image",
       "scope": "runtime_image"
     },
     {
@@ -9648,7 +9648,7 @@
       "case": "sentence"
     },
     {
-      "text": "host",
+      "text": "Host",
       "scope": "server"
     },
     {
@@ -9657,7 +9657,7 @@
       "case": "sentence"
     },
     {
-      "text": "address",
+      "text": "Address",
       "scope": "site_domain"
     },
     {
@@ -9666,7 +9666,7 @@
       "case": "sentence"
     },
     {
-      "text": "site",
+      "text": "Site",
       "scope": "site"
     },
     {
@@ -9675,7 +9675,7 @@
       "case": "sentence"
     },
     {
-      "text": "client key",
+      "text": "Client key",
       "scope": "spamservice_key"
     },
     {
@@ -9693,7 +9693,7 @@
       "case": "sentence"
     },
     {
-      "text": "sample",
+      "text": "Sample",
       "scope": "spamservice_sample"
     },
     {
@@ -9702,7 +9702,7 @@
       "case": "sentence"
     },
     {
-      "text": "security event",
+      "text": "Security event",
       "scope": "spamservice_event"
     },
     {
@@ -9711,7 +9711,7 @@
       "case": "sentence"
     },
     {
-      "text": "spam word",
+      "text": "Spam word",
       "scope": "spamservice_word"
     },
     {
@@ -9720,7 +9720,7 @@
       "case": "sentence"
     },
     {
-      "text": "stack file",
+      "text": "Stack file",
       "scope": "stack_file"
     },
     {
@@ -9729,7 +9729,7 @@
       "case": "sentence"
     },
     {
-      "text": "stack",
+      "text": "Stack",
       "scope": "stack"
     },
     {
@@ -9738,7 +9738,7 @@
       "case": "sentence"
     },
     {
-      "text": "stack service",
+      "text": "Stack service",
       "scope": "stack_service"
     },
     {
@@ -9747,7 +9747,7 @@
       "case": "sentence"
     },
     {
-      "text": "protected path",
+      "text": "Protected path",
       "scope": "protected_path"
     },
     {
@@ -9756,7 +9756,7 @@
       "case": "sentence"
     },
     {
-      "text": "template database",
+      "text": "Template database",
       "scope": "template_database"
     },
     {
@@ -9765,7 +9765,7 @@
       "case": "sentence"
     },
     {
-      "text": "template volume",
+      "text": "Template volume",
       "scope": "template_volume"
     },
     {
@@ -9774,7 +9774,7 @@
       "case": "sentence"
     },
     {
-      "text": "database engine",
+      "text": "Database engine",
       "scope": "database_engine"
     },
     {
@@ -9783,7 +9783,7 @@
       "case": "sentence"
     },
     {
-      "text": "app",
+      "text": "App",
       "scope": "app_list"
     },
     {
