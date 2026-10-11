@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.server.util.Http11;
+import be.elevenways.hohenheim.server.util.Tar;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -1203,7 +1204,7 @@ public class ManagedDatabase {
         Path tempDir = Files.createTempDirectory("hohenheim-restore");
         try {
             Files.copy(source, tempDir.resolve(fileName));
-            docker.putArchiveFromDirectory(handle, "/tmp", tempDir);
+            docker.putArchiveFromDirectory(handle, "/tmp", tempDir, Tar.Ownerships.AS_ON_DISK);
         } finally {
             Files.deleteIfExists(tempDir.resolve(fileName));
             Files.deleteIfExists(tempDir);

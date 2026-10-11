@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.util.FileTrees;
+import be.elevenways.hohenheim.server.util.Tar;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -370,10 +371,12 @@ public final class BuildSandbox {
             // putArchiveCreating, not putArchiveFromDirectory: a phase image is a plain
             // base image with no /workspace (or tool dir) baked in, and Docker's archive
             // PUT refuses a target directory that does not exist.
-            this.docker.putArchiveCreating(handle, phase.contextPath(), contextDir, null);
+            // The context is a source tree (Tar.Ownerships.SOURCE_TREE); staged tool binaries keep their own modes.
+            this.docker.putArchiveCreating(handle, phase.contextPath(), contextDir, null,
+                Tar.Ownerships.SOURCE_TREE);
             for (Phase.StagedBinary staged : phase.stagedBinaries()) {
                 this.docker.putArchiveCreating(handle, staged.targetDir(), staged.hostDir(),
-                    staged.files());
+                    staged.files(), Tar.Ownerships.AS_ON_DISK);
             }
             ConsoleStream stream = this.docker.attach(handle);
             Thread reader = drainInto(stream, log, handle);
@@ -478,7 +481,7 @@ public final class BuildSandbox {
 
     private void pushContext(@NonNull String handle, @NonNull BuildPlan plan,
                              @NonNull Path contextDir) throws IOException {
-        this.docker.putArchiveFromDirectory(handle, plan.contextPath(), contextDir);
+        this.docker.putArchiveFromDirectory(handle, plan.contextPath(), contextDir, Tar.Ownerships.SOURCE_TREE);
     }
 
     private void stageFiles(@NonNull String handle, @NonNull BuildPlan plan) throws IOException {

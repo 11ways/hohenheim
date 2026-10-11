@@ -1074,9 +1074,12 @@ public class DockerClient {
      * always produced, and the daemon applies its mode and owner to {@code targetDir}. That
      * is the shape this lane has always had; a caller that must not re-own an existing
      * directory uses {@link #putArchiveFiles} instead.
+     *
+     * @param ownerships how each entry's owner and mode are written: as on disk, or as a source tree
      */
-    public void putArchiveFromDirectory(String containerId, String targetDir, Path hostDir) throws IOException {
-        putArchive(containerId, targetDir, writer -> {
+    public void putArchiveFromDirectory(String containerId, String targetDir, Path hostDir,
+                                        Tar.Ownerships ownerships) throws IOException {
+        putArchive(containerId, targetDir, ownerships, writer -> {
             writer.addDirectoryHeader(hostDir, "./");
             for (Path child : childrenOf(hostDir)) {
                 writer.add(child, "./" + child.getFileName());
@@ -1101,7 +1104,7 @@ public class DockerClient {
         for (String relative : relativeFiles) {
             names.add(entryNameOf(relative));
         }
-        putArchive(containerId, targetDir, writer -> {
+        putArchive(containerId, targetDir, Tar.Ownerships.AS_ON_DISK, writer -> {
             for (String name : names) {
                 writer.add(hostDir.resolve(name), name);
             }
@@ -1118,7 +1121,7 @@ public class DockerClient {
     public void putArchiveFile(String containerId, String targetDir, Path source, String name)
             throws IOException {
         String entry = entryNameOf(name);
-        putArchive(containerId, targetDir, writer -> writer.add(source, entry));
+        putArchive(containerId, targetDir, Tar.Ownerships.AS_ON_DISK, writer -> writer.add(source, entry));
     }
 
     /**
@@ -1130,9 +1133,10 @@ public class DockerClient {
      *
      * @param files the entries to include relative to {@code hostDir}, or null for the
      *              whole directory
+     * @param ownerships how each entry's owner and mode are written: as on disk, or as a source tree
      */
     public void putArchiveCreating(String containerId, String targetDir, Path hostDir,
-                                   List<String> files) throws IOException {
+                                   List<String> files, Tar.Ownerships ownerships) throws IOException {
         String prefix = entryPrefixOf(targetDir);
         List<String> names = new ArrayList<>();
         if (files != null) {
@@ -1140,7 +1144,7 @@ public class DockerClient {
                 names.add(entryNameOf(relative));
             }
         }
-        putArchive(containerId, "/", writer -> {
+        putArchive(containerId, "/", ownerships, writer -> {
             if (files == null) {
                 writer.addDirectoryHeader(hostDir, prefix.isEmpty() ? "./" : prefix + "/");
                 for (Path child : childrenOf(hostDir)) {
@@ -1155,11 +1159,11 @@ public class DockerClient {
     }
 
     /** One archive PUT whose tar is produced straight onto the wire. */
-    private void putArchive(String containerId, String targetDir, ArchiveContent content)
-            throws IOException {
+    private void putArchive(String containerId, String targetDir, Tar.Ownerships ownerships,
+                            ArchiveContent content) throws IOException {
         DockerWire.upload(streamTransport(), timeoutMillis, LONG_OP_TIMEOUT_MS, "PUT",
             archivePath(containerId, targetDir), "application/x-tar", out -> {
-                Tar.Writer writer = new Tar.Writer(out);
+                Tar.Writer writer = new Tar.Writer(out, ownerships);
                 content.writeTo(writer);
                 writer.finish();
             }, DockerWire.MAX_ERROR_BODY);

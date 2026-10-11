@@ -85,6 +85,32 @@ public final class Tar {
 
     // -- writer ---------------------------------------------------------------
 
+    /** How an archived entry's owner and mode are written. */
+    public enum Ownerships {
+
+        /** As the host path has them. */
+        AS_ON_DISK,
+
+        /**
+         * As git records a source tree: owned by root, a file 0644 or 0755 when its owner may execute it, a directory
+         * 0755.
+         *
+         * AIDEV-NOTE: a checkout is written by the controller's service account under its restrictive umask, and a
+         * builder that keeps the context's owner and mode on COPY (kaniko does) baked both into the image: an nginx
+         * worker then could not read the index.html it served (403). Git tracks only the executable bit, so this is
+         * the tree the repository describes, whoever checked it out.
+         */
+        SOURCE_TREE;
+
+        private @NonNull Ownership applyTo(@NonNull Ownership disk, boolean directory) {
+            return switch (this) {
+                case AS_ON_DISK -> disk;
+                case SOURCE_TREE -> new Ownership(directory || (disk.mode() & 0100) != 0 ? 0755 : 0644,
+                    disk.fileType(), 0, 0);
+            };
+        }
+    }
+
     /**
      * Streams an archive to an {@link OutputStream}; nothing is buffered beyond one block.
      * The caller writes the end-of-archive marker with {@link #finish()} only on success, so
@@ -93,9 +119,15 @@ public final class Tar {
     public static final class Writer {
 
         private final OutputStream out;
+        private final Ownerships ownerships;
 
         public Writer(@NonNull OutputStream out) {
+            this(out, Ownerships.AS_ON_DISK);
+        }
+
+        public Writer(@NonNull OutputStream out, @NonNull Ownerships ownerships) {
             this.out = out;
+            this.ownerships = ownerships;
         }
 
         /**
@@ -107,7 +139,7 @@ public final class Tar {
         public void add(@NonNull Path source, @NonNull String entryName) throws IOException {
             BasicFileAttributes attributes = Files.readAttributes(source,
                 BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-            Ownership ownership = Ownership.of(source);
+            Ownership ownership = this.ownerships.applyTo(Ownership.of(source), attributes.isDirectory());
             long mtime = attributes.lastModifiedTime().toMillis() / 1000;
             if (attributes.isSymbolicLink()) {
                 writeEntryHeader(entryName, '2', 0, Files.readSymbolicLink(source).toString(),
@@ -153,7 +185,7 @@ public final class Tar {
             if (!attributes.isDirectory()) {
                 throw new IOException("'" + source + "' is not a directory");
             }
-            Ownership ownership = Ownership.of(source);
+            Ownership ownership = this.ownerships.applyTo(Ownership.of(source), true);
             String directoryName = entryName.endsWith("/") ? entryName : entryName + "/";
             writeEntryHeader(directoryName, '5', 0, "", ownership.mode(), ownership,
                 attributes.lastModifiedTime().toMillis() / 1000);

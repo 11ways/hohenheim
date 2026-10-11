@@ -8,6 +8,7 @@ import be.elevenways.zenit.server.cli.OfflineCommandContext;
 import be.elevenways.zenit.server.cli.OfflineCommandException;
 import be.elevenways.zenit.server.orm.DatabaseEngine;
 import be.elevenways.zenit.server.orm.DatasourceFactory;
+import be.elevenways.zenit.server.orm.SchemaDriftChecker;
 import be.elevenways.zenit.server.orm.migration.MigrationRunner;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -15,6 +16,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * Deploy rehearsal: run the pending migrations against a BYTE COPY of the database, so an
@@ -67,8 +69,16 @@ public final class RehearseMigrationsCommand implements OfflineCommand {
                 throw new OfflineCommandException(
                     "Rehearsal FAILED against " + copy + "; the live database was not touched.");
             }
+            // A copy the migrations leave without what this build's models declare fails at the first write after the
+            // swap: an edited migration whose new column a re-recorded ledger never ran, say. Refused here instead.
+            List<String> drift = SchemaDriftChecker.findDrift(rehearsal);
+            if (!drift.isEmpty()) {
+                drift.forEach(finding -> context.print("drift: " + finding));
+                throw new OfflineCommandException("Rehearsal FAILED against " + copy + ": the migrated copy lacks "
+                    + drift.size() + " table(s) or column(s) this build declares; the live database was not touched.");
+            }
             context.print("Rehearsal complete: " + result.getAppliedCount()
-                + " applied against " + copy + "; the live database was not touched.");
+                + " applied against " + copy + ", no schema drift; the live database was not touched.");
         } finally {
             rehearsal.close();
         }
