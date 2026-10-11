@@ -5,9 +5,13 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
 import be.elevenways.hohenheim.server.tls.HostnameReach;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
@@ -42,15 +46,17 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * "Put something online": one flow that creates an app, its address and its certificate, as two background
- * operations behind one wizard page ({@link PutOnlinePage}).
+ * "Put something online": one flow that creates an app, its address and its certificate, as background operations
+ * behind one wizard page ({@link PutOnlinePage}).
  *
- * AIDEV-NOTE: two operations because the input differs by WHAT is put online. A template's form is that template's own
- * variables, resolved per selected template (the subject), so {@link #PUT_ONLINE} takes the template as its subject,
- * exactly as the create-from-template lane does. An address that needs no workload (a redirect, an existing service,
- * static files, TLS passthrough) has no subject; {@link #PUT_ADDRESS_ONLINE} asks the site form's upstream kind and
- * settings. Both end in the same Website and Certificate steps (PutOnlineHandlers), so the going-live half is one
- * implementation. Both run in the background: their run page is the "Going live" step.
+ * AIDEV-NOTE: three operations because the input differs by WHAT is put online. A template's form is that template's
+ * own variables, resolved per selected template (the subject), so {@link #PUT_ONLINE} takes the template as its
+ * subject, exactly as the create-from-template lane does. An address that needs no workload (a redirect, an existing
+ * service, static files, TLS passthrough) has no subject; {@link #PUT_ADDRESS_ONLINE} asks the site form's upstream
+ * kind and settings. A workload of a kind that serves a website (a Git app, a container image) has no subject either;
+ * {@link #PUT_WORKLOAD_ONLINE} asks that kind's own settings, the instance form's. All end in the same Website and
+ * Certificate steps (PutOnlineHandlers), so the going-live half is one implementation. All run in the background:
+ * their run page is the "Going live" step.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -102,6 +108,14 @@ public final class PutOnline {
         OperationSteps.step("certificate", HohenheimMicrocopy.PUT_ONLINE.of("run_certificate")))
         .inJourney(List.of(STEP_WHAT, STEP_WHERE, STEP_HTTPS), STEP_LIVE);
 
+    /** The run's steps for a workload of one kind: the app, its website, its certificate, then live. */
+    private static final OperationSteps WORKLOAD_STEPS = OperationSteps.of(
+        OperationSteps.step("app", HohenheimMicrocopy.PUT_ONLINE.of("run_app")),
+        OperationSteps.step("website", HohenheimMicrocopy.PUT_ONLINE.of("run_website")),
+        OperationSteps.step("certificate", HohenheimMicrocopy.PUT_ONLINE.of("run_certificate")),
+        OperationSteps.step("live", HohenheimMicrocopy.PUT_ONLINE.of("run_live")))
+        .inJourney(List.of(STEP_WHAT, STEP_WHERE, STEP_OPTIONS, STEP_HTTPS), STEP_LIVE);
+
     private static final FormSpec TEMPLATE_INPUT = FormSpec.builder()
         .add(InstanceTemplateOperations.NAME)
         .add(HOSTNAME)
@@ -141,6 +155,25 @@ public final class PutOnline {
             .summarizedBy(PutOnline::addressSummary))
         .build();
 
+    private static final FormSpec WORKLOAD_INPUT = FormSpec.builder()
+        .add(InstanceModel.NAME)
+        .add(HOSTNAME)
+        .add(Select.of(InstanceTemplateOperations.SERVER_ID)
+            .options(OptionSource.dynamic(context -> InstanceTemplateHandlers.hostOptions()))
+            .build())
+        .add(InstanceModel.KIND)
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
+        .add(httpsChoice())
+        .step(FormStep.of("where", STEP_WHERE, InstanceModel.NAME.getName(), HOSTNAME.getName(),
+            InstanceTemplateOperations.SERVER_ID.getName(), InstanceModel.KIND.getName())
+                .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_where_lead")))
+        .step(FormStep.of("settings", STEP_OPTIONS, InstanceModel.SETTINGS.getName())
+            .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_settings_lead")))
+        .step(FormStep.of("https", STEP_HTTPS, HTTPS.getName())
+            .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_https_lead"))
+            .summarizedBy(PutOnline::workloadSummary))
+        .build();
+
     /** The template's own create (named as its form names it), its address and its HTTPS choice. */
     public record FromTemplate(@Nullable String name, @Nullable String hostname, @Nullable Integer serverId,
                                @Nullable Integer projectId, @Nullable Integer environmentId,
@@ -156,6 +189,11 @@ public final class PutOnline {
     /** An address that needs no workload: what it serves (the site's upstream kind and settings) and its HTTPS. */
     public record Address(@Nullable String name, @Nullable String hostname, @Nullable String upstream_kind,
                           @Nullable Map<String, Object> settings, @Nullable String https) {
+    }
+
+    /** A workload of one kind: its name, host (null: placement picks), settings, address and HTTPS choice. */
+    public record Workload(@Nullable String name, @Nullable String hostname, @Nullable Integer serverId,
+                           @Nullable String kind, @Nullable Map<String, Object> settings, @Nullable String https) {
     }
 
     /** Puts one template online: the app, its address, its certificate, then the first deploy. */
@@ -196,6 +234,25 @@ public final class PutOnline {
             .background(ADDRESS_STEPS)
             .register();
 
+    /** Puts one workload online from its kind's own settings: the app, its website, its certificate, its start. */
+    public static final Operation<Void, Workload, Integer> PUT_WORKLOAD_ONLINE =
+        Operation.declare(HohenheimIds.id("put_workload_online"))
+            .label(HohenheimMicrocopy.PUT_ONLINE.of("put_online"))
+            .happened(HohenheimMicrocopy.PUT_ONLINE.of("happened"))
+            .icon(Icon.of("rocket"))
+            .noSubject()
+            .gate(OperationGate.open())
+            .input(OperationInput.of(WORKLOAD_INPUT, Workload.class, values -> new Workload(
+                values.get(InstanceModel.NAME), values.get(HOSTNAME), values.get(InstanceTemplateOperations.SERVER_ID),
+                values.get(InstanceModel.KIND), RawValues.mapOrNull(values.get(InstanceModel.SETTINGS.getName())),
+                values.get(HTTPS))))
+            .result(Integer.class)
+            .rateLimit(HohenheimEndpoints.INSTANCE_CREATE_LIMIT)
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .command(CmsCommands.EXTERNAL)
+            .background(WORKLOAD_STEPS)
+            .register();
+
     private PutOnline() {
     }
 
@@ -211,6 +268,12 @@ public final class PutOnline {
         return info != null && info.offeredAsApp();
     }
 
+    /** @return whether a workload of the kind with this stored id is put online from its own settings */
+    static boolean offeredAsWorkload(@Nullable String kind) {
+        InstanceKindHandler handler = InstanceKinds.getHandler(kind);
+        return handler != null && handler.putOnlineGroup() != null && handler.supportsSiteUpstream();
+    }
+
     /** What a template's HTTPS step shows of Where and Options in its summary. */
     private static @NonNull List<SummaryLine> templateSummary(@NonNull StepAnswers answers) {
         List<SummaryLine> lines = new ArrayList<>();
@@ -220,10 +283,7 @@ public final class PutOnline {
         }
         String hostname = answers.text(HOSTNAME.getName());
         lines.add(addressLine(hostname));
-        Integer serverId = answers.get(InstanceTemplateOperations.SERVER_ID.getName(), Integer.class);
-        lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_runs_on"),
-            serverId == null ? HohenheimMicrocopy.PUT_ONLINE.of("summary_runs_on_auto")
-                : Microcopy.literal(serverName(serverId))));
+        lines.add(runsOnLine(answers));
         if (hostname != null) {
             lines.add(reachLine(hostname));
         }
@@ -232,19 +292,34 @@ public final class PutOnline {
 
     /** What an address's HTTPS step shows of Where: what it serves, its name and address, and where that points. */
     private static @NonNull List<SummaryLine> addressSummary(@NonNull StepAnswers answers) {
-        List<SummaryLine> lines = new ArrayList<>();
         String kind = answers.text(SiteModel.UPSTREAM_KIND.getName());
         Identifier kindId = kind == null ? null : Identifier.tryParse(kind);
         UpstreamKindInfo info = kindId == null ? null : UpstreamKinds.REGISTRY.get(kindId);
-        if (info != null) {
-            lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_serves"), info.getLabel()));
+        return servedSummary(info == null ? null : info.getLabel(), answers.text(SiteModel.NAME.getName()),
+            answers.text(ADDRESS_HOSTNAME.getName()), null);
+    }
+
+    /** What a workload's HTTPS step shows of Where: its kind, its name and address, and where that points. */
+    private static @NonNull List<SummaryLine> workloadSummary(@NonNull StepAnswers answers) {
+        InstanceKindHandler handler = InstanceKinds.getHandler(answers.text(InstanceModel.KIND.getName()));
+        return servedSummary(handler == null ? null : handler.getLabel(), answers.text(InstanceModel.NAME.getName()),
+            answers.text(HOSTNAME.getName()), runsOnLine(answers));
+    }
+
+    /** What it serves, its name, its address, where it runs when that is asked, then where the address points. */
+    private static @NonNull List<SummaryLine> servedSummary(@Nullable Microcopy what, @Nullable String name,
+                                                            @Nullable String hostname, @Nullable SummaryLine runsOn) {
+        List<SummaryLine> lines = new ArrayList<>();
+        if (what != null) {
+            lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_serves"), what));
         }
-        String name = answers.text(SiteModel.NAME.getName());
         if (name != null) {
             lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_name"), Microcopy.literal(name)));
         }
-        String hostname = answers.text(ADDRESS_HOSTNAME.getName());
         lines.add(addressLine(hostname));
+        if (runsOn != null) {
+            lines.add(runsOn);
+        }
         if (hostname != null) {
             lines.add(reachLine(hostname));
         }
@@ -254,6 +329,14 @@ public final class PutOnline {
     private static @NonNull SummaryLine addressLine(@Nullable String hostname) {
         return new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_address"),
             hostname == null ? HohenheimMicrocopy.PUT_ONLINE.of("summary_address_none") : Microcopy.literal(hostname));
+    }
+
+    /** The host the answers chose, or that placement picks one. */
+    private static @NonNull SummaryLine runsOnLine(@NonNull StepAnswers answers) {
+        Integer serverId = answers.get(InstanceTemplateOperations.SERVER_ID.getName(), Integer.class);
+        return new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_runs_on"),
+            serverId == null ? HohenheimMicrocopy.PUT_ONLINE.of("summary_runs_on_auto")
+                : Microcopy.literal(serverName(serverId)));
     }
 
     /**

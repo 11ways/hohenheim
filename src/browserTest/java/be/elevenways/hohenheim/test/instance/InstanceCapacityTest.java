@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -224,6 +225,40 @@ class InstanceCapacityTest {
             assertThat(InstanceCapacity.bookedMbOn(alpha))
                 .as("step 7: the untouched neighbour still carries its own booking")
                 .isEqualTo(512);
+        });
+    }
+
+    /**
+     * An application owns no container: its releases book the host, the record never does,
+     * so its memory is never charged twice.
+     */
+    @Test
+    void anApplicationRecordBooksNothingItsReleasesDo() {
+        Db.run(datasource, () -> {
+            int alpha = host("alpha", 2048L, Now.instant());
+
+            // 1. The application record books nothing on its host and stamps zero.
+            Row application = newWorkload(alpha, "app", 512);
+            application.set(InstanceModel.KIND, ApplicationKind.ID.toString());
+            int applicationId = save(application);
+            assertThat(InstanceCapacity.bookedMbOn(alpha))
+                .as("step 1: the application record booked nothing on alpha").isEqualTo(0);
+            assertThat((Integer) Models.get(InstanceModel.class).findById(applicationId)
+                    .get(InstanceModel.CAPACITY_MB))
+                .as("step 1: and stamps zero").isEqualTo(0);
+
+            // 2. So the host's whole budget is still there for the workloads that run: the
+            //    shape that refused an application's first release on a small host.
+            save(newWorkload(alpha, "release-sized", 2048));
+            assertThat(InstanceCapacity.bookedMbOn(alpha))
+                .as("step 2: the full 2048 MB went to the running workload").isEqualTo(2048);
+
+            // 3. A record stamped before this rule holds nothing either, so the reconcile
+            //    corrects the bucket that stamp inflated.
+            Row stale = Models.get(InstanceModel.class).findById(applicationId);
+            stale.set(InstanceModel.CAPACITY_MB, 512);
+            assertThat(InstanceCapacity.bookedMbOf(stale))
+                .as("step 3: a stale 512 MB stamp on an application books nothing").isEqualTo(0);
         });
     }
 

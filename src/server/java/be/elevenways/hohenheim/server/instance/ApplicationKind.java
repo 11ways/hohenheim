@@ -194,8 +194,9 @@ public final class ApplicationKind implements InstanceKindHandler {
     @Override public Schema getSchema() { return SETTINGS_SCHEMA; }
 
     /**
-     * A gated swap runs the candidate BESIDE the serving release, so the authored record is
-     * charged for both -- the same number DockerContainerKind charges, doubled.
+     * A gated swap runs the candidate BESIDE the serving release, so placement asks room for
+     * both -- the same number DockerContainerKind charges, doubled. The record itself books
+     * nothing ({@link #releaseManaged}); its releases book what they run.
      */
     @Override public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
         return 1024;

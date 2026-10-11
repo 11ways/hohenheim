@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.source;
 
+import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -196,6 +198,24 @@ class GitRemoteAccessTest extends HohenheimTestBase {
         assertThat(unread).as("step 3: an unreachable repository is a finding").isNotNull();
         assertThat(unread.key()).as("step 3: that it could not be read").isEqualTo("poll_failed");
         assertThat(unreachable.deploying()).as("step 3: and nothing deploys").isFalse();
+
+        // 4. A head whose newest build failed is not retried each interval: the finding says so, and how to retry.
+        settings.put(GitSourceSchema.REPOSITORY_URL, upstream.toString());
+        String head = commit(upstream, "two");
+        var builds = Models.get(BuildOperationModel.class);
+        Row failedBuild = builds.createEmptyRow();
+        failedBuild.set(BuildOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
+        failedBuild.set(BuildOperationModel.FOR_ID, application.get(InstanceModel.ID));
+        failedBuild.set(BuildOperationModel.BUILDER_KIND, BuildOperationModel.KIND_DOCKERFILE);
+        failedBuild.set(BuildOperationModel.STATUS, BuildOperationModel.LIFECYCLE.stored(OperationStatus.FAILED));
+        failedBuild.set(BuildOperationModel.SOURCE_REF, head);
+        builds.save(failedBuild);
+        GitSourcePolls.Check failed = GitSourcePolls.check(application, settings, now);
+        assertThat(failed.finding()).as("step 4: the finding is the failed build")
+            .isEqualTo(GitSourcePolls.Finding.BUILD_FAILED);
+        assertThat(failed.failed()).as("step 4: which reads as a failure").isTrue();
+        assertThat(failed.deploying()).as("step 4: and nothing deploys again").isFalse();
+        assertThat(failed.remoteCommit()).as("step 4: naming the head it saw").isEqualTo(head);
     }
 
     private static Row application(String name, Map<String, Object> settings) {

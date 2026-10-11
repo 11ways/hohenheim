@@ -140,7 +140,8 @@ public final class InstanceQuota {
         public @Nullable Charge held(@NonNull Row stored) {
             Charge count = COUNT.held(stored);
             Integer stamped = stored.get(InstanceModel.QUOTA_MEMORY_MB);
-            long amount = Math.max(0, stamped != null ? stamped : InstanceCapacity.footprintMbOf(stored));
+            long amount = InstanceCapacity.booksNothing(InstanceKinds.handlerOf(stored)) ? 0
+                : Math.max(0, stamped != null ? stamped : InstanceCapacity.footprintMbOf(stored));
             return new Charge(memoryBucketOfChargedBucket(count.bucket()), amount,
                 stamped == null || count.derived());
         }

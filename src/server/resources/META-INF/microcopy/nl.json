@@ -5909,6 +5909,10 @@
     {
       "text": "Bezig met uitrollen",
       "scope": "operation_status"
+    },
+    {
+      "text": "Bezig met uitrollen",
+      "scope": "app_health"
     }
   ],
   "workload_identity": {
@@ -14673,6 +14677,10 @@
     "text": "Status onbekend",
     "scope": "app_health"
   },
+  "deploying_detail": {
+    "text": "Er loopt een build of release.",
+    "scope": "app_health"
+  },
   "stopped_after_error": [
     {
       "text": "Gestopt na een fout",
@@ -14924,6 +14932,10 @@
     "text": "De waarden waarmee het start. Een leeg geheim behoudt de waarde van het sjabloon.",
     "scope": "put_online"
   },
+  "step_settings_lead": {
+    "text": "Waar het vandaan komt en hoe het draait. Alles behalve de bron heeft een standaardwaarde.",
+    "scope": "put_online"
+  },
   "step_https_lead": {
     "text": "Hoe bezoekers het veilig bereiken.",
     "scope": "put_online"
@@ -14978,6 +14990,10 @@
   },
   "outcome_kind_not_offered": {
     "text": "Dit soort adres wordt niet op zichzelf online gezet.",
+    "scope": "put_online"
+  },
+  "outcome_kind_not_a_workload": {
+    "text": "Dit soort app wordt niet vanuit zijn eigen instellingen online gezet.",
     "scope": "put_online"
   },
   "checklist_put_online": {
@@ -15441,6 +15457,10 @@
   },
   "poll_deploying": {
     "text": "{$commit} gevonden en het uitrollen gestart.",
+    "scope": "deployments"
+  },
+  "poll_build_failed": {
+    "text": "de build van {$commit} is mislukt. Push een oplossing, of gebruik Nu uitrollen om het opnieuw te proberen.",
     "scope": "deployments"
   },
   "poll_failed": {

@@ -536,8 +536,25 @@ public final class InstanceCapacity {
      * how a reconciler reports drift that does not exist.
      */
     public static long bookedMbOf(@NonNull Row instance) {
+        if (booksNothing(InstanceKinds.handlerOf(instance))) {
+            return 0;
+        }
         Integer stamped = instance.get(InstanceModel.CAPACITY_MB);
         return Math.max(0, stamped != null ? stamped : footprintMbOf(instance));
+    }
+
+    /**
+     * Whether a record of this kind books no memory of its own, on the host or the owner.
+     *
+     * AIDEV-NOTE: a release-managed record (an application) owns no container; each of its
+     * releases is a workload and books itself. Booking the record too charged an application
+     * twice (three times mid-swap), so a host with room for the release refused its first
+     * deploy. Placement still asks room for the record's footprint, which is what its releases
+     * will need. A stamp written before this rule is ignored, and the boot reconcile corrects
+     * the bucket it inflated.
+     */
+    static boolean booksNothing(@Nullable InstanceKindHandler handler) {
+        return handler != null && handler.releaseManaged();
     }
 
     /**
@@ -570,7 +587,7 @@ public final class InstanceCapacity {
      */
     static int effectiveFootprintMb(@NonNull Row row, @Nullable Row stored) {
         InstanceKindHandler handler = InstanceKinds.getHandler(row.afterWrite(InstanceModel.KIND, stored));
-        if (handler == null) {
+        if (handler == null || booksNothing(handler)) {
             return 0;
         }
         Map<String, Object> settings =

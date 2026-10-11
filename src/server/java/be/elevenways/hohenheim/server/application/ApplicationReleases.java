@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
@@ -322,7 +323,17 @@ public final class ApplicationReleases {
         try {
             inScope(applicationId, () -> {
                 for (Row instance : owned) {
-                    new InstanceService().destroy(instance.get(InstanceModel.ID));
+                    int releaseId = instance.get(InstanceModel.ID);
+                    try {
+                        new InstanceService().destroy(releaseId);
+                    } catch (Violations refused) {
+                        // The engine's own drain may have removed a superseded release since the list was read:
+                        // a release already gone is at its end of life, anything else still refuses.
+                        Row stored = StoredRows.byId(Models.get(InstanceModel.class), releaseId);
+                        if (stored != null && stored.get(InstanceModel.DELETED_AT) == null) {
+                            throw refused;
+                        }
+                    }
                 }
                 return null;
             });
@@ -342,6 +353,13 @@ public final class ApplicationReleases {
     }
 
     // -- release ownership ----------------------------------------------------
+
+    /** Whether a deploy of the application is under way: a release operation in flight, or its build running. */
+    public static boolean deploying(int applicationId) {
+        String owner = InstanceModel.MODEL_ID.toString();
+        return !Models.get(ReleaseOperationModel.class).findInFlight(owner, applicationId).isEmpty()
+            || Models.get(BuildOperationModel.class).building(owner, applicationId);
+    }
 
     /**
      * The application's SERVING release, or null. Newest-first so a crash between the two

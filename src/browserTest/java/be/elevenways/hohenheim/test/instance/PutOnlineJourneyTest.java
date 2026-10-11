@@ -32,6 +32,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.security.Secret;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.OperationPipeline;
@@ -94,7 +95,8 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
     static void cleanUp() {
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED, true);
         for (Row site : Models.get(SiteModel.class).find()
-                .where(SiteModel.NAME.in(List.of(PREFIX + "shop-app", PREFIX + "old-shop"))).all()) {
+                .where(SiteModel.NAME.in(List.of(PREFIX + "shop-app", PREFIX + "old-shop", PREFIX + "git-app")))
+                .all()) {
             for (Row domain : Models.get(SiteDomainModel.class).find()
                     .where(SiteDomainModel.SITE_ID.eq(site.get(SiteModel.ID))).all()) {
                 HardDeletes.row(Models.get(SiteDomainModel.class), domain);
@@ -281,6 +283,82 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
             OperationRequest.of(PutOnline.PUT_ONLINE, CmsPlacementSurface.ADMIN_ACTION)
                 .caller(tenant).subjects(List.of(template)).form(tenantForm)));
         assertThat(noAddress).as("step 7: an address from a tenant is refused in the request").isNotNull();
+    }
+
+    /**
+     * A Git app has no template: an operator's card opens the same stepped wizard over the app kind's own settings,
+     * and one run creates the app and its website; everyone else keeps the create form.
+     */
+    @Test
+    void aGitAppGoesOnlineFromItsOwnSettings() throws Exception {
+        AccessContext operator = TenantConduits.operator();
+
+        // 1. The operator's Application card opens the wizard, not the instance create form; a virtual machine,
+        //    which serves no website, still opens the create form.
+        HttpResponse<String> picked = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE
+            + "?choice=instance:hohenheim:application");
+        assertThat(picked.headers().firstValue("location").orElse(""))
+            .as("step 1: the Application card opens the put-online wizard")
+            .contains(HohenheimSlugs.PUT_ONLINE).contains("workload=hohenheim%3Aapplication");
+        assertThat(adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?choice=instance:hohenheim:vm")
+                .headers().firstValue("location").orElse(""))
+            .as("step 1: a virtual machine still opens the create form")
+            .contains(HohenheimSlugs.INSTANCES).contains("kind=hohenheim%3Avm");
+
+        // 2. The wizard asks where, the app's own settings, then HTTPS; the kind rides along, never asked again.
+        String wizard = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?workload=hohenheim:application").body();
+        assertThat(wizard).as("step 2: where, settings and HTTPS")
+            .contains("data-zf-step=\"where\"").contains("data-zf-step=\"settings\"")
+            .contains("data-zf-step=\"https\"");
+        assertThat(wizard).as("step 2: the kind is transport")
+            .contains("type=\"hidden\" name=\"kind\" value=\"hohenheim:application\"");
+        assertThat(wizard).as("step 2: the settings step asks where the code comes from")
+            .contains("repository_url");
+
+        // 3. One run creates the app and the website on its address; HTTPS waits because Let's Encrypt is off.
+        Map<String, Object> form = new LinkedHashMap<>();
+        form.put(InstanceModel.NAME.getName(), PREFIX + "git-app");
+        form.put(PutOnline.HOSTNAME.getName(), "git." + PREFIX + "test");
+        form.put(InstanceModel.KIND.getName(), "hohenheim:application");
+        // The operator names the host; this test runtime has none that placement would pick on its own.
+        form.put("serverId", ServerModel.localServerId());
+        // The env map posts as the key/value editor submits it: indexed rows.
+        form.put(InstanceModel.SETTINGS.getName(), Map.of("repository_url", "https://git.example.test/acme/app.git",
+            "branch", "main", "environment_variables",
+            Map.of("0", Map.of("key", "API_KEY", "value", "env-secret"))));
+        form.put(PutOnline.HTTPS.getName(), PutOnline.HTTPS_AUTOMATIC);
+        OperationRun run = ended(runOf(OperationPipeline.invoke(OperationRequest.of(PutOnline.PUT_WORKLOAD_ONLINE,
+                CmsPlacementSurface.ADMIN_ACTION).caller(operator).form(form))), operator, "step 3");
+        assertThat(run.status()).as("step 3: the run succeeded (%s)", run.outcome())
+            .isEqualTo(OperationRunStatus.SUCCEEDED);
+        assertThat(Objects.requireNonNull(run.steps()).journeyBefore())
+            .as("step 3: the run ends the journey the wizard walked: what, where, settings, https").hasSize(4);
+        assertThat(run.skipped(1)).as("step 3: the website was made, so its step is done").isFalse();
+        Row app = Models.get(InstanceModel.class).find().where(InstanceModel.NAME.eq(PREFIX + "git-app")).first();
+        assertThat(app).as("step 3: the app exists").isNotNull();
+        assertThat(String.valueOf((Object) app.get(InstanceModel.KIND))).as("step 3: as an application")
+            .isEqualTo("hohenheim:application");
+        assertThat(InstanceModel.settingsOf(app).get("repository_url")).as("step 3: with the repository given")
+            .isEqualTo("https://git.example.test/acme/app.git");
+        Object apiKey = ((Map<?, ?>) InstanceModel.settingsOf(app).get("environment_variables")).get("API_KEY");
+        assertThat(apiKey instanceof Secret secret ? secret.reveal() : apiKey)
+            .as("step 3: a secret variable is stored as typed, never as a mask").isEqualTo("env-secret");
+        assertThat(Models.get(SiteModel.class).find().where(SiteModel.INSTANCE_ID.eq(app.get(InstanceModel.ID)))
+            .first()).as("step 3: a website serves it").isNotNull();
+
+        // 4. A tenant has no such door, and a kind that serves no website is refused on the kind, both before a run.
+        form.put(InstanceModel.NAME.getName(), PREFIX + "tenant-git-app");
+        form.remove(PutOnline.HOSTNAME.getName());
+        assertThat(catchThrowableOfType(DomainRefusal.class, () -> OperationPipeline.invoke(OperationRequest.of(
+                PutOnline.PUT_WORKLOAD_ONLINE, CmsPlacementSurface.ADMIN_ACTION).caller(tenant).form(form))))
+            .as("step 4: a tenant is refused in the request").isNotNull();
+        form.put(InstanceModel.KIND.getName(), "hohenheim:vm");
+        form.put(InstanceModel.SETTINGS.getName(), Map.of());
+        DomainRefusal noWebsite = catchThrowableOfType(DomainRefusal.class, () -> OperationPipeline.invoke(
+            OperationRequest.of(PutOnline.PUT_WORKLOAD_ONLINE, CmsPlacementSurface.ADMIN_ACTION)
+                .caller(operator).form(form)));
+        assertThat(noWebsite).as("step 4: a virtual machine is refused in the request").isNotNull();
+        assertThat(noWebsite.field()).as("step 4: on the kind").isEqualTo(InstanceModel.KIND.getName());
     }
 
     /** @return the run a background answer names */

@@ -2,9 +2,11 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -31,6 +33,7 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -514,6 +517,50 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, id);
             HardDeletes.row(Models.get(InstanceModel.class), instance);
         }
+    }
+
+    /** An application whose release is still building reads as on its way, never as stopped with a Start fix. */
+    @Test
+    void anApplicationWhoseBuildRunsReadsAsDeploying() {
+        var instances = Models.get(InstanceModel.class);
+        Row app = instances.createEmptyRow();
+        app.set(InstanceModel.NAME, "app-journey-building");
+        app.set(InstanceModel.KIND, "hohenheim:application");
+        app.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("repository_url",
+            "https://git.example.test/acme/app.git")));
+        app.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        instances.save(app);
+        int id = app.get(InstanceModel.ID);
+        var builds = Models.get(BuildOperationModel.class);
+        Row build = builds.createEmptyRow();
+        try {
+            // 1. Created with nothing building: it is not running.
+            assertThat(headlineOf(id)).as("step 1: nothing builds, so it is not running")
+                .isNotEqualTo("deploying");
+
+            // 2. Its build runs: the band says a deploy is under way.
+            build.set(BuildOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
+            build.set(BuildOperationModel.FOR_ID, id);
+            build.set(BuildOperationModel.BUILDER_KIND, BuildOperationModel.KIND_DOCKERFILE);
+            build.set(BuildOperationModel.STATUS, BuildOperationModel.LIFECYCLE.stored(OperationStatus.RUNNING));
+            builds.save(build);
+            assertThat(headlineOf(id)).as("step 2: a running build reads as deploying").isEqualTo("deploying");
+
+            // 3. The build ended without a release: not running again.
+            build.set(BuildOperationModel.STATUS, BuildOperationModel.LIFECYCLE.stored(OperationStatus.FAILED));
+            builds.save(build);
+            assertThat(headlineOf(id)).as("step 3: an ended build is no deploy").isNotEqualTo("deploying");
+        } finally {
+            if (build.get(BuildOperationModel.ID) != null) {
+                builds.delete(build.get(BuildOperationModel.ID));
+            }
+            HardDeletes.byId(instances, id);
+        }
+    }
+
+    private static String headlineOf(int instanceId) {
+        return AppHealth.instances(false).read(Models.get(InstanceModel.class).findById(instanceId),
+            TenantConduits.operator()).headline().key();
     }
 
     private static void status(int instanceId, String status) {

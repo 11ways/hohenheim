@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -46,9 +47,10 @@ import java.util.Map;
  *
  * AIDEV-NOTE: the chooser is the step "What". A template opens {@link PutOnline#PUT_ONLINE} over that template
  * ({@code ?template=}); an address kind opens {@link PutOnline#PUT_ADDRESS_ONLINE} with the kind preset
- * ({@code ?kind=}). Both forms are the framework's stepped PAGE document, and both operations run in the background,
- * so a submit lands on the run page ("Going live"). Workloads without a template (a Git app, a container image, a Linux
- * container, a virtual machine, a workspace) still open the instance create form until they get a flow of their own.
+ * ({@code ?kind=}); for an operator, an instance kind that serves a website (a Git app, a container image) opens
+ * {@link PutOnline#PUT_WORKLOAD_ONLINE} with the kind preset ({@code ?workload=}). All are the framework's stepped PAGE
+ * document, and all run in the background, so a submit lands on the run page ("Going live"). The other kinds (a
+ * Linux container, a virtual machine) and every kind for a tenant still open the instance create form.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -78,6 +80,16 @@ public final class PutOnlinePage extends PanelPage {
         .transport(SiteModel.UPSTREAM_KIND.getName())
         .build();
 
+    /** A workload of one kind, put online from that kind's own settings with its address and certificate. */
+    public static final PanelAction<Object> WORKLOAD = PanelAction.<Object, Integer>places(
+            PutOnline.PUT_WORKLOAD_ONLINE, ActionPlacement.PAGE,
+            (request, result) -> CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
+                HohenheimSlugs.INSTANCES, result.value(), RecordOverview.SLUG).toUrl())))
+        .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
+        // The chooser already answered which kind: it rides the form as transport, never asked again.
+        .transport(InstanceModel.KIND.getName())
+        .build();
+
     /** The journey's steps on other pages: the chooser before the wizard, the run page after it. */
     private static final List<Microcopy> BEFORE_WIZARD = List.of(PutOnline.STEP_WHAT);
     private static final List<Microcopy> AFTER_WIZARD = List.of(PutOnline.STEP_LIVE);
@@ -92,7 +104,7 @@ public final class PutOnlinePage extends PanelPage {
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     public @NonNull List<PanelAction<Row>> actions() {
-        return List.of(FROM_TEMPLATE, (PanelAction) ADDRESS);
+        return List.of(FROM_TEMPLATE, (PanelAction) ADDRESS, (PanelAction) WORKLOAD);
     }
 
     @Override
@@ -103,6 +115,7 @@ public final class PutOnlinePage extends PanelPage {
         vars.put("cancelTarget", CmsRoutes.list(request.panelSlug(), HohenheimSlugs.APPS));
         String kind = request.conduit().getQueryParam(HohenheimParams.PUT_ONLINE_KIND.getName());
         String template = request.conduit().getQueryParam(HohenheimParams.FROM_TEMPLATE_TEMPLATE.getName());
+        String workload = request.conduit().getQueryParam(HohenheimParams.PUT_ONLINE_WORKLOAD.getName());
         if (template != null && !template.isBlank()) {
             PageActions.Opened opened = PageActions.open(request, this, FROM_TEMPLATE.id());
             if (opened instanceof PageActions.Form form) {
@@ -125,6 +138,17 @@ public final class PutOnlinePage extends PanelPage {
                 vars.put("whatIcon", info == null ? "globe" : info.getIcon().name());
                 vars.put("what", info == null ? kind : resolve(info.getLabel(), request));
                 vars.put("whatDescription", info == null ? "" : resolve(info.getDescription(), request));
+            }
+        } else if (workload != null && PutOnline.offeredAsWorkload(workload)
+                && HohenheimAccess.isAdmin(request.access())) {
+            PageActions.Opened opened = PageActions.open(request, this, WORKLOAD.id(),
+                Map.of(InstanceModel.KIND.getName(), workload));
+            InstanceKindInfo info = InstanceKindRegistry.REGISTRY.get(Identifier.tryParse(workload));
+            if (opened instanceof PageActions.Form form && info != null) {
+                vars.put("document", form.state().withJourney(BEFORE_WIZARD, AFTER_WIZARD));
+                vars.put("whatIcon", info.getIcon().name());
+                vars.put("what", resolve(info.getLabel(), request));
+                vars.put("whatDescription", resolve(info.getDescription(), request));
             }
         }
         if (!vars.containsKey("document")) {
@@ -163,16 +187,21 @@ public final class PutOnlinePage extends PanelPage {
             resolve(HohenheimMicrocopy.PUT_ONLINE.of("catalog"), request),
                 resolve(HohenheimMicrocopy.PUT_ONLINE.of("catalog_help"), request),
             CmsRoutes.list(request.panelSlug(), HohenheimSlugs.INSTANCE_TEMPLATES));
+        boolean admin = HohenheimAccess.isAdmin(request.access());
         for (InstanceKindInfo info : InstanceKindRegistry.REGISTRY) {
             PutOnlineGroup group = info.putOnlineGroup();
             if (group != null) {
+                String kind = info.typeId().toString();
                 card(cards, targets, group, "instance:" + info.typeId(), info.getIcon().name(),
                     resolve(info.getLabel(), request), resolve(info.getDescription(), request),
-                    CmsRoutes.create(request.panelSlug(), HohenheimSlugs.INSTANCES)
-                        .with(HohenheimParams.PUT_ONLINE_KIND, info.typeId().toString()));
+                    admin && PutOnline.offeredAsWorkload(kind)
+                        ? CmsRoutes.list(request.panelSlug(), HohenheimSlugs.PUT_ONLINE)
+                            .with(HohenheimParams.PUT_ONLINE_WORKLOAD, kind)
+                        : CmsRoutes.create(request.panelSlug(), HohenheimSlugs.INSTANCES)
+                            .with(HohenheimParams.PUT_ONLINE_KIND, kind));
             }
         }
-        if (HohenheimAccess.isAdmin(request.access())) {
+        if (admin) {
             for (UpstreamKindInfo info : UpstreamKinds.REGISTRY) {
                 PutOnlineGroup group = info.putOnlineGroup();
                 if (group != null) {

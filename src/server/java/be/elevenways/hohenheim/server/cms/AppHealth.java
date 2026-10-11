@@ -14,6 +14,9 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.server.ServerMain;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.OwnedInstances;
 import be.elevenways.hohenheim.server.proxy.RoutingProblem;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
@@ -364,6 +367,10 @@ final class AppHealth {
             return Verdict.notServing(RecordHealth.broken(Headline.INSTALL_FAILED.copy())
                 .detail(HohenheimMicrocopy.APP_HEALTH.of("install_failed_detail")));
         }
+        if (deployingWhileStopped(instance)) {
+            return Verdict.notServing(RecordHealth.unknown(HohenheimMicrocopy.APP_HEALTH.of("deploying"))
+                .detail(HohenheimMicrocopy.APP_HEALTH.of("deploying_detail")));
+        }
         // The host is the root while it refuses the start: an older recorded failure (the ERROR status a failed start
         // stamped) is history, Recent's to tell, never a second current verdict beside this one.
         Microcopy refusal = OwnedInstances.placementReasonOf(instance, delegated, viewer);
@@ -406,6 +413,17 @@ final class AppHealth {
         };
         // A running workload whose site turns visitors away serves nothing, though it runs.
         return new Verdict(health, workloadServes(status) && health.tone() != HealthTone.BROKEN, root);
+    }
+
+    /**
+     * Whether an application that serves nothing yet has a release on its way: its build or release runs, so it is
+     * deploying, whatever its host would say about a start and however stopped its record still reads.
+     */
+    private static boolean deployingWhileStopped(@NonNull Row instance) {
+        InstanceStatus status = InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
+        InstanceKindHandler kind = InstanceKinds.handlerOf(instance);
+        return (status == InstanceStatus.STOPPED || status == InstanceStatus.CREATED)
+            && kind != null && kind.releaseManaged() && ApplicationReleases.deploying(instance.get(InstanceModel.ID));
     }
 
     // -- stacks ----------------------------------------------------------------------

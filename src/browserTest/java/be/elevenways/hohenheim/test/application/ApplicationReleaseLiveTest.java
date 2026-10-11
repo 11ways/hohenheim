@@ -327,9 +327,10 @@ class ApplicationReleaseLiveTest {
             assertThat(op.get(ReleaseOperationModel.STATUS))
                 .as("step 4: the operation is FAILED, never silently forgotten")
                 .isEqualTo(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED));
+            // The stored reason is the refusal's sentence (HohenheimViolations.reasonOf), never its key.
             assertThat((String) op.get(ReleaseOperationModel.FAILURE_REASON))
                 .as("step 4: the failure names the probe")
-                .contains("release_probe_failed");
+                .contains("never answered a healthy HTTP response");
 
             // 5. The candidate is GONE: record soft-deleted, container removed, port
             //    claim released; the serving release is untouched.

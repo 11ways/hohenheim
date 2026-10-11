@@ -156,19 +156,17 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         ReleaseOperationModel model = Models.get(ReleaseOperationModel.class);
         List<Row> operations = model.findForOwner(InstanceModel.MODEL_ID.toString(), instanceId, 50);
 
-        // AIDEV-NOTE: "in flight" is the model's own answer (findInFlight), never a status
-        // list spelled here: this page used to list pending/deploying/probing and missed
-        // switching and draining, so Deploy and Rollback were offered mid-switch.
-        boolean inFlight = !model.findInFlight(InstanceModel.MODEL_ID.toString(), instanceId).isEmpty();
+        // AIDEV-NOTE: "in flight" is the release engine's own answer (a release in flight or a build running), never
+        // a status list spelled here: this page used to list pending/deploying/probing and missed switching and
+        // draining, so Deploy and Rollback were offered mid-switch.
+        boolean inFlight = ApplicationReleases.deploying(instanceId);
         // A build that did not succeed never became a release: listed beside them, or a deploy a push or the
         // scheduled check started and the build refused would leave no trace on this page.
-        BuildOperationModel builds = Models.get(BuildOperationModel.class);
-        List<Row> unreleased = builds.findForOwner(InstanceModel.MODEL_ID.toString(), instanceId, 50).stream()
+        List<Row> unreleased = Models.get(BuildOperationModel.class)
+            .findForOwner(InstanceModel.MODEL_ID.toString(), instanceId, 50).stream()
             .filter(row -> !BuildOperationModel.LIFECYCLE.is(row.get(BuildOperationModel.STATUS),
                 OperationStatus.SUCCEEDED))
             .toList();
-        inFlight = inFlight || unreleased.stream().anyMatch(row ->
-            BuildOperationModel.LIFECYCLE.is(row.get(BuildOperationModel.STATUS), OperationStatus.RUNNING));
         Row serving = ApplicationReleases.ownedServing(instanceId);
         Row kept = ReleaseEngine.newestRetired(instanceId);
         vars.put("isDeploying", inFlight);
@@ -317,7 +315,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             : GitSourcePolls.lastCheck(application.get(InstanceModel.ID));
         vars.put("pollMinutes", pollSeconds / 60);
         vars.put("pollCheckedIso", check == null ? "" : check.at().toString());
-        vars.put("pollFailed", check != null && check.failure() != null);
+        vars.put("pollFailed", check != null && check.failed());
         vars.put("pollFinding", check == null ? "" : CmsSupport.resolvedTextOrDefault(findingOf(check)));
         List<Map<String, Object>> pushes = new ArrayList<>();
         for (Row delivery : Models.get(WebhookDeliveryModel.class).findRecent(application.get(InstanceModel.ID), 10)) {
@@ -335,16 +333,14 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         vars.put("pushes", pushes);
     }
 
-    /** What a scheduled check found, in words: the commit it saw, or why it saw none. */
+    /** What a scheduled check found, in words: what it found about the commit it saw, or why it saw none. */
     private static @NonNull Microcopy findingOf(GitSourcePolls.@NonNull Check check) {
         Microcopy failure = check.failure();
         if (failure != null) {
             return failure;
         }
-        String commit = Objects.toString(check.remoteCommit(), "");
-        String shortCommit = commit.length() > 7 ? commit.substring(0, 7) : commit;
-        return HohenheimMicrocopy.DEPLOYMENTS.of(check.deploying() ? "poll_deploying" : "poll_current")
-            .withArg("commit", shortCommit);
+        return Objects.requireNonNull(check.finding(), "a check that read the head names a finding")
+            .wording(shortSha(check.remoteCommit()));
     }
 
     /** Where a succeeded release stands now: serving, kept for one-step rollback, or replaced and removed. */

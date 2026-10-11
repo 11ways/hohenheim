@@ -9,6 +9,9 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
@@ -22,6 +25,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
+import be.elevenways.zenit.common.security.Secret;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
@@ -30,6 +34,7 @@ import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -39,7 +44,8 @@ import java.util.Objects;
  * reports each step as one progress part of its run.
  *
  * AIDEV-NOTE: nothing here is a second writer. The app is the template create funnel
- * ({@link InstanceTemplates#createFromTemplate}), the install is {@link InstanceInstalls}, the website and its first
+ * ({@link InstanceTemplates#createFromTemplate}) or the same placed record write for a kind's own settings, the
+ * install is {@link InstanceInstalls}, the website and its first
  * address are the site create ({@link SiteOperationHandlers#createSite}, in its own transaction so a refused address
  * rolls the site back), the certificate is the certificate operation's own order ({@link CertificateOperationHandlers})
  * and the first start is {@link InstanceService#deploy}. The ACME order runs after the website's transaction has
@@ -61,6 +67,9 @@ final class PutOnlineHandlers {
         OperationHandlers.attach(PutOnline.PUT_ADDRESS_ONLINE)
             .authorize(PutOnlineHandlers::admitAddress)
             .handle(PutOnlineHandlers::putAddressOnline);
+        OperationHandlers.attach(PutOnline.PUT_WORKLOAD_ONLINE)
+            .authorize(PutOnlineHandlers::admitWorkload)
+            .handle(PutOnlineHandlers::putWorkloadOnline);
     }
 
     private PutOnlineHandlers() {
@@ -102,6 +111,19 @@ final class PutOnlineHandlers {
         return null;
     }
 
+    /** In the request, before a run is recorded: an operator, and a kind that is put online from its own settings. */
+    private static @Nullable DomainRefusal admitWorkload(@Nullable Void none, PutOnline.@Nullable Workload input,
+                                                         @NonNull AccessContext access) {
+        if (!HohenheimAccess.isAdmin(access)) {
+            return new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "a workload without a template is an operator's");
+        }
+        if (input != null && !PutOnline.offeredAsWorkload(input.kind())) {
+            return new DomainRefusal(ZenitRefusalReason.INVALID, "kind " + input.kind() + " is no workload of its own",
+                InstanceModel.KIND.getName(), message("kind_not_a_workload"));
+        }
+        return null;
+    }
+
     /**
      * App, install, website, certificate, live.
      *
@@ -127,21 +149,70 @@ final class PutOnlineHandlers {
             call.reportStepSkipped();
         }
 
-        // 3 and 4. Its website and certificate, when an address was given; each is skipped when there is none to make.
-        String hostname = Texts.trimmedOrNull(input.hostname());
+        return goLive(call, instance, input.hostname(), input.https());
+    }
+
+    /**
+     * App, website, certificate, live.
+     *
+     * @return the new instance's id
+     */
+    private static @NonNull Integer putWorkloadOnline(@NonNull OperationCall<Void, PutOnline.Workload> call) {
+        PutOnline.Workload input = Objects.requireNonNull(call.input(), "put online has its input");
+
+        // 1. The app, as the template funnel writes one: placement chooses the host from the kind and its settings,
+        //    and the save meets every model hook (declarations, image policy, quota, capacity). The pipeline sealed
+        //    each secret; the record stores their text, so they are opened once here.
+        InstanceKindHandler kind = Objects.requireNonNull(InstanceKinds.getHandler(input.kind()), "admitted kind");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> settings = input.settings() == null ? new LinkedHashMap<>()
+            : (Map<String, Object>) opened(input.settings());
+        Row instance = Models.get(InstanceModel.class).createEmptyRow();
+        try {
+            int serverId = InstancePlacement.forActor(call.access(), input.serverId(),
+                InstancePlacement.Workload.of(kind, settings));
+            String name = Texts.trimmedOrNull(input.name());
+            if (name == null) {
+                throw Violations.ofField(InstanceModel.NAME.getName(), input.name(),
+                    HohenheimMicrocopy.VIOLATIONS.of("name_required"));
+            }
+            instance.set(InstanceModel.NAME, name);
+            instance.set(InstanceModel.KIND, input.kind());
+            instance.set(InstanceModel.SETTINGS, settings);
+            instance.set(InstanceModel.SERVER_ID, serverId);
+            Models.get(InstanceModel.class).save(instance);
+        } catch (Violations refused) {
+            throw refusedAs("app", refused);
+        }
+        call.attachSubject(InstanceOperations.INSTANCE, instance);
+        call.progress().reportProgressPart();
+        return goLive(call, instance, input.hostname(), input.https());
+    }
+
+    /**
+     * A new app's website and certificate when an address was given, each skipped when there is none to make, then
+     * its first start.
+     *
+     * @return the app's id
+     */
+    private static @NonNull Integer goLive(@NonNull OperationCall<?, ?> call, @NonNull Row instance,
+                                           @Nullable String address, @Nullable String https) {
+        int instanceId = instance.get(InstanceModel.ID);
+        ProgressSink progress = call.progress();
+        String hostname = Texts.trimmedOrNull(address);
         Microcopy note = null;
         if (hostname != null) {
             String name = String.valueOf((Object) instance.get(InstanceModel.NAME));
             createWebsite(name, hostname, InstanceUpstreamKind.ID.toString(), instanceId, Map.of());
             progress.reportProgressPart();
-            note = certificate(hostname, input.https(), call.subjectAccess());
+            note = certificate(hostname, https, call.subjectAccess());
             certificateStep(call, note);
         } else {
             call.reportStepSkipped();
             call.reportStepSkipped();
         }
 
-        // 5. The first start. A refusal (no admitted host, databases still provisioning) leaves the app for its page.
+        // The first start. A refusal (no admitted host, databases still provisioning) leaves the app for its page.
         try {
             new InstanceService().deploy(instanceId, DeployTrigger.MANUAL);
             // An order that went out still waits for its certificate: the outcome says what happens next.
@@ -193,12 +264,32 @@ final class PutOnlineHandlers {
             Models.get(SiteModel.class).getResolvedDatasource()
                 .withTransaction(transaction -> siteId[0] = SiteOperationHandlers.createSite(create));
         } catch (Violations refused) {
-            // After the request a refusal is the run's words: the claimed name, the name already a site's.
-            throw new DomainRefusal(ZenitRefusalReason.INVALID, "website refused: " + refused.getMessage(),
-                refused.all().isEmpty() ? null : refused.all().getFirst().fieldName(),
-                refused.all().isEmpty() ? null : refused.all().getFirst().message());
+            throw refusedAs("website", refused);
         }
         return siteId[0];
+    }
+
+    /** After the request a refusal is the run's words: the claimed name, the name already a site's, the setting. */
+    private static @NonNull DomainRefusal refusedAs(@NonNull String what, @NonNull Violations refused) {
+        return new DomainRefusal(ZenitRefusalReason.INVALID, what + " refused: " + refused.getMessage(),
+            refused.all().isEmpty() ? null : refused.all().getFirst().fieldName(),
+            refused.all().isEmpty() ? null : refused.all().getFirst().message());
+    }
+
+    /** @return the tree with every {@link Secret} opened to its text, maps and lists copied */
+    private static @Nullable Object opened(@Nullable Object value) {
+        if (value instanceof Secret secret) {
+            return secret.reveal();
+        }
+        if (value instanceof Map<?, ?> map) {
+            Map<Object, Object> copy = new LinkedHashMap<>();
+            map.forEach((key, item) -> copy.put(key, opened(item)));
+            return copy;
+        }
+        if (value instanceof List<?> list) {
+            return list.stream().map(PutOnlineHandlers::opened).toList();
+        }
+        return value;
     }
 
     /**

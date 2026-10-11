@@ -202,7 +202,7 @@ public final class InstanceTemplateHandlers {
         replaced.put(InstanceTemplateOperations.VARIABLES, Nested.of(InstanceTemplateOperations.VARIABLES)
             .subSpec(templates.variableFormSpec(templateId)).build());
         replaced.put(InstanceTemplateOperations.SERVER_ID.getName(), Select.of(InstanceTemplateOperations.SERVER_ID)
-            .options(OptionSource.of(access != null && HohenheimAccess.isAdmin(access) ? servers() : List.of()))
+            .options(OptionSource.of(access != null && HohenheimAccess.isAdmin(access) ? hostOptions() : List.of()))
             .build());
         replaced.put(InstanceTemplateOperations.PROJECT_ID.getName(), Select.of(InstanceTemplateOperations.PROJECT_ID)
             .options(OptionSource.of(access == null ? List.of() : projects(access))).build());
@@ -240,7 +240,8 @@ public final class InstanceTemplateHandlers {
         return instanceId;
     }
 
-    private static @NonNull List<FieldOption<Integer>> servers() {
+    /** @return every host as an option, for an operator's host pick (placement still judges the choice) */
+    public static @NonNull List<FieldOption<Integer>> hostOptions() {
         List<FieldOption<Integer>> options = new ArrayList<>();
         for (Row server : Models.get(ServerModel.class).find().all()) {
             options.add(FieldOption.of(server.get(ServerModel.ID),

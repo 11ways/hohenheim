@@ -82,6 +82,11 @@ public final class HohenheimParams {
         ParameterDefinition.builder(String.class).name("kind")
             .stringResolver(value -> value).build();
 
+    /** The instance kind "Put something online" opens from its own settings: an operator's Git app or container. */
+    public static final ParameterDefinition<String> PUT_ONLINE_WORKLOAD =
+        ParameterDefinition.builder(String.class).name("workload")
+            .stringResolver(value -> value).build();
+
     /** The application a preview create form opens for: the Deploys tab's "Preview a branch". */
     public static final ParameterDefinition<Integer> PREVIEW_APPLICATION =
         ParameterDefinition.builder(Integer.class).name("application")

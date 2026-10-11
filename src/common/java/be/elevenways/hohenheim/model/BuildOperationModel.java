@@ -202,6 +202,12 @@ public class BuildOperationModel extends Model {
         return this.history(forModel, forId).where(STATUS.eq(LIFECYCLE.stored(OperationStatus.SUCCEEDED))).first();
     }
 
+    /** Whether a build of one owning record is still running. */
+    public boolean building(String forModel, int forId) {
+        return this.history(forModel, forId).where(STATUS.eq(LIFECYCLE.stored(OperationStatus.RUNNING)))
+            .first() != null;
+    }
+
     static {
         // What the build PRODUCED names it best; a build that never got that far is
         // still traceable by the commit it started from.

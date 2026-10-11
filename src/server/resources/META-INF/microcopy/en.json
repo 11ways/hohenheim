@@ -5909,6 +5909,10 @@
     {
       "text": "Deploying",
       "scope": "operation_status"
+    },
+    {
+      "text": "Deploying",
+      "scope": "app_health"
     }
   ],
   "workload_identity": {
@@ -14673,6 +14677,10 @@
     "text": "Status unknown",
     "scope": "app_health"
   },
+  "deploying_detail": {
+    "text": "A build or release is under way.",
+    "scope": "app_health"
+  },
   "stopped_after_error": [
     {
       "text": "Stopped after an error",
@@ -14924,6 +14932,10 @@
     "text": "The values it starts with. A secret left empty keeps the template's own value.",
     "scope": "put_online"
   },
+  "step_settings_lead": {
+    "text": "Where it comes from and how it runs. Everything except the source has a default.",
+    "scope": "put_online"
+  },
   "step_https_lead": {
     "text": "How visitors reach it securely.",
     "scope": "put_online"
@@ -14978,6 +14990,10 @@
   },
   "outcome_kind_not_offered": {
     "text": "This kind of address is not put online on its own.",
+    "scope": "put_online"
+  },
+  "outcome_kind_not_a_workload": {
+    "text": "This kind of app is not put online from its own settings.",
     "scope": "put_online"
   },
   "checklist_put_online": {
@@ -15441,6 +15457,10 @@
   },
   "poll_deploying": {
     "text": "found {$commit} and started deploying it.",
+    "scope": "deployments"
+  },
+  "poll_build_failed": {
+    "text": "the build of {$commit} failed. Push a fix, or use Deploy now to try it again.",
     "scope": "deployments"
   },
   "poll_failed": {
