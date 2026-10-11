@@ -52,7 +52,7 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
             .isSameAs(NavGroup.SYSTEM);
         List<SettingsPage.Mount> mounts = ((SettingsPage) peer).mounts();
         assertThat(mounts).extracting(SettingsPage.Mount::key).as("step 2: the sections in their order")
-            .containsExactly("general", "https", "backups", "comms", "apps", "hosts", "dns", "blocking",
+            .containsExactly("general", "brand", "https", "backups", "comms", "apps", "hosts", "dns", "blocking",
                 "spamservice", "proxy", SettingsPage.FRAMEWORK_MOUNT_KEY);
         assertThat(mounts).filteredOn(SettingsPage.Mount::advanced).extracting(SettingsPage.Mount::key)
             .as("step 2: only the framework mount is advanced").containsExactly(SettingsPage.FRAMEWORK_MOUNT_KEY);
@@ -60,18 +60,18 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
         // 2b. Each operator section heads with its icon, Backups and Notifications hold their own records lists, the
         //     Settings cluster's other pages are listed right after Notifications, and every group names its icon.
         assertThat(mounts).filteredOn(mount -> !mount.advanced()).extracting(mount -> mount.icon().name())
-            .as("step 2b: the board's section icons").containsExactly("sliders", "lock", "box-archive", "bell",
-                "cubes", "server", "sitemap", "shield-halved", "robot", "route");
-        assertThat(mounts.get(2).records()).as("step 2b: Backups lists the backup targets")
+            .as("step 2b: each section's icon").containsExactly("sliders", "palette", "lock", "box-archive",
+                "bell", "cubes", "server", "sitemap", "shield-halved", "robot", "route");
+        assertThat(mounts.get(3).records()).as("step 2b: Backups lists the backup targets")
             .containsExactly(HohenheimSlugs.BACKUP_TARGETS);
-        assertThat(mounts.get(3).records()).as("step 2b: Notifications lists the channels")
+        assertThat(mounts.get(4).records()).as("step 2b: Notifications lists the channels")
             .containsExactly(HohenheimSlugs.NOTIFICATIONS);
         for (String slug : List.of(HohenheimSlugs.BACKUP_TARGETS, HohenheimSlugs.NOTIFICATIONS)) {
             assertThat(admin.entryBySlug(slug).standsUnder()).as("step 2b: " + slug + " stands under Settings")
                 .isEqualTo(SettingsPage.DEFAULT_SLUG);
         }
         assertThat(((SettingsPage) peer).listsClusterMembers()).as("step 2b: the page lists its cluster").isTrue();
-        assertThat(((SettingsPage) peer).membersAt()).as("step 2b: right after Notifications").isEqualTo(4);
+        assertThat(((SettingsPage) peer).membersAt()).as("step 2b: right after Notifications").isEqualTo(5);
         assertThat(SettingGroupIcons.unmarked(HohenheimSettings.HOHENHEIM)).as("step 2b: no group without its icon")
             .isEmpty();
 
@@ -81,8 +81,8 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
         List<String> sections = page.locator(NAV + " a.cms-settings-nav-item[data-depth='0']:not([hidden])")
             .allInnerTexts().stream().map(String::trim).toList();
         assertThat(sections).as("step 3: the operator sections, in order")
-            .startsWith("General", "HTTPS and certificates", "Backups", "Notifications", "Apps and deploys", "Hosts",
-                "DNS server", "Blocking and firewall", "Abuse protection", "Proxy");
+            .startsWith("General", "Name and look", "HTTPS and certificates", "Backups", "Notifications",
+                "Apps and deploys", "Hosts", "DNS server", "Blocking and firewall", "Abuse protection", "Proxy");
         String toggle = NAV + " [data-cms-settings-nav-mount='" + SettingsPage.FRAMEWORK_MOUNT_KEY + "']";
         assertThat(page.locator(toggle).innerText().trim()).as("step 3: one disclosure names the framework")
             .isEqualTo("Framework (advanced)");

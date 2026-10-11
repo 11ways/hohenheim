@@ -33,4 +33,10 @@ public interface GitProviderKindInfo extends WordedKind {
      * the operator never named.
      */
     boolean requiresBaseUrl();
+
+    /**
+     * Whether a connection of this kind clones over SSH with a private key of its own, rather than over HTTPS with a
+     * token: the form offers each its own credential, and a lane that cannot carry a key file refuses it.
+     */
+    boolean clonesWithKey();
 }

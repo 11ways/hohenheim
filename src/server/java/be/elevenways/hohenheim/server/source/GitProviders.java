@@ -13,9 +13,6 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -150,33 +147,15 @@ public final class GitProviders {
     }
 
     /**
-     * The extra git environment that authenticates a clone/fetch against a provider:
-     * an {@code http.<base>.extraheader} Authorization header injected through git's
-     * environment-config mechanism -- never on the command line (visible in /proc),
-     * never in the URL (GitRepository refuses embedded user-info).
+     * What a clone or fetch of the source authenticates with: the bound provider's own access
+     * ({@link GitProviderClient#cloneAccess}); the caller closes it once git ran.
      *
-     * @return null when the site is not provider-bound
+     * @return null when the source is not provider-bound
      * @throws IOException when the provider cannot mint/supply a credential
      */
-    public static @Nullable Map<String, String> credentialEnv(
-            @NonNull Map<String, Object> sourceSettings) throws IOException {
+    public static @Nullable GitAccess access(@NonNull Map<String, Object> sourceSettings) throws IOException {
         Binding binding = bindingOf(sourceSettings);
-        if (binding == null) {
-            return null;
-        }
-        GitProviderClient client = clientFor(binding.providerId());
-        GitProviderClient.Credential credential = client.cloneCredential(binding.repository());
-        String cloneUrl = client.cloneUrl(binding.repository());
-        String origin = originOf(cloneUrl);
-        String basic = Base64.getEncoder().encodeToString(
-            (credential.username() + ":" + credential.secret())
-                .getBytes(StandardCharsets.UTF_8));
-        Map<String, String> env = new LinkedHashMap<>();
-        env.put("GIT_CONFIG_COUNT", "1");
-        env.put("GIT_CONFIG_KEY_0", "http." + origin + "/.extraHeader");
-        env.put("GIT_CONFIG_VALUE_0", "Authorization: Basic " + basic);
-        env.put("GIT_TERMINAL_PROMPT", "0");
-        return env;
+        return binding == null ? null : clientFor(binding.providerId()).cloneAccess(binding.repository());
     }
 
     /**
@@ -204,16 +183,5 @@ public final class GitProviders {
 
     /** A source bound to a git provider: its clone URL and credentials derive from the provider and repository. */
     public record Binding(int providerId, @NonNull String repository) {
-    }
-
-
-    /** Scheme + authority of a URL; the config key scope credentials bind to. */
-    private static @NonNull String originOf(@NonNull String url) {
-        int schemeEnd = url.indexOf("://");
-        if (schemeEnd < 0) {
-            return url;
-        }
-        int pathStart = url.indexOf('/', schemeEnd + 3);
-        return pathStart < 0 ? url : url.substring(0, pathStart);
     }
 }

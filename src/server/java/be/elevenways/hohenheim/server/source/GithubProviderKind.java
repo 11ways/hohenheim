@@ -54,6 +54,8 @@ public final class GithubProviderKind implements GitProviderKind {
     /** Blank means github.com, the kind's public host. */
     @Override public boolean requiresBaseUrl() { return false; }
 
+    @Override public boolean clonesWithKey() { return false; }
+
     @Override
     public @NonNull GitProviderClient clientFor(@NonNull Row provider, @Nullable String baseUrl,
                                                 @NonNull OutboundUrlGuard guard) {

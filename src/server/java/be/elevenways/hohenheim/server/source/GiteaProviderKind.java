@@ -41,6 +41,8 @@ public final class GiteaProviderKind implements GitProviderKind {
      */
     @Override public boolean requiresBaseUrl() { return true; }
 
+    @Override public boolean clonesWithKey() { return false; }
+
     /** The base URL is non-null by construction: {@link GitProviders} validated it. */
     @Override
     public @NonNull GitProviderClient clientFor(@NonNull Row provider, @Nullable String baseUrl,

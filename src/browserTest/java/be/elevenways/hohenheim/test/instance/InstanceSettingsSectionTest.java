@@ -240,28 +240,27 @@ class InstanceSettingsSectionTest {
     }
 
     /**
-     * poll_interval is RETIRED: nothing reads it, so no form offers it, while the schema
-     * still declares it so a stored value reads and an API request sending it is accepted.
+     * poll_interval is offered again now the scheduled check reads it: every view of both source kinds carries it,
+     * defaulting to five minutes for a new source.
      */
     @Test
-    void theRetiredPollIntervalIsDeclaredButOfferedByNoForm() {
+    void thePollIntervalIsOfferedWhereverASourceIsEdited() {
         for (Schema schema : List.of(WorkspaceKind.SETTINGS_SCHEMA, ApplicationKind.SETTINGS_SCHEMA)) {
-            // 1. Still declared: the closed-world settings coercion keeps accepting the key.
-            assertThat(schema.getFields()).as("step 1: the schema still declares poll_interval")
-                .containsKey(GitSourceSchema.POLL_INTERVAL);
+            // 1. Declared, and carried by the coercion spec.
             FormSpec derived = FieldFormEntryRegistry.INSTANCE.deriveSpec(schema);
             assertThat(derived.findEntry(GitSourceSchema.POLL_INTERVAL))
-                .as("step 1: and the coercion spec still carries its entry").isNotNull();
+                .as("step 1: the coercion spec carries poll_interval").isNotNull();
 
-            // 2. But no view renders it: create, edit and detail all leave it out.
+            // 2. Every view renders it.
             for (EditView view : EditView.values()) {
                 assertThat(derived.forView(view).findEntry(GitSourceSchema.POLL_INTERVAL))
-                    .as("step 2: the %s view offers no poll_interval", view).isNull();
+                    .as("step 2: the %s view offers poll_interval", view).isNotNull();
             }
+            assertThat(schema.getFields().get(GitSourceSchema.POLL_INTERVAL).getDefaultValue())
+                .as("step 2: a new source asks every five minutes").isEqualTo(300);
         }
 
-        // 3. keep_releases is retired the same way: the engine keeps exactly one rollback target whatever it said. And
-        // a
+        // 3. keep_releases is retired: the engine keeps exactly one rollback target whatever it said. And a
         //    workspace keeps its preview fields declared but offers none: the preview lane builds applications only.
         FormSpec workspace = FieldFormEntryRegistry.INSTANCE.deriveSpec(WorkspaceKind.SETTINGS_SCHEMA);
         for (String preview : GitSourceSchema.PREVIEWS) {

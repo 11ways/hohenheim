@@ -1,15 +1,13 @@
 package be.elevenways.hohenheim.server.source;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.source.GitRefNames;
 import be.elevenways.hohenheim.source.GitSourceSchema;
+import be.elevenways.hohenheim.server.DataDirectory;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -43,10 +41,7 @@ public final class GitCheckout {
 
     /** The directory a given owner record's checkouts live in. */
     public static @NonNull File directoryFor(@NonNull Identifier ownerModel, int ownerId) {
-        String dataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
-        String base = dataPath == null || dataPath.isBlank() ? "/opt/hohenheim/data" : dataPath;
-        return new File(new File(new File(base, "checkouts"), ownerModel.getPath()),
-            String.valueOf(ownerId));
+        return DataDirectory.resolve("checkouts", ownerModel.getPath(), String.valueOf(ownerId)).toFile();
     }
 
     /**
@@ -69,6 +64,44 @@ public final class GitCheckout {
                                               @NonNull Map<String, Object> sourceSettings,
                                               @NonNull File checkout) throws Exception {
 
+        GitRepository repo = repositoryFor(ownerModel, ownerId, ref, sourceSettings);
+        GitRepository.GitResult result;
+
+        if (checkout.isDirectory() && repo.isMatchingRepo(checkout)) {
+            result = repo.fetchAndReset(checkout);
+        } else {
+            deleteTree(checkout);
+            File parent = checkout.getParentFile();
+            if (parent != null) {
+                parent.mkdirs();
+            }
+            result = repo.clone(checkout);
+        }
+
+        if (!result.success()) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_checkout_failed")
+                .withArg("reason", result.output()));
+        }
+
+        String commit = repo.getCurrentCommit(checkout);
+
+        if (commit == null || commit.isBlank()) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_checkout_failed")
+                .withArg("reason", "no commit identity"));
+        }
+
+        return commit;
+    }
+
+    /**
+     * THE repository a record's source names, at {@code ref}, judged before git runs and carrying the bound
+     * provider's credentials: what a checkout clones and the scheduled check asks for the branch's head.
+     *
+     * @throws Violations when no repository is declared, or the URL or the ref may not be cloned
+     */
+    public static @NonNull GitRepository repositoryFor(@NonNull Identifier ownerModel, int ownerId,
+                                                       @NonNull String ref,
+                                                       @NonNull Map<String, Object> sourceSettings) {
         String repoUrl = GitProviders.requireCloneUrl(sourceSettings);
 
         if (!GitRefNames.isValid(ref)) {
@@ -97,43 +130,18 @@ public final class GitCheckout {
             localAllowed);
 
         if (GitProviders.bindingOf(sourceSettings) != null) {
-            repo.setCredentialEnv(() -> {
+            repo.setAccess(() -> {
                 try {
-                    return GitProviders.credentialEnv(sourceSettings);
+                    GitAccess access = GitProviders.access(sourceSettings);
+                    return access == null ? GitAccess.NONE : access;
                 } catch (Exception e) {
                     Blast.log("CHECKOUT:", ownerModel, ownerId,
                         "provider credential unavailable -", e.getMessage());
-                    return null;
+                    return GitAccess.NONE;
                 }
             });
         }
-
-        GitRepository.GitResult result;
-
-        if (checkout.isDirectory() && repo.isMatchingRepo(checkout)) {
-            result = repo.fetchAndReset(checkout);
-        } else {
-            deleteTree(checkout);
-            File parent = checkout.getParentFile();
-            if (parent != null) {
-                parent.mkdirs();
-            }
-            result = repo.clone(checkout);
-        }
-
-        if (!result.success()) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_checkout_failed")
-                .withArg("reason", result.output()));
-        }
-
-        String commit = repo.getCurrentCommit(checkout);
-
-        if (commit == null || commit.isBlank()) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_checkout_failed")
-                .withArg("reason", "no commit identity"));
-        }
-
-        return commit;
+        return repo;
     }
 
     /**

@@ -38,26 +38,14 @@ final class WorkloadErrors {
     }
 
     /**
-     * What stopped this workload with an error as one text: the worded cause, then the technical words after it.
-     *
-     * @param withDetail whether the cause's stored detail (a failure's own message) may be shown; a delegated reader
-     *                   gets the cause's sentence only, since a daemon's message can name the host's internals
-     * @return what stopped this workload with an error, or a neutral sentence when no cause is recorded
-     */
-    static @NonNull Microcopy detailOf(@NonNull Row instance, boolean withDetail) {
-        Reading reading = readingOf(instance, withDetail);
-        return reading.technical() == null ? reading.worded()
-            : Microcopy.concat(List.of(reading.worded(), Microcopy.literal(" "), reading.technical()));
-    }
-
-    /**
      * What stopped this workload with an error, worded, and the failure's own message as a separate technical line.
      *
      * AIDEV-NOTE: a recorded message is stored text in the daemon's or a gate's English ("Conflict. The container name
      * ... is already in use"), never localized copy, so it is never the sentence a reader is given first: failed
      * starts once read "What refused it: " and then that text. It follows the worded cause as "Technically: ...".
      *
-     * @param withDetail whether the cause's stored detail may be shown, as {@link #detailOf}
+     * @param withDetail whether the cause's stored detail (a failure's own message) may be shown; a delegated reader
+     *                   gets the cause's sentence only, since a daemon's message can name the host's internals
      */
     static @NonNull Reading readingOf(@NonNull Row instance, boolean withDetail) {
         Integer id = instance.get(InstanceModel.ID);

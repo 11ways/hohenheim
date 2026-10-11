@@ -10,6 +10,7 @@ import be.elevenways.protoblast.server.process.SubprocessException;
 import be.elevenways.protoblast.server.process.Termination;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,7 +18,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -77,12 +80,11 @@ public class GitRepository {
     private final boolean localSourcesAllowed;
 
     /**
-     * Per-operation credential environment (evaluated fresh so a minted short-lived
-     * token is current), or null for credential-less operation. Values go into the git
-     * process ENVIRONMENT only -- never onto the command line, never into the URL.
+     * Per-command credential access (asked fresh so a minted short-lived token is current), or null for
+     * credential-less operation. It reaches git through the process ENVIRONMENT only -- never the command line, never
+     * the URL -- and is closed once the command ran, so a key file lives exactly as long as its command.
      */
-    private volatile java.util.function.@Nullable Supplier<@Nullable Map<String, String>>
-        credentialEnv;
+    private volatile @Nullable Supplier<@NonNull GitAccess> access;
 
     /** A REMOTE-only repository: local paths and {@code file://} are refused. */
     public GitRepository(String repositoryUrl, String branch, boolean shallow,
@@ -125,10 +127,9 @@ public class GitRepository {
         this.timeoutMillis = timeoutMillis;
     }
 
-    /** Install the credential-environment supplier (provider-bound sites). */
-    public void setCredentialEnv(
-            java.util.function.@Nullable Supplier<@Nullable Map<String, String>> supplier) {
-        this.credentialEnv = supplier;
+    /** Install the credential access supplier (provider-bound sources). */
+    public void setAccess(@Nullable Supplier<@NonNull GitAccess> supplier) {
+        this.access = supplier;
     }
 
     /**
@@ -147,7 +148,7 @@ public class GitRepository {
         cmd.add(repositoryUrl);
         cmd.add(directory.getAbsolutePath());
 
-        return execute(cmd, directory.getParentFile(), remoteEnv());
+        return remote(cmd, directory.getParentFile());
     }
 
     /**
@@ -158,8 +159,7 @@ public class GitRepository {
      * {@code origin/<branch>} can never read as an option.
      */
     public GitResult fetchAndReset(File directory) throws InterruptedException {
-        GitResult fetch = execute(git("fetch", "--", "origin", branch),
-            directory, remoteEnv());
+        GitResult fetch = remote(git("fetch", "--", "origin", branch), directory);
         if (!fetch.success()) return fetch;
 
         return execute(git("reset", "--hard", "origin/" + branch), directory, null);
@@ -183,8 +183,7 @@ public class GitRepository {
      */
     public boolean hasNewCommits(File directory) {
         try {
-            GitResult lsRemote = execute(git("ls-remote", "--", "origin", branch),
-                directory, remoteEnv());
+            GitResult lsRemote = remote(git("ls-remote", "--", "origin", branch), directory);
             if (!lsRemote.success()) return false;
 
             String remoteOutput = lsRemote.output().trim();
@@ -199,6 +198,41 @@ public class GitRepository {
             Thread.currentThread().interrupt();
             return false;
         }
+    }
+
+    /**
+     * The commit the remote's branch points at, asked of the repository URL itself: no checkout needed.
+     *
+     * @return the result, its output the bare commit id when the branch exists and empty when it does not
+     */
+    public GitResult remoteHead() throws InterruptedException {
+        GitResult listed = remote(git("ls-remote", "--", repositoryUrl, "refs/heads/" + branch), null);
+        if (!listed.success()) {
+            return listed;
+        }
+        String output = listed.output().trim();
+        return new GitResult(true, output.isEmpty() ? "" : output.split("\\s+")[0], 0);
+    }
+
+    /**
+     * The branches the remote holds, asked of the repository URL itself.
+     *
+     * @return the branch names, in the remote's order
+     * @throws IOException naming git's own words when the remote cannot be listed
+     */
+    public List<String> remoteBranches() throws InterruptedException, IOException {
+        GitResult listed = remote(git("ls-remote", "--heads", "--", repositoryUrl), null);
+        if (!listed.success()) {
+            throw new IOException(listed.output().trim());
+        }
+        List<String> branches = new ArrayList<>();
+        for (String line : listed.output().split("\n")) {
+            int ref = line.indexOf("refs/heads/");
+            if (ref >= 0) {
+                branches.add(line.substring(ref + "refs/heads/".length()).trim());
+            }
+        }
+        return branches;
     }
 
     /**
@@ -231,10 +265,12 @@ public class GitRepository {
         return command;
     }
 
-    /** The credential environment for remote-touching commands; null when unbound. */
-    private @Nullable Map<String, String> remoteEnv() {
-        var supplier = this.credentialEnv;
-        return supplier != null ? supplier.get() : null;
+    /** Runs a remote-touching command under a fresh credential access, closed as soon as git ran. */
+    private GitResult remote(List<String> command, @Nullable File workDir) throws InterruptedException {
+        var supplier = this.access;
+        try (GitAccess granted = supplier != null ? supplier.get() : GitAccess.NONE) {
+            return execute(command, workDir, granted.environment());
+        }
     }
 
     GitResult execute(List<String> command, File workDir,
@@ -397,6 +433,31 @@ public class GitRepository {
     public static boolean isLocalCloneUrl(@Nullable String repositoryUrl) {
         String url = cleaned(repositoryUrl);
         return url != null && (CLONE_URL_FILE.matcher(url).matches() || url.startsWith("/"));
+    }
+
+    /**
+     * The repository's path as a forge names it ({@code org/repo}): the path of a scheme URL or of the scp-style
+     * spelling, or the value itself when it is no URL (a provider binding's repository), without a leading slash or
+     * a {@code .git} suffix.
+     *
+     * @return the path, or null for a blank value or one that names no path
+     */
+    public static @Nullable String pathOf(@Nullable String repository) {
+        String value = repository == null ? "" : repository.trim();
+        int schemeEnd = value.indexOf("://");
+        if (schemeEnd >= 0) {
+            int pathStart = value.indexOf('/', schemeEnd + 3);
+            value = pathStart < 0 ? "" : value.substring(pathStart + 1);
+        } else if (CLONE_URL_SCP.matcher(value).matches()) {
+            value = value.substring(value.indexOf(':') + 1);
+        }
+        while (value.startsWith("/")) {
+            value = value.substring(1);
+        }
+        if (value.endsWith(".git")) {
+            value = value.substring(0, value.length() - 4);
+        }
+        return value.isEmpty() ? null : value;
     }
 
     /**

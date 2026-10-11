@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.WorkspaceBuilds;
+import be.elevenways.hohenheim.server.source.GitSourcePolls;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.source.WebhookOutcome;
 import be.elevenways.hohenheim.source.GitSourceSchema;
@@ -295,6 +296,14 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             : Objects.toString(settings.get(GitSourceSchema.REPOSITORY_URL), ""));
         vars.put("sourceBranch", Objects.toString(settings.get(GitSourceSchema.BRANCH), ""));
         vars.put("autoDeploy", GitSourceSchema.autoDeploys(settings));
+        // The scheduled check: how often it asks, and what its last answer was since this process started.
+        int pollSeconds = GitSourceSchema.pollSeconds(settings);
+        GitSourcePolls.Check check = pollSeconds == 0 ? null
+            : GitSourcePolls.lastCheck(application.get(InstanceModel.ID));
+        vars.put("pollMinutes", pollSeconds / 60);
+        vars.put("pollCheckedIso", check == null ? "" : check.at().toString());
+        vars.put("pollFailed", check != null && check.failure() != null);
+        vars.put("pollFinding", check == null ? "" : CmsSupport.resolvedTextOrDefault(findingOf(check)));
         List<Map<String, Object>> pushes = new ArrayList<>();
         for (Row delivery : Models.get(WebhookDeliveryModel.class).findRecent(application.get(InstanceModel.ID), 10)) {
             Map<String, Object> push = new HashMap<>();
@@ -309,6 +318,18 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             pushes.add(push);
         }
         vars.put("pushes", pushes);
+    }
+
+    /** What a scheduled check found, in words: the commit it saw, or why it saw none. */
+    private static @NonNull Microcopy findingOf(GitSourcePolls.@NonNull Check check) {
+        Microcopy failure = check.failure();
+        if (failure != null) {
+            return failure;
+        }
+        String commit = Objects.toString(check.remoteCommit(), "");
+        String shortCommit = commit.length() > 7 ? commit.substring(0, 7) : commit;
+        return HohenheimMicrocopy.DEPLOYMENTS.of(check.deploying() ? "poll_deploying" : "poll_current")
+            .withArg("commit", shortCommit);
     }
 
     /** Where a succeeded release stands now: serving, kept for one-step rollback, or replaced and removed. */

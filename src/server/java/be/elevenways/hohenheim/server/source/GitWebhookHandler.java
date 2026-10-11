@@ -7,10 +7,8 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.preview.PreviewBranches;
-import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
-import be.elevenways.hohenheim.server.instance.WorkspaceBuilds;
 import be.elevenways.hohenheim.server.instance.WorkspaceKind;
 import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.source.GitRefNames;
@@ -397,19 +395,7 @@ public class GitWebhookHandler {
             GitProviderClient.StatusState.PENDING, DeployStatuses.CONTEXT_DEPLOY,
             "Deploy queued", null);
         // The build takes minutes; the provider expects an answer in seconds.
-        String deployBranch = configuredBranch;
-        // Which deploy verb depends on WHAT the record is: an application converges a
-        // release, a workspace checks out and builds inside its own container. The branch
-        // is on the KIND, not on a name -- a third source-driven kind wires itself here.
-        boolean workspace = WorkspaceKind.ID.toString()
-            .equals(application.get(InstanceModel.KIND));
-        HandlerSupport.inBackgroundLogged("WEBHOOK: deploy of instance " + applicationId, () -> {
-            if (workspace) {
-                new WorkspaceBuilds().deploy(applicationId, deployBranch, pushedSha, DeployTrigger.WEBHOOK);
-            } else {
-                ApplicationDeploys.deploy(applicationId, deployBranch, pushedSha, DeployTrigger.WEBHOOK);
-            }
-        });
+        SourceDeploys.deployInBackground(application, configuredBranch, pushedSha, DeployTrigger.WEBHOOK);
         WebhookDeliveries.stampAction(claimed, WebhookOutcome.DEPLOY_QUEUED);
         Blast.log("GIT WEBHOOK: deploy queued for application",
             application.get(InstanceModel.NAME), "(id:", applicationId + ")");
@@ -715,23 +701,8 @@ public class GitWebhookHandler {
     /** The repository the application is bound to: the provider binding, else the URL's path. */
     static @Nullable String boundRepositoryOf(@NonNull Map<String, Object> sourceSettings) {
         String repository = trimmed(sourceSettings.get(GitSourceSchema.REPOSITORY));
-        if (!repository.isEmpty()) {
-            return repository;
-        }
-        String url = trimmed(sourceSettings.get(GitSourceSchema.REPOSITORY_URL));
-        int schemeEnd = url.indexOf("://");
-        if (schemeEnd < 0) {
-            return null;
-        }
-        int pathStart = url.indexOf('/', schemeEnd + 3);
-        if (pathStart < 0) {
-            return null;
-        }
-        String repoPath = url.substring(pathStart + 1);
-        if (repoPath.endsWith(".git")) {
-            repoPath = repoPath.substring(0, repoPath.length() - 4);
-        }
-        return repoPath.isEmpty() ? null : repoPath;
+        return GitRepository.pathOf(repository.isEmpty()
+            ? trimmed(sourceSettings.get(GitSourceSchema.REPOSITORY_URL)) : repository);
     }
 
     private static void refuse(HttpServerExchange exchange) {

@@ -54,7 +54,13 @@ public enum DeployTrigger {
      * third party's push is not an argument against it -- the deploy is recorded, the
      * decision is stated, and nothing is spent.
      */
-    WEBHOOK("webhook", false);
+    WEBHOOK("webhook", false),
+
+    /**
+     * The scheduled check found a new commit on the source's branch ({@code GitSourcePolls}): the same third-party
+     * push as {@link #WEBHOOK}, only learned by asking, so it may not start a stopped workload either.
+     */
+    POLL("poll", false);
 
     /**
      * What an unrecognised stored word reads as: the first DECLARED member that may not

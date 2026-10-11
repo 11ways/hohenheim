@@ -31,6 +31,12 @@ import be.elevenways.zenit.cms.server.panel.PartsForms;
 import be.elevenways.zenit.cms.server.panel.PartsLists;
 import be.elevenways.zenit.cms.server.panel.ResourceVerbs;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.brand.Brands;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
+import be.elevenways.zenit.common.security.AccountabilityOrigin;
+import be.elevenways.zenit.common.security.SystemPrincipal;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.model.Model;
@@ -44,6 +50,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.net.URLEncoder;
+import java.time.Instant;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -503,6 +510,78 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         } finally {
             local.restore();
         }
+    }
+
+    /**
+     * The landing's Recent band tells the tenant what happened to what they may see, their own acts worded "You",
+     * and never an entry about anyone else's record; the usage card names the operator once one is declared.
+     */
+    @Test
+    void theLandingTellsTheTenantWhatHappenedToTheirAppsAndWhoRunsTheInstallation() throws Exception {
+        // 1. Three entries: the tenant created their app, the system restarted it, and someone else's app was
+        //    created where the tenant holds nothing.
+        Model activity = Models.get(ActivityModel.class);
+        activity.find().delete();
+        Instant now = Now.instant();
+        Row other = Models.get(InstanceModel.class).createEmptyRow();
+        other.set(InstanceModel.NAME, "someone-elses-app");
+        other.set(InstanceModel.KIND, "hohenheim:docker_container");
+        other.set(InstanceModel.SETTINGS, new LinkedHashMap<>(Map.of("image", "alpine")));
+        Models.get(InstanceModel.class).save(other);
+        acted(activity, this.appId, "tenant-survival", ZenitActivityAction.CREATE, String.valueOf(this.tenantId),
+            now.minusSeconds(30));
+        acted(activity, this.appId, "tenant-survival", ZenitActivityAction.UPDATE, null, now.minusSeconds(20));
+        acted(activity, other.get(InstanceModel.ID), "someone-elses-app", ZenitActivityAction.CREATE, null,
+            now.minusSeconds(10));
+
+        // 2. The band lists the two entries about the tenant's app, their own act worded for them.
+        String home = page("/manage/dashboard");
+        assertThat(home).as("step 2: the band is headed Recent").contains(">Recent<");
+        assertThat(home).as("step 2: the tenant's own act reads You").contains("You created tenant-survival");
+        assertThat(home).as("step 2: the other entry about their app is listed too").contains("changed tenant-survival");
+
+        // 3. Nothing about a record the tenant may not see, and no door into the operator's activity log.
+        assertThat(home).as("step 3: another tenant's app is never named").doesNotContain("someone-elses-app");
+        assertThat(home).as("step 3: no link into the activity log").doesNotContain("/manage/activity");
+
+        // 4. With no operator declared, the usage card asks the tenant to ask "the operator of this installation".
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Quota.MAX_INSTANCES_PER_OWNER, 5);
+        String before = page("/manage/dashboard");
+        assertThat(before).as("step 4: the unnamed operator")
+            .contains("Need more? Ask the operator of this installation.");
+
+        // 5. Once the installation names its operator, the card names them in its lead and its closing line.
+        String previous = Zenit.SETTINGS_VALUES.getValue(Brands.OPERATOR);
+        Zenit.SETTINGS_VALUES.setValue(Brands.OPERATOR, "Jelle De Loecker");
+        try {
+            String named = page("/manage/dashboard");
+            assertThat(named).as("step 5: the lead names the operator").contains("Limits set by Jelle De Loecker.");
+            assertThat(named).as("step 5: and so does the way to ask for more")
+                .contains("Need more? Ask Jelle De Loecker, who manages this installation.");
+        } finally {
+            Zenit.SETTINGS_VALUES.setValue(Brands.OPERATOR, previous);
+        }
+    }
+
+    /** One activity entry about an instance, by an account (its id) or by the system (null). */
+    private static void acted(Model activity, Object instanceId, String title, ZenitActivityAction action,
+                              String accountId, Instant at) {
+        Row row = activity.createEmptyRow();
+        row.set(ActivityModel.MODEL, InstanceModel.MODEL_ID.toString());
+        row.set(ActivityModel.RECORD_ID, String.valueOf(instanceId));
+        row.set(ActivityModel.RECORD_TITLE, title);
+        row.set(ActivityModel.ACTION, action.id().toString());
+        row.set(ActivityModel.CREATED_AT, at);
+        if (accountId != null) {
+            row.set(ActivityModel.ACTOR, accountId);
+            row.set(ActivityModel.ORIGIN, AccountabilityOrigin.WEB.token());
+        } else {
+            var system = SystemPrincipal.INSTANCE.reference();
+            row.set(ActivityModel.ACTOR_KIND, system.storedKind());
+            row.set(ActivityModel.ACTOR, Long.toString(system.id()));
+            row.set(ActivityModel.ORIGIN, AccountabilityOrigin.SYSTEM.token());
+        }
+        activity.save(row);
     }
 
     /** @return the usage card's line of one budget, up to its end */

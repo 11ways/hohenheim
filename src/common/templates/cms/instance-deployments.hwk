@@ -24,6 +24,10 @@
 {% declare sourceRepository: String = "" %}
 {% declare sourceBranch: String = "" %}
 {% declare autoDeploy: Boolean = false %}
+{% declare pollMinutes: Integer = 0 %}
+{% declare pollCheckedIso: String = "" %}
+{% declare pollFailed: Boolean = false %}
+{% declare pollFinding: String = "" %}
 {% declare pushes: List = null %}
 {% declare returnUrl: String = "" %}
 {#- ReturnTarget.PARAM, supplied by the page: ReturnTarget lives in zenit's SERVER
@@ -179,6 +183,14 @@
         </pl-card-header>
         <pl-card-content>
             <p>{% if autoDeploy %}{{ t("auto_deploy_on", scope: "deployments") }}{% else %}{{ t("auto_deploy_off", scope: "deployments") }}{% /if %}</p>
+            {% if pollMinutes > 0 %}
+            <p data-hh-poll>{{ t("poll_every", scope: "deployments", minutes: pollMinutes) }}</p>
+            {% if pollCheckedIso != "" %}
+            <p class="hh-deploys-sub" data-hh-poll-check data-hh-poll-failed={% pollFailed %}>
+                {{ t("poll_last", scope: "deployments") }} <pl-relative-time datetime={% pollCheckedIso %} wording={% timeWording %} title={% pollCheckedIso %}></pl-relative-time>: {{ pollFinding }}
+            </p>
+            {% /if %}
+            {% /if %}
             {% if webhookSecret != "" %}
             <dl class="hh-webhook-fields">
                 <dt>{{ t("payload_url", scope: "deployments") }}</dt>

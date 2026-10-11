@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.test.instance;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.sftp.server.SftpSessionInfo;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.ControllerScope;
@@ -28,6 +29,7 @@ import be.elevenways.protoblast.common.i18n.MessageResolver;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.ApiKeyService;
+import be.elevenways.zenit.auth.server.GrantService;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
@@ -189,11 +191,15 @@ class SftpJourneyTest {
         int reader = ApiSupport.user("sftp-reader@live.test");
         int writer = ApiSupport.user("sftp-writer@live.test");
         int stranger = ApiSupport.user("sftp-stranger@live.test");
+        // An operator holds every permission through the wildcard and no grant on this instance at all.
+        int operator = ApiSupport.user("sftp-operator@live.test");
+        GrantService.createDirectGrant(GrantSubjectType.USER, operator, "*", true);
         grant(reader, id, HohenheimCapabilities.FILES_READ);
         grant(writer, id, HohenheimCapabilities.FILES_READ);
         grant(writer, id, HohenheimCapabilities.FILES_WRITE);
         String readerPassword = password(reader, false);
         String writerPassword = password(writer, true);
+        String operatorPassword = password(operator, true);
         String strangerPassword = ApiKeyService.create(stranger, "SFTP", InstanceSftpRealm.FILE_SCOPES, null)
             .plaintext();
 
@@ -247,6 +253,21 @@ class SftpJourneyTest {
                 .as("step 4: nor create a directory").isEqualTo(SftpConstants.SSH_FX_PERMISSION_DENIED);
             assertThat(inContainer(docker, handle, "ls /data"))
                 .as("step 4: nothing the reader attempted landed").doesNotContain("sneaky", "by-reader");
+        }
+
+        // 4b. An operator's password carries the files of every app (and the gate), so it reaches this app's files
+        //     without a grant on it, and nothing past them: the key holds no admin permission.
+        assertThat(InstanceSftpRealm.passwordScopes(holder(operator), true))
+            .as("step 4b: an operator's SFTP password carries the files of every app")
+            .contains(HohenheimAccess.FILES_ALL.value());
+        assertThat(InstanceSftpRealm.passwordScopes(holder(reader), false))
+            .as("step 4b: a tenant's never does").doesNotContain(HohenheimAccess.FILES_ALL.value());
+        try (Connection operating = signIn(client, port, InstanceSftpRealm.username("sftp-operator@live.test", id),
+            operatorPassword)) {
+            assertThat(names(operating.sftp, "/data")).as("step 4b: the operator lists the app's volume")
+                .contains("hello.txt");
+            assertThat(readText(operating.sftp, "/data/hello.txt")).as("step 4b: and reads its files")
+                .isEqualTo("hello\n");
         }
 
         // 5. files.write: an upload past the browser's cap spools and lands whole; it reads back byte for byte.
@@ -385,9 +406,13 @@ class SftpJourneyTest {
 
     /** An SFTP password minted the way the Files tab's card mints one: by its holder, narrowed to what it holds. */
     private static String password(int userId, boolean write) {
-        AccessContext holder = AccessContext.detached(new UserPrincipal((long) userId, "user-" + userId));
-        return ApiKeyService.create(holder, userId, "SFTP", InstanceSftpRealm.passwordScopes(write), null)
-            .plaintext();
+        return ApiKeyService.create(holder(userId), userId, "SFTP", InstanceSftpRealm.passwordScopes(holder(userId),
+            write), null).plaintext();
+    }
+
+    /** The account's own session, as the Files tab reads it. */
+    private static AccessContext holder(int userId) {
+        return AccessContext.detached(new UserPrincipal((long) userId, "user-" + userId));
     }
 
     private static Connection signIn(SshClient client, int port, String username, String password) throws IOException {

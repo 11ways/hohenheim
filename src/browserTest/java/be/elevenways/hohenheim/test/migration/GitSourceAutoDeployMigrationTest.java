@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * M011 against the git sources production holds: a source that never stored auto_deploy read off, and still reads
- * off once a new source's absent flag reads on.
+ * off once a new source's absent flag reads on; and no stored source starts checking its repository on a schedule.
  *
  * @author Jelle De Loecker
  * @since 0.9.0
@@ -76,6 +76,47 @@ class GitSourceAutoDeployMigrationTest {
             .as("step 4: a second run keeps the opted-in source on").isTrue();
         assertThat(GitSourceSchema.autoDeploys(settings(datasource, application)))
             .as("step 4: and the legacy one off").isFalse();
+    }
+
+    @Test
+    void everyStoredSourceKeepsNotCheckingItsRepository() throws Exception {
+        SqlDatasource datasource = TestDatabases.freshDatasource();
+
+        // 1. Sources as the previous builds stored them: one deploying on push with no interval, one carrying an
+        //    interval nothing ever read, and a kind that carries no git source.
+        Map<String, Object> deploying = legacySource();
+        deploying.put(GitSourceSchema.AUTO_DEPLOY, true);
+        int onPush = instance(datasource, "hohenheim:application", deploying);
+        Map<String, Object> interval = legacySource();
+        interval.put(GitSourceSchema.AUTO_DEPLOY, true);
+        interval.put(GitSourceSchema.POLL_INTERVAL, 120);
+        int stale = instance(datasource, "hohenheim:workspace", interval);
+        int container = instance(datasource, "hohenheim:docker_container",
+            new LinkedHashMap<>(Map.of("image", "alpine")));
+
+        // 2. Under today's default they would start asking their repository.
+        assertThat(GitSourceSchema.pollSeconds(settings(datasource, onPush)))
+            .as("step 2: an unmigrated source would ask every five minutes").isEqualTo(300);
+        assertThat(GitSourceSchema.pollSeconds(settings(datasource, stale)))
+            .as("step 2: and a stored interval would come into effect").isEqualTo(120);
+
+        // 3. The data step stores 0 on both, and keeps everything else they stored.
+        M011_ReviewHardening.keepStoredSourcesUnpolled(datasource);
+        assertThat(GitSourceSchema.pollSeconds(settings(datasource, onPush)))
+            .as("step 3: the push-deploying source never asks").isZero();
+        assertThat(GitSourceSchema.pollSeconds(settings(datasource, stale)))
+            .as("step 3: nor does the one with a stale interval").isZero();
+        assertThat(GitSourceSchema.autoDeploys(settings(datasource, onPush)))
+            .as("step 3: it still deploys on push").isTrue();
+        assertThat(settings(datasource, stale).get(GitSourceSchema.REPOSITORY_URL))
+            .as("step 3: its other settings are kept").isEqualTo("https://git.example.test/acme/legacy.git");
+
+        // 4. A kind without a git source is left as stored, and a second run changes nothing.
+        assertThat(settings(datasource, container)).as("step 4: a container gains no interval")
+            .doesNotContainKey(GitSourceSchema.POLL_INTERVAL);
+        M011_ReviewHardening.keepStoredSourcesUnpolled(datasource);
+        assertThat(settings(datasource, onPush).get(GitSourceSchema.POLL_INTERVAL))
+            .as("step 4: a second run keeps the stored 0").isEqualTo(0);
     }
 
     private static Map<String, Object> legacySource() {

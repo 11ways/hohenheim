@@ -100,7 +100,7 @@ class GitProviderOwnershipTest extends HohenheimTestBase {
     void theKindRegistryIsTheOnlyVocabulary() {
         assertThat(GitProviderModel.KIND.getValues().keySet())
             .as("the form's kind options enumerate the registry, never a hand-written list")
-            .containsExactlyInAnyOrder("hohenheim:github", "hohenheim:gitlab", "hohenheim:gitea");
+            .containsExactlyInAnyOrder("hohenheim:github", "hohenheim:gitlab", "hohenheim:gitea", "hohenheim:ssh");
 
         for (String token : GitProviderModel.KIND.getValues().keySet()) {
             assertThat(GitProviderKinds.getHandler(token))

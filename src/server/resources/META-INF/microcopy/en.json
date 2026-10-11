@@ -624,11 +624,11 @@
   ],
   "poll_interval": [
     {
-      "text": "Poll interval",
+      "text": "Check for new commits every",
       "scope": "hohenheim_field"
     },
     {
-      "text": "Seconds between repository checks when polling is enabled.",
+      "text": "Seconds between two checks of the repository for new commits while automatic deploys are on, at least 60. 0 never checks; a webhook still deploys on push.",
       "scope": "help"
     }
   ],
@@ -1576,6 +1576,22 @@
       "target": "task_description"
     }
   ],
+  "poll_git_sources": [
+    {
+      "text": "Check git sources for new commits",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Deploys an app when its branch has a commit it does not run yet",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "poll_branch_missing": {
+    "text": "the repository has no branch {$branch}.",
+    "scope": "deployments"
+  },
   "clean_orphan_certificates": [
     {
       "text": "Clean unused certificates",
@@ -4418,6 +4434,10 @@
     "text": "Manage all sites",
     "scope": "permission"
   },
+  "hohenheim_instances_files_all": {
+    "text": "Read and change the files of every app",
+    "scope": "permission"
+  },
   "hohenheim_media_manage": {
     "text": "Manage install media",
     "scope": "permission"
@@ -6769,6 +6789,14 @@
     {
       "text": "SSH",
       "scope": "ban_scope"
+    },
+    {
+      "text": "SSH key",
+      "scope": "git_provider_kind"
+    },
+    {
+      "text": "Any git host over SSH, with a private key you paste",
+      "scope": "git_provider_kind_description"
     }
   ],
   "web": {
@@ -8432,7 +8460,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "The provider API dialect: GitHub, GitLab or Gitea.",
+      "text": "How Hohenheim reaches the repositories: through the GitHub, GitLab or Gitea API with a token, or over SSH with a private key.",
       "scope": "help"
     }
   ],
@@ -8486,6 +8514,30 @@
       "scope": "help"
     }
   ],
+  "provider_ssh_private_key": [
+    {
+      "text": "Private SSH key",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "The private key (OpenSSH or PEM, without a passphrase) that may read the repository, such as a deploy key. Stored encrypted.",
+      "scope": "help"
+    }
+  ],
+  "provider_ssh_repository": [
+    {
+      "text": "Repository",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "The repository as git clones it over SSH, such as git@github.com:you/site.git.",
+      "scope": "help"
+    }
+  ],
+  "workspace_source_key_refused": {
+    "text": "A workspace clones inside its own container, which never receives an SSH key. Use a token connection or a public repository.",
+    "scope": "violations"
+  },
   "provider_settings": {
     "text": "Kind settings",
     "scope": "hohenheim_field"
@@ -14493,10 +14545,16 @@
     "text": "Details",
     "scope": "app_overview"
   },
-  "recent": {
-    "text": "Recent",
-    "scope": "app_overview"
-  },
+  "recent": [
+    {
+      "text": "Recent",
+      "scope": "app_overview"
+    },
+    {
+      "text": "Recent",
+      "scope": "manage_dashboard"
+    }
+  ],
   "main_address": {
     "text": "Main address",
     "scope": "app_overview"
@@ -15130,6 +15188,10 @@
     "text": "General",
     "scope": "settings_section"
   },
+  "section_brand": {
+    "text": "Name and look",
+    "scope": "settings_section"
+  },
   "section_https": {
     "text": "HTTPS and certificates",
     "scope": "settings_section"
@@ -15363,6 +15425,26 @@
   },
   "auto_deploy_on": {
     "text": "Every push to the branch deploys it.",
+    "scope": "deployments"
+  },
+  "poll_every": {
+    "text": ".match {$minutes :number}\none {{It also checks the repository for new commits every minute.}}\n* {{It also checks the repository for new commits every {$minutes} minutes.}}",
+    "scope": "deployments"
+  },
+  "poll_last": {
+    "text": "Last checked",
+    "scope": "deployments"
+  },
+  "poll_current": {
+    "text": "up to date at {$commit}.",
+    "scope": "deployments"
+  },
+  "poll_deploying": {
+    "text": "found {$commit} and started deploying it.",
+    "scope": "deployments"
+  },
+  "poll_failed": {
+    "text": "could not read the repository: {$reason}",
     "scope": "deployments"
   },
   "auto_deploy_off": {
@@ -15941,6 +16023,14 @@
   ],
   "need_more": {
     "text": "Need more? Ask the operator of this installation.",
+    "scope": "tenant_usage"
+  },
+  "need_more_named": {
+    "text": "Need more? Ask {$operator}, who manages this installation.",
+    "scope": "tenant_usage"
+  },
+  "lead_named": {
+    "text": "Limits set by {$operator}.",
     "scope": "tenant_usage"
   },
   "of_count": {
@@ -17164,6 +17254,10 @@
     "text": "The operator of this installation can fix this.",
     "scope": "app_health"
   },
+  "operator_fixes_named": {
+    "text": "{$operator} can fix this.",
+    "scope": "app_health"
+  },
   "console_instance_description": {
     "text": "its console",
     "scope": "capability"
@@ -17439,5 +17533,14 @@
   "take_over": {
     "text": "Take over",
     "scope": "instance_framebuffer"
-  }
+  },
+  "routes": { "text": "Events per channel", "scope": "notification_channel" },
+  "routes_help": { "text": "Tick the channels each event reaches. A channel with every event ticked also gets the events a later version adds.", "scope": "notification_channel" },
+  "event": { "text": "Event", "scope": "notification_channel" },
+  "events_except": { "text": "Every event except {$events}", "scope": "notification_channel" },
+  "route_events": { "text": "Which events go where", "scope": "notification_channel" },
+  "routes_save": { "text": "Save", "scope": "notification_channel" },
+  "routes_saved": { "text": "Saved which events reach which channel.", "scope": "notification_channel" },
+  "notification_channel_unknown": { "text": "This notification channel no longer exists.", "scope": "violations" },
+  "route_notification_events": { "text": "{$actor} chose which events reach which notification channel", "scope": "hohenheim", "target": "happened" }
 }

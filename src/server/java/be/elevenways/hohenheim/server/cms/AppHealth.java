@@ -103,7 +103,7 @@ final class AppHealth {
                 && RecordHealthReads.fixCell(PanelGate.request(manage, reader), entry, own, health) != null) {
             return health;
         }
-        Microcopy who = HohenheimMicrocopy.APP_HEALTH.of("operator_fixes");
+        Microcopy who = CmsSupport.operatorWords(HohenheimMicrocopy.APP_HEALTH, "operator_fixes");
         return health.detail(health.detail() == null ? who
             : Microcopy.concat(List.of(health.detail(), Microcopy.literal(" "), who)));
     }
@@ -384,11 +384,12 @@ final class AppHealth {
         RecordHealth health = switch (status) {
             case RUNNING -> runningVerdict(facts.sitesByInstance.get(instance.get(InstanceModel.ID)), facts.sites,
                 delegated, viewer);
-            // What stopped it, as its recorded cause says (the dashboard item's detail too); a tenant reads the
-            // sentence without the daemon's own message.
+            // What stopped it, as its recorded cause says (the dashboard item's detail too), the failure's own message
+            // as the band's technical line; a tenant reads the sentence without the daemon's own message.
             case ERROR -> {
+                WorkloadErrors.Reading reading = WorkloadErrors.readingOf(instance, !delegated);
                 RecordHealth stopped = RecordHealth.broken(WorkloadErrors.stoppageOf(instance).headline())
-                    .detail(WorkloadErrors.detailOf(instance, !delegated));
+                    .detail(reading.worded()).technical(reading.technical());
                 // Restart is its fix, unless its root is another record's (the host that refuses its start, the
                 // database whose old engine it is): a restart would be refused or bring back what should go. On
                 // /manage it is offered to a holder of power; everyone else reads who can (spokenTo).

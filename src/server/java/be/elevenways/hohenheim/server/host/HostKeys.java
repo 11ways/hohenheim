@@ -1,15 +1,14 @@
 package be.elevenways.hohenheim.server.host;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
+import be.elevenways.hohenheim.server.DataDirectory;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.security.SshKeyType;
@@ -364,9 +363,7 @@ public final class HostKeys {
      * token, as the per-controller daemon resource names.
      */
     static @NonNull Path storeDirectory() {
-        Path directory = Path.of(Zenit.SETTINGS_VALUES
-            .getValue(HohenheimSettings.Storage.DATA_PATH))
-            .resolve("host-ssh").resolve(ControllerIdentity.token());
+        Path directory = DataDirectory.resolve("host-ssh", ControllerIdentity.token());
         try {
             Files.createDirectories(directory);
             trySetPermissions(directory, "rwx------");

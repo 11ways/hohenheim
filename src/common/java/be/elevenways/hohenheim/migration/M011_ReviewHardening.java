@@ -52,7 +52,9 @@ import java.util.TreeSet;
  * and the lock version of every game-domain mapping, whose writes became operations;
  * and the access-rule tree on core's TreeBehaviour: nullable positions, one tree index and dense sibling runs;
  * and every workload restarting after a crash, the stored ones and the column default;
- * and every stored git source keeping auto-deploy off once a new source starts with it on.
+ * and every stored git source keeping auto-deploy off once a new source starts with it on;
+ * and a git connection's private SSH key, and every stored git source keeping its scheduled check off once a new
+ * source checks its repository every few minutes.
  *
  * AIDEV-NOTE: this is ONE migration on purpose. It replaced M011, M012, M015, M016 and M017,
  * which no production install (kuifje at 009, robbedoes at 010) had applied; the two test installs that
@@ -255,6 +257,13 @@ public class M011_ReviewHardening extends HohenheimMigration {
         // A new git source deploys on push by default now; every stored one keeps the off an absent flag used to read.
         schema.data("keep every stored git source's auto-deploy off", "1",
             M011_ReviewHardening::keepStoredSourcesManual);
+        // A git connection may clone over SSH with a key of its own, encrypted at rest like its other credentials.
+        schema.alterTable("git_providers", table -> table.addColumn("ssh_private_key", ColumnType.TEXT,
+            column -> column.nullable(true)));
+        // A new git source checks its repository for new commits on a schedule; no stored one ever did, whatever
+        // interval it stored, so every stored one keeps not checking.
+        schema.data("keep every stored git source from checking its repository on a schedule", "1",
+            M011_ReviewHardening::keepStoredSourcesUnpolled);
         // The settings page asked the system tier itself; each setting now asks its own leaf, so whoever held the tier
         // keeps every setting the page offers.
         GrantMigrations.grantToHolders(schema, "grant the system tier's holders every settings leaf", "2",
@@ -285,6 +294,33 @@ public class M011_ReviewHardening extends HohenheimMigration {
                 Map<String, Object> rewritten = new LinkedHashMap<>();
                 stored.forEach((key, value) -> rewritten.put(String.valueOf(key), value));
                 rewritten.put(AUTO_DEPLOY_KEY, false);
+                row.set(settings, rewritten);
+                instances.save(row);
+            }
+        });
+    }
+
+    /** The source settings key holding the scheduled check's interval in seconds, as production stored it. */
+    static final String POLL_INTERVAL_KEY = "poll_interval";
+
+    /**
+     * The data step storing {@code poll_interval: 0} on every git source: nothing ever checked a repository on a
+     * schedule, so a stored interval was never in effect; trashed rows included, as {@link #keepStoredSourcesManual}.
+     */
+    public static void keepStoredSourcesUnpolled(@NonNull Datasource datasource) {
+        Db.run(datasource, () -> {
+            IntegerField id = IntegerField.builder().name("id").build();
+            StringField kind = StringField.builder().name("kind").build();
+            SchemaField settings = SchemaField.builder("settings").build();
+            FrozenModel instances = new FrozenModel("instances", id, kind, settings);
+            for (Row row : instances.find().where(kind.in(GIT_SOURCE_KINDS)).all()) {
+                Map<?, ?> stored = row.get(settings) instanceof Map<?, ?> map ? map : Map.of();
+                if (Integer.valueOf(0).equals(stored.get(POLL_INTERVAL_KEY))) {
+                    continue;
+                }
+                Map<String, Object> rewritten = new LinkedHashMap<>();
+                stored.forEach((key, value) -> rewritten.put(String.valueOf(key), value));
+                rewritten.put(POLL_INTERVAL_KEY, 0);
                 row.set(settings, rewritten);
                 instances.save(row);
             }

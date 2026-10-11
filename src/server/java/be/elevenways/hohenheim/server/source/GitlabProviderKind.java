@@ -33,6 +33,8 @@ public final class GitlabProviderKind implements GitProviderKind {
     /** Blank means gitlab.com, the kind's public host. */
     @Override public boolean requiresBaseUrl() { return false; }
 
+    @Override public boolean clonesWithKey() { return false; }
+
     @Override
     public @NonNull GitProviderClient clientFor(@NonNull Row provider, @Nullable String baseUrl,
                                                 @NonNull OutboundUrlGuard guard) {

@@ -88,14 +88,26 @@ public final class HohenheimAccess {
      * Sites have exactly one ({@link HohenheimCapabilities#MANAGE}), so the two readings coincide. On
      * InstanceModel they would not -- its vocabulary carries {@link HohenheimCapabilities#EXEC} and
      * {@link HohenheimCapabilities#IMAGE_ANY}, both deliberately admin-only and non-delegable -- so an
-     * instances-wide equivalent needs per-capability narrowing in the framework FIRST. Do not
-     * copy this declaration onto another model without it.
+     * instance-wide permission is declared NARROWED to the verbs it names ({@link #FILES_ALL}, through
+     * {@code RecordCapabilityRules.typeLevelFor}). Do not copy this declaration onto another model.
      *
      * Declared DELEGABLE (the owner's call of 2026-08-15, see ServerMain.installAuthBaselines): a
      * permission is a leaf, and holding it includes handing it on.
      */
     public static final Permission SITES_MANAGE_ALL = Permission.declare("hohenheim.sites.manage_all",
         HohenheimMicrocopy.PERMISSION.of("hohenheim_sites_manage_all"), Permission.Delegation.DELEGABLE);
+
+    /**
+     * The files of every app, read and written, and nothing else: what an operator's SFTP password or key carries, so
+     * it reaches any app's files without the reach of the admin permission. A type-level permission on instances
+     * NARROWED to {@link HohenheimCapabilities#FILES_READ} and {@link HohenheimCapabilities#FILES_WRITE}
+     * ({@code HohenheimGrantPolicy}).
+     *
+     * AIDEV-NOTE: NOT delegable. Writing every tenant's files is operator power; an operator holds it through the
+     * admin role's wildcard and hands it to nobody.
+     */
+    public static final Permission FILES_ALL = Permission.declare("hohenheim.instances.files_all",
+        HohenheimMicrocopy.PERMISSION.of("hohenheim_instances_files_all"), Permission.Delegation.NOT_DELEGABLE);
 
     /** How a packed subject set separates its entries; no subject token can contain it. */
     public static final String SUBJECT_SEPARATOR = "\n";

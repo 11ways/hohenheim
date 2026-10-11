@@ -1,15 +1,16 @@
 {#- The /manage landing's usage card: each listed budget, how much of the operator's cap
-    this tenant holds with its bar, or "No limit" where the operator set none (TenantUsage). -#}
+    this tenant holds with its bar, or "No limit" where the operator set none (TenantUsage). Its lead and
+    closing line name the installation's operator when one is declared (CmsSupport.operatorWords). -#}
 {% declare widget: WidgetInstance %}
-{% declare data: List<UsageLine> = null %}
-{% if data != null and data %}
+{% declare data: TenantUsageCard = null %}
+{% if data != null and data.lines %}
 <pl-card data-hh-tenant-usage>
     <pl-card-header>
         <pl-card-title>{{ t("title", scope: "tenant_usage") }}</pl-card-title>
-        <pl-card-description>{{ t("lead", scope: "tenant_usage") }}</pl-card-description>
+        <pl-card-description>{{ data.lead }}</pl-card-description>
     </pl-card-header>
     <pl-card-content>
-        {% each data as line %}
+        {% each data.lines as line %}
         <div class="hh-tenant-usage-line" data-hh-usage={% line.label %}>
             <span class="hh-tenant-usage-label">{{ line.label }}</span>
             {% if line.capped %}
@@ -20,7 +21,7 @@
             {% /if %}
         </div>
         {% /each %}
-        <p class="hh-tenant-usage-more">{{ t("need_more", scope: "tenant_usage") }}</p>
+        <p class="hh-tenant-usage-more">{{ data.needMore }}</p>
     </pl-card-content>
 </pl-card>
 {% /if %}

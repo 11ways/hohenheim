@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.source.GitProviderKinds;
 import be.elevenways.hohenheim.source.GitProviderOperations;
 import be.elevenways.hohenheim.source.GitProviderOperations.ConnectionTest;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -29,6 +30,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 
 /**
@@ -51,15 +53,7 @@ public final class GitProviderParts {
 
     /** @return the admin provider resource: every provider, and the SHARED switch */
     public static @NonNull PanelResource<Row> admin() {
-        FormSpec form = FormSpec.builder()
-            .add(GitProviderModel.NAME)
-            .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(GitProviderModel.KIND))
-            .add(GitProviderModel.BASE_URL)
-            // The per-kind sub-form: the GitHub App identifiers appear on a GitHub provider
-            // and on no other, without a second resource or a hand-written visibility rule.
-            .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(GitProviderModel.SETTINGS))
-            .add(GitProviderModel.ACCESS_TOKEN)
-            .add(GitProviderModel.APP_PRIVATE_KEY_PEM)
+        FormSpec form = connectionForm()
             .add(GitProviderModel.SHARED)
             .build();
         TableSpec<Row> table = TableSpec.<Row>builder()
@@ -77,14 +71,7 @@ public final class GitProviderParts {
 
     /** @return the /manage twin: the providers the caller registered, through the delegated form */
     public static @NonNull PanelResource<Row> manage() {
-        FormSpec form = FormSpec.builder()
-            .add(GitProviderModel.NAME)
-            .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(GitProviderModel.KIND))
-            .add(GitProviderModel.BASE_URL)
-            .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(GitProviderModel.SETTINGS))
-            .add(GitProviderModel.ACCESS_TOKEN)
-            .add(GitProviderModel.APP_PRIVATE_KEY_PEM)
-            .build();
+        FormSpec form = connectionForm().build();
         TableSpec<Row> table = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(GitProviderModel.NAME).build())
             .column(ColumnSpec.fromField(GitProviderModel.KIND).filterable().build())
@@ -114,6 +101,39 @@ public final class GitProviderParts {
                 })
                 .build())
             .build();
+    }
+
+    /**
+     * The connection's own entries both twins ask: its name and kind, the per-kind settings, and the credential its
+     * kind clones with: a base URL and token (or GitHub App key) for an API kind, a private key for an SSH kind, each
+     * shown only beside a kind that reads it.
+     */
+    private static FormSpec.@NonNull Builder connectionForm() {
+        String kind = GitProviderModel.KIND.getName();
+        String[] tokenKinds = kindsCloning(false);
+        return FormSpec.builder()
+            .add(GitProviderModel.NAME)
+            .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(GitProviderModel.KIND))
+            .add(GitProviderModel.BASE_URL)
+            // The per-kind sub-form: the GitHub App identifiers appear on a GitHub provider, an SSH connection's
+            // repository on an SSH one, without a second resource or a hand-written visibility rule.
+            .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(GitProviderModel.SETTINGS))
+            .add(GitProviderModel.ACCESS_TOKEN)
+            .add(GitProviderModel.APP_PRIVATE_KEY_PEM)
+            .add(GitProviderModel.SSH_PRIVATE_KEY)
+            .showWhen(GitProviderModel.BASE_URL.getName(), kind, tokenKinds)
+            .showWhen(GitProviderModel.ACCESS_TOKEN.getName(), kind, tokenKinds)
+            .showWhen(GitProviderModel.APP_PRIVATE_KEY_PEM.getName(), kind, tokenKinds)
+            .showWhen(GitProviderModel.SSH_PRIVATE_KEY.getName(), kind, kindsCloning(true));
+    }
+
+    /** @return the stored tokens of the declared kinds that clone with a key, or with a token */
+    private static @NonNull String[] kindsCloning(boolean withKey) {
+        return GitProviderKinds.declaredKinds().stream()
+            .filter(id -> Objects.requireNonNull(GitProviderKinds.getHandler(id.toString())).clonesWithKey() == withKey)
+            .map(Identifier::toString)
+            .sorted()
+            .toArray(String[]::new);
     }
 
     /** The entry, list, reads, inline cell and connection test both twins share. */

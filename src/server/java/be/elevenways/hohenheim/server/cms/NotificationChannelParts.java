@@ -1,8 +1,11 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.zenit.cms.common.action.ActionStyle;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.activity.OperationSentences;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -29,12 +32,15 @@ import be.elevenways.zenit.cms.common.schema.FilterSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.edit.Array;
+import be.elevenways.zenit.common.edit.EditContext;
 import be.elevenways.zenit.common.edit.FieldFormEntryDefaults;
 import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.operation.OperationInput;
+import be.elevenways.zenit.forms.common.edit.CheckMatrix;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
@@ -42,6 +48,7 @@ import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
@@ -52,7 +59,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
@@ -103,7 +112,101 @@ public final class NotificationChannelParts {
         });
     }
 
+    /** The grid's input name: per channel id, the event tokens it receives. */
+    static final String ROUTES = "routes";
+
+    /** Which events reach which channel, for every channel at once, per channel id: the Notifications page's grid. */
+    public record Routes(@NonNull Map<String, List<String>> routes) {
+    }
+
+    private static final FormSpec ROUTES_FORM = FormSpec.builder()
+        .add(CheckMatrix.of(ROUTES)
+            .label(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("routes"))
+            .choiceHeading(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("event"))
+            .choices(Arrays.stream(NotificationEvents.values())
+                .map(event -> FieldOption.of(event.token(), event.label()))
+                .toList())
+            .keys(OptionSource.dynamic(NotificationChannelParts::channelOptions))
+            .build())
+        .build();
+
+    /**
+     * Saves which events reach which channel for every channel the grid drew; a channel with every event checked
+     * stores the empty list, which also takes the events a later build adds.
+     */
+    public static final Operation<Void, Routes, Integer> ROUTE_EVENTS =
+        Operation.declare(HohenheimIds.id("route_notification_events"))
+            .happened(OperationSentences.of("route_notification_events"))
+            .label(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("route_events"))
+            .icon(Icon.of("route"))
+            .noSubject()
+            .gate(OperationGate.permission(HohenheimPanel.ACCESS))
+            .input(OperationInput.of(ROUTES_FORM, Routes.class, values -> new Routes(routesOf(values.get(ROUTES)))))
+            .result(Integer.class)
+            .command(CmsCommands.TRANSACTIONAL)
+            .register();
+
+    static {
+        OperationHandlers.attach(ROUTE_EVENTS).handle(call -> {
+            NotificationChannelModel model = Models.get(NotificationChannelModel.class);
+            int changed = 0;
+            for (Map.Entry<String, List<String>> route : Objects.requireNonNull(call.input()).routes().entrySet()) {
+                Integer id = RawValues.positiveInt(route.getKey());
+                Row channel = id == null ? null : model.findById(id);
+                if (channel == null) {
+                    throw Violations.ofField(ROUTES, route.getKey(),
+                        HohenheimMicrocopy.VIOLATIONS.of("notification_channel_unknown"));
+                }
+                List<String> events = route.getValue().size() == NotificationEvents.values().length
+                    ? List.of() : route.getValue();
+                if (!events.equals(storedEvents(channel))) {
+                    channel.set(NotificationChannelModel.EVENTS, events);
+                    model.save(channel);
+                    changed++;
+                }
+            }
+            return changed;
+        });
+    }
+
     private NotificationChannelParts() {
+    }
+
+    /** The grid opens on what each channel receives now: every event for a channel that stores none. */
+    private static @NonNull Map<String, Object> currentRoutes() {
+        Map<String, Object> routes = new LinkedHashMap<>();
+        for (Row channel : channels()) {
+            List<String> stored = storedEvents(channel);
+            routes.put(String.valueOf((Object) channel.get(NotificationChannelModel.ID)),
+                stored.isEmpty() ? NotificationEvents.ALL : stored);
+        }
+        return Map.of(ROUTES, routes);
+    }
+
+    /** The grid's columns: every channel by name, the reader being an operator (the operation's gate). */
+    private static @NonNull List<FieldOption<String>> channelOptions(@NonNull EditContext context) {
+        List<FieldOption<String>> options = new ArrayList<>();
+        for (Row channel : channels()) {
+            options.add(FieldOption.of(String.valueOf((Object) channel.get(NotificationChannelModel.ID)),
+                Microcopy.literal(Objects.toString(channel.get(NotificationChannelModel.NAME), ""))));
+        }
+        return options;
+    }
+
+    private static @NonNull List<Row> channels() {
+        return Models.get(NotificationChannelModel.class).find()
+            .orderBy(NotificationChannelModel.NAME, SortOrder.ASC).all();
+    }
+
+    private static @NonNull List<String> storedEvents(@NonNull Row channel) {
+        List<String> events = channel.get(NotificationChannelModel.EVENTS);
+        return events == null ? List.of() : events;
+    }
+
+    /** The grid's coerced value ({@code CheckMatrix}: channel id to its checked event tokens). */
+    @SuppressWarnings("unchecked")
+    private static @NonNull Map<String, List<String>> routesOf(@Nullable Object coerced) {
+        return coerced instanceof Map<?, ?> map ? (Map<String, List<String>>) map : Map.of();
     }
 
     /** @return the admin notification channel resource */
@@ -167,14 +270,26 @@ public final class NotificationChannelParts {
                     (request, result) -> testWords(Objects.requireNonNull(result.value(), "a test answers")))
                 .label(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("test"))
                 .icon(Icon.of("paper-plane"))
-                .build()))
+                .build(),
+                // Which events go where, for every channel at once: a header button over the channels, its grid in a
+                // sheet, since a grid of every event by every channel outgrows a dialog.
+                PanelAction.<Row, Integer>places(ROUTE_EVENTS, ActionPlacement.HEADER,
+                        (request, result) -> CmsActionResult.refreshWithToast(
+                            HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("routes_saved")))
+                    // The sheet is titled by the question it answers, explains the grid once and saves with Save.
+                    .confirmation(ConfirmationSpec.of(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("route_events"),
+                        HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("routes_save"),
+                        HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("routes_help"), ActionStyle.DEFAULT))
+                    .inSheet()
+                    .inputValues((none, request) -> currentRoutes())
+                    .build()))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
     }
 
     /**
      * The event summary under the name, each token through its own declared label; a token this build no longer
-     * declares keeps its raw spelling.
+     * declares keeps its raw spelling. A channel taking most events names the few it skips instead.
      *
      * @return null when the channel takes every event (an empty subscription means "all")
      */
@@ -183,13 +298,29 @@ public final class NotificationChannelParts {
         if (events == null || events.isEmpty()) {
             return null;
         }
+        List<String> skipped = new ArrayList<>();
+        for (NotificationEvents event : NotificationEvents.values()) {
+            if (!events.contains(event.token())) {
+                skipped.add(labelOf(event.token()));
+            }
+        }
+        if (skipped.size() * 2 < NotificationEvents.values().length && events.stream()
+                .allMatch(token -> NotificationEvents.byToken(token) != null)) {
+            return CmsSupport.resolvedText(HohenheimMicrocopy.NOTIFICATION_CHANNEL.of("events_except")
+                .withArg("events", String.join(", ", skipped)));
+        }
         List<String> labels = new ArrayList<>();
         for (String token : events) {
-            NotificationEvents event = NotificationEvents.byToken(token);
-            String label = event == null ? null : CmsSupport.resolvedText(event.label());
-            labels.add(label != null ? label : token);
+            labels.add(labelOf(token));
         }
         return String.join(", ", labels);
+    }
+
+    /** @return the event's declared label, or the raw token of one this build no longer declares */
+    private static @NonNull String labelOf(@NonNull String token) {
+        NotificationEvents event = NotificationEvents.byToken(token);
+        String label = event == null ? null : CmsSupport.resolvedText(event.label());
+        return label != null ? label : token;
     }
 
     /** Stamps the webhook kind, then judges the url scheme and the event vocabulary of the row as it will be saved. */

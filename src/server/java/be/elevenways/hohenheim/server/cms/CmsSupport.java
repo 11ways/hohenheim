@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
+import be.elevenways.zenit.common.brand.Brands;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.protoblast.common.time.RelativeTimeWording;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -207,6 +208,15 @@ public final class CmsSupport {
      */
     public static @NonNull Microcopy navHint(@NonNull HohenheimMicrocopy scope) {
         return scope.of("nav_hint");
+    }
+
+    /**
+     * A sentence naming who runs this installation: the key's {@code _named} variant carrying {@code {$operator}}
+     * when the installation declares its operator ({@link Brands#OPERATOR}), the plain key otherwise.
+     */
+    public static @NonNull Microcopy operatorWords(@NonNull HohenheimMicrocopy scope, @NonNull String key) {
+        String operator = Brands.operator();
+        return operator == null ? scope.of(key) : scope.of(key + "_named").withArg("operator", operator);
     }
 
     /**

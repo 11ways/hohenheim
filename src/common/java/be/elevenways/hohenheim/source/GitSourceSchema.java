@@ -50,7 +50,8 @@ public final class GitSourceSchema {
         BUILD_DIRECTORY, BUILD_TIMEOUT, BUILD_ENVIRONMENT_VARIABLES, SHALLOW_CLONE, SUBMODULES);
 
     /**
-     * When a new revision is picked up, and what proves the webhook that says so (poll_interval is retired, see addTo).
+     * When a new revision is picked up: on push (the webhook its secret proves) or by asking the repository every so
+     * often, both only while auto-deploy is on.
      */
     public static final List<String> DELIVERY = List.of(AUTO_DEPLOY, POLL_INTERVAL, WEBHOOK_SECRET);
 
@@ -72,11 +73,37 @@ public final class GitSourceSchema {
      */
     private static final boolean AUTO_DEPLOY_DEFAULT = true;
 
+    /**
+     * How often a source with auto-deploy on asks its repository for new commits, until it stores its own interval.
+     *
+     * AIDEV-NOTE: ONE value for the form and every reader, as {@link #AUTO_DEPLOY_DEFAULT}. Every source stored before
+     * the check existed stores 0 (M011's "keep every stored git source from checking its repository"), so this only
+     * reaches sources written from here on.
+     */
+    private static final int POLL_INTERVAL_DEFAULT = 300;
+
+    /** The shortest interval a check runs at: a busier one only loads the repository's host. */
+    public static final int POLL_INTERVAL_FLOOR = 60;
+
     private GitSourceSchema() {}
 
     /** @return whether a push to the source's branch deploys it */
     public static boolean autoDeploys(@Nullable Map<String, ?> settings) {
         return RawValues.isOn(settings, AUTO_DEPLOY, AUTO_DEPLOY_DEFAULT);
+    }
+
+    /**
+     * @return the seconds between two checks of the source's repository, at least {@link #POLL_INTERVAL_FLOOR}; 0 when
+     *         the source never asks (an interval of 0, or auto-deploy off)
+     */
+    public static int pollSeconds(@Nullable Map<String, ?> settings) {
+        if (!autoDeploys(settings)) {
+            return 0;
+        }
+        Object stored = settings == null ? null : settings.get(POLL_INTERVAL);
+        Integer parsed = stored == null ? Integer.valueOf(POLL_INTERVAL_DEFAULT) : RawValues.parsedInt(stored);
+        int seconds = parsed == null ? 0 : parsed;
+        return seconds <= 0 ? 0 : Math.max(seconds, POLL_INTERVAL_FLOOR);
     }
 
     /** @return the source's declared branch trimmed, {@link #DEFAULT_BRANCH} when it declares none */
@@ -148,16 +175,10 @@ public final class GitSourceSchema {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("auto_deploy"))
             .help(HohenheimMicrocopy.HELP.of("auto_deploy")).build());
 
-        // AIDEV-NOTE: RETIRED. Nothing ever polled a repository: a new revision arrives by
-        // the webhook (auto_deploy + webhook_secret), and inventing a poller was decided
-        // against. The field stays DECLARED so a stored value still reads and an
-        // API request that still sends settings.poll_interval is still accepted (the schema
-        // is closed-world: an undeclared key would become an unknown_field refusal). It is
-        // visible in NO edit view, so no form offers a setting that does nothing.
-        schema.addField(IntegerField.builder().name(POLL_INTERVAL).suffix("s")
+        schema.addField(IntegerField.builder().name(POLL_INTERVAL).suffix("s").defaultValue(POLL_INTERVAL_DEFAULT)
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("poll_interval"))
             .help(HohenheimMicrocopy.HELP.of("poll_interval"))
-            .attribute(FieldAttributes.VISIBLE_IN, EnumSet.noneOf(EditView.class)).build());
+            .build());
 
         schema.addField(StringField.builder().name(WEBHOOK_SECRET).secret()
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("webhook_secret"))

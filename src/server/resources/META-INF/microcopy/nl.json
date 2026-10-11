@@ -624,11 +624,11 @@
   ],
   "poll_interval": [
     {
-      "text": "Pollinginterval",
+      "text": "Controleer op nieuwe commits elke",
       "scope": "hohenheim_field"
     },
     {
-      "text": "Seconden tussen repositorycontroles wanneer polling actief is.",
+      "text": "Seconden tussen twee controles van de repository op nieuwe commits zolang automatisch uitrollen aan staat, minstens 60. Met 0 wordt nooit gecontroleerd; een webhook rolt nog steeds uit bij een push.",
       "scope": "help"
     }
   ],
@@ -1576,6 +1576,22 @@
       "target": "task_description"
     }
   ],
+  "poll_git_sources": [
+    {
+      "text": "Git-bronnen controleren op nieuwe commits",
+      "scope": "hohenheim",
+      "target": "task_label"
+    },
+    {
+      "text": "Rolt een app uit wanneer haar branch een commit heeft die ze nog niet draait",
+      "scope": "hohenheim",
+      "target": "task_description"
+    }
+  ],
+  "poll_branch_missing": {
+    "text": "de repository heeft geen branch {$branch}.",
+    "scope": "deployments"
+  },
   "clean_orphan_certificates": [
     {
       "text": "Ongebruikte certificaten opruimen",
@@ -4418,6 +4434,10 @@
     "text": "Alle sites beheren",
     "scope": "permission"
   },
+  "hohenheim_instances_files_all": {
+    "text": "De bestanden van elke app lezen en wijzigen",
+    "scope": "permission"
+  },
   "hohenheim_media_manage": {
     "text": "Installatiemedia beheren",
     "scope": "permission"
@@ -6769,6 +6789,14 @@
     {
       "text": "SSH",
       "scope": "ban_scope"
+    },
+    {
+      "text": "SSH-sleutel",
+      "scope": "git_provider_kind"
+    },
+    {
+      "text": "Elke git-host via SSH, met een privésleutel die u plakt",
+      "scope": "git_provider_kind_description"
     }
   ],
   "web": {
@@ -8432,7 +8460,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Het API-dialect van de provider: GitHub, GitLab of Gitea.",
+      "text": "Hoe Hohenheim de repositories bereikt: via de API van GitHub, GitLab of Gitea met een token, of via SSH met een privésleutel.",
       "scope": "help"
     }
   ],
@@ -8486,6 +8514,30 @@
       "scope": "help"
     }
   ],
+  "provider_ssh_private_key": [
+    {
+      "text": "Privé SSH-sleutel",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "De privésleutel (OpenSSH of PEM, zonder wachtwoordzin) die de repository mag lezen, zoals een deploy key. Versleuteld opgeslagen.",
+      "scope": "help"
+    }
+  ],
+  "provider_ssh_repository": [
+    {
+      "text": "Repository",
+      "scope": "hohenheim_field"
+    },
+    {
+      "text": "De repository zoals git hem via SSH kloont, bijvoorbeeld git@github.com:u/site.git.",
+      "scope": "help"
+    }
+  ],
+  "workspace_source_key_refused": {
+    "text": "Een werkruimte kloont in haar eigen container, die nooit een SSH-sleutel krijgt. Gebruik een verbinding met een token of een publieke repository.",
+    "scope": "violations"
+  },
   "provider_settings": {
     "text": "Instellingen per soort",
     "scope": "hohenheim_field"
@@ -14493,10 +14545,16 @@
     "text": "Details",
     "scope": "app_overview"
   },
-  "recent": {
-    "text": "Recent",
-    "scope": "app_overview"
-  },
+  "recent": [
+    {
+      "text": "Recent",
+      "scope": "app_overview"
+    },
+    {
+      "text": "Recent",
+      "scope": "manage_dashboard"
+    }
+  ],
   "main_address": {
     "text": "Hoofdadres",
     "scope": "app_overview"
@@ -15130,6 +15188,10 @@
     "text": "Algemeen",
     "scope": "settings_section"
   },
+  "section_brand": {
+    "text": "Naam en uiterlijk",
+    "scope": "settings_section"
+  },
   "section_https": {
     "text": "HTTPS en certificaten",
     "scope": "settings_section"
@@ -15363,6 +15425,26 @@
   },
   "auto_deploy_on": {
     "text": "Elke push naar de branch wordt uitgerold.",
+    "scope": "deployments"
+  },
+  "poll_every": {
+    "text": ".match {$minutes :number}\none {{Daarnaast controleert het elke minuut de repository op nieuwe commits.}}\n* {{Daarnaast controleert het elke {$minutes} minuten de repository op nieuwe commits.}}",
+    "scope": "deployments"
+  },
+  "poll_last": {
+    "text": "Laatst gecontroleerd",
+    "scope": "deployments"
+  },
+  "poll_current": {
+    "text": "up-to-date op {$commit}.",
+    "scope": "deployments"
+  },
+  "poll_deploying": {
+    "text": "{$commit} gevonden en het uitrollen gestart.",
+    "scope": "deployments"
+  },
+  "poll_failed": {
+    "text": "kon de repository niet lezen: {$reason}",
     "scope": "deployments"
   },
   "auto_deploy_off": {
@@ -15941,6 +16023,14 @@
   ],
   "need_more": {
     "text": "Meer nodig? Vraag het aan de beheerder van deze installatie.",
+    "scope": "tenant_usage"
+  },
+  "need_more_named": {
+    "text": "Meer nodig? Vraag het aan {$operator}, die deze installatie beheert.",
+    "scope": "tenant_usage"
+  },
+  "lead_named": {
+    "text": "Limieten ingesteld door {$operator}.",
     "scope": "tenant_usage"
   },
   "of_count": {
@@ -17164,6 +17254,10 @@
     "text": "De beheerder van deze installatie kan dit oplossen.",
     "scope": "app_health"
   },
+  "operator_fixes_named": {
+    "text": "{$operator} kan dit oplossen.",
+    "scope": "app_health"
+  },
   "console_instance_description": {
     "text": "de console",
     "scope": "capability"
@@ -17439,5 +17533,14 @@
   "take_over": {
     "text": "Overnemen",
     "scope": "instance_framebuffer"
-  }
+  },
+  "routes": { "text": "Meldingen per kanaal", "scope": "notification_channel" },
+  "routes_help": { "text": "Vink de kanalen aan die elke melding ontvangen. Een kanaal met alle meldingen aangevinkt krijgt ook de meldingen die een latere versie toevoegt.", "scope": "notification_channel" },
+  "event": { "text": "Melding", "scope": "notification_channel" },
+  "events_except": { "text": "Elke melding behalve {$events}", "scope": "notification_channel" },
+  "route_events": { "text": "Welke meldingen waar terechtkomen", "scope": "notification_channel" },
+  "routes_save": { "text": "Opslaan", "scope": "notification_channel" },
+  "routes_saved": { "text": "Opgeslagen welke meldingen welk kanaal bereiken.", "scope": "notification_channel" },
+  "notification_channel_unknown": { "text": "Dit meldingskanaal bestaat niet meer.", "scope": "violations" },
+  "route_notification_events": { "text": "{$actor} koos welke meldingen welk meldingskanaal bereiken", "scope": "hohenheim", "target": "happened" }
 }

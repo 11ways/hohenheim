@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
+import be.elevenways.zenit.common.brand.Brands;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.setting.SettingGroup;
 import be.elevenways.zenit.comms.CommsSettings;
@@ -34,6 +35,10 @@ public enum HohenheimSettingsSections {
     GENERAL("general", HohenheimMicrocopy.SETTINGS_SECTION.of("section_general"),
         HohenheimSettings.Roles.GROUP, HohenheimSettings.Storage.GROUP, HohenheimSettings.Logging.GROUP,
         HohenheimSettings.Process.GROUP),
+    // The installation's name and look, and who runs it: zenit's brand group, offered here rather than behind
+    // "Framework (advanced)" because the people an installation serves read it.
+    BRAND(label -> SettingsPage.frameworkGroup("brand", label, Brands.BRAND), "brand",
+        HohenheimMicrocopy.SETTINGS_SECTION.of("section_brand")),
     HTTPS("https", HohenheimMicrocopy.SETTINGS_SECTION.of("section_https"), HohenheimSettings.Ssl.GROUP),
     BACKUPS("backups", HohenheimMicrocopy.SETTINGS_SECTION.of("section_backups"),
         HohenheimSettings.Database.GROUP, HohenheimSettings.Backup.GROUP),
@@ -91,6 +96,7 @@ public enum HohenheimSettingsSections {
     public @NonNull Icon icon() {
         return Icon.of(switch (this) {
             case GENERAL -> "sliders";
+            case BRAND -> "palette";
             case HTTPS -> "lock";
             case BACKUPS -> "box-archive";
             case NOTIFICATIONS -> "bell";
@@ -108,7 +114,7 @@ public enum HohenheimSettingsSections {
         return switch (this) {
             case BACKUPS -> List.of(HohenheimSlugs.BACKUP_TARGETS);
             case NOTIFICATIONS -> List.of(HohenheimSlugs.NOTIFICATIONS);
-            case GENERAL, HTTPS, APPS, HOSTS, DNS, BLOCKING, ABUSE, PROXY -> List.of();
+            case GENERAL, BRAND, HTTPS, APPS, HOSTS, DNS, BLOCKING, ABUSE, PROXY -> List.of();
         };
     }
 
@@ -116,7 +122,7 @@ public enum HohenheimSettingsSections {
     public boolean clusterMembersFollow() {
         return switch (this) {
             case NOTIFICATIONS -> true;
-            case GENERAL, HTTPS, BACKUPS, APPS, HOSTS, DNS, BLOCKING, ABUSE, PROXY -> false;
+            case GENERAL, BRAND, HTTPS, BACKUPS, APPS, HOSTS, DNS, BLOCKING, ABUSE, PROXY -> false;
         };
     }
 

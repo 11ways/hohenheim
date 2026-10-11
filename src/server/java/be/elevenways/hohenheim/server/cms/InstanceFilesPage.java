@@ -221,7 +221,7 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
         // "Create an SFTP password" mints it in place: the account's API key form, posted with this app's scopes and
         // name, answers the one-time password on the account page.
         vars.put("sftpPasswordTarget", AuthEndpoints.POST_ACCOUNT_API_KEY_CREATE);
-        vars.put("sftpPasswordScopes", String.join(" ", InstanceSftpRealm.passwordScopes(canWrite)));
+        vars.put("sftpPasswordScopes", String.join(" ", InstanceSftpRealm.passwordScopes(accessContext, canWrite)));
         vars.put("sftpPasswordLabel", "SFTP " + vars.get("instanceName"));
         vars.put("sftpKeysTarget", AuthEndpoints.GET_ACCOUNT_SSH_KEYS);
         List<Map<String, Object>> sessions = new ArrayList<>();

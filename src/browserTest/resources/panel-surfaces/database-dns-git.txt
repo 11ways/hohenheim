@@ -10,14 +10,12 @@ column created_at at=4 shown=true hidden=false sortable=false filterable=false c
 tab history at=0 landing=false view=false
 tab access at=1 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
-control CREATE%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
-control CREATE%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
-control CREATE%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
-control CREATE%20shared at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab,hohenheim:ssh binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github%252Chohenheim:ssh
+control CREATE%20shared at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:ssh]/settings.repository at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 
 case admin.git-providers.tenant-git admin git-providers tenant-git
 admission - verdict=zenit:forbidden
@@ -81,23 +79,22 @@ inline name
 tab history at=0 landing=false view=false
 tab access at=1 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
-control CREATE%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
-control CREATE%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
-control CREATE%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
-control CREATE%20shared at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab,hohenheim:ssh binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github%252Chohenheim:ssh
+control CREATE%20shared at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:ssh]/settings.repository at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control EDIT%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control EDIT%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
+control EDIT%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab,hohenheim:ssh binding=searchable:false,clearable:false,presentation:DEFAULT
 control EDIT%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control EDIT%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
+control EDIT%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github%252Chohenheim:ssh
 control EDIT%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
 control EDIT%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
 control EDIT%20shared at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:ssh]/settings.repository at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 
 case admin.git-providers.operator.tenant admin git-providers operator
 admission - verdict=admitted
@@ -118,23 +115,22 @@ inline name
 tab history at=0 landing=false view=false
 tab access at=1 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
-control CREATE%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
-control CREATE%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
-control CREATE%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
-control CREATE%20shared at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab,hohenheim:ssh binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github%252Chohenheim:ssh
+control CREATE%20shared at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:ssh]/settings.repository at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control EDIT%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control EDIT%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
+control EDIT%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab,hohenheim:ssh binding=searchable:false,clearable:false,presentation:DEFAULT
 control EDIT%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control EDIT%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
+control EDIT%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github%252Chohenheim:ssh
 control EDIT%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
 control EDIT%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
 control EDIT%20shared at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:ssh]/settings.repository at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 
 case admin.game-domains.operator.mapping admin game-domains operator
 admission - verdict=admitted
@@ -217,14 +213,12 @@ column created_at at=4 shown=true hidden=false sortable=false filterable=false c
 tab history at=0 landing=false view=false
 tab access at=1 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
-control CREATE%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
-control CREATE%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
-control CREATE%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
-control CREATE%20shared at=6 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
+control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab,hohenheim:ssh binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github%252Chohenheim:ssh
+control CREATE%20shared at=3 kind=zenitforms:control/boolean input=checkbox required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:ssh]/settings.repository at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 
 case admin.dns-zones.operator.primary admin dns-zones operator
 admission - verdict=admitted
@@ -465,13 +459,11 @@ column kind at=1 shown=true hidden=false sortable=false filterable=true copyable
 column base_url at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
 tab access at=0 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
-control CREATE%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
-control CREATE%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
-control CREATE%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
+control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab,hohenheim:ssh binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github%252Chohenheim:ssh
 control CREATE%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:ssh]/settings.repository at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 
 case manage.git-providers.tenant-git.tenant manage git-providers tenant-git
 admission - verdict=admitted
@@ -489,21 +481,20 @@ row zenit:delete at=2 verb=invoke band=destructive style=DESTRUCTIVE disabled= c
 inline name
 tab access at=0 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
-control CREATE%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
-control CREATE%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
-control CREATE%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
+control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab,hohenheim:ssh binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github%252Chohenheim:ssh
 control CREATE%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:ssh]/settings.repository at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 control EDIT%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control EDIT%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
+control EDIT%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab,hohenheim:ssh binding=searchable:false,clearable:false,presentation:DEFAULT
 control EDIT%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control EDIT%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
+control EDIT%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github%252Chohenheim:ssh
 control EDIT%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
 control EDIT%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control EDIT%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control EDIT%20settings[hohenheim:ssh]/settings.repository at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 
 case manage.git-providers.tenant-git.shared manage git-providers tenant-git
 admission - verdict=admitted
@@ -515,13 +506,11 @@ column kind at=1 shown=true hidden=false sortable=false filterable=true copyable
 column base_url at=2 shown=true hidden=false sortable=false filterable=false copyable=true subtext= relation=false
 tab access at=0 landing=false view=false
 control CREATE%20name at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
-control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab binding=searchable:false,clearable:false,presentation:DEFAULT
-control CREATE%20base_url at=2 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
-control CREATE%20settings at=3 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github
-control CREATE%20access_token at=4 kind=zenitforms:control/string input=secret required=false readonly=false options= binding=
-control CREATE%20app_private_key_pem at=5 kind=zenitforms:control/text input=secret required=false readonly=false options= binding=
+control CREATE%20kind at=1 kind=zenitforms:form/select input=select required=true readonly=false options=hohenheim:gitea,hohenheim:github,hohenheim:gitlab,hohenheim:ssh binding=searchable:false,clearable:false,presentation:DEFAULT
+control CREATE%20settings at=2 kind=zenitforms:form/schema-nested input=text required=false readonly=false options= binding=schema:kind,sibling:kind,variants:hohenheim:github%252Chohenheim:ssh
 control CREATE%20settings[hohenheim:github]/settings.app_id at=0 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
 control CREATE%20settings[hohenheim:github]/settings.app_installation_id at=1 kind=zenitforms:control/string input=text required=false readonly=false options= binding=
+control CREATE%20settings[hohenheim:ssh]/settings.repository at=0 kind=zenitforms:control/string input=text required=true readonly=false options= binding=
 
 case manage.git-providers.tenant-empty manage git-providers tenant-empty
 admission - verdict=zenit:forbidden

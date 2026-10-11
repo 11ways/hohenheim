@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.task.CheckForeignKeys;
 import be.elevenways.hohenheim.server.task.CleanOldInstanceLogs;
 import be.elevenways.hohenheim.server.task.CleanOrphanCertificates;
 import be.elevenways.hohenheim.server.task.MonitorStacks;
+import be.elevenways.hohenheim.server.task.PollGitSources;
 import be.elevenways.hohenheim.server.task.CheckDnsDelegations;
 import be.elevenways.hohenheim.server.task.ObserveInstanceDisk;
 import be.elevenways.hohenheim.server.task.ProbeDnsSecondaries;
@@ -79,6 +80,7 @@ class HohenheimTaskBootstrapTest {
         CleanOrphanCertificates.class,
         MonitorStacks.class,
         ObserveInstanceDisk.class,
+        PollGitSources.class,
         ProbeDnsSecondaries.class,
         ReapIncusControllers.class,
         ReclaimDockerImages.class,

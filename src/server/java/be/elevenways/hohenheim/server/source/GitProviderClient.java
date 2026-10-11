@@ -45,6 +45,17 @@ public interface GitProviderClient {
     @NonNull Credential cloneCredential(@NonNull String repository) throws IOException;
 
     /**
+     * What a git command against {@code repository} authenticates with: by default the {@link #cloneCredential} as an
+     * HTTP header scoped to the clone URL's origin.
+     *
+     * @throws IOException when no credential can be had
+     */
+    default @NonNull GitAccess cloneAccess(@NonNull String repository) throws IOException {
+        Credential credential = this.cloneCredential(repository);
+        return GitAccess.httpBasic(this.cloneUrl(repository), credential.username(), credential.secret());
+    }
+
+    /**
      * Report a deployment status onto one commit.
      *
      * @throws IOException when the provider refuses or is unreachable

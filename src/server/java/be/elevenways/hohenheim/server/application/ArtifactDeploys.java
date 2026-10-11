@@ -3,7 +3,6 @@ package be.elevenways.hohenheim.server.application;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ArtifactOperationModel;
 import be.elevenways.hohenheim.model.ArtifactSourceModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
@@ -11,6 +10,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.BootSettle;
+import be.elevenways.hohenheim.server.DataDirectory;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.server.instance.DeployStartPolicy;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
@@ -21,7 +21,6 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.util.Sha256;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -57,9 +56,8 @@ public final class ArtifactDeploys {
     private ArtifactDeploys() {}
 
     public static File directoryFor(int applicationId) {
-        String dataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
-        String base = dataPath == null || dataPath.isBlank() ? "/opt/hohenheim/data" : dataPath;
-        return Path.of(base, "artifacts", InstanceModel.MODEL_ID.getPath(), String.valueOf(applicationId)).toFile();
+        return DataDirectory.resolve("artifacts", InstanceModel.MODEL_ID.getPath(), String.valueOf(applicationId))
+            .toFile();
     }
 
     public static Path uploadPathFor(int applicationId) throws IOException {

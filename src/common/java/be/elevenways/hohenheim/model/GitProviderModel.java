@@ -110,6 +110,18 @@ public class GitProviderModel extends Model {
             .help(HohenheimMicrocopy.HELP.of("provider_app_private_key"))
             .build());
 
+    /**
+     * The private key an SSH connection clones with (OpenSSH or PEM text, pasted whole), encrypted at rest.
+     *
+     * AIDEV-NOTE: only the SSH kind reads it ({@code SshProviderKind}); git sees it as a file that exists for the one
+     * command that needs it and is removed after, never in the environment or on a command line.
+     */
+    public static final TextField SSH_PRIVATE_KEY = SCHEMA.addField(
+        TextField.builder().name("ssh_private_key").secret().encrypted()
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("provider_ssh_private_key"))
+            .help(HohenheimMicrocopy.HELP.of("provider_ssh_private_key"))
+            .build());
+
     public static final DateTimeField CREATED_AT = SCHEMA.addField(DateTimeField.builder().name("created_at")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("created_at")).build());
     public static final DateTimeField UPDATED_AT = SCHEMA.addField(DateTimeField.builder().name("updated_at").build());

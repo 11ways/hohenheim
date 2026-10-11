@@ -10,9 +10,13 @@ import be.elevenways.zenit.comms.server.CommsDeliveryModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import com.microsoft.playwright.Locator;
+import com.microsoft.playwright.Page;
 import com.microsoft.playwright.assertions.PlaywrightAssertions;
+import com.microsoft.playwright.options.AriaRole;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,11 +35,11 @@ class NotificationAdminTest extends HohenheimTestBase {
         String body = page.locator("body").textContent();
         assertThat(body).contains("Notification channels");
 
-        // The channels are a tab of the Settings cluster, which the sidebar carries.
+        // The channels stand under Settings (their list sits in its Notifications section): no tab strip of their
+        // own, and the sidebar's one Settings row is the branch the page belongs to.
+        PlaywrightAssertions.assertThat(page.locator("[data-cms-cluster-tabs]")).hasCount(0);
         PlaywrightAssertions.assertThat(
-            page.locator("[data-cms-cluster-tabs] a[href='/admin/notifications']").first()).isVisible();
-        PlaywrightAssertions.assertThat(
-            page.locator("pl-app-sidebar a[href='/admin/configure']")).hasCount(1);
+            page.locator("pl-app-sidebar pl-nav-item[href='/admin/configure'].active-branch")).hasCount(1);
 
         navigateToApp("/admin/notifications/new");
         waitForHydration();
@@ -174,6 +178,52 @@ class NotificationAdminTest extends HohenheimTestBase {
         navigateToApp("/admin/notifications/new");
         waitForHydration();
         assertThat(page.content()).contains("Leave empty to receive every event");
+    }
+
+    /**
+     * Which events reach which channel, for every channel at once: the grid opens on what each channel receives, a
+     * box unticked there stops that event, and the list names what a channel skips.
+     */
+    @Test
+    void theEventGridRoutesEveryChannelAtOnceJourney() throws Exception {
+        Models.get(NotificationChannelModel.class).find().delete();
+        adminPostForm("/admin/notifications/new", "name=grid-ops&format=slack&url=https%3A%2F%2Fhooks.example%2Fops");
+        adminPostForm("/admin/notifications/new", "name=grid-pager&format=discord&url=https%3A%2F%2Fhooks.example%2Fp");
+        Row pager = channelNamed("grid-pager");
+        assertThat(pager).as("setup: both channels exist").isNotNull();
+        assertThat(channelNamed("grid-ops")).isNotNull();
+
+        // 1. The header's menu opens the grid in a sheet, every box ticked: an empty subscription is every event.
+        navigateToApp("/admin/notifications");
+        waitForHydration();
+        page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("More actions")).first().click();
+        page.getByRole(AriaRole.MENUITEM, new Page.GetByRoleOptions().setName("Which events go where")).click();
+        Locator sheet = page.getByRole(AriaRole.DIALOG, new Page.GetByRoleOptions().setName("Which events go where"));
+        PlaywrightAssertions.assertThat(sheet).isVisible();
+        Locator backupToPager = sheet.getByRole(AriaRole.CHECKBOX,
+            new Locator.GetByRoleOptions().setName("Backup failed: grid-pager"));
+        PlaywrightAssertions.assertThat(backupToPager).isChecked();
+        assertThat(sheet.getByRole(AriaRole.CHECKBOX).count())
+            .as("step 1: one box per event per channel").isEqualTo(NotificationEvents.values().length * 2);
+
+        // 2. Unticking one box and saving stops exactly that event for that channel.
+        backupToPager.click();
+        sheet.getByRole(AriaRole.BUTTON, new Locator.GetByRoleOptions().setName("Save")).click();
+        PlaywrightAssertions.assertThat(sheet).isHidden();
+        List<String> pagerEvents = Models.get(NotificationChannelModel.class)
+            .findById(pager.get(NotificationChannelModel.ID)).get(NotificationChannelModel.EVENTS);
+        assertThat(pagerEvents).as("step 2: the pager keeps every other event")
+            .hasSize(NotificationEvents.values().length - 1)
+            .doesNotContain(NotificationEvents.BACKUP_FAILED.token());
+        List<String> opsEvents = channelNamed("grid-ops").get(NotificationChannelModel.EVENTS);
+        assertThat(opsEvents == null ? List.<String>of() : opsEvents)
+            .as("step 2: a channel left fully ticked keeps receiving everything, stored as no subscription").isEmpty();
+
+        // 3. The list names what the pager skips instead of the sixteen events it keeps.
+        navigateToApp("/admin/notifications");
+        waitForHydration();
+        assertThat(page.content()).as("step 3: the summary names the skipped event")
+            .contains("Every event except Backup failed");
     }
 
     private Row channelNamed(String name) {

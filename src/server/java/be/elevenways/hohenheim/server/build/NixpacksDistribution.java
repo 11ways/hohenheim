@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.build;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.DataDirectory;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.hohenheim.server.util.PosixPaths;
 import be.elevenways.hohenheim.server.util.Tar;
@@ -103,9 +104,7 @@ public final class NixpacksDistribution {
     }
 
     private static @NonNull Path cacheDir(@NonNull String version) {
-        String dataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
-        return Path.of(dataPath == null || dataPath.isBlank() ? "data" : dataPath)
-            .resolve("nixpacks").resolve(version);
+        return DataDirectory.resolve("nixpacks", version);
     }
 
     private static byte[] download(@NonNull String version) throws IOException {

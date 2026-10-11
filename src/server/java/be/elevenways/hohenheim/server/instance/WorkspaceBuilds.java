@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.ExecSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.source.DeployStatuses;
+import be.elevenways.hohenheim.server.source.GitAccess;
 import be.elevenways.hohenheim.server.source.GitProviderClient;
 import be.elevenways.hohenheim.server.source.GitProviders;
 import be.elevenways.hohenheim.server.source.GitRepository;
@@ -48,10 +49,12 @@ import java.util.Map;
  * ownership, the .gitignore'd build output and the running process stop agreeing.
  *
  * AIDEV-NOTE: the provider token reaches the clone through the exec ENVIRONMENT and nothing
- * else. {@code GitProviders.credentialEnv} hands back GIT_CONFIG_* variables carrying an
+ * else. {@code GitProviders.access} hands back GIT_CONFIG_* variables carrying an
  * Authorization header, so the credential is never a URL component and never a
  * {@code .git/config} entry -- {@code WorkspaceKindTest} greps the volume after a clone
  * precisely because "the token is not written down" is the kind of claim that rots silently.
+ * An SSH key connection is refused here: its key is a file on the controller, never shipped
+ * into a tenant's container.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
@@ -251,9 +254,13 @@ public final class WorkspaceBuilds {
         Map<String, String> credentials = Map.of();
 
         if (GitProviders.bindingOf(settings) != null) {
-            try {
-                Map<String, String> env = GitProviders.credentialEnv(settings);
-                credentials = env == null ? Map.of() : env;
+            // AIDEV-NOTE: this clone runs inside the workspace's own container, so only an environment-only access
+            // can travel there; a key file lives on the controller and is never shipped into a tenant's container.
+            try (GitAccess access = GitProviders.access(settings)) {
+                if (access != null && !access.portable()) {
+                    throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("workspace_source_key_refused"));
+                }
+                credentials = access == null ? Map.of() : access.environment();
             } catch (IOException unavailable) {
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("source_checkout_failed")
                     .withArg("reason", String.valueOf(unavailable.getMessage())));

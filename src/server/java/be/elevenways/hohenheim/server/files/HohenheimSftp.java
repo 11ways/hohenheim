@@ -7,6 +7,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.security.PrincipalRef;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.DataDirectory;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimViolations;
@@ -63,8 +64,7 @@ public final class HohenheimSftp {
     /** @return the server's settings, the spool under the data path */
     public static @NonNull SftpConfig configured() {
         String bind = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Sftp.BIND_ADDRESS);
-        Path spool = Path.of(Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH))
-            .resolve("sftp").resolve("spool");
+        Path spool = DataDirectory.resolve("sftp", "spool");
         return new SftpConfig(bind == null || bind.isBlank() ? null : bind.strip(),
             valueOf(HohenheimSettings.Sftp.PORT),
             valueOf(HohenheimSettings.Sftp.MAX_SESSIONS),

@@ -264,10 +264,12 @@ final class HohenheimGrantPolicy {
                 .describe(HohenheimMicrocopy.CAPABILITY.of("shell_instance_description"))
                 .elevated()
                 .asDelegable());
+        // An operator's SFTP credential reaches every app's files through FILES_ALL, narrowed to the two file verbs.
         RecordCapabilityRules.declare(InstanceModel.MODEL_ID,
             RecordCapabilityRules.create().visibility(VIEW)
                 .gate(ManagePanel.ACCESS)
-                .admin(HohenheimPanel.ACCESS));
+                .admin(HohenheimPanel.ACCESS)
+                .typeLevelFor(HohenheimAccess.FILES_ALL, FILES_READ, FILES_WRITE));
 
         // Preview deployments: no vocabulary and not grantable. A preview is a projection of its application, so
         // its authority is the application's (TenantScopes.PREVIEWS lists exactly these): manage on the preview is

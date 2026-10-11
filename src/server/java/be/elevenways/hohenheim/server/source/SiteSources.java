@@ -34,6 +34,11 @@ public final class SiteSources {
     private SiteSources() {
     }
 
+    /** @return the instance kinds that carry a git source in their settings */
+    public static @NonNull List<String> sourcedKinds() {
+        return SOURCED_KINDS;
+    }
+
     /**
      * @return the git-source settings of the instance this site exposes, or null when the
      *         site exposes nothing or the instance carries no source

@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.AttentionSeverity;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimWidgets;
+import be.elevenways.hohenheim.app.TenantUsageCard;
 import be.elevenways.hohenheim.app.UsageLine;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -14,12 +15,17 @@ import be.elevenways.zenit.cms.common.panel.PanelDashboard;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.render.action.LinkActionState;
+import be.elevenways.zenit.cms.common.resource.ActivitySources;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
+import be.elevenways.zenit.common.data.RecordSourceRegistry;
+import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
 import be.elevenways.zenit.widget.common.builtin.ColumnSplit;
+import be.elevenways.zenit.widget.common.builtin.RecordsWidget;
+import be.elevenways.zenit.widget.common.builtin.SectionWidget;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -36,11 +42,9 @@ import java.util.Map;
  * collector is operator inventory by content (host names, "removed host #N", admin-route links). This band once
  * asked only the placement gate, so it read "All clear" while the tenant's app page said "Visitors get an error page".
  *
- * AIDEV-NOTE: no Recent band, unlike /admin: the activity log is the operator's audit trail, which /manage never
- * shows (ManageHistoryHiddenTest). A tenant-safe history is zenit-cms's to give: the one
- * activity source is installation-wide and gated by one permission, so a feed of the rows about records the reader may
- * view, its actor worded for that reader ("you", "automatic"), needs a viewer-scoped source there, never a second
- * history read here.
+ * AIDEV-NOTE: the Recent band reads zenit-cms's viewable activity source ({@link ActivitySources#VIEWABLE}), never the
+ * operator's audit log, which /manage never shows (ManageHistoryHiddenTest): only the entries about records this
+ * reader may see, its own acts worded "You", no detail or origin.
  *
  * @author Jelle De Loecker
  * @since 0.2.0
@@ -77,15 +81,31 @@ public final class ManageDashboard extends PanelDashboard {
         List<WidgetInstance> widgets = new ArrayList<>();
         widgets.add(AdminDashboard.section(new WidgetInstance(HohenheimWidgets.ATTENTION.id(), Map.of())
             .withData(attention(apps))));
-        List<WidgetInstance> lower = new ArrayList<>(2);
-        lower.add(new WidgetInstance(HohenheimWidgets.APPS.id(), Map.of()).withData(AdminDashboard.appsBand(
+        List<WidgetInstance> lead = new ArrayList<>(2);
+        lead.add(new WidgetInstance(HohenheimWidgets.APPS.id(), Map.of()).withData(AdminDashboard.appsBand(
             HohenheimMicrocopy.MANAGE_DASHBOARD.of("apps"), apps, accessContext)));
+        lead.add(recent());
+        List<WidgetInstance> lower = new ArrayList<>(2);
+        lower.add(new WidgetInstance(SectionWidget.ID, Map.of(), new WidgetTree(lead)));
         List<UsageLine> usage = TenantUsage.of(accessContext);
         if (!usage.isEmpty()) {
-            lower.add(new WidgetInstance(HohenheimWidgets.TENANT_USAGE.id(), Map.of()).withData(usage));
+            lower.add(new WidgetInstance(HohenheimWidgets.TENANT_USAGE.id(), Map.of())
+                .withData(new TenantUsageCard(CmsSupport.operatorWords(HohenheimMicrocopy.TENANT_USAGE, "lead"),
+                    CmsSupport.operatorWords(HohenheimMicrocopy.TENANT_USAGE, "need_more"), usage)));
         }
         widgets.add(AdminDashboard.section(AdminDashboard.columns(lower, ColumnSplit.LEAD)));
         return new WidgetTree(widgets);
+    }
+
+    /** What happened lately to what this reader may see, one row per command, the newest first. */
+    private static @NonNull WidgetInstance recent() {
+        return new WidgetInstance(RecordsWidget.ID, Map.of(
+            "title", HohenheimWidgetCopy.localized(HohenheimMicrocopy.MANAGE_DASHBOARD.of("recent")),
+            "source", RecordSourceRegistry.INSTANCE.requireById(ActivitySources.VIEWABLE).idToken(),
+            "rules", ActivitySources.recent(),
+            "sort", ActivityModel.CREATED_AT.getName(),
+            "descending", true,
+            "limit", 6));
     }
 
     /**

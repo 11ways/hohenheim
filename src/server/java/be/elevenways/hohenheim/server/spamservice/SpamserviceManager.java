@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.spamservice;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.SpamserviceInstallationModel;
+import be.elevenways.hohenheim.server.DataDirectory;
 import be.elevenways.hohenheim.server.SystemUsers;
 import be.elevenways.hohenheim.server.host.PrivilegedHelper;
 import be.elevenways.hohenheim.server.security.SecurityReportEnv;
@@ -839,8 +840,7 @@ public final class SpamserviceManager {
     }
 
     private static Path configuredRuntimeRoot() {
-        String configured = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
-        return Path.of(configured == null || configured.isBlank() ? "data" : configured);
+        return DataDirectory.path();
     }
 
     private static InputStream openNestedArtifact() throws IOException {
