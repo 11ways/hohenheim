@@ -178,7 +178,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Rol elke nieuwe revisie uit die de push-webhook van de repository voor deze branch meldt.",
+      "text": "Rol elke nieuwe commit op deze branch uit, of de push-webhook van de repository hem meldt of de geplande controle hem vindt.",
       "scope": "help"
     }
   ],
@@ -668,7 +668,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Git-clone-URL. SSH gebruikt de geconfigureerde sleutels van de host.",
+      "text": "Git-clone-URL van een repository die iedereen mag lezen. Kies voor een privérepository hieronder een Git-verbinding.",
       "scope": "help"
     }
   ],
@@ -2972,7 +2972,7 @@
       "scope": "backup_target"
     },
     {
-      "text": "Provider antwoordde; {$count} repositories zichtbaar",
+      "text": ".match {$count :number}\none {{De provider antwoordde; 1 repository is zichtbaar.}}\n* {{De provider antwoordde; {$count} repositories zijn zichtbaar.}}",
       "scope": "git_provider"
     }
   ],

@@ -50,6 +50,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -159,6 +160,15 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         // list spelled here: this page used to list pending/deploying/probing and missed
         // switching and draining, so Deploy and Rollback were offered mid-switch.
         boolean inFlight = !model.findInFlight(InstanceModel.MODEL_ID.toString(), instanceId).isEmpty();
+        // A build that did not succeed never became a release: listed beside them, or a deploy a push or the
+        // scheduled check started and the build refused would leave no trace on this page.
+        BuildOperationModel builds = Models.get(BuildOperationModel.class);
+        List<Row> unreleased = builds.findForOwner(InstanceModel.MODEL_ID.toString(), instanceId, 50).stream()
+            .filter(row -> !BuildOperationModel.LIFECYCLE.is(row.get(BuildOperationModel.STATUS),
+                OperationStatus.SUCCEEDED))
+            .toList();
+        inFlight = inFlight || unreleased.stream().anyMatch(row ->
+            BuildOperationModel.LIFECYCLE.is(row.get(BuildOperationModel.STATUS), OperationStatus.RUNNING));
         Row serving = ApplicationReleases.ownedServing(instanceId);
         Row kept = ReleaseEngine.newestRetired(instanceId);
         vars.put("isDeploying", inFlight);
@@ -199,6 +209,11 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             }
             deployments.add(entry);
         }
+        for (Row row : unreleased) {
+            deployments.add(buildEntry(row, failures));
+        }
+        deployments.sort(Comparator.comparing((Map<String, Object> entry) ->
+            Objects.toString(entry.get("startedAtIso"), "")).reversed());
         vars.put("deployments", deployments);
     }
 
@@ -372,15 +387,23 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
 
         List<Map<String, Object>> deployments = new ArrayList<>();
         for (Row row : operations) {
-            deployments.add(entry(row.get(BuildOperationModel.ID),
-                BuildOperationModel.STATUS, row.get(BuildOperationModel.STATUS), "",
-                row.get(BuildOperationModel.SOURCE_REF),
-                row.get(BuildOperationModel.DURATION_MS),
-                failures.shown(row.get(BuildOperationModel.FAILURE_REASON)),
-                row.get(BuildOperationModel.STARTED_AT),
-                row.get(BuildOperationModel.LOG)));
+            deployments.add(buildEntry(row, failures));
         }
         vars.put("deployments", deployments);
+    }
+
+    /**
+     * One checkout-and-build row: its log is the output of the record's own checkout and build, which its owner needs
+     * to fix a build, so it stays visible where a release's daemon step log does not.
+     */
+    private static @NonNull Map<String, Object> buildEntry(@NonNull Row row, @NonNull WithheldFailure failures) {
+        return entry(row.get(BuildOperationModel.ID),
+            BuildOperationModel.STATUS, row.get(BuildOperationModel.STATUS), "",
+            row.get(BuildOperationModel.SOURCE_REF),
+            row.get(BuildOperationModel.DURATION_MS),
+            failures.shown(row.get(BuildOperationModel.FAILURE_REASON)),
+            row.get(BuildOperationModel.STARTED_AT),
+            row.get(BuildOperationModel.LOG));
     }
 
     /** One history row in the shape both lanes and the shared deploy-detail partial read. */

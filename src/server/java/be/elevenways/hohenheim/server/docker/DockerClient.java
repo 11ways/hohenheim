@@ -625,10 +625,42 @@ public class DockerClient {
                                   Integer tighterPidsLimit) throws IOException {
         Map<String, Object> hardened = new LinkedHashMap<>(spec);
         ContainerHardening.applyTo(hardened, profile, tighterPidsLimit);
+        this.capCpusAtHost(hardened);
         String path = "/containers/create" + (name != null && !name.isBlank() ? "?name=" + enc(name) : "");
         Map<String, Object> result = (Map<String, Object>) parseJson(
             request("POST", path, toJson(hardened)).body());
         return (String) result.get("Id");
+    }
+
+    /** The daemon's CPU count, read once: a host does not grow CPUs under a running controller. */
+    private volatile int hostCpus;
+
+    /**
+     * Lowers a CPU cap above the host's CPU count to that count.
+     *
+     * AIDEV-NOTE: Docker refuses NanoCpus above the host's CPUs ("Range of CPUs is from 0.01 to 1.00"), and such a
+     * cap throttles nothing anyway: a build quota of 2 CPUs on a one-CPU host must run, not fail every build. A daemon
+     * that does not answer /info keeps the cap as asked, and the create call says what it refuses.
+     */
+    @SuppressWarnings("unchecked")
+    private void capCpusAtHost(@NonNull Map<String, Object> spec) {
+        if (!(spec.get("HostConfig") instanceof Map<?, ?> hostConfig)
+                || !(hostConfig.get("NanoCpus") instanceof Number nanoCpus)) {
+            return;
+        }
+        int cpus = this.hostCpus;
+        if (cpus <= 0) {
+            try {
+                cpus = RawValues.intOr(this.info().get("NCPU"), 0);
+            } catch (IOException unanswered) {
+                return;
+            }
+            this.hostCpus = cpus;
+        }
+        long ceiling = cpus * 1_000_000_000L;
+        if (cpus > 0 && nanoCpus.longValue() > ceiling) {
+            ((Map<String, Object>) hostConfig).put("NanoCpus", ceiling);
+        }
     }
 
     /** Start a created container (idempotent: an already-running container is a no-op). */

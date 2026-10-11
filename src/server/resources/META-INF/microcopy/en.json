@@ -178,7 +178,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Deploy each new revision the repository's push webhook reports for this branch.",
+      "text": "Deploy each new commit on this branch, whether the repository's push webhook reports it or the scheduled check finds it.",
       "scope": "help"
     }
   ],
@@ -668,7 +668,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Git clone URL. SSH authentication uses the host's configured SSH keys.",
+      "text": "Git clone URL of a repository anyone may read. For a private repository, choose a Git connection below instead.",
       "scope": "help"
     }
   ],
@@ -2972,7 +2972,7 @@
       "scope": "backup_target"
     },
     {
-      "text": "Provider answered; {$count} repositories visible",
+      "text": ".match {$count :number}\none {{The provider answered; 1 repository is visible.}}\n* {{The provider answered; {$count} repositories are visible.}}",
       "scope": "git_provider"
     }
   ],

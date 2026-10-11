@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;
+import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.WebhookDeliveryModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
@@ -47,6 +48,7 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
     private static Integer applicationId;
     private static final List<Integer> releaseIds = new ArrayList<>();
     private static final List<Integer> operationIds = new ArrayList<>();
+    private static final List<Integer> buildIds = new ArrayList<>();
     private static final List<Integer> previewIds = new ArrayList<>();
     private static final List<Integer> deliveryIds = new ArrayList<>();
 
@@ -79,6 +81,16 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), null,
             "Did not answer on port 3000 within 60 s",
             Instant.parse("2026-09-01T11:00:00Z"));
+        // A deploy whose build was refused never became a release.
+        Row build = Models.get(BuildOperationModel.class).createEmptyRow();
+        build.set(BuildOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
+        build.set(BuildOperationModel.FOR_ID, applicationId);
+        build.set(BuildOperationModel.STATUS, BuildOperationModel.LIFECYCLE.stored(OperationStatus.FAILED));
+        build.set(BuildOperationModel.SOURCE_REF, "main");
+        build.set(BuildOperationModel.FAILURE_REASON, "The builder refused the image: no Dockerfile at the root");
+        build.set(BuildOperationModel.STARTED_AT, Instant.parse("2026-09-01T12:00:00Z"));
+        Models.get(BuildOperationModel.class).save(build);
+        buildIds.add(build.get(BuildOperationModel.ID));
 
         preview("feature/checkout", 42, PreviewDeploymentModel.STATUS_RUNNING);
         preview("old/branch", null, PreviewDeploymentModel.STATUS_DESTROYED);
@@ -97,6 +109,9 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         }
         for (Integer id : operationIds) {
             Models.get(ReleaseOperationModel.class).delete(id);
+        }
+        for (Integer id : buildIds) {
+            Models.get(BuildOperationModel.class).delete(id);
         }
         if (applicationId != null) {
             GeneratedRows.as(new GeneratedRows.Attribution(ApplicationReleases.SOURCE,
@@ -196,6 +211,12 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
             .as("step 3: a failed release states its reason").contains("Did not answer on port 3000 within 60 s")
             .as("step 3: and its state in words, never the stored token").contains(">Failed<")
             .as("step 3: durations read in minutes and seconds").contains("1 min 48 s");
+
+        // 3b. A deploy whose build was refused is listed too, newest first, with what refused it.
+        int refused = body.indexOf("The builder refused the image: no Dockerfile at the root");
+        assertThat(refused).as("step 3b: the refused build states its reason").isPositive();
+        assertThat(refused).as("step 3b: above the older failed release")
+            .isLessThan(body.indexOf("Did not answer on port 3000 within 60 s"));
 
         // 4. The running preview is listed with its pull request; a torn-down one is not.
         assertThat(body)
