@@ -1,7 +1,7 @@
 package be.elevenways.hohenheim.server.quota;
 
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.DoomedRows;
+import be.elevenways.zenit.common.orm.model.DoomedRows;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.PreviewDeploymentModel;

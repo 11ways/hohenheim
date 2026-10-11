@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.database;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.DatabaseModel;
-import be.elevenways.hohenheim.model.DoomedRows;
+import be.elevenways.zenit.common.orm.model.DoomedRows;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.cms.CmsSupport;

@@ -1,6 +1,6 @@
 package be.elevenways.hohenheim.ports;
 
-import be.elevenways.hohenheim.model.DoomedRows;
+import be.elevenways.zenit.common.orm.model.DoomedRows;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.protoblast.common.Blast;

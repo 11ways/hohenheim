@@ -2,7 +2,7 @@ package be.elevenways.hohenheim.server.project;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
-import be.elevenways.hohenheim.model.DoomedRows;
+import be.elevenways.zenit.common.orm.model.DoomedRows;
 import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
