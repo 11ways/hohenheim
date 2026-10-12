@@ -75,6 +75,7 @@ final class InstanceConsoleSession {
 
     private volatile boolean stopObserved;
     private volatile boolean closedByHub;
+    private final boolean exclusive;
 
     // Readiness matcher state, guarded by `this` (armed after the STARTING stamp so the
     // async RUNNING flip can never race the deploy thread's own stamp; arming scans the
@@ -85,6 +86,7 @@ final class InstanceConsoleSession {
 
     InstanceConsoleSession(int instanceId, @NonNull String handle,
                            ConsoleStreamSupport.@NonNull Console console,
+                           boolean exclusive,
                            @NonNull Resizer resizer,
                            @Nullable String stopCommand,
                            ConsoleRedaction.@NonNull Redactor redactor,
@@ -95,6 +97,7 @@ final class InstanceConsoleSession {
         this.handle = handle;
         this.generation = generation;
         this.console = console;
+        this.exclusive = exclusive;
         this.resizer = resizer;
         this.stopCommand = stopCommand == null || stopCommand.isBlank()
             ? null : stopCommand.trim();
@@ -333,18 +336,39 @@ final class InstanceConsoleSession {
     /**
      * Subscribe a viewer: replays the ring, then live chunks -- under the ring lock, so
      * no chunk is lost or doubled between replay and subscription.
+     *
+     * @return false when the hub already closed this session, so the viewer follows nothing here
      */
-    void subscribe(@NonNull Consumer<String> listener) {
+    boolean subscribe(@NonNull Consumer<String> listener) {
         synchronized (this) {
+            if (this.closedByHub) {
+                return false;
+            }
             if (this.ring.length() > 0) {
                 listener.accept(this.ring.toString());
             }
             this.listeners.add(listener);
+            return true;
         }
     }
 
     void unsubscribe(@NonNull Consumer<String> listener) {
         this.listeners.remove(listener);
+    }
+
+    /**
+     * Closes this session when its console is exclusive and nothing needs it: no viewer follows it, no stop command
+     * waits on it and no readiness line is still awaited. Atomic with {@link #subscribe}.
+     *
+     * @return whether it closed
+     */
+    synchronized boolean releaseIfIdle() {
+        if (!this.exclusive || this.closedByHub || !this.listeners.isEmpty() || this.stopCommand != null
+                || (this.readinessLine != null && !this.readinessMatched)) {
+            return false;
+        }
+        this.close();
+        return true;
     }
 
     /**

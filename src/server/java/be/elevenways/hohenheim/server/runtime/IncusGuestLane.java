@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.runtime;
 
 import be.elevenways.hohenheim.server.incus.IncusClient;
+import be.elevenways.hohenheim.server.incus.IncusConsoleOperation;
 import be.elevenways.hohenheim.server.incus.IncusWebSocket;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
@@ -58,16 +59,22 @@ final class IncusGuestLane {
     // -- the console ----------------------------------------------------------------
 
     ConsoleStreamSupport.@NonNull Console openConsole(@NonNull String handle) throws IOException {
-        IncusWebSocket socket = this.incus.operationWebSocket(IncusClient.OperationSocket.of(
-            this.incus.startConsole(handle), IncusClient.OperationSocket.DATA,
-            "Incus console operation of '" + handle + "'"));
+        IncusConsoleOperation operation = IncusConsoleOperation.link(this.incus, this.incus.startConsole(handle),
+            "Incus console operation of '" + handle + "'");
+        IncusWebSocket socket;
+        try {
+            socket = this.incus.operationWebSocket(operation.data());
+        } catch (IOException refused) {
+            operation.close();
+            throw refused;
+        }
         // /dev/console is bidirectional by construction: what we write IS delivered to
         // the workload's console, unlike Docker's discarded attach-without-OpenStdin.
         // AIDEV-NOTE: NOT declared interactive, deliberately. /dev/console of a system
         // container or VM is a terminal, but what answers on it is the guest's own init
         // and getty, and the surface here stays the line console it always was (the form
         // POST); flipping it to keystrokes is a separate decision with its own consumer.
-        return new ConsoleStreamSupport.Console(new IncusConsoleStream(socket), true, false);
+        return new ConsoleStreamSupport.Console(new IncusConsoleStream(socket, operation), true, false);
     }
 
     @NonNull String consoleTail(@NonNull String handle, int lines) throws IOException {

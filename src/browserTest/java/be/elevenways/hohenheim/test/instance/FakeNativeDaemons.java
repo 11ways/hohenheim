@@ -193,6 +193,9 @@ final class FakeNativeDaemons {
     /** handle -> what the one-shot console tail answers. */
     static final Map<String, String> TAILS = new ConcurrentHashMap<>();
 
+    /** Whether the fake's console is exclusive, the Incus shape: one console per workload. */
+    static volatile boolean exclusiveConsoles;
+
     /**
      * Consumed by the next {@code createSnapshot}: a writer that appears while the
      * daemon is taking the capture, on the caller's thread and datasource scope. That
@@ -245,6 +248,7 @@ final class FakeNativeDaemons {
         STATS_FAILS.clear();
         TAIL_FAILS.clear();
         TAILS.clear();
+        exclusiveConsoles = false;
     }
 
     /**
@@ -546,6 +550,11 @@ final class FakeNativeDaemons {
             ScriptedStream stream = new ScriptedStream();
             CONSOLE_STREAMS.put(handle, stream);
             return new Console(stream, true, workload.tty);
+        }
+
+        @Override
+        public boolean consoleExclusive() {
+            return exclusiveConsoles;
         }
 
         @Override

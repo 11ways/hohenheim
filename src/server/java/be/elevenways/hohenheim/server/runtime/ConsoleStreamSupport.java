@@ -66,6 +66,15 @@ public interface ConsoleStreamSupport {
         return false;
     }
 
+    /**
+     * Whether holding this workload's console locks every other console of it out: Incus admits one console per
+     * instance (serial and VGA alike), so a held serial console keeps the VM's screen and the operator's own
+     * {@code incus console} out. The console hub then holds it only while something needs it.
+     */
+    default boolean consoleExclusive() {
+        return false;
+    }
+
     /** Single-shot console history: the last {@code lines} lines. */
     @NonNull String consoleTail(@NonNull String handle, int lines) throws IOException;
 

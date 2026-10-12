@@ -520,6 +520,11 @@ public final class IncusInstanceRuntime
     }
 
     @Override
+    public boolean consoleExclusive() {
+        return true;
+    }
+
+    @Override
     public @NonNull Console openConsole(@NonNull String handle) throws IOException {
         return this.guest.openConsole(handle);
     }

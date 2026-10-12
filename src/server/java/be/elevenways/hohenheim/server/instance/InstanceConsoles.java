@@ -128,10 +128,16 @@ public final class InstanceConsoles {
         if (readiness == null && stopCommand == null && !restartPolicy) {
             return null;
         }
-        if (!(resolved.runtime() instanceof ConsoleStreamSupport) && readiness == null && stopCommand == null) {
+        boolean exclusive = resolved.runtime() instanceof ConsoleStreamSupport streaming
+            && streaming.consoleExclusive();
+        if ((!(resolved.runtime() instanceof ConsoleStreamSupport) || exclusive) && readiness == null
+                && stopCommand == null) {
             // AIDEV-NOTE: restart alone never demands a console: without a stream to watch, the status reconciler
             // catches the unobserved exit at sweep cadence and redeploys it. Only a template's console contract
             // (readiness line, stop command) cannot be honoured blind. Restart became the default on 2026-10-07.
+            // An EXCLUSIVE console (Incus) is not held for restart alone either: holding it keeps the VM's screen
+            // and the operator's own console out for the workload's whole life, and Incus reports no exit status
+            // a console-observed exit could act on.
             return null;
         }
         if (!(resolved.runtime() instanceof ConsoleStreamSupport support)) {
@@ -350,30 +356,35 @@ public final class InstanceConsoles {
      * @throws Violations {@code console_unsupported}, {@code console_not_running}
      */
     public static @NonNull Viewer attach(int instanceId) {
-        InstanceConsoleSession session = ensureSession(instanceId);
+        InstanceConsoleSession attached = ensureSession(instanceId);
         return new Viewer() {
 
+            private @NonNull InstanceConsoleSession session = attached;
             private @Nullable Consumer<String> following;
 
             @Override
             public boolean interactive() {
-                return session.interactive();
+                return this.session.interactive();
             }
 
             @Override
             public void follow(@NonNull Consumer<String> viewer) {
                 this.following = viewer;
-                session.subscribe(viewer);
+                if (!this.session.subscribe(viewer)) {
+                    // Released as idle between the attach and this follow: its successor serves the viewer.
+                    this.session = ensureSession(instanceId);
+                    this.session.subscribe(viewer);
+                }
             }
 
             @Override
             public void write(@NonNull String keystrokes) throws IOException {
-                session.writeRaw(keystrokes);
+                this.session.writeRaw(keystrokes);
             }
 
             @Override
             public void resize(int cols, int rows) throws IOException {
-                session.resize(cols, rows);
+                this.session.resize(cols, rows);
             }
 
             @Override
@@ -381,7 +392,8 @@ public final class InstanceConsoles {
                 Consumer<String> viewer = this.following;
                 this.following = null;
                 if (viewer != null) {
-                    session.unsubscribe(viewer);
+                    this.session.unsubscribe(viewer);
+                    releaseIfIdle(this.session);
                 }
             }
         };
@@ -445,6 +457,8 @@ public final class InstanceConsoles {
         } catch (IOException e) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("console_send_failed")
                 .withArg("reason", HohenheimViolations.reasonOf(e)));
+        } finally {
+            releaseIfIdle(session);
         }
     }
 
@@ -515,6 +529,13 @@ public final class InstanceConsoles {
         return SESSIONS.size();
     }
 
+    /** Closes and forgets a session nothing needs any more, when its console is exclusive (Incus). */
+    private static void releaseIfIdle(@NonNull InstanceConsoleSession session) {
+        if (session.releaseIfIdle()) {
+            SESSIONS.remove(session.instanceId(), session);
+        }
+    }
+
     // -- internals ------------------------------------------------------------
 
     private static @NonNull InstanceConsoleSession open(@NonNull ConsoleStreamSupport support,
@@ -536,7 +557,7 @@ public final class InstanceConsoles {
         // rather than silently stream a secret later.
         String handle = resolved.spec().handle();
         InstanceConsoleSession session = new InstanceConsoleSession(instanceId,
-            handle, console, (cols, rows) -> support.resizeConsole(handle, cols, rows),
+            handle, console, support.consoleExclusive(), (cols, rows) -> support.resizeConsole(handle, cols, rows),
             stopCommand, ConsoleRedaction.redactorFor(instanceId),
             InstanceConsoleLogs.sinkFor(instanceId, resolved.spec().handle(), datasource),
             GENERATIONS.getOrDefault(instanceId, 0L),

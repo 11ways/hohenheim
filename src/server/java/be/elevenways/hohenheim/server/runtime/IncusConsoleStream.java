@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.runtime;
 
+import be.elevenways.hohenheim.server.incus.IncusConsoleOperation;
 import be.elevenways.hohenheim.server.incus.IncusWebSocket;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -11,17 +12,20 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * {@link ConsoleStream} over an Incus console websocket. A console is one merged TTY
  * stream, so every chunk reports as stdout; the daemon closing the socket in order is
  * ENDED (console detached / workload gone), a mid-stream transport failure is
- * DAEMON_LOST.
+ * DAEMON_LOST. However it ends, its console operation is released with it: a running one
+ * holds the instance's only console.
  */
 final class IncusConsoleStream implements ConsoleStream {
 
     private final @NonNull IncusWebSocket socket;
+    private final @NonNull IncusConsoleOperation operation;
     private final AtomicBoolean consumerClosed = new AtomicBoolean();
     private volatile @Nullable Termination termination;
     private volatile @NonNull String detail = "";
 
-    IncusConsoleStream(@NonNull IncusWebSocket socket) {
+    IncusConsoleStream(@NonNull IncusWebSocket socket, @NonNull IncusConsoleOperation operation) {
         this.socket = socket;
+        this.operation = operation;
     }
 
     @Override
@@ -71,6 +75,7 @@ final class IncusConsoleStream implements ConsoleStream {
     public void close() {
         this.consumerClosed.set(true);
         this.socket.close();
+        this.operation.close();
     }
 
     private void settle(@NonNull Termination termination, @NonNull String detail) {
@@ -78,5 +83,6 @@ final class IncusConsoleStream implements ConsoleStream {
             this.termination = termination;
             this.detail = detail;
         }
+        this.operation.close();
     }
 }
