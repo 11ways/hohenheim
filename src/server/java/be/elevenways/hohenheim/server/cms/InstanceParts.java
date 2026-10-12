@@ -67,6 +67,11 @@ import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.edit.EditContext;
+import be.elevenways.zenit.common.edit.FieldOption;
+import be.elevenways.zenit.common.orm.field.IntegerField;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.hohenheim.server.project.ProjectGuards;
 import be.elevenways.zenit.common.operation.SubjectType;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -346,16 +351,10 @@ public final class InstanceParts {
             // A host is admitted, preflighted and trusted before it can carry anything, so it is never created from
             // inside another record's form -- and the offer follows the kind. The submit is re-narrowed server-side
             // (relation_out_of_scope), the picker is never the gate.
-            .add(RelationPick.of(InstanceModel.SERVER_ID, ServerModel.MODEL_ID)
-                .creatable(false)
-                .rulesFromSiblings(new HohenheimPickRules.KindHostRules(
-                    InstanceModel.KIND.getName(),
-                    InstanceKinds.runtimesByKind(),
-                    InstanceKinds.kindsWhere(InstanceKindHandler::supportsVolumes)), "kind")
-                .build())
-            // The runtime image only offers images to kinds that run inside one; for every other kind the narrowing
-            // resolves to nothing and SAYS SO. It stays clearable because most kinds have no image to name; what
-            // makes it REQUIRED for the kinds that do is InstanceDeclarations, on the write.
+            .add(hostPick(InstanceModel.SERVER_ID))
+            // The runtime image only offers images to kinds that run inside one, and is SHOWN only for those kinds (the
+            // showWhen below): every other kind's deploy never reads the column. It stays clearable because a shown
+            // pick may still be left for InstanceDeclarations to require on the write.
             .add(RelationPick.of(InstanceModel.RUNTIME_IMAGE_ID, RuntimeImageModel.MODEL_ID)
                 .creatable(false).clearable(true)
                 .rulesFromSiblings(new HohenheimPickRules.RuntimeImageRules(
@@ -367,10 +366,12 @@ public final class InstanceParts {
             // AIDEV-NOTE: deliberately NO template pick here. TEMPLATE_ID is only ever stamped by
             // InstanceTemplates.createFromTemplate, which coerces the template's variables and arms the install
             // lifecycle; creating from a template stays the template page's own flow (InstanceFromTemplatePage).
-            // Grouping, never authority: ProjectGuards refuses an environment whose project does not OWN this
-            // instance, on every writer.
-            .add(RelationPick.of(InstanceModel.ENVIRONMENT_ID, EnvironmentModel.MODEL_ID)
-                .clearable(true).build())
+            // Grouping, never authority: the environments offered are ProjectGuards' own answer for this record's
+            // owner, the rule its write hook refuses by, so the pick never offers what the save would refuse.
+            .add(Select.of(InstanceModel.ENVIRONMENT_ID)
+                .options(OptionSource.dynamic(InstanceParts::environmentOptions))
+                .clearable(true)
+                .build())
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.CRASH_POLICY))
             .add(RelationPick.of(InstanceModel.BACKUP_TARGET_ID, BackupTargetModel.MODEL_ID)
@@ -384,7 +385,50 @@ public final class InstanceParts {
             .section(FormSection.advanced(
                 InstanceModel.CRASH_POLICY.getName(),
                 InstanceModel.BACKUP_TARGET_ID.getName()))
+            .showWhen(InstanceModel.RUNTIME_IMAGE_ID.getName(), InstanceModel.KIND.getName(),
+                InstanceKinds.kindsWhere(InstanceKindHandler::usesRuntimeImage).toArray(String[]::new))
             .build();
+    }
+
+    /**
+     * THE host pick of a form that names its kind in a {@code kind} entry: only the hosts that can run that kind
+     * (its runtimes and, where it needs one, a volume backend), narrowed live and re-narrowed on submit. Blank stays
+     * a choice: placement then picks the host.
+     */
+    static @NonNull RelationPick hostPick(@NonNull IntegerField field) {
+        return RelationPick.of(field, ServerModel.MODEL_ID)
+            .creatable(false)
+            .rulesFromSiblings(new HohenheimPickRules.KindHostRules(
+                InstanceModel.KIND.getName(),
+                InstanceKinds.runtimesByKind(),
+                InstanceKinds.kindsWhere(InstanceKindHandler::supportsVolumes)), InstanceModel.KIND.getName())
+            .build();
+    }
+
+    /**
+     * The environments the edited record (or, on a create, the record this caller would create) may be grouped in,
+     * plus the one it already sits in: an unchanged environment is never judged.
+     */
+    private static @NonNull List<FieldOption<Integer>> environmentOptions(@NonNull EditContext context) {
+        Object recordId = context.record() instanceof Row row && row.has(InstanceModel.ID.getName())
+            ? row.get(InstanceModel.ID) : null;
+        Object current = context.record() instanceof Row row && row.has(InstanceModel.ENVIRONMENT_ID.getName())
+            ? row.get(InstanceModel.ENVIRONMENT_ID) : null;
+        List<FieldOption<Integer>> options = new ArrayList<>();
+        boolean currentOffered = current == null;
+        for (Row environment : ProjectGuards.environmentsFor(
+                ProjectGuards.ownerOf(recordId, context.accessContext()))) {
+            Integer id = environment.get(EnvironmentModel.ID);
+            currentOffered |= id.equals(current);
+            options.add(FieldOption.of(id, Microcopy.literal(String.valueOf((Object) environment.get(
+                EnvironmentModel.NAME)))));
+        }
+        if (!currentOffered && current instanceof Integer id) {
+            Row environment = Models.get(EnvironmentModel.class).findById(id);
+            options.add(FieldOption.of(id, Microcopy.literal(environment == null ? "#" + id
+                : String.valueOf((Object) environment.get(EnvironmentModel.NAME)))));
+        }
+        return options;
     }
 
     private static @NonNull TableSpec<Row> adminTable() {

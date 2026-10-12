@@ -385,6 +385,35 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         Models.get(InstanceQuotaModel.class).delete(cap.get(InstanceQuotaModel.ID));
     }
 
+    /**
+     * The environment pick offers exactly what the grouping guard accepts: the environments of the project that owns
+     * the record, never another owner's.
+     */
+    @Test
+    void theEnvironmentPickOffersOnlyWhatTheSaveAccepts() {
+        String environmentSelect = "pl-select[name='environment_id']";
+        String popup = "he-bottom .pl-select-popup[data-open]";
+        String production = popup + " div[role='option'][data-value='" + environmentId + "']";
+
+        // 1. A project-one record is offered project one's environment.
+        navigateToApp("/admin/instances/" + betaId);
+        waitForHydration();
+        page.click(environmentSelect + " .pl-select-field");
+        page.waitForSelector(production);
+
+        // 2. An operator-owned record is not: the save would refuse it, so the pick never offers it.
+        navigateToApp("/admin/instances/" + omegaId);
+        waitForHydration();
+        if (page.locator(environmentSelect + "[disabled]").count() == 0) {
+            page.click(environmentSelect + " .pl-select-field");
+            page.waitForSelector(popup);
+            page.waitForCondition(() -> page.locator(popup + " div[role='option']").count() > 0
+                || page.locator(popup + " .pl-select-empty").count() > 0);
+            assertThat(page.locator(production).count())
+                .as("step 2: another project's environment is not offered to an operator-owned record").isZero();
+        }
+    }
+
     /** Environments group ONLY what their project owns, and their variables merge under. */
     @Test
     void environmentsGroupOwnedRecordsAndLayerVariables() {

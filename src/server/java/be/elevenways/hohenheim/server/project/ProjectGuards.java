@@ -16,6 +16,8 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -173,18 +175,12 @@ public final class ProjectGuards {
                 return;
             }
             Row environment = Models.get(EnvironmentModel.class).findById(environmentId);
-            if (environment == null) {
-                throw Violations.ofField(InstanceModel.ENVIRONMENT_ID.getName(), environmentId,
-                    HohenheimMicrocopy.VIOLATIONS.of("environment_unknown"));
-            }
-            Row project = Models.get(ProjectModel.class)
-                .findById(environment.get(EnvironmentModel.PROJECT_ID));
+            Row project = environment == null ? null : projectOf(environment);
             if (project == null) {
                 throw Violations.ofField(InstanceModel.ENVIRONMENT_ID.getName(), environmentId,
                     HohenheimMicrocopy.VIOLATIONS.of("environment_unknown"));
             }
-            Set<String> owner = ownerOf(row);
-            if (owner == null || !owner.equals(Projects.ownerSubjectsOf(project))) {
+            if (!owns(project, ownerOf(row))) {
                 // Fails CLOSED on unreadable grants: grouping without a proven owner
                 // match is exactly the drift this hook exists to refuse.
                 throw Violations.ofField(InstanceModel.ENVIRONMENT_ID.getName(), environmentId,
@@ -194,18 +190,57 @@ public final class ProjectGuards {
     }
 
     /**
-     * The owner the instance answers to for the grouping decision: the stored record's
-     * grant-derived subjects, or -- at create, when no grants can exist yet -- the same
-     * creation-owner derivation the quota charge and the planted grant use.
+     * The environments a record answering to {@code owner} may be placed in, by name: THE grouping rule the write hook
+     * judges a placement by, so a picker offering these never offers what the save refuses.
+     *
+     * @param owner the record's owner subjects ({@link #ownerOf(Object, AccessContext)}), null when unreadable
+     */
+    public static @NonNull List<Row> environmentsFor(@Nullable Set<String> owner) {
+        if (owner == null) {
+            return List.of();
+        }
+        List<Row> admitted = new ArrayList<>();
+        for (Row environment : Models.get(EnvironmentModel.class).find()
+                .orderBy(EnvironmentModel.NAME, SortOrder.ASC).all()) {
+            Row project = projectOf(environment);
+            if (project != null && owns(project, owner)) {
+                admitted.add(environment);
+            }
+        }
+        return admitted;
+    }
+
+    /**
+     * The owner an instance answers to for the grouping decision: a stored record's grant-derived subjects, or, for
+     * a record not created yet, the creation owner of {@code creator}.
+     *
+     * @return the owner subjects, null when the grants are unreadable
+     */
+    public static @Nullable Set<String> ownerOf(@Nullable Object instanceId, @Nullable AccessContext creator) {
+        // Trashed included: a stored record answers by its grants even while trashed.
+        if (instanceId != null && StoredRows.byId(Models.get(InstanceModel.class), instanceId) != null) {
+            return HohenheimAccess.manageSubjectsOf(InstanceModel.MODEL_ID, instanceId);
+        }
+        return HohenheimAccess.creationOwnerSubjects(creator);
+    }
+
+    private static @Nullable Row projectOf(@NonNull Row environment) {
+        Object projectId = environment.get(EnvironmentModel.PROJECT_ID);
+        return projectId == null ? null : Models.get(ProjectModel.class).findById(projectId);
+    }
+
+    /** Whether the project owns a record answering to {@code owner}: its owner subject set is exactly the project's. */
+    private static boolean owns(@NonNull Row project, @Nullable Set<String> owner) {
+        return owner != null && owner.equals(Projects.ownerSubjectsOf(project));
+    }
+
+    /**
+     * The owner a written instance row answers to: at create, when no grants can exist yet, the same creation-owner
+     * derivation the quota charge and the planted grant use.
      */
     private static @Nullable Set<String> ownerOf(@NonNull Row row) {
         Object id = row.has(InstanceModel.ID.getName()) ? row.get(InstanceModel.ID) : null;
-        // Trashed included: a stored record answers by its grants even while trashed.
-        if (StoredRows.byId(Models.get(InstanceModel.class), id) != null) {
-            return HohenheimAccess.manageSubjectsOf(InstanceModel.MODEL_ID, id);
-        }
-        return HohenheimAccess.creationOwnerSubjects(
-            TenantWrites.isTenantOriginated() ? TenantWrites.acting() : null);
+        return ownerOf(id, TenantWrites.isTenantOriginated() ? TenantWrites.acting() : null);
     }
 
     /**

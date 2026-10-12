@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.zenit.cms.server.panel.PartsWrites;
-import com.microsoft.playwright.Locator;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -85,6 +84,11 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         return OPEN_SELECT_POPUP + " div[role='option'][data-value='" + hostId + "']";
     }
 
+    /** Whether the runtime image pick is drawn: a kind's declared fields decide, never a disabled stub. */
+    private boolean imageShown() {
+        return page.locator(IMAGE_SELECT + " .pl-select-field").isVisible();
+    }
+
     /** One create-form load walked through kinds, hosts and the image pick. */
     @Test
     void kindCardsDriveTheDependentPicks() {
@@ -111,9 +115,10 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
             .as("step 1b: the create screen names one instance, not the list")
             .isEqualTo("New instance");
 
-        // 2. No kind chosen: host and runtime image cannot narrow, so both are disabled.
+        // 2. No kind chosen: the host cannot narrow, so it is disabled, and the runtime image, which only the kinds that
+        //    run inside one ask, is not shown at all.
         waitForSelector(HOST_SELECT + "[disabled]");
-        waitForSelector(IMAGE_SELECT + "[disabled]");
+        assertThat(imageShown()).as("step 2: no runtime image before a kind asks for one").isFalse();
 
         // Reload marker: every narrowing step below must be client-side.
         page.evaluate("window.__cfNoReloadMarker = 'alive'");
@@ -126,21 +131,9 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         assertCount(hostOption(incusHostId), 0, "step 3: a Docker-only kind never offers the Incus host");
         closeOpenPopup();
 
-        // ...and the runtime image picker is no longer held by the missing kind: it opens
-        // and states why nothing qualifies, because a raw container ignores the column.
-        page.waitForCondition(() -> page.locator(IMAGE_SELECT + "[disabled]").count() == 0);
-        openPlSelect(IMAGE_SELECT);
-        // The reason lands with the provider's (empty) answer, so wait for it rather
-        // than reading the slot the instant the popup opens; scoped to the OPEN popup,
-        // since every closed picker keeps its portalled popup (and its own empty
-        // slot) in the document.
-        Locator emptySlot = page.locator(OPEN_SELECT_POPUP + " .pl-select-empty");
-        page.waitForCondition(() -> emptySlot.count() > 0
-            && emptySlot.first().textContent().contains("does not run inside a runtime image"));
-        assertThat(emptySlot.first().textContent().trim())
-            .as("the empty picker names the reason, not a generic no-results line")
-            .contains("does not run inside a runtime image");
-        closeOpenPopup();
+        // ...and the runtime image is still not shown: a raw container ignores the column, so the kind's declared
+        // fields leave it out instead of offering a pick that says to leave it empty.
+        assertThat(imageShown()).as("step 3: a Docker container shows no runtime image").isFalse();
 
         // 4. An Incus-only kind flips the offer around.
         clickKindCard("vm");
@@ -149,6 +142,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         page.waitForSelector(hostOption(incusHostId));
         assertCount(hostOption(dockerHostId), 0, "step 4: an Incus-only kind never offers the Docker host");
         closeOpenPopup();
+        assertThat(imageShown()).as("step 4: a virtual machine shows no runtime image").isFalse();
 
         // 5. A workspace runs on both runtimes but DEMANDS a quota-capable volume
         //    backend, so only the btrfs host qualifies -- the Incus host (backend none)
@@ -160,10 +154,11 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         assertCount(hostOption(incusHostId), 0,
             "step 5: a workspace never offers the Incus host, whose volume backend has no quota");
 
-        // 6. A workspace runs inside a runtime image: the pick resolves, and the seeded
+        // 6. A workspace runs inside a runtime image: the pick is shown and resolves, and the seeded
         //    catalog answers (RuntimeImageSeeder ships node-22 and friends).
         click(hostOption(dockerHostId));
         page.waitForCondition(() -> page.locator(OPEN_SELECT_POPUP).count() == 0);
+        page.waitForCondition(this::imageShown);
         page.waitForCondition(() -> page.locator(IMAGE_SELECT + "[disabled]").count() == 0);
         openPlSelect(IMAGE_SELECT);
         page.waitForSelector(OPEN_SELECT_POPUP + " div[role='option']");
