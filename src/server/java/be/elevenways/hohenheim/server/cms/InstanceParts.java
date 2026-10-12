@@ -33,6 +33,9 @@ import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.server.instance.InstanceResize;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
+import be.elevenways.protoblast.common.typed.rule.Condition;
+import be.elevenways.protoblast.common.typed.rule.Operand;
+import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.page.CmsRecordLinks;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -70,7 +73,6 @@ import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.edit.EditContext;
-import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.server.project.ProjectGuards;
@@ -96,6 +98,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.Objects;
 import java.util.function.Supplier;
 
@@ -387,13 +390,13 @@ public final class InstanceParts {
             // InstanceTemplates.createFromTemplate, which coerces the template's variables and arms the install
             // lifecycle; creating from a template stays the template page's own flow (InstanceFromTemplatePage).
             // Grouping, never authority: the environments offered are ProjectGuards' own answer for this record's
-            // owner, the rule its write hook refuses by, so the pick never offers what the save would refuse.
-            .add(Select.of(InstanceModel.ENVIRONMENT_ID)
-                .options(OptionSource.dynamic(InstanceParts::environmentOptions))
-                // Nothing to offer is said in words: the owning project has no environment yet, or there is none.
-                .emptyReason(context -> ProjectGuards.noEnvironmentsReason(
-                    ProjectGuards.ownerOf(editedId(context), context.accessContext())))
+            // owner (its owning project's), the rule its write hook refuses by, re-checked on the submit; a new one
+            // is created INTO that project, and an owner without one is told why the list is empty.
+            .add(RelationPick.of(InstanceModel.ENVIRONMENT_ID, EnvironmentModel.MODEL_ID)
                 .clearable(true)
+                .rulesFromContext(InstanceParts::environmentRules)
+                .emptyReason(context -> ProjectGuards.noEnvironmentsReason(ownerOf(context)))
+                .createPresets(InstanceParts::environmentPresets)
                 .build())
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.CRASH_POLICY))
@@ -432,27 +435,33 @@ public final class InstanceParts {
     }
 
     /**
-     * The environments the edited record (or, on a create, the record this caller would create) may be grouped in,
-     * plus the one it already sits in: an unchanged environment is never judged.
+     * The environments the edited record (or, on a create, the record this caller would create) may be grouped in:
+     * its grouping project's, plus the one it already sits in, since an unchanged environment is never judged.
      */
-    private static @NonNull List<FieldOption<Integer>> environmentOptions(@NonNull EditContext context) {
+    private static @NonNull Condition environmentRules(@NonNull EditContext context) {
+        List<Condition> admitted = new ArrayList<>();
+        Row project = ProjectGuards.groupingProject(ownerOf(context));
+        if (project != null) {
+            admitted.add(Condition.test(EnvironmentModel.PROJECT_ID.getName(), CoreTypes.EQUALS,
+                Operand.of(project.get(ProjectModel.ID))));
+        }
         Object current = context.record() instanceof Row row && row.has(InstanceModel.ENVIRONMENT_ID.getName())
             ? row.get(InstanceModel.ENVIRONMENT_ID) : null;
-        List<FieldOption<Integer>> options = new ArrayList<>();
-        boolean currentOffered = current == null;
-        for (Row environment : ProjectGuards.environmentsFor(
-                ProjectGuards.ownerOf(editedId(context), context.accessContext()))) {
-            Integer id = environment.get(EnvironmentModel.ID);
-            currentOffered |= id.equals(current);
-            options.add(FieldOption.of(id, Microcopy.literal(String.valueOf((Object) environment.get(
-                EnvironmentModel.NAME)))));
+        if (current != null) {
+            admitted.add(Condition.test(EnvironmentModel.ID.getName(), CoreTypes.EQUALS, Operand.of(current)));
         }
-        if (!currentOffered && current instanceof Integer id) {
-            Row environment = Models.get(EnvironmentModel.class).findById(id);
-            options.add(FieldOption.of(id, Microcopy.literal(environment == null ? "#" + id
-                : String.valueOf((Object) environment.get(EnvironmentModel.NAME)))));
-        }
-        return options;
+        return admitted.isEmpty() ? Condition.NOTHING : Condition.any(admitted);
+    }
+
+    /** @return the environment an inline create makes: one of the grouping project's, null when there is none */
+    private static @Nullable Map<String, Object> environmentPresets(@NonNull EditContext context) {
+        Row project = ProjectGuards.groupingProject(ownerOf(context));
+        return project == null ? null : Map.of(EnvironmentModel.PROJECT_ID.getName(), project.get(ProjectModel.ID));
+    }
+
+    /** @return the owner subjects the record the form edits answers to, or the caller's creation owner */
+    private static @Nullable Set<String> ownerOf(@NonNull EditContext context) {
+        return ProjectGuards.ownerOf(editedId(context), context.accessContext());
     }
 
     /** @return the id of the instance the form edits, null on a create */

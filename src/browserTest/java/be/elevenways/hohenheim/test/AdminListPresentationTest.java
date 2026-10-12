@@ -4,7 +4,10 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.BanModel;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.panel.Panel;
@@ -22,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -297,13 +301,14 @@ class AdminListPresentationTest extends HohenheimTestBase {
         assertThat(sites).as("step 4: sites keep the column picker")
             .contains("data-cms-columns-toggle");
 
-        // 5. The instance create form's HOST pick offers no inline create: a host is
-        //    admitted, preflighted and trusted, never minted from inside another form. The
-        //    picker HOSTS its own create dialog since zenit-forms 66fa5ed, so each pick is
-        //    read off its own pl-select element.
-        String instanceForm = adminGet("/admin/instances/new").body();
+        // 5. The instance form's HOST pick offers no inline create: a host is admitted,
+        //    preflighted and trusted, never minted from inside another form. The picker
+        //    HOSTS its own create dialog since zenit-forms 66fa5ed, so each pick is read off
+        //    its own pl-select element. Read on a project-owned instance, the one kind of
+        //    record an environment can be created for (step 7).
+        String instanceForm = adminGet("/admin/instances/" + projectInstance()).body();
         String hostPick = pickMarkup(instanceForm, "server_id");
-        assertThat(hostPick).as("step 5: the instance create form renders its host pick")
+        assertThat(hostPick).as("step 5: the instance form renders its host pick")
             .isNotEmpty();
         assertThat(hostPick).as("step 5: and that pick has no create dialog")
             .doesNotContain(CREATE_DIALOG);
@@ -313,6 +318,36 @@ class AdminListPresentationTest extends HohenheimTestBase {
         assertThat(pickMarkup(instanceForm, "environment_id"))
             .as("step 6: the environment pick keeps inline create")
             .contains(CREATE_DIALOG);
+
+        // 7. An operator's NEW instance answers to no project, so no environment can be made
+        //    for it: that pick offers no create (it could only fail) and says why it is empty.
+        String operatorPick = pickMarkup(adminGet("/admin/instances/new").body(), "environment_id");
+        assertThat(operatorPick).as("step 7: the operator create form renders its environment pick")
+            .isNotEmpty();
+        assertThat(operatorPick).as("step 7: with no create dialog")
+            .doesNotContain(CREATE_DIALOG);
+    }
+
+    /** @return a find-or-created instance owned by a project, the shape whose environment pick can create */
+    private static int projectInstance() {
+        var instances = Models.get(InstanceModel.class);
+        Row existing = instances.find().where(InstanceModel.NAME.eq("wavea-project-instance")).first();
+        if (existing != null) {
+            return existing.get(InstanceModel.ID);
+        }
+        Row project = Models.get(ProjectModel.class).createEmptyRow();
+        project.set(ProjectModel.NAME, "wavea-project");
+        Models.get(ProjectModel.class).save(project);
+        Row instance = instances.createEmptyRow();
+        instance.set(InstanceModel.NAME, "wavea-project-instance");
+        instance.set(InstanceModel.KIND, "hohenheim:docker_container");
+        instance.set(InstanceModel.SETTINGS, new LinkedHashMap<>(
+            Map.of("image", "alpine", "tag", "latest", "command", "sleep 300")));
+        instance.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
+        instances.save(instance);
+        Projects.adoptRecord(Models.get(ProjectModel.class).findById(project.get(ProjectModel.ID)),
+            InstanceModel.MODEL_ID, instance.get(InstanceModel.ID));
+        return instance.get(InstanceModel.ID);
     }
 
     /** @return the server-rendered pl-select for the named pick, empty when there is none */

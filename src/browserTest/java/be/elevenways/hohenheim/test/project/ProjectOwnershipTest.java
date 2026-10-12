@@ -387,7 +387,7 @@ class ProjectOwnershipTest extends HohenheimTestBase {
 
     /**
      * The environment pick offers exactly what the grouping guard accepts: the environments of the project that owns
-     * the record, never another owner's.
+     * the record, never another owner's, and creates a new one INTO that project, never for a record without one.
      */
     @Test
     void theEnvironmentPickOffersOnlyWhatTheSaveAccepts() {
@@ -415,16 +415,37 @@ class ProjectOwnershipTest extends HohenheimTestBase {
             assertThat(page.locator(popup + " .pl-select-empty").textContent())
                 .as("step 2: the empty pick says the record belongs to no project")
                 .contains("belongs to no project");
+            assertThat(page.locator(popup + " .pl-select-create").count())
+                .as("step 2: and offers no create: an environment made for it could never be chosen").isZero();
         }
 
-        // 3. A record of a project without environments reads that project's name and where to add one.
+        // 3. A record of a project without environments reads that project's name and offers to create one.
         navigateToApp("/admin/instances/" + gammaId);
         waitForHydration();
         page.click(environmentSelect + " .pl-select-field");
         page.waitForSelector(popup + " .pl-select-empty");
         assertThat(page.locator(popup + " .pl-select-empty").textContent())
-            .as("step 3: the empty pick names the project and where its environments are added")
-            .contains(PREFIX + "two has no environments yet").contains("Environments");
+            .as("step 3: the empty pick names the project and says to create one")
+            .contains(PREFIX + "two has no environments yet").contains("Create one here");
+
+        // 4. The inline create makes the environment IN the record's project, and the pick adopts it.
+        String created = PREFIX + "inline-staging";
+        page.click(popup + " .pl-select-create");
+        String createForm = "[data-zf-create-form='environment_id']";
+        page.waitForSelector(createForm + " input[name='name']");
+        page.fill(createForm + " input[name='name']", created);
+        page.click("[data-zf-create-submit='environment_id']");
+        page.waitForCondition(() -> Models.get(EnvironmentModel.class).find()
+            .where(EnvironmentModel.NAME.eq(created)).first() != null);
+        Row staging = Models.get(EnvironmentModel.class).find().where(EnvironmentModel.NAME.eq(created)).first();
+        try {
+            assertThat((Integer) staging.get(EnvironmentModel.PROJECT_ID))
+                .as("step 4: the environment was created in the record's own project").isEqualTo(projectTwoId);
+            page.waitForCondition(() -> page.locator(environmentSelect + " .pl-select-field").textContent()
+                .contains(created));
+        } finally {
+            Models.get(EnvironmentModel.class).delete(staging.get(EnvironmentModel.ID));
+        }
     }
 
     /** Environments group ONLY what their project owns, and their variables merge under. */

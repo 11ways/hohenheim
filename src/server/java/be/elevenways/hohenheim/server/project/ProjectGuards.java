@@ -190,36 +190,27 @@ public final class ProjectGuards {
     }
 
     /**
-     * The environments a record answering to {@code owner} may be placed in, by name: THE grouping rule the write hook
-     * judges a placement by, so a picker offering these never offers what the save refuses.
+     * THE project whose environments a record answering to {@code owner} may be grouped in: the one that owns it, by
+     * the grouping rule the write hook judges a placement by, so a picker narrowed to it never offers what the save
+     * refuses.
      *
      * @param owner the record's owner subjects ({@link #ownerOf(Object, AccessContext)}), null when unreadable
+     * @return the project, null when the record answers to none (operator-owned, per-user or unreadable)
      */
-    public static @NonNull List<Row> environmentsFor(@Nullable Set<String> owner) {
-        if (owner == null) {
-            return List.of();
-        }
-        List<Row> admitted = new ArrayList<>();
-        for (Row environment : Models.get(EnvironmentModel.class).find()
-                .orderBy(EnvironmentModel.NAME, SortOrder.ASC).all()) {
-            Row project = projectOf(environment);
-            if (project != null && owns(project, owner)) {
-                admitted.add(environment);
-            }
-        }
-        return admitted;
+    public static @Nullable Row groupingProject(@Nullable Set<String> owner) {
+        Row project = Projects.projectForSubjects(owner);
+        return project != null && owns(project, owner) ? project : null;
     }
 
     /**
-     * Why {@link #environmentsFor} offers a record answering to {@code owner} nothing: its project has no environment
-     * yet, or it answers to no project at all (unreadable grants included, which place nothing either).
+     * Why a record answering to {@code owner} is offered no environment: its project has none yet, or it answers to
+     * no project at all (unreadable grants included, which place nothing either).
      */
     public static @NonNull Microcopy noEnvironmentsReason(@Nullable Set<String> owner) {
-        for (Row project : Models.get(ProjectModel.class).find().all()) {
-            if (owns(project, owner)) {
-                return HohenheimMicrocopy.INSTANCE.of("environment_empty_project")
-                    .withArg("project", String.valueOf((Object) project.get(ProjectModel.NAME)));
-            }
+        Row project = groupingProject(owner);
+        if (project != null) {
+            return HohenheimMicrocopy.INSTANCE.of("environment_empty_project")
+                .withArg("project", String.valueOf((Object) project.get(ProjectModel.NAME)));
         }
         return HohenheimMicrocopy.INSTANCE.of("environment_empty_no_project");
     }

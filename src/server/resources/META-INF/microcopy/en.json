@@ -12099,7 +12099,7 @@
     "scope": "instance"
   },
   "environment_empty_project": {
-    "text": "{$project} has no environments yet. Add one under Environments, then pick it here.",
+    "text": "{$project} has no environments yet. Create one here.",
     "scope": "instance"
   },
   "environment_empty_no_project": {

@@ -549,6 +549,22 @@ class InstanceBackupsTest {
             .assign(ServerModel.LAST_SEEN_AT, at).updateAll();
     }
 
+    /** A backup whose instance row is gone (its id cleared) still deletes: the operator governs it alone. */
+    @Test
+    void aBackupWhoseInstanceIsGoneDeletesCleanly() {
+        // 1. A failed backup row naming no instance (no artifact, so no target is asked).
+        Row row = Models.get(InstanceBackupModel.class).createEmptyRow();
+        row.set(InstanceBackupModel.INSTANCE_ID, (Integer) null);
+        row.set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_FAILED);
+        Models.get(InstanceBackupModel.class).save(row);
+        int id = row.get(InstanceBackupModel.ID);
+
+        // 2. The delete runs as system work and removes the row instead of failing on the missing instance.
+        new InstanceBackups().delete(id);
+        assertThat(Models.get(InstanceBackupModel.class).findById(id))
+            .as("step 2: the orphan backup row is gone").isNull();
+    }
+
     /**
      * The explicit-target flow (null target id: tests, future re-target flows) must not
      * produce rows retention can never remove: re-resolving a null TARGET_ID throws, so

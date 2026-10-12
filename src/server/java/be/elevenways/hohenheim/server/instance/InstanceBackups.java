@@ -762,14 +762,23 @@ public final class InstanceBackups {
         }
     }
 
-    /** Remove a backup's artifact from its target and delete the row. */
+    /**
+     * Remove a backup's artifact from its target and delete the row.
+     *
+     * AIDEV-NOTE: a backup outlives its instance; once the instance's id is cleared no grant can name it, so the
+     * operator alone governs the row (the admin entry's survivingArchive parent offers it there).
+     */
     public void delete(int backupId) {
         Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
         if (backup == null) {
             return;
         }
-        HohenheimAccess.requireOperationCapability(
-            backup.get(InstanceBackupModel.INSTANCE_ID), HohenheimCapabilities.BACKUPS);
+        Integer instanceId = backup.get(InstanceBackupModel.INSTANCE_ID);
+        if (instanceId == null) {
+            HohenheimAccess.requireOperatorOperation();
+        } else {
+            HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.BACKUPS);
+        }
         deleteAuthorized(backup, null, null);
     }
 
