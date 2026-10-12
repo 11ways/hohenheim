@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimPickRules;
@@ -114,6 +116,9 @@ public final class InstanceParts {
 
     /** The artifact sections' stored-failure column, drawn only in the Backups tab. */
     private static final String FAILURE_COLUMN = "failure";
+
+    /** The instance form's open section holding where its backups go. */
+    private static final String BACKUPS_SECTION = "backups";
 
     /** Virtual column naming the owning product record of a generated row. */
     static final String MANAGED_BY_COLUMN = "managed_by";
@@ -392,17 +397,20 @@ public final class InstanceParts {
                 .build())
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.CRASH_POLICY))
+            // Where its backups go is the instance's own choice (no installation default exists), so it stands in an
+            // open section of its own: Back up now refuses by naming it, and the Backups tab links here.
             .add(RelationPick.of(InstanceModel.BACKUP_TARGET_ID, BackupTargetModel.MODEL_ID)
                 .clearable(true).build())
             // What a person DECIDES when creating an instance is the kind, its name, where it runs and what it runs
-            // inside; the failure policy and where its backups go are answers this installation already has.
+            // inside; the failure policy is an answer this installation already has.
             //
             // AIDEV-NOTE: this section can only name TOP-LEVEL entries; the per-kind SETTINGS sub-form folds through
             // the schema-declared sections each kind adds (HohenheimFormSections). Never fold a field by hiding it
             // with visibleIn: that makes it unwritable.
-            .section(FormSection.advanced(
-                InstanceModel.CRASH_POLICY.getName(),
+            .section(FormSection.of(BACKUPS_SECTION, HohenheimMicrocopy.INSTANCE.of("backups"),
                 InstanceModel.BACKUP_TARGET_ID.getName()))
+            .section(FormSection.advanced(
+                InstanceModel.CRASH_POLICY.getName()))
             .showWhen(InstanceModel.RUNTIME_IMAGE_ID.getName(), InstanceModel.KIND.getName(),
                 InstanceKinds.kindsWhere(InstanceKindHandler::usesRuntimeImage).toArray(String[]::new))
             .build();
@@ -572,7 +580,7 @@ public final class InstanceParts {
         tabs.add(new InstanceStatsPage());
         // The sections read THIS panel's entries: the /manage backup twin places no restore-to-new, which is how it
         // stays operator-only there too.
-        tabs.add(backupsTab());
+        tabs.add(backupsTab(operator));
         tabs.add(new InstanceProvisioningPage());
         tabs.add(new InstanceVolumesTab());
         tabs.add(new InstanceDatabasesPage());
@@ -591,9 +599,12 @@ public final class InstanceParts {
      * AIDEV-NOTE: built per panel (a child list resolves in the panel it is declared on). An artifact's stored
      * failure text is the daemon's own wording, shown through {@link WithheldFailure}: an operator reads it, a
      * delegate reads that it failed.
+     *
+     * @param operator whether the tab is the operator's, which names the backup target in use and links to its choice
      */
-    private static @NonNull ChildList<Row> backupsTab() {
-        return ChildList.<Row>sections(HohenheimSlugs.Tab.BACKUPS, HohenheimMicrocopy.INSTANCE.of("backups"),
+    private static @NonNull ChildList<Row> backupsTab(boolean operator) {
+        ChildList<Row> tab = ChildList.<Row>sections(HohenheimSlugs.Tab.BACKUPS,
+                HohenheimMicrocopy.INSTANCE.of("backups"),
                 HohenheimSlugs.INSTANCE_BACKUPS, HohenheimSlugs.INSTANCE_SNAPSHOTS, HohenheimSlugs.INSTANCE_SCHEDULES)
             .icon(Icon.of("box-archive"))
             .hide(HohenheimSlugs.INSTANCE_BACKUPS, InstanceBackupModel.INSTANCE_ID.getName())
@@ -608,6 +619,27 @@ public final class InstanceParts {
             failureColumn(),
                 (snapshot, request) -> WithheldFailure.of(request.conduit())
                     .shown(snapshot.get(InstanceSnapshotModel.ERROR)));
+        return operator ? tab.headerLink(HohenheimSlugs.INSTANCE_BACKUPS, backupTargetLink()) : tab;
+    }
+
+    /**
+     * The backups section's header link: the target this instance's backups go to, or the offer to choose one, both
+     * leading to the Configuration where its Backups section holds the choice.
+     */
+    private static @NonNull PanelAction<Row> backupTargetLink() {
+        return PanelAction.<Row>link(HohenheimIds.id("instance_backup_target"), ActionPlacement.HEADER)
+            .label(HohenheimMicrocopy.INSTANCE.of("backup_target_choose"))
+            .dynamicLabel(instance -> {
+                Integer targetId = instance.get(InstanceModel.BACKUP_TARGET_ID);
+                Row target = targetId == null ? null : Models.get(BackupTargetModel.class).findById(targetId);
+                return target == null ? HohenheimMicrocopy.INSTANCE.of("backup_target_choose")
+                    : HohenheimMicrocopy.INSTANCE.of("backups_go_to")
+                        .withArg("target", String.valueOf((Object) target.get(BackupTargetModel.NAME)));
+            })
+            .icon(Icon.of("box-archive"))
+            .route((instance, request) -> CmsRoutes.detail(request.panelSlug(), HohenheimSlugs.INSTANCES,
+                instance.get(InstanceModel.ID)))
+            .build();
     }
 
     /** The column an artifact's stored failure reads in, blank while it has none. */

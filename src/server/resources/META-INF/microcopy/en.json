@@ -6627,6 +6627,18 @@
     "text": "The daemon for instance {$name} cannot be reached",
     "scope": "violations"
   },
+  "instance_backup_target_none": {
+    "text": "{$name} has no backup target yet. Choose where its backups go in its Configuration, under Backups.",
+    "scope": "violations"
+  },
+  "backup_target_choose": {
+    "text": "Choose a backup target",
+    "scope": "instance"
+  },
+  "backups_go_to": {
+    "text": "Backups go to {$target}",
+    "scope": "instance"
+  },
   "backup_target_missing": {
     "text": "No backup target is configured for this instance",
     "scope": "violations"

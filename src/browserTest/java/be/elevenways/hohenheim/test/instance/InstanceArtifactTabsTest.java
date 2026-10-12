@@ -14,6 +14,8 @@ import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -202,6 +204,97 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
             Row untargeted = Models.get(InstanceBackupModel.class).findById(backupId);
             untargeted.set(InstanceBackupModel.TARGET_ID, (Integer) null);
             Models.get(InstanceBackupModel.class).save(untargeted);
+            Models.get(BackupTargetModel.class).delete(target.get(BackupTargetModel.ID));
+        }
+    }
+
+    /**
+     * A backup outlives its instance: once the instance is deleted, the backup is the way to bring it back on another
+     * host, so its record still offers restore-to-new (with the host pick) and delete, under the same gates.
+     */
+    @Test
+    void aBackupWhoseInstanceIsGoneStillOffersRestoreAndDelete() throws Exception {
+        // 1. A complete backup of an instance that is then deleted.
+        var instances = Models.get(InstanceModel.class);
+        Row doomed = instances.createEmptyRow();
+        doomed.set(InstanceModel.NAME, "artifact-gone");
+        doomed.set(InstanceModel.KIND, "hohenheim:docker_container");
+        doomed.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "command", "sleep 60"));
+        doomed.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
+        doomed.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        instances.save(doomed);
+        int goneId = doomed.get(InstanceModel.ID);
+        Row orphan = Models.get(InstanceBackupModel.class).createEmptyRow();
+        orphan.set(InstanceBackupModel.INSTANCE_ID, goneId);
+        orphan.set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_COMPLETE);
+        orphan.set(InstanceBackupModel.SUMMARY, Map.of("kind", "hohenheim:docker_container"));
+        Models.get(InstanceBackupModel.class).save(orphan);
+        int orphanId = orphan.get(InstanceBackupModel.ID);
+        assertThat(instances.delete(goneId)).as("step 1: the instance is deleted").isTrue();
+        assertThat(instances.findById(goneId)).as("step 1: and gone from every default read").isNull();
+
+        // 2. The backup's record page still offers restore-to-new and delete.
+        HttpResponse<String> page = httpGet("/admin/instance-backups/" + orphanId, sessionToken);
+        assertThat(page.statusCode()).as("step 2: the backup record renders").isEqualTo(200);
+        assertThat(page.body())
+            .withFailMessage("step 2: the backup of a deleted instance offers no restore")
+            .containsPattern("/admin/instance-backups/invoke/hohenheim\\.restore_backup\\?ids=" + orphanId
+                + "(?![0-9])");
+        assertThat(page.body())
+            .withFailMessage("step 2: the backup of a deleted instance offers no delete")
+            .containsPattern("(/admin/instance-backups/" + orphanId + "/delete|delete_backup\\?ids=" + orphanId
+                + "(?![0-9]))");
+
+        // 3. The restore's host pick lists the hosts a restore could land on, read off the backup alone.
+        assertThat(InstanceBackups.destinationsFor(Models.get(InstanceBackupModel.class).findById(orphanId)))
+            .as("step 3: the host pick offers this installation's host")
+            .anySatisfy(destination -> assertThat(destination.serverId()).isEqualTo(ServerModel.localServerId()));
+
+        // 4. The operator's delete removes it through the entry's own DELETE.
+        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_BACKUPS, orphanId,
+            TenantConduits.operator());
+        assertThat(Models.get(InstanceBackupModel.class).findById(orphanId)).as("step 4: the backup is deleted")
+            .isNull();
+    }
+
+    /**
+     * Where an instance's backups go is its own choice, made in its Configuration: Back up now without one says so in
+     * words, and the Backups tab names the target in use with the way to change it.
+     */
+    @Test
+    void backingUpWithoutATargetSaysWhereToChooseOneAndTheTabNamesTheTargetInUse() throws Exception {
+        // 1. Without a target, Back up now is refused naming where the target is chosen.
+        Throwable refused = catchThrowable(() -> new InstanceBackups().backupNow(instanceId));
+        assertThat(refused).as("step 1: refused").isInstanceOf(Violations.class);
+        assertThat(((Violations) refused).all()).as("step 1: by the instance's own missing choice")
+            .anySatisfy(violation -> {
+                assertThat(violation.message().key()).isEqualTo("instance_backup_target_none");
+                assertThat(ApiSupport.shippedText(violation.message())).contains("artifact-subject")
+                    .contains("Configuration").contains("Backups");
+            });
+
+        // 2. The Backups tab says none is chosen and links to the Configuration, where the field is not folded away.
+        HttpResponse<String> none = httpGet(url("backups"), sessionToken);
+        assertThat(none.body()).as("step 2: the tab offers to choose one").contains("Choose a backup target")
+            .contains("href=\"/admin/instances/" + instanceId + "\"");
+        assertThat(httpGet("/admin/instances/" + instanceId, sessionToken).body())
+            .as("step 2: the Configuration shows its Backups section open")
+            .contains("data-section=\"backups\" data-collapsed=\"false\"");
+
+        // 3. With a target chosen, the tab names it.
+        Row target = Models.get(BackupTargetModel.class).createEmptyRow();
+        target.set(BackupTargetModel.NAME, "artifact-tab-destination");
+        target.set(BackupTargetModel.KIND, "hohenheim:filesystem");
+        target.set(BackupTargetModel.SETTINGS, Map.of("path", System.getProperty("java.io.tmpdir")));
+        Models.get(BackupTargetModel.class).save(target);
+        Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+            .assign(InstanceModel.BACKUP_TARGET_ID, (Integer) target.get(BackupTargetModel.ID)).updateAll();
+        try {
+            assertThat(httpGet(url("backups"), sessionToken).body()).as("step 3: the tab names the target in use")
+                .contains("Backups go to artifact-tab-destination");
+        } finally {
+            Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+                .assign(InstanceModel.BACKUP_TARGET_ID, (Integer) null).updateAll();
             Models.get(BackupTargetModel.class).delete(target.get(BackupTargetModel.ID));
         }
     }

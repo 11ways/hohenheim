@@ -467,6 +467,72 @@ class InstanceBackupsTest {
         }
     }
 
+    /**
+     * An imported export brings every device its definition carries: an extra network interface gets its device row
+     * on the new record from the same read that lands install media; a data disk, whose volume no export carries,
+     * holds the restore in error by name instead of landing a machine that points at the source's disk.
+     */
+    @Test
+    void aRestoredMachineGetsARowForEachDeviceItsExportCarries() throws Exception {
+        try (FakeIncusSocket landing = FakeIncusSocket.start()) {
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            InstanceBackups backups = new InstanceBackups();
+            int instanceId = instanceRecord("backup-with-nic", hostId);
+            service.deploy(instanceId);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
+            Row nic = Models.get(InstanceDeviceModel.class).createEmptyRow();
+            nic.set(InstanceDeviceModel.INSTANCE_ID, instanceId);
+            nic.set(InstanceDeviceModel.TYPE, InstanceDeviceModel.TYPE_NIC);
+            nic.set(InstanceDeviceModel.NAME, "eth1");
+            Models.get(InstanceDeviceModel.class).save(nic);
+            FakeNativeDaemons.FakeWorkload source = FakeNativeDaemons.daemonOf(hostId)
+                .get(FakeNativeDaemons.handleOf(instanceId));
+            source.nics.add("eth1");
+            java.util.Set<Integer> restored = new java.util.LinkedHashSet<>();
+            int landingId = HostFixtures.admittedIncusHost("device-landing-host");
+            Models.get(ServerModel.class).find().where(ServerModel.ID.eq(landingId))
+                .assign(ServerModel.INCUS_URL, landing.url()).updateAll();
+            try {
+                // 1. The restored record has the interface's row under the name the daemon holds it by.
+                int withNic = backups.backupNow(instanceId, targetId, target);
+                int copyId = backups.restoreToNew(withNic, "nic-copy", landingId).instanceId();
+                restored.add(copyId);
+                assertThat(Models.get(InstanceDeviceModel.class).find()
+                        .where(InstanceDeviceModel.INSTANCE_ID.eq(copyId)).all())
+                    .as("step 1: the restored record has the interface's row").singleElement().satisfies(row -> {
+                        assertThat((String) row.get(InstanceDeviceModel.NAME)).isEqualTo("eth1");
+                        assertThat((String) row.get(InstanceDeviceModel.TYPE)).isEqualTo(InstanceDeviceModel.TYPE_NIC);
+                    });
+                assertThat(FakeNativeDaemons.daemonOf(landingId).get(FakeNativeDaemons.handleOf(copyId)).nics)
+                    .as("step 1: and the restored machine holds that one interface").containsExactly("eth1");
+
+                // 2. A data disk in the export holds the restore in error, naming the disk.
+                source.disks.put("data1", "source-data1");
+                int withDisk = backups.backupNow(instanceId, targetId, target);
+                long before = Models.get(InstanceModel.class).find().count();
+                Throwable refused = catchThrowable(() -> restored.add(
+                    backups.restoreToNew(withDisk, "disk-copy", landingId).instanceId()));
+                Models.get(InstanceModel.class).find().where(InstanceModel.NAME.eq("disk-copy")).all()
+                    .forEach(row -> restored.add(row.get(InstanceModel.ID)));
+                assertThat(refused).as("step 2: the restore is refused").isInstanceOf(Violations.class);
+                assertThat(((Violations) refused).all()).as("step 2: naming the data disk").anySatisfy(violation ->
+                    assertThat(ApiSupport.shippedText(violation.message())).contains("data1"));
+                assertThat(Models.get(InstanceModel.class).find().count()).as("step 2: the record is held, not lost")
+                    .isEqualTo(before + 1);
+            } finally {
+                source.disks.clear();
+                Models.get(InstanceDeviceModel.class).find().where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
+                    .all().forEach(row -> Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID)));
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
+                restored.forEach(service::destroy);
+                service.destroy(instanceId);
+                Models.get(ServerModel.class).delete(landingId);
+            }
+        });
+        }
+    }
+
     private static Map<Integer, InstanceBackups.Destination> destinationsById(Row backup) {
         Map<Integer, InstanceBackups.Destination> byId = new HashMap<>();
         InstanceBackups.destinationsFor(backup).forEach(destination -> byId.put(destination.serverId(), destination));

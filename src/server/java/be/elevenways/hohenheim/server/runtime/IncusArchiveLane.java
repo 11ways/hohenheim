@@ -9,6 +9,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 import static be.elevenways.hohenheim.server.runtime.IncusDefinitions.USER_PREFIX;
@@ -92,7 +93,8 @@ final class IncusArchiveLane {
         }
     }
 
-    @NonNull Map<String, String> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive) throws IOException {
+    @NonNull List<NativeSnapshotSupport.ImportedDevice> importBackup(@NonNull InstanceSpec spec,
+                                                                     @NonNull Path archive) throws IOException {
         // AIDEV-NOTE: the isolation ACL is ensured BEFORE the import, on THIS daemon. The
         // archive carries the source's device config, and its eth0 names this
         // controller's isolation ACL (`security.acls`); the daemon validates every
@@ -148,7 +150,7 @@ final class IncusArchiveLane {
         });
         this.runtime.verifyIsolated(spec);
         // Read off the SAME definition the import landed (the edits above touch config and eth0 only).
-        return IncusDeviceLane.installMediaDrives(existing);
+        return IncusDeviceLane.importedDevices(existing);
     }
 
     /**

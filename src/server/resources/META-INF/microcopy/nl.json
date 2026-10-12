@@ -6627,6 +6627,18 @@
     "text": "De daemon voor instantie {$name} is onbereikbaar",
     "scope": "violations"
   },
+  "instance_backup_target_none": {
+    "text": "{$name} heeft nog geen back-updoel. Kies waar de back-ups heen gaan in de Configuratie, onder Back-ups.",
+    "scope": "violations"
+  },
+  "backup_target_choose": {
+    "text": "Kies een back-updoel",
+    "scope": "instance"
+  },
+  "backups_go_to": {
+    "text": "Back-ups gaan naar {$target}",
+    "scope": "instance"
+  },
   "backup_target_missing": {
     "text": "Er is geen back-updoel ingesteld voor deze instantie",
     "scope": "violations"

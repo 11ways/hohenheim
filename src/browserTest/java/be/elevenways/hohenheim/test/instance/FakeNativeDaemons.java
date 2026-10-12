@@ -23,6 +23,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
+import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution.WorkloadClaim;
@@ -156,6 +157,10 @@ final class FakeNativeDaemons {
         String geometry;
         /** Install-media drives, device name to ISO volume: an export carries them, an import lands them. */
         final Map<String, String> cdroms = new LinkedHashMap<>();
+        /** Extra network interfaces by device name: an export carries them, an import lands them. */
+        final List<String> nics = new ArrayList<>();
+        /** Data disks, device name to the volume they point at: an export names them, never carries the volume. */
+        final Map<String, String> disks = new LinkedHashMap<>();
     }
 
     /**
@@ -473,12 +478,15 @@ final class FakeNativeDaemons {
             }
             workload.cdroms.forEach((name, medium) ->
                 text.append("cdrom ").append(name).append('=').append(medium).append('\n'));
+            workload.nics.forEach(name -> text.append("nic ").append(name).append('\n'));
+            workload.disks.forEach((name, volume) ->
+                text.append("disk ").append(name).append('=').append(volume).append('\n'));
             Files.writeString(destination, text.toString());
             return Files.size(destination);
         }
 
         @Override
-        public @NonNull Map<String, String> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive)
+        public @NonNull List<ImportedDevice> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive)
                 throws IOException {
             if (this.daemon.containsKey(spec.handle())) {
                 throw new IOException("already exists: " + spec.handle());
@@ -496,10 +504,20 @@ final class FakeNativeDaemons {
                 } else if (line.startsWith("cdrom ")) {
                     String[] drive = line.substring(6).split("=", 2);
                     workload.cdroms.put(drive[0], drive[1]);
+                } else if (line.startsWith("nic ")) {
+                    workload.nics.add(line.substring(4));
+                } else if (line.startsWith("disk ")) {
+                    String[] disk = line.substring(5).split("=", 2);
+                    workload.disks.put(disk[0], disk[1]);
                 }
             }
             this.daemon.put(spec.handle(), workload);
-            return Map.copyOf(workload.cdroms);
+            // The definition's devices in the import's own vocabulary, the shape the Incus lane reads back.
+            List<ImportedDevice> devices = new ArrayList<>();
+            workload.cdroms.forEach((name, medium) -> devices.add(new ImportedDevice(name, DeviceType.CDROM, medium)));
+            workload.nics.forEach(name -> devices.add(new ImportedDevice(name, DeviceType.NIC, null)));
+            workload.disks.forEach((name, volume) -> devices.add(new ImportedDevice(name, DeviceType.DISK, volume)));
+            return devices;
         }
 
         // -- DeviceAttachSupport: install-media drives only ---------------------
@@ -518,7 +536,10 @@ final class FakeNativeDaemons {
 
         @Override
         public void ensureNic(@NonNull InstanceSpec spec, @NonNull String deviceName) throws IOException {
-            throw new IOException("the fake native runtime carries install media only");
+            List<String> nics = require(spec.handle()).nics;
+            if (!nics.contains(deviceName)) {
+                nics.add(deviceName);
+            }
         }
 
         @Override
@@ -531,6 +552,7 @@ final class FakeNativeDaemons {
         public void removeDevice(@NonNull InstanceSpec spec, @NonNull String deviceName, boolean hasVolume)
                 throws IOException {
             require(spec.handle()).cdroms.remove(deviceName);
+            require(spec.handle()).nics.remove(deviceName);
         }
 
         @Override

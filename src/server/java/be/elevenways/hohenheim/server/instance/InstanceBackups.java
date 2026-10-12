@@ -119,6 +119,11 @@ public final class InstanceBackups {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.BACKUPS);
         Row row = requireRow(instanceId);
         Integer targetId = row.get(InstanceModel.BACKUP_TARGET_ID);
+        if (targetId == null) {
+            // The target is the instance's own choice (no installation default), so the refusal says where it is made.
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_backup_target_none")
+                .withArg("name", String.valueOf((Object) row.get(InstanceModel.NAME))));
+        }
         return backupNow(instanceId, targetId, BackupTargetKinds.targetFor(targetId));
     }
 
@@ -744,9 +749,9 @@ public final class InstanceBackups {
                 throw new IOException("Backup archive carries no 'instance'"
                     + " payload entry for its instance_export manifest");
             }
-            // The export keeps a machine's ISO drives (an import onto a host holding the ISO lands them), so the new
-            // record gets the rows for what the daemon now holds, under the names it holds them.
-            InstanceDevices.recordImportedDrives(newId, nativeSupport.importBackup(resolved.spec(), export));
+            // The export keeps a machine's ISO drives and extra NICs (an import onto a host holding the ISO lands
+            // them), so the new record gets the rows for what the daemon now holds, under the names it holds them.
+            InstanceDevices.recordImportedDevices(newId, nativeSupport.importBackup(resolved.spec(), export));
         } else {
             VolumeSnapshotSupport support = InstanceSnapshots.requireSupport(resolved);
             Map<String, String> volumes = InstanceSnapshots.logicalVolumes(resolved);

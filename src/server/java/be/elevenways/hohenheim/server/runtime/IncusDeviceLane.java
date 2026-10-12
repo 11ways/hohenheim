@@ -6,7 +6,10 @@ import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import be.elevenways.hohenheim.instance.DeviceType;
+
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -272,23 +275,34 @@ final class IncusDeviceLane {
     }
 
     /**
-     * The install-media drives of an instance definition: the device shape {@link #ensureCdrom} writes (a disk with a
-     * source volume, no mount path and the media boot priority), read back by the import.
+     * The modelled devices of an instance definition, read back by the import: an extra NIC (any NIC but the managed
+     * {@link IncusNetworkPolicy#NIC}), install media (the shape {@link #ensureCdrom} writes: a disk with a source
+     * volume, no mount path and the media boot priority) and a data disk (the shape {@link #ensureDisk} writes: the
+     * same disk without that priority). The root disk and mounted volumes carry a path and are no device rows.
      *
-     * @return device name to ISO volume, in definition order
+     * @return the devices in definition order
      */
-    static @NonNull Map<String, String> installMediaDrives(@NonNull Map<String, Object> instance) {
-        Map<String, String> drives = new LinkedHashMap<>();
+    static @NonNull List<NativeSnapshotSupport.ImportedDevice> importedDevices(@NonNull Map<String, Object> instance) {
+        List<NativeSnapshotSupport.ImportedDevice> imported = new ArrayList<>();
         if (instance.get("devices") instanceof Map<?, ?> devices) {
-            devices.forEach((name, device) -> {
-                if (device instanceof Map<?, ?> disk && "disk".equals(disk.get("type")) && disk.get("path") == null
-                        && disk.get("source") instanceof String source && !source.isBlank()
-                        && CDROM_BOOT_PRIORITY.equals(String.valueOf(disk.get("boot.priority")))) {
-                    drives.put(String.valueOf(name), source);
+            devices.forEach((key, value) -> {
+                String name = String.valueOf(key);
+                if (!(value instanceof Map<?, ?> device)) {
+                    return;
+                }
+                if ("nic".equals(device.get("type"))) {
+                    if (!IncusNetworkPolicy.NIC.equals(name)) {
+                        imported.add(new NativeSnapshotSupport.ImportedDevice(name, DeviceType.NIC, null));
+                    }
+                } else if ("disk".equals(device.get("type")) && device.get("path") == null
+                        && device.get("source") instanceof String source && !source.isBlank()) {
+                    imported.add(new NativeSnapshotSupport.ImportedDevice(name,
+                        CDROM_BOOT_PRIORITY.equals(String.valueOf(device.get("boot.priority")))
+                            ? DeviceType.CDROM : DeviceType.DISK, source));
                 }
             });
         }
-        return drives;
+        return imported;
     }
 
     /** Stamp the root disk's boot priority ABOVE the media's (see ensureCdrom's note). */

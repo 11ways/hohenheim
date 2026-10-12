@@ -1,9 +1,12 @@
 package be.elevenways.hohenheim.server.runtime;
 
+import be.elevenways.hohenheim.instance.DeviceType;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -72,10 +75,18 @@ public interface NativeSnapshotSupport extends WorkloadAttribution {
      * instance's labels, and an unattributable window would defeat every ownership
      * guard, so re-attribution is part of this contract, not a caller nicety.
      *
-     * @return the install-media drives the imported definition carries, device name to ISO volume (empty for none):
-     *         the export keeps them, so the new record's device rows are written from this answer
+     * @return the devices the imported definition carries that Hohenheim models as device rows, in definition order
+     *         (empty for none): the export keeps them, so the new record's rows are written from this answer
      */
-    @NonNull Map<String, String> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive) throws IOException;
+    @NonNull List<ImportedDevice> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive) throws IOException;
+
+    /**
+     * One device an imported definition carries, as the device-row vocabulary names it.
+     *
+     * @param source the volume the device names (an ISO for a cdrom, a custom volume for a disk), null for a NIC
+     */
+    record ImportedDevice(@NonNull String name, @NonNull DeviceType type, @Nullable String source) {
+    }
 
     /**
      * The image identity the workload actually runs (for the backup manifest).

@@ -51,9 +51,16 @@ public final class InstanceBackupParts {
     private InstanceBackupParts() {
     }
 
-    /** The operator's backups: every backup, restore-to-new on a complete one, and the history tab. */
+    /**
+     * The operator's backups: every backup, restore-to-new on a complete one, and the history tab.
+     *
+     * AIDEV-NOTE: a backup OUTLIVES its instance here (ResourceParent.survivingArchive): restoring a backup of a
+     * deleted instance onto another host is the recovery restore-to-new exists for, so a trashed instance never makes
+     * its backups read-only on the operator's surface. The tenant twin keeps the plain parent: what a tenant may do
+     * with the backups of an instance it deleted is the operator's call.
+     */
     public static @NonNull PanelResource<Row> admin() {
-        return base(HohenheimIds.id("instance_backup"))
+        return base(HohenheimIds.id("instance_backup"), instanceParent().survivingArchive())
             .actions(List.of(restore()))
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
@@ -65,13 +72,20 @@ public final class InstanceBackupParts {
      * surface, which also 404s its routes.
      */
     public static @NonNull PanelResource<Row> manage() {
-        return ManageTwin.reached(base(ManageTwin.id("instance_backup")), TenantScopes.INSTANCE_BACKUPS,
-                ResourceTabs.<Row>none().withContributions())
+        return ManageTwin.reached(base(ManageTwin.id("instance_backup"), instanceParent()),
+                TenantScopes.INSTANCE_BACKUPS, ResourceTabs.<Row>none().withContributions())
             .build();
     }
 
+    /** A backup belongs to its instance: listed in the instance's Backups tab, its record page leads back there. */
+    private static @NonNull ResourceParent<Row> instanceParent() {
+        return ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceBackupModel.INSTANCE_ID)
+            .tab(HohenheimSlugs.Tab.BACKUPS);
+    }
+
     /** The parts both twins share: identity, list, title and the delete that removes the artifact too. */
-    private static PanelResource.@NonNull Builder<Row> base(@NonNull Identifier id) {
+    private static PanelResource.@NonNull Builder<Row> base(@NonNull Identifier id,
+                                                            @NonNull ResourceParent<Row> parent) {
         RelationPick instance = RelationPick.of(InstanceBackupModel.INSTANCE_ID, InstanceModel.MODEL_ID).build();
         TableSpec<Row> table = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(InstanceBackupModel.INSTANCE_ID).relation(instance).build())
@@ -92,9 +106,7 @@ public final class InstanceBackupParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(17)
             .showInNav(false)
-            // A backup belongs to its instance: listed in the instance's Backups tab, its record page leads back there.
-            .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceBackupModel.INSTANCE_ID)
-                .tab(HohenheimSlugs.Tab.BACKUPS))
+            .parent(parent)
             .reads(ResourceReads.rows().title(InstanceBackupParts::title))
             // A backup is immutable evidence: no create (born from the instance action or the nightly task) and no
             // update; readers view, actions act.

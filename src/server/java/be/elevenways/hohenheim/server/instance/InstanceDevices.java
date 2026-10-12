@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.DeviceAttachSupport;
+import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -209,17 +210,29 @@ public final class InstanceDevices {
     }
 
     /**
-     * Record the drives an import brought in its definition (a restore of a machine backed up with its ISO): the
-     * daemon already holds each one, so only the row is written, and the deploy's reconcile finds it in place.
+     * Record the devices an import brought in its definition: the daemon already holds each NIC and drive, so only
+     * the row is written, and the deploy's reconcile finds it in place. A data disk refuses the whole restore before
+     * any row is written: no export carries its volume, so the imported device still names the SOURCE's disk.
      *
-     * @param drives device name to ISO volume, as the driver read them off the imported workload
+     * @param devices the modelled devices as the driver read them off the imported workload
+     * @throws IOException naming a data disk the import carries
      */
-    static void recordImportedDrives(int instanceId, @NonNull Map<String, String> drives) {
-        drives.forEach((name, medium) -> {
-            Row row = newDevice(instanceId, DeviceType.CDROM, name);
-            row.set(InstanceDeviceModel.SOURCE_MEDIA, medium);
-            Models.get(InstanceDeviceModel.class).save(row);
-        });
+    static void recordImportedDevices(int instanceId, @NonNull List<NativeSnapshotSupport.ImportedDevice> devices)
+            throws IOException {
+        List<Row> rows = new ArrayList<>();
+        for (NativeSnapshotSupport.ImportedDevice device : devices) {
+            Row row = newDevice(instanceId, device.type(), device.name());
+            switch (device.type()) {
+                case CDROM -> row.set(InstanceDeviceModel.SOURCE_MEDIA, device.source());
+                case NIC -> {
+                }
+                case DISK -> throw new IOException("The backup's machine carries data disk '" + device.name()
+                    + "' on volume '" + device.source() + "', which an export does not carry; detach the data disk"
+                    + " before backing up, or copy its data another way");
+            }
+            rows.add(row);
+        }
+        rows.forEach(row -> Models.get(InstanceDeviceModel.class).save(row));
     }
 
     /** The instance's cdrom rows, oldest first. */
