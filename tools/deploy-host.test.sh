@@ -3,9 +3,10 @@
 # deploy-host.test.sh -- drive tools/deploy-host.sh against FAKE ssh/scp/java/zenit-dev.
 #
 # Every external command the lane uses is a shim in a temp dir on PATH, so the
-# ordering of the steps and the three refusals (dirty stamp, failed rehearsal,
-# health never green) are proven with no host, no jar and no network. A real
-# deploy is still the real proof; this is the regression net around the script.
+# ordering of the steps and the refusals (dirty stamp, no room on the host,
+# failed rehearsal, health never green) are proven with no host, no jar and no
+# network. A real deploy is still the real proof; this is the regression net
+# around the script.
 
 set -euo pipefail
 
@@ -33,7 +34,14 @@ cat > "$CONFIG" <<CONFIG
         "rootbox": {
             "ssh": "root@roothost",
             "jar": "/opt/hohenheim/hohenheim-server.jar",
-            "service": "hohenheim"
+            "service": "hohenheim",
+            "keepPreflights": 2
+        },
+        "badkeep": {
+            "ssh": "root@roothost",
+            "jar": "/opt/hohenheim/hohenheim-server.jar",
+            "service": "hohenheim",
+            "keepPreflights": 0
         }
     }
 }
@@ -81,6 +89,22 @@ printf '%s\n' "$script" >> "$REMOTE_SCRIPTS"
 log() { printf '%s\n' "$1" >> "$SSH_LOG"; }
 
 case "$script" in
+    *"@@space"*)
+        log "space"
+        root_kib=10000000
+        opt_kib=10000000
+        case "${FAKE_SPACE:-room}" in
+            short) root_kib=500000; opt_kib=500000 ;;
+            opt-short) opt_kib=500000 ;;
+        esac
+        printf '@@space\n'
+        printf 'db 600000000\nwal 0\nsettings 100\noldjar 268000000\n'
+        printf 'df preflight /dev/vda1 41000000 30000000 %s 80%% /\n' "$root_kib"
+        printf 'df rehearse /dev/vdb1 41000000 30000000 %s 80%% /opt\n' "$opt_kib"
+        printf 'df staging /dev/vda1 41000000 30000000 %s 80%% /\n' "$root_kib"
+        printf 'df install /dev/vdb1 41000000 30000000 %s 80%% /opt\n' "$opt_kib"
+        printf '@@end\n'
+        ;;
     *"@@integrity"*)
         log "backup"
         printf '@@integrity\nok\n'
@@ -132,8 +156,15 @@ case "$script" in
         log "verify-upload"
         printf '%s\n' "$FAKE_JAR_SHA"
         ;;
+    *"@@prune"*)
+        log "prune"
+        printf '%s\n' "$script" > "$PRUNE_SCRIPT"
+        printf '@@prune\nkeep /root/hohenheim-preflight-20261011-120000\n'
+        printf 'pruned /root/hohenheim-preflight-20260901-old\n@@end\n'
+        ;;
     *"rm -rf"*)
         log "cleanup"
+        printf '%s\n' "$script" > "$CLEANUP_SCRIPT"
         ;;
     *)
         log "other"
@@ -174,13 +205,15 @@ export SSH_LOG DEPLOYED_CALLS
 export REMOTE_SCRIPTS="$WORK/remote-scripts"
 export SWAP_SCRIPT="$WORK/swap.sh"
 export HEALTH_SCRIPT="$WORK/health.sh"
+export PRUNE_SCRIPT="$WORK/prune.sh"
+export CLEANUP_SCRIPT="$WORK/cleanup.sh"
 export FAKE_JAR_SHA="$JAR_SHA"
 export ZENIT_DEV_CONFIG="$CONFIG"
 
 # shellcheck source=test-assert.sh
 . "$HERE/test-assert.sh"
 
-reset_logs() { : > "$SSH_LOG"; : > "$DEPLOYED_CALLS"; : > "$REMOTE_SCRIPTS"; }
+reset_logs() { : > "$SSH_LOG"; : > "$DEPLOYED_CALLS"; : > "$REMOTE_SCRIPTS"; rm -f "$PRUNE_SCRIPT" "$CLEANUP_SCRIPT"; }
 
 run_lane() {
     reset_logs
@@ -196,6 +229,8 @@ expect "a non-root ssh user means sudo -n" "$OUT" "privilege: sudo -n"
 expect "step 1 verifies the local stamp" "$OUT" "1. Local build stamp"
 expect "counts the clean repos" "$OUT" "2 repos stamped clean"
 expect "step 2 asks what runs there now" "$OUT" "2. What runs on testbox right now"
+expect "step 3 checks the host has room first" "$OUT" "room for the backup and rehearsal copies"
+expect "step 3 names each filesystem's free and needed space" "$OUT" "/opt: 9.5 GB free"
 expect "step 3 verifies the uploaded sha256" "$OUT" "sha256 matches on the host"
 expect "step 4 checks the backup's integrity" "$OUT" "database backed up, integrity ok"
 expect "step 4 compares the keyring" "$OUT" "keyring sha256 matches the copy"
@@ -210,6 +245,10 @@ expect "step 10 demands current" "$OUT" "current, no restart pending"
 expect "prints a runbook skeleton" "$OUT" "## Deploy"
 expect "the skeleton carries the jar sha" "$OUT" "$JAR_SHA"
 expect "the skeleton names the rollback command" "$OUT" "--rollback testbox --preflight"
+expect "step 11 keeps the default five preflights" "$OUT" "keeping the 5 newest /root/hohenheim-preflight-*"
+expect "step 11 names what it pruned" "$OUT" "pruned /root/hohenheim-preflight-20260901-old"
+expect "the default retention is five" "$(cat "$PRUNE_SCRIPT")" "keep=5"
+expect "the scratch cleanup never touches a preflight" "$(cat "$CLEANUP_SCRIPT")" "hohenheim-preflight-" no
 
 SCRIPTS="$(cat "$REMOTE_SCRIPTS")"
 expect "the rehearsal copies the settings directory" "$SCRIPTS" \
@@ -220,8 +259,8 @@ expect "the rehearsal boots on that copy, never the live settings" "$SCRIPTS" \
 LOG="$(cat "$SSH_LOG")"
 ORDER="$(/usr/bin/grep -v '^scp ' "$SSH_LOG" | tr '\n' ' ')"
 expect "the jar is uploaded before anything is verified on the host" "$LOG" "scp "
-expect "backup, rehearsal and swap happen in that order" "$ORDER" \
-    "verify-upload backup rehearse swap health migrations-after restart2 health cleanup"
+expect "backup, rehearsal and swap happen in that order, pruning only at the very end" "$ORDER" \
+    "space verify-upload backup rehearse swap health migrations-after restart2 health cleanup prune"
 if [ "$(wc -l < "$DEPLOYED_CALLS")" = "2" ]; then
     ok "zenit-dev deployed is asked before and after"
 else
@@ -235,6 +274,7 @@ if OUT="$(FAKE_STAMP=dirty run_lane testbox "$JAR" 2>&1)"; then
 else
     expect "the dirty stamp refusal names it" "$OUT" "carries a DIRTY stamp"
     expect "nothing was uploaded after a dirty stamp" "$(cat "$SSH_LOG")" "scp " no
+    expect "a lane refused before the upload has nothing to clean" "$(cat "$SSH_LOG")" "cleanup" no
 fi
 
 if OUT="$(FAKE_STAMP=unstamped run_lane testbox "$JAR" 2>&1)"; then
@@ -251,6 +291,11 @@ else
     expect "the rehearsal refusal names the exit code" "$OUT" "--rehearse-migrations exited 1"
     expect "the rehearsal refusal says the live database is untouched" "$OUT" "the live database was not touched and nothing was swapped"
     expect "no swap happened after a failed rehearsal" "$(cat "$SSH_LOG")" "swap" no
+    expect "a refused lane removes its own scratch copies" "$(cat "$SSH_LOG")" "cleanup"
+    expect "the scratch it removes is the rehearsal copy" "$(cat "$CLEANUP_SCRIPT")" "rm -rf '/opt/hohenheim-rehearse-"
+    expect "and the uploaded jar" "$(cat "$CLEANUP_SCRIPT")" "rm -f 'hohenheim-deploy-"
+    expect "a refused lane keeps its preflight backup" "$(cat "$CLEANUP_SCRIPT")" "hohenheim-preflight-" no
+    expect "a refused lane prunes no preflight" "$(cat "$SSH_LOG")" "prune" no
 fi
 
 # --- 4. refusal: health never turns green -----------------------------------
@@ -264,6 +309,7 @@ else
     expect "it prints the rollback commands instead" "$OUT" "ROLLBACK (run these by hand"
     expect "the rollback names the preflight jar" "$OUT" "rollback.jar"
     expect "it never restarted a second time" "$(cat "$SSH_LOG")" "restart2" no
+    expect "a failed deploy prunes no preflight" "$(cat "$SSH_LOG")" "prune" no
 fi
 
 # --- 5. refusal: the host does not report current ---------------------------
@@ -273,6 +319,7 @@ if OUT="$(FAKE_DEPLOYED=stuck run_lane testbox "$JAR" 2>&1)"; then
 else
     expect "the not-current refusal names the state" "$OUT" "does not report current for every repo"
     expect "it names the repo that is not current" "$OUT" "hohenheim=deployed-ahead"
+    expect "a deploy that is not current prunes no preflight" "$(cat "$SSH_LOG")" "prune" no
 fi
 
 # An UPSTREAM repo whose local checkout is merely ahead of the shipped jar is the
@@ -280,6 +327,24 @@ fi
 OUT="$(FAKE_DEPLOYED=upstream-ahead run_lane testbox "$JAR" 2>&1)" || no "an upstream local-ahead lane exits 0"
 expect "an upstream local-ahead is reported as a warning" "$OUT" "WARNING: upstream local checkouts carry unpushed commits"
 expect "and names the repo" "$OUT" "pushed heads): zenit"
+
+# --- 5b. refusal: the host lacks room for the copies -------------------------
+
+if OUT="$(FAKE_SPACE=short run_lane testbox "$JAR" 2>&1)"; then
+    no "a host without room for the copies is refused"
+else
+    expect "the space refusal says why" "$OUT" "REFUSED: not enough free space on the host for the backup and rehearsal copies"
+    expect "the space refusal names free and needed" "$OUT" "/: 488 MB free, 1.6 GB needed"
+    expect "nothing was uploaded without room" "$(cat "$SSH_LOG")" "scp " no
+    expect "no backup was started without room" "$(cat "$SSH_LOG")" "backup" no
+fi
+if OUT="$(FAKE_SPACE=opt-short run_lane testbox "$JAR" 2>&1)"; then
+    no "a host whose /opt lacks room is refused"
+else
+    REFUSAL="$(printf '%s\n' "$OUT" | /usr/bin/grep '^REFUSED')"
+    expect "a separate filesystem is judged on its own" "$REFUSAL" "/opt: 488 MB free"
+    expect "a filesystem with room is not named short" "$REFUSAL" " /: " no
+fi
 
 # --- 6. argument refusals ---------------------------------------------------
 
@@ -289,6 +354,12 @@ else
     expect "the unknown target lists the known ones" "$OUT" "unknown deployment target"
     expect "the known root target is named" "$OUT" "rootbox"
     expect "the known sudo target is named" "$OUT" "testbox"
+fi
+
+if OUT="$(run_lane badkeep "$JAR" 2>&1)"; then
+    no "a retention below one is refused"
+else
+    expect "the bad retention is named" "$OUT" "keepPreflights must be a whole number of at least 1"
 fi
 
 if OUT="$(run_lane testbox "$WORK/absent.jar" 2>&1)"; then
@@ -319,6 +390,7 @@ fi
 
 OUT="$(run_lane rootbox "$JAR")" || no "the root lane exits 0"
 expect "a root ssh user needs no sudo" "$OUT" "privilege: none needed"
+expect "a target's own retention is used" "$(cat "$PRUNE_SCRIPT")" "keep=2"
 OUT="$(run_lane rootbox "$JAR" --dry-run)" || no "the root dry run exits 0"
 expect "root still drops to the service user for the rehearsal" "$OUT" "runuser -u 'hohenheim' -- "
 OUT="$(run_lane testbox "$JAR" --dry-run)" || no "the sudo dry run exits 0"
@@ -428,5 +500,34 @@ if [ "$((SECONDS - START_SECONDS))" -le 2 ]; then
 else
     no "one-second health budget bounds a hanging request"
 fi
+
+# --- 12. execute the generated prune: the N newest stay, the current always ----
+# The current preflight carries the OLDEST mtime here, so only its name keeps it.
+OUT="$(run_lane testbox "$JAR" --preflight /root/hohenheim-preflight-20261012-040000)" || no "capture the prune"
+cat > "$WORK/execute-prune.sh" <<'REMOTE'
+sudo() { shift; "$@"; }
+find() {
+    printf '%s\n' '1000.5 /root/hohenheim-preflight-20261012-040000' \
+        '9500.0 /root/not-a-preflight' \
+        '9000.0 /root/hohenheim-preflight-20261011-a' '8000.0 /root/hohenheim-preflight-20261010-b' \
+        '4000.0 /root/hohenheim-preflight-20261006-f' '7000.0 /root/hohenheim-preflight-20261009-c' \
+        '6000.0 /root/hohenheim-preflight-20261008-d' '5000.0 /root/hohenheim-preflight-20261007-e'
+}
+rm() { printf 'rm %s\n' "$*"; }
+. "$PRUNE_SCRIPT"
+REMOTE
+OUT="$(sh "$WORK/execute-prune.sh" 2>&1)" || no "the prune script runs under POSIX sh"
+expect "the oldest beyond five is pruned" "$OUT" "rm -rf -- /root/hohenheim-preflight-20261006-f"
+expect "the next oldest beyond five is pruned" "$OUT" "rm -rf -- /root/hohenheim-preflight-20261007-e"
+expect "the fourth newest other is kept" "$OUT" "rm -rf -- /root/hohenheim-preflight-20261008-d" no
+expect "the newest other is kept" "$OUT" "rm -rf -- /root/hohenheim-preflight-20261011-a" no
+expect "the current preflight is never pruned" "$OUT" "rm -rf -- /root/hohenheim-preflight-20261012-040000" no
+expect "a directory outside the pattern is never pruned" "$OUT" "not-a-preflight" no
+if [ "$(printf '%s\n' "$OUT" | /usr/bin/grep -c '^rm ')" = 2 ]; then
+    ok "exactly two preflights are pruned"
+else
+    no "exactly two preflights are pruned"
+fi
+expect "a pruned path is reported" "$OUT" "pruned /root/hohenheim-preflight-20261006-f"
 
 report

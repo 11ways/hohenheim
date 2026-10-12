@@ -11,11 +11,16 @@
 #
 # Its main gates are:
 #   1. a local jar whose build stamp is DIRTY, unstamped or inconsistent,
-#   2. a migration rehearsal that does not succeed against a byte copy,
-#   3. a health probe that never turns green (it then STOPS and prints the
+#   2. a host without the free space the backup and rehearsal copies need,
+#   3. a migration rehearsal that does not succeed against a byte copy,
+#   4. a health probe that never turns green (it then STOPS and prints the
 #      rollback commands; it never rolls back on its own).
 # A failed swap restarts the installed jar before returning failure. This is
 # service recovery, not an automatic jar or database rollback.
+#
+# A lane refused before the swap removes its own rehearsal copy and uploaded jar.
+# Only a lane that ends healthy and current prunes the host's older preflight
+# backups, keeping the target's "keepPreflights" newest (default 5), its own included.
 #
 # The host, jar path and service name come from the SAME `deployments` config
 # `zenit-dev deployed` reads: ~/.config/zenit-dev/config.json, key
@@ -34,6 +39,14 @@ HEALTH_URL="http://127.0.0.1:3000/api/health"
 HEALTH_TIMEOUT="120"
 PREFLIGHT_DIR=""
 REHEARSE_DIR=""
+# Where every lane's preflight backup lives; retention prunes only this pattern.
+PREFLIGHT_ROOT="/root"
+PREFLIGHT_PREFIX="hohenheim-preflight-"
+DEFAULT_KEEP_PREFLIGHTS="5"
+KEEP_PREFLIGHTS=""
+# Room the free-space gate leaves on every filesystem beyond the lane's own copies:
+# the rehearsal JVM extracts native libraries, and the live service keeps writing.
+SPACE_HEADROOM_MB="256"
 JAVA_BIN="java"
 STAMP="$(date -u +%Y%m%d-%H%M%S)"
 DRY_RUN="no"
@@ -53,6 +66,10 @@ JAR_SIZE=""
 MIGRATIONS_BEFORE=""
 MIGRATIONS_AFTER=""
 ROLLBACK_JAR=""
+# Set once the host holds this lane's scratch, and once the swap begins: together
+# they decide whether a failing lane removes its scratch on exit.
+SCRATCH_PLACED="no"
+SWAP_BEGUN="no"
 
 # --- output helpers ---------------------------------------------------------
 
@@ -85,6 +102,10 @@ Options:
   --dry-run              print the plan, execute nothing
   --rollback             swap <preflight>/rollback.jar back in and restart
   --help                 this text
+
+The deployments entry may declare "keepPreflights" (default 5): after a deploy
+that ends healthy and current, only that many of the newest
+/root/hohenheim-preflight-* backups stay, this deploy's own always among them.
 
 There is deliberately NO flag to skip the second restart: a jar that survives
 one restart and not the next is the failure this lane exists to catch.
@@ -132,7 +153,7 @@ fi
 # global one -- the same merge lib/deployed.js performs, so both tools can never
 # disagree about which host a name means.
 read_target() {
-    python3 - "$CONFIG_PATH" "$REPO_CONFIG" "$TARGET" <<'PY'
+    python3 - "$CONFIG_PATH" "$REPO_CONFIG" "$TARGET" "$DEFAULT_KEEP_PREFLIGHTS" <<'PY'
 import json, sys
 
 def deployments(path):
@@ -159,9 +180,13 @@ if not isinstance(ssh, str) or not ssh:
     sys.exit('deployment "%s" declares no ssh (user@host)' % name)
 if not isinstance(jar, str) or not jar.startswith('/'):
     sys.exit('deployment "%s" must declare an absolute jar path on the host' % name)
+keep = spec.get('keepPreflights', int(sys.argv[4]))
+if isinstance(keep, bool) or not isinstance(keep, int) or keep < 1:
+    sys.exit('deployment "%s": keepPreflights must be a whole number of at least 1, got %r' % (name, keep))
 print(ssh)
 print(jar)
 print(service)
+print(keep)
 PY
 }
 
@@ -169,11 +194,13 @@ TARGET_FACTS="$(read_target 2>&1)" || fail "$TARGET_FACTS"
 SSH_TARGET="$(printf '%s\n' "$TARGET_FACTS" | sed -n 1p)"
 REMOTE_JAR="$(printf '%s\n' "$TARGET_FACTS" | sed -n 2p)"
 SERVICE="$(printf '%s\n' "$TARGET_FACTS" | sed -n 3p)"
+KEEP_PREFLIGHTS="$(printf '%s\n' "$TARGET_FACTS" | sed -n 4p)"
 [ -n "$SERVICE" ] || fail "deployment \"$TARGET\" declares no systemd service; this lane restarts one"
 
 [ -n "$PREFIX" ] || PREFIX="$(dirname "$REMOTE_JAR")"
 [ -n "$DB_PATH" ] || DB_PATH="$PREFIX/hohenheim.db"
-[ -n "$PREFLIGHT_DIR" ] || PREFLIGHT_DIR="/root/hohenheim-preflight-$STAMP"
+[ -n "$PREFLIGHT_DIR" ] || PREFLIGHT_DIR="$PREFLIGHT_ROOT/$PREFLIGHT_PREFIX$STAMP"
+PREFLIGHT_DIR="${PREFLIGHT_DIR%/}"
 [ -n "$REHEARSE_DIR" ] || REHEARSE_DIR="/opt/hohenheim-rehearse-$STAMP"
 SETTINGS_DIR="$PREFIX/settings"
 KEYRING="$SETTINGS_DIR/field-encryption.keys"
@@ -218,6 +245,78 @@ section() {
         $0 == want { grab = 1; next }
         /^@@/ { grab = 0 }
         grab { print }'
+}
+
+# Removes this lane's uploaded jar and rehearsal copy; a preflight backup is never scratch.
+remove_scratch() {
+    remote "$SUDO rm -rf '$REHEARSE_DIR'; rm -f '$STAGED_JAR'"
+}
+
+# On a failing exit before the swap, removes the lane's scratch. Its preflight backup
+# stays for the next healthy deploy's retention, and once the swap began nothing is
+# removed, so the operator finds the host exactly as the failure left it.
+clean_refused_lane() {
+    local rc=$?
+    [ "$rc" -ne 0 ] && [ "$DRY_RUN" = "no" ] && [ "$SCRATCH_PLACED" = "yes" ] && [ "$SWAP_BEGUN" = "no" ] \
+        || return 0
+    printf '   removing the refused lane'"'"'s scratch: %s and ~/%s\n' "$REHEARSE_DIR" "$STAGED_JAR" >&2
+    remove_scratch > /dev/null 2>&1 \
+        || printf '   WARNING: could not remove %s and ~/%s; remove them by hand\n' "$REHEARSE_DIR" "$STAGED_JAR" >&2
+}
+trap clean_refused_lane EXIT
+
+# Judges a space report against what the lane is about to write, per filesystem:
+# two database copies, the settings and the old jar into the preflight; a database
+# copy, the settings and the new jar into the rehearsal; the uploaded jar; the new
+# jar staged beside the live one; plus the headroom on each. Prints one ok/short line
+# per filesystem.
+# @return 1 when a filesystem lacks room, 2 when the report is unreadable
+judge_space() {
+    python3 - "$1" "$JAR_SIZE" "$SPACE_HEADROOM_MB" <<'PY'
+import sys
+
+report, new_jar, headroom = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]) * 1024 * 1024
+sizes, places = {}, {}
+for line in report.splitlines():
+    parts = line.split()
+    if len(parts) == 2 and parts[0] in ('db', 'wal', 'settings', 'oldjar') and parts[1].isdigit():
+        sizes[parts[0]] = int(parts[1]) * (1024 if parts[0] == 'settings' else 1)
+    elif len(parts) >= 8 and parts[0] == 'df' and parts[5].isdigit():
+        # df -Pk columns: filesystem, 1024-blocks, used, available, capacity, mounted on.
+        places[parts[1]] = (' '.join(parts[7:]), int(parts[5]) * 1024)
+
+missing = [k for k in ('db', 'wal', 'settings', 'oldjar') if k not in sizes] \
+    + [k for k in ('preflight', 'rehearse', 'staging', 'install') if k not in places]
+if missing:
+    print('the space report lacks: %s' % ', '.join(missing))
+    sys.exit(2)
+
+db = sizes['db'] + sizes['wal']
+writes = {
+    'preflight': [('preflight databases', 2 * db), ('preflight settings', sizes['settings']),
+                  ('rollback jar', sizes['oldjar'])],
+    'rehearse': [('rehearsal database', db), ('rehearsal settings', sizes['settings']), ('rehearsal jar', new_jar)],
+    'staging': [('uploaded jar', new_jar)],
+    'install': [('new jar beside the live one', new_jar)],
+}
+mounts = {}
+for place, parts in writes.items():
+    mount, free = places[place]
+    entry = mounts.setdefault(mount, {'free': free, 'need': headroom, 'parts': []})
+    entry['need'] += sum(size for _, size in parts)
+    entry['parts'] += [label for label, _ in parts]
+
+def human(n):
+    return '%.1f GB' % (n / 1024 ** 3) if n >= 1024 ** 3 else '%.0f MB' % (n / 1024 ** 2)
+
+short = False
+for mount, entry in mounts.items():
+    lacking = entry['free'] < entry['need']
+    short = short or lacking
+    print('%s %s: %s free, %s needed (%s, %s headroom)' % ('short' if lacking else 'ok', mount,
+        human(entry['free']), human(entry['need']), ', '.join(entry['parts']), human(headroom)))
+sys.exit(1 if short else 0)
+PY
 }
 
 deployed_json() {
@@ -369,9 +468,34 @@ if [ "$DRY_RUN" = "no" ] && [ -n "$BEFORE_JSON" ]; then
     judge_deployed "$BEFORE_JSON" || info "(that is the state BEFORE the deploy; local-ahead is what a pending deploy looks like)"
 fi
 
-# --- 3. upload ---------------------------------------------------------------
+# --- 3. free space, then upload ---------------------------------------------
 
-step "3. Upload the jar and verify its sha256 on the host"
+step "3. Check the host has room for the backup and rehearsal copies, upload the jar, verify its sha256"
+# Refusing here costs nothing; running out midway once left a refused lane's copies
+# behind on a full disk, its rehearsal unable even to extract the SQLite library.
+SPACE="$(remote "echo '@@space'
+echo \"db \$($SUDO stat -c %s '$DB_PATH')\"
+echo \"wal \$($SUDO stat -c %s '$DB_PATH-wal' 2>/dev/null || echo 0)\"
+echo \"settings \$($SUDO du -sk '$SETTINGS_DIR' | cut -f1)\"
+echo \"oldjar \$($SUDO stat -c %s '$REMOTE_JAR')\"
+echo \"df preflight \$($SUDO df -Pk '$(dirname "$PREFLIGHT_DIR")' | tail -n 1)\"
+echo \"df rehearse \$($SUDO df -Pk '$(dirname "$REHEARSE_DIR")' | tail -n 1)\"
+echo \"df staging \$(df -Pk . | tail -n 1)\"
+echo \"df install \$($SUDO df -Pk '$PREFIX' | tail -n 1)\"
+echo '@@end'")" || fail "could not read the host's free space; nothing was uploaded"
+if [ "$DRY_RUN" = "no" ]; then
+    SPACE_VERDICT="$(judge_space "$(section "$SPACE" space)" 2>&1)" && SPACE_RC=0 || SPACE_RC=$?
+    printf '%s\n' "$SPACE_VERDICT" | sed 's/^ok /   /; s/^short /   SHORT /'
+    case "$SPACE_RC" in
+        0) ;;
+        1) fail "not enough free space on the host for the backup and rehearsal copies: $(printf '%s\n' \
+            "$SPACE_VERDICT" | sed -n 's/^short //p' | paste -sd ';' - | sed 's/;/; /g'); nothing was uploaded.\
+ Free room first (older $PREFLIGHT_ROOT/$PREFLIGHT_PREFIX* backups, leftover /opt/hohenheim-rehearse-* copies)" ;;
+        *) fail "could not judge the host's free space: $SPACE_VERDICT" ;;
+    esac
+fi
+
+SCRATCH_PLACED="yes"
 if [ "$DRY_RUN" = "yes" ]; then
     info "PLAN: scp $LOCAL_JAR $SSH_TARGET:$STAGED_JAR"
 else
@@ -470,6 +594,7 @@ step "6. Swap the jar and restart $SERVICE"
 # Arm restart recovery before stopping: a failed backup or move must not leave
 # the installed jar stopped. After the move, inspection failures are reported
 # without preventing the explicit start; health is judged by the caller.
+SWAP_BEGUN="yes"
 SWAP="$(remote "set -e
 $SUDO install -o '$SERVICE_USER' -g '$SERVICE_USER' -m 0644 '$REHEARSE_DIR/new.jar' '$PREFIX/hohenheim-server.jar.new'
 trap '$SUDO systemctl start \"$SERVICE\"' 0
@@ -571,10 +696,29 @@ if [ "$DRY_RUN" = "no" ]; then
     info "current, no restart pending"
 fi
 
-# --- 11. cleanup and the runbook entry --------------------------------------
+# --- 11. cleanup, retention and the runbook entry ---------------------------
 
-step "11. Clean up the staged copies"
-remote "$SUDO rm -rf '$REHEARSE_DIR'; rm -f '$STAGED_JAR'" || warn "could not clean the staged jar / rehearsal dir"
+step "11. Clean up the staged copies and prune older preflights"
+remove_scratch || warn "could not clean the staged jar / rehearsal dir"
+# Only here, after a healthy and current deploy whose own backup verified: every
+# failing path exited above, so a failure always keeps every backup. Newest by mtime;
+# this deploy's directory counts as one kept whatever its mtime says.
+info "keeping the $KEEP_PREFLIGHTS newest $PREFLIGHT_ROOT/$PREFLIGHT_PREFIX* (this deploy's among them)"
+PRUNE="$(remote "echo '@@prune'
+keep=$KEEP_PREFLIGHTS
+kept=1
+for dir in \$($SUDO find '$PREFLIGHT_ROOT' -mindepth 1 -maxdepth 1 -type d -name '$PREFLIGHT_PREFIX*' -printf '%T@ %p\\n' | sort -rn | cut -d' ' -f2-); do
+  case \"\$dir\" in '$PREFLIGHT_ROOT/$PREFLIGHT_PREFIX'?*) ;; *) continue ;; esac
+  [ \"\$dir\" = '$PREFLIGHT_DIR' ] && continue
+  if [ \"\$kept\" -lt \"\$keep\" ]; then kept=\$((kept + 1)); echo \"keep \$dir\"; continue; fi
+  if $SUDO rm -rf -- \"\$dir\"; then echo \"pruned \$dir\"; else echo \"failed \$dir\"; fi
+done
+echo '@@end'")" || warn "could not prune the older preflights; the deploy itself is done"
+if [ "$DRY_RUN" = "no" ]; then
+    PRUNED="$(section "$PRUNE" prune)"
+    printf '%s\n' "$PRUNED" | sed -n 's/^pruned /   pruned /p'
+    printf '%s\n' "$PRUNED" | sed -n 's/^failed //p' | while read -r left; do warn "could not prune $left"; done
+fi
 
 step "Runbook entry (paste into the host's deploy log)"
 cat <<ENTRY
