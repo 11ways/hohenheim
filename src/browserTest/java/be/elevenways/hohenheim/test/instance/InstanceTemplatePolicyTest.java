@@ -475,7 +475,7 @@ class InstanceTemplatePolicyTest extends HohenheimTestBase {
             Map.of("SERVER_PORT", "70000", "MODE", "survival"), null));
         assertThat(violationKeys(outOfRange))
             .as("step 2: 70000 violates the declared max=65535, as a typed Max violation")
-            .contains("SERVER_PORT=" + Max.DEFAULT_MESSAGE_KEY + " ");
+            .contains("SERVER_PORT=" + Max.DEFAULT_MESSAGE_KEY.key() + " ");
 
         // 3. A value outside the select's closed set is refused.
         Throwable badChoice = catchThrowable(() -> templates.createFromTemplate(

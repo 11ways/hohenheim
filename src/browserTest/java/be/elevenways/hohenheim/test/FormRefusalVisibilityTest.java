@@ -49,7 +49,7 @@ class FormRefusalVisibilityTest extends HohenheimTestBase {
         assertThat(noSibling.body())
             .as("the field error is resolved copy, not a raw key")
             .contains("Upstream must be chosen before its settings can be saved")
-            .doesNotContain("data-unresolved>" + SubmittedValueCoercion.SCHEMA_UNRESOLVED_MESSAGE_KEY);
+            .doesNotContain("data-unresolved>" + SubmittedValueCoercion.SCHEMA_UNRESOLVED_MESSAGE_KEY.key());
 
         // Step 3: a nonsense scalar for a boolean setting is refused with the
         // boolean sentence, again with nothing written.
@@ -62,7 +62,7 @@ class FormRefusalVisibilityTest extends HohenheimTestBase {
         assertThat(afterBadBoolean).isEqualTo(before);
         assertThat(badBoolean.body())
             .contains("This is not a valid on/off value")
-            .doesNotContain("data-unresolved>" + SubmittedValueCoercion.INVALID_BOOLEAN_MESSAGE_KEY);
+            .doesNotContain("data-unresolved>" + SubmittedValueCoercion.INVALID_BOOLEAN_MESSAGE_KEY.key());
 
         // Step 4: the certificate request refuses comma-joined domains with a 422 whose redrawn input RENDERS the
         // refusal naming the bad hostnames -- pinned because a curl-only probe once read this refusal as "and then
