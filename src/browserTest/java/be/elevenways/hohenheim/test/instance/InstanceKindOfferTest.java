@@ -44,6 +44,8 @@ class InstanceKindOfferTest {
 
     @BeforeAll
     static void bootRegistry() {
+        // The template part's contents tab is role-gated, and this class boots no runtime that would declare roles.
+        HohenheimTestRuntime.declareFullNodeRolesOnce();
         HohenheimTestRuntime.ensureDatasource();
     }
 

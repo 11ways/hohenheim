@@ -24,19 +24,12 @@ public final class HohenheimTestRuntime {
     private HohenheimTestRuntime() {
     }
 
-    // AIDEV-NOTE: this boots the REAL TaskService -- the zenit TASKS stage is an
-    // unconditional ROOT_STAGE child, and ensureBooted enables all 7 roles, so
-    // minutely and */5 crons (SuperviseProxyListeners, MonitorStacks,
-    // Verify*Isolation) tick throughout every browser test. Anything published via
-    // ServerMain.adoptProxyServer becomes visible to those ticks MID-ASSERTION:
-    // superviseListeners() mutates the very restart counters and listener state a
-    // proxy test is checking. Detach with adoptProxyServer(null) when done.
-    public static void ensureBooted() {
-        // Standalone tests that never load the hohenheim settings file still hit
-        // role gates (task declarations at the TASKS stage, panel filtering, the
-        // security engine). The funnel DECLARES the full-node role set for them,
-        // matching what these suites always exercised; a role-restricted test
-        // declares its own set (and captures) BEFORE calling ensureBooted.
+    /**
+     * Declares the full-node role set unless roles were captured already: standalone tests that never load the
+     * hohenheim settings file still hit role gates (task declarations at the TASKS stage, panel filtering, a panel
+     * part's role-gated tab, the security engine). A role-restricted test declares its own set and captures first.
+     */
+    public static void declareFullNodeRolesOnce() {
         if (!HohenheimRoles.isCaptured()) {
             HohenheimSettingsBoot.forceDefinitions();
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.PROXY, true);
@@ -47,6 +40,17 @@ public final class HohenheimTestRuntime {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Roles.INSTANCES, true);
             HohenheimRoles.capture();
         }
+    }
+
+    // AIDEV-NOTE: this boots the REAL TaskService -- the zenit TASKS stage is an
+    // unconditional ROOT_STAGE child, and ensureBooted enables all 7 roles, so
+    // minutely and */5 crons (SuperviseProxyListeners, MonitorStacks,
+    // Verify*Isolation) tick throughout every browser test. Anything published via
+    // ServerMain.adoptProxyServer becomes visible to those ticks MID-ASSERTION:
+    // superviseListeners() mutates the very restart counters and listener state a
+    // proxy test is checking. Detach with adoptProxyServer(null) when done.
+    public static void ensureBooted() {
+        declareFullNodeRolesOnce();
         declareAccessModelsOnce();
         ensureDatasource();
         // AIDEV-NOTE: zenit-auth installs itself at the MODULES stage (the discovered
