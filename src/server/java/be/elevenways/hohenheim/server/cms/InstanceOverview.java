@@ -182,8 +182,11 @@ public final class InstanceOverview {
         List<WidgetFact> facts = new ArrayList<>();
         HealthCellState verdict = HealthCellState.of(AppHealth.instanceReading(instance, delegated, viewer).health(),
             viewer);
+        // The verdict's one word ("Working"), never its headline: the band above says the sentence ("Live at
+        // https://..."), which as a pill outgrew this narrow card.
         facts.add(WidgetFact.badge(AppOverview.text("state", locales, resolver),
-            new WidgetBadge(verdict.label(), verdict.variant(), null, verdict.icon(), true)));
+            new WidgetBadge(AppParts.stateLabel(verdict.tone()).resolve(locales, resolver), verdict.variant(), null,
+                verdict.icon(), true)));
         Object kind = instance.get(InstanceModel.KIND);
         if (kind != null) {
             facts.add(WidgetFact.badge(AppOverview.text("kind", locales, resolver),

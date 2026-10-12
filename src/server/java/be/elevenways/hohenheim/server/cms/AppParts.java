@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
@@ -261,8 +262,13 @@ public final class AppParts {
     private static @NonNull EnumField stateField() {
         EnumField.Builder builder = EnumField.builder("state");
         for (HealthTone tone : HealthTone.values()) {
-            builder.value(tone.token(), spec -> spec.label(HohenheimMicrocopy.APP_LIST.of("state_" + tone.token())));
+            builder.value(tone.token(), spec -> spec.label(stateLabel(tone.token())));
         }
         return builder.label(HohenheimMicrocopy.APP_LIST.of("state")).build();
+    }
+
+    /** @return a verdict tone's one word for an app ("Working"), the state filter's and the Details card's */
+    static @NonNull Microcopy stateLabel(@NonNull String toneToken) {
+        return HohenheimMicrocopy.APP_LIST.of("state_" + toneToken);
     }
 }

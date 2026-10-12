@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityVisibility;
@@ -482,16 +483,20 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
         int id = instance.get(InstanceModel.ID);
         try {
             // 1. Never started and never checked: the Details card says so in words, not "Created" beside "Never
-            //    checked against the host"; its Status is the band's verdict, never the stored token's label.
+            //    checked against the host"; its Status is the band's verdict in one word, never the stored token's
+            //    label, and never the band's whole sentence, which outgrew the card.
             Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(id))
                 .assign(InstanceModel.STATUS, InstanceModel.STATUS_CREATED)
                 .assign(InstanceModel.STATUS_OBSERVED_AT, null).bypassBehaviours().updateAll();
             String created = adminGet("/admin/instances/" + id + "/page/overview").body();
             int status = created.indexOf("widget-facts-term\">Status</dt>");
-            String verdict = AppHealth.instances(false).read(Models.get(InstanceModel.class).findById(id),
-                TenantConduits.operator()).headline().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver());
+            RecordHealth verdict = AppHealth.instances(false).read(Models.get(InstanceModel.class).findById(id),
+                TenantConduits.operator());
             assertThat(created.substring(status, created.indexOf("</dd>", status)))
-                .as("step 1: the Status reads the band's verdict").contains(verdict)
+                .as("step 1: the Status says the band's verdict in one word")
+                .contains(AppParts.stateLabel(verdict.tone().token())
+                    .resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .doesNotContain(verdict.headline().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
                 .doesNotContain("Not started yet");
             assertThat(created).as("step 1: a workload never started reads so, and when it was last checked")
                 .contains("Last checked")
