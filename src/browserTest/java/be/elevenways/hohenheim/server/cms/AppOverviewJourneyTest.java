@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.HohenheimStatsFunctions;
+import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -32,6 +34,7 @@ import be.elevenways.zenit.common.operation.OperationRunModel;
 import be.elevenways.zenit.common.operation.OperationRunStatus;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.data.UsageData;
 import org.junit.jupiter.api.Test;
 
@@ -366,32 +369,41 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
         cleanup.add(() -> HardDeletes.row(Models.get(InstanceModel.class), instance));
         LocaleChain en = LocaleChain.ofTags("en");
         try {
-            // 1. Memory and CPU are read live, while someone watches the Metrics tab: a stopped workload uses none, and
-            //    a running one nobody watches is not measured, in words, never a zero.
-            List<UsageData> idle = InstanceOverview.liveUsage(instance, List.of(), en, Zenit.getMessageResolver());
+            // 1. Memory and CPU are read live: a stopped workload uses none, said in words, never a zero; a running
+            //    one gets the live gauges, whose element holds the stats feed while the overview is open.
+            List<WidgetInstance> idle = InstanceOverview.liveGauges(instance, en, Zenit.getMessageResolver());
             assertThat(idle).as("step 1: a stopped workload's memory and CPU are not measured")
-                .allMatch(usage -> !usage.measured());
-            assertThat(idle.get(0).unmeasuredReason()).as("step 1: because it does not run")
+                .allMatch(gauge -> gauge.data() instanceof UsageData usage && !usage.measured());
+            assertThat(((UsageData) idle.get(0).data()).unmeasuredReason()).as("step 1: because it does not run")
                 .isEqualTo("It is not running, so it uses none.");
             instance.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
             Models.get(InstanceModel.class).save(instance);
-            assertThat(InstanceOverview.liveUsage(instance, List.of(), en, Zenit.getMessageResolver()).get(1)
-                .unmeasuredReason()).as("step 1: or because nobody watches it now")
-                .isEqualTo("Read live while its Metrics tab is open; nobody has it open now.");
+            List<WidgetInstance> running = InstanceOverview.liveGauges(instance, en, Zenit.getMessageResolver());
+            assertThat(running).as("step 1: a running one gets the one live widget").singleElement()
+                .satisfies(gauge -> assertThat(gauge.typeId()).isEqualTo(HohenheimWidgets.INSTANCE_LIVE_USAGE.id()));
 
-            // 2. With samples held, memory is measured against its limit and CPU is the samples' mean (the first,
-            //    which carries no CPU figure, left out) against the cores the daemon reports.
+            // 2. A reading is measured the same way on both halves (the seed and the element): memory against its
+            //    cap, else what the host booked; CPU is the newest window's share against the cores the daemon
+            //    reports, and a single reading is no window yet.
             long mib = 1024L * 1024L;
-            List<InstanceStats.Sample> samples = List.of(
-                new InstanceStats.Sample(1_000L, 0, 100 * mib, 1024 * mib, 0, 0, 2),
-                new InstanceStats.Sample(2_000L, 24.0, 200 * mib, 1024 * mib, 0, 0, 2),
-                new InstanceStats.Sample(3_000L, 36.0, 300 * mib, 1024 * mib, 0, 0, 2));
-            List<UsageData> live = InstanceOverview.liveUsage(instance, samples, en, Zenit.getMessageResolver());
-            assertThat(live.get(0).used()).as("step 2: memory is the newest reading").isEqualTo(300 * mib);
-            assertThat(live.get(0).max()).as("step 2: of its limit").isEqualTo(1024 * mib);
-            assertThat(live.get(1).used()).as("step 2: CPU is the mean, the first sample left out").isEqualTo(30L);
-            assertThat(live.get(1).max()).as("step 2: of its two cores").isEqualTo(200L);
-            assertThat(live.get(1).maxLabel()).as("step 2: said as cores").isEqualTo("2 cores");
+            Map<String, Object> first = new InstanceStats.Sample(1_000L, 0, 100 * mib, 1024 * mib, 0, 0, 2).toMap();
+            Map<String, Object> second = new InstanceStats.Sample(2_000L, 36.0, 300 * mib, 0, 0, 0, 2).toMap();
+            UsageData memory = HohenheimStatsFunctions.memoryGauge(first, 512 * mib, "waiting", "no limit");
+            assertThat(memory.used()).as("step 2: memory is the reading").isEqualTo(100 * mib);
+            assertThat(memory.max()).as("step 2: of its cap").isEqualTo(1024 * mib);
+            assertThat(HohenheimStatsFunctions.memoryGauge(second, 512 * mib, "waiting", "no limit").max())
+                .as("step 2: with no cap, of what the host booked").isEqualTo(512 * mib);
+            assertThat(HohenheimStatsFunctions.memoryGauge(second, null, "waiting", "no limit").unmeasuredReason())
+                .as("step 2: and with neither, not measured").isEqualTo("no limit");
+            assertThat(HohenheimStatsFunctions.memoryGauge(null, null, "waiting", "no limit").unmeasuredReason())
+                .as("step 2: before any reading it waits").isEqualTo("waiting");
+            assertThat(HohenheimStatsFunctions.cpuGauge(null, first, "waiting", "unreported", "first", "2 cores")
+                .unmeasuredReason()).as("step 2: one reading is no window").isEqualTo("first");
+            UsageData cpu = HohenheimStatsFunctions.cpuGauge(first, second, "waiting", "unreported", "first",
+                "2 cores");
+            assertThat(cpu.used()).as("step 2: CPU is the newest window's share").isEqualTo(36L);
+            assertThat(cpu.max()).as("step 2: of its two cores").isEqualTo(200L);
+            assertThat(cpu.maxLabel()).as("step 2: said as cores").isEqualTo("2 cores");
 
             // 3. The overview draws Memory, Root disk and CPU, and Details say when it started
             //    (its last start's activity row), the database it uses with that database's state, and its backups.

@@ -1,0 +1,48 @@
+{% tag HhInstanceGauges {
+    /* The overview's live memory and CPU gauges for one running instance. Viewing them is a viewer of the live stats
+       hub: the element opens the instance-stats channel in @mount and its link closes with the element (the
+       hh-instance-stats shape), so the overview reads on its own and holds no feed once it is left. The hub replays
+       its held readings on connect, so the seed and the live half never disagree. Each gauge is the framework's
+       usage bar; its data comes from the one derivation the server seed uses (InstanceStats.memoryUsage/cpuUsage). */
+    public required instanceId: Integer
+    public latestSeed: Map = null
+    public previousSeed: Map = null
+    public bookedBytes: Long = null
+    public required memoryGauge: WidgetInstance
+    public required cpuGauge: WidgetInstance
+
+    private transient latest: Map = null
+    private transient previous: Map = null
+
+    private computed now = latest{:} ?? latestSeed
+    private computed before = latest{:} != null ? previous{:} : previousSeed
+
+    style {
+        display: contents;
+    }
+
+    @mount
+    function connect() {
+        InstanceStats.connect(this, instanceId, (sample) => { apply(sample) })
+    }
+
+    function apply(sample: Map) {
+        previous = latest ?? latestSeed
+        latest = sample
+    }
+
+    template {
+        <div data-live-gauge="memory">
+            {% render "zenitwidget:widget-display/usage-bar" var:widget=memoryGauge
+                var:data=InstanceStats.memoryUsage(now{:}, bookedBytes,
+                    t("live_waiting", scope: "instance_overview")) %}
+        </div>
+        <div data-live-gauge="cpu">
+            {% render "zenitwidget:widget-display/usage-bar" var:widget=cpuGauge
+                var:data=InstanceStats.cpuUsage(before{:}, now{:},
+                    t("live_waiting", scope: "instance_overview"),
+                    t("cpu_unreported", scope: "instance_overview"),
+                    t("cpu_first_reading", scope: "instance_overview")) %}
+        </div>
+    }
+} %}

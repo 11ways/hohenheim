@@ -545,7 +545,7 @@ class InstancePlacementTest {
 
     /**
      * A kind that refuses every host, by name -- the shape
-     * {@code VmKind.requirePlaceableOn} has when a prepared alias is not published
+     * {@code VmKind.requireImageOn} has when a prepared alias is not published
      * on the candidate, without needing a daemon to say so.
      */
     private record RefusingKind(InstanceKindHandler delegate) implements InstanceKindHandler {
@@ -594,7 +594,7 @@ class InstancePlacementTest {
         }
 
         @Override
-        public void requirePlaceableOn(String serverName, Map<String, Object> settings) {
+        public void requireImageOn(String serverName, Map<String, Object> settings) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_prepared_image_missing")
                 .withArg("name", serverName)
                 .withArg("image", "win2025-core"));

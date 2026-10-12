@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.runtime.WorkloadLane;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.instance.InstanceDiskView;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
+import be.elevenways.hohenheim.instance.InstanceLiveUsageView;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
@@ -137,19 +138,15 @@ public final class InstanceOverview {
                 new WidgetTree(List.of(new WidgetInstance(HohenheimWidgets.INSTANCE_ENDPOINTS.id(), Map.of())
                     .withData(ports)))));
         }
-        // Memory, disk, CPU. Memory and CPU are the live stats hub's held samples, read while
-        // someone watches the Metrics tab; never a stream opened by this render. An application's
-        // three are its serving release's, the container that runs (ApplicationReleases.runtimeRows).
+        // Memory, CPU, disk. A running workload's memory and CPU are LIVE: the gauges' element holds the stats hub's
+        // feed while this page is open (seeded from what the hub holds now), never a stream opened by this render.
+        // An application's three are its serving release's, the container that runs (ApplicationReleases.runtimeRows).
         Row runtime = ApplicationReleases.runtimeRowOf(instance);
-        List<UsageData> live = InstanceKinds.offers(runtime, WorkloadLane.LIVE_STATS)
-            ? liveUsage(runtime, InstanceStats.history(runtime.get(InstanceModel.ID)), locales, resolver)
-            : unmeasuredLive(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("live_no_lane"), locales, resolver);
-        main.add(AppOverview.resources(List.of(
-            AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("memory"), live.get(0)),
-            AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("disk"),
-                diskUsage(runtime, ServerModel.canonicalServerId(runtime.get(InstanceModel.SERVER_ID)), locales,
-                    resolver)),
-            AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("cpu"), live.get(1)))));
+        List<WidgetInstance> gauges = new ArrayList<>(liveGauges(runtime, locales, resolver));
+        gauges.add(AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("disk"),
+            diskUsage(runtime, ServerModel.canonicalServerId(runtime.get(InstanceModel.SERVER_ID)), locales,
+                resolver)));
+        main.add(AppOverview.resources(gauges));
 
         List<WidgetInstance> side = new ArrayList<>();
         side.add(AppOverview.details(facts(instance, runtime, serverId, panelSlug, delegated, accessContext)));
@@ -329,60 +326,38 @@ public final class InstanceOverview {
 
     // -- live usage ------------------------------------------------------------------
 
-    /** @return memory, then CPU, both not measured for the one reason given */
-    private static @NonNull List<UsageData> unmeasuredLive(@NonNull Microcopy why, @NonNull LocaleChain locales,
-                                                           @Nullable MessageResolver resolver) {
-        UsageData unmeasured = UsageData.unmeasured(why.resolve(locales, resolver));
-        return List.of(unmeasured, unmeasured);
-    }
-
     /**
-     * Memory and CPU from the samples the live stats hub holds ({@link InstanceStats#history}), which exist only while
-     * someone watches the workload's Metrics tab: a reading when there is one, NOT MEASURED in words when there is
-     * not, never a zero.
+     * The memory and CPU gauges: live for a running workload whose driver reads live stats (the
+     * {@link HohenheimWidgets#INSTANCE_LIVE_USAGE} element holds the hub's feed while the overview is open, seeded with
+     * the hub's newest two readings), otherwise both not measured for the one reason that applies.
      *
-     * AIDEV-NOTE: never opens a stream (InstanceStats.lastMemoryMb's rule): a render that started a daemon stats
-     * stream would be the per-render daemon call this page refuses. Memory is measured against the container's own
-     * limit, else what the host booked for it; CPU is the samples' mean (the first, which has no CPU figure, left out)
-     * against the cores the daemon reports.
+     * AIDEV-NOTE: the render itself never opens a stream (InstanceStats.lastMemoryMb's rule); the element's channel
+     * link does, as a viewer of the ONE hub session per instance the Metrics tab also joins. Memory is measured
+     * against the runtime's cap, else what the host booked for it.
      *
-     * @return memory, then CPU
+     * @return the gauge widgets, memory first
      */
-    static @NonNull List<UsageData> liveUsage(@NonNull Row instance, @NonNull List<InstanceStats.Sample> samples,
-                                              @NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
-        if (!InstanceModel.STATUS_RUNNING.equals(instance.get(InstanceModel.STATUS))) {
-            return unmeasuredLive(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("live_not_running"), locales, resolver);
+    static @NonNull List<WidgetInstance> liveGauges(@NonNull Row instance, @NonNull LocaleChain locales,
+                                                   @Nullable MessageResolver resolver) {
+        Microcopy memoryLabel = HohenheimMicrocopy.INSTANCE_OVERVIEW.of("memory");
+        Microcopy cpuLabel = HohenheimMicrocopy.INSTANCE_OVERVIEW.of("cpu");
+        Microcopy unmeasured = !InstanceKinds.offers(instance, WorkloadLane.LIVE_STATS)
+            ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("live_no_lane")
+            : !InstanceModel.STATUS_RUNNING.equals(instance.get(InstanceModel.STATUS))
+            ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("live_not_running") : null;
+        if (unmeasured != null) {
+            UsageData none = UsageData.unmeasured(unmeasured.resolve(locales, resolver));
+            return List.of(AppOverview.gauge(memoryLabel, none), AppOverview.gauge(cpuLabel, none));
         }
-        if (samples.isEmpty()) {
-            return unmeasuredLive(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("live_unwatched"), locales, resolver);
-        }
-        InstanceStats.Sample last = samples.get(samples.size() - 1);
-        String observed = Instant.ofEpochMilli(last.at()).toString();
-        long limit = last.memoryLimit() > 0 ? last.memoryLimit()
-            : InstanceCapacity.bookedMbOf(instance) * 1024L * 1024L;
-        UsageData memory = limit > 0
-            ? UsageData.measured(last.memoryBytes(), limit, ByteText.human(last.memoryBytes()), ByteText.human(limit),
-                observed)
-            : UsageData.unmeasured(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("memory_no_limit")
-                .withArg("used", ByteText.human(last.memoryBytes())).resolve(locales, resolver));
-        if (!last.cpuReported()) {
-            return List.of(memory, UsageData.unmeasured(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("cpu_unreported")
-                .resolve(locales, resolver)));
-        }
-        if (samples.size() < 2) {
-            return List.of(memory,
-                UsageData.unmeasured(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("cpu_first_reading")
-                    .resolve(locales, resolver)));
-        }
-        double total = 0;
-        for (InstanceStats.Sample sample : samples.subList(1, samples.size())) {
-            total += sample.cpuPercent();
-        }
-        long mean = Math.round(total / (samples.size() - 1));
-        UsageData cpu = UsageData.measured(mean, 100L * last.cores(), mean + "%",
-            HohenheimMicrocopy.INSTANCE_OVERVIEW.of("cores").withArg("count", last.cores())
-                .resolve(locales, resolver), observed);
-        return List.of(memory, cpu);
+        int instanceId = instance.get(InstanceModel.ID);
+        List<InstanceStats.Sample> held = InstanceStats.history(instanceId);
+        long booked = InstanceCapacity.bookedMbOf(instance) * 1024L * 1024L;
+        InstanceLiveUsageView view = new InstanceLiveUsageView(instanceId,
+            held.isEmpty() ? null : held.get(held.size() - 1).toMap(),
+            held.size() < 2 ? null : held.get(held.size() - 2).toMap(),
+            booked > 0 ? booked : null,
+            AppOverview.gauge(memoryLabel, null), AppOverview.gauge(cpuLabel, null));
+        return List.of(new WidgetInstance(HohenheimWidgets.INSTANCE_LIVE_USAGE.id(), Map.of()).withData(view));
     }
 
     // -- status ----------------------------------------------------------------------

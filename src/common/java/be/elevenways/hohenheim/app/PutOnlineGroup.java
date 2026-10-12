@@ -43,4 +43,16 @@ public enum PutOnlineGroup {
             case ADDRESS -> HohenheimMicrocopy.PUT_ONLINE.of("group_addresses");
         };
     }
+
+    /**
+     * Whether this group's start verb only brings up something that is not running (a machine is started), so a
+     * running record offers Restart and Stop instead; the other groups' start deploys again, which a running record
+     * still means.
+     */
+    public boolean startsOnlyWhenDown() {
+        return switch (this) {
+            case MACHINE -> true;
+            case TEMPLATE, OWN_CODE, ADDRESS -> false;
+        };
+    }
 }

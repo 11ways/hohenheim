@@ -298,15 +298,14 @@ public interface InstanceKindHandler extends InstanceKindInfo {
     }
 
     /**
-     * Refuse a candidate host this kind's DEPLOY would refuse anyway, before placement
-     * can choose it.
+     * Refuse a candidate host this kind's DEPLOY would refuse anyway, whatever arrives on it (a new workload or one
+     * imported whole), before placement can choose it; what only building from an image needs is
+     * {@link #requireImageOn}.
      *
      * AIDEV-NOTE: this exists so the eligible set and the deploy path answer to ONE
      * authority. It must never re-state a rule -- an implementation calls the same code
-     * the driver calls (IncusInstanceRuntime.requirePreparedImagePresent is the first
-     * one), because a second copy of a refusal is the drift defect this seam removes.
-     * Implementations must stay CHEAP on the common path: the prepared-image check does
-     * no daemon call at all for a catalog image.
+     * the driver calls, because a second copy of a refusal is the drift defect this seam removes.
+     * Implementations must stay CHEAP on the common path.
      *
      * The DEFAULT enforces the volume-backend consequence of {@link #supportsVolumes()}:
      * a volume-mounting kind only places on a host whose data root can quota, so the
@@ -319,5 +318,18 @@ public interface InstanceKindHandler extends InstanceKindInfo {
         if (this.supportsVolumes()) {
             VolumeBackends.requireQuotaCapableHost(serverName, this.getLabel());
         }
+    }
+
+    /**
+     * Refuse a candidate host that cannot BUILD a new workload of these settings from its image (a prepared alias
+     * that is not published there), the half of placeability a workload that arrives whole never asks.
+     *
+     * AIDEV-NOTE: split from {@link #requirePlaceableOn} because a restore and a migration import the whole instance:
+     * asking them for the image made a restore's automatic host pick refuse every host without it. The same rule as
+     * {@link #requirePlaceableOn}: call the driver's own check, never a copy of it.
+     *
+     * @throws Violations naming the host and the image it lacks
+     */
+    default void requireImageOn(@NonNull String serverName, @NonNull Map<String, Object> settings) {
     }
 }

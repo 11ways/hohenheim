@@ -94,22 +94,30 @@ public final class InstancePlacement {
      * @param supportedRuntimes the daemon flavours it can run on; derived from the kind
      *        by {@link #of}, and carried explicitly only so a kind-less caller can still
      *        route by runtime
+     * @param arrivesWhole true when the whole instance is imported (a restore, a migration), so the host is never
+     *        asked for the image a new workload is built from ({@link InstanceKindHandler#requireImageOn})
      */
     public record Workload(@Nullable InstanceKindHandler handler,
                            @NonNull Map<String, Object> settings,
-                           @NonNull Set<String> supportedRuntimes) {
+                           @NonNull Set<String> supportedRuntimes,
+                           boolean arrivesWhole) {
 
         /** The workload a create is about: the kind decides the runtime and the price. */
         public static @NonNull Workload of(@Nullable InstanceKindHandler handler,
                                            @NonNull Map<String, Object> settings) {
-            return new Workload(handler, settings, handler != null
-                ? handler.supportedRuntimes() : Set.of(ServerModel.RUNTIME_DOCKER));
+            return new Workload(handler, settings, runtimesOf(handler), false);
         }
 
-        /** The workload an EXISTING record describes (the migration/drain lane). */
+        /** The workload an EXISTING record describes (the migration/drain lane): it moves whole. */
         public static @NonNull Workload of(@Nullable InstanceKindHandler handler,
                                            @NonNull Row instance) {
-            return of(handler, InstanceModel.settingsOf(instance));
+            return imported(handler, InstanceModel.settingsOf(instance));
+        }
+
+        /** A workload imported whole from an export (a restore): placed like a create, minus the image question. */
+        public static @NonNull Workload imported(@Nullable InstanceKindHandler handler,
+                                                 @NonNull Map<String, Object> settings) {
+            return new Workload(handler, settings, runtimesOf(handler), true);
         }
 
         /**
@@ -120,7 +128,11 @@ public final class InstancePlacement {
          * left -- never reach for it on a create path, where the kind is always known.
          */
         public static @NonNull Workload forRuntime(@NonNull String runtime) {
-            return new Workload(null, Map.of(), Set.of(runtime));
+            return new Workload(null, Map.of(), Set.of(runtime), false);
+        }
+
+        private static @NonNull Set<String> runtimesOf(@Nullable InstanceKindHandler handler) {
+            return handler != null ? handler.supportedRuntimes() : Set.of(ServerModel.RUNTIME_DOCKER);
         }
 
         int footprintMb() {
@@ -373,8 +385,11 @@ public final class InstancePlacement {
             return KindGate.OK;
         }
         try {
-            workload.handler().requirePlaceableOn(
-                ServerModel.nameOf(serverId), workload.settings());
+            String serverName = ServerModel.nameOf(serverId);
+            workload.handler().requirePlaceableOn(serverName, workload.settings());
+            if (!workload.arrivesWhole()) {
+                workload.handler().requireImageOn(serverName, workload.settings());
+            }
             return KindGate.OK;
         } catch (Violations refused) {
             return new KindGate(false, refused);

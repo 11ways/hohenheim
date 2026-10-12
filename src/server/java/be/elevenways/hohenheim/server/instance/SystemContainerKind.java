@@ -179,8 +179,7 @@ public final class SystemContainerKind implements InstanceKindHandler {
     public boolean supportsTemplateCapture() { return true; }
 
     @Override
-    public void requirePlaceableOn(@NonNull String serverName,
-                                   @NonNull Map<String, Object> settings) {
+    public void requireImageOn(@NonNull String serverName, @NonNull Map<String, Object> settings) {
         // The image-origin setting is a VM-form field today, but the rule is the DRIVER's
         // and it answers for whatever the settings declare -- keeping the two kinds on one
         // call means a prepared container alias needs no second gate later.

@@ -1,0 +1,13 @@
+{# A running instance's live memory and CPU, inside the overview's Resources card (InstanceOverview). The element owns
+   the live stats link while the overview is open; this widget only hands it the seed and the two gauges. #}
+{% declare widget: WidgetInstance %}
+{% declare data: InstanceLiveUsageView = null %}
+
+{% if data %}
+<hh-instance-gauges instanceId={% data.instanceId %}
+                    latestSeed={% data.latestSeed %}
+                    previousSeed={% data.previousSeed %}
+                    bookedBytes={% data.bookedBytes %}
+                    memoryGauge={% data.memoryGauge %}
+                    cpuGauge={% data.cpuGauge %}></hh-instance-gauges>
+{% /if %}

@@ -134,6 +134,18 @@ public enum InstanceStatus {
     }
 
     /**
+     * Whether starting a record in this status would bring something up: false while it already runs or is starting,
+     * and while another operation holds it. A machine offers Start only here; a code deploy is offered regardless,
+     * because deploying again ships its code again.
+     */
+    public boolean startable() {
+        return switch (this) {
+            case CREATED, STOPPED, ERROR -> true;
+            case STARTING, RUNNING, CAPTURING, RESTORING, MIGRATING -> false;
+        };
+    }
+
+    /**
      * THE token-to-member lookup.
      *
      * @return the member storing exactly this token, or null for an unknown token

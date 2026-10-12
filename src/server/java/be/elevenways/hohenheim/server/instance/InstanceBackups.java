@@ -570,7 +570,7 @@ public final class InstanceBackups {
             int serverId = serverSpelling != null
                 ? ServerModel.canonicalServerId(serverSpelling)
                 : InstancePlacement.chooseForBucket(InstanceQuota.creationBucket(),
-                    InstancePlacement.Workload.of(restoredKind, settings), null);
+                    InstancePlacement.Workload.imported(restoredKind, settings), null);
             Microcopy refused = destinationRefusal(serverId, restoredKind);
             if (refused != null) {
                 throw Violations.ofForm(refused);

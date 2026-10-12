@@ -9344,6 +9344,10 @@
     "text": "Nog geen installatiemedia op {$host}. Haal een ISO op via het tabblad Installatiemedia van de host.",
     "scope": "instance_device"
   },
+  "install_media_none_anywhere": {
+    "text": "Nog geen enkele host heeft installatiemedia. Haal een ISO op via het tabblad Installatiemedia van een host.",
+    "scope": "instance_device"
+  },
   "install_media_wizard_help": {
     "text": "Alleen voor Installatiemedia (lege VM): de ISO waarvan de nieuwe machine haar installatieprogramma start, gegroepeerd per host die ze heeft.",
     "scope": "instance_device"
@@ -17253,8 +17257,8 @@
     "text": "Het draait niet, dus het gebruikt niets.",
     "scope": "instance_overview"
   },
-  "live_unwatched": {
-    "text": "Live gelezen zolang het tabblad Metingen open staat; niemand heeft het nu open.",
+  "live_waiting": {
+    "text": "Wacht op de eerste live meting.",
     "scope": "instance_overview"
   },
   "memory_no_limit": {

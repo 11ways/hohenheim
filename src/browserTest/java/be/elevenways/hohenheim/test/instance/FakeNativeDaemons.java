@@ -1,8 +1,10 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -672,6 +674,19 @@ final class FakeNativeDaemons {
         @Override
         public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
             return 128;
+        }
+
+        /** Hosts (by name) whose daemon holds no copy of the workload's image; a test adds and clears its own. */
+        static final Set<String> IMAGE_MISSING_ON = ConcurrentHashMap.newKeySet();
+
+        /** Refuses a host named in {@link #IMAGE_MISSING_ON} the way a kind refuses a host without its image. */
+        @Override
+        public void requireImageOn(@NonNull String serverName, @NonNull Map<String, Object> settings) {
+            if (IMAGE_MISSING_ON.contains(serverName)) {
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("host_prepared_image_missing")
+                    .withArg("name", serverName)
+                    .withArg("image", String.valueOf(settings.getOrDefault("image", "fake/image"))));
+            }
         }
     }
 

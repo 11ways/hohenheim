@@ -112,6 +112,63 @@ class AppMetricsJourneyTest extends HohenheimTestBase {
         }
     }
 
+    @Test
+    void theOverviewOpensTheFeedWhileItIsViewedAndReadsMemoryAndCpu() throws Exception {
+        InstanceStats.shutdown();
+        FakeNativeDaemons.resetStreams();
+        Duration offset = Now.offset();
+        try {
+            // 1. Nobody has the Metrics tab open. Viewing the overview is itself a viewer of the live feed: the hub
+            //    opens the driver's stats lane for it, and until the first reading the gauges say they wait.
+            navigateToApp("/admin/instances/" + instanceId + "/page/overview");
+            waitForHydration();
+            Poll.until("step 1: the overview holds the hub's feed", WAIT,
+                () -> InstanceStats.viewers(instanceId) == 1 && FakeNativeDaemons.STATS_STREAMS.get(handle) != null);
+            assertThat(gaugeText("memory")).as("step 1: memory waits for its first reading, in words")
+                .contains("Waiting for its first live reading.");
+
+            // 2. Two readings a second apart: memory is measured against its cap, and CPU is the window between them,
+            //    a full core of four.
+            FakeNativeDaemons.ScriptedStream stream = FakeNativeDaemons.STATS_STREAMS.get(handle);
+            pushHeld(stream, 1, sample(1_000_000_000L, 10_000_000_000L, 300, 400));
+            pushHeld(stream, 2, sample(1_100_000_000L, 10_400_000_000L, 500, 600));
+            awaitGauge("step 2: the memory gauge reads the live sample", "memory", "512.0 MB", "1.0 GB");
+            awaitGauge("step 2: the CPU gauge reads the window", "cpu", "100%", "4 cores");
+
+            // 3. Leaving the overview releases the feed: no viewer is left, so the daemon stream closes.
+            navigateToApp("/admin/instances");
+            waitForHydration();
+            Poll.until("step 3: nobody holds the feed once the overview is left", WAIT,
+                () -> InstanceStats.viewers(instanceId) == 0);
+        } finally {
+            Now.setOffset(offset);
+            // Whatever step stopped, no live link or hub session outlives this test.
+            navigateToApp("/admin");
+            InstanceStats.shutdown();
+        }
+    }
+
+    /** Waits until the gauge reads every expected part, failing with what it does read. */
+    private void awaitGauge(String step, String metric, String... parts) throws Exception {
+        try {
+            Poll.until(step, WAIT, () -> List.of(parts).stream().allMatch(gaugeText(metric)::contains));
+        } catch (AssertionError timeout) {
+            throw new AssertionError(step + ": the gauge reads \"" + gaugeText(metric) + "\"", timeout);
+        }
+    }
+
+    /** Advances the clock a second, then pushes one sample and waits until the hub holds it. */
+    private static void pushHeld(FakeNativeDaemons.ScriptedStream stream, int count, String sample) throws Exception {
+        Now.setOffset(Now.offset().plus(Duration.ofSeconds(1)));
+        stream.push(sample + "\n");
+        Poll.until("sample " + count + " reached the ring", WAIT,
+            () -> InstanceStats.history(instanceId).size() >= count);
+    }
+
+    private String gaugeText(String metric) {
+        return page.locator("[data-live-gauge='" + metric + "']").textContent().trim();
+    }
+
     /** Advances the clock a second, then pushes one sample and waits until the hub decoded it. */
     private static void pushSpaced(FakeNativeDaemons.ScriptedStream stream, List<InstanceStats.Sample> seen,
                                    int count, String sample) throws Exception {

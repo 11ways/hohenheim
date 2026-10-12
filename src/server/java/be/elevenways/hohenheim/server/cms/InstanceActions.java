@@ -92,8 +92,10 @@ final class InstanceActions {
 
     /**
      * Deploy (the start operation), offered only where it means something: the record is not owned by a product
-     * tier AND its KIND is one a person may power at all ({@link InstanceKinds#isUserDeployable}, which reads the
-     * kind's own {@code generatedOnly()} declaration). Dead, with the database and its state on screen, while an
+     * tier, its KIND is one a person may power at all ({@link InstanceKinds#isUserDeployable}, which reads the
+     * kind's own {@code generatedOnly()} declaration), and a start would do something
+     * ({@link InstanceKinds#offersStart}: a running machine offers Restart and Stop instead). Dead, with the database
+     * and its state on screen, while an
      * attached managed database is not active: the same words the handler refuses a direct POST with.
      *
      * AIDEV-NOTE: deliberately NOT ActionStyle.PRIMARY (reverted 2026-08-22): the style renders the button FILLED, a
@@ -106,7 +108,8 @@ final class InstanceActions {
             .label(HohenheimMicrocopy.INSTANCE.of("deploy"))
             .dynamicLabel(row -> startWords("deploy", row))
             .icon(Icon.of("play"))
-            .hiddenWhen(row -> !InstanceKinds.isUserDeployable(row.get(InstanceModel.KIND)))
+            .hiddenWhen(row -> !InstanceKinds.isUserDeployable(row.get(InstanceModel.KIND))
+                || !InstanceKinds.offersStart(row))
             .disabledWhen((row, access) -> {
                 Integer id = row.get(InstanceModel.ID);
                 Microcopy database = id == null ? null : InstanceDatabaseLinks.notReadyReason(id);
@@ -121,8 +124,7 @@ final class InstanceActions {
      * words (a whole machine is started), and a kind with no group (only other machinery creates it) the app words.
      */
     private static @NonNull Microcopy startWords(@NonNull String key, @NonNull Row row) {
-        InstanceKindHandler kind = InstanceKinds.handlerOf(row);
-        PutOnlineGroup group = kind == null || InstanceKinds.deploysCode(row) ? null : kind.putOnlineGroup();
+        PutOnlineGroup group = InstanceKinds.startGroupOf(row);
         Microcopy words = HohenheimMicrocopy.INSTANCE.of(key);
         return group == null ? words : words.withFilter("what", group.token());
     }

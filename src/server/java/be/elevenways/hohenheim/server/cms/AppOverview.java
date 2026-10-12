@@ -231,9 +231,10 @@ final class AppOverview {
         return CardWidget.of(HohenheimMicrocopy.APP_OVERVIEW.of("resources"), new WidgetTree(gauges));
     }
 
-    /** One measured resource under its label, for {@link #resources}. */
-    static @NonNull WidgetInstance gauge(@NonNull Microcopy label, @NonNull UsageData usage) {
-        return new WidgetInstance(UsageBarWidget.ID, Map.of("label", label)).withData(usage);
+    /** One resource under its label, for {@link #resources}; without usage it is a gauge a live element fills. */
+    static @NonNull WidgetInstance gauge(@NonNull Microcopy label, @Nullable UsageData usage) {
+        WidgetInstance gauge = new WidgetInstance(UsageBarWidget.ID, Map.of("label", label));
+        return usage == null ? gauge : gauge.withData(usage);
     }
 
     static @NonNull WidgetInstance details(@NonNull List<WidgetFact> facts) {

@@ -12,6 +12,9 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.instance.InstancePlacement;
+import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -319,13 +322,23 @@ class InstanceBackupsTest {
                 assertThat(violationKeys(catchThrowable(() -> backups.restoreToNew(backupId, "to-the-dead", hostId))))
                     .as("step 2: a restore onto the silent source is refused by the placement gate")
                     .isEqualTo("host_contact_lapsed ");
-                assertThat(catchThrowable(() -> OperationPipeline.invoke(restoreRequest(backup)
-                        .form(Map.of("serverId", hostId)))))
-                    .as("step 2: and the form refuses the disabled host too").isInstanceOf(Violations.class);
+                assertThat(violationKeys(catchThrowable(() -> OperationPipeline.invoke(restoreRequest(backup)
+                        .form(Map.of("serverId", hostId))))))
+                    .as("step 2: and the form refuses the disabled host with the same named refusal, never the "
+                        + "select's generic one").isEqualTo("host_contact_lapsed ");
                 assertThat(Models.get(InstanceModel.class).find().count())
                     .as("step 2: no instance record was created").isEqualTo(instancesBefore);
 
-                // 3. Left blank, placement picks: the restore lands on the spare host.
+                // 3. Left blank, placement picks: the restore lands on the spare host. The spare holds no copy of the
+                //    image a NEW instance of this kind would be built from, which refuses a create there, but a
+                //    restore imports the whole instance and never asks for the image.
+                FakeNativeDaemons.FakeNativeKind.IMAGE_MISSING_ON.add("backup-spare-host");
+                assertThat(violationKeys(catchThrowable(() -> InstancePlacement.chooseForBucket(
+                        InstanceQuota.creationBucket(), InstancePlacement.Workload.of(
+                            InstanceKinds.getHandler(FakeNativeDaemons.FakeNativeKind.ID.toString()), Map.of()),
+                        null))))
+                    .as("step 3: a new instance of the kind is not placed where its image is missing")
+                    .isEqualTo("host_prepared_image_missing ");
                 InstanceBackupOperations.Restored picked = (InstanceBackupOperations.Restored) OperationPipeline
                     .invoke(restoreRequest(backup).form(Map.of())).value();
                 restored.add(picked.instanceId());
@@ -342,6 +355,7 @@ class InstanceBackupsTest {
                         .get(InstanceModel.SERVER_ID))
                     .as("step 4: the picked host is where the restore lands").isEqualTo(spareId);
             } finally {
+                FakeNativeDaemons.FakeNativeKind.IMAGE_MISSING_ON.clear();
                 stampLastSeen(hostId, Now.instant());
                 Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Hosts.CONTACT_MAX_AGE_MINUTES, contactBound);
                 Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);

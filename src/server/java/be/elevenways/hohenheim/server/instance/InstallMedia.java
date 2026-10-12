@@ -155,6 +155,15 @@ public final class InstallMedia {
     }
 
     /**
+     * Why an install-media pick offers nothing, the one wording home of both picks: {@link #optionsOn} names its host,
+     * {@link #optionsEverywhere} (a null host) says no host holds one.
+     */
+    public static @NonNull Microcopy noneReason(@Nullable Integer serverId) {
+        return serverId == null ? HohenheimMicrocopy.INSTANCE_DEVICE.of("install_media_none_anywhere")
+            : HohenheimMicrocopy.INSTANCE_DEVICE.of("install_media_none").withArg("host", ServerModel.labelOf(serverId));
+    }
+
+    /**
      * Refuse install media the host does not hold, by name.
      *
      * @throws Violations {@code install_media_not_on_host}

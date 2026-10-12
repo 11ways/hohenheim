@@ -78,6 +78,7 @@ public final class InstanceStats {
             map.put(HohenheimStatsFunctions.MEMORY_LIMIT_KEY, this.memoryLimit);
             map.put(Metric.RX.key(), this.rxBytes);
             map.put(Metric.TX.key(), this.txBytes);
+            map.put(HohenheimStatsFunctions.CORES_KEY, this.cores);
             return map;
         }
     }

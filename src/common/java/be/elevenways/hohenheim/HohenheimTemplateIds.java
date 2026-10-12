@@ -61,6 +61,8 @@ public final class HohenheimTemplateIds {
     public static final Identifier WIDGET_HOST_WORKLOADS = Identifier.of("hohenheim", "cms/widget-host-workloads");
     public static final Identifier WIDGET_INSTANCE_ENDPOINTS =
         Identifier.of("hohenheim", "cms/widget-instance-endpoints");
+    public static final Identifier WIDGET_INSTANCE_LIVE_USAGE =
+        Identifier.of("hohenheim", "cms/widget-instance-live-usage");
     public static final Identifier WIDGET_APP_ADDRESSES = Identifier.of("hohenheim", "cms/widget-app-addresses");
     public static final Identifier WIDGET_APP_PROTECTION = Identifier.of("hohenheim", "cms/widget-app-protection");
     public static final Identifier WIDGET_APPS = Identifier.of("hohenheim", "cms/widget-apps");

@@ -6,8 +6,10 @@ import be.elevenways.hawkeye.common.customelement.CustomElement;
 import be.elevenways.hawkeye.common.lambda.LambdaReference1;
 import be.elevenways.hawkeye.common.render.RenderContext;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.channel.ChannelLinks;
 import be.elevenways.zenit.common.text.ByteText;
+import be.elevenways.zenit.widget.common.data.UsageData;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -38,6 +40,9 @@ public final class HohenheimStatsFunctions {
 
     /** Wire key a sample carries, true, when the runtime gives the workload no CPU reading at all. */
     public static final String CPU_UNREPORTED_KEY = "cpu_unreported";
+
+    /** Wire key of the CPUs the daemon reports online for the workload, what a CPU figure is a share of (100 each). */
+    public static final String CORES_KEY = "cores";
 
     private HohenheimStatsFunctions() {
     }
@@ -359,6 +364,128 @@ public final class HohenheimStatsFunctions {
         }
         double rate = rateBetween(previous, sample, resolved);
         return rate < 0 ? "" : ByteText.human(Math.round(rate));
+    }
+
+    /**
+     * The memory gauge of one reading, for a template: {@link #memoryGauge} with its words resolved for the render.
+     */
+    @HawkeyeFunction(
+        name = "memoryUsage",
+        namespace = "InstanceStats",
+        description = "A reading's memory as a usage gauge's data",
+        returnType = UsageData.class,
+        returnsReference = false,
+        arguments = {
+            @Arg(name = "sample", required = false, type = Map.class, expectsReference = false,
+                 description = "The latest sample map, or null before the first"),
+            @Arg(name = "bookedBytes", required = false, type = Long.class, expectsReference = false,
+                 description = "What the host booked for the workload, measured against when the runtime has no cap"),
+            @Arg(name = "waiting", required = true, type = Microcopy.class, expectsReference = false,
+                 description = "The words for no reading yet")
+        }
+    )
+    public static @NonNull UsageData memoryUsage(RenderContext context, @Nullable Object sample,
+                                                 @Nullable Long bookedBytes, @Nullable Microcopy waiting) {
+        // The amount in use is a message argument only: a t() call would also make it a catalog filter.
+        return memoryGauge(sample, bookedBytes, words(context, waiting), words(context,
+            HohenheimMicrocopy.INSTANCE_OVERVIEW.of("memory_no_limit").withArg("used", memoryUsed(sample))));
+    }
+
+    /**
+     * The memory gauge of one reading: in use against the cap the runtime reports, else against what the host booked
+     * for the workload; the server's seed and the live element both read it, so the two halves cannot disagree.
+     *
+     * @return measured, or not measured with {@code waiting} (no reading yet) or {@code noLimit} (nothing to measure
+     *         against), never a zero
+     */
+    public static @NonNull UsageData memoryGauge(@Nullable Object sample, @Nullable Long bookedBytes,
+                                                 @Nullable String waiting, @Nullable String noLimit) {
+        long used = numberOf(sample, Metric.MEMORY.key());
+        if (used < 0) {
+            return UsageData.unmeasured(waiting);
+        }
+        long cap = numberOf(sample, MEMORY_LIMIT_KEY);
+        long limit = cap > 0 ? cap : bookedBytes != null ? bookedBytes : 0;
+        if (limit <= 0) {
+            return UsageData.unmeasured(noLimit);
+        }
+        return UsageData.measured(used, limit, ByteText.human(used), ByteText.human(limit), null);
+    }
+
+    /** The CPU gauge of the newest window, for a template: {@link #cpuGauge} with its words resolved for the render. */
+    @HawkeyeFunction(
+        name = "cpuUsage",
+        namespace = "InstanceStats",
+        description = "The newest window's CPU as a usage gauge's data",
+        returnType = UsageData.class,
+        returnsReference = false,
+        arguments = {
+            @Arg(name = "previous", required = false, type = Map.class, expectsReference = false,
+                 description = "The sample before the latest, or null"),
+            @Arg(name = "sample", required = false, type = Map.class, expectsReference = false,
+                 description = "The latest sample map, or null before the first"),
+            @Arg(name = "waiting", required = true, type = Microcopy.class, expectsReference = false,
+                 description = "The words for no reading yet"),
+            @Arg(name = "unreported", required = true, type = Microcopy.class, expectsReference = false,
+                 description = "The words for a runtime that gives no CPU reading"),
+            @Arg(name = "firstReading", required = true, type = Microcopy.class, expectsReference = false,
+                 description = "The words for a single reading, which is no window yet")
+        }
+    )
+    public static @NonNull UsageData cpuUsage(RenderContext context, @Nullable Object previous,
+                                              @Nullable Object sample, @Nullable Microcopy waiting,
+                                              @Nullable Microcopy unreported, @Nullable Microcopy firstReading) {
+        // The cores are said with the overview's own plural words, built here with the count as a message argument
+        // only: a t() call would also make the count a catalog filter.
+        return cpuGauge(previous, sample, words(context, waiting), words(context, unreported),
+            words(context, firstReading),
+            words(context, HohenheimMicrocopy.INSTANCE_OVERVIEW.of("cores").withArg("count", cores(sample))));
+    }
+
+    /**
+     * The CPU gauge of the newest window: the reading's share (100 per core) against the cores the daemon reports.
+     *
+     * @return measured, or not measured with {@code waiting} (no reading), {@code unreported} (the runtime gives none)
+     *         or {@code firstReading} (one reading is no window yet)
+     */
+    public static @NonNull UsageData cpuGauge(@Nullable Object previous, @Nullable Object sample,
+                                              @Nullable String waiting, @Nullable String unreported,
+                                              @Nullable String firstReading, @Nullable String coresLabel) {
+        if (!(sample instanceof Map<?, ?> latest)) {
+            return UsageData.unmeasured(waiting);
+        }
+        if (cpuUnreported(sample)) {
+            return UsageData.unmeasured(unreported);
+        }
+        if (!(previous instanceof Map<?, ?>) || !(latest.get(Metric.CPU.key()) instanceof Number cpu)) {
+            return UsageData.unmeasured(firstReading);
+        }
+        long share = Math.round(cpu.doubleValue());
+        return UsageData.measured(share, 100L * Math.max(1, cores(sample)), share + "%", coresLabel, null);
+    }
+
+    /** @return the words resolved the way the render resolves its own copy; null stays null */
+    private static @Nullable String words(RenderContext context, @Nullable Microcopy words) {
+        return words == null ? null : words.asString(context);
+    }
+
+    /** @return the CPUs the reading says are online for the workload, 0 when it says none */
+    @HawkeyeFunction(
+        name = "cores",
+        namespace = "InstanceStats",
+        description = "The CPUs a reading says are online for the workload",
+        returnType = Integer.class,
+        returnsReference = false,
+        arguments = @Arg(name = "sample", required = false, type = Map.class, expectsReference = false,
+                         description = "The latest sample map")
+    )
+    public static int cores(@Nullable Object sample) {
+        return (int) Math.max(0, numberOf(sample, CORES_KEY));
+    }
+
+    /** @return the sample's whole number under {@code key}, or -1 when it carries none */
+    private static long numberOf(@Nullable Object sample, @NonNull String key) {
+        return sample instanceof Map<?, ?> map && map.get(key) instanceof Number number ? number.longValue() : -1;
     }
 
     private static @NonNull String sizeOf(@Nullable Object sample, @NonNull String key) {

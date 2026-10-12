@@ -82,6 +82,24 @@ class MachineRecordPageJourneyTest extends HohenheimTestBase {
                 .as("step 2: and it has the Deployments tab that Deploy fills")
                 .contains("/admin/instances/" + coded.get(InstanceModel.ID) + "/page/deployments");
 
+            // 2b. A running machine is not offered Start: it already runs, so Restart and Stop are its power verbs.
+            //     Stopped, it is offered Start again. A running app keeps Deploy, which ships its code again.
+            assertThat(action(InstanceOperations.START.id()).hiddenFor(vm)).as("step 2b: a running VM offers no Start")
+                .isTrue();
+            assertThat(action(InstanceOperations.RESTART.id()).hiddenFor(vm)).as("step 2b: it offers Restart")
+                .isFalse();
+            assertThat(action(InstanceOperations.STOP.id()).hiddenFor(vm)).as("step 2b: and Stop").isFalse();
+            Row stoppedVm = Models.get(InstanceModel.class).findById(vm.get(InstanceModel.ID));
+            stoppedVm.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
+            assertThat(action(InstanceOperations.START.id()).hiddenFor(stoppedVm))
+                .as("step 2b: a stopped VM offers Start").isFalse();
+            assertThat(action(InstanceOperations.STOP.id()).hiddenFor(stoppedVm))
+                .as("step 2b: and no Stop").isTrue();
+            assertThat(action(InstanceOperations.START.id()).hiddenFor(app))
+                .as("step 2b: a running app still offers Deploy").isFalse();
+            assertThat(action(InstanceOperations.START.id()).hiddenFor(box))
+                .as("step 2b: a running bare workspace is started, so it offers no Start either").isTrue();
+
             // 3. The machine's overview has a Network card, never the web-address card's promise.
             String vmOverview = adminGet(vmPage + "/page/overview").body();
             assertThat(vmOverview).as("step 3: no web address is asked of a machine")
@@ -89,8 +107,8 @@ class MachineRecordPageJourneyTest extends HohenheimTestBase {
                 .contains("Network").contains("Hidden behind its host")
                 .as("step 3: an unreachable host is said in words")
                 .contains("Its host did not answer, so its addresses are unknown right now")
-                .as("step 3: its live gauges point at its Metrics tab")
-                .contains("Read live while its Metrics tab is open");
+                .as("step 3: its live gauges wait for the reading the overview itself opens")
+                .contains("Waiting for its first live reading.");
 
             // 4. Its strip carries Devices and Metrics (the Incus driver reads live stats); Files and an empty
             //    Provisioning are absent and their routes 404.
@@ -148,12 +166,16 @@ class MachineRecordPageJourneyTest extends HohenheimTestBase {
     }
 
     private static PanelAction<Row> startAction() {
+        return action(InstanceOperations.START.id());
+    }
+
+    private static PanelAction<Row> action(Identifier id) {
         for (PanelAction<Row> action : InstanceActions.placedOperator()) {
-            if (action.id().equals(InstanceOperations.START.id())) {
+            if (action.id().equals(id)) {
                 return action;
             }
         }
-        throw new AssertionError("no start action");
+        throw new AssertionError("no action " + id);
     }
 
     private static Row incusHost(List<Runnable> cleanup) {

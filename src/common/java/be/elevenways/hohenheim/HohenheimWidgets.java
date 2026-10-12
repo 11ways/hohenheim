@@ -73,6 +73,14 @@ public final class HohenheimWidgets {
         HohenheimTemplateIds.WIDGET_INSTANCE_ENDPOINTS,
         HohenheimMicrocopy.INSTANCE_OVERVIEW.of("endpoint"), "plug");
 
+    /**
+     * An instance's live memory and CPU on its overview: the element that draws them holds the live stats link while
+     * the overview is open, so the page reads on its own instead of only while a Metrics tab is open somewhere.
+     */
+    public static final DisplayWidget INSTANCE_LIVE_USAGE = register("instance_live_usage",
+        HohenheimTemplateIds.WIDGET_INSTANCE_LIVE_USAGE,
+        HohenheimMicrocopy.APP_OVERVIEW.of("resources"), "gauge");
+
     /** An app's addresses with whether HTTPS works for each: the body of the overview's Addresses card. */
     public static final DisplayWidget APP_ADDRESSES = register("app_addresses",
             HohenheimTemplateIds.WIDGET_APP_ADDRESSES,

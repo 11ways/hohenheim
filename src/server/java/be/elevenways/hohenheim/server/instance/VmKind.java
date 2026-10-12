@@ -219,8 +219,7 @@ public final class VmKind implements InstanceKindHandler {
     }
 
     @Override
-    public void requirePlaceableOn(@NonNull String serverName,
-                                   @NonNull Map<String, Object> settings) {
+    public void requireImageOn(@NonNull String serverName, @NonNull Map<String, Object> settings) {
         requirePreparedImageOn(serverName, settings, IncusWorkloadType.VIRTUAL_MACHINE);
     }
 

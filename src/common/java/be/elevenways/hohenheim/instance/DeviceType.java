@@ -24,13 +24,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public enum DeviceType {
 
     /** An extra block device backed by a daemon volume, charged in gigabytes. */
-    DISK(InstanceDeviceModel.TYPE_DISK, QuotaCharge.DISK_GIGABYTES, true, false),
+    DISK(InstanceDeviceModel.TYPE_DISK, QuotaCharge.DISK_GIGABYTES, true, false, false),
 
     /** An extra network interface, charged one NIC slot. */
-    NIC(InstanceDeviceModel.TYPE_NIC, QuotaCharge.NIC_SLOT, false, false),
+    NIC(InstanceDeviceModel.TYPE_NIC, QuotaCharge.NIC_SLOT, false, false, false),
 
-    /** Operator-published install media; charges nothing and owns no volume. */
-    CDROM(InstanceDeviceModel.TYPE_CDROM, QuotaCharge.NONE, false, true);
+    /** Operator-published install media; charges nothing and owns no volume. Attached through its own action. */
+    CDROM(InstanceDeviceModel.TYPE_CDROM, QuotaCharge.NONE, false, true, true);
 
     /** The owner-quota bucket a device of a type is charged to. */
     public enum QuotaCharge {
@@ -49,13 +49,15 @@ public enum DeviceType {
     private final QuotaCharge charge;
     private final boolean ownsVolume;
     private final boolean operatorOnly;
+    private final boolean ownAttachAction;
 
     DeviceType(@NonNull String token, @NonNull QuotaCharge charge, boolean ownsVolume,
-               boolean operatorOnly) {
+               boolean operatorOnly, boolean ownAttachAction) {
         this.token = token;
         this.charge = charge;
         this.ownsVolume = ownsVolume;
         this.operatorOnly = operatorOnly;
+        this.ownAttachAction = ownAttachAction;
     }
 
     /** @return the stored column value */
@@ -76,6 +78,14 @@ public enum DeviceType {
     /** @return whether attaching or detaching it is an operator act no delegation reaches */
     public boolean operatorOnly() {
         return this.operatorOnly;
+    }
+
+    /**
+     * @return whether a device of this type is attached through its own action (install media: the record's ISO pick
+     *         of its host), so the generic device form never offers it
+     */
+    public boolean ownAttachAction() {
+        return this.ownAttachAction;
     }
 
     /** @return the member stored as {@code token}, or null when it is no member */

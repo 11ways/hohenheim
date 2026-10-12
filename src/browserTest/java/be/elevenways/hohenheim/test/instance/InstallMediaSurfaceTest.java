@@ -5,6 +5,7 @@ import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.hohenheim.server.cms.InstanceDevicesPage;
 import be.elevenways.hohenheim.server.cms.PutOnline;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.edit.EditContext;
 import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.zenit.common.edit.FormEntry;
@@ -491,6 +492,23 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
                         assertThat(option.value()).isEqualTo("debian.iso");
                         assertThat(option.group()).isEqualTo(PREFIX + "socket-host");
                     });
+
+                // 6. With no ISO on any host, both picks say so in words from the one home: the record's pick names
+                //    its host, the wizard's (every host) says none holds one, never a bare "No results".
+                incus.daemon.customVolumes.remove("debian.iso");
+                EditContext operator = EditContext.of(TenantConduits.operator());
+                FormSpec emptyMachine = OperationPipeline.inputForm(OperationRequest.of(PutOnline.PUT_MACHINE_ONLINE,
+                    CmsPlacementSurface.ADMIN_ACTION).caller(TenantConduits.operator()));
+                Select<?> emptyPick = (Select<?>) emptyMachine.entries().stream()
+                    .filter(entry -> entry.name().equals("installMedia")).findFirst().orElseThrow();
+                assertThat(emptyPick.options().resolve(operator)).as("step 6: the wizard has nothing to offer")
+                    .isEmpty();
+                assertThat(emptyPick.emptyReason(operator)).as("step 6: and says why in words").isNotNull()
+                    .extracting(Microcopy::key).isEqualTo("install_media_none_anywhere");
+                Select<?> recordPick = (Select<?>) OperationPipeline.inputForm(attachRequest(attach, instance))
+                    .entries().get(0);
+                assertThat(recordPick.emptyReason(operator)).as("step 6: the record's pick names its host")
+                    .isNotNull().extracting(Microcopy::key).isEqualTo("install_media_none");
             } finally {
                 // The derived device name carries no PREFIX, so its row goes here; the instance goes back to the
                 // class host, whose cleanup removes it, and the socket host leaves empty.

@@ -9344,6 +9344,10 @@
     "text": "No install media on {$host} yet. Fetch an ISO on the host's Install media tab.",
     "scope": "instance_device"
   },
+  "install_media_none_anywhere": {
+    "text": "No host holds install media yet. Fetch an ISO on a host's Install media tab.",
+    "scope": "instance_device"
+  },
   "install_media_wizard_help": {
     "text": "Only for Install media (empty VM): the ISO the new machine starts its installer from, grouped by the host that holds it.",
     "scope": "instance_device"
@@ -17253,8 +17257,8 @@
     "text": "It is not running, so it uses none.",
     "scope": "instance_overview"
   },
-  "live_unwatched": {
-    "text": "Read live while its Metrics tab is open; nobody has it open now.",
+  "live_waiting": {
+    "text": "Waiting for its first live reading.",
     "scope": "instance_overview"
   },
   "memory_no_limit": {

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
@@ -264,6 +265,29 @@ public final class InstanceKinds {
     public static boolean deploysCode(@NonNull Row instance) {
         InstanceKindHandler handler = handlerOf(instance);
         return handler != null && (handler.releaseManaged() || handler.deploysSource(instance));
+    }
+
+    /**
+     * The "Put something online" group whose words the record's start verb speaks: none where it deploys code (it
+     * reads Deploy), else its kind's own group. The verb's words and its availability both read this.
+     */
+    public static @Nullable PutOnlineGroup startGroupOf(@NonNull Row instance) {
+        InstanceKindHandler kind = handlerOf(instance);
+        return kind == null || deploysCode(instance) ? null : kind.putOnlineGroup();
+    }
+
+    /**
+     * Whether the record's start verb is offered: always where it deploys (deploying again ships it again), and where
+     * its group only starts what is down ({@link PutOnlineGroup#startsOnlyWhenDown}, a machine) only while its status
+     * says a start would bring something up ({@link InstanceStatus#startable}); an unknown status offers none.
+     */
+    public static boolean offersStart(@NonNull Row instance) {
+        PutOnlineGroup group = startGroupOf(instance);
+        if (group == null || !group.startsOnlyWhenDown()) {
+            return true;
+        }
+        InstanceStatus status = InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
+        return status != null && status.startable();
     }
 
     /**

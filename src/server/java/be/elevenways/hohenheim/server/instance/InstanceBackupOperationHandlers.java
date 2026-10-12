@@ -72,7 +72,7 @@ public final class InstanceBackupOperationHandlers {
                 FieldOption<Integer> option = FieldOption.of(destination.serverId(),
                     Microcopy.literal(destination.name()));
                 options.add(destination.refusal() == null ? option
-                    : option.asDisabled().withDescription(destination.refusal()));
+                    : option.disabledBecause(destination.refusal()));
             }
         }
         return InputScope.of(InstanceTemplateHandlers.replacing(declared, Map.of(

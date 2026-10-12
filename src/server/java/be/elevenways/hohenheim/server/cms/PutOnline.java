@@ -197,6 +197,7 @@ public final class PutOnline {
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
         .add(Select.of(InstanceOperations.INSTALL_MEDIA)
             .options(OptionSource.dynamic(context -> new InstallMedia().optionsEverywhere()))
+            .emptyReason(context -> InstallMedia.noneReason(null))
             .help(record -> HohenheimMicrocopy.INSTANCE_DEVICE.of("install_media_wizard_help"))
             .build())
         .step(FormStep.of("where", STEP_WHERE, InstanceModel.NAME.getName(),

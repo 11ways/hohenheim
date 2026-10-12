@@ -63,6 +63,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 /**
  * What is attached to an instance, as shared parts: its devices and its managed database attachments, the admin
@@ -96,14 +97,17 @@ public final class InstanceAttachmentParts {
 
     // -- devices -----------------------------------------------------------------------------------------------------
 
-    /** @return the operator's devices: attach, resize a disk, detach (any type) */
+    /**
+     * @return the operator's devices: attach, resize a disk, detach (any type). Install media is no type of this form:
+     *         it is attached through its own action (the record's ISO pick of its host), so the select offers only the
+     *         types without one and refuses a hand-posted cdrom itself
+     */
     public static @NonNull PanelResource<Row> devicesAdmin() {
         FormSpec form = FormSpec.builder()
             .add(InstanceDeviceModel.INSTANCE_ID)
-            .add(InstanceDeviceModel.TYPE)
+            .add(Select.of(InstanceDeviceModel.TYPE).options(OptionSource.of(typeOptions(type -> true))).build())
             .add(InstanceDeviceModel.NAME)
             .add(InstanceDeviceModel.SIZE_GB)
-            .add(InstanceDeviceModel.SOURCE_MEDIA)
             .build();
         return devices(HohenheimIds.id("instance_device"), form)
             .scope(DEVICE_ROWS)
@@ -119,7 +123,8 @@ public final class InstanceAttachmentParts {
     public static @NonNull PanelResource<Row> devicesManage() {
         FormSpec form = FormSpec.builder()
             .add(InstanceDeviceModel.INSTANCE_ID)
-            .add(Select.of(InstanceDeviceModel.TYPE).options(OptionSource.of(tenantTypeOptions())).build())
+            .add(Select.of(InstanceDeviceModel.TYPE)
+                .options(OptionSource.of(typeOptions(type -> !type.operatorOnly()))).build())
             .add(InstanceDeviceModel.NAME)
             .add(InstanceDeviceModel.SIZE_GB)
             .build();
@@ -197,12 +202,16 @@ public final class InstanceAttachmentParts {
             : InstanceDevices.mayChangeAnyDevices(access);
     }
 
-    private static @NonNull List<FieldOption<String>> tenantTypeOptions() {
+    /**
+     * The TYPE vocabulary's options a device form offers: never a type attached through its own action, and only those
+     * {@code offered} accepts.
+     */
+    private static @NonNull List<FieldOption<String>> typeOptions(@NonNull Predicate<DeviceType> offered) {
         List<FieldOption<String>> options = new ArrayList<>();
         for (Map.Entry<String, EnumField.EnumValue> value : InstanceDeviceModel.TYPE.getValues().entrySet()) {
             // Fail closed: a token that is no member is never offered either.
             DeviceType type = DeviceType.parse(value.getKey());
-            if (type == null || type.operatorOnly()) {
+            if (type == null || type.ownAttachAction() || !offered.test(type)) {
                 continue;
             }
             options.add(FieldOption.of(value.getKey(), value.getValue().getLabel()));
@@ -218,8 +227,9 @@ public final class InstanceAttachmentParts {
         switch (DeviceType.require(values.get(InstanceDeviceModel.TYPE.getName()))) {
             case DISK -> devices.attachDisk(instanceId, name, sizeOf(values, null));
             case NIC -> devices.attachNic(instanceId, name);
-            case CDROM -> devices.attachCdrom(instanceId, name,
-                String.valueOf(values.getOrDefault(InstanceDeviceModel.SOURCE_MEDIA.getName(), "")).trim());
+            // The form's select never offers it (ownAttachAction): install media is attached by its own operation.
+            case CDROM -> throw new IllegalStateException("install media is attached through "
+                + "attach_install_media, never the device form");
         }
         ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DEVICE_ATTACHED, null);
         Row created = Models.get(InstanceDeviceModel.class).find()

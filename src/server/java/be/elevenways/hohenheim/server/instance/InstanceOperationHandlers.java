@@ -393,8 +393,7 @@ public final class InstanceOperationHandlers {
             InstanceOperations.INSTALL_MEDIA.getName(), Select.of(InstanceOperations.INSTALL_MEDIA)
                 .options(OptionSource.of(new InstallMedia().optionsOn(serverId)))
                 .clearable(false)
-                .emptyReason(context -> HohenheimMicrocopy.INSTANCE_DEVICE.of("install_media_none")
-                    .withArg("host", serverId == null ? "" : ServerModel.labelOf(serverId)))
+                .emptyReason(context -> InstallMedia.noneReason(serverId))
                 .build())));
     }
 
