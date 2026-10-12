@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -12,10 +14,17 @@ import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
+import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
+import be.elevenways.zenit.common.edit.EditContext;
+import be.elevenways.zenit.common.edit.FieldOption;
+import be.elevenways.zenit.common.edit.FormEntry;
+import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -23,6 +32,8 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.OperationRequest;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -31,7 +42,10 @@ import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -258,6 +272,94 @@ class InstanceBackupsTest {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
             service.destroy(instanceId);
         });
+    }
+
+    /**
+     * Restore ELSEWHERE, the replacement for HA after a dead host: the restore takes a host pick whose options are the
+     * placement gate's own verdicts, its blank lets placement pick, and none of it touches the silent source host.
+     */
+    @Test
+    void restoreToNewTakesAHostPickAndLandsElsewhereWhenTheSourceHostIsDead() {
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            InstanceBackups backups = new InstanceBackups();
+            int instanceId = instanceRecord("backup-elsewhere", hostId);
+            service.deploy(instanceId);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
+            int backupId = backups.backupNow(instanceId, targetId, target);
+            Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
+            int spareId = HostFixtures.admittedIncusHost("backup-spare-host");
+            Integer contactBound = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Hosts.CONTACT_MAX_AGE_MINUTES);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Hosts.CONTACT_MAX_AGE_MINUTES, 60);
+            stampLastSeen(hostId, Now.instant().minus(Duration.ofDays(1)));
+            List<Integer> restored = new ArrayList<>();
+            try {
+                // 1. The source host has gone silent. The restore's host pick offers the spare and shows the source
+                //    disabled with the placement gate's own refusal, the words the Migrate page shows beside a host.
+                FormSpec form = OperationPipeline.inputForm(restoreRequest(backup));
+                FormEntry pick = form.entries().stream().filter(entry -> entry.name().equals("serverId"))
+                    .findFirst().orElse(null);
+                assertThat(pick).as("step 1: the restore asks for a host").isInstanceOf(Select.class);
+                List<? extends FieldOption<?>> options = ((Select<?>) pick).options()
+                    .resolve(EditContext.of(TenantConduits.operator()));
+                assertThat(options).as("step 1: the dead source is shown, disabled, with the gate's refusal")
+                    .anySatisfy(option -> {
+                        assertThat(option.value()).isEqualTo(hostId);
+                        assertThat(option.disabled()).isTrue();
+                        assertThat(option.description().key()).isEqualTo("host_contact_lapsed");
+                    });
+                assertThat(options).as("step 1: the spare host is offered")
+                    .anySatisfy(option -> {
+                        assertThat(option.value()).isEqualTo(spareId);
+                        assertThat(option.disabled()).isFalse();
+                    });
+
+                // 2. Naming the dead source is refused by name, and creates nothing.
+                long instancesBefore = Models.get(InstanceModel.class).find().count();
+                assertThat(violationKeys(catchThrowable(() -> backups.restoreToNew(backupId, "to-the-dead", hostId))))
+                    .as("step 2: a restore onto the silent source is refused by the placement gate")
+                    .isEqualTo("host_contact_lapsed ");
+                assertThat(catchThrowable(() -> OperationPipeline.invoke(restoreRequest(backup)
+                        .form(Map.of("serverId", hostId)))))
+                    .as("step 2: and the form refuses the disabled host too").isInstanceOf(Violations.class);
+                assertThat(Models.get(InstanceModel.class).find().count())
+                    .as("step 2: no instance record was created").isEqualTo(instancesBefore);
+
+                // 3. Left blank, placement picks: the restore lands on the spare host.
+                InstanceBackupOperations.Restored picked = (InstanceBackupOperations.Restored) OperationPipeline
+                    .invoke(restoreRequest(backup).form(Map.of())).value();
+                restored.add(picked.instanceId());
+                assertThat((Integer) Models.get(InstanceModel.class).findById(picked.instanceId())
+                        .get(InstanceModel.SERVER_ID))
+                    .as("step 3: picked for you lands on the host that accepts it, not the dead source")
+                    .isEqualTo(spareId);
+
+                // 4. Named explicitly through the form, the spare is honoured.
+                InstanceBackupOperations.Restored named = (InstanceBackupOperations.Restored) OperationPipeline
+                    .invoke(restoreRequest(backup).form(Map.of("serverId", spareId))).value();
+                restored.add(named.instanceId());
+                assertThat((Integer) Models.get(InstanceModel.class).findById(named.instanceId())
+                        .get(InstanceModel.SERVER_ID))
+                    .as("step 4: the picked host is where the restore lands").isEqualTo(spareId);
+            } finally {
+                stampLastSeen(hostId, Now.instant());
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Hosts.CONTACT_MAX_AGE_MINUTES, contactBound);
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
+                restored.forEach(service::destroy);
+                service.destroy(instanceId);
+                Models.get(ServerModel.class).delete(spareId);
+            }
+        });
+    }
+
+    private static OperationRequest<Row, ?, ?> restoreRequest(Row backup) {
+        return OperationRequest.of(InstanceBackupOperations.RESTORE_BACKUP, CmsPlacementSurface.ADMIN_ACTION)
+            .caller(TenantConduits.operator()).subjects(List.of(backup));
+    }
+
+    private static void stampLastSeen(int serverId, Instant at) {
+        Models.get(ServerModel.class).find().where(ServerModel.ID.eq(serverId))
+            .assign(ServerModel.LAST_SEEN_AT, at).updateAll();
     }
 
     /**

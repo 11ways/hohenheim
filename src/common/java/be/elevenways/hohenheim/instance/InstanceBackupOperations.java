@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.zenit.cms.common.CmsMicrocopy;
+import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationCommand;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
@@ -33,17 +35,30 @@ public final class InstanceBackupOperations {
     /** The subject of every backup operation: one backup row. */
     public static final SubjectType<Row> BACKUP = SubjectType.record(InstanceBackupModel.MODEL_ID);
 
-    /** Restores the backup as a NEW instance; the source keeps running, so it confirms without a typed phrase. */
-    public static final Operation<Row, Void, Restored> RESTORE_BACKUP =
+    /**
+     * Restores the backup as a NEW instance on the host the operator picks, or the one placement picks when none is;
+     * the source keeps running, so it confirms without a typed phrase.
+     *
+     * AIDEV-NOTE: the host pick reuses the create forms' own field (InstanceTemplateOperations.SERVER_ID, whose help
+     * says what blank means). Restoring onto ANOTHER host is the recovery for a dead one, so blank never means "the
+     * source host": the server scopes the pick to the placement gate's verdict per host.
+     */
+    public static final Operation<Row, RestoreInput, Restored> RESTORE_BACKUP =
         Operation.declare(HohenheimIds.id("restore_backup"))
             .happened(OperationSentences.of("restore_backup"))
             .label(HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new"))
             .icon(Icon.of("clone"))
             .one(BACKUP)
             .gate(OperationGate.open())
+            .input(OperationInput.of(FormSpec.builder().add(InstanceTemplateOperations.SERVER_ID).build(),
+                RestoreInput.class, values -> new RestoreInput(values.get(InstanceTemplateOperations.SERVER_ID))))
             .result(Restored.class)
             .command(COMMAND)
             .register();
+
+    /** Where a restore lands: a host, or null to let placement pick one. */
+    public record RestoreInput(@Nullable Integer serverId) {
+    }
 
     /**
      * Removes the backup's artifact FROM ITS TARGET with the row, and refuses when the target cannot be reached.

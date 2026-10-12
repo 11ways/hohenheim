@@ -285,7 +285,8 @@ class IncusSnapshotBackupLiveTest {
                 //    instance to the NEW record, not the source it was exported from.
                 String operatorBucket = HohenheimAccess.packSubjects(Set.of());
                 long quotaBefore = OwnerBudget.INSTANCES.usedBy(operatorBucket);
-                newId = backups.restoreToNew(backupId, "incus-clone", null).instanceId();
+                newId = backups.restoreToNew(backupId, "incus-clone",
+                    Models.get(InstanceModel.class).findById(id).get(InstanceModel.SERVER_ID)).instanceId();
                 newHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, newId);
                 assertThat(newId).as("step 7: the new instance has its own id")
                     .isNotEqualTo(id);

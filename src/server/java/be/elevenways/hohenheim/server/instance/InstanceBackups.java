@@ -18,7 +18,6 @@ import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.Retention;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.HohenheimCapabilities;
@@ -50,6 +49,7 @@ import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.hohenheim.server.util.Sha256;
 import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -447,14 +447,64 @@ public final class InstanceBackups {
     }
 
     /**
+     * One host a restore could land on, as the restore's host pick shows it.
+     *
+     * @param refusal the placement gate's reason this host cannot take the restore, null when it can
+     */
+    public record Destination(int serverId, @NonNull String name, @Nullable Microcopy refusal) {
+    }
+
+    /**
+     * Every host, each with the verdict {@link #restoreToNew} would give it for this backup's kind.
+     *
+     * AIDEV-NOTE: the SAME call the restore's gate makes ({@link #destinationRefusal}), so the pick and the write
+     * cannot disagree; the kind comes from the row's non-sensitive manifest summary, the archive is not opened.
+     */
+    public static @NonNull List<Destination> destinationsFor(@NonNull Row backup) {
+        String kindId = RawValues.nonBlankString(RawValues.map((Object) backup.get(InstanceBackupModel.SUMMARY))
+            .get("kind"));
+        InstanceKindHandler kind = InstanceKinds.getHandler(kindId);
+        List<Destination> destinations = new ArrayList<>();
+        for (Row server : Models.get(ServerModel.class).find().all()) {
+            Integer serverId = server.get(ServerModel.ID);
+            if (serverId == null) {
+                continue;
+            }
+            destinations.add(new Destination(serverId, String.valueOf((Object) server.get(ServerModel.NAME)),
+                kind == null ? HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown").withArg("kind", kindId)
+                    : destinationRefusal(serverId, kind)));
+        }
+        return destinations;
+    }
+
+    /**
+     * Why this host cannot receive a restore of this kind: the runtime it runs, then the instance placement gate.
+     *
+     * @return the first refusal, null when the host takes it
+     */
+    private static @Nullable Microcopy destinationRefusal(int serverId, @NonNull InstanceKindHandler kind) {
+        Row server = Models.get(ServerModel.class).findById(serverId);
+        if (server != null) {
+            Microcopy runtime = InstanceKinds.runtimeMismatch(String.valueOf((Object) server.get(ServerModel.NAME)),
+                ServerModel.runtimeOf(server), kind.supportedRuntimes());
+            if (runtime != null) {
+                return runtime;
+            }
+        }
+        // The record does not exist yet, so the owner it will be CHARGED to is asked for through the create hook's
+        // own derivation -- never a second spelling.
+        return HostAdmission.instancePlacementRefusal(serverId, kind.isolation(), InstanceQuota.creationBucket());
+    }
+
+    /**
      * Restore a completed backup to a NEW instance: verify everything (target sha,
      * GCM authentication, per-payload checksums, kind, admission, capacity) BEFORE
      * creating anything, then run the full create story -- record save (quota
      * reservation), control-plane re-materialization, volume restore, fenced deploy.
      *
      * @param newName name for the new instance, or null for a derived one
-     * @param serverSpelling target host (any canonical spelling), or null for the
-     *                       source instance's host
+     * @param serverSpelling target host (any canonical spelling), or null to let placement pick one; never the
+     *                       source host by default, because a restore elsewhere is the recovery for a dead one
      * @return the NEW instance, deployed and running, with whatever could not be restored
      * @throws Violations naming the refusal or failure
      */
@@ -515,13 +565,16 @@ public final class InstanceBackups {
                 throw Violations.ofField("kind", manifest.kind(),
                     HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown").withArg("kind", manifest.kind()));
             }
+            Map<String, Object> settings = InstanceKindFields.typedNumbers(InstanceModel.SETTINGS, manifest.kind(),
+                manifest.restoredSettings(InstanceModel.SETTINGS.resolveSchemaForSiblingValue(manifest.kind())));
             int serverId = serverSpelling != null
                 ? ServerModel.canonicalServerId(serverSpelling)
-                : sourceServerId(backup);
-            // The record does not exist yet, so the owner it will be CHARGED to is asked
-            // for through the create hook's own derivation -- never a second spelling.
-            HostAdmission.requireInstancePlacement(serverId, restoredKind.isolation(),
-                InstanceQuota.creationBucket());
+                : InstancePlacement.chooseForBucket(InstanceQuota.creationBucket(),
+                    InstancePlacement.Workload.of(restoredKind, settings), null);
+            Microcopy refused = destinationRefusal(serverId, restoredKind);
+            if (refused != null) {
+                throw Violations.ofForm(refused);
+            }
             RestoreCapacity.require(serverId, manifest.totalVolumeBytes());
             boolean application = InstanceKinds.isReleaseManaged(manifest.kind());
             Integer runtimeImageId = null;
@@ -554,8 +607,7 @@ public final class InstanceBackups {
             record.set(InstanceModel.NAME, newName != null && !newName.isBlank()
                 ? newName : manifest.instanceName() + "-restored-" + stamp);
             record.set(InstanceModel.KIND, manifest.kind());
-            record.set(InstanceModel.SETTINGS, InstanceKindFields.typedNumbers(InstanceModel.SETTINGS, manifest.kind(),
-                manifest.restoredSettings(InstanceModel.SETTINGS.resolveSchemaForSiblingValue(manifest.kind()))));
+            record.set(InstanceModel.SETTINGS, settings);
             record.set(InstanceModel.SERVER_ID, serverId);
             record.set(InstanceModel.RUNTIME_IMAGE_ID, runtimeImageId);
             record.set(InstanceModel.CRASH_POLICY, profile != null
@@ -1236,14 +1288,6 @@ public final class InstanceBackups {
         backup.set(InstanceBackupModel.REMOTE_KEY, key);
         backup.set(InstanceBackupModel.ERROR, error);
         Models.get(InstanceBackupModel.class).save(backup);
-    }
-
-    /** The source instance's host, trashed included (the backup outlives the instance). */
-    private static int sourceServerId(@NonNull Row backup) {
-        Row instance = StoredRows.byId(Models.get(InstanceModel.class),
-            backup.get(InstanceBackupModel.INSTANCE_ID));
-        return ServerModel.canonicalServerId(instance != null
-            ? instance.get(InstanceModel.SERVER_ID) : null);
     }
 
     private static @NonNull EncryptionKeyring keyring() {
