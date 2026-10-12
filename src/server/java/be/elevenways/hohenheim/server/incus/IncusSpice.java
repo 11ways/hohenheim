@@ -4,6 +4,7 @@ import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.kvm.server.ScreenRefusalReason;
 import be.elevenways.pepperglass.session.ChannelStream;
 import be.elevenways.pepperglass.session.SessionOptions;
+import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.server.io.BulkInputStream;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -11,6 +12,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -22,7 +24,9 @@ import java.util.Map;
  * AIDEV-NOTE: the console is started WITHOUT force unless the viewer asked to take it over: Incus refuses a console
  * while another console operation of the instance runs (an operator's {@code incus console}, of either type, or one
  * an older Hohenheim leaked), and that refusal reads as {@link ScreenRefusalReason#HELD}, whose viewer may take the
- * console over. The ticket is empty because the daemon's proxy is the authority, not SPICE.
+ * console over. A held console is asked for again for {@link #HELD_ATTEMPTS} attempts first: a page moving from the
+ * serial console to the screen asks for the screen before its serial console is let go. The ticket is empty because
+ * the daemon's proxy is the authority, not SPICE.
  *
  * @author Jelle De Loecker
  * @since 0.2.0
@@ -32,6 +36,10 @@ public final class IncusSpice {
     /** The words Incus refuses a console with while another one runs (instance_console.go, without force). */
     static final String HELD_REFUSAL = "Force is required to take it over";
 
+    /** How often a held console is asked for before it reads as held, and how long apart. */
+    static final int HELD_ATTEMPTS = 8;
+    private static final Backoff HELD_RETRY = Backoff.fixed(Duration.ofMillis(250));
+
     private IncusSpice() {
     }
 
@@ -39,23 +47,37 @@ public final class IncusSpice {
      * Starts the instance's VGA console and links its control socket.
      *
      * @param takeOver whether to end a console someone else holds; without it, a held console is refused
-     * @throws DomainRefusal {@link ScreenRefusalReason#HELD} when someone else holds the console and this is no
-     *                       take-over
+     * @throws DomainRefusal {@link ScreenRefusalReason#HELD} when someone else still holds the console after every
+     *                       attempt and this is no take-over
      * @throws IOException   when the daemon refuses the console or its control socket; the operation is cancelled then
      */
     public static @NonNull Console open(@NonNull IncusClient incus, @NonNull String handle, boolean takeOver)
             throws IOException {
         String what = "VGA console operation of '" + handle + "'";
-        Map<String, Object> operation;
-        try {
-            operation = incus.startVgaConsole(handle, takeOver);
-        } catch (IncusClient.ApiException refused) {
-            if (!takeOver && String.valueOf(refused.getMessage()).contains(HELD_REFUSAL)) {
-                throw ScreenRefusalReason.HELD.refusal("the VGA console of '" + handle + "' is held elsewhere");
+        return new Console(handle, IncusConsoleOperation.link(incus, start(incus, handle, takeOver), what), incus);
+    }
+
+    /** @return the started VGA console operation, a held console asked for again until the attempts run out */
+    private static @NonNull Map<String, Object> start(@NonNull IncusClient incus, @NonNull String handle,
+                                                      boolean takeOver) throws IOException {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return incus.startVgaConsole(handle, takeOver);
+            } catch (IncusClient.ApiException refused) {
+                if (takeOver || !String.valueOf(refused.getMessage()).contains(HELD_REFUSAL)) {
+                    throw refused;
+                }
+                if (attempt >= HELD_ATTEMPTS) {
+                    throw ScreenRefusalReason.HELD.refusal("the VGA console of '" + handle + "' is held elsewhere");
+                }
             }
-            throw refused;
+            try {
+                Thread.sleep(HELD_RETRY.delayAfter(attempt));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IOException("interrupted while the console of '" + handle + "' was held", interrupted);
+            }
         }
-        return new Console(handle, IncusConsoleOperation.link(incus, operation, what), incus);
     }
 
     /** One VGA console of a running VM: how a SPICE session reaches it, until it is closed. */
