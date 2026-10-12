@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.cms;
 
-import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
@@ -16,11 +15,9 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
-import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
-import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
@@ -63,30 +60,24 @@ public final class PutOnlinePage extends PanelPage {
     public static final String ADDRESSES_ANCHOR = "put-online-" + PutOnlineGroup.ADDRESS.token();
 
     /** A template, put online with its address and certificate. */
-    public static final PanelAction<Row> FROM_TEMPLATE = PanelAction.<Row, Integer>places(PutOnline.PUT_ONLINE,
-            ActionPlacement.PAGE,
-            (request, result) -> CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
-                HohenheimSlugs.INSTANCES, result.value(), RecordOverview.SLUG).toUrl())))
+    public static final PanelAction<Row> FROM_TEMPLATE = PanelAction.<Row, Integer>placesRun(PutOnline.PUT_ONLINE,
+            ActionPlacement.PAGE)
         .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
         .selectedBy(HohenheimParams.FROM_TEMPLATE_TEMPLATE.getName())
         .fixed((template, request) -> fixed(request.access()))
         .build();
 
     /** An address that needs no workload: a redirect, an existing service, static files, TLS passthrough. */
-    public static final PanelAction<Object> ADDRESS = PanelAction.<Object, Integer>places(
-            PutOnline.PUT_ADDRESS_ONLINE, ActionPlacement.PAGE,
-            (request, result) -> CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
-                HohenheimSlugs.SITES, result.value(), "overview").toUrl())))
+    public static final PanelAction<Object> ADDRESS = PanelAction.<Object, Integer>placesRun(
+            PutOnline.PUT_ADDRESS_ONLINE, ActionPlacement.PAGE)
         .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
         // The chooser already answered what it serves: the kind rides the form as transport, never asked again.
         .transport(SiteModel.UPSTREAM_KIND.getName())
         .build();
 
     /** A workload of one kind, put online from that kind's own settings with its address and certificate. */
-    public static final PanelAction<Object> WORKLOAD = PanelAction.<Object, Integer>places(
-            PutOnline.PUT_WORKLOAD_ONLINE, ActionPlacement.PAGE,
-            (request, result) -> CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
-                HohenheimSlugs.INSTANCES, result.value(), RecordOverview.SLUG).toUrl())))
+    public static final PanelAction<Object> WORKLOAD = PanelAction.<Object, Integer>placesRun(
+            PutOnline.PUT_WORKLOAD_ONLINE, ActionPlacement.PAGE)
         .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
         // The chooser already answered which kind: it rides the form as transport, never asked again.
         .transport(InstanceModel.KIND.getName())
@@ -94,13 +85,13 @@ public final class PutOnlinePage extends PanelPage {
 
     /**
      * A machine of one kind, put online from that kind's own settings, with no address to give. A machine created
-     * with install media lands on its screen, where its installer is waiting; any other on its overview.
+     * with install media opens on its screen once its run finished, where its installer is waiting; any other on its
+     * front door, the overview.
      */
-    public static final PanelAction<Object> MACHINE = PanelAction.<Object, Integer>places(
-            PutOnline.PUT_MACHINE_ONLINE, ActionPlacement.PAGE,
-            (request, result) -> CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
-                HohenheimSlugs.INSTANCES, result.value(), InstanceDevices.hasInstallMedia(result.value())
-                    ? HohenheimSlugs.Tab.FRAMEBUFFER : RecordOverview.SLUG).toUrl())))
+    public static final PanelAction<Object> MACHINE = PanelAction.<Object, Integer>placesRun(
+            PutOnline.PUT_MACHINE_ONLINE, ActionPlacement.PAGE)
+        .finishedRunOpens(Row.class, machine -> InstanceDevices.hasInstallMedia(machine.get(InstanceModel.ID))
+            ? HohenheimSlugs.Tab.FRAMEBUFFER : null)
         .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
         .transport(InstanceModel.KIND.getName())
         .build();

@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -13,9 +15,12 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.operation.OperationRunModel;
+import be.elevenways.zenit.common.operation.OperationRunStatus;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -24,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -163,6 +169,58 @@ class MachineRecordPageJourneyTest extends HohenheimTestBase {
                 cleanup.get(i).run();
             }
         }
+    }
+
+    @Test
+    void aFinishedMachineRunOpensTheScreenOnlyWhenItsDriveHoldsInstallMedia() throws Exception {
+        List<Runnable> cleanup = new ArrayList<>();
+        try {
+            Row host = incusHost(cleanup);
+            Row vm = instance(cleanup, PREFIX + "iso", "hohenheim:vm", host.get(ServerModel.ID),
+                Map.of("image_origin", "install_media"));
+            int vmId = vm.get(InstanceModel.ID);
+            String vmPage = "/admin/instances/" + vmId + "/page/";
+            String runPage = "/admin/" + HohenheimSlugs.PUT_ONLINE + "/run/" + finishedMachineRun(cleanup, vmId);
+
+            // 1. A machine put online without install media: its finished run leads on to its overview.
+            assertThat(adminGet(runPage).body()).as("step 1: onward to the overview")
+                .contains(vmPage + "overview")
+                .doesNotContain(vmPage + HohenheimSlugs.Tab.FRAMEBUFFER);
+
+            // 2. With install media in its drive, the same finished run leads on to its screen, where the installer
+            //    waits: the tab the put-online placement declares, read from the record once the run ended.
+            var devices = Models.get(InstanceDeviceModel.class);
+            Row cdrom = devices.createEmptyRow();
+            cdrom.set(InstanceDeviceModel.INSTANCE_ID, vmId);
+            cdrom.set(InstanceDeviceModel.TYPE, InstanceDeviceModel.TYPE_CDROM);
+            cdrom.set(InstanceDeviceModel.NAME, "cdrom");
+            cdrom.set(InstanceDeviceModel.SOURCE_MEDIA, "debian.iso");
+            devices.save(cdrom);
+            cleanup.add(() -> HardDeletes.row(devices, cdrom));
+            assertThat(adminGet(runPage).body()).as("step 2: onward to the screen")
+                .contains(vmPage + HohenheimSlugs.Tab.FRAMEBUFFER);
+        } finally {
+            for (int i = cleanup.size() - 1; i >= 0; i--) {
+                cleanup.get(i).run();
+            }
+        }
+    }
+
+    /** @return the id of a put-online machine run over the record that has ended, as a succeeded wizard leaves it */
+    private static long finishedMachineRun(List<Runnable> cleanup, int instanceId) {
+        OperationRunModel runs = Models.get(OperationRunModel.class);
+        Row run = runs.createEmptyRow();
+        run.set(OperationRunModel.OPERATION, PutOnline.PUT_MACHINE_ONLINE.id().toString());
+        run.set(OperationRunModel.INVOCATION_ID, UUID.randomUUID());
+        run.set(OperationRunModel.SUBJECT_TYPE, InstanceOperations.INSTANCE.id().toString());
+        run.set(OperationRunModel.SUBJECT_KEY, String.valueOf(instanceId));
+        run.set(OperationRunModel.STATUS, OperationRunStatus.SUCCEEDED.storageKey());
+        run.set(OperationRunModel.PROGRESS, 1.0);
+        run.set(OperationRunModel.STARTED_AT, Now.instant());
+        run.set(OperationRunModel.ENDED_AT, Now.instant());
+        runs.save(run);
+        cleanup.add(() -> HardDeletes.row(runs, run));
+        return run.get(OperationRunModel.ID);
     }
 
     private static PanelAction<Row> startAction() {
