@@ -19,7 +19,6 @@ import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
-import be.elevenways.hohenheim.server.instance.WorkspaceBuilds;
 import be.elevenways.hohenheim.server.source.GitSourcePolls;
 import be.elevenways.hohenheim.server.source.GitWebhookHandler;
 import be.elevenways.hohenheim.server.source.WebhookOutcome;
@@ -100,14 +99,13 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
 
     /**
-     * A record has this tab when deploying it means deploying a SOURCE: a release-managed
-     * kind always does, a workspace does once it names a repository. A workspace with no
-     * repository deploys a bare container and has no history to show.
+     * A record has this tab when deploying it means deploying code ({@code InstanceKinds.deploysCode}): a
+     * release-managed kind always does, a workspace once it names a repository. A workspace with no repository
+     * deploys a bare container and has no history to show.
      */
     @Override
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext access) {
-        return InstanceKinds.isReleaseManaged(record.get(InstanceModel.KIND))
-            || WorkspaceBuilds.deploysSource(record);
+        return InstanceKinds.deploysCode(record);
     }
 
     @Override

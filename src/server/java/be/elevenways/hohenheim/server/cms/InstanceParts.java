@@ -351,13 +351,14 @@ public final class InstanceParts {
             // the nav needs; createTitle gives it an honest singular. An edit page leads with the record's own name,
             // like every other tab of the record, so no editTitle is declared.
             .createTitle(HohenheimMicrocopy.INSTANCE.of("create_title"))
-            // AIDEV-NOTE: the kind entry offers only what a human may author (the generated kinds are refused by
-            // OwnedInstances anyway). Supplied, never a resolved list: registry entries arrive via BlastAutoLoadInit
-            // after class-load, and a Supplied source still resolves on the context-free coercion path, which is what
-            // makes a hand-posted generated-only kind fail at the form layer too. Every label path reads
-            // EnumField.getValues() and still sees the whole registry, so existing generated rows keep their label.
+            // AIDEV-NOTE: the kind entry offers what this record may BECOME: on a create every kind a human may author
+            // (InstanceKinds.placeableOptions), on a stored record only its InstanceKinds.kindChangesOf, the set its
+            // write hook enforces. Record-aware (OptionSource.dynamic): the render's AND the save's coercion context
+            // carry the record (zenit-cms RecordFormWrite), so the API lane judges an update against the same cards.
+            // Every label path reads EnumField.getValues() and still sees the whole registry, so existing generated
+            // rows keep their label.
             .add(Select.of(InstanceModel.KIND)
-                .options(OptionSource.supplied(InstanceKinds::placeableOptions))
+                .options(OptionSource.dynamic(context -> InstanceKinds.kindOptionsFor(context.record())))
                 .presentation(Select.Presentation.CARDS)
                 .clearable(!Boolean.TRUE.equals(InstanceModel.KIND.getAttribute(FieldAttributes.REQUIRED)))
                 .build())

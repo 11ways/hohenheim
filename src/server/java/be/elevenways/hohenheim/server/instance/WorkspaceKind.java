@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.HohenheimFormSections;
@@ -155,6 +156,12 @@ public final class WorkspaceKind implements InstanceKindHandler {
     @Override public Icon getIcon() { return Icon.of("code"); }
 
     @Override public PutOnlineGroup putOnlineGroup() { return PutOnlineGroup.MACHINE; }
+
+    /** A workspace that names a repository deploys that code: checkout, build, restart (WorkspaceBuilds). */
+    @Override public boolean deploysSource(@NonNull Row instance) {
+        return instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
+            && SiteSources.hasRepository(RawValues.map(map));
+    }
 
     @Override public BadgeColor color() { return ColorHue.VIOLET; }
 

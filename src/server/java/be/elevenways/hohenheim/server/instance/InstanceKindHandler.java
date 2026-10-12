@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.protoblast.common.annotation.BlastDiscoverable;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
@@ -78,6 +79,16 @@ public interface InstanceKindHandler extends InstanceKindInfo {
      * @return false for every kind whose record IS a workload
      */
     default boolean releaseManaged() {
+        return false;
+    }
+
+    /**
+     * Whether deploying THIS record builds and ships a source of its own (a workspace that names a repository), so
+     * its deploy is a code deploy with a history, not a plain start.
+     *
+     * @return false for every kind whose records never build their own source
+     */
+    default boolean deploysSource(@NonNull Row instance) {
         return false;
     }
 

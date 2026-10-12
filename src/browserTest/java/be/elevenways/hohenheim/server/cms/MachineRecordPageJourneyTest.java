@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
@@ -29,9 +30,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * A machine's record page speaks of a machine and an app's of an app, each read from the kind's and its driver's
- * declared facts: the start verb, the Network card instead of web addresses, only the tabs the driver has lanes for,
- * the devices in the strip, the resize notice and shell refusal worded for what runs, and only the kind changes the
- * driver can perform.
+ * declared facts: the start verb (Deploy wherever deploying means deploying code), the Network card instead of web
+ * addresses, only the tabs the driver has lanes for (Metrics on Incus too), the devices in the strip, the resize notice
+ * and shell refusal worded for what runs, and only the kind changes the driver can perform, offered and written.
  */
 class MachineRecordPageJourneyTest extends HohenheimTestBase {
 
@@ -67,9 +68,19 @@ class MachineRecordPageJourneyTest extends HohenheimTestBase {
                 }
             }
 
-            // 2. The machine is started, the app deployed.
+            // 2. The machine is started, the app deployed; a workspace is started, and deployed once it names a
+            //    repository, because then deploying it builds and ships that code.
             assertThat(say(startAction().labelFor(vm))).as("step 2: a machine's start verb").isEqualTo("Start");
             assertThat(say(startAction().labelFor(app))).as("step 2: an app's start verb").isEqualTo("Deploy");
+            Row box = workspace(cleanup, PREFIX + "box", Map.of());
+            assertThat(say(startAction().labelFor(box))).as("step 2: a bare workspace is started").isEqualTo("Start");
+            Row coded = workspace(cleanup, PREFIX + "coded",
+                Map.of("repository_url", "https://example.invalid/app.git"));
+            assertThat(say(startAction().labelFor(coded))).as("step 2: a workspace with code is deployed")
+                .isEqualTo("Deploy");
+            assertThat(adminGet("/admin/instances/" + coded.get(InstanceModel.ID) + "/page/overview").body())
+                .as("step 2: and it has the Deployments tab that Deploy fills")
+                .contains("/admin/instances/" + coded.get(InstanceModel.ID) + "/page/deployments");
 
             // 3. The machine's overview has a Network card, never the web-address card's promise.
             String vmOverview = adminGet(vmPage + "/page/overview").body();
@@ -78,19 +89,22 @@ class MachineRecordPageJourneyTest extends HohenheimTestBase {
                 .contains("Network").contains("Hidden behind its host")
                 .as("step 3: an unreachable host is said in words")
                 .contains("Its host did not answer, so its addresses are unknown right now")
-                .as("step 3: its live gauges do not point at a Metrics tab it does not have")
-                .doesNotContain("Read live while its Metrics tab is open");
+                .as("step 3: its live gauges point at its Metrics tab")
+                .contains("Read live while its Metrics tab is open");
 
-            // 4. Its strip carries Devices; Files, Metrics and an empty Provisioning are absent and their routes 404.
+            // 4. Its strip carries Devices and Metrics (the Incus driver reads live stats); Files and an empty
+            //    Provisioning are absent and their routes 404.
+            assertThat(InstanceKinds.offers(vm, WorkloadLane.LIVE_STATS)).as("step 4: Incus has a live-stats lane")
+                .isTrue();
             assertThat(vmOverview).as("step 4: the devices tab is in the strip")
                 .contains(vmPage + "/page/devices")
+                .contains(vmPage + "/page/stats")
                 .doesNotContain(vmPage + "/page/files")
-                .doesNotContain(vmPage + "/page/stats")
                 .doesNotContain(vmPage + "/page/provisioning");
             assertThat(adminGet(vmPage + "/page/files").statusCode()).as("step 4: no file lane, no page")
                 .isEqualTo(404);
-            assertThat(adminGet(vmPage + "/page/stats").statusCode()).as("step 4: no live lane, no page")
-                .isEqualTo(404);
+            assertThat(adminGet(vmPage + "/page/stats").statusCode()).as("step 4: the Metrics tab renders")
+                .isEqualTo(200);
 
             // 5. Its configuration words the resize as Incus applies it, and offers no other kind.
             String vmEdit = adminGet(vmPage).body();
@@ -121,7 +135,11 @@ class MachineRecordPageJourneyTest extends HohenheimTestBase {
             assertThat(InstanceKinds.offers(app, WorkloadLane.FILES)).as("step 7: the Docker driver browses files")
                 .isTrue();
             assertThat(adminGet(appPage).body()).as("step 7: its resize recreates the container")
-                .contains("recreates a running workload's container");
+                .contains("recreates a running workload's container")
+                .as("step 7: its kind cards offer only what this record can become")
+                .contains("data-value=\"hohenheim:docker_container\"")
+                .doesNotContain("data-value=\"hohenheim:vm\"")
+                .doesNotContain("data-value=\"hohenheim:system_container\"");
         } finally {
             for (int i = cleanup.size() - 1; i >= 0; i--) {
                 cleanup.get(i).run();
@@ -154,6 +172,24 @@ class MachineRecordPageJourneyTest extends HohenheimTestBase {
 
     private static Row instance(List<Runnable> cleanup, String name, String kind, int serverId,
                                 Map<String, Object> settings) {
+        return instance(cleanup, name, kind, serverId, settings, null);
+    }
+
+    /** A workspace on the local Docker host, on a runtime image of its own (a workspace requires one). */
+    private static Row workspace(List<Runnable> cleanup, String name, Map<String, Object> settings) {
+        var images = Models.get(RuntimeImageModel.class);
+        Row image = images.createEmptyRow();
+        image.set(RuntimeImageModel.NAME, name + "-image");
+        image.set(RuntimeImageModel.DOCKER_IMAGE, "alpine");
+        image.set(RuntimeImageModel.ENABLED, true);
+        images.save(image);
+        cleanup.add(() -> HardDeletes.row(images, image));
+        return instance(cleanup, name, "hohenheim:workspace", ServerModel.localServerId(), settings,
+            image.get(RuntimeImageModel.ID));
+    }
+
+    private static Row instance(List<Runnable> cleanup, String name, String kind, int serverId,
+                                Map<String, Object> settings, Integer runtimeImageId) {
         var instances = Models.get(InstanceModel.class);
         Row row = instances.createEmptyRow();
         row.set(InstanceModel.NAME, name);
@@ -161,6 +197,7 @@ class MachineRecordPageJourneyTest extends HohenheimTestBase {
         row.set(InstanceModel.SETTINGS, settings);
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
         row.set(InstanceModel.SERVER_ID, serverId);
+        row.set(InstanceModel.RUNTIME_IMAGE_ID, runtimeImageId);
         instances.save(row);
         cleanup.add(() -> HardDeletes.row(instances, row));
         return row;

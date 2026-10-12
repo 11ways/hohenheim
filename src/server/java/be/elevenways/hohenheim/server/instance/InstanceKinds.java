@@ -233,6 +233,40 @@ public final class InstanceKinds {
     }
 
     /**
+     * The kind cards a form shows for {@code record}: every placeable kind on a create, only the record's own
+     * {@link #kindChangesOf} on a stored one.
+     *
+     * @param record the edited record from the form's edit context, null (or an unsaved row) on a create
+     */
+    public static @NonNull List<FieldOption<String>> kindOptionsFor(@Nullable Object record) {
+        List<FieldOption<String>> placeable = placeableOptions();
+        if (!(record instanceof Row stored) || !stored.has(InstanceModel.ID.getName())
+                || stored.get(InstanceModel.ID) == null) {
+            return placeable;
+        }
+        Set<String> changes = kindChangesOf(stored);
+        List<FieldOption<String>> options = new ArrayList<>();
+        for (FieldOption<String> option : placeable) {
+            if (changes.contains(option.value())) {
+                options.add(option);
+            }
+        }
+        return options;
+    }
+
+    /**
+     * Whether deploying this record means deploying CODE: a release-managed kind always does, another kind when it
+     * says the record builds a source of its own ({@link InstanceKindHandler#deploysSource}). The start verb and the
+     * Deployments tab both read this.
+     *
+     * @return false for an unknown kind (fail closed)
+     */
+    public static boolean deploysCode(@NonNull Row instance) {
+        InstanceKindHandler handler = handlerOf(instance);
+        return handler != null && (handler.releaseManaged() || handler.deploysSource(instance));
+    }
+
+    /**
      * Every registered kind's supported runtimes, keyed by the stored kind value --
      * the data the dependent host picker's resolver carries
      * ({@code HohenheimPickRules.KindHostRules}).

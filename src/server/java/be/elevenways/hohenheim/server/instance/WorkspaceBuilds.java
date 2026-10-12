@@ -1,6 +1,5 @@
 package be.elevenways.hohenheim.server.instance;
 
-import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -102,19 +101,8 @@ public final class WorkspaceBuilds {
      * container up, which is what an operator who wants a bare box asks for.
      */
     public static boolean deploysSource(@Nullable Row instance) {
-
-        if (instance == null) {
-            return false;
-        }
-
-        InstanceKindHandler handler = InstanceKinds.handlerOf(instance);
-
-        if (handler == null || !WorkspaceKind.ID.equals(handler.typeId())) {
-            return false;
-        }
-
-        return instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map
-            && SiteSources.hasRepository(RawValues.map(map));
+        InstanceKindHandler handler = instance == null ? null : InstanceKinds.handlerOf(instance);
+        return handler != null && handler.deploysSource(instance);
     }
 
     /**

@@ -116,13 +116,13 @@ final class InstanceActions {
     }
 
     /**
-     * The start verb's words for what this record is: a whole machine is started, an app is deployed. The kind's
-     * "Put something online" group is the one declaration of which it is ({@code PutOnlineGroup}); a kind with none
-     * (only other machinery creates it) reads the app words.
+     * The start verb's words for what this record is: deploying CODE reads "Deploy" ({@code InstanceKinds.deploysCode},
+     * a workspace that names a repository included); anything else reads its kind's "Put something online" group's
+     * words (a whole machine is started), and a kind with no group (only other machinery creates it) the app words.
      */
     private static @NonNull Microcopy startWords(@NonNull String key, @NonNull Row row) {
         InstanceKindHandler kind = InstanceKinds.handlerOf(row);
-        PutOnlineGroup group = kind == null ? null : kind.putOnlineGroup();
+        PutOnlineGroup group = kind == null || InstanceKinds.deploysCode(row) ? null : kind.putOnlineGroup();
         Microcopy words = HohenheimMicrocopy.INSTANCE.of(key);
         return group == null ? words : words.withFilter("what", group.token());
     }
