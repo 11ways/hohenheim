@@ -38,14 +38,14 @@
                     {% if volume.get("usedText") != "" %}
                     {{ volume.get("usedText") }}
                     {% else %}
-                    <span class="hh-muted">{{ t("never_measured", scope: "instance_volume") }}</span>
+                    <span class="text-xs text-muted">{{ t("never_measured", scope: "instance_volume") }}</span>
                     {% /if %}
                 </pl-table-cell>
                 <pl-table-cell>
                     {% if volume.get("quotaText") != "" %}
                     {{ volume.get("quotaText") }}
                     {% else %}
-                    <span class="hh-muted">{{ t("no_quota", scope: "instance_volume") }}</span>
+                    <span class="text-xs text-muted">{{ t("no_quota", scope: "instance_volume") }}</span>
                     {% /if %}
                 </pl-table-cell>
                 <pl-table-cell>

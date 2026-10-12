@@ -13,7 +13,7 @@
     {% elseif value.instanceName != null %}
     <span>{{ value.instanceName }}</span>
     {% elseif value.summary != null %}
-    <span class="hh-upstream-summary">{{ value.summary }}</span>
+    <span class="text-xs text-muted">{{ value.summary }}</span>
     {% /if %}
 </span>
 {% /if %}

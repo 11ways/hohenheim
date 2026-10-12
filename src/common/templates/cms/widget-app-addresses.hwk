@@ -15,5 +15,5 @@
     {% /each %}
 </pl-list>
 {% else %}
-<p class="hh-muted" data-app-card="addresses" data-app-addresses-empty>{{ t("no_addresses", scope: "app_overview") }}</p>
+<p class="text-xs text-muted" data-app-card="addresses" data-app-addresses-empty>{{ t("no_addresses", scope: "app_overview") }}</p>
 {% /if %}

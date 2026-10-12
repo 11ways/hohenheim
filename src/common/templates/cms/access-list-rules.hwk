@@ -70,7 +70,7 @@
                 {% each protects as use %}<li data-access-list-use>{{ use }}</li>{% /each %}
             </ul>
             {% else %}
-            <p class="hh-muted">{{ t("protects_none", scope: "access_list") }}</p>
+            <p class="text-xs text-muted">{{ t("protects_none", scope: "access_list") }}</p>
             {% /if %}
         </pl-card-content>
     </pl-card>

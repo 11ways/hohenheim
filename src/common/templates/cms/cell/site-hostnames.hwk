@@ -9,7 +9,7 @@
     <pl-badge variant="outline">+{{ value.moreCount }}</pl-badge>
     {% /if %}
     {% else %}
-    <span class="hh-muted">{{ t("no_hostnames", scope: "site") }}</span>
+    <span class="text-xs text-muted">{{ t("no_hostnames", scope: "site") }}</span>
     {% /if %}
 </span>
 {% /if %}
