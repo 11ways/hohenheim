@@ -41,7 +41,14 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
 
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.OptionSource;
+import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.server.operation.InputScope;
+
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * The handlers of the instance operations and their schedule placements, attached once per JVM.
@@ -104,6 +111,19 @@ public final class InstanceOperationHandlers {
                 && InstanceKinds.isReleaseManaged(instance.get(InstanceModel.KIND)))
             .handle(call -> {
                 ReleaseEngine.rollback(instanceId(call));
+                return null;
+            });
+        OperationHandlers.attach(InstanceOperations.ATTACH_INSTALL_MEDIA).source(SUBJECTS)
+            .applies(instance -> authored(instance) && InstanceKinds.handlerOf(instance) != null
+                && InstanceKinds.handlerOf(instance).supportsInstallMedia())
+            .inputScope(InstanceOperationHandlers::hostMedia)
+            .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
+            .handle(call -> {
+                int instanceId = instanceId(call);
+                new InstanceDevices().attachInstallMedia(instanceId,
+                    Objects.requireNonNull(call.input(), "the attach has its input").installMedia());
+                ActivityLog.record(Models.get(InstanceModel.class), instanceId,
+                    HohenheimActivityAction.DEVICE_ATTACHED, null);
                 return null;
             });
         OperationHandlers.attach(InstanceOperations.INSTALL).source(SUBJECTS)
@@ -360,6 +380,22 @@ public final class InstanceOperationHandlers {
             return "";
         }
         return HohenheimViolations.reasonOf(cause);
+    }
+
+    /**
+     * The install-media attach's pick: the ISO volumes on the record's own host, a choice it must make (no blank);
+     * none there says where media comes from.
+     */
+    private static @NonNull InputScope hostMedia(@Nullable Row instance, @NonNull FormSpec declared,
+                                                 @Nullable AccessContext access) {
+        Integer serverId = instance == null ? null : instance.get(InstanceModel.SERVER_ID);
+        return InputScope.of(InstanceTemplateHandlers.replacing(declared, Map.of(
+            InstanceOperations.INSTALL_MEDIA.getName(), Select.of(InstanceOperations.INSTALL_MEDIA)
+                .options(OptionSource.of(new InstallMedia().optionsOn(serverId)))
+                .clearable(false)
+                .emptyReason(context -> HohenheimMicrocopy.INSTANCE_DEVICE.of("install_media_none")
+                    .withArg("host", serverId == null ? "" : ServerModel.labelOf(serverId)))
+                .build())));
     }
 
     private static int instanceId(@NonNull OperationCall<Row, ?> call) {

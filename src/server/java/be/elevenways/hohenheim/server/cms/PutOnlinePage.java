@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.http.Uri;
@@ -91,11 +92,15 @@ public final class PutOnlinePage extends PanelPage {
         .transport(InstanceModel.KIND.getName())
         .build();
 
-    /** A machine of one kind, put online from that kind's own settings, with no address to give. */
+    /**
+     * A machine of one kind, put online from that kind's own settings, with no address to give. A machine created
+     * with install media lands on its screen, where its installer is waiting; any other on its overview.
+     */
     public static final PanelAction<Object> MACHINE = PanelAction.<Object, Integer>places(
             PutOnline.PUT_MACHINE_ONLINE, ActionPlacement.PAGE,
             (request, result) -> CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
-                HohenheimSlugs.INSTANCES, result.value(), RecordOverview.SLUG).toUrl())))
+                HohenheimSlugs.INSTANCES, result.value(), InstanceDevices.hasInstallMedia(result.value())
+                    ? HohenheimSlugs.Tab.FRAMEBUFFER : RecordOverview.SLUG).toUrl())))
         .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
         .transport(InstanceModel.KIND.getName())
         .build();

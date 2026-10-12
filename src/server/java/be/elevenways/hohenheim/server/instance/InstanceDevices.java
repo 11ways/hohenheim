@@ -161,6 +161,31 @@ public final class InstanceDevices {
     }
 
     /**
+     * Put install media in the machine's drive under a name derived from the device type, the next free one when a
+     * drive already holds an ISO: the record's attach and the put-online machine wizard both land here.
+     *
+     * @return the device name used
+     * @throws Violations as {@link #attachCdrom}
+     */
+    public @NonNull String attachInstallMedia(int instanceId, @NonNull String mediaVolume) {
+        String base = DeviceType.CDROM.token();
+        String name = base;
+        for (int next = 2; rowOf(instanceId, name) != null; next++) {
+            name = base + next;
+        }
+        this.attachCdrom(instanceId, name, mediaVolume);
+        return name;
+    }
+
+    /** @return whether the instance has install media in a drive (a cdrom row) */
+    public static boolean hasInstallMedia(int instanceId) {
+        return Models.get(InstanceDeviceModel.class).find()
+            .where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
+            .where(InstanceDeviceModel.TYPE.eq(DeviceType.CDROM.token()))
+            .count() > 0;
+    }
+
+    /**
      * Detach one device: daemon first (device removed, disk volume deleted VERIFIED),
      * row second -- an unreachable daemon keeps the row AND its reservation, because
      * the disk still exists.

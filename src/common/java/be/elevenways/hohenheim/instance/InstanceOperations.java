@@ -300,6 +300,40 @@ public final class InstanceOperations {
     public record MigrateInput(@Nullable Integer targetServerId) {
     }
 
+    /**
+     * The ISO a machine boots its installer from: the attach on its record and the put-online machine wizard ask it,
+     * each scoping the choice to the media present on the host. Optional here, because the wizard may create an empty
+     * VM without one; the attach's scoped pick refuses a blank.
+     */
+    public static final StringField INSTALL_MEDIA = StringField.builder("installMedia")
+        .label(HohenheimMicrocopy.INSTANCE_DEVICE.of("install_media"))
+        .help(HohenheimMicrocopy.INSTANCE_DEVICE.of("install_media_help"))
+        .build();
+
+    /**
+     * Puts an ISO from the record's host in the machine's drive, the driver booting it before the root disk.
+     *
+     * AIDEV-NOTE: OPERATOR-ONLY (its server authorizer; InstanceDevices.attachCdrom refuses a tenant underneath):
+     * media provenance is arbitrary bootable code. The record is the subject, so the form never asks which instance,
+     * and a CD has no size.
+     */
+    public static final Operation<Row, InstallMediaInput, Void> ATTACH_INSTALL_MEDIA =
+        Operation.declare(HohenheimIds.id("attach_install_media"))
+            .happened(OperationSentences.of("attach_install_media"))
+            .label(HohenheimMicrocopy.INSTANCE_DEVICE.of("add_media"))
+            .icon(Icon.of("compact-disc"))
+            .one(INSTANCE)
+            .gate(OperationGate.open())
+            .input(OperationInput.of(FormSpec.builder().add(INSTALL_MEDIA).build(), InstallMediaInput.class,
+                values -> new InstallMediaInput(values.get(INSTALL_MEDIA))))
+            .command(COMMAND_FACET)
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .register();
+
+    /** The install-media attach's input: the ISO volume's name on the record's host. */
+    public record InstallMediaInput(@Nullable String installMedia) {
+    }
+
     /** The exec tab's input. */
     public record ExecInput(@Nullable String command) {
     }

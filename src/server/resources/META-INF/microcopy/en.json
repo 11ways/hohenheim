@@ -8918,10 +8918,16 @@
     "text": "Prepared template",
     "scope": "image_origin"
   },
-  "install_media": {
-    "text": "Install media (empty VM)",
-    "scope": "image_origin"
-  },
+  "install_media": [
+    {
+      "text": "Install media (empty VM)",
+      "scope": "image_origin"
+    },
+    {
+      "text": "Install media",
+      "scope": "instance_device"
+    }
+  ],
   "secure_boot": [
     {
       "text": "Secure Boot",
@@ -9329,6 +9335,42 @@
   "add_media": {
     "text": "Attach install media",
     "scope": "instance_device"
+  },
+  "install_media_help": {
+    "text": "The ISO the machine starts its installer from, one of the install media on its host.",
+    "scope": "instance_device"
+  },
+  "install_media_none": {
+    "text": "No install media on {$host} yet. Fetch an ISO on the host's Install media tab.",
+    "scope": "instance_device"
+  },
+  "install_media_wizard_help": {
+    "text": "Only for Install media (empty VM): the ISO the new machine starts its installer from, grouped by the host that holds it.",
+    "scope": "instance_device"
+  },
+  "manage_media": {
+    "text": "Install media on {$host}",
+    "scope": "instance_device"
+  },
+  "media_attached": {
+    "text": "Install media is in the drive of {$name}",
+    "scope": "instance_device"
+  },
+  "attach_media": {
+    "text": "Attach",
+    "scope": "instance_device"
+  },
+  "attach_media_lead": {
+    "text": "The machine starts from this ISO before its own disk until you detach it.",
+    "scope": "instance_device"
+  },
+  "install_media_not_on_host": {
+    "text": "{$host} holds no install media named {$media}",
+    "scope": "violations"
+  },
+  "install_media_needs_empty_vm": {
+    "text": "Install media is for a machine created empty: choose Install media (empty VM) as its image.",
+    "scope": "violations"
   },
   "detach": {
     "text": "Detach",
@@ -15458,6 +15500,7 @@
   "create_instance_from_template": { "text": "{$actor} created an app from template {$subject}", "scope": "hohenheim", "target": "happened" },
   "approve_template": { "text": "{$actor} approved template {$subject}", "scope": "hohenheim", "target": "happened" },
   "unapprove_template": { "text": "{$actor} withdrew the approval of template {$subject}", "scope": "hohenheim", "target": "happened" },
+  "attach_install_media": { "text": "{$actor} put install media in {$subject}", "scope": "hohenheim", "target": "happened" },
   "restore_backup": { "text": "{$actor} restored backup {$subject}", "scope": "hohenheim", "target": "happened" },
   "delete_backup": { "text": "{$actor} deleted backup {$subject}", "scope": "hohenheim", "target": "happened" },
   "detach_device": { "text": "{$actor} detached device {$subject}", "scope": "hohenheim", "target": "happened" },

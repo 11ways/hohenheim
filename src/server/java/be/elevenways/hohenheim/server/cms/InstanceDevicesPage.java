@@ -5,6 +5,15 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.DeviceType;
+import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
+import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
+import be.elevenways.zenit.cms.common.action.CmsActionResult;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
+import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.server.page.PageActions;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
@@ -39,6 +48,17 @@ import java.util.Map;
  */
 public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
 
+    /** Install media into this tab's own record, its form the ISO pick of the record's host. */
+    private static final PanelAction<Row> ATTACH_MEDIA = PanelAction.<Row, Void>places(
+            InstanceOperations.ATTACH_INSTALL_MEDIA, ActionPlacement.PAGE,
+            (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_DEVICE
+                .of("media_attached").withArg("name", request.subject().get(InstanceModel.NAME))))
+        .confirmation(ConfirmationSpec.of(HohenheimMicrocopy.INSTANCE_DEVICE.of("add_media"),
+            HohenheimMicrocopy.INSTANCE_DEVICE.of("attach_media"),
+            HohenheimMicrocopy.INSTANCE_DEVICE.of("attach_media_lead"), ActionStyle.DEFAULT))
+        .selectedByRoute(instance -> String.valueOf((Object) instance.get(InstanceModel.ID)))
+        .build();
+
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_devices"); }
     @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE_DEVICE.of("plural"); }
     /**
@@ -66,6 +86,11 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext access) {
         InstanceKindHandler handler = InstanceKinds.handlerOf(record);
         return handler != null && handler.supportsDevices();
+    }
+
+    @Override
+    public @NonNull List<PanelAction<Row>> actions() {
+        return List.of(ATTACH_MEDIA);
     }
 
     @Override
@@ -109,14 +134,18 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
             ? newDeviceTarget(panel, DeviceType.DISK, instanceId) : null);
         vars.put("addNicTarget", canEdit
             ? newDeviceTarget(panel, DeviceType.NIC, instanceId) : null);
-        // Install media is OPERATOR-ONLY (InstanceDevices.attachCdrom refuses a tenant
-        // with the uniform refusal) and VM-only -- both gates repeated here so the
-        // affordance is offered exactly where the funnel would accept it.
-        InstanceKindHandler handler = InstanceKinds.handlerOf(instance);
-        boolean canAttachMedia = handler != null && handler.supportsInstallMedia()
-            && (!DeviceType.CDROM.operatorOnly() || HohenheimAccess.isAdmin(accessContext));
-        vars.put("addMediaTarget", canAttachMedia
-            ? newDeviceTarget(panel, DeviceType.CDROM, instanceId) : null);
+        // Install media is OPERATOR-ONLY and VM-only: the attach operation is offered exactly where its handler applies
+        // and authorizes, and its form (the ISO pick of this record's host) is drawn on the tab itself.
+        boolean canAttachMedia = InstanceOperationHandlers.offered(InstanceOperations.ATTACH_INSTALL_MEDIA,
+            accessContext, instance);
+        vars.put("mediaForm", canAttachMedia && PageActions.open(request, this, instance, ATTACH_MEDIA.id())
+            instanceof PageActions.Form form ? form.state() : null);
+        Integer serverId = instance.get(InstanceModel.SERVER_ID);
+        vars.put("mediaHostTarget", canAttachMedia && serverId != null
+            ? CmsRoutes.subpage(panel, HohenheimSlugs.SERVERS, serverId, HohenheimSlugs.Tab.INSTALL_MEDIA) : null);
+        vars.put("mediaHostLabel", canAttachMedia && serverId != null
+            ? HohenheimMicrocopy.INSTANCE_DEVICE.of("manage_media").withArg("host", ServerModel.labelOf(serverId))
+                .asString(conduit) : "");
         vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_DEVICES, vars);
     }

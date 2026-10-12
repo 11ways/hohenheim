@@ -8918,10 +8918,16 @@
     "text": "Voorbereid sjabloon",
     "scope": "image_origin"
   },
-  "install_media": {
-    "text": "Installatiemedia (lege VM)",
-    "scope": "image_origin"
-  },
+  "install_media": [
+    {
+      "text": "Installatiemedia (lege VM)",
+      "scope": "image_origin"
+    },
+    {
+      "text": "Installatiemedia",
+      "scope": "instance_device"
+    }
+  ],
   "secure_boot": [
     {
       "text": "Secure Boot",
@@ -9329,6 +9335,42 @@
   "add_media": {
     "text": "Installatiemedia aankoppelen",
     "scope": "instance_device"
+  },
+  "install_media_help": {
+    "text": "De ISO waarvan de machine haar installatieprogramma start, een van de installatiemedia op haar host.",
+    "scope": "instance_device"
+  },
+  "install_media_none": {
+    "text": "Nog geen installatiemedia op {$host}. Haal een ISO op via het tabblad Installatiemedia van de host.",
+    "scope": "instance_device"
+  },
+  "install_media_wizard_help": {
+    "text": "Alleen voor Installatiemedia (lege VM): de ISO waarvan de nieuwe machine haar installatieprogramma start, gegroepeerd per host die ze heeft.",
+    "scope": "instance_device"
+  },
+  "manage_media": {
+    "text": "Installatiemedia op {$host}",
+    "scope": "instance_device"
+  },
+  "media_attached": {
+    "text": "Installatiemedia zit in de lade van {$name}",
+    "scope": "instance_device"
+  },
+  "attach_media": {
+    "text": "Aankoppelen",
+    "scope": "instance_device"
+  },
+  "attach_media_lead": {
+    "text": "De machine start van deze ISO voor haar eigen schijf tot je ze loskoppelt.",
+    "scope": "instance_device"
+  },
+  "install_media_not_on_host": {
+    "text": "{$host} heeft geen installatiemedia met de naam {$media}",
+    "scope": "violations"
+  },
+  "install_media_needs_empty_vm": {
+    "text": "Installatiemedia is voor een machine die leeg wordt aangemaakt: kies Installatiemedia (lege VM) als image.",
+    "scope": "violations"
   },
   "detach": {
     "text": "Afkoppelen",
@@ -15458,6 +15500,7 @@
   "create_instance_from_template": { "text": "{$actor} maakte een app aan vanuit sjabloon {$subject}", "scope": "hohenheim", "target": "happened" },
   "approve_template": { "text": "{$actor} keurde sjabloon {$subject} goed", "scope": "hohenheim", "target": "happened" },
   "unapprove_template": { "text": "{$actor} trok de goedkeuring van sjabloon {$subject} in", "scope": "hohenheim", "target": "happened" },
+  "attach_install_media": { "text": "{$actor} plaatste installatiemedia in {$subject}", "scope": "hohenheim", "target": "happened" },
   "restore_backup": { "text": "{$actor} herstelde back-up {$subject}", "scope": "hohenheim", "target": "happened" },
   "delete_backup": { "text": "{$actor} verwijderde back-up {$subject}", "scope": "hohenheim", "target": "happened" },
   "detach_device": { "text": "{$actor} koppelde apparaat {$subject} los", "scope": "hohenheim", "target": "happened" },

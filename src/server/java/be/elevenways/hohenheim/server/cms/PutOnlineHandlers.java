@@ -10,7 +10,10 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.server.instance.InstallMedia;
+import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.server.instance.InstanceInstalls;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
@@ -41,6 +44,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.IntConsumer;
 
 /**
  * The server half of "Put something online": each run composes the existing writers, one step after the other, and
@@ -188,7 +192,7 @@ final class PutOnlineHandlers {
      */
     private static @NonNull Integer putWorkloadOnline(@NonNull OperationCall<Void, PutOnline.Workload> call) {
         PutOnline.Workload input = Objects.requireNonNull(call.input(), "put online has its input");
-        Row instance = createOfKind(call, input.name(), input.serverId(), input.kind(), input.settings());
+        Row instance = createOfKind(call, input.name(), input.serverId(), input.kind(), input.settings(), null);
         return goLive(call, instance, input.hostname(), input.https());
     }
 
@@ -199,9 +203,24 @@ final class PutOnlineHandlers {
      */
     private static @NonNull Integer putMachineOnline(@NonNull OperationCall<Void, PutOnline.Machine> call) {
         PutOnline.Machine input = Objects.requireNonNull(call.input(), "put online has its input");
-        Row instance = createOfKind(call, input.name(), input.serverId(), input.kind(), input.settings());
-        firstStart(call, instance.get(InstanceModel.ID), null, null);
-        return instance.get(InstanceModel.ID);
+        // An ISO is for a machine created EMPTY: any other origin boots its own image and would never reach the
+        // installer, so the pick is refused before anything exists.
+        String media = Texts.trimmedOrNull(input.installMedia());
+        if (media != null && ImageOrigin.of(input.settings() == null ? Map.of() : input.settings())
+                != ImageOrigin.INSTALL_MEDIA) {
+            throw refusedAs("app", Violations.ofField(InstanceOperations.INSTALL_MEDIA.getName(), media,
+                HohenheimMicrocopy.VIOLATIONS.of("install_media_needs_empty_vm")));
+        }
+        Row instance = createOfKind(call, input.name(), input.serverId(), input.kind(), input.settings(),
+            media == null ? null : placed -> new InstallMedia().requireOn(placed, media));
+        int instanceId = instance.get(InstanceModel.ID);
+        if (media != null) {
+            // Before the first start: an absent workload takes the device row alone, and the deploy creates the VM
+            // with the ISO in its drive, booted before the root disk.
+            new InstanceDevices().attachInstallMedia(instanceId, media);
+        }
+        firstStart(call, instanceId, null, null);
+        return instanceId;
     }
 
     /**
@@ -209,11 +228,12 @@ final class PutOnlineHandlers {
      * save meets every model hook (declarations, image policy, quota, capacity). The pipeline sealed each secret; the
      * record stores their text, so they are opened once here.
      *
+     * @param onPlaced what the host placement chose must also hold, asked before the record is saved; null for none
      * @return the saved record, attached as the run's subject
      */
     private static @NonNull Row createOfKind(@NonNull OperationCall<Void, ?> call, @Nullable String givenName,
                                              @Nullable Integer serverId, @Nullable String kindId,
-                                             @Nullable Map<String, Object> given) {
+                                             @Nullable Map<String, Object> given, @Nullable IntConsumer onPlaced) {
         InstanceKindHandler kind = Objects.requireNonNull(InstanceKinds.getHandler(kindId), "admitted kind");
         @SuppressWarnings("unchecked")
         Map<String, Object> settings = given == null ? new LinkedHashMap<>() : (Map<String, Object>) opened(given);
@@ -221,6 +241,9 @@ final class PutOnlineHandlers {
         try {
             int placed = InstancePlacement.forActor(call.access(), serverId, InstancePlacement.Workload.of(kind,
                 settings));
+            if (onPlaced != null) {
+                onPlaced.accept(placed);
+            }
             String name = Texts.trimmedOrNull(givenName);
             if (name == null) {
                 throw Violations.ofField(InstanceModel.NAME.getName(), givenName,

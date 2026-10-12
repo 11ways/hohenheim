@@ -1,6 +1,18 @@
 package be.elevenways.hohenheim.test.instance;
 
+import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
+import be.elevenways.zenit.cms.common.action.PanelAction;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
+import be.elevenways.hohenheim.server.cms.InstanceDevicesPage;
+import be.elevenways.hohenheim.server.cms.PutOnline;
+import be.elevenways.zenit.common.edit.EditContext;
+import be.elevenways.zenit.common.edit.FieldOption;
+import be.elevenways.zenit.common.edit.FormEntry;
+import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.Select;
+import be.elevenways.zenit.common.operation.Operation;
+import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.server.operation.OperationRequest;
 import be.elevenways.zenit.cms.server.panel.PartsForms;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.test.PanelEntryViews;
@@ -401,6 +413,99 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         assertThat(coerced)
             .as("the positive anchor: a disk submit coerces through the same spec")
             .containsEntry("type", InstanceDeviceModel.TYPE_DISK);
+    }
+
+    /**
+     * Install media from the record: the Devices tab's attach asks only which ISO, picked from the media on the
+     * record's own host (read through the production client lane), and the put-online wizard offers the same media
+     * for an empty VM.
+     */
+    @Test
+    void theRecordAttachesInstallMediaPickedFromItsHostsMedia() throws Exception {
+        try (FakeIncusSocket incus = FakeIncusSocket.start()) {
+            incus.daemon.customVolumes.put("debian.iso",
+                Map.of("name", "debian.iso", "content_type", "iso", "description", "Debian 13"));
+            incus.daemon.customVolumes.put("data", Map.of("name", "data", "content_type", "block"));
+            Row socketHost = Models.get(ServerModel.class).createEmptyRow();
+            socketHost.set(ServerModel.NAME, PREFIX + "socket-host");
+            socketHost.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
+            socketHost.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
+            socketHost.set(ServerModel.INCUS_URL, incus.url());
+            socketHost.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+            socketHost.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+            Models.get(ServerModel.class).save(socketHost);
+            HostFixtures.acknowledgePosture(socketHost);
+            Integer socketHostId = socketHost.get(ServerModel.ID);
+            try {
+                int instanceId = mediaCapableInstance("media-surf-attach");
+                Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
+                    .assign(InstanceModel.SERVER_ID, socketHostId).updateAll();
+                Row instance = Models.get(InstanceModel.class).findById(instanceId);
+
+                // 1. The Devices tab places the attach as an operation on the record itself.
+                Operation<Row, ?, ?> attach = new InstanceDevicesPage().actions().stream()
+                    .map(PanelAction::operation)
+                    .filter(operation -> operation.id().equals(Identifier.of("hohenheim", "attach_install_media")))
+                    .map(operation -> {
+                        @SuppressWarnings("unchecked")
+                        Operation<Row, ?, ?> typed = (Operation<Row, ?, ?>) operation;
+                        return typed;
+                    })
+                    .findFirst().orElse(null);
+                assertThat(attach).as("step 1: the Devices tab places attach-install-media").isNotNull();
+
+                // 2. Its form asks only which ISO: no instance id (it is the record), no size (it is a CD), and the
+                //    choice is the ISO volumes of the record's host, never a block volume or free text.
+                FormSpec form = OperationPipeline.inputForm(attachRequest(attach, instance));
+                assertThat(form.entries()).as("step 2: one entry, the medium")
+                    .extracting(FormEntry::name).containsExactly("installMedia");
+                assertThat(((Select<?>) form.entries().get(0)).options()
+                        .resolve(EditContext.of(TenantConduits.operator())).stream()
+                        .map(option -> (Object) option.value()).toList())
+                    .as("step 2: picked from the host's ISO volumes").containsExactly("debian.iso");
+
+                // 3. Attaching it puts that ISO in the record's drive.
+                OperationPipeline.invoke(attachRequest(attach, instance).form(Map.of("installMedia", "debian.iso")));
+                assertThat(deviceRows(instanceId)).as("step 3: one cdrom row naming the medium").singleElement()
+                    .satisfies(row -> {
+                        assertThat((String) row.get(InstanceDeviceModel.TYPE)).isEqualTo(InstanceDeviceModel.TYPE_CDROM);
+                        assertThat((String) row.get(InstanceDeviceModel.SOURCE_MEDIA)).isEqualTo("debian.iso");
+                    });
+                assertThat(DAEMON.get(handleOf(instanceId)).cdroms).as("step 3: and the daemon holds it")
+                    .containsValue("debian.iso");
+
+                // 4. A medium the host does not hold is refused by the pick, and nothing more is attached.
+                assertThat(catchThrowable(() -> OperationPipeline.invoke(attachRequest(attach, instance)
+                        .form(Map.of("installMedia", "elsewhere.iso")))))
+                    .as("step 4: an ISO that is not on the host is refused").isInstanceOf(Violations.class);
+                assertThat(deviceRows(instanceId)).as("step 4: still one device").hasSize(1);
+
+                // 5. The put-online machine wizard offers the same media, so an empty VM is created with its ISO.
+                FormSpec machine = OperationPipeline.inputForm(OperationRequest.of(PutOnline.PUT_MACHINE_ONLINE,
+                    CmsPlacementSurface.ADMIN_ACTION).caller(TenantConduits.operator()));
+                FormEntry media = machine.entries().stream().filter(entry -> entry.name().equals("installMedia"))
+                    .findFirst().orElse(null);
+                assertThat(media).as("step 5: the machine wizard asks for install media").isInstanceOf(Select.class);
+                assertThat(((Select<?>) media).options().resolve(EditContext.of(TenantConduits.operator())))
+                    .as("step 5: offering the ISO on the host that holds it").anySatisfy(option -> {
+                        assertThat(option.value()).isEqualTo("debian.iso");
+                        assertThat(option.group()).isEqualTo(PREFIX + "socket-host");
+                    });
+            } finally {
+                // The derived device name carries no PREFIX, so its row goes here; the instance goes back to the
+                // class host, whose cleanup removes it, and the socket host leaves empty.
+                Models.get(InstanceDeviceModel.class).find().where(InstanceDeviceModel.SOURCE_MEDIA.eq("debian.iso"))
+                    .all().forEach(row -> Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID)));
+                Models.get(InstanceModel.class).find().where(InstanceModel.SERVER_ID.eq(socketHostId))
+                    .assign(InstanceModel.SERVER_ID, hostId).updateAll();
+                Models.get(ServerModel.class).delete(socketHostId);
+            }
+        }
+    }
+
+    private static OperationRequest<Row, ?, ?> attachRequest(Operation<Row, ?, ?> attach, Row instance) {
+        return OperationRequest.of(attach, CmsPlacementSurface.ADMIN_ACTION).caller(TenantConduits.operator())
+            .subjects(List.of(instance));
     }
 
     // -- capture --------------------------------------------------------------

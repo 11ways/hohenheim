@@ -1,12 +1,14 @@
 {#- Devices tab on an instance: its attached disks and extra NICs, linking into the
-    (nav-hidden) device resource forms. -#}
+    (nav-hidden) device resource forms, and the install-media attach drawn in place. -#}
 {% declare title: String %}
 {% declare instanceId: Integer %}
 {% declare instanceName: String %}
 {% declare devices: List %}
 {% declare addDiskTarget: RouteTarget = null %}
 {% declare addNicTarget: RouteTarget = null %}
-{% declare addMediaTarget: RouteTarget = null %}
+{% declare mediaForm: PageFormState = null %}
+{% declare mediaHostTarget: RouteTarget = null %}
+{% declare mediaHostLabel: String = "" %}
 {% declare canEdit: Boolean = true %}
 {% declare head: RecordHeadState = null %}
 {% extend "zenitcms:shell" var:title=title %}
@@ -19,10 +21,14 @@
         <pl-button variant="primary" use:Zenit.route={% addDiskTarget %} id="add-disk-link">{{ t("add_disk", scope: "instance_device") }}</pl-button>
         <pl-button use:Zenit.route={% addNicTarget %} id="add-nic-link">{{ t("add_nic", scope: "instance_device") }}</pl-button>
         {% /if %}
-        {% if addMediaTarget %}
-        <pl-button use:Zenit.route={% addMediaTarget %} id="add-media-link">{{ t("add_media", scope: "instance_device") }}</pl-button>
-        {% /if %}
     </div>
+
+    {% if mediaForm != null %}
+    <div id="attach-media">
+        {% render "zenitcms:form/page-action" var:page=mediaForm %}
+        {% if mediaHostTarget %}<a use:Zenit.route={% mediaHostTarget %} id="media-host-link">{{ mediaHostLabel }}</a>{% /if %}
+    </div>
+    {% /if %}
 
     {% if devices %}
     <pl-table>

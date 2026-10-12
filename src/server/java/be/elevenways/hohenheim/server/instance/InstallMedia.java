@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.DeviceType;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -11,6 +12,8 @@ import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.edit.FieldOption;
 import be.elevenways.protoblast.common.async.ProgressSink;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -111,6 +114,68 @@ public final class InstallMedia {
         }
         media.sort((a, b) -> a.name().compareTo(b.name()));
         return media;
+    }
+
+    /**
+     * One host's ISO volumes as a pick's options, the volume's description beside its name.
+     *
+     * @return empty for a host that is gone, not Incus, holds no ISO or cannot be read right now (its Install media
+     *         tab names why)
+     */
+    public @NonNull List<FieldOption<String>> optionsOn(@Nullable Integer serverId) {
+        Row server = serverId == null ? null : Models.get(ServerModel.class).findById(serverId);
+        if (server == null || !ServerModel.isIncus(server)) {
+            return List.of();
+        }
+        try {
+            return options(this.listFor(server), null);
+        } catch (IOException unreadable) {
+            return List.of();
+        }
+    }
+
+    /**
+     * Every Incus host's ISO volumes, grouped by host name: the pick of a create that has not been placed yet, so the
+     * operator sees which host holds which ISO. A host that cannot be read offers nothing.
+     */
+    public @NonNull List<FieldOption<String>> optionsEverywhere() {
+        List<FieldOption<String>> options = new ArrayList<>();
+        for (Row server : Models.get(ServerModel.class).find().all()) {
+            if (!ServerModel.isIncus(server)) {
+                continue;
+            }
+            try {
+                options.addAll(options(this.listFor(server), String.valueOf((Object) server.get(ServerModel.NAME))));
+            } catch (IOException unreadable) {
+                Blast.log("INSTALL_MEDIA: media of", server.get(ServerModel.NAME), "unreadable:",
+                    unreadable.getMessage());
+            }
+        }
+        return options;
+    }
+
+    /**
+     * Refuse install media the host does not hold, by name.
+     *
+     * @throws Violations {@code install_media_not_on_host}
+     */
+    public void requireOn(int serverId, @NonNull String name) {
+        boolean held = this.optionsOn(serverId).stream().anyMatch(option -> name.equals(option.value()));
+        if (!held) {
+            throw Violations.ofField(InstanceOperations.INSTALL_MEDIA.getName(), name,
+                HohenheimMicrocopy.VIOLATIONS.of("install_media_not_on_host").withArg("media", name)
+                    .withArg("host", ServerModel.labelOf(serverId)));
+        }
+    }
+
+    private static @NonNull List<FieldOption<String>> options(@NonNull List<Medium> media, @Nullable String host) {
+        List<FieldOption<String>> options = new ArrayList<>();
+        for (Medium medium : media) {
+            FieldOption<String> option = FieldOption.of(medium.name(), Microcopy.literal(medium.name()))
+                .withDescription(medium.description() == null ? null : Microcopy.literal(medium.description()));
+            options.add(host == null ? option : option.inGroup(host));
+        }
+        return options;
     }
 
     /**

@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
+import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.server.instance.InstallMedia;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -180,16 +182,28 @@ public final class PutOnline {
             .summarizedBy(PutOnline::workloadSummary))
         .build();
 
-    /** A machine's input: where it runs, then its kind's own settings; no address, so no HTTPS either. */
+    /**
+     * A machine's input: where it runs, then its kind's own settings and, for an empty VM, the ISO it installs from;
+     * no address, so no HTTPS either.
+     *
+     * AIDEV-NOTE: the ISO entry carries no showWhen on the image origin: the handler's kind-narrowed host pick replaces
+     * entries through InstanceTemplateHandlers.replacing, which carries no conditions. Its help says when it applies
+     * and the handler refuses an ISO for any other origin by name.
+     */
     private static final FormSpec MACHINE_INPUT = FormSpec.builder()
         .add(InstanceModel.NAME)
         .add(declaredHostPick())
         .add(InstanceModel.KIND)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
+        .add(Select.of(InstanceOperations.INSTALL_MEDIA)
+            .options(OptionSource.dynamic(context -> new InstallMedia().optionsEverywhere()))
+            .help(record -> HohenheimMicrocopy.INSTANCE_DEVICE.of("install_media_wizard_help"))
+            .build())
         .step(FormStep.of("where", STEP_WHERE, InstanceModel.NAME.getName(),
             InstanceTemplateOperations.SERVER_ID.getName(), InstanceModel.KIND.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_machine_where_lead")))
-        .step(FormStep.of("settings", STEP_OPTIONS, InstanceModel.SETTINGS.getName())
+        .step(FormStep.of("settings", STEP_OPTIONS, InstanceModel.SETTINGS.getName(),
+                InstanceOperations.INSTALL_MEDIA.getName())
             .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_machine_settings_lead"))
             .summarizedBy(PutOnline::machineSummary))
         .build();
@@ -216,9 +230,9 @@ public final class PutOnline {
                            @Nullable String kind, @Nullable Map<String, Object> settings, @Nullable String https) {
     }
 
-    /** A machine of one kind: its name, host (null: placement picks) and settings. */
+    /** A machine of one kind: its name, host (null: placement picks), settings and, for an empty VM, its ISO. */
     public record Machine(@Nullable String name, @Nullable Integer serverId, @Nullable String kind,
-                          @Nullable Map<String, Object> settings) {
+                          @Nullable Map<String, Object> settings, @Nullable String installMedia) {
     }
 
     /** Puts one template online: the app, its address, its certificate, then the first deploy. */
@@ -289,7 +303,8 @@ public final class PutOnline {
             .gate(OperationGate.open())
             .input(OperationInput.of(MACHINE_INPUT, Machine.class, values -> new Machine(
                 values.get(InstanceModel.NAME), values.get(InstanceTemplateOperations.SERVER_ID),
-                values.get(InstanceModel.KIND), RawValues.mapOrNull(values.get(InstanceModel.SETTINGS.getName())))))
+                values.get(InstanceModel.KIND), RawValues.mapOrNull(values.get(InstanceModel.SETTINGS.getName())),
+                values.get(InstanceOperations.INSTALL_MEDIA))))
             .result(Integer.class)
             .rateLimit(HohenheimEndpoints.INSTANCE_CREATE_LIMIT)
             .facts(OperationFact.REACHES_OUTSIDE)
