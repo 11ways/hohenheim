@@ -49,14 +49,16 @@ import java.util.Map;
  * "Put something online": one flow that creates an app, its address and its certificate, as background operations
  * behind one wizard page ({@link PutOnlinePage}).
  *
- * AIDEV-NOTE: three operations because the input differs by WHAT is put online. A template's form is that template's
+ * AIDEV-NOTE: four operations because the input differs by WHAT is put online. A template's form is that template's
  * own variables, resolved per selected template (the subject), so {@link #PUT_ONLINE} takes the template as its
  * subject, exactly as the create-from-template lane does. An address that needs no workload (a redirect, an existing
  * service, static files, TLS passthrough) has no subject; {@link #PUT_ADDRESS_ONLINE} asks the site form's upstream
  * kind and settings. A workload of a kind that serves a website (a Git app, a container image) has no subject either;
- * {@link #PUT_WORKLOAD_ONLINE} asks that kind's own settings, the instance form's. All end in the same Website and
- * Certificate steps (PutOnlineHandlers), so the going-live half is one implementation. All run in the background:
- * their run page is the "Going live" step.
+ * {@link #PUT_WORKLOAD_ONLINE} asks that kind's own settings, the instance form's. A machine of a kind that serves no
+ * website (a virtual machine, a Linux container) is {@link #PUT_MACHINE_ONLINE}: the same kind's own settings, without
+ * the address and HTTPS steps. The workload ones end in the same Website and Certificate steps (PutOnlineHandlers),
+ * so the going-live half is one implementation, and every run starts what it made the same way. All run in the
+ * background: their run page is the "Going live" step.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -116,6 +118,12 @@ public final class PutOnline {
         OperationSteps.step("live", HohenheimMicrocopy.PUT_ONLINE.of("run_live")))
         .inJourney(List.of(STEP_WHAT, STEP_WHERE, STEP_OPTIONS, STEP_HTTPS), STEP_LIVE);
 
+    /** The run's steps for a machine: the app, then its first start. */
+    private static final OperationSteps MACHINE_STEPS = OperationSteps.of(
+        OperationSteps.step("app", HohenheimMicrocopy.PUT_ONLINE.of("run_app")),
+        OperationSteps.step("live", HohenheimMicrocopy.PUT_ONLINE.of("run_live")))
+        .inJourney(List.of(STEP_WHAT, STEP_WHERE, STEP_OPTIONS), STEP_LIVE);
+
     private static final FormSpec TEMPLATE_INPUT = FormSpec.builder()
         .add(InstanceTemplateOperations.NAME)
         .add(HOSTNAME)
@@ -158,9 +166,7 @@ public final class PutOnline {
     private static final FormSpec WORKLOAD_INPUT = FormSpec.builder()
         .add(InstanceModel.NAME)
         .add(HOSTNAME)
-        .add(Select.of(InstanceTemplateOperations.SERVER_ID)
-            .options(OptionSource.dynamic(context -> InstanceTemplateHandlers.hostOptions()))
-            .build())
+        .add(declaredHostPick())
         .add(InstanceModel.KIND)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
         .add(httpsChoice())
@@ -172,6 +178,20 @@ public final class PutOnline {
         .step(FormStep.of("https", STEP_HTTPS, HTTPS.getName())
             .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_https_lead"))
             .summarizedBy(PutOnline::workloadSummary))
+        .build();
+
+    /** A machine's input: where it runs, then its kind's own settings; no address, so no HTTPS either. */
+    private static final FormSpec MACHINE_INPUT = FormSpec.builder()
+        .add(InstanceModel.NAME)
+        .add(declaredHostPick())
+        .add(InstanceModel.KIND)
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
+        .step(FormStep.of("where", STEP_WHERE, InstanceModel.NAME.getName(),
+            InstanceTemplateOperations.SERVER_ID.getName(), InstanceModel.KIND.getName())
+                .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_machine_where_lead")))
+        .step(FormStep.of("settings", STEP_OPTIONS, InstanceModel.SETTINGS.getName())
+            .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_machine_settings_lead"))
+            .summarizedBy(PutOnline::machineSummary))
         .build();
 
     /** The template's own create (named as its form names it), its address and its HTTPS choice. */
@@ -194,6 +214,11 @@ public final class PutOnline {
     /** A workload of one kind: its name, host (null: placement picks), settings, address and HTTPS choice. */
     public record Workload(@Nullable String name, @Nullable String hostname, @Nullable Integer serverId,
                            @Nullable String kind, @Nullable Map<String, Object> settings, @Nullable String https) {
+    }
+
+    /** A machine of one kind: its name, host (null: placement picks) and settings. */
+    public record Machine(@Nullable String name, @Nullable Integer serverId, @Nullable String kind,
+                          @Nullable Map<String, Object> settings) {
     }
 
     /** Puts one template online: the app, its address, its certificate, then the first deploy. */
@@ -253,6 +278,24 @@ public final class PutOnline {
             .background(WORKLOAD_STEPS)
             .register();
 
+    /** Puts one machine online from its kind's own settings: the machine, then its first start. */
+    public static final Operation<Void, Machine, Integer> PUT_MACHINE_ONLINE =
+        Operation.declare(HohenheimIds.id("put_machine_online"))
+            .label(HohenheimMicrocopy.PUT_ONLINE.of("put_online"))
+            .happened(HohenheimMicrocopy.PUT_ONLINE.of("happened"))
+            .icon(Icon.of("rocket"))
+            .noSubject()
+            .gate(OperationGate.open())
+            .input(OperationInput.of(MACHINE_INPUT, Machine.class, values -> new Machine(
+                values.get(InstanceModel.NAME), values.get(InstanceTemplateOperations.SERVER_ID),
+                values.get(InstanceModel.KIND), RawValues.mapOrNull(values.get(InstanceModel.SETTINGS.getName())))))
+            .result(Integer.class)
+            .rateLimit(HohenheimEndpoints.INSTANCE_CREATE_LIMIT)
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .command(CmsCommands.EXTERNAL)
+            .background(MACHINE_STEPS)
+            .register();
+
     private PutOnline() {
     }
 
@@ -268,10 +311,16 @@ public final class PutOnline {
         return info != null && info.offeredAsApp();
     }
 
-    /** @return whether a workload of the kind with this stored id is put online from its own settings */
+    /** @return whether a workload of the kind with this stored id is put online from its own settings and address */
     static boolean offeredAsWorkload(@Nullable String kind) {
         InstanceKindHandler handler = InstanceKinds.getHandler(kind);
         return handler != null && handler.putOnlineGroup() != null && handler.supportsSiteUpstream();
+    }
+
+    /** @return whether a machine of the kind with this stored id is put online from its own settings, without one */
+    static boolean offeredAsMachine(@Nullable String kind) {
+        InstanceKindHandler handler = InstanceKinds.getHandler(kind);
+        return handler != null && handler.putOnlineGroup() != null && !handler.supportsSiteUpstream();
     }
 
     /** What a template's HTTPS step shows of Where and Options in its summary. */
@@ -304,6 +353,21 @@ public final class PutOnline {
         InstanceKindHandler handler = InstanceKinds.getHandler(answers.text(InstanceModel.KIND.getName()));
         return servedSummary(handler == null ? null : handler.getLabel(), answers.text(InstanceModel.NAME.getName()),
             answers.text(HOSTNAME.getName()), runsOnLine(answers));
+    }
+
+    /** What a machine's settings step shows of Where: its kind, its name and where it runs. */
+    private static @NonNull List<SummaryLine> machineSummary(@NonNull StepAnswers answers) {
+        List<SummaryLine> lines = new ArrayList<>();
+        InstanceKindHandler handler = InstanceKinds.getHandler(answers.text(InstanceModel.KIND.getName()));
+        if (handler != null) {
+            lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_serves"), handler.getLabel()));
+        }
+        String name = answers.text(InstanceModel.NAME.getName());
+        if (name != null) {
+            lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_name"), Microcopy.literal(name)));
+        }
+        lines.add(runsOnLine(answers));
+        return lines;
     }
 
     /** What it serves, its name, its address, where it runs when that is asked, then where the address points. */
@@ -360,6 +424,17 @@ public final class PutOnline {
     private static @NonNull String serverName(int serverId) {
         Row server = Models.get(ServerModel.class).findById(serverId);
         return server == null ? "#" + serverId : String.valueOf((Object) server.get(ServerModel.NAME));
+    }
+
+    /**
+     * The host pick both kind-led inputs declare: every host, placement judging the choice. The machine input's handler
+     * replaces it per request with the kind-narrowed pick ({@link InstanceParts#hostPick}), built once the kind registry
+     * is complete, so a machine is only offered the hosts that can run its kind.
+     */
+    private static @NonNull Select<Integer> declaredHostPick() {
+        return Select.of(InstanceTemplateOperations.SERVER_ID)
+            .options(OptionSource.dynamic(context -> InstanceTemplateHandlers.hostOptions()))
+            .build();
     }
 
     private static @NonNull Select<String> httpsChoice() {

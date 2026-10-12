@@ -293,17 +293,12 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
     void aGitAppGoesOnlineFromItsOwnSettings() throws Exception {
         AccessContext operator = TenantConduits.operator();
 
-        // 1. The operator's Application card opens the wizard, not the instance create form; a virtual machine,
-        //    which serves no website, still opens the create form.
+        // 1. The operator's Application card opens the wizard, not the instance create form.
         HttpResponse<String> picked = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE
             + "?choice=instance:hohenheim:application");
         assertThat(picked.headers().firstValue("location").orElse(""))
             .as("step 1: the Application card opens the put-online wizard")
             .contains(HohenheimSlugs.PUT_ONLINE).contains("workload=hohenheim%3Aapplication");
-        assertThat(adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?choice=instance:hohenheim:vm")
-                .headers().firstValue("location").orElse(""))
-            .as("step 1: a virtual machine still opens the create form")
-            .contains(HohenheimSlugs.INSTANCES).contains("kind=hohenheim%3Avm");
 
         // 2. The wizard asks where, the app's own settings, then HTTPS; the kind rides along, never asked again.
         String wizard = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?workload=hohenheim:application").body();
@@ -359,6 +354,70 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
                 .caller(operator).form(form)));
         assertThat(noWebsite).as("step 4: a virtual machine is refused in the request").isNotNull();
         assertThat(noWebsite.field()).as("step 4: on the kind").isEqualTo(InstanceModel.KIND.getName());
+    }
+
+    /**
+     * A virtual machine, which serves no website, goes online through the same wizard from its own settings: where it
+     * runs (only a host that can run one), what it boots and how big it is, then one run that makes it and starts it.
+     */
+    @Test
+    void aVirtualMachineGoesOnlineFromItsOwnSettingsWithoutAnAddress() throws Exception {
+        AccessContext operator = TenantConduits.operator();
+
+        // 1. The operator's Virtual machine card opens the put-online wizard, not the instance create form.
+        assertThat(adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?choice=instance:hohenheim:vm")
+                .headers().firstValue("location").orElse(""))
+            .as("step 1: the Virtual machine card opens the put-online wizard")
+            .contains(HohenheimSlugs.PUT_ONLINE).contains("workload=hohenheim%3Avm");
+
+        // 2. The wizard asks where and the machine's own settings (cloud-init included); an address and HTTPS, which a
+        //    machine serving no website has no use for, are not asked.
+        String wizard = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?workload=hohenheim:vm").body();
+        assertThat(wizard).as("step 2: where and settings")
+            .contains("data-zf-step=\"where\"").contains("data-zf-step=\"settings\"");
+        assertThat(wizard).as("step 2: no HTTPS step and no address").doesNotContain("data-zf-step=\"https\"")
+            .doesNotContain("name=\"" + PutOnline.HOSTNAME.getName() + "\"");
+        assertThat(wizard).as("step 2: the kind is transport")
+            .contains("type=\"hidden\" name=\"kind\" value=\"hohenheim:vm\"");
+        assertThat(wizard).as("step 2: the settings step asks its cloud-init user-data").contains("cloud_init");
+
+        // 3. The host pick is the kind's: a host that cannot run a virtual machine is refused on the host field.
+        Map<String, Object> form = new LinkedHashMap<>();
+        form.put(InstanceModel.NAME.getName(), PREFIX + "vm");
+        form.put(InstanceModel.KIND.getName(), "hohenheim:vm");
+        form.put("serverId", ServerModel.localServerId());
+        form.put(InstanceModel.SETTINGS.getName(), Map.of("image", "images:alpine/3.22/cloud"));
+        Throwable wrongHost = catchThrowableOfType(Violations.class, () -> OperationPipeline.invoke(
+            OperationRequest.of(PutOnline.PUT_MACHINE_ONLINE, CmsPlacementSurface.ADMIN_ACTION)
+                .caller(operator).form(form)));
+        assertThat(wrongHost).as("step 3: the local Docker host is refused").isNotNull();
+        assertThat(((Violations) wrongHost).all().stream().map(Violation::fieldName).toList())
+            .as("step 3: on the host field").contains("serverId");
+
+        // 4. On the Incus host one run makes the machine and starts it: no website and no certificate step.
+        form.put("serverId", hostId);
+        OperationRun run = ended(runOf(OperationPipeline.invoke(OperationRequest.of(PutOnline.PUT_MACHINE_ONLINE,
+                CmsPlacementSurface.ADMIN_ACTION).caller(operator).form(form))), operator, "step 4");
+        assertThat(Objects.requireNonNull(run.steps()).journeyBefore())
+            .as("step 4: the run ends the journey the wizard walked: what, where, settings").hasSize(3);
+        Row vm = Models.get(InstanceModel.class).find().where(InstanceModel.NAME.eq(PREFIX + "vm")).first();
+        assertThat(vm).as("step 4: the machine exists (%s)", run.outcome()).isNotNull();
+        assertThat(String.valueOf((Object) vm.get(InstanceModel.KIND))).as("step 4: as a virtual machine")
+            .isEqualTo("hohenheim:vm");
+        assertThat((Object) vm.get(InstanceModel.SERVER_ID)).as("step 4: on the host given").isEqualTo(hostId);
+        assertThat(Models.get(SiteModel.class).find().where(SiteModel.INSTANCE_ID.eq(vm.get(InstanceModel.ID)))
+            .first()).as("step 4: and no website").isNull();
+
+        // 5. A kind that serves a website is not put online as a machine: refused on the kind, before a run.
+        form.put(InstanceModel.NAME.getName(), PREFIX + "not-a-machine");
+        form.put(InstanceModel.KIND.getName(), "hohenheim:docker_container");
+        form.put("serverId", ServerModel.localServerId());
+        form.put(InstanceModel.SETTINGS.getName(), Map.of("image", "alpine"));
+        DomainRefusal notAMachine = catchThrowableOfType(DomainRefusal.class, () -> OperationPipeline.invoke(
+            OperationRequest.of(PutOnline.PUT_MACHINE_ONLINE, CmsPlacementSurface.ADMIN_ACTION)
+                .caller(operator).form(form)));
+        assertThat(notAMachine).as("step 5: an application is refused in the request").isNotNull();
+        assertThat(notAMachine.field()).as("step 5: on the kind").isEqualTo(InstanceModel.KIND.getName());
     }
 
     /** @return the run a background answer names */

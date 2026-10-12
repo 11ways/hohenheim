@@ -206,14 +206,22 @@ public final class InstanceTemplateHandlers {
             .build());
         replaced.put(InstanceTemplateOperations.PROJECT_ID.getName(), Select.of(InstanceTemplateOperations.PROJECT_ID)
             .options(OptionSource.of(access == null ? List.of() : projects(access))).build());
+        Map<String, Object> secrets = templates.secretDefaults(templateId);
+        return InputScope.of(replacing(declared, replaced)).withServerDefaults(secrets.isEmpty() ? Map.of()
+            : Map.of(InstanceTemplateOperations.VARIABLES, secrets));
+    }
+
+    /**
+     * @return {@code declared} with each entry named in {@code replaced} swapped for its replacement and its steps kept;
+     *         its tabs, groups, sections and conditions are not carried, so only a form declaring none is replaced
+     */
+    public static @NonNull FormSpec replacing(@NonNull FormSpec declared, @NonNull Map<String, FormEntry> replaced) {
         FormSpec.Builder form = FormSpec.builder();
         for (FormEntry entry : declared.entries()) {
             form.add(replaced.getOrDefault(entry.name(), entry));
         }
         declared.steps().forEach(form::step);
-        Map<String, Object> secrets = templates.secretDefaults(templateId);
-        return InputScope.of(form.build()).withServerDefaults(secrets.isEmpty() ? Map.of()
-            : Map.of(InstanceTemplateOperations.VARIABLES, secrets));
+        return form.build();
     }
 
     /**

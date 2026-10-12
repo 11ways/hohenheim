@@ -2,6 +2,9 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
+import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.server.operation.InputScope;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -70,6 +73,10 @@ final class PutOnlineHandlers {
         OperationHandlers.attach(PutOnline.PUT_WORKLOAD_ONLINE)
             .authorize(PutOnlineHandlers::admitWorkload)
             .handle(PutOnlineHandlers::putWorkloadOnline);
+        OperationHandlers.attach(PutOnline.PUT_MACHINE_ONLINE)
+            .inputScope(PutOnlineHandlers::kindHosts)
+            .authorize(PutOnlineHandlers::admitMachine)
+            .handle(PutOnlineHandlers::putMachineOnline);
     }
 
     private PutOnlineHandlers() {
@@ -114,14 +121,36 @@ final class PutOnlineHandlers {
     /** In the request, before a run is recorded: an operator, and a kind that is put online from its own settings. */
     private static @Nullable DomainRefusal admitWorkload(@Nullable Void none, PutOnline.@Nullable Workload input,
                                                          @NonNull AccessContext access) {
+        return admitKind(access, input == null ? null : input.kind(), input != null
+            && !PutOnline.offeredAsWorkload(input.kind()));
+    }
+
+    /** In the request, before a run is recorded: an operator, and a kind that is put online as a machine. */
+    private static @Nullable DomainRefusal admitMachine(@Nullable Void none, PutOnline.@Nullable Machine input,
+                                                        @NonNull AccessContext access) {
+        return admitKind(access, input == null ? null : input.kind(), input != null
+            && !PutOnline.offeredAsMachine(input.kind()));
+    }
+
+    /** An operator's, and refused on the kind when this flow does not put that kind online. */
+    private static @Nullable DomainRefusal admitKind(@NonNull AccessContext access, @Nullable String kind,
+                                                     boolean notThisFlow) {
         if (!HohenheimAccess.isAdmin(access)) {
             return new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "a workload without a template is an operator's");
         }
-        if (input != null && !PutOnline.offeredAsWorkload(input.kind())) {
-            return new DomainRefusal(ZenitRefusalReason.INVALID, "kind " + input.kind() + " is no workload of its own",
+        if (notThisFlow) {
+            return new DomainRefusal(ZenitRefusalReason.INVALID, "kind " + kind + " is not put online this way",
                 InstanceModel.KIND.getName(), message("kind_not_a_workload"));
         }
         return null;
+    }
+
+    /** A kind-led input with its host pick narrowed to the hosts that can run the chosen kind. */
+    private static @NonNull InputScope kindHosts(@Nullable Void none, @NonNull FormSpec declared,
+                                                 @Nullable AccessContext access) {
+        return InputScope.of(InstanceTemplateHandlers.replacing(declared, Map.of(
+            InstanceTemplateOperations.SERVER_ID.getName(),
+            InstanceParts.hostPick(InstanceTemplateOperations.SERVER_ID))));
     }
 
     /**
@@ -159,34 +188,55 @@ final class PutOnlineHandlers {
      */
     private static @NonNull Integer putWorkloadOnline(@NonNull OperationCall<Void, PutOnline.Workload> call) {
         PutOnline.Workload input = Objects.requireNonNull(call.input(), "put online has its input");
+        Row instance = createOfKind(call, input.name(), input.serverId(), input.kind(), input.settings());
+        return goLive(call, instance, input.hostname(), input.https());
+    }
 
-        // 1. The app, as the template funnel writes one: placement chooses the host from the kind and its settings,
-        //    and the save meets every model hook (declarations, image policy, quota, capacity). The pipeline sealed
-        //    each secret; the record stores their text, so they are opened once here.
-        InstanceKindHandler kind = Objects.requireNonNull(InstanceKinds.getHandler(input.kind()), "admitted kind");
+    /**
+     * App, live.
+     *
+     * @return the new instance's id
+     */
+    private static @NonNull Integer putMachineOnline(@NonNull OperationCall<Void, PutOnline.Machine> call) {
+        PutOnline.Machine input = Objects.requireNonNull(call.input(), "put online has its input");
+        Row instance = createOfKind(call, input.name(), input.serverId(), input.kind(), input.settings());
+        firstStart(call, instance.get(InstanceModel.ID), null, null);
+        return instance.get(InstanceModel.ID);
+    }
+
+    /**
+     * The app, as the template funnel writes one: placement chooses the host from the kind and its settings, and the
+     * save meets every model hook (declarations, image policy, quota, capacity). The pipeline sealed each secret; the
+     * record stores their text, so they are opened once here.
+     *
+     * @return the saved record, attached as the run's subject
+     */
+    private static @NonNull Row createOfKind(@NonNull OperationCall<Void, ?> call, @Nullable String givenName,
+                                             @Nullable Integer serverId, @Nullable String kindId,
+                                             @Nullable Map<String, Object> given) {
+        InstanceKindHandler kind = Objects.requireNonNull(InstanceKinds.getHandler(kindId), "admitted kind");
         @SuppressWarnings("unchecked")
-        Map<String, Object> settings = input.settings() == null ? new LinkedHashMap<>()
-            : (Map<String, Object>) opened(input.settings());
+        Map<String, Object> settings = given == null ? new LinkedHashMap<>() : (Map<String, Object>) opened(given);
         Row instance = Models.get(InstanceModel.class).createEmptyRow();
         try {
-            int serverId = InstancePlacement.forActor(call.access(), input.serverId(),
-                InstancePlacement.Workload.of(kind, settings));
-            String name = Texts.trimmedOrNull(input.name());
+            int placed = InstancePlacement.forActor(call.access(), serverId, InstancePlacement.Workload.of(kind,
+                settings));
+            String name = Texts.trimmedOrNull(givenName);
             if (name == null) {
-                throw Violations.ofField(InstanceModel.NAME.getName(), input.name(),
+                throw Violations.ofField(InstanceModel.NAME.getName(), givenName,
                     HohenheimMicrocopy.VIOLATIONS.of("name_required"));
             }
             instance.set(InstanceModel.NAME, name);
-            instance.set(InstanceModel.KIND, input.kind());
+            instance.set(InstanceModel.KIND, kindId);
             instance.set(InstanceModel.SETTINGS, settings);
-            instance.set(InstanceModel.SERVER_ID, serverId);
+            instance.set(InstanceModel.SERVER_ID, placed);
             Models.get(InstanceModel.class).save(instance);
         } catch (Violations refused) {
             throw refusedAs("app", refused);
         }
         call.attachSubject(InstanceOperations.INSTANCE, instance);
         call.progress().reportProgressPart();
-        return goLive(call, instance, input.hostname(), input.https());
+        return instance;
     }
 
     /**
@@ -211,19 +261,25 @@ final class PutOnlineHandlers {
             call.reportStepSkipped();
             call.reportStepSkipped();
         }
+        firstStart(call, instanceId, note, hostname);
+        return instanceId;
+    }
 
-        // The first start. A refusal (no admitted host, databases still provisioning) leaves the app for its page.
+    /**
+     * The first start, as the run's last step. A refusal (no admitted host, databases still provisioning) leaves the
+     * app for its page; an order that went out still waits for its certificate, so {@code note} says what follows.
+     */
+    private static void firstStart(@NonNull OperationCall<?, ?> call, int instanceId, @Nullable Microcopy note,
+                                   @Nullable String hostname) {
         try {
             new InstanceService().deploy(instanceId, DeployTrigger.MANUAL);
-            // An order that went out still waits for its certificate: the outcome says what happens next.
             call.reportOutcome(note != null ? note : message(hostname == null ? "running" : "live")
                 .withArg("address", hostname == null ? "" : hostname));
         } catch (Violations | DomainRefusal notStarted) {
             Blast.log("PUT_ONLINE: first deploy of", instanceId, "did not start:", notStarted.getMessage());
             call.reportOutcome(message("not_started"));
         }
-        progress.reportProgressPart();
-        return instanceId;
+        call.progress().reportProgressPart();
     }
 
     /**

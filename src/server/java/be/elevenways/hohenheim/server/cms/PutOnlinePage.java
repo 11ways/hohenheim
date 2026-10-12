@@ -47,10 +47,11 @@ import java.util.Map;
  *
  * AIDEV-NOTE: the chooser is the step "What". A template opens {@link PutOnline#PUT_ONLINE} over that template
  * ({@code ?template=}); an address kind opens {@link PutOnline#PUT_ADDRESS_ONLINE} with the kind preset
- * ({@code ?kind=}); for an operator, an instance kind that serves a website (a Git app, a container image) opens
- * {@link PutOnline#PUT_WORKLOAD_ONLINE} with the kind preset ({@code ?workload=}). All are the framework's stepped PAGE
- * document, and all run in the background, so a submit lands on the run page ("Going live"). The other kinds (a
- * Linux container, a virtual machine) and every kind for a tenant still open the instance create form.
+ * ({@code ?kind=}); for an operator, an instance kind opens the flow its declarations put it online by
+ * ({@code ?workload=}, the kind preset): {@link PutOnline#PUT_WORKLOAD_ONLINE} for one that serves a website (a Git
+ * app, a container image), {@link PutOnline#PUT_MACHINE_ONLINE} for one that does not (a virtual machine, a Linux
+ * container). All are the framework's stepped PAGE document, and all run in the background, so a submit lands on the
+ * run page ("Going live"). Every kind for a tenant still opens the instance create form.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -90,6 +91,15 @@ public final class PutOnlinePage extends PanelPage {
         .transport(InstanceModel.KIND.getName())
         .build();
 
+    /** A machine of one kind, put online from that kind's own settings, with no address to give. */
+    public static final PanelAction<Object> MACHINE = PanelAction.<Object, Integer>places(
+            PutOnline.PUT_MACHINE_ONLINE, ActionPlacement.PAGE,
+            (request, result) -> CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
+                HohenheimSlugs.INSTANCES, result.value(), RecordOverview.SLUG).toUrl())))
+        .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
+        .transport(InstanceModel.KIND.getName())
+        .build();
+
     /** The journey's steps on other pages: the chooser before the wizard, the run page after it. */
     private static final List<Microcopy> BEFORE_WIZARD = List.of(PutOnline.STEP_WHAT);
     private static final List<Microcopy> AFTER_WIZARD = List.of(PutOnline.STEP_LIVE);
@@ -104,7 +114,7 @@ public final class PutOnlinePage extends PanelPage {
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     public @NonNull List<PanelAction<Row>> actions() {
-        return List.of(FROM_TEMPLATE, (PanelAction) ADDRESS, (PanelAction) WORKLOAD);
+        return List.of(FROM_TEMPLATE, (PanelAction) ADDRESS, (PanelAction) WORKLOAD, (PanelAction) MACHINE);
     }
 
     @Override
@@ -116,6 +126,7 @@ public final class PutOnlinePage extends PanelPage {
         String kind = request.conduit().getQueryParam(HohenheimParams.PUT_ONLINE_KIND.getName());
         String template = request.conduit().getQueryParam(HohenheimParams.FROM_TEMPLATE_TEMPLATE.getName());
         String workload = request.conduit().getQueryParam(HohenheimParams.PUT_ONLINE_WORKLOAD.getName());
+        PanelAction<Object> workloadAction = kindAction(workload);
         if (template != null && !template.isBlank()) {
             PageActions.Opened opened = PageActions.open(request, this, FROM_TEMPLATE.id());
             if (opened instanceof PageActions.Form form) {
@@ -139,9 +150,8 @@ public final class PutOnlinePage extends PanelPage {
                 vars.put("what", info == null ? kind : resolve(info.getLabel(), request));
                 vars.put("whatDescription", info == null ? "" : resolve(info.getDescription(), request));
             }
-        } else if (workload != null && PutOnline.offeredAsWorkload(workload)
-                && HohenheimAccess.isAdmin(request.access())) {
-            PageActions.Opened opened = PageActions.open(request, this, WORKLOAD.id(),
+        } else if (workload != null && workloadAction != null && HohenheimAccess.isAdmin(request.access())) {
+            PageActions.Opened opened = PageActions.open(request, this, workloadAction.id(),
                 Map.of(InstanceModel.KIND.getName(), workload));
             InstanceKindInfo info = InstanceKindRegistry.REGISTRY.get(Identifier.tryParse(workload));
             if (opened instanceof PageActions.Form form && info != null) {
@@ -194,7 +204,7 @@ public final class PutOnlinePage extends PanelPage {
                 String kind = info.typeId().toString();
                 card(cards, targets, group, "instance:" + info.typeId(), info.getIcon().name(),
                     resolve(info.getLabel(), request), resolve(info.getDescription(), request),
-                    admin && PutOnline.offeredAsWorkload(kind)
+                    admin && kindAction(kind) != null
                         ? CmsRoutes.list(request.panelSlug(), HohenheimSlugs.PUT_ONLINE)
                             .with(HohenheimParams.PUT_ONLINE_WORKLOAD, kind)
                         : CmsRoutes.create(request.panelSlug(), HohenheimSlugs.INSTANCES)
@@ -235,6 +245,14 @@ public final class PutOnlinePage extends PanelPage {
         card.put("description", description);
         cards.computeIfAbsent(group, ignored -> new ArrayList<>()).add(card);
         targets.put(value, target);
+    }
+
+    /** @return the flow an instance kind with this stored id is put online by, or null when it opens the create form */
+    private static @Nullable PanelAction<Object> kindAction(@Nullable String kind) {
+        if (PutOnline.offeredAsWorkload(kind)) {
+            return WORKLOAD;
+        }
+        return PutOnline.offeredAsMachine(kind) ? MACHINE : null;
     }
 
     /** The chosen template's other versions (its family's other members), each opening its own document. */
