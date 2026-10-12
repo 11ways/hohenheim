@@ -329,10 +329,12 @@ deployed_json() {
 
 # Prints the per-repo verdicts of a `deployed --json` report and exits non-zero
 # when it is not the finished state: hohenheim itself current, no restart pending,
-# and no repo diverged/deployed-ahead/unknown/undiffable/inconsistent. An UPSTREAM
-# repo reading local-ahead is a warning, not a refusal: the jar is built from the
-# PUSHED heads in a clean secondary workspace on purpose, so another session's
-# unpushed upstream commits are exactly what this lane keeps out of production.
+# and no repo diverged/deployed-ahead/unknown/undiffable/inconsistent. Verdicts
+# compare the host against the PUSHED head each checkout tracks, so a local
+# checkout that lags its remote or holds unpushed commits never refuses; its
+# unpushed commits are a warning (no deploy of pushed heads can carry them). An
+# UPSTREAM repo reading pushed-ahead is a warning too: another session pushed it
+# after this lane's build fetched it, and the next deploy ships it.
 judge_deployed() {
     python3 - "$1" <<'PY'
 import json, sys
@@ -340,20 +342,27 @@ report = json.loads(sys.argv[1])
 service = report.get('service') or {}
 print('   verdict: %s   jar %s' % (report.get('verdict'), (report.get('jar') or {}).get('path')))
 bad = []
-ahead = []
+pending = []
+unpushed = []
 for repo in report.get('repos') or []:
     verdict = repo.get('verdict')
     name = repo.get('repo')
     print('   %-22s %s %s' % (name, verdict, repo.get('shortSha') or ''))
+    count = (repo.get('local') or {}).get('unpushed') or 0
+    if count:
+        unpushed.append('%s (%d)' % (name, count))
     if verdict == 'current':
         continue
-    if verdict == 'local-ahead' and name != 'hohenheim':
-        ahead.append(name)
+    if verdict == 'pushed-ahead' and name != 'hohenheim':
+        pending.append(name)
         continue
     bad.append('%s=%s' % (name, verdict))
-if ahead:
-    print('   WARNING: upstream local checkouts carry unpushed commits the shipped jar deliberately'
-          ' lacks (built from the pushed heads): ' + ', '.join(ahead))
+if unpushed:
+    print('   WARNING: local checkouts hold unpushed commits that no deploy of the pushed heads carries: '
+          + ', '.join(unpushed))
+if pending:
+    print('   WARNING: upstream repos were pushed after this build fetched them (the next deploy ships them): '
+          + ', '.join(pending))
 if service.get('restartPending'):
     bad.append('RESTART PENDING (the jar on disk is newer than the running process)')
 for problem in report.get('problems') or []:
@@ -465,7 +474,7 @@ info "$CLEAN_ROWS repos stamped clean"
 step "2. What runs on $TARGET right now"
 BEFORE_JSON="$(deployed_json)" || warn "zenit-dev deployed could not answer; recording that and continuing"
 if [ "$DRY_RUN" = "no" ] && [ -n "$BEFORE_JSON" ]; then
-    judge_deployed "$BEFORE_JSON" || info "(that is the state BEFORE the deploy; local-ahead is what a pending deploy looks like)"
+    judge_deployed "$BEFORE_JSON" || info "(that is the state BEFORE the deploy; pushed-ahead is what a pending deploy looks like)"
 fi
 
 # --- 3. free space, then upload ---------------------------------------------

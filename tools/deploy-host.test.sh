@@ -179,9 +179,11 @@ printf 'deployed\n' >> "$DEPLOYED_CALLS"
 calls="$(wc -l < "$DEPLOYED_CALLS")"
 verdict="current"
 upstream="current"
-if [ "$calls" = "1" ]; then verdict="local-ahead"; fi
+unpushed=0
+if [ "$calls" = "1" ]; then verdict="pushed-ahead"; fi
 if [ "${FAKE_DEPLOYED:-current}" = "stuck" ]; then verdict="deployed-ahead"; fi
-if [ "${FAKE_DEPLOYED:-current}" = "upstream-ahead" ]; then upstream="local-ahead"; fi
+if [ "${FAKE_DEPLOYED:-current}" = "upstream-ahead" ]; then upstream="pushed-ahead"; fi
+if [ "${FAKE_DEPLOYED:-current}" = "unpushed" ]; then unpushed=2; fi
 cat <<JSON
 {
   "target": "testbox",
@@ -190,8 +192,8 @@ cat <<JSON
   "service": {"name": "hohenheim", "restartPending": false},
   "stamped": true,
   "repos": [
-    {"repo": "hohenheim", "verdict": "$verdict", "shortSha": "12345678"},
-    {"repo": "zenit", "verdict": "$upstream", "shortSha": "9fd78ec7"}
+    {"repo": "hohenheim", "verdict": "$verdict", "shortSha": "12345678", "local": {"unpushed": $unpushed, "behind": 0}},
+    {"repo": "zenit", "verdict": "$upstream", "shortSha": "9fd78ec7", "local": {"unpushed": 0, "behind": 3}}
   ],
   "verdict": "$verdict",
   "problems": []
@@ -322,11 +324,17 @@ else
     expect "a deploy that is not current prunes no preflight" "$(cat "$SSH_LOG")" "prune" no
 fi
 
-# An UPSTREAM repo whose local checkout is merely ahead of the shipped jar is the
-# clean-workspace lane working as designed: a warning, never a refusal.
-OUT="$(FAKE_DEPLOYED=upstream-ahead run_lane testbox "$JAR" 2>&1)" || no "an upstream local-ahead lane exits 0"
-expect "an upstream local-ahead is reported as a warning" "$OUT" "WARNING: upstream local checkouts carry unpushed commits"
-expect "and names the repo" "$OUT" "pushed heads): zenit"
+# An UPSTREAM repo pushed after the build fetched it is a warning, never a refusal:
+# the jar is exactly the pushed heads it was built from.
+OUT="$(FAKE_DEPLOYED=upstream-ahead run_lane testbox "$JAR" 2>&1)" || no "an upstream pushed-ahead lane exits 0"
+expect "an upstream pushed-ahead is reported as a warning" "$OUT" "WARNING: upstream repos were pushed after this build"
+expect "and names the repo" "$OUT" "ships them): zenit"
+
+# Unpushed local commits (hohenheim's own included) are in no deploy of pushed heads:
+# a warning naming the count, never a refusal; a lagging checkout is not even that.
+OUT="$(FAKE_DEPLOYED=unpushed run_lane testbox "$JAR" 2>&1)" || no "a lane beside unpushed local commits exits 0"
+expect "unpushed local commits are a warning" "$OUT" "WARNING: local checkouts hold unpushed commits"
+expect "naming repo and count" "$OUT" "pushed heads carries: hohenheim (2)"
 
 # --- 5b. refusal: the host lacks room for the copies -------------------------
 
