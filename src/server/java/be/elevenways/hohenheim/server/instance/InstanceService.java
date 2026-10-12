@@ -20,6 +20,7 @@ import be.elevenways.hohenheim.server.database.InstanceDatabaseLinks;
 import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostLeases;
+import be.elevenways.hohenheim.server.quota.ChargedModel;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.FileStagingSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
@@ -604,10 +605,13 @@ public final class InstanceService {
         int serverId = ServerModel.canonicalServerId(row.get(InstanceModel.SERVER_ID));
         this.leases.requireFence(serverId);
         // The release's own claim, queued: the caller holds the application's (the documented lock order), and a
-        // reconciler glance at the release must delay the switch, never fail it.
-        this.operations.exclusive(instanceId, InstanceOperationLock.Contention.QUEUE, () ->
+        // reconciler glance at the release must delay the switch, never fail it. The ledger follows the role in the
+        // same claim: a release that retires hands its memory back (InstanceModel.roleHoldsMemory).
+        this.operations.exclusive(instanceId, InstanceOperationLock.Contention.QUEUE, () -> {
             InstanceOperationGuard.stampRole(this.leases, instanceId, serverId, role,
-                String.valueOf((Object) row.get(InstanceModel.NAME))));
+                String.valueOf((Object) row.get(InstanceModel.NAME)));
+            ChargedModel.INSTANCES.resettle(instanceId);
+        });
     }
 
     /** Typed live status straight off the daemon; never throws. */

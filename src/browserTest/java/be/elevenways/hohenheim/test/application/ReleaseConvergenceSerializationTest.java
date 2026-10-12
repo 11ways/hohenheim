@@ -205,9 +205,9 @@ class ReleaseConvergenceSerializationTest {
                         + " rollback target; a third would be the stranded row")
                     .hasSize(2);
                 assertThat(InstanceCapacity.bookedMbOn(localServerId))
-                    .as("step 7: and the host is booked for exactly those two releases")
-                    .isEqualTo(bookedWithOneRelease + InstanceCapacity.footprintMbOf(
-                        Models.get(InstanceModel.class).findById(servingId)));
+                    .as("step 7: and the host is booked for the serving release alone: the retained one is"
+                        + " stopped for good and books nothing")
+                    .isEqualTo(bookedWithOneRelease);
 
                 // 8. And the reason all of that held: B really did contend for the lock
                 //    while A was mid-flight. Asserted last so a lock-less engine fails on

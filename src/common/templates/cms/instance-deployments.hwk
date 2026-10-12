@@ -41,10 +41,14 @@
 {% declare webhookUrl: String = "" %}
 {% declare webhookSecret: String = "" %}
 {% declare webhookAutoDeploy: Boolean = false %}
+{#- Set while a deploy runs: the feed cms-live-refresh watches, and the live stamp taken before this render's reads. -#}
+{% declare liveFeed: String = "" %}
+{% declare liveSince: Long = null %}
 {% extend "zenitcms:shell" var:title=title %}
 
 {% block "main" %}
 <section class="cms-resource-list-page hh-deploys">
+    {% if liveFeed != "" %}<cms-live-refresh feed={% liveFeed %} since={% liveSince %} data-hh-deploys-live></cms-live-refresh>{% /if %}
     {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
 
     {% if currentCommit != "" %}

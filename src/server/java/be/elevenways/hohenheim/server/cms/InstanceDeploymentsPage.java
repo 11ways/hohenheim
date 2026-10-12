@@ -26,6 +26,9 @@ import be.elevenways.hohenheim.server.source.WebhookOutcome;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.zenit.common.live.LiveFeed;
+import be.elevenways.zenit.common.live.LiveFeeds;
+import be.elevenways.zenit.server.live.LiveServer;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -79,6 +82,19 @@ import java.util.regex.Pattern;
 public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_deployments"); }
+
+    /**
+     * The feed an open Deploys tab watches while a deploy runs: every build, release-operation and release-role write
+     * re-renders the tab in place (cms-live-refresh), so a deploy's progress and its end appear without a reload.
+     */
+    static final Identifier LIVE_FEED = HohenheimIds.id("instance_deploys_live");
+
+    /** Register {@link #LIVE_FEED}; the tab's own record gates decide what a re-render shows. */
+    public static void registerLiveFeed() {
+        LiveFeeds.INSTANCE.registerOwned(LIVE_FEED, LiveFeed.of(AccessContext::isAccount,
+            BuildOperationModel.MODEL_ID, ReleaseOperationModel.MODEL_ID, InstanceModel.MODEL_ID));
+    }
+
     @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.DEPLOYMENTS.of("title"); }
     @Override public @NonNull String slug() { return HohenheimSlugs.Tab.DEPLOYMENTS; }
     @Override public @NonNull Icon icon() { return Icon.of("rocket"); }
@@ -99,6 +115,8 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         Conduit conduit = request.conduit();
         AccessContext accessContext = request.access();
         Integer instanceId = instance.get(InstanceModel.ID);
+        // Stamped BEFORE the reads: a write between this render and the page's live watch is caught up at open.
+        long liveSince = LiveServer.INVALIDATIONS.stamp();
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", CmsSupport.pageTitle(conduit, HohenheimMicrocopy.INSTANCE_DEPLOYMENTS,
             instance.get(InstanceModel.NAME)));
@@ -122,6 +140,10 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
             putWorkspaceVars(vars, instanceId, failures);
         }
         putSourceVars(vars, instance);
+        if (Boolean.TRUE.equals(vars.get("isDeploying"))) {
+            vars.put("liveFeed", LIVE_FEED.toString());
+            vars.put("liveSince", liveSince);
+        }
 
         if (HohenheimAccess.isAdmin(accessContext)) {
             putAdminOnlyVars(vars, instance);

@@ -225,7 +225,7 @@ public final class InstanceCapacity {
      */
     public static int footprintMbOf(@NonNull Row instance) {
         InstanceKindHandler handler = InstanceKinds.handlerOf(instance);
-        if (handler == null) {
+        if (handler == null || !InstanceModel.roleHoldsMemory(instance.get(InstanceModel.RUNTIME_ROLE))) {
             return 0;
         }
         return footprintMbOf(handler, InstanceModel.settingsOf(instance));
@@ -587,7 +587,8 @@ public final class InstanceCapacity {
      */
     static int effectiveFootprintMb(@NonNull Row row, @Nullable Row stored) {
         InstanceKindHandler handler = InstanceKinds.getHandler(row.afterWrite(InstanceModel.KIND, stored));
-        if (handler == null || booksNothing(handler)) {
+        if (handler == null || booksNothing(handler)
+                || !InstanceModel.roleHoldsMemory(row.afterWrite(InstanceModel.RUNTIME_ROLE, stored))) {
             return 0;
         }
         Map<String, Object> settings =

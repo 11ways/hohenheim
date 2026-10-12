@@ -492,6 +492,18 @@ public class InstanceModel extends Model {
         .build());
 
     /**
+     * Whether a release in this role books workload memory on its host and owner.
+     *
+     * A retired release's container is stopped for good: a rollback boots a fresh candidate from its spec and never
+     * starts the retired one again, so booking it only kept memory from workloads that could run.
+     *
+     * @return false only for {@link #ROLE_RETIRED}; an unknown role keeps its booking (fails closed)
+     */
+    public static boolean roleHoldsMemory(@Nullable String role) {
+        return !ROLE_RETIRED.equals(role);
+    }
+
+    /**
      * The fence of the operation claim that holds the record (InstanceOperationLock over
      * core ClaimedRows): stamped when an operation takes the record, and every runtime-
      * outcome write is conditional on it ({@code claim_fence = :claimFence}); a stale

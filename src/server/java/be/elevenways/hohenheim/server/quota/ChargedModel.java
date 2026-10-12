@@ -16,12 +16,14 @@ import be.elevenways.hohenheim.server.quota.ChargedDimension.Charge;
 import be.elevenways.hohenheim.server.quota.ChargedDimension.Transition;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.behaviour.SoftDeleteBehaviour;
+import be.elevenways.zenit.common.orm.field.Field;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.context.RemoveFromDatasource;
 import be.elevenways.zenit.common.orm.datasource.context.SaveToDatasource;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.model.Schema;
+import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.quota.Quotas;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -29,6 +31,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -214,6 +218,46 @@ public enum ChargedModel {
             }
         }
         dimension.stamp(row, after);
+    }
+
+    /**
+     * Re-judge one live row's holdings after a hookless write changed a fact its claims read, and persist the stamps.
+     *
+     * AIDEV-NOTE: the release engine's runtime-role flip is a FENCED updateAll (InstanceOperationGuard.stampRole), so
+     * the charge hook never sees a release retire; without this a retired release kept its memory booked for as long
+     * as it was retained, and every application held twice its footprint between deploys.
+     *
+     * @param id the row's primary key; an absent or trashed row holds nothing and is left alone
+     */
+    @SuppressWarnings("unchecked")
+    public void resettle(@NonNull Object id) {
+        Model model = this.model();
+        Row stored = StoredRows.byId(model, id);
+        if (stored == null || !this.isLive(stored)) {
+            return;
+        }
+        Row row = new Row(stored);
+        Journal journal = new Journal();
+        try {
+            for (ChargedDimension dimension : this.dimensions) {
+                this.rebook(dimension, row, stored, journal);
+            }
+            Field<Object, ?> primaryKey = (Field<Object, ?>) model.getPrimaryKeyField();
+            QueryBuilder<?> update = model.find().withTrashed().noCache().where(primaryKey.eq(id));
+            boolean changed = false;
+            for (Map.Entry<String, Field<?, ?>> field : this.schema.getFields().entrySet()) {
+                if (!Objects.equals(row.get(field.getKey()), stored.get(field.getKey()))) {
+                    update.assign(field.getValue(), row.get(field.getKey()));
+                    changed = true;
+                }
+            }
+            if (changed) {
+                update.updateAll();
+            }
+        } catch (RuntimeException | Error refused) {
+            journal.undo();
+            throw refused;
+        }
     }
 
     private void reserve(@NonNull ChargedDimension dimension, @NonNull String bucket, long amount,

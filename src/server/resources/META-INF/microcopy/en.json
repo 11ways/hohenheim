@@ -15448,11 +15448,11 @@
     "scope": "deployments"
   },
   "auto_deploy_on": {
-    "text": "Every push to the branch deploys it.",
+    "text": "New commits on the branch deploy automatically.",
     "scope": "deployments"
   },
   "poll_every": {
-    "text": ".match {$minutes :number}\none {{It also checks the repository for new commits every minute.}}\n* {{It also checks the repository for new commits every {$minutes} minutes.}}",
+    "text": ".match {$minutes :number}\none {{It checks the repository for new commits every minute; a push webhook, when the repository sends one, deploys at once.}}\n* {{It checks the repository for new commits every {$minutes} minutes; a push webhook, when the repository sends one, deploys at once.}}",
     "scope": "deployments"
   },
   "poll_last": {

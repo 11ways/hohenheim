@@ -229,11 +229,28 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         // 5. Automatic deploys say where the code comes from and what each recent push did, in words.
         assertThat(body)
             .as("step 5: the source line").contains("https://git.example.test/acme/staging-api.git, branch main")
-            .as("step 5: deploy-on-push is on").contains("Every push to the branch deploys it.")
+            .as("step 5: automatic deploys are on, without promising a push deploys at once")
+            .contains("New commits on the branch deploy automatically.")
+            .doesNotContain("Every push to the branch deploys it.")
             .as("step 5: a push that deployed").contains("Started a deploy")
             .as("step 5: and one that was ignored, with the reason")
             .contains("Ignored: not the deployed branch and not a preview branch")
             .as("step 5: never the stored outcome token").doesNotContain(">ignored_branch<");
+
+        // 6. Nothing deploys, so the tab watches nothing; once a build runs, the open tab follows it without a reload.
+        assertThat(body).as("step 6: an idle tab keeps no live watch").doesNotContain("data-hh-deploys-live");
+        Row running = Models.get(BuildOperationModel.class).createEmptyRow();
+        running.set(BuildOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
+        running.set(BuildOperationModel.FOR_ID, applicationId);
+        running.set(BuildOperationModel.STATUS, BuildOperationModel.LIFECYCLE.stored(OperationStatus.RUNNING));
+        running.set(BuildOperationModel.SOURCE_REF, "main");
+        running.set(BuildOperationModel.STARTED_AT, Instant.parse("2026-09-02T12:00:00Z"));
+        Models.get(BuildOperationModel.class).save(running);
+        buildIds.add(running.get(BuildOperationModel.ID));
+        String deploying = adminGet(pageUrl()).body();
+        assertThat(deploying)
+            .as("step 6: a running deploy re-renders the tab live").contains("data-hh-deploys-live")
+            .as("step 6: watching the deploys feed").contains("instance_deploys_live");
     }
 
     /** The history row carrying a release mark, up to the next row. */

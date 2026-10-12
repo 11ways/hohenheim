@@ -15448,11 +15448,11 @@
     "scope": "deployments"
   },
   "auto_deploy_on": {
-    "text": "Elke push naar de branch wordt uitgerold.",
+    "text": "Nieuwe commits op de branch worden automatisch uitgerold.",
     "scope": "deployments"
   },
   "poll_every": {
-    "text": ".match {$minutes :number}\none {{Daarnaast controleert het elke minuut de repository op nieuwe commits.}}\n* {{Daarnaast controleert het elke {$minutes} minuten de repository op nieuwe commits.}}",
+    "text": ".match {$minutes :number}\none {{Het controleert elke minuut de repository op nieuwe commits; een push-webhook, als de repository er een stuurt, rolt meteen uit.}}\n* {{Het controleert elke {$minutes} minuten de repository op nieuwe commits; een push-webhook, als de repository er een stuurt, rolt meteen uit.}}",
     "scope": "deployments"
   },
   "poll_last": {

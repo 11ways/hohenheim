@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.api.HostApi;
 import be.elevenways.hohenheim.server.api.PaasApi;
 import be.elevenways.hohenheim.server.cms.EnvironmentParts;
 import be.elevenways.hohenheim.server.cms.HohenheimPanel;
+import be.elevenways.hohenheim.server.cms.InstanceDeploymentsPage;
 import be.elevenways.hohenheim.server.cms.InstanceScheduleOperationHandlers;
 import be.elevenways.hohenheim.server.cms.PutOnline;
 import be.elevenways.hohenheim.server.cms.SiteOperationHandlers;
@@ -71,6 +72,7 @@ public final class HohenheimHandlers {
         DynamicDnsHandlers.init();
         DatabaseHandlers.init();
         ServerMediaHandlers.init();
+        InstanceDeploymentsPage.registerLiveFeed();
         SiteControlHandlers.initDeployControl();
         SiteControlHandlers.initInstanceConsole();
         SiteControlHandlers.initDevTunnel();

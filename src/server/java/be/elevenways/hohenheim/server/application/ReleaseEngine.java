@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostLeases;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
@@ -427,8 +428,13 @@ public final class ReleaseEngine {
                 ApplicationUpstreams.invalidate(applicationId);
             }
             snapshotVolumes(op, applicationId, serverId);
-            Row candidate = newInstanceRow(applicationId, applicationName, serverId, desired,
-                InstanceModel.ROLE_CANDIDATE);
+            // AIDEV-NOTE: the candidate REPLACES the serving release, which hands its booking back when it retires at
+            // the switch (a failed candidate is destroyed with its own), so the candidate is admitted with that
+            // booking as a credit on the host limit (InstanceCapacity.withPendingRelease, the shared-engine move's
+            // shape). Without it a host had to keep a second copy of every application free, and a full host refused
+            // every update.
+            Row candidate = InstanceCapacity.withPendingRelease(serverId, InstanceCapacity.bookedMbOf(serving),
+                () -> newInstanceRow(applicationId, applicationName, serverId, desired, InstanceModel.ROLE_CANDIDATE));
             candidateId = candidate.get(InstanceModel.ID);
             transition(stamp(op).set(ReleaseOperationModel.CANDIDATE_INSTANCE_ID, candidateId),
                 ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.DEPLOYING),

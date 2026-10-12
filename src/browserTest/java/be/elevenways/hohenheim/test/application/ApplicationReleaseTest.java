@@ -16,6 +16,7 @@ import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
+import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -232,6 +233,73 @@ class ApplicationReleaseTest {
                     .isEqualTo(InstanceModel.ROLE_RETIRED);
             } finally {
                 ApplicationReleases.destroyFor(applicationId);
+            }
+        });
+    }
+
+    /**
+     * A host with no memory to spare still updates and rolls back an application, and the release a deploy
+     * retires hands its memory back.
+     *
+     * AIDEV-NOTE: found on the 2 GB test host, where every update was refused host_capacity_reached: the candidate
+     * was booked beside the serving release it replaces, and the retired release kept its booking for as long as it
+     * was retained although its container never runs again (a rollback boots a fresh candidate).
+     */
+    @Test
+    void aFullHostStillUpdatesAndRollsBackAndARetiredReleaseBooksNothing() {
+        Integer savedReserve = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB);
+        Double savedRatio = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO);
+        int host = ServerModel.localServerId();
+        Db.run(datasource, () -> {
+            int applicationId = application("full", "v1");
+            try {
+                // 1. The first release books its footprint on the host, and the host is then made full: 1 MB free.
+                ApplicationReleases.converge(applicationId, Map.of());
+                Row first = ApplicationReleases.ownedServing(applicationId);
+                long footprint = InstanceCapacity.bookedMbOf(first);
+                assertThat(footprint).as("step 1: the serving release books memory").isPositive();
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB, 0);
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO, 1.0);
+                long booked = InstanceCapacity.bookedMbOn(host);
+                HostFixtures.makeLocalPlaceable(booked + 1);
+                assertThat(InstanceCapacity.budgetMbOf(Models.get(ServerModel.class).findById(host)))
+                    .as("step 1: the host's budget leaves one megabyte free").isEqualTo(booked + 1);
+
+                // 2. An update still lands: the candidate is admitted against the release it replaces.
+                setSettings(applicationId, "v2");
+                ApplicationReleases.converge(applicationId, Map.of());
+                Row second = ApplicationReleases.ownedServing(applicationId);
+                assertThat((Object) second.get(InstanceModel.ID))
+                    .as("step 2: the update produced a new serving release on the full host")
+                    .isNotEqualTo(first.get(InstanceModel.ID));
+
+                // 3. The retired release hands its memory back, so the host holds one release's worth again.
+                Row retired = Models.get(InstanceModel.class).findById(first.get(InstanceModel.ID));
+                assertThat(retired.get(InstanceModel.RUNTIME_ROLE))
+                    .as("step 3: the first release is retired").isEqualTo(InstanceModel.ROLE_RETIRED);
+                assertThat((Object) retired.get(InstanceModel.CAPACITY_MB))
+                    .as("step 3: its host booking is handed back").isEqualTo(0);
+                assertThat((Object) retired.get(InstanceModel.QUOTA_MEMORY_MB))
+                    .as("step 3: and so is its owner booking").isEqualTo(0);
+                assertThat(InstanceCapacity.bookedMbOn(host))
+                    .as("step 3: the host books exactly what it booked before the update").isEqualTo(booked);
+                await("step 3: the update's drain lets go of the application",
+                    () -> ReleaseSettling.settled(applicationId));
+
+                // 4. A rollback on the same full host lands too, and the books still hold one release.
+                ReleaseEngine.rollback(applicationId);
+                assertThat(ApplicationReleases.storedSettings(ApplicationReleases.ownedServing(applicationId))
+                        .get("image"))
+                    .as("step 4: the rollback serves v1 again").isEqualTo(FakeDockerDaemon.digestOf("fake/app:v1"));
+                await("step 4: the rollback's drain lets go of the application",
+                    () -> ReleaseSettling.settled(applicationId));
+                assertThat(InstanceCapacity.bookedMbOn(host))
+                    .as("step 4: the host still books one release of the application").isEqualTo(booked);
+            } finally {
+                ApplicationReleases.destroyFor(applicationId);
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB, savedReserve);
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO, savedRatio);
+                HostFixtures.makeLocalPlaceable(16 * 1024);
             }
         });
     }
