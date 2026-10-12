@@ -4932,6 +4932,26 @@
     "text": "Spamservice draait, maar de beheer-API is nog niet verbonden.",
     "scope": "spamservice"
   },
+  "settings_not_configured": {
+    "text": "Misbruikbescherming is nog niet ingesteld, dus er zijn geen instellingen om te tonen. Stel eerst de installatie in onder Toegang, Misbruikbescherming, Installatie.",
+    "scope": "spamservice"
+  },
+  "settings_not_enabled": {
+    "text": "Misbruikbescherming staat uit, dus de instellingen kunnen niet gelezen worden. Schakel ze in onder Toegang, Misbruikbescherming, Installatie om ze te wijzigen.",
+    "scope": "spamservice"
+  },
+  "settings_not_running": {
+    "text": "Misbruikbescherming staat aan maar draait niet, dus de instellingen kunnen niet gelezen worden. Start ze onder Toegang, Misbruikbescherming.",
+    "scope": "spamservice"
+  },
+  "settings_not_connected": {
+    "text": "Misbruikbescherming draait, maar Hohenheim bereikt de beheer-API nog niet. Toegang, Misbruikbescherming vertelt waarom.",
+    "scope": "spamservice"
+  },
+  "settings_unreachable": {
+    "text": "Misbruikbescherming antwoordde niet toen de instellingen gelezen werden: {$reason}",
+    "scope": "spamservice"
+  },
   "no_checks": {
     "text": "Geen gereedheidscontroles beschikbaar",
     "scope": "spamservice"

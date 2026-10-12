@@ -228,9 +228,33 @@ class SpamserviceCmsContractTest {
         SettingsBackend.Snapshot unavailable = backend.snapshot();
         assertThat(unavailable.available()).isFalse();
         assertThat(unavailable.settings()).containsKeys("scoring.threshold", "datasets.token", "network.port");
+        assertThat(unavailable.unavailableReason()).as("a failed read says the service did not answer").isNotNull();
+        assertThat(unavailable.unavailableReason().resolve(LocaleChain.ofTags("en"), catalogs))
+            .startsWith("Abuse protection did not answer when its settings were read: ");
         assertThat(as(operator, () -> backend.apply(
             new SettingsBackend.Patch("r1", List.of(SettingsBackend.Change.set("scoring.threshold", "70")))))
             .succeeded()).isFalse();
+    }
+
+    /** A switched-off installation's settings section says what is missing and where to fix it, in both languages. */
+    @Test
+    void anUnreachableInstallationsSettingsSayWhatIsMissing() {
+        ShippedCatalogs catalogs = new ShippedCatalogs();
+        for (SpamserviceGap gap : SpamserviceGap.values()) {
+            SettingsBackend.Snapshot snapshot = new SpamserviceSettingsBackend(() -> null, () -> gap).snapshot();
+            assertThat(snapshot.available()).as("%s: unavailable", gap).isFalse();
+            assertThat(snapshot.unavailableReason()).as("%s: names a reason", gap).isNotNull();
+            assertThat(snapshot.unavailableReason().key()).as("%s: its own", gap).isEqualTo(gap.settingsReason().key());
+            for (String language : List.of("en", "nl")) {
+                assertThat(catalogs.resolveSource(gap.settingsReason().key(), LocaleChain.ofTags(language),
+                        gap.settingsReason().filters()))
+                    .as("%s: the reason ships in %s", gap, language).isNotNull();
+            }
+        }
+        assertThat(new SpamserviceSettingsBackend(() -> null, () -> SpamserviceGap.NOT_ENABLED).snapshot()
+                .unavailableReason().resolve(LocaleChain.ofTags("en"), catalogs))
+            .isEqualTo("Abuse protection is switched off, so its settings cannot be read. Enable it under Access, "
+                + "Abuse protection, Installation to change them.");
     }
 
     private static List<SettingDefinition<?>> definitionsUnder(SettingGroup group) {

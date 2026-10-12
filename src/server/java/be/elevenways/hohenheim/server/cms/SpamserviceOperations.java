@@ -122,31 +122,22 @@ public final class SpamserviceOperations {
 
     /** Why the installation itself cannot act, or null when it is configured and enabled. */
     static @Nullable Microcopy configurationReason(@NonNull SpamserviceManager manager) {
-        SpamserviceManager.Snapshot snapshot = manager.snapshot();
-        if (!snapshot.configured()) {
-            return HohenheimMicrocopy.SPAMSERVICE.of("not_configured");
-        }
-        if (!snapshot.enabled()) {
-            return HohenheimMicrocopy.SPAMSERVICE.of("not_enabled");
-        }
-        return null;
+        return verbReason(manager, SpamserviceGap.NOT_ENABLED);
     }
 
     /** Why nothing can be stopped, or null when a managed process is actually alive. */
     static @Nullable Microcopy runningReason(@NonNull SpamserviceManager manager) {
-        Microcopy configuration = configurationReason(manager);
-        if (configuration != null) {
-            return configuration;
-        }
-        return manager.snapshot().pid() == null ? HohenheimMicrocopy.SPAMSERVICE.of("not_running") : null;
+        return verbReason(manager, SpamserviceGap.NOT_RUNNING);
     }
 
     /** Why the management API cannot be called, or null when a client is installed. */
     static @Nullable Microcopy connectedReason(@NonNull SpamserviceManager manager) {
-        Microcopy running = runningReason(manager);
-        if (running != null) {
-            return running;
-        }
-        return manager.client() == null ? HohenheimMicrocopy.SPAMSERVICE.of("not_connected") : null;
+        return verbReason(manager, SpamserviceGap.NOT_CONNECTED);
+    }
+
+    /** @return the verb's reason for the installation's first gap up to {@code last}, or null when it has none */
+    private static @Nullable Microcopy verbReason(@NonNull SpamserviceManager manager, @NonNull SpamserviceGap last) {
+        SpamserviceGap gap = SpamserviceGap.of(manager);
+        return gap != null && gap.within(last) ? gap.verbReason() : null;
     }
 }

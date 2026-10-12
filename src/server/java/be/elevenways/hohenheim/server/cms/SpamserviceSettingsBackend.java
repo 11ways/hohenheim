@@ -2,7 +2,9 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.util.BlastString;
+import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSources;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.server.spamservice.SpamserviceManager;
 import be.elevenways.spamservice.client.SettingEntry;
 import be.elevenways.spamservice.client.SettingsApplyResult;
@@ -26,7 +28,16 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
 
-/** Adapts Spamservice's metadata-rich management settings API to a SettingsPage mount. */
+/**
+ * Adapts Spamservice's metadata-rich management settings API to a SettingsPage mount.
+ *
+ * AIDEV-NOTE: an unavailable snapshot always says why ({@link SpamserviceGap#settingsReason}, or the failed read's own
+ * reason): the installation being switched off is a host's choice, and the generic "currently unavailable" left the
+ * operator guessing which.
+ *
+ * @author Jelle De Loecker
+ * @since  0.10.0
+ */
 public final class SpamserviceSettingsBackend implements SettingsBackend {
 
     /** The abuse-protection section's icon in the settings list. */
@@ -39,28 +50,41 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
         "events", new GroupLook(Microcopy.of("settings.spamservice.events.help"), "list"));
 
     private final Supplier<SpamserviceClient> clientSupplier;
+    private final Supplier<@Nullable SpamserviceGap> gapSupplier;
     private volatile @Nullable BuiltSnapshot lastSnapshot;
 
     public SpamserviceSettingsBackend() {
-        this(() -> SpamserviceManager.get().client());
+        this(() -> SpamserviceManager.get().client(), () -> SpamserviceGap.of(SpamserviceManager.get()));
     }
 
     SpamserviceSettingsBackend(@NonNull Supplier<SpamserviceClient> clientSupplier) {
+        this(clientSupplier, () -> SpamserviceGap.NOT_CONNECTED);
+    }
+
+    /**
+     * @param gapSupplier the installation's first missing step, read when no client is installed; null there (the
+     *                    client went away between the two reads) words it as not connected
+     */
+    SpamserviceSettingsBackend(@NonNull Supplier<SpamserviceClient> clientSupplier,
+                               @NonNull Supplier<@Nullable SpamserviceGap> gapSupplier) {
         this.clientSupplier = Objects.requireNonNull(clientSupplier, "clientSupplier cannot be null");
+        this.gapSupplier = Objects.requireNonNull(gapSupplier, "gapSupplier cannot be null");
     }
 
     @Override
     public @NonNull Snapshot snapshot() {
         SpamserviceClient client = this.clientSupplier.get();
         if (client == null) {
-            return unavailableSnapshot();
+            SpamserviceGap gap = this.gapSupplier.get();
+            return unavailableSnapshot((gap != null ? gap : SpamserviceGap.NOT_CONNECTED).settingsReason());
         }
         try {
             BuiltSnapshot built = buildData(client.settings());
             this.lastSnapshot = built;
             return built.snapshot();
         } catch (SpamserviceApiException unavailable) {
-            return unavailableSnapshot();
+            return unavailableSnapshot(HohenheimMicrocopy.SPAMSERVICE.of("settings_unreachable")
+                .withArg("reason", HohenheimViolations.reasonOf(unavailable)));
         }
     }
 
@@ -133,15 +157,15 @@ public final class SpamserviceSettingsBackend implements SettingsBackend {
         }
     }
 
-    private @NonNull Snapshot unavailableSnapshot() {
+    private @NonNull Snapshot unavailableSnapshot(@NonNull Microcopy reason) {
         BuiltSnapshot cached = this.lastSnapshot;
         if (cached == null) {
             return new Snapshot(new SettingGroup("spamservice").label(Microcopy.of("settings.spamservice.label"))
                     .describe(Microcopy.of("settings.spamservice.help")).icon(ROOT_ICON),
-                Map.of(), "", false, null);
+                Map.of(), "", false, reason);
         }
         Snapshot snapshot = cached.snapshot();
-        return new Snapshot(snapshot.rootGroup(), snapshot.settings(), snapshot.revision(), false, null);
+        return new Snapshot(snapshot.rootGroup(), snapshot.settings(), snapshot.revision(), false, reason);
     }
 
     private static @NonNull Snapshot build(be.elevenways.spamservice.client.SettingsSnapshot remote) {

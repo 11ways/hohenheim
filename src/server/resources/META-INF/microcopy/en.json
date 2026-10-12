@@ -4932,6 +4932,26 @@
     "text": "Spamservice is running but its management API is not connected yet.",
     "scope": "spamservice"
   },
+  "settings_not_configured": {
+    "text": "Abuse protection is not set up yet, so it has no settings to show. Set up its installation under Access, Abuse protection, Installation first.",
+    "scope": "spamservice"
+  },
+  "settings_not_enabled": {
+    "text": "Abuse protection is switched off, so its settings cannot be read. Enable it under Access, Abuse protection, Installation to change them.",
+    "scope": "spamservice"
+  },
+  "settings_not_running": {
+    "text": "Abuse protection is enabled but not running, so its settings cannot be read. Start it under Access, Abuse protection.",
+    "scope": "spamservice"
+  },
+  "settings_not_connected": {
+    "text": "Abuse protection is running, but Hohenheim cannot reach its management API yet. Access, Abuse protection says why.",
+    "scope": "spamservice"
+  },
+  "settings_unreachable": {
+    "text": "Abuse protection did not answer when its settings were read: {$reason}",
+    "scope": "spamservice"
+  },
   "no_checks": {
     "text": "No readiness checks available",
     "scope": "spamservice"
