@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
@@ -148,7 +149,9 @@ public final class InstanceFiles {
      */
     public boolean isSupported(int instanceId) {
         HohenheimAccess.requireOperationCapability(instanceId, READ);
-        return this.instances.resolve(instanceId).runtime() instanceof InstanceFileSupport;
+        Integer workload = ApplicationReleases.workloadIdOf(instanceId);
+        // An application nothing serves has no driver to ask yet; its listing names that refusal (app_not_serving).
+        return workload == null || this.instances.resolve(workload).runtime() instanceof InstanceFileSupport;
     }
 
     /** The declared volume roots of an instance, the only places this service will look. */
@@ -511,9 +514,16 @@ public final class InstanceFiles {
         return resolveOpened(instanceId);
     }
 
-    /** The resolve half of {@link #open}, for a verb that asked its capability itself. */
+    /**
+     * The resolve half of {@link #open}, for a verb that asked its capability itself.
+     *
+     * AIDEV-NOTE: an application runs nothing itself, so its files are its serving release's mounts (the release
+     * binds the application's volumes); the capability, the managed paths and the activity stay on the application.
+     *
+     * @throws Violations {@code app_not_serving} for an application nothing serves
+     */
     private @NonNull Opened resolveOpened(int instanceId) {
-        InstanceService.Resolved resolved = this.instances.resolve(instanceId);
+        InstanceService.Resolved resolved = this.instances.resolve(ApplicationReleases.requireWorkloadIdOf(instanceId));
         return new Opened(resolved, sortedRoots(resolved));
     }
 

@@ -1,6 +1,11 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.docker.ReleaseKind;
+import be.elevenways.hohenheim.server.files.InstanceFiles;
+import be.elevenways.hohenheim.server.instance.ApplicationKind;
+import be.elevenways.hohenheim.server.orm.GeneratedRows;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
@@ -181,6 +186,44 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Sftp.PORT, 2022);
             Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Sftp.PUBLIC_HOST, null);
         }
+    }
+
+    /**
+     * An application runs nothing itself, so its Files tab browses the release serving it; with nothing serving it
+     * the tab names that instead of failing the whole page.
+     */
+    @Test
+    void anApplicationsFilesAreItsServingReleases() throws Exception {
+        int applicationId = instance("files-app", ApplicationKind.ID.toString(), ServerModel.localServerId());
+        String page = "/admin/instances/" + applicationId + "/page/files";
+
+        // 1. THE DEFECT: the tab resolved the application's own runtime, which refuses, so the page was a 422.
+        HttpResponse<String> unserved = httpGet(page, sessionToken);
+        assertThat(unserved.statusCode()).as("step 1: the Files tab of an application nothing serves renders")
+            .isEqualTo(200);
+        assertThat(unserved.body()).as("step 1: and says nothing serves it yet")
+            .contains("data-files-error").contains("Nothing serves");
+
+        // 2. A serving release: the tab's roots are that release's mounts, and the page no longer refuses.
+        GeneratedRows.as(new GeneratedRows.Attribution(ApplicationReleases.SOURCE,
+                InstanceModel.MODEL_ID.toString(), applicationId), () -> {
+            Row release = Models.get(InstanceModel.class).createEmptyRow();
+            release.set(InstanceModel.NAME, "files-app-release");
+            release.set(InstanceModel.KIND, ReleaseKind.ID.toString());
+            release.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+            release.set(InstanceModel.SETTINGS, Map.of("image", "alpine",
+                ApplicationReleases.VOLUME_MOUNTS, Map.of("/srv/files-app-data", "/data")));
+            release.set(InstanceModel.RUNTIME_ROLE, InstanceModel.ROLE_SERVING);
+            release.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
+            Models.get(InstanceModel.class).save(release);
+        });
+        assertThat(new InstanceFiles().volumeRoots(applicationId))
+            .as("step 2: the application's file roots are its serving release's mounts")
+            .containsExactly("/data");
+        HttpResponse<String> served = httpGet(page, sessionToken);
+        assertThat(served.statusCode()).as("step 2: the tab renders").isEqualTo(200);
+        assertThat(served.body()).as("step 2: and no longer says nothing serves it")
+            .doesNotContain("Nothing serves").doesNotContain("data-files-unsupported");
     }
 
     /**
