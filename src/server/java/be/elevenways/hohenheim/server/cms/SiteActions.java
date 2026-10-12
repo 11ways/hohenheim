@@ -118,8 +118,8 @@ final class SiteActions {
                     HohenheimMicrocopy.SITE.of("stop_forcing_https_toast")))
             .inlineOnRecord(false)
             .inlineInRow(false)
-            .confirmation(ConfirmationSpec.generic(
-                HohenheimMicrocopy.SITE.of("stop_forcing_https_confirm"), false))
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.SITE.of("stop_forcing_https"),
+                HohenheimMicrocopy.SITE.of("stop_forcing_https_confirm"), ActionStyle.PRIMARY))
             .build();
     }
 

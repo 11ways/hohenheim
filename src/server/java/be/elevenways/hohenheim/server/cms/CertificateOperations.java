@@ -181,7 +181,7 @@ public final class CertificateOperations {
     static @NonNull PanelAction<Row> requestAction() {
         init();
         return PanelAction.<Row, Integer>places(REQUEST, ActionPlacement.HEADER, CertificateOperations::opened)
-            .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("uses_production"), false))
+            .confirmation(requestConfirmation(null))
             .inSheet()
             .inlineInHeader(true)
             .build();
@@ -207,7 +207,8 @@ public final class CertificateOperations {
     static @NonNull PanelAction<Row> reissueAction() {
         init();
         return PanelAction.<Row, Integer>places(REISSUE, ActionPlacement.ROW, CertificateOperations::opened)
-            .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("reissue_notice"), false))
+            .confirmation(reissueConfirmation(null))
+            .dynamicConfirmation(CertificateOperations::reissueConfirmation)
             .inSheet()
             .inputValues((cert, request) -> reorder(cert))
             // A manual upload has no order to repeat, and the ACME account row is not a certificate at all: the
@@ -222,8 +223,8 @@ public final class CertificateOperations {
     static @NonNull PanelAction<Row> continueDnsAction() {
         init();
         return PanelAction.<Row, Integer>places(CONTINUE_DNS, ActionPlacement.ROW, CertificateOperations::opened)
-            .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("publish_description"),
-                false))
+            .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("verify_dns"),
+                HohenheimMicrocopy.CERTIFICATE_REQUEST.of("publish_description"), ActionStyle.PRIMARY))
             .build();
     }
 
@@ -241,6 +242,20 @@ public final class CertificateOperations {
         return ConfirmationSpec.of(copy.of("get_certificate_for").withArg("hostname", hostname),
             copy.of("get_certificate"), copy.of("get_certificate_for_body").withArg("hostname", hostname),
             ActionStyle.PRIMARY);
+    }
+
+    /**
+     * The re-order's dialog names the domains the certificate secures; the fallback serves an offer drawn without its
+     * row.
+     *
+     * @param cert the certificate row, null for none
+     */
+    private static @NonNull ConfirmationSpec reissueConfirmation(@Nullable Row cert) {
+        HohenheimMicrocopy copy = HohenheimMicrocopy.CERTIFICATE_REQUEST;
+        String domains = cert == null ? "" : DeleteImpact.join(CertificateCoverage.namesOf(cert));
+        return ConfirmationSpec.of(domains.isEmpty() ? copy.of("reissue_title")
+                : copy.of("reissue_title_for").withArg("domains", domains),
+            copy.of("reissue_submit"), copy.of("reissue_notice"), ActionStyle.PRIMARY);
     }
 
     /**

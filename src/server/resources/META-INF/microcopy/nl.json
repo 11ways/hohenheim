@@ -14354,6 +14354,14 @@
     "text": "Dit vraagt een echt certificaat aan bij Let's Encrypt (productie), wat meetelt voor de limieten daar.",
     "scope": "certificate_request"
   },
+  "reissue_title": {
+    "text": "Dit certificaat opnieuw uitgeven?",
+    "scope": "certificate_request"
+  },
+  "reissue_title_for": {
+    "text": "Het certificaat voor {$domains} opnieuw uitgeven?",
+    "scope": "certificate_request"
+  },
   "dns_mode_help": {
     "text": "Waar de TXT-records komen die Let's Encrypt controleert. Handmatig: je voegt ze toe bij je DNS-provider en kiest daarna DNS controleren op het certificaat.",
     "scope": "certificate_request"

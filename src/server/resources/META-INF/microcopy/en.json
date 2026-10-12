@@ -14354,6 +14354,14 @@
     "text": "This orders a real certificate from Let's Encrypt (production), which counts against its rate limits.",
     "scope": "certificate_request"
   },
+  "reissue_title": {
+    "text": "Re-issue this certificate?",
+    "scope": "certificate_request"
+  },
+  "reissue_title_for": {
+    "text": "Re-issue the certificate for {$domains}?",
+    "scope": "certificate_request"
+  },
   "dns_mode_help": {
     "text": "Where the TXT records Let's Encrypt checks are published. Manual: you add them at your DNS provider, then choose Verify DNS on the certificate.",
     "scope": "certificate_request"
