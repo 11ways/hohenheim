@@ -25,26 +25,26 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public enum DeployTrigger {
 
     /** A person pressed a control on this record; they are standing there asking. */
-    MANUAL("manual", true),
+    MANUAL("manual", true, true),
 
     /**
      * An API key holder asked over {@code /api/v1} or the PaaS API: a deliberate request
      * from a credential an operator issued, so it may start what it deploys -- and it
      * keeps its own word so the activity row still says WHICH surface asked.
      */
-    API("api", true),
+    API("api", true, true),
 
     /**
      * The control plane converging its own work: {@code InstanceService}'s default
      * reason, and everything that reaches deploy without naming a trigger.
      */
-    SYSTEM(InstanceService.DEFAULT_DEPLOY_REASON, true),
+    SYSTEM(InstanceService.DEFAULT_DEPLOY_REASON, true, false),
 
     /**
      * A record schedule step placed the start or restart. Exactly {@link #SYSTEM}'s start policy, so a scheduled
      * deploy behaves as before; only its recorded word names the surface that asked.
      */
-    SCHEDULE("schedule", true),
+    SCHEDULE("schedule", true, false),
 
     /**
      * Someone else's {@code git push}, relayed by a forge.
@@ -54,13 +54,13 @@ public enum DeployTrigger {
      * third party's push is not an argument against it -- the deploy is recorded, the
      * decision is stated, and nothing is spent.
      */
-    WEBHOOK("webhook", false),
+    WEBHOOK("webhook", false, false),
 
     /**
      * The scheduled check found a new commit on the source's branch ({@code GitSourcePolls}): the same third-party
      * push as {@link #WEBHOOK}, only learned by asking, so it may not start a stopped workload either.
      */
-    POLL("poll", false);
+    POLL("poll", false, false);
 
     /**
      * What an unrecognised stored word reads as: the first DECLARED member that may not
@@ -74,10 +74,12 @@ public enum DeployTrigger {
 
     private final @NonNull String word;
     private final boolean startsStoppedWorkload;
+    private final boolean liftsRollbackPin;
 
-    DeployTrigger(@NonNull String word, boolean startsStoppedWorkload) {
+    DeployTrigger(@NonNull String word, boolean startsStoppedWorkload, boolean liftsRollbackPin) {
         this.word = word;
         this.startsStoppedWorkload = startsStoppedWorkload;
+        this.liftsRollbackPin = liftsRollbackPin;
     }
 
     /** The reason word this trigger is recorded under. */
@@ -88,6 +90,16 @@ public enum DeployTrigger {
     /** Whether a deploy on this trigger may bring a workload that is down back up. */
     public boolean startsStoppedWorkload() {
         return this.startsStoppedWorkload;
+    }
+
+    /**
+     * Whether a deploy on this trigger releases the source a rollback rejected again.
+     *
+     * Only a deliberate request does: a person pressing Deploy after a rollback asks for the branch's head, while a
+     * convergence, a schedule or a re-delivered push of the rejected commit must keep the rollback standing.
+     */
+    public boolean liftsRollbackPin() {
+        return this.liftsRollbackPin;
     }
 
     /**

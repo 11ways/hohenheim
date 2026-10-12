@@ -9,7 +9,9 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.test.Poll;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
+import be.elevenways.hohenheim.server.application.ApplicationDeploys;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
+import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.application.ApplicationUpstreams;
 import be.elevenways.hohenheim.server.application.InstanceUpstreamHandler;
 import be.elevenways.hohenheim.server.application.ReleaseEngine;
@@ -246,7 +248,7 @@ class ApplicationReleaseTest {
      * was retained although its container never runs again (a rollback boots a fresh candidate).
      */
     @Test
-    void aFullHostStillUpdatesAndRollsBackAndARetiredReleaseBooksNothing() {
+    void aFullHostStillUpdatesRollsBackAndDeploysForwardAgain() {
         Integer savedReserve = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB);
         Double savedRatio = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Capacity.MEMORY_OVERCOMMIT_RATIO);
         int host = ServerModel.localServerId();
@@ -295,6 +297,21 @@ class ApplicationReleaseTest {
                     () -> ReleaseSettling.settled(applicationId));
                 assertThat(InstanceCapacity.bookedMbOn(host))
                     .as("step 4: the host still books one release of the application").isEqualTo(booked);
+
+                // 5. The rollback stands against a plain converge, and a person pressing Deploy lifts it: the
+                //    rejected source is released again instead of the button doing nothing.
+                ApplicationReleases.converge(applicationId, Map.of());
+                assertThat(ApplicationReleases.storedSettings(ApplicationReleases.ownedServing(applicationId))
+                        .get("image"))
+                    .as("step 5: a plain converge keeps the rolled-back release")
+                    .isEqualTo(FakeDockerDaemon.digestOf("fake/app:v1"));
+                ApplicationDeploys.deploy(applicationId, null, null, DeployTrigger.MANUAL);
+                assertThat(ApplicationReleases.storedSettings(ApplicationReleases.ownedServing(applicationId))
+                        .get("image"))
+                    .as("step 5: Deploy now serves the branch's source again")
+                    .isEqualTo(FakeDockerDaemon.digestOf("fake/app:v2"));
+                await("step 5: the forward deploy's drain lets go of the application",
+                    () -> ReleaseSettling.settled(applicationId));
             } finally {
                 ApplicationReleases.destroyFor(applicationId);
                 Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Capacity.HOST_MEMORY_RESERVE_MB, savedReserve);

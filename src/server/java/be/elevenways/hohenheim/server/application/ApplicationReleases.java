@@ -135,9 +135,20 @@ public final class ApplicationReleases {
      */
     public static @NonNull Release converge(int applicationId,
                                             @NonNull Map<String, Object> overrides) {
+        return converge(applicationId, overrides, false);
+    }
+
+    /**
+     * {@link #converge}, optionally past a rollback pin.
+     *
+     * @param liftRollbackPin true when a deliberate deploy request asks for the very source a rollback rejected
+     *        ({@code DeployTrigger.liftsRollbackPin}); a plain converge keeps the rolled-back release serving
+     */
+    public static @NonNull Release converge(int applicationId, @NonNull Map<String, Object> overrides,
+                                            boolean liftRollbackPin) {
         return InstanceOperationLock.production().exclusive(applicationId,
             InstanceOperationLock.Contention.QUEUE,
-            () -> convergeLocked(applicationId, overrides));
+            () -> convergeLocked(applicationId, overrides, liftRollbackPin));
     }
 
     /** Restore an imported image and its owner-keyed volumes before the first start. */
@@ -184,8 +195,8 @@ public final class ApplicationReleases {
     }
 
     /** {@link #converge}'s body; callers hold the application's operation lock. */
-    private static @NonNull Release convergeLocked(int applicationId,
-                                                   @NonNull Map<String, Object> overrides) {
+    private static @NonNull Release convergeLocked(int applicationId, @NonNull Map<String, Object> overrides,
+                                                   boolean liftRollbackPin) {
 
         Row application = requireApplication(applicationId);
         Map<String, Object> settings = resolvedSettings(application, overrides);
@@ -226,8 +237,10 @@ public final class ApplicationReleases {
                 }
 
                 // Rollback pin: the operator rejected exactly this source, so converge
-                // on the ROLLED-BACK release instead of re-releasing the rejected spec.
-                if (serving != null && ReleaseEngine.pinnedByRollback(applicationId, fingerprint)) {
+                // on the ROLLED-BACK release instead of re-releasing the rejected spec --
+                // unless the operator now deliberately asks for that source again.
+                if (!liftRollbackPin && serving != null
+                        && ReleaseEngine.pinnedByRollback(applicationId, fingerprint)) {
                     int servingId = serving.get(InstanceModel.ID);
                     if (InstanceModel.STATUS_RUNNING.equals(serving.get(InstanceModel.STATUS))) {
                         InstanceStatus live =

@@ -156,7 +156,7 @@ public final class ApplicationDeploys {
 
         try {
             ApplicationReleases.Release release =
-                ApplicationReleases.converge(applicationId, overrides);
+                ApplicationReleases.converge(applicationId, overrides, trigger.liftsRollbackPin());
             // The SAME action word every other instance deploy is recorded under -- a
             // second spelling would split one verb across two vocabularies.
             ActivityLog.record(Models.get(InstanceModel.class), applicationId,
