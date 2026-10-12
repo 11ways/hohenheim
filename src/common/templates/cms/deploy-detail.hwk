@@ -7,9 +7,9 @@
     decides whether a row has detail and which text a reader of this panel may see (a
     delegated panel gets a tenant-safe reason, never the daemon's own text); this only
     draws it. The trigger is the collapsible's own ghost register, never a pl-button
-    nested inside it -- that was a button inside a button. -#}
+    nested inside it -- that was a button inside a button. The row's one cell is
+    pl-table-detail-cell, so the log spans every column of either table. -#}
 {% declare deploy: Map<String, Object> %}
-{% declare colspan: Integer %}
 {% declare logLabel: Microcopy %}
 {% declare buildLogLabel: Microcopy = null %}
 {% snippet logView(label: Microcopy, text: Object) %}
@@ -24,7 +24,7 @@
 </pl-collapsible>
 {% /snippet %}
 <pl-table-row data-detail>
-    <pl-table-cell colspan={% colspan %} class="hh-deploy-detail">
+    <pl-table-detail-cell class="hh-deploy-detail">
         {% if deploy.get("error") != "" %}
         <div class="hh-deploy-error">
             <pl-icon name="triangle-exclamation"></pl-icon>
@@ -37,5 +37,5 @@
         {% if buildLogLabel != null and deploy.get("hasBuildLog") == true %}
         <div data-hh-build-log>{% render logView(buildLogLabel, deploy.get("buildLog")) %}</div>
         {% /if %}
-    </pl-table-cell>
+    </pl-table-detail-cell>
 </pl-table-row>

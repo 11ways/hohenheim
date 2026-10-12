@@ -130,7 +130,6 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         vars.put("showTrigger", releaseManaged);
         // The live band leads both lanes; only a release lane keeps a release to go back to.
         vars.put("keepsReleases", releaseManaged);
-        vars.put("columnCount", releaseManaged ? 5 : 4);
 
         WithheldFailure failures = WithheldFailure.of(conduit);
         if (releaseManaged) {
