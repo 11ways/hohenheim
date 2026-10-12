@@ -114,13 +114,16 @@ class InstanceLogRetentionLiveTest {
                 service.deploy(id);
 
                 // 2. The workload prints an ordinary line and a secret one; the episode is
-                //    flushed to its row.
+                //    flushed to its row. The wait is for BOTH outputs (the second line ends in
+                //    " ok" however it is redacted): waiting for the first alone raced the second
+                //    command's output to the flush (run 1810, 2026-10-12).
                 InstanceConsoles.sendCommand(id, "echo history-line-abcdef");
                 InstanceConsoles.sendCommand(id, "echo token=" + SECRET + " ok");
                 Poll.until("step 2: the episode's output was written down",
                     Duration.ofMillis(15_000), POLL_INTERVAL, () -> {
                     InstanceConsoles.flushLogNow(id);
-                    return storedText(logs, id).contains("history-line-abcdef");
+                    String text = storedText(logs, id);
+                    return text.contains("history-line-abcdef") && text.contains(" ok");
                 });
 
                 List<Row> stored = logs.findByInstanceId(id, 50);
