@@ -253,15 +253,7 @@ public class ServerService extends DatasourceScoped {
             info.put("OSType", environment.get("kernel") != null
                 ? BlastString.lower(String.valueOf(environment.get("kernel"))) : "");
             info.put("Architecture", environment.get("kernel_architecture"));
-            Map<String, Object> resources = client.resources();
-            if (resources.get("cpu") instanceof Map<?, ?> cpu
-                    && cpu.get("total") instanceof Number total) {
-                info.put("NCPU", total.intValue());
-            }
-            if (resources.get("memory") instanceof Map<?, ?> memory
-                    && memory.get("total") instanceof Number total) {
-                info.put("MemTotal", total.longValue());
-            }
+            info.putAll(client.resourceTotals().asInfo());
             int running = 0;
             List<Map<String, Object>> instances = client.instances();
             for (Map<String, Object> instance : instances) {

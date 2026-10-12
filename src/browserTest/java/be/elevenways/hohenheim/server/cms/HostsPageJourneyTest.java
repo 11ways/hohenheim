@@ -12,7 +12,9 @@ import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.HostProbe;
 import be.elevenways.hohenheim.server.host.PreflightFinding;
+import be.elevenways.hohenheim.server.incus.EchoIncusDaemon;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
+import be.elevenways.hohenheim.server.task.ReapIncusControllers;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -231,12 +233,18 @@ class HostsPageJourneyTest extends HohenheimTestBase {
                 .as("step 2: and names no button in prose").doesNotContain("Check again measures");
 
             // 3. The cause on Starfleet: only a full preflight wrote the memory reading, so a host the hourly
-            //    sweep reached every hour still went stale. The heartbeat now records the daemon's memory total: the
-            //    reading is fresh again, while the checks, their time and the preflight verdict stay as stored.
+            //    sweep reached every hour still went stale. Every heartbeat now records the daemon's memory total: the
+            //    reading is fresh again, while the checks, their time and the preflight verdict stay as stored. This
+            //    host is an Incus host, whose heartbeat is the 15-minute controller sweep: it re-measured nothing
+            //    (nightstrom on daystrom, seen every 15 minutes and last measured at its preflight, 2026-10-12).
             Instant preflightAt = server(stale).get(ServerModel.PROBED_AT);
-            HostProbe.recordSuccess(PREFIX + "stale", Map.of("MemTotal", 16L * 1024 * 1024 * 1024));
+            EchoIncusDaemon daemon = new EchoIncusDaemon();
+            daemon.resources = Map.of("memory", Map.of("total", 16L * 1024 * 1024 * 1024),
+                "cpu", Map.of("total", 4));
+            ReapIncusControllers.HostOutcome swept = ReapIncusControllers.sweepHost(server(stale), daemon.client());
+            assertThat(swept.reachable()).as("step 3: the sweep reached the host's daemon").isTrue();
             assertThat(HostPreflight.factMeasuredAt(server(stale), HostPreflight.MEM_TOTAL_FACT))
-                .as("step 3: the heartbeat measured the memory now")
+                .as("step 3: the Incus heartbeat measured the memory now")
                 .isAfter(Now.instant().minus(Duration.ofMinutes(1)));
             assertThat((Instant) server(stale).get(ServerModel.PROBED_AT))
                 .as("step 3: the preflight's own time is untouched").isEqualTo(preflightAt);

@@ -459,14 +459,12 @@ public final class IncusPreflight {
     private static void recordResources(IncusClient client, Map<String, Object> facts,
                                         List<HostPreflight.Check> checks) {
         try {
-            Map<String, Object> resources = client.resources();
-            if (resources.get("cpu") instanceof Map<?, ?> cpu
-                    && cpu.get("total") instanceof Number total) {
-                facts.put(HostFact.NCPU.token(), total.intValue());
+            IncusClient.ResourceTotals totals = client.resourceTotals();
+            if (totals.cpus() != null) {
+                facts.put(HostFact.NCPU.token(), totals.cpus());
             }
-            if (resources.get("memory") instanceof Map<?, ?> memory
-                    && memory.get("total") instanceof Number total) {
-                facts.put(HostFact.MEM_TOTAL.token(), total.longValue());
+            if (totals.memoryBytes() != null) {
+                facts.put(HostFact.MEM_TOTAL.token(), totals.memoryBytes());
             }
         } catch (IOException | RuntimeException unreadable) {
             checks.add(HostPreflight.Check.of("resources", HostPreflight.STATUS_FAIL, true,

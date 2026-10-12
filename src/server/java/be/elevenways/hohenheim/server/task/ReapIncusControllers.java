@@ -24,10 +24,13 @@ import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The sweep that keeps a shared Incus daemon from accumulating one isolation ACL and one
@@ -131,7 +134,12 @@ public class ReapIncusControllers extends ScheduledTask {
         } catch (RuntimeException unreachable) {
             return unreachable(name, "could not address the daemon", unreachable);
         }
+        return sweepHost(server, incus);
+    }
 
+    /** {@link #sweepHost(Row)} through a client already addressing the host's daemon. */
+    public static @NonNull HostOutcome sweepHost(@NonNull Row server, @NonNull IncusClient incus) {
+        String name = String.valueOf((Object) server.get(ServerModel.NAME));
         try {
             ControllerPresence.stamp(incus);
         } catch (Exception unstamped) {
@@ -153,7 +161,10 @@ public class ReapIncusControllers extends ScheduledTask {
         // for Docker hosts all along, and an Incus host had no positive signal at all.
         // Recorded only after the daemon actually ANSWERED (stamp written, objects
         // listed), never off a client object that merely constructed.
-        HostProbe.recordSuccess(name);
+        // AIDEV-NOTE: the heartbeat carries the host's memory reading, as the Docker reconcile's does. Without it an
+        // Incus host was measured only by a full preflight, so a host this sweep reached every 15 minutes still aged
+        // past the freshness bound and silently stopped taking new apps (nightstrom on daystrom, 2026-10-12).
+        HostProbe.recordSuccess(name, memoryReadingOf(name, incus));
 
         if (!reapingEnabled()) {
             return new HostOutcome(name, true, plan, List.of(), List.of(), List.of());
@@ -164,6 +175,21 @@ public class ReapIncusControllers extends ScheduledTask {
                 HohenheimActivityAction.REAPED_CONTROLLER_OBJECTS, removed);
         }
         return new HostOutcome(name, true, plan, reaped.removed(), reaped.refused(), List.of());
+    }
+
+    /**
+     * The daemon's resource totals as the heartbeat records them.
+     *
+     * @return the totals, or null when the daemon would not tell: the reading then ages, visibly, on the host page
+     */
+    private static @Nullable Map<String, Object> memoryReadingOf(@NonNull String name, @NonNull IncusClient incus) {
+        try {
+            return incus.resourceTotals().asInfo();
+        } catch (IOException | RuntimeException unreadable) {
+            Blast.log("INCUS REAP:", name, "resources unreadable, memory reading not refreshed -",
+                unreadable.getMessage());
+            return null;
+        }
     }
 
     /**

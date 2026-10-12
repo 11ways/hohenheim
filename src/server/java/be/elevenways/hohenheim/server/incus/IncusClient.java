@@ -124,6 +124,40 @@ public class IncusClient {
         return syncMetadata("GET", "/1.0/resources", null, DEFAULT_TIMEOUT_MS);
     }
 
+    /**
+     * The host's CPU count and total memory as {@code GET /1.0/resources} reports them.
+     *
+     * @param cpus        null when the daemon reports no CPU total
+     * @param memoryBytes null when the daemon reports no memory total
+     */
+    public record ResourceTotals(@Nullable Integer cpus, @Nullable Long memoryBytes) {
+
+        /**
+         * @return these totals under the Docker {@code /info} key spelling the host facts read ({@code NCPU},
+         *         {@code MemTotal}), absent keys for absent totals
+         */
+        public @NonNull Map<String, Object> asInfo() {
+            Map<String, Object> info = new LinkedHashMap<>();
+            if (this.cpus != null) {
+                info.put("NCPU", this.cpus);
+            }
+            if (this.memoryBytes != null) {
+                info.put("MemTotal", this.memoryBytes);
+            }
+            return info;
+        }
+    }
+
+    /** @return the host's CPU count and total memory, read from {@link #resources()} */
+    public @NonNull ResourceTotals resourceTotals() throws IOException {
+        Map<String, Object> resources = resources();
+        Integer cpus = resources.get("cpu") instanceof Map<?, ?> cpu && cpu.get("total") instanceof Number total
+            ? total.intValue() : null;
+        Long memory = resources.get("memory") instanceof Map<?, ?> memoryMap
+            && memoryMap.get("total") instanceof Number total ? total.longValue() : null;
+        return new ResourceTotals(cpus, memory);
+    }
+
     /** All instances of the default project, recursed to full objects. */
     public @NonNull List<Map<String, Object>> instances() throws IOException {
         return recursed("/1.0/instances");
