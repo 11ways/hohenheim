@@ -109,7 +109,22 @@ public final class TenantScopes {
      * list -- THE {@link InstanceModel#liveAuthored} clause the instance and file APIs read too.
      */
     public static final RowScope INSTANCES = RowScope.within(InstanceModel::liveAuthored).andPerPrincipal(
-        ctx -> HohenheimAccess.instanceScope(ctx, HohenheimCapabilities.VIEW));
+        TenantScopes::viewableInstances);
+
+    /**
+     * Who may READ an instance in any archived lane: {@link #INSTANCES} without its trash half, the instance model
+     * source's scope.
+     *
+     * AIDEV-NOTE: on a record source the archived lane decides trash (a picker, a list and a search hop read live
+     * rows only), while a stored reference reads both lanes under this scope: a backup of a trashed instance names
+     * it, marked deleted, to whoever may read it, and never by a bare id.
+     */
+    public static final RowScope INSTANCE_READERS = RowScope.within(InstanceModel::authored).andPerPrincipal(
+        TenantScopes::viewableInstances);
+
+    private static @Nullable Criteria viewableInstances(@NonNull AccessContext ctx) {
+        return HohenheimAccess.instanceScope(ctx, HohenheimCapabilities.VIEW);
+    }
 
     /** The template catalog: operators browse everything, everyone else only APPROVED rows. */
     public static final RowScope INSTANCE_TEMPLATES = RowScope.perPrincipal(

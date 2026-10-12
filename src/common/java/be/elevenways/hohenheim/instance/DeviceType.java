@@ -7,6 +7,8 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.List;
+
 /**
  * THE vocabulary of an instance device row's {@code type}, with what each member charges
  * and how the daemon treats it as facts on the member.
@@ -24,13 +26,14 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public enum DeviceType {
 
     /** An extra block device backed by a daemon volume, charged in gigabytes. */
-    DISK(InstanceDeviceModel.TYPE_DISK, QuotaCharge.DISK_GIGABYTES, true, false, false),
+    DISK(InstanceDeviceModel.TYPE_DISK, QuotaCharge.DISK_GIGABYTES, true, false, false,
+        List.of(DeviceDetail.SIZE_GB)),
 
     /** An extra network interface, charged one NIC slot. */
-    NIC(InstanceDeviceModel.TYPE_NIC, QuotaCharge.NIC_SLOT, false, false, false),
+    NIC(InstanceDeviceModel.TYPE_NIC, QuotaCharge.NIC_SLOT, false, false, false, List.of()),
 
     /** Operator-published install media; charges nothing and owns no volume. Attached through its own action. */
-    CDROM(InstanceDeviceModel.TYPE_CDROM, QuotaCharge.NONE, false, true, true);
+    CDROM(InstanceDeviceModel.TYPE_CDROM, QuotaCharge.NONE, false, true, true, List.of(DeviceDetail.SOURCE_MEDIA));
 
     /** The owner-quota bucket a device of a type is charged to. */
     public enum QuotaCharge {
@@ -50,14 +53,16 @@ public enum DeviceType {
     private final boolean ownsVolume;
     private final boolean operatorOnly;
     private final boolean ownAttachAction;
+    private final List<DeviceDetail> details;
 
     DeviceType(@NonNull String token, @NonNull QuotaCharge charge, boolean ownsVolume,
-               boolean operatorOnly, boolean ownAttachAction) {
+               boolean operatorOnly, boolean ownAttachAction, @NonNull List<DeviceDetail> details) {
         this.token = token;
         this.charge = charge;
         this.ownsVolume = ownsVolume;
         this.operatorOnly = operatorOnly;
         this.ownAttachAction = ownAttachAction;
+        this.details = details;
     }
 
     /** @return the stored column value */
@@ -86,6 +91,11 @@ public enum DeviceType {
      */
     public boolean ownAttachAction() {
         return this.ownAttachAction;
+    }
+
+    /** @return the details a row of this type means; any other detail is no fact about it, never shown for it */
+    public @NonNull List<DeviceDetail> details() {
+        return this.details;
     }
 
     /** @return the member stored as {@code token}, or null when it is no member */

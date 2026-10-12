@@ -245,6 +245,13 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
             .containsPattern("(/admin/instance-backups/" + orphanId + "/delete|delete_backup\\?ids=" + orphanId
                 + "(?![0-9]))");
 
+        // 2b. The backup names its instance by title, marked deleted, on its record page and in the backup list:
+        //     a relation to a trashed record the operator may read is never a bare id.
+        assertThat(page.body()).as("step 2b: the record page names the deleted instance")
+            .contains("artifact-gone (deleted)");
+        assertThat(httpGet("/admin/" + HohenheimSlugs.INSTANCE_BACKUPS, sessionToken).body())
+            .as("step 2b: and so does the backup list").contains("artifact-gone (deleted)");
+
         // 3. The restore's host pick lists the hosts a restore could land on, read off the backup alone.
         assertThat(InstanceBackups.destinationsFor(Models.get(InstanceBackupModel.class).findById(orphanId)))
             .as("step 3: the host pick offers this installation's host")

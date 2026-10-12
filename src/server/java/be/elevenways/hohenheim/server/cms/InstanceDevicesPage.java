@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
+import be.elevenways.hohenheim.instance.DeviceDetail;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -32,9 +33,12 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
 import be.elevenways.zenit.common.routing.RouteTarget;
+import be.elevenways.zenit.common.edit.FieldLabels;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.widget.common.data.WidgetBadge;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -111,20 +115,31 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
         Integer instanceId = instance.get(InstanceModel.ID);
         String panel = request.panelSlug();
 
+        List<Row> rows = new InstanceDevices().rowsFor(instanceId);
+        List<DeviceDetail> columns = detailColumns(rows);
         List<Map<String, Object>> devices = new ArrayList<>();
-        for (Row device : new InstanceDevices().rowsFor(instanceId)) {
+        for (Row device : rows) {
             Map<String, Object> entry = new HashMap<>();
+            Object token = device.get(InstanceDeviceModel.TYPE);
+            DeviceType type = DeviceType.parse(token);
+            WidgetBadge.Colors colors = WidgetBadge.colorsOf(InstanceDeviceModel.TYPE, token);
             entry.put("id", device.get(InstanceDeviceModel.ID));
             entry.put("name", device.get(InstanceDeviceModel.NAME));
-            entry.put("type", device.get(InstanceDeviceModel.TYPE));
-            DeviceType type = DeviceType.parse(device.get(InstanceDeviceModel.TYPE));
-            entry.put("disk", type == DeviceType.DISK);
-            entry.put("sizeGb", device.get(InstanceDeviceModel.SIZE_GB));
-            entry.put("cdrom", type == DeviceType.CDROM);
-            entry.put("sourceMedia", device.get(InstanceDeviceModel.SOURCE_MEDIA));
+            entry.put("typeLabel", CmsSupport.enumLabel(InstanceDeviceModel.TYPE, token));
+            entry.put("typeVariant", colors.variant());
+            entry.put("typeColorSet", colors.colorSet());
+            List<String> details = new ArrayList<>();
+            for (DeviceDetail detail : columns) {
+                details.add(detailText(type, detail, device));
+            }
+            entry.put("details", details);
             entry.put("editTarget", CmsRoutes.detail(panel, HohenheimSlugs.INSTANCE_DEVICES,
                 device.get(InstanceDeviceModel.ID)));
             devices.add(entry);
+        }
+        List<String> detailHeads = new ArrayList<>();
+        for (DeviceDetail detail : columns) {
+            detailHeads.add(FieldLabels.labelFor(detail.field()).asString(conduit));
         }
 
         Map<String, Object> vars = new HashMap<>();
@@ -133,6 +148,7 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
         vars.put("instanceId", instanceId);
         vars.put("instanceName", instance.get(InstanceModel.NAME));
         vars.put("devices", devices);
+        vars.put("detailHeads", detailHeads);
         boolean canEdit = HohenheimAccess.isAdmin(accessContext)
             || HohenheimAccess.hasInstanceCapability(
                 accessContext, instanceId, HohenheimCapabilities.CONFIG);
@@ -163,6 +179,34 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
                 .asString(conduit) : "");
         vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_DEVICES, vars);
+    }
+
+    /** @return every detail some listed device's type means, in the vocabulary's order: the tab's detail columns */
+    private static @NonNull List<DeviceDetail> detailColumns(@NonNull List<Row> devices) {
+        List<DeviceDetail> columns = new ArrayList<>();
+        for (DeviceDetail detail : DeviceDetail.values()) {
+            for (Row device : devices) {
+                DeviceType type = DeviceType.parse(device.get(InstanceDeviceModel.TYPE));
+                if (type != null && type.details().contains(detail)) {
+                    columns.add(detail);
+                    break;
+                }
+            }
+        }
+        return columns;
+    }
+
+    /**
+     * @return the detail's text for the device: empty where its type does not mean the detail (an unknown type means
+     *         none), "-" where it does but holds no value
+     */
+    private static @NonNull String detailText(@Nullable DeviceType type, @NonNull DeviceDetail detail,
+                                              @NonNull Row device) {
+        if (type == null || !type.details().contains(detail)) {
+            return "";
+        }
+        Object value = device.get(detail.field().getName());
+        return value == null ? "-" : String.valueOf(value);
     }
 
     /** The device create form, opened with its kind and owning instance prefilled. */

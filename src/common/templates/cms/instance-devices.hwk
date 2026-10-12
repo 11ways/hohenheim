@@ -4,6 +4,7 @@
 {% declare instanceId: Integer %}
 {% declare instanceName: String %}
 {% declare devices: List %}
+{% declare detailHeads: List %}
 {% declare addDiskTarget: RouteTarget = null %}
 {% declare addNicTarget: RouteTarget = null %}
 {% declare mediaForm: PageFormState = null %}
@@ -37,22 +38,14 @@
         <pl-table-header><pl-table-row>
             <pl-table-head>{{ t("name", scope: "hohenheim_field") }}</pl-table-head>
             <pl-table-head>{{ t("type", scope: "instance_device") }}</pl-table-head>
-            <pl-table-head>{{ t("device_size_gb", scope: "hohenheim_field") }}</pl-table-head>
+            {% each detailHeads as headIndex, head %}<pl-table-head>{{ head }}</pl-table-head>{% /each %}
         </pl-table-row></pl-table-header>
         <pl-table-body>
             {% each devices as index, device %}
             <pl-table-row>
                 <pl-table-cell>{% if canEdit %}<a use:Zenit.route={% device.get("editTarget") %}>{{ device.get("name") }}</a>{% else %}{{ device.get("name") }}{% /if %}</pl-table-cell>
-                <pl-table-cell>
-                    {% if device.get("disk") == true %}
-                    <pl-badge variant="primary">{{ t("disk", scope: "instance_device") }}</pl-badge>
-                    {% else %}{% if device.get("cdrom") == true %}
-                    <pl-badge variant="primary">{{ t("cdrom", scope: "instance_device") }}</pl-badge>
-                    {% else %}
-                    <pl-badge variant={% "secondary" %}>{{ t("nic", scope: "instance_device") }}</pl-badge>
-                    {% /if %}{% /if %}
-                </pl-table-cell>
-                <pl-table-cell>{% if device.get("disk") == true %}{{ device.get("sizeGb") }}{% else %}{% if device.get("cdrom") == true %}{{ device.get("sourceMedia") }}{% else %}-{% /if %}{% /if %}</pl-table-cell>
+                <pl-table-cell><pl-badge variant={% device.get("typeVariant") %} colorSet={% device.get("typeColorSet") %}>{{ device.get("typeLabel") }}</pl-badge></pl-table-cell>
+                {% each device.get("details") as detailIndex, detail %}<pl-table-cell>{{ detail }}</pl-table-cell>{% /each %}
             </pl-table-row>
             {% /each %}
         </pl-table-body>

@@ -38,12 +38,16 @@ import be.elevenways.zenit.common.orm.quota.Quotas;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -252,6 +256,72 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .doesNotContainKey(device);
         assertThat(deviceRows(instanceId))
             .as("step 5: and only the NIC row survives").hasSize(1);
+    }
+
+    /**
+     * The Devices tab shows each device only the columns meaningful for its type: a disk its size, install media its
+     * ISO, a NIC neither, and an ISO name never reads as a size.
+     */
+    @Test
+    void eachDeviceRowFillsOnlyTheColumnsItsTypeDeclares() throws Exception {
+        int instanceId = deviceCapableInstance("devsurf-columns");
+        InstanceDevices devices = new InstanceDevices();
+        devices.attachDisk(instanceId, NAME_PREFIX + "data", 2);
+        devices.attachNic(instanceId, NAME_PREFIX + "net");
+        devices.attachCdrom(instanceId, NAME_PREFIX + "cd", "debian.iso");
+
+        // 1. The tab draws one row per device under a size AND an install media column.
+        HttpResponse<String> tab = adminGet("/admin/instances/" + instanceId + "/page/devices");
+        assertThat(tab.statusCode()).as("step 1: the Devices tab renders").isEqualTo(200);
+        Map<String, Map<String, String>> rows = deviceTable(tab.body());
+        assertThat(rows).as("step 1: one row per device")
+            .containsOnlyKeys(NAME_PREFIX + "data", NAME_PREFIX + "net", NAME_PREFIX + "cd");
+        assertThat(rows.get(NAME_PREFIX + "data")).as("step 1: the columns, in order")
+            .containsOnlyKeys("Name", "Type", "Size (GB)", "Install media (ISO volume)");
+
+        // 2. The disk shows its size and no medium.
+        assertThat(rows.get(NAME_PREFIX + "data")).as("step 2: the disk's size, no medium")
+            .containsEntry("Size (GB)", "2").containsEntry("Install media (ISO volume)", "");
+
+        // 3. The install media shows its ISO under its own column, never under the size.
+        assertThat(rows.get(NAME_PREFIX + "cd")).as("step 3: the ISO under install media, no size")
+            .containsEntry("Size (GB)", "").containsEntry("Install media (ISO volume)", "debian.iso");
+
+        // 4. The NIC declares neither.
+        assertThat(rows.get(NAME_PREFIX + "net")).as("step 4: a NIC fills neither column")
+            .containsEntry("Size (GB)", "").containsEntry("Install media (ISO volume)", "");
+    }
+
+    /** @return the Devices tab's rows by device name, each its cells' text by column heading */
+    private static Map<String, Map<String, String>> deviceTable(String html) {
+        List<String> heads = texts(html, "pl-table-head");
+        Map<String, Map<String, String>> rows = new LinkedHashMap<>();
+        Matcher body = Pattern.compile("<pl-table-body[^>]*>(.*?)</pl-table-body>", Pattern.DOTALL).matcher(html);
+        if (!body.find()) {
+            return rows;
+        }
+        Matcher row = Pattern.compile("<pl-table-row[^>]*>(.*?)</pl-table-row>", Pattern.DOTALL)
+            .matcher(body.group(1));
+        while (row.find()) {
+            List<String> cells = texts(row.group(1), "pl-table-cell");
+            Map<String, String> byHead = new LinkedHashMap<>();
+            for (int index = 0; index < heads.size() && index < cells.size(); index++) {
+                byHead.put(heads.get(index), cells.get(index));
+            }
+            rows.put(cells.isEmpty() ? "" : cells.get(0), byHead);
+        }
+        return rows;
+    }
+
+    /** @return the tag-free, whitespace-folded text of every {@code element} in the markup, in order */
+    private static List<String> texts(String html, String element) {
+        Matcher matcher = Pattern.compile("<" + element + "[^>]*>(.*?)</" + element + ">", Pattern.DOTALL)
+            .matcher(html);
+        List<String> texts = new ArrayList<>();
+        while (matcher.find()) {
+            texts.add(matcher.group(1).replaceAll("<[^>]*>", " ").replaceAll("\\s+", " ").trim());
+        }
+        return texts;
     }
 
     /**

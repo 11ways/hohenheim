@@ -332,11 +332,13 @@ public final class ManagePanel extends Panel {
         // projection is the rule vocabulary, so dropping it silently 400s the picker.
         // AIDEV-NOTE: the base excludes GENERATED instances like the /manage list always
         // did (TenantScopes.INSTANCES): a product-tier-owned row is managed through its
-        // owning record, and a picker offering it was a tenant read the list refused.
+        // owning record, and a picker offering it was a tenant read the list refused. Its scope
+        // is INSTANCE_READERS, never the live-only INSTANCES: the archived lane keeps trashed rows
+        // out of every pick and search, while a stored reference still names its trashed instance.
         RecordSourceRegistry.INSTANCE.override(RecordSource.of(InstanceModel.class)
             .project(InstanceModel.NAME, InstanceModel.KIND)
             .search(InstanceModel.NAME)
-            .scopedBy(TenantScopes.INSTANCES)
+            .scopedBy(TenantScopes.INSTANCE_READERS)
             .build());
 
         // Templates: exposed by TWO entries (InstanceTemplateParts.admin and .manage),
