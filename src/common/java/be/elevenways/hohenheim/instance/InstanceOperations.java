@@ -311,6 +311,14 @@ public final class InstanceOperations {
         .build();
 
     /**
+     * The record attach's ISO pick: the same input name as {@link #INSTALL_MEDIA}, labelled only "ISO" because the
+     * Devices tab's install-media section already heads and explains it.
+     */
+    public static final StringField DRIVE_MEDIA = StringField.builder(INSTALL_MEDIA.getName())
+        .label(HohenheimMicrocopy.INSTANCE_DEVICE.of("drive_media"))
+        .build();
+
+    /**
      * Puts an ISO from the record's host in the machine's drive, the driver booting it before the root disk.
      *
      * AIDEV-NOTE: OPERATOR-ONLY (its server authorizer; InstanceDevices.attachCdrom refuses a tenant underneath):
@@ -324,8 +332,8 @@ public final class InstanceOperations {
             .icon(Icon.of("compact-disc"))
             .one(INSTANCE)
             .gate(OperationGate.open())
-            .input(OperationInput.of(FormSpec.builder().add(INSTALL_MEDIA).build(), InstallMediaInput.class,
-                values -> new InstallMediaInput(values.get(INSTALL_MEDIA))))
+            .input(OperationInput.of(FormSpec.builder().add(DRIVE_MEDIA).build(), InstallMediaInput.class,
+                values -> new InstallMediaInput(values.get(DRIVE_MEDIA))))
             .command(COMMAND_FACET)
             .facts(OperationFact.REACHES_OUTSIDE)
             .register();

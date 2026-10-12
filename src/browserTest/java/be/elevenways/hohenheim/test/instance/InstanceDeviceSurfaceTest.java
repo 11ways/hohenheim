@@ -292,6 +292,34 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .containsEntry("Size (GB)", "").containsEntry("Install media (ISO volume)", "");
     }
 
+    /**
+     * The Devices tab's install-media section shows the drive's state and the one change it allows: an empty drive
+     * the ISO pick with its attach on one line, a full one the ISO it holds with its detach, never both.
+     */
+    @Test
+    void theInstallMediaSectionOffersTheAttachOrTheDetachNeverBoth() throws Exception {
+        int instanceId = deviceCapableInstance("devsurf-media");
+
+        // 1. An empty drive: the section says so and draws the pick and its submit as one inline form, no detach.
+        String empty = adminGet("/admin/instances/" + instanceId + "/page/devices").body();
+        assertThat(texts(empty, "pl-section-header-lead")).as("step 1: the lead says the drive is empty")
+            .anySatisfy(lead -> assertThat(lead).startsWith("The drive is empty."));
+        assertThat(empty).as("step 1: the attach is the inline page form")
+            .contains("data-cms-page-action-inline")
+            .doesNotContain("id=\"detach-media\"");
+        assertThat(texts(empty, "pl-label")).as("step 1: its pick is labelled ISO under the section heading")
+            .contains("ISO");
+
+        // 2. A drive holding an ISO: the section names it and offers the detach, and no second attach.
+        new InstanceDevices().attachCdrom(instanceId, NAME_PREFIX + "cd", "debian.iso");
+        String full = adminGet("/admin/instances/" + instanceId + "/page/devices").body();
+        assertThat(texts(full, "pl-section-header-lead")).as("step 2: the lead names the ISO in the drive")
+            .anySatisfy(lead -> assertThat(lead).startsWith("debian.iso is in the drive."));
+        assertThat(full).as("step 2: the detach is offered, the attach is not")
+            .contains("id=\"detach-media\"")
+            .doesNotContain("data-cms-page-action-inline");
+    }
+
     /** @return the Devices tab's rows by device name, each its cells' text by column heading */
     private static Map<String, Map<String, String>> deviceTable(String html) {
         List<String> heads = texts(html, "pl-table-head");

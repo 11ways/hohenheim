@@ -265,6 +265,55 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
     }
 
     /**
+     * A deleted referent is named only to whom may read it: a tenant holding backups but not view on an instance never
+     * reads that instance's name off its backup, live or trashed (once trashed the backup's page refuses the tenant,
+     * whose way to it was the instance), while the operator reads the name marked deleted.
+     */
+    @Test
+    void aTenantWhoCannotReadTheTrashedInstanceSeesItsBackupWithoutItsName() throws Exception {
+        // 1. A backup of an instance the tenant holds BACKUPS (and nothing else) on.
+        var instances = Models.get(InstanceModel.class);
+        Row hidden = instances.createEmptyRow();
+        hidden.set(InstanceModel.NAME, "unreadable-gone");
+        hidden.set(InstanceModel.KIND, "hohenheim:docker_container");
+        hidden.set(InstanceModel.SETTINGS, Map.of("image", "alpine", "command", "sleep 60"));
+        hidden.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
+        hidden.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
+        instances.save(hidden);
+        int hiddenId = hidden.get(InstanceModel.ID);
+        Row backup = Models.get(InstanceBackupModel.class).createEmptyRow();
+        backup.set(InstanceBackupModel.INSTANCE_ID, hiddenId);
+        backup.set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_COMPLETE);
+        backup.set(InstanceBackupModel.CREATED_AT, Instant.parse("2026-08-11T09:30:00Z"));
+        Models.get(InstanceBackupModel.class).save(backup);
+        int backupRowId = backup.get(InstanceBackupModel.ID);
+        Integer tenantId = ApiSupport.user("artifact-backups@hohenheim.local", "Backups Only");
+        RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, hiddenId,
+            HohenheimCapabilities.BACKUPS, true);
+        String tenantSession = sessionFor(tenantId).token();
+        String pagePath = "/manage/" + HohenheimSlugs.INSTANCE_BACKUPS + "/" + backupRowId;
+
+        // 2. Live: the tenant reaches the backup, headed by when it was taken (no keyless "InstanceBackup #N").
+        HttpResponse<String> live = httpGet(pagePath, tenantSession);
+        assertThat(live.statusCode()).as("step 2: the tenant reaches its backup").isEqualTo(200);
+        assertThat(live.body()).as("step 2: headed by when it was taken").contains("2026-08-11 09:30 UTC")
+            .doesNotContain("InstanceBackup #");
+
+        // 3. Trashed: the record page refuses the tenant, and the backup list never names the instance.
+        assertThat(instances.delete(hiddenId)).as("step 3: the instance is trashed").isTrue();
+        HttpResponse<String> trashed = httpGet(pagePath, tenantSession);
+        assertThat(trashed.statusCode()).as("step 3: the backup page refuses the tenant").isEqualTo(403);
+        assertThat(trashed.body()).as("step 3: and names nothing").doesNotContain("unreadable-gone");
+        assertThat(httpGet("/manage/" + HohenheimSlugs.INSTANCE_BACKUPS, tenantSession).body())
+            .as("step 3: nor does its backup list").doesNotContain("unreadable-gone");
+
+        // 4. The positive anchor: the operator, who may read the trashed instance, reads its name marked deleted.
+        assertThat(httpGet("/admin/" + HohenheimSlugs.INSTANCE_BACKUPS + "/" + backupRowId, sessionToken).body())
+            .as("step 4: the operator reads the deleted instance by name")
+            .contains("unreadable-gone (deleted)");
+    }
+
+    /**
      * Where an instance's backups go is its own choice, made in its Configuration: Back up now without one says so in
      * words, and the Backups tab names the target in use with the way to change it.
      */

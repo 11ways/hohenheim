@@ -9355,6 +9355,18 @@
     "text": "The ISO the machine starts its installer from, one of the install media on its host.",
     "scope": "instance_device"
   },
+  "drive_media": {
+    "text": "ISO",
+    "scope": "instance_device"
+  },
+  "media_in_drive": {
+    "text": "{$media} is in the drive. The machine starts from it before its own disk until you detach it.",
+    "scope": "instance_device"
+  },
+  "media_drive_empty": {
+    "text": "The drive is empty. Pick an ISO from the host to start the machine's installer from it.",
+    "scope": "instance_device"
+  },
   "install_media_none": {
     "text": "No install media on {$host} yet. Fetch an ISO on the host's Install media tab.",
     "scope": "instance_device"

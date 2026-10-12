@@ -113,9 +113,11 @@ public final class InstanceOperationHandlers {
                 ReleaseEngine.rollback(instanceId(call));
                 return null;
             });
+        // One ISO per machine through its record: a drive that holds one is emptied (the detach) before another goes in.
         OperationHandlers.attach(InstanceOperations.ATTACH_INSTALL_MEDIA).source(SUBJECTS)
             .applies(instance -> authored(instance) && InstanceKinds.handlerOf(instance) != null
-                && InstanceKinds.handlerOf(instance).supportsInstallMedia())
+                && InstanceKinds.handlerOf(instance).supportsInstallMedia()
+                && !InstanceDevices.hasInstallMedia(instance.get(InstanceModel.ID)))
             .inputScope(InstanceOperationHandlers::hostMedia)
             .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
             .handle(call -> {
@@ -400,7 +402,7 @@ public final class InstanceOperationHandlers {
                                                  @Nullable AccessContext access) {
         Integer serverId = instance == null ? null : instance.get(InstanceModel.SERVER_ID);
         return InputScope.of(InstanceTemplateHandlers.replacing(declared, Map.of(
-            InstanceOperations.INSTALL_MEDIA.getName(), Select.of(InstanceOperations.INSTALL_MEDIA)
+            InstanceOperations.DRIVE_MEDIA.getName(), Select.of(InstanceOperations.DRIVE_MEDIA)
                 .options(OptionSource.of(new InstallMedia().optionsOn(serverId)))
                 .clearable(false)
                 .emptyReason(context -> InstallMedia.noneReason(serverId))

@@ -32,6 +32,9 @@ import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
@@ -116,17 +119,27 @@ public final class InstanceBackupParts {
     }
 
     /**
-     * The key the archive was committed under names this backup.
+     * The key the archive was committed under names this backup; one that never reached its target is named by when it
+     * was taken.
      *
      * AIDEV-NOTE: declared HERE and not as a schema display field, because a display field is also the derived record
-     * source's SEARCH field and {@code remote_key} is {@code filterable(false)} on purpose. A backup that never
-     * reached its target has no key and keeps the framework's id fallback: nothing else on the row was written by a
-     * human.
+     * source's SEARCH field and {@code remote_key} is {@code filterable(false)} on purpose. The title never names the
+     * instance: it is one String for every viewer, and the instance may be a trashed one this viewer cannot read (the
+     * instance column and card name it under the viewer's own read). It answers for every row, so no page falls back to
+     * the model's class name ("InstanceBackup #1").
      */
-    private static @Nullable String title(@NonNull Row backup) {
+    static @NonNull String title(@NonNull Row backup) {
         String key = backup.get(InstanceBackupModel.REMOTE_KEY);
-        return key != null && !key.isBlank() ? key : null;
+        if (key != null && !key.isBlank()) {
+            return key;
+        }
+        Instant taken = backup.get(InstanceBackupModel.CREATED_AT);
+        return taken != null ? TAKEN_AT.format(taken) : "#" + backup.get(InstanceBackupModel.ID);
     }
+
+    /** A keyless backup's title: when it was taken, in UTC, to the minute. */
+    private static final DateTimeFormatter TAKEN_AT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'")
+        .withZone(ZoneOffset.UTC);
 
     /**
      * Restore-to-new, offered on a complete backup. A restore that could not bring everything back says so HERE, at

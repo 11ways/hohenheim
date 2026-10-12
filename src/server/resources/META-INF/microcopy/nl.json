@@ -9355,6 +9355,18 @@
     "text": "De ISO waarvan de machine haar installatieprogramma start, een van de installatiemedia op haar host.",
     "scope": "instance_device"
   },
+  "drive_media": {
+    "text": "ISO",
+    "scope": "instance_device"
+  },
+  "media_in_drive": {
+    "text": "{$media} zit in het station. De machine start ervan voor haar eigen schijf tot je het ontkoppelt.",
+    "scope": "instance_device"
+  },
+  "media_drive_empty": {
+    "text": "Het station is leeg. Kies een ISO van de host om het installatieprogramma van de machine ervan te starten.",
+    "scope": "instance_device"
+  },
   "install_media_none": {
     "text": "Nog geen installatiemedia op {$host}. Haal een ISO op via het tabblad Installatiemedia van de host.",
     "scope": "instance_device"

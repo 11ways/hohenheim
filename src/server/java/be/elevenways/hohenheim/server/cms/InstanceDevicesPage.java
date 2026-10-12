@@ -14,6 +14,7 @@ import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.render.action.PageFormState;
 import be.elevenways.zenit.cms.server.page.PageActions;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -161,20 +162,28 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
             ? newDeviceTarget(panel, DeviceType.DISK, instanceId) : null);
         vars.put("addNicTarget", canEdit
             ? newDeviceTarget(panel, DeviceType.NIC, instanceId) : null);
-        // Install media is OPERATOR-ONLY and VM-only: the attach operation is offered exactly where its handler applies
-        // and authorizes, and its form (the ISO pick of this record's host) is drawn on the tab itself.
-        boolean canAttachMedia = InstanceOperationHandlers.offered(InstanceOperations.ATTACH_INSTALL_MEDIA,
-            accessContext, instance);
-        vars.put("mediaForm", canAttachMedia && PageActions.open(request, this, instance, ATTACH_MEDIA.id())
-            instanceof PageActions.Form form ? form.state() : null);
-        // The detach beside it, drawn while a drive holds an ISO: its handler applies exactly then.
-        vars.put("detachMediaForm", InstanceOperationHandlers.offered(InstanceOperations.DETACH_INSTALL_MEDIA,
+        // Install media is OPERATOR-ONLY and VM-only, one ISO at a time: an empty drive offers the attach (its form
+        // the ISO pick of this record's host), a drive holding one offers the detach. Each is drawn exactly where its
+        // handler applies and authorizes, so the section shows only to whom may change the drive.
+        PageFormState attachForm = InstanceOperationHandlers.offered(InstanceOperations.ATTACH_INSTALL_MEDIA,
+            accessContext, instance) && PageActions.open(request, this, instance, ATTACH_MEDIA.id())
+            instanceof PageActions.Form form ? form.state() : null;
+        PageFormState detachForm = InstanceOperationHandlers.offered(InstanceOperations.DETACH_INSTALL_MEDIA,
             accessContext, instance) && PageActions.open(request, this, instance, DETACH_MEDIA.id())
-            instanceof PageActions.Form form ? form.state() : null);
+            instanceof PageActions.Form form ? form.state() : null;
+        boolean mediaSection = attachForm != null || detachForm != null;
+        vars.put("mediaSection", mediaSection);
+        vars.put("mediaForm", attachForm);
+        vars.put("detachMediaForm", detachForm);
+        List<String> inDrive = InstanceDevices.installMediaOf(instanceId);
+        vars.put("mediaLead", !mediaSection ? "" : (inDrive.isEmpty()
+            ? HohenheimMicrocopy.INSTANCE_DEVICE.of("media_drive_empty")
+            : HohenheimMicrocopy.INSTANCE_DEVICE.of("media_in_drive").withArg("media", String.join(", ", inDrive)))
+            .asString(conduit));
         Integer serverId = instance.get(InstanceModel.SERVER_ID);
-        vars.put("mediaHostTarget", canAttachMedia && serverId != null
+        vars.put("mediaHostTarget", mediaSection && serverId != null
             ? CmsRoutes.subpage(panel, HohenheimSlugs.SERVERS, serverId, HohenheimSlugs.Tab.INSTALL_MEDIA) : null);
-        vars.put("mediaHostLabel", canAttachMedia && serverId != null
+        vars.put("mediaHostLabel", mediaSection && serverId != null
             ? HohenheimMicrocopy.INSTANCE_DEVICE.of("manage_media").withArg("host", ServerModel.labelOf(serverId))
                 .asString(conduit) : "");
         vars.put("head", recordHead(conduit));

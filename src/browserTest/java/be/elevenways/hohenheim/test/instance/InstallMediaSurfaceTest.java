@@ -457,21 +457,25 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
                         .map(option -> (Object) option.value()).toList())
                     .as("step 2: picked from the host's ISO volumes").containsExactly("debian.iso");
 
-                // 3. Attaching it puts that ISO in the record's drive.
+                // 3. A medium the host does not hold is refused by the pick, and nothing is attached.
+                assertThat(catchThrowable(() -> OperationPipeline.invoke(attachRequest(attach, instance)
+                        .form(Map.of("installMedia", "elsewhere.iso")))))
+                    .as("step 3: an ISO that is not on the host is refused").isInstanceOf(Violations.class);
+                assertThat(deviceRows(instanceId)).as("step 3: nothing is attached").isEmpty();
+
+                // 4. Attaching it puts that ISO in the record's drive; a drive holding one is not offered another.
                 OperationPipeline.invoke(attachRequest(attach, instance).form(Map.of("installMedia", "debian.iso")));
-                assertThat(deviceRows(instanceId)).as("step 3: one cdrom row naming the medium").singleElement()
+                assertThat(deviceRows(instanceId)).as("step 4: one cdrom row naming the medium").singleElement()
                     .satisfies(row -> {
                         assertThat((String) row.get(InstanceDeviceModel.TYPE)).isEqualTo(InstanceDeviceModel.TYPE_CDROM);
                         assertThat((String) row.get(InstanceDeviceModel.SOURCE_MEDIA)).isEqualTo("debian.iso");
                     });
-                assertThat(DAEMON.get(handleOf(instanceId)).cdroms).as("step 3: and the daemon holds it")
+                assertThat(DAEMON.get(handleOf(instanceId)).cdroms).as("step 4: and the daemon holds it")
                     .containsValue("debian.iso");
-
-                // 4. A medium the host does not hold is refused by the pick, and nothing more is attached.
-                assertThat(catchThrowable(() -> OperationPipeline.invoke(attachRequest(attach, instance)
-                        .form(Map.of("installMedia", "elsewhere.iso")))))
-                    .as("step 4: an ISO that is not on the host is refused").isInstanceOf(Violations.class);
-                assertThat(deviceRows(instanceId)).as("step 4: still one device").hasSize(1);
+                assertThat(OperationPipeline.offer(attach, TenantConduits.operator(),
+                        Models.get(InstanceModel.class).findById(instanceId)))
+                    .as("step 4: a full drive is not offered a second ISO (detach first)")
+                    .isInstanceOf(OperationPipeline.Offer.Hidden.class);
 
                 // 5. The put-online machine wizard offers the same media, so an empty VM is created with its ISO.
                 FormSpec machine = OperationPipeline.inputForm(OperationRequest.of(PutOnline.PUT_MACHINE_ONLINE,

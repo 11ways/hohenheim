@@ -1,5 +1,7 @@
 {#- Devices tab on an instance: its attached disks and extra NICs, linking into the
-    (nav-hidden) device resource forms, and the install-media attach drawn in place. -#}
+    (nav-hidden) device resource forms, and the install-media section (operator only): what is in the drive with
+    its detach, or the ISO pick of the record's host with its attach on one line, and the host's media as a quiet
+    link. -#}
 {% declare title: String %}
 {% declare instanceId: Integer %}
 {% declare instanceName: String %}
@@ -7,8 +9,10 @@
 {% declare detailHeads: List %}
 {% declare addDiskTarget: RouteTarget = null %}
 {% declare addNicTarget: RouteTarget = null %}
+{% declare mediaSection: Boolean = false %}
 {% declare mediaForm: PageFormState = null %}
 {% declare detachMediaForm: PageFormState = null %}
+{% declare mediaLead: String = "" %}
 {% declare mediaHostTarget: RouteTarget = null %}
 {% declare mediaHostLabel: String = "" %}
 {% declare canEdit: Boolean = true %}
@@ -25,12 +29,18 @@
         {% /if %}
     </div>
 
-    {% if mediaForm != null || detachMediaForm != null %}
-    <div id="attach-media">
-        {% if mediaForm != null %}{% render "zenitcms:form/page-action" var:page=mediaForm %}{% /if %}
-        {% if detachMediaForm != null %}<div id="detach-media">{% render "zenitcms:form/page-action" var:page=detachMediaForm %}</div>{% /if %}
-        {% if mediaHostTarget %}<a use:Zenit.route={% mediaHostTarget %} id="media-host-link">{{ mediaHostLabel }}</a>{% /if %}
-    </div>
+    {% if mediaSection %}
+    <section id="attach-media" class="mb-xl">
+        <pl-section-header>
+            <h2>{{ t("install_media", scope: "instance_device") }}</h2>
+            <pl-section-header-actions>
+                {% if mediaHostTarget %}<pl-button variant="text" use:Zenit.route={% mediaHostTarget %} id="media-host-link">{{ mediaHostLabel }}</pl-button>{% /if %}
+                {% if detachMediaForm != null %}<div id="detach-media">{% render "zenitcms:form/page-action" var:page=detachMediaForm %}</div>{% /if %}
+            </pl-section-header-actions>
+            <pl-section-header-lead id="media-in-drive">{{ mediaLead }}</pl-section-header-lead>
+        </pl-section-header>
+        {% if mediaForm != null %}{% render "zenitcms:form/page-action" var:page=mediaForm var:inline=true %}{% /if %}
+    </section>
     {% /if %}
 
     {% if devices %}

@@ -16,5 +16,8 @@
 # FramebufferWire, plus the template work since 2026-10-06: raw 7505575 -> 7829863, gzip 1779877 -> 1862955.
 # Generated templates +130904, unmapped +87242, zenit-kvm +64359 (ScreenMessage +25032, BrowserScreenViewer
 # +13667, ScreenCodec +9827); TeaVM's BigDecimal/BigInteger fell out (-19621). Standard 5 percent headroom.
-cms.js.raw=8221357 measured=7829863
-cms.js.gzip=1956103 measured=1862955
+# 2026-10-12: the framework work since 2026-10-08 (archived referents, relation pick narrowing and inline create,
+# registries, Pace) plus this round's named create dialogs and inline page-action form: raw 7829863 -> 8065767,
+# gzip 1862955 -> 1956546 (the breach that set this was 443 bytes over). Standard 5 percent headroom.
+cms.js.raw=8469055 measured=8065767
+cms.js.gzip=2054373 measured=1956546
