@@ -381,14 +381,15 @@ public final class HohenheimStatsFunctions {
             @Arg(name = "bookedBytes", required = false, type = Long.class, expectsReference = false,
                  description = "What the host booked for the workload, measured against when the runtime has no cap"),
             @Arg(name = "waiting", required = true, type = Microcopy.class, expectsReference = false,
-                 description = "The words for no reading yet")
+                 description = "The words for no reading yet"),
+            @Arg(name = "noLimit", required = true, type = Microcopy.class, expectsReference = false,
+                 description = "The words for an amount in use with nothing to measure it against")
         }
     )
     public static @NonNull UsageData memoryUsage(RenderContext context, @Nullable Object sample,
-                                                 @Nullable Long bookedBytes, @Nullable Microcopy waiting) {
-        // The amount in use is a message argument only: a t() call would also make it a catalog filter.
-        return memoryGauge(sample, bookedBytes, words(context, waiting), words(context,
-            HohenheimMicrocopy.INSTANCE_OVERVIEW.of("memory_no_limit").withArg("used", memoryUsed(sample))));
+                                                 @Nullable Long bookedBytes, @Nullable Microcopy waiting,
+                                                 @Nullable Microcopy noLimit) {
+        return memoryGauge(sample, bookedBytes, words(context, waiting), words(context, noLimit));
     }
 
     /**
@@ -429,17 +430,17 @@ public final class HohenheimStatsFunctions {
             @Arg(name = "unreported", required = true, type = Microcopy.class, expectsReference = false,
                  description = "The words for a runtime that gives no CPU reading"),
             @Arg(name = "firstReading", required = true, type = Microcopy.class, expectsReference = false,
-                 description = "The words for a single reading, which is no window yet")
+                 description = "The words for a single reading, which is no window yet"),
+            @Arg(name = "coresLabel", required = true, type = Microcopy.class, expectsReference = false,
+                 description = "The cores the share is measured against, said as words")
         }
     )
     public static @NonNull UsageData cpuUsage(RenderContext context, @Nullable Object previous,
                                               @Nullable Object sample, @Nullable Microcopy waiting,
-                                              @Nullable Microcopy unreported, @Nullable Microcopy firstReading) {
-        // The cores are said with the overview's own plural words, built here with the count as a message argument
-        // only: a t() call would also make the count a catalog filter.
+                                              @Nullable Microcopy unreported, @Nullable Microcopy firstReading,
+                                              @Nullable Microcopy coresLabel) {
         return cpuGauge(previous, sample, words(context, waiting), words(context, unreported),
-            words(context, firstReading),
-            words(context, HohenheimMicrocopy.INSTANCE_OVERVIEW.of("cores").withArg("count", cores(sample))));
+            words(context, firstReading), words(context, coresLabel));
     }
 
     /**

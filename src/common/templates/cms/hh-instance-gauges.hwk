@@ -35,14 +35,16 @@
         <div data-live-gauge="memory">
             {% render "zenitwidget:widget-display/usage-bar" var:widget=memoryGauge
                 var:data=InstanceStats.memoryUsage(now{:}, bookedBytes,
-                    t("live_waiting", scope: "instance_overview")) %}
+                    t("live_waiting", scope: "instance_overview"),
+                    t("memory_no_limit", scope: "instance_overview", used: InstanceStats.memoryUsed(now{:}))) %}
         </div>
         <div data-live-gauge="cpu">
             {% render "zenitwidget:widget-display/usage-bar" var:widget=cpuGauge
                 var:data=InstanceStats.cpuUsage(before{:}, now{:},
                     t("live_waiting", scope: "instance_overview"),
                     t("cpu_unreported", scope: "instance_overview"),
-                    t("cpu_first_reading", scope: "instance_overview")) %}
+                    t("cpu_first_reading", scope: "instance_overview"),
+                    t("cores", scope: "instance_overview", count: InstanceStats.cores(now{:}))) %}
         </div>
     }
 } %}
