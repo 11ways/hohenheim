@@ -10517,6 +10517,10 @@
     "text": "Your apps that run as a container or virtual machine: their status, deploys and console.",
     "scope": "manage_app"
   },
+  "website_apps_hint": {
+    "text": "Your websites: their addresses, protected paths and settings.",
+    "scope": "manage_app"
+  },
   "workloads_empty": {
     "text": "Nothing runs on this host",
     "scope": "server_overview"

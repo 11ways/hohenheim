@@ -183,6 +183,9 @@ public final class SiteParts {
         return ManageTwin.reached(entry(ManageTwin.id("site")), TenantScopes.SITES,
                 ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS, PROTECTED_PATHS)).withContributions())
             .standsUnder(HohenheimSlugs.APPS)
+            // The tenant's words, where the toolbar, the heading and the command palette read them: never the
+            // operator's "served from this host".
+            .description(HohenheimMicrocopy.MANAGE_APP.of("website_apps_hint"))
             // One of the tenant's apps, as the Apps list words it: what the landing's Recent rows name its kind.
             .recordLabel(HohenheimMicrocopy.APP_LIST.of("singular"))
             .health(AppHealth.sites(true))

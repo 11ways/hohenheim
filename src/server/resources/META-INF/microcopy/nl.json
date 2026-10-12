@@ -10517,6 +10517,10 @@
     "text": "Je apps die als container of virtuele machine draaien: hun status, deploys en console.",
     "scope": "manage_app"
   },
+  "website_apps_hint": {
+    "text": "Je websites: hun adressen, beschermde paden en instellingen.",
+    "scope": "manage_app"
+  },
   "workloads_empty": {
     "text": "Er draait niets op deze host",
     "scope": "server_overview"

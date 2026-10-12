@@ -239,6 +239,12 @@ class AdminNavigationJourneyTest extends HohenheimTestBase {
         for (String slug : List.of("sites", "instances")) {
             assertThat(PanelNav.sidebarEntryOf(manage, manage.entryBySlug(slug)).slug())
                 .as("step 8: a tenant's page of '" + slug + "' marks their Apps").isEqualTo(HohenheimSlugs.APPS);
+            // The tenant's palette and heading read the entry's description: never the operator's host-wide words.
+            assertThat(manage.entryBySlug(slug).description()
+                    .tryResolve(LocaleChain.ofTags("en"), MessageResolvers.getDefault()))
+                .as("step 8: the tenant's '" + slug + "' speaks its own words, not the operator's")
+                .isNotEqualTo(admin.entryBySlug(slug).description()
+                    .tryResolve(LocaleChain.ofTags("en"), MessageResolvers.getDefault()));
         }
 
         // 9. A person opens on what they can manage (zenit-auth's "Can manage" tab, slug reach), before their
