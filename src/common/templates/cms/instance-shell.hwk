@@ -8,6 +8,8 @@
 {% declare available: Boolean = false %}
 {% declare unsupportedRuntime: Boolean = false %}
 {% declare runsAsRoot: Boolean = false %}
+{% declare runsAsRootTitle: Microcopy = null %}
+{% declare runsAsRootDescription: Microcopy = null %}
 {% declare maxSessions: Integer = 0 %}
 {% declare idleMinutes: Integer = 0 %}
 {% declare shellWsUrl: String %}
@@ -28,8 +30,8 @@
             </pl-empty-state>
         {% elseif runsAsRoot %}
             <pl-empty-state icon="shield-halved" attr:data-shell-runs-as-root={% true %}>
-                <pl-empty-state-title>{{ t("runs_as_root", scope: "instance_shell") }}</pl-empty-state-title>
-                <pl-empty-state-description>{{ t("runs_as_root_description", scope: "instance_shell") }}</pl-empty-state-description>
+                <pl-empty-state-title>{{ runsAsRootTitle }}</pl-empty-state-title>
+                <pl-empty-state-description>{{ runsAsRootDescription }}</pl-empty-state-description>
             </pl-empty-state>
         {% elseif !running %}
             <pl-empty-state icon="terminal" attr:data-shell-not-running={% true %}>

@@ -9,6 +9,9 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.instance.WorkloadIsolation;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceShell;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -92,6 +95,14 @@ public final class InstanceShellPage implements ConsoleModes.Mode {
         vars.put("unsupportedRuntime",
             availability == InstanceShell.Availability.NO_RUNTIME_LANE);
         vars.put("runsAsRoot", availability == InstanceShell.Availability.RUNS_AS_ROOT);
+        // Why root closes the shell depends on what contains the workload: root in a container is root on the host,
+        // root in a virtual machine is not, and its own screen is where one signs in to it.
+        InstanceKindHandler kind = InstanceKinds.handlerOf(instance);
+        String workload = (kind == null ? WorkloadIsolation.SHARED_KERNEL : kind.isolation()).token();
+        vars.put("runsAsRootTitle",
+            HohenheimMicrocopy.INSTANCE_SHELL.of("runs_as_root").withFilter("workload", workload));
+        vars.put("runsAsRootDescription",
+            HohenheimMicrocopy.INSTANCE_SHELL.of("runs_as_root_description").withFilter("workload", workload));
 
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_SHELL, vars);
     }

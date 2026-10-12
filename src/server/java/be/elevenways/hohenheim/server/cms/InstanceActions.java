@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.InstanceStatus;
@@ -103,6 +104,7 @@ final class InstanceActions {
                 (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE.of("deployed")
                     .withArg("name", request.subject().get(InstanceModel.NAME))))
             .label(HohenheimMicrocopy.INSTANCE.of("deploy"))
+            .dynamicLabel(row -> startWords("deploy", row))
             .icon(Icon.of("play"))
             .hiddenWhen(row -> !InstanceKinds.isUserDeployable(row.get(InstanceModel.KIND)))
             .disabledWhen((row, access) -> {
@@ -111,6 +113,18 @@ final class InstanceActions {
                 return database != null ? database : OwnedInstances.placementReasonOf(row, delegated, access);
             })
             .build();
+    }
+
+    /**
+     * The start verb's words for what this record is: a whole machine is started, an app is deployed. The kind's
+     * "Put something online" group is the one declaration of which it is ({@code PutOnlineGroup}); a kind with none
+     * (only other machinery creates it) reads the app words.
+     */
+    private static @NonNull Microcopy startWords(@NonNull String key, @NonNull Row row) {
+        InstanceKindHandler kind = InstanceKinds.handlerOf(row);
+        PutOnlineGroup group = kind == null ? null : kind.putOnlineGroup();
+        Microcopy words = HohenheimMicrocopy.INSTANCE.of(key);
+        return group == null ? words : words.withFilter("what", group.token());
     }
 
     /**

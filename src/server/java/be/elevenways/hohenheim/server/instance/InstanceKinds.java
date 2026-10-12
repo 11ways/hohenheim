@@ -6,7 +6,9 @@ import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceStatus;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.runtime.WorkloadLane;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.edit.FieldOption;
@@ -274,5 +276,58 @@ public final class InstanceKinds {
             }
         }
         return isolations.isEmpty() ? EnumSet.of(WorkloadIsolation.SHARED_KERNEL) : isolations;
+    }
+
+    /** @return the runtime of the host this record names (a missing host reads as the local Docker daemon) */
+    public static @NonNull String hostRuntimeOf(@NonNull Row instance) {
+        Row server = Models.get(ServerModel.class).findById(
+            ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID)));
+        return server == null ? ServerModel.RUNTIME_DOCKER : ServerModel.runtimeOf(server);
+    }
+
+    /**
+     * Whether this record's driver offers {@code lane}: its kind's declared driver on its host's runtime.
+     *
+     * @return false for an unknown kind or a runtime its kind does not declare (fail closed)
+     */
+    public static boolean offers(@NonNull Row instance, @NonNull WorkloadLane lane) {
+        InstanceKindHandler handler = handlerOf(instance);
+        return handler != null && lane.offeredBy(handler.driverOn(hostRuntimeOf(instance)));
+    }
+
+    /**
+     * The kinds a stored record may be changed to: the ones its host's runtime runs, and, once a workload exists, only
+     * those its driver can converge that workload into (the same isolation: a container never becomes a virtual
+     * machine or back, which the Incus driver refuses by name at deploy). Its own kind is always among them.
+     */
+    public static @NonNull Set<String> kindChangesOf(@NonNull Row stored) {
+        String current = stored.get(InstanceModel.KIND);
+        InstanceKindHandler own = getHandler(current);
+        String runtime = hostRuntimeOf(stored);
+        boolean deployed = InstanceStatus.forToken(stored.get(InstanceModel.STATUS)) instanceof InstanceStatus status
+            && status.deployed();
+        Set<String> kinds = new HashSet<>();
+        if (current != null) {
+            kinds.add(current);
+        }
+        for (FieldOption<String> option : authorableOptions()) {
+            InstanceKindHandler handler = getHandler(option.value());
+            if (handler != null && handler.supportedRuntimes().contains(runtime)
+                    && (!deployed || own == null || handler.isolation() == own.isolation())) {
+                kinds.add(option.value());
+            }
+        }
+        return kinds;
+    }
+
+    /** @throws Violations on the kind entry when {@code stored} cannot be changed to {@code kind} */
+    public static void requireKindChange(@NonNull Row stored, @Nullable String kind) {
+        if (kind == null || kind.equals(stored.get(InstanceModel.KIND)) || kindChangesOf(stored).contains(kind)) {
+            return;
+        }
+        InstanceKindHandler handler = getHandler(kind);
+        throw Violations.ofField(InstanceModel.KIND.getName(), kind,
+            HohenheimMicrocopy.VIOLATIONS.of("instance_kind_change_refused")
+                .withArg("kind", handler == null ? Microcopy.literal(kind) : handler.getLabel()));
     }
 }

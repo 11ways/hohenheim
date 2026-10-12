@@ -10,7 +10,9 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.InstanceResize;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
+import be.elevenways.hohenheim.server.runtime.WorkloadLane;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -19,6 +21,7 @@ import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.result.ActionResult;
 import be.elevenways.zenit.common.result.RenderTemplateResult;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -43,6 +46,15 @@ public final class InstanceStatsPage implements RecordTab.Rendered<Row> {
     @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE.of("stats"); }
     @Override public @NonNull String slug() { return HohenheimSlugs.Tab.STATS; }
     @Override public @NonNull Icon icon() { return Icon.of("chart-line"); }
+
+    /**
+     * Only where the workload's driver streams live samples (WorkloadLane.LIVE_STATS): a tab that can only ever say
+     * "waiting for the first reading" is a promise the driver cannot keep.
+     */
+    @Override
+    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext access) {
+        return InstanceKinds.offers(record, WorkloadLane.LIVE_STATS);
+    }
 
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {

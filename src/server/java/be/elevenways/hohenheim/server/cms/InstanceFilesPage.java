@@ -16,6 +16,8 @@ import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.files.HohenheimSftp;
 import be.elevenways.hohenheim.server.files.InstanceFiles;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.runtime.WorkloadLane;
 import be.elevenways.hohenheim.server.files.InstanceSftpRealm;
 import be.elevenways.hohenheim.server.util.PosixPaths;
 import be.elevenways.zenit.auth.AuthEndpoints;
@@ -80,11 +82,10 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
      */
     @Override
     public boolean visibleFor(@NonNull Row record, @NonNull AccessContext accessContext) {
-        // AIDEV-NOTE: deliberately NO kind gate here (unlike the Volumes tab): the file
-        // lane browses the RUNTIME's volumes -- Docker named volumes included -- not only
-        // declared instance_volumes rows, so a docker_container legitimately has files to
-        // browse. The page itself renders the named no-lane/no-volumes states.
-        return HohenheimAccess.hasInstanceCapability(
+        // AIDEV-NOTE: the gate is the DRIVER's file lane (WorkloadLane.FILES), not a volume declaration: the lane
+        // browses the runtime's volumes -- Docker named volumes included -- so a docker_container legitimately has
+        // files to browse, while a workload whose driver has no lane (Incus) gets no tab, here and on /manage.
+        return InstanceKinds.offers(record, WorkloadLane.FILES) && HohenheimAccess.hasInstanceCapability(
             accessContext, record.get(InstanceModel.ID), HohenheimCapabilities.FILES_READ);
     }
 

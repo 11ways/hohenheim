@@ -155,7 +155,9 @@ public final class InstanceParts {
                 .computed(Objects.requireNonNull(table.column(MANAGED_BY_COLUMN)),
                     (row, request) -> managedByCellOf(row))
                 .build())
-            .form(form(createForm()).createDefaults(InstanceParts::createDefaults).build())
+            .form(form(createForm()).createDefaults(InstanceParts::createDefaults)
+                .bindings(List.of(ResourceFieldBinding.of(InstanceModel.KIND.getName(), kindAccess())))
+                .build())
             .writes(writes(true))
             .deleteConfirmation(deleteConfirmation())
             .authority(authority())
@@ -257,10 +259,22 @@ public final class InstanceParts {
             .lead((instance, access) -> instance.get(InstanceModel.ID) == null ? null
                 : new RecordLead(AppOverview.instanceLead(instance, access.conduit()), null))
             .inlineEditable(InstanceModel.NAME, InstanceModel.CRASH_POLICY)
-            // Saving a new memory or CPU ceiling RECREATES the workload's container, so it is briefly down; on the
-            // create form there is nothing to recreate.
+            // Saving a new memory or CPU ceiling reaches a live workload the way its host's driver applies one (Docker
+            // recreates the container, Incus rewrites the instance in place); on the create form there is nothing yet.
             .notice((instance, access) -> instance.get(InstanceModel.ID) == null ? null
-                : HohenheimMicrocopy.INSTANCE.of("resize_notice"));
+                : HohenheimMicrocopy.INSTANCE.of("resize_notice")
+                    .withFilter("runtime", InstanceKinds.hostRuntimeOf(instance)));
+    }
+
+    /**
+     * The kind entry: editable on a create and wherever {@link InstanceKinds#kindChangesOf} offers a change, read-only
+     * on a record whose driver can turn its workload into no other kind (a virtual machine stays one); the write hook
+     * ({@code InstanceDeclarations}) refuses a change outside that set either way.
+     */
+    private static @NonNull FieldAccess kindAccess() {
+        return FieldAccess.customRecordAware((access, record) -> record instanceof Row row
+                && row.get(InstanceModel.ID) != null && InstanceKinds.kindChangesOf(row).size() < 2
+            ? FieldAccess.Decision.READONLY : FieldAccess.Decision.EDITABLE);
     }
 
     /**
@@ -549,13 +563,16 @@ public final class InstanceParts {
         // bounded to a workload that runs as its own non-root uid; the one-off command is ADMIN-sensitivity with
         // deliberately no /manage surface (ConsoleModes.delegated()).
         tabs.addAll((operator ? ConsoleModes.operator() : ConsoleModes.delegated()).tabs());
+        // What the kind's driver offers, in the order it matters: a machine's disks, NICs and install media right after
+        // its console; a workload's files and live metrics only where its driver has those lanes (WorkloadLane). Each
+        // tab hides itself where its lane or kind fact is absent, so every kind's strip derives from those facts.
+        tabs.add(new InstanceDevicesPage());
         tabs.add(new InstanceFilesPage());
         tabs.add(new InstanceStatsPage());
         // The sections read THIS panel's entries: the /manage backup twin places no restore-to-new, which is how it
         // stays operator-only there too.
         tabs.add(backupsTab());
         tabs.add(new InstanceProvisioningPage());
-        tabs.add(new InstanceDevicesPage());
         tabs.add(new InstanceVolumesTab());
         tabs.add(new InstanceDatabasesPage());
         if (operator) {

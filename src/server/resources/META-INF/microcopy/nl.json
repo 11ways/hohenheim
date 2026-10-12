@@ -1147,6 +1147,11 @@
     {
       "text": "Deployen",
       "scope": "instance"
+    },
+    {
+      "scope": "instance",
+      "what": "machine",
+      "text": "Starten"
     }
   ],
   "deploy_now": {
@@ -8137,6 +8142,10 @@
     {
       "text": "Netwerk",
       "scope": "reconcile_kind"
+    },
+    {
+      "scope": "instance_overview",
+      "text": "Netwerk"
     }
   ],
   "network_description": {
@@ -12234,14 +12243,28 @@
     "text": "Dit is geen git-clone-URL. Gebruik https://host/eigenaar/repo.git, ssh://git@host/eigenaar/repo.git, git@host:eigenaar/repo.git, git://host/repo.git of een absoluut pad op deze machine.",
     "scope": "violations"
   },
-  "runs_as_root": {
-    "text": "Deze workload draait als root",
-    "scope": "instance_shell"
-  },
-  "runs_as_root_description": {
-    "text": "Een shell wordt alleen aangeboden waar de workload als eigen niet-root gebruiker draait, omdat root in de container ook root op de host is.",
-    "scope": "instance_shell"
-  },
+  "runs_as_root": [
+    {
+      "text": "Deze workload draait als root",
+      "scope": "instance_shell"
+    },
+    {
+      "scope": "instance_shell",
+      "workload": "virtual_machine",
+      "text": "Geen shell in deze virtuele machine"
+    }
+  ],
+  "runs_as_root_description": [
+    {
+      "text": "Een shell wordt alleen aangeboden waar de workload als eigen niet-root gebruiker draait, omdat root in de container ook root op de host is.",
+      "scope": "instance_shell"
+    },
+    {
+      "scope": "instance_shell",
+      "workload": "virtual_machine",
+      "text": "Een shell opent hier alleen als de eigen gebruiker van een workload zonder rootrechten, en de agent van deze virtuele machine voert opdrachten uit als root. Meld je aan op de machine zelf via het scherm."
+    }
+  ],
   "shell_failed": {
     "text": "Kon geen shell openen in {$name}: {$reason}",
     "scope": "violations"
@@ -13076,6 +13099,11 @@
     {
       "text": "Alleen het geheugen- en CPU-plafond zijn hier aanpasbaar; elk ander veld beschrijft de container die aangemaakt is. Een nieuw plafond bewaren maakt de engine opnieuw aan, dus elke database erop verliest haar verbindingen tot ze terug is.",
       "scope": "database_engine"
+    },
+    {
+      "scope": "instance",
+      "runtime": "incus",
+      "text": "Een nieuwe geheugen- of CPU-limiet opslaan past de grootte van de draaiende workload ter plekke aan via Incus; schijven en adressen blijven behouden."
     }
   ],
   "database_resize_failed": {
@@ -17709,5 +17737,53 @@
   "routes_save": { "text": "Opslaan", "scope": "notification_channel" },
   "routes_saved": { "text": "Opgeslagen welke meldingen welk kanaal bereiken.", "scope": "notification_channel" },
   "notification_channel_unknown": { "text": "Dit meldingskanaal bestaat niet meer.", "scope": "violations" },
-  "route_notification_events": { "text": "{$actor} koos welke meldingen welk meldingskanaal bereiken", "scope": "hohenheim", "target": "happened" }
+  "route_notification_events": { "text": "{$actor} koos welke meldingen welk meldingskanaal bereiken", "scope": "hohenheim", "target": "happened" },
+  "machine_happened": {
+    "scope": "put_online",
+    "text": "{$actor} maakte {$subject} aan"
+  },
+  "network_mode": {
+    "scope": "instance_overview",
+    "text": "Verbinding"
+  },
+  "network_reach": {
+    "scope": "instance_overview",
+    "text": "Wie erbij kan"
+  },
+  "network_mode_hidden": {
+    "scope": "instance_overview",
+    "text": "Verborgen achter de host"
+  },
+  "network_mode_hidden_detail": {
+    "scope": "instance_overview",
+    "text": "Het bereikt het internet via de host, achter de isolatieregel van Hohenheim. Niets buiten de host kan het rechtstreeks bereiken."
+  },
+  "network_addresses": {
+    "scope": "instance_overview",
+    "text": "Adressen"
+  },
+  "network_interface": {
+    "scope": "instance_overview",
+    "text": "{$name} op {$network}"
+  },
+  "network_no_address": {
+    "scope": "instance_overview",
+    "text": "Nog geen adres gemeld"
+  },
+  "network_not_running": {
+    "scope": "instance_overview",
+    "text": "Draait niet, dus heeft het geen adres"
+  },
+  "network_unreachable": {
+    "scope": "instance_overview",
+    "text": "De host antwoordde niet, dus de adressen zijn nu onbekend"
+  },
+  "live_no_lane": {
+    "scope": "instance_overview",
+    "text": "De runtime van de host levert hier geen live metingen."
+  },
+  "instance_kind_change_refused": {
+    "scope": "violations",
+    "text": "Deze workload kan niet veranderen in {$kind}: de driver van de host kan wat nu draait niet omzetten naar die soort. Maak een nieuwe aan."
+  }
 }

@@ -7,6 +7,10 @@ import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceVariableModel;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.runtime.WorkloadLane;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -49,6 +53,22 @@ public final class InstanceProvisioningPage implements RecordTab.Rendered<Row> {
     @Override public boolean secondaryTab() { return true; }
     @Override public @NonNull String slug() { return HohenheimSlugs.Tab.PROVISIONING; }
     @Override public @NonNull Icon icon() { return Icon.of("wand-magic-sparkles"); }
+
+    /**
+     * Only where it has something to offer: a template, an install step, variables or config files already there, or a
+     * driver that can write a config file into the workload (WorkloadLane.CONFIG_FILES). A plain virtual machine has
+     * none of these, and an empty tab with an Add file its driver refuses was all it showed.
+     */
+    @Override
+    public boolean visibleFor(@NonNull Row record, @NonNull AccessContext access) {
+        Integer instanceId = record.get(InstanceModel.ID);
+        return InstanceKinds.offers(record, WorkloadLane.CONFIG_FILES)
+            || record.get(InstanceModel.TEMPLATE_ID) != null
+            || InstanceModel.isNotableInstallState(record.get(InstanceModel.INSTALL_STATE))
+            || instanceId != null && (Models.get(InstanceVariableModel.class).find()
+                    .where(InstanceVariableModel.INSTANCE_ID.eq(instanceId)).first() != null
+                || !Models.get(InstanceFileModel.class).findByInstanceId(instanceId).isEmpty());
+    }
 
     /**
      * AIDEV-NOTE: the variables are the framework's child list section ({@link InstanceVariableParts}), embedded over

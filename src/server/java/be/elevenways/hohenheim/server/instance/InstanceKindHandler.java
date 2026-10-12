@@ -8,6 +8,9 @@ import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.protoblast.common.annotation.BlastDiscoverable;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
+import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
+import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 
 import java.util.Map;
 import java.util.Set;
@@ -107,6 +110,28 @@ public interface InstanceKindHandler extends InstanceKindInfo {
      */
     default @NonNull Set<String> supportedRuntimes() {
         return Set.of(ServerModel.RUNTIME_DOCKER);
+    }
+
+    /**
+     * The driver class records of this kind run through on a host of {@code hostRuntime}: what the optional lanes a
+     * record surface offers ({@code WorkloadLane}) are derived from, without building a daemon client.
+     *
+     * AIDEV-NOTE: every kind today runs the Docker driver on a Docker host and the Incus driver on an Incus host,
+     * which is what this default declares; {@link #runtimeFor} must build an instance of exactly this class, and
+     * {@code MachineRecordPageJourneyTest} holds the two to each other for every registered kind.
+     *
+     * @return null for a runtime this kind does not support, or one this declaration does not know (fail closed: no
+     *         lane is offered)
+     */
+    default @Nullable Class<? extends InstanceRuntime> driverOn(@NonNull String hostRuntime) {
+        if (!this.supportedRuntimes().contains(hostRuntime)) {
+            return null;
+        }
+        return switch (hostRuntime) {
+            case ServerModel.RUNTIME_DOCKER -> DockerInstanceRuntime.class;
+            case ServerModel.RUNTIME_INCUS -> IncusInstanceRuntime.class;
+            default -> null;
+        };
     }
 
     /**

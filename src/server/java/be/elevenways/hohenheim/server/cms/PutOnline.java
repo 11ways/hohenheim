@@ -282,7 +282,8 @@ public final class PutOnline {
     public static final Operation<Void, Machine, Integer> PUT_MACHINE_ONLINE =
         Operation.declare(HohenheimIds.id("put_machine_online"))
             .label(HohenheimMicrocopy.PUT_ONLINE.of("put_online"))
-            .happened(HohenheimMicrocopy.PUT_ONLINE.of("happened"))
+            // A machine is created and started, never "put online": it gets no address and no certificate.
+            .happened(HohenheimMicrocopy.PUT_ONLINE.of("machine_happened"))
             .icon(Icon.of("rocket"))
             .noSubject()
             .gate(OperationGate.open())

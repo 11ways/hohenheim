@@ -1147,6 +1147,11 @@
     {
       "text": "Deploy",
       "scope": "instance"
+    },
+    {
+      "scope": "instance",
+      "what": "machine",
+      "text": "Start"
     }
   ],
   "deploy_now": {
@@ -8137,6 +8142,10 @@
     {
       "text": "Network",
       "scope": "reconcile_kind"
+    },
+    {
+      "scope": "instance_overview",
+      "text": "Network"
     }
   ],
   "network_description": {
@@ -12234,14 +12243,28 @@
     "text": "This is not a git clone URL. Use https://host/owner/repo.git, ssh://git@host/owner/repo.git, git@host:owner/repo.git, git://host/repo.git or an absolute path on this machine.",
     "scope": "violations"
   },
-  "runs_as_root": {
-    "text": "This workload runs as root",
-    "scope": "instance_shell"
-  },
-  "runs_as_root_description": {
-    "text": "A shell is only offered where the workload runs as its own non-root user, because root inside the container is root on the host.",
-    "scope": "instance_shell"
-  },
+  "runs_as_root": [
+    {
+      "text": "This workload runs as root",
+      "scope": "instance_shell"
+    },
+    {
+      "scope": "instance_shell",
+      "workload": "virtual_machine",
+      "text": "No shell into this virtual machine"
+    }
+  ],
+  "runs_as_root_description": [
+    {
+      "text": "A shell is only offered where the workload runs as its own non-root user, because root inside the container is root on the host.",
+      "scope": "instance_shell"
+    },
+    {
+      "scope": "instance_shell",
+      "workload": "virtual_machine",
+      "text": "A shell here opens only as a workload's own non-root user, and this virtual machine's agent runs commands as its root. Sign in on the machine itself through its screen."
+    }
+  ],
   "shell_failed": {
     "text": "Could not open a shell inside {$name}: {$reason}",
     "scope": "violations"
@@ -13076,6 +13099,11 @@
     {
       "text": "Only the memory and CPU ceilings can be changed here; every other field describes the container that was provisioned. Saving a new ceiling recreates the engine, so every database on it loses its connections until it is back.",
       "scope": "database_engine"
+    },
+    {
+      "scope": "instance",
+      "runtime": "incus",
+      "text": "Saving a new memory or CPU ceiling changes the running workload's size in place through Incus; its disks and addresses are kept."
     }
   ],
   "database_resize_failed": {
@@ -17709,5 +17737,53 @@
   "routes_save": { "text": "Save", "scope": "notification_channel" },
   "routes_saved": { "text": "Saved which events reach which channel.", "scope": "notification_channel" },
   "notification_channel_unknown": { "text": "This notification channel no longer exists.", "scope": "violations" },
-  "route_notification_events": { "text": "{$actor} chose which events reach which notification channel", "scope": "hohenheim", "target": "happened" }
+  "route_notification_events": { "text": "{$actor} chose which events reach which notification channel", "scope": "hohenheim", "target": "happened" },
+  "machine_happened": {
+    "scope": "put_online",
+    "text": "{$actor} created {$subject}"
+  },
+  "network_mode": {
+    "scope": "instance_overview",
+    "text": "Connection"
+  },
+  "network_reach": {
+    "scope": "instance_overview",
+    "text": "Who reaches it"
+  },
+  "network_mode_hidden": {
+    "scope": "instance_overview",
+    "text": "Hidden behind its host"
+  },
+  "network_mode_hidden_detail": {
+    "scope": "instance_overview",
+    "text": "It reaches the internet through its host, behind Hohenheim's isolation rule. Nothing outside its host can reach it directly."
+  },
+  "network_addresses": {
+    "scope": "instance_overview",
+    "text": "Addresses"
+  },
+  "network_interface": {
+    "scope": "instance_overview",
+    "text": "{$name} on {$network}"
+  },
+  "network_no_address": {
+    "scope": "instance_overview",
+    "text": "No address reported yet"
+  },
+  "network_not_running": {
+    "scope": "instance_overview",
+    "text": "Not running, so it holds no address"
+  },
+  "network_unreachable": {
+    "scope": "instance_overview",
+    "text": "Its host did not answer, so its addresses are unknown right now"
+  },
+  "live_no_lane": {
+    "scope": "instance_overview",
+    "text": "Its host's runtime gives no live readings to show here."
+  },
+  "instance_kind_change_refused": {
+    "scope": "violations",
+    "text": "This workload cannot be changed into {$kind}: its host's driver cannot turn what runs now into that kind. Create a new one instead."
+  }
 }

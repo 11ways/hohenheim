@@ -3,6 +3,9 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.runtime.WorkloadLane;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.instance.InstanceDiskView;
 import be.elevenways.hohenheim.instance.InstanceEndpointView;
@@ -109,14 +112,20 @@ public final class InstanceOverview {
                     .resolve(locales, resolver), installError)));
         }
 
-        // The sites whose hostname serves THIS instance (the sites.instance_id reverse lookup the column exists
-        // for): their names are the addresses the workload answers on.
-        List<Row> sites = Models.get(SiteModel.class).find().where(SiteModel.INSTANCE_ID.eq(instanceId)).all();
+        // A kind a site can serve answers on the names of the sites that serve it (the sites.instance_id reverse lookup
+        // the column exists for). A machine no site can serve is reached on its own network instead: its Network card
+        // says how it is connected and the addresses its guest holds. Both read the kind's and its driver's facts.
         List<WidgetInstance> main = new ArrayList<>();
-        main.add(AppOverview.addresses(sites, accessContext));
-        WidgetInstance protection = AppOverview.protection(sites, accessContext);
-        if (protection != null) {
-            main.add(protection);
+        InstanceKindHandler kind = InstanceKinds.handlerOf(instance);
+        if (kind != null && kind.supportsSiteUpstream()) {
+            List<Row> sites = Models.get(SiteModel.class).find().where(SiteModel.INSTANCE_ID.eq(instanceId)).all();
+            main.add(AppOverview.addresses(sites, accessContext));
+            WidgetInstance protection = AppOverview.protection(sites, accessContext);
+            if (protection != null) {
+                main.add(protection);
+            }
+        } else if (InstanceKinds.offers(instance, WorkloadLane.GUEST_ADDRESSES)) {
+            main.add(InstanceNetwork.card(instance, locales, resolver));
         }
         // The ports it answers on directly, only where it holds one: no card is drawn for an app
         // reached through its addresses alone, where "holds no port claim" was ledger words about nothing.
@@ -132,8 +141,9 @@ public final class InstanceOverview {
         // someone watches the Metrics tab; never a stream opened by this render. An application's
         // three are its serving release's, the container that runs (ApplicationReleases.runtimeRows).
         Row runtime = ApplicationReleases.runtimeRowOf(instance);
-        List<UsageData> live = liveUsage(runtime, InstanceStats.history(runtime.get(InstanceModel.ID)), locales,
-            resolver);
+        List<UsageData> live = InstanceKinds.offers(runtime, WorkloadLane.LIVE_STATS)
+            ? liveUsage(runtime, InstanceStats.history(runtime.get(InstanceModel.ID)), locales, resolver)
+            : unmeasuredLive(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("live_no_lane"), locales, resolver);
         main.add(AppOverview.resources(List.of(
             AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("memory"), live.get(0)),
             AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("disk"),
@@ -319,6 +329,13 @@ public final class InstanceOverview {
 
     // -- live usage ------------------------------------------------------------------
 
+    /** @return memory, then CPU, both not measured for the one reason given */
+    private static @NonNull List<UsageData> unmeasuredLive(@NonNull Microcopy why, @NonNull LocaleChain locales,
+                                                           @Nullable MessageResolver resolver) {
+        UsageData unmeasured = UsageData.unmeasured(why.resolve(locales, resolver));
+        return List.of(unmeasured, unmeasured);
+    }
+
     /**
      * Memory and CPU from the samples the live stats hub holds ({@link InstanceStats#history}), which exist only while
      * someone watches the workload's Metrics tab: a reading when there is one, NOT MEASURED in words when there is
@@ -334,14 +351,10 @@ public final class InstanceOverview {
     static @NonNull List<UsageData> liveUsage(@NonNull Row instance, @NonNull List<InstanceStats.Sample> samples,
                                               @NonNull LocaleChain locales, @Nullable MessageResolver resolver) {
         if (!InstanceModel.STATUS_RUNNING.equals(instance.get(InstanceModel.STATUS))) {
-            UsageData idle = UsageData.unmeasured(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("live_not_running")
-                .resolve(locales, resolver));
-            return List.of(idle, idle);
+            return unmeasuredLive(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("live_not_running"), locales, resolver);
         }
         if (samples.isEmpty()) {
-            UsageData unwatched = UsageData.unmeasured(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("live_unwatched")
-                .resolve(locales, resolver));
-            return List.of(unwatched, unwatched);
+            return unmeasuredLive(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("live_unwatched"), locales, resolver);
         }
         InstanceStats.Sample last = samples.get(samples.size() - 1);
         String observed = Instant.ofEpochMilli(last.at()).toString();

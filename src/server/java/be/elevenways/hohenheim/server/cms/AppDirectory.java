@@ -10,6 +10,8 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.site.SiteHostnamesCell;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.MessageResolver;
@@ -99,7 +101,7 @@ final class AppDirectory {
      * @param target      its record page's front door
      */
     record App(@NonNull String key, @NonNull Source source, int id, @NonNull String name, @NonNull String kind,
-               @NonNull SiteHostnamesCell address, @Nullable String addressText, @Nullable String host,
+               @Nullable SiteHostnamesCell address, @Nullable String addressText, @Nullable String host,
                @Nullable StateLineCell https, @NonNull RecordHealth health, @NonNull RouteTarget target) {
 
         // AIDEV-NOTE: an app is a reading, so its verdict's fixes are ROW actions of the record behind it (or of the
@@ -204,13 +206,16 @@ final class AppDirectory {
             for (Row site : served) {
                 names.addAll(domains.getOrDefault(site.get(SiteModel.ID), List.of()));
             }
-            SiteHostnamesCell address = names.isEmpty() ? endpointAddress(id, delegated)
-                : SiteParts.hostnamesCellOf(names);
+            // A machine no site can serve has no web address to lack: with no port either, its cell stays empty
+            // rather than saying "No address yet" (its overview's Network card holds its addresses).
+            InstanceKindHandler kind = InstanceKinds.handlerOf(instance);
+            SiteHostnamesCell address = !names.isEmpty() ? SiteParts.hostnamesCellOf(names)
+                : endpointAddress(id, delegated, kind != null && kind.supportsSiteUpstream());
             apps.add(new App(Source.WORKLOAD.token() + "-" + id, Source.WORKLOAD, id,
                 String.valueOf((Object) instance.get(InstanceModel.NAME)),
                 WidgetBadge.of(InstanceModel.KIND, instance.get(InstanceModel.KIND), words.locales, words.resolver)
                     .label(),
-                address, address.primary(),
+                address, address == null ? null : address.primary(),
                 delegated ? null : ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID)),
                 mainHttps(names, served, working, access, panel.slug()), workloadHealth.apply(instance),
                 InstanceParts.recordRoute(panel.slug(), instance, null)));
@@ -389,12 +394,14 @@ final class AppDirectory {
 
     /**
      * Where a workload no site serves is reached: its first claimed port on its host's public address (the overview's
-     * own endpoint read), or no address at all.
+     * own endpoint read), or no address at all: "No address yet" for a kind a site could serve, nothing for one no
+     * site can.
      */
-    private static @NonNull SiteHostnamesCell endpointAddress(int instanceId, boolean delegated) {
+    private static @Nullable SiteHostnamesCell endpointAddress(int instanceId, boolean delegated,
+                                                               boolean siteServable) {
         List<InstanceEndpointView> endpoints = InstanceOverview.endpointsOf(instanceId, delegated);
         if (endpoints.isEmpty()) {
-            return new SiteHostnamesCell(null, 0);
+            return siteServable ? new SiteHostnamesCell(null, 0) : null;
         }
         InstanceEndpointView first = endpoints.get(0);
         return new SiteHostnamesCell(first.address() + ":" + first.port(), endpoints.size() - 1);

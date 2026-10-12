@@ -13,6 +13,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -60,7 +61,7 @@ import static be.elevenways.hohenheim.server.runtime.IncusDefinitions.ROOT_DEVIC
 public final class IncusInstanceRuntime
         implements InstanceRuntime, ConsoleStreamSupport, NativeSnapshotSupport,
         InstallSupport, AppUpdateSupport, DeviceAttachSupport, RootDiskSizeSupport,
-        RootDiskUsageSupport, ExecSupport, ImagePublishSupport {
+        RootDiskUsageSupport, ExecSupport, ImagePublishSupport, GuestAddressSupport {
 
     /** The public image server system-container aliases resolve against. */
     public static final String IMAGE_SERVER = "https://images.linuxcontainers.org";
@@ -509,6 +510,47 @@ public final class IncusInstanceRuntime
             }
         }
         return WorkloadLiveness.UNKNOWN;
+    }
+
+    // -- GuestAddressSupport --------------------------------------------------
+
+    /**
+     * The guest's interfaces out of the daemon's instance state, each with the network its NIC device names.
+     *
+     * AIDEV-NOTE: a VM reports its addresses through its agent (or the bridge's leases); a stopped instance or one
+     * whose guest has none yet answers an empty list, never an error. Loopback interfaces and link-local addresses are
+     * left out: nobody reaches the guest on them.
+     */
+    @Override
+    public @NonNull List<GuestInterface> guestAddresses(@NonNull String handle, long timeoutMs)
+            throws IOException {
+        Map<String, Object> state = this.incus.instanceState(handle, timeoutMs);
+        if (!"Running".equalsIgnoreCase(String.valueOf(state.get("status")))
+                || !(state.get("network") instanceof Map<?, ?> network)) {
+            return List.of();
+        }
+        Map<?, ?> devices = this.incus.instance(handle, timeoutMs).get("expanded_devices") instanceof Map<?, ?> map
+            ? map : Map.of();
+        List<GuestInterface> interfaces = new ArrayList<>();
+        for (Map.Entry<?, ?> entry : network.entrySet()) {
+            if (!(entry.getValue() instanceof Map<?, ?> iface) || "loopback".equals(iface.get("type"))) {
+                continue;
+            }
+            List<String> addresses = new ArrayList<>();
+            if (iface.get("addresses") instanceof List<?> list) {
+                for (Object item : list) {
+                    if (item instanceof Map<?, ?> address && !"link".equals(address.get("scope"))
+                            && address.get("address") != null) {
+                        addresses.add(String.valueOf(address.get("address")));
+                    }
+                }
+            }
+            String name = String.valueOf(entry.getKey());
+            Object attached = devices.get(name) instanceof Map<?, ?> nic ? nic.get("network") : null;
+            interfaces.add(new GuestInterface(name, attached == null ? "" : String.valueOf(attached),
+                List.copyOf(addresses)));
+        }
+        return List.copyOf(interfaces);
     }
 
     // -- ConsoleStreamSupport -------------------------------------------------

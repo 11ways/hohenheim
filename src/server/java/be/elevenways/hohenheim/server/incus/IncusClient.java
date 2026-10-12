@@ -219,7 +219,12 @@ public class IncusClient {
 
     /** The instance's definition ({@code GET /1.0/instances/{name}}). */
     public @NonNull Map<String, Object> instance(@NonNull String name) throws IOException {
-        return syncMetadata("GET", "/1.0/instances/" + name, null, DEFAULT_TIMEOUT_MS);
+        return instance(name, DEFAULT_TIMEOUT_MS);
+    }
+
+    /** {@link #instance(String)} within {@code timeoutMs}, for a page that must not wait on an unreachable host. */
+    public @NonNull Map<String, Object> instance(@NonNull String name, long timeoutMs) throws IOException {
+        return syncMetadata("GET", "/1.0/instances/" + name, null, timeoutMs);
     }
 
     /** {@link #instance} together with its ETag, for a read-modify-write. */
@@ -236,8 +241,12 @@ public class IncusClient {
 
     /** The instance's live state ({@code GET /1.0/instances/{name}/state}). */
     public @NonNull Map<String, Object> instanceState(@NonNull String name) throws IOException {
-        return syncMetadata("GET", "/1.0/instances/" + name + "/state", null,
-            DEFAULT_TIMEOUT_MS);
+        return instanceState(name, DEFAULT_TIMEOUT_MS);
+    }
+
+    /** {@link #instanceState(String)} within {@code timeoutMs}. */
+    public @NonNull Map<String, Object> instanceState(@NonNull String name, long timeoutMs) throws IOException {
+        return syncMetadata("GET", "/1.0/instances/" + name + "/state", null, timeoutMs);
     }
 
     /**

@@ -80,6 +80,11 @@ public final class InstanceDeclarations {
         Violations refused = new Violations();
         collect(refused, () -> requireRuntimeImage(row, stored));
         collect(refused, () -> requireUsableRepository(row));
+        if (stored != null) {
+            // The form offers exactly InstanceKinds.kindChangesOf; this is the write's half of the same answer.
+            collect(refused, () -> InstanceKinds.requireKindChange(stored,
+                row.afterWrite(InstanceModel.KIND, stored)));
+        }
         return refused;
     }
 
