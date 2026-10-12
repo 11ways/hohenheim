@@ -414,13 +414,14 @@ public final class AttentionCollector {
     }
 
     /**
-     * Why a run failed, in the words its failure carried: core's message without the exception or stack trace
-     * ({@link TaskRunErrors#message}), a stored refusal read back in its own words.
+     * Why a run failed, in the words its failure carried: core's message without the exception or stack trace, a
+     * refusal in its own words ({@link TaskRunErrors#message}); a run stored before core kept a refusal's words reads
+     * its debug rendering back as Hohenheim's refusal.
      *
      * @return the reason, null when the run stored none
      */
     private static @Nullable Microcopy failureOf(@Nullable String stored) {
-        String message = TaskRunErrors.message(stored);
-        return message == null ? null : HohenheimViolations.storedMessage(message);
+        Microcopy message = TaskRunErrors.message(stored);
+        return message == null || !message.isLiteral() ? message : HohenheimViolations.storedMessage(message.key());
     }
 }

@@ -86,9 +86,9 @@ public final class HohenheimViolations {
 
     /**
      * A stored reason as a message for its reader: what {@link #reasonOf} stores, or, for a reason stored before it
-     * existed (and a task run's refusal, which the scheduler stores as thrown), the refusal it debug-rendered
-     * ("1 violation(s):  -> workspace_build_failed {reason=...}") as that refusal, which each reader resolves in its
-     * own locale.
+     * existed (and a task run's refusal stored before core's {@code TaskRunErrors} kept a refusal's words), the
+     * refusal it debug-rendered ("1 violation(s):  -> workspace_build_failed {reason=...}") as that refusal, which each
+     * reader resolves in its own locale.
      *
      * AIDEV-NOTE: only ONE violation is read back, because a list of them joins entries AND args with ", " and cannot
      * be split without guessing. A key this catalog does not hold, or any other shape, keeps the stored text: an old
