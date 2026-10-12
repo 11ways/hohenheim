@@ -3,6 +3,8 @@ package be.elevenways.hohenheim;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.i18n.MicrocopyScope;
 import be.elevenways.protoblast.common.util.BlastString;
+import be.elevenways.zenit.common.security.Permission;
+import be.elevenways.zenit.common.setting.SettingsForms;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -19,7 +21,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * never core's {@code activity} scope; violations keep their own scope rather than core's ValidationMicrocopy one, so
  * a Hohenheim entry never shadows a core validation message. Each constant holds protoblast's {@link MicrocopyScope}
  * for its scope, so the filter names are the framework's and a framework API taking a scope (a task's
- * {@code labelIn}) receives {@link #copy()}.
+ * {@code labelIn}) receives {@link #copy()}. A scope is declared once per process, so a constant naming a framework
+ * module's scope ({@code permission}, {@code settings}) reads that module's declaration instead of declaring it.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -45,12 +48,13 @@ public enum HohenheimMicrocopy {
     INSTANCE_SCHEDULE, INSTANCE_SHELL, INSTANCE_SNAPSHOT, INSTANCE_STATS, INSTANCE_STATUS, INSTANCE_TEMPLATE,
     INSTANCE_VARIABLE, INSTANCE_VOLUME, ISOLATION_FINDING, MANAGE, MANAGE_APP, MANAGE_DASHBOARD, NAV_CLUSTER,
     NAV_CLUSTER_HINT, NOTIFICATION_CHANNEL, NOTIFICATION_EVENT, NOTIFICATION_FORMAT, ONBOARDING,
-    ONBOARDING_CHECKLIST, OPERATION_STATUS, PERMISSION, PORT_EXPOSURE, PORT_PROTOCOL, POWER_OPERATION,
+    ONBOARDING_CHECKLIST, OPERATION_STATUS, PERMISSION(Permission.COPY), PORT_EXPOSURE, PORT_PROTOCOL, POWER_OPERATION,
     PREVIEW_DEPLOYMENT, PREVIEW_STATUS, PROJECT, PROJECT_MEMBER, PROTECTED_PATH, PROTECT_PATH, PROXY_ERROR, PUT_ONLINE,
     READINESS_KIND, RECONCILE_BUCKET, RECONCILE_FINDING, RECONCILE_KIND, REDIRECT_STATUS, REINSTALL_POLICY,
     RELEASED_CLAIM, RELEASE_KIND, RELEASE_OPERATION, RESTART_POLICY, ROLE, ROUTING_PROBLEM, RUNTIME_IMAGE,
     RUNTIME_ROLE, SCHEDULE_ACTION, SCHEDULE_RUN_STATUS, SCHEDULE_STEP, SECURITY_EVENT_TYPE, SERVER, SERVER_MEDIA,
-    SERVER_OPTION, SERVER_OVERVIEW, SETTINGS, SETTINGS_SECTION, SITE, SITE_DATABASE, SITE_DATABASES, SITE_DOMAIN,
+    SERVER_OPTION, SERVER_OVERVIEW, SETTINGS(SettingsForms.COPY), SETTINGS_SECTION, SITE, SITE_DATABASE,
+    SITE_DATABASES, SITE_DOMAIN,
     SITE_DOMAINS, SITE_FAULT, SITE_STATUS, SITE_TLS, SNAPSHOT_STATUS, SPAMSERVICE, SPAMSERVICE_CLIENT,
     SPAMSERVICE_EVENT, SPAMSERVICE_KEY, SPAMSERVICE_REPUTATION, SPAMSERVICE_SAMPLE, SPAMSERVICE_WORD, STACK,
     STACK_DEPLOYMENTS, STACK_DEPLOY_REASON, STACK_FILE, STACK_MOUNT_TYPE, STACK_SERVICE,
@@ -64,6 +68,19 @@ public enum HohenheimMicrocopy {
 
     HohenheimMicrocopy() {
         this.copy = MicrocopyScope.named(BlastString.lower(this.name()));
+    }
+
+    /**
+     * A constant naming a scope a framework module declares: it reads that declaration, since a scope is declared
+     * once per process.
+     *
+     * @throws IllegalStateException when the imported scope is not the one this constant's name spells
+     */
+    HohenheimMicrocopy(@NonNull MicrocopyScope imported) {
+        if (!imported.scope().equals(BlastString.lower(this.name()))) {
+            throw new IllegalStateException(this.name() + " imports scope '" + imported.scope() + "', not its own");
+        }
+        this.copy = imported;
     }
 
     /** @return the scope filter value this constant's catalog entries carry */
