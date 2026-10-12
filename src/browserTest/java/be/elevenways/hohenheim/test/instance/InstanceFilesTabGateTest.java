@@ -114,31 +114,21 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
     }
 
     /**
-     * A runtime with no file lane says so, instead of rendering a browser that answers
-     * every request with a refusal banner.
+     * A runtime with no file lane offers no Files tab at all (the record page shows only what its driver offers), so
+     * nobody reaches a browser that answers every request with a refusal banner.
      */
     @Test
-    void anIncusWorkloadStatesTheRuntimeHasNoFileLaneYet() throws Exception {
-        HttpResponse<String> page = httpGet(
-            "/admin/instances/" + incusInstanceId + "/page/files", sessionToken);
-        assertThat(page.statusCode()).as("step 1: the tab renders for an operator")
-            .isEqualTo(200);
+    void anIncusWorkloadOffersNoFilesTab() throws Exception {
+        // 1. The Incus record does not offer the tab, and its route is not there by hand either.
+        assertThat(httpGet("/admin/instances/" + incusInstanceId, sessionToken).body())
+            .as("step 1: an Incus workload is offered no Files tab").doesNotContain("/page/files");
+        assertThat(httpGet("/admin/instances/" + incusInstanceId + "/page/files", sessionToken).statusCode())
+            .as("step 1: and its route answers not found").isEqualTo(404);
 
-        // 2. THE DEFECT: pre-fix this rendered the files_unsupported violation as a red
-        //    error alert, which reads as breakage rather than as a declared asymmetry.
-        assertThat(page.body())
-            .withFailMessage("step 2: an Incus workload does not state that its runtime"
-                + " has no file lane yet")
-            .contains("data-files-unsupported");
-        assertThat(page.body())
-            .withFailMessage("step 2: and still renders the refusal as an error alert")
-            .doesNotContain("<pl-alert variant=\"destructive\"");
-
-        // 3. Positive anchor: the Docker workload still gets a real browser.
-        assertThat(httpGet("/admin/instances/" + dockerInstanceId + "/page/files", sessionToken)
-                .body())
-            .as("step 3: the Docker tier still browses")
-            .doesNotContain("data-files-unsupported");
+        // 2. Positive anchor: the Docker workload still gets a real browser.
+        HttpResponse<String> docker = httpGet("/admin/instances/" + dockerInstanceId + "/page/files", sessionToken);
+        assertThat(docker.statusCode()).as("step 2: the Docker tier still opens its Files tab").isEqualTo(200);
+        assertThat(docker.body()).as("step 2: and browses").doesNotContain("data-files-unsupported");
     }
 
     /**

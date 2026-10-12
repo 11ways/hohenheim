@@ -142,17 +142,17 @@ class InstanceOverviewTest extends HohenheimTestBase {
     }
 
     /**
-     * The Root disk gauge of a rendered overview: from its label to the CPU gauge's (the order is
-     * memory, disk, CPU), so the memory and CPU gauges beside it never answer for the disk.
+     * The Root disk gauge of a rendered overview: from its label to the next widget (the order is memory, CPU, root
+     * disk, so the disk is the last usage gauge), so the memory and CPU gauges before it never answer for the disk.
      */
     private static String diskGauge(String page) {
         // The gauge's own heading, never the page's serialized render data, which may name it too.
         int start = page.indexOf(">Root disk<");
         assertThat(start).as("the overview draws the Root disk gauge's heading").isNotNegative();
-        // Each gauge is one "widget widget-usage" block; the next one is the CPU gauge.
-        int end = page.indexOf("widget widget-usage", start);
-        assertThat(end).as("the CPU gauge follows the Root disk gauge").isNotNegative();
-        return page.substring(start, end);
+        assertThat(page.indexOf("widget widget-usage", start))
+            .as("the Root disk gauge is the last usage gauge").isNegative();
+        int next = page.indexOf("\"widget widget-", start);
+        return page.substring(start, next < 0 ? page.length() : next);
     }
 
     /** The placed restart operation, which the overview page projects. */
