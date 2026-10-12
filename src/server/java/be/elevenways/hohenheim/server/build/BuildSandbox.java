@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.hohenheim.server.util.Tar;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -22,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -279,7 +281,7 @@ public final class BuildSandbox {
                 }
             }
             try {
-                Thread.sleep(POLL_MS);
+                Pace.sleep(Duration.ofMillis(POLL_MS));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 kill(handle);
