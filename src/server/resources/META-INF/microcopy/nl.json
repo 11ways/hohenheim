@@ -11993,12 +11993,27 @@
     "text": "Verwijderen met data",
     "scope": "instance"
   },
-  "delete_with_data_confirm": {
-    "text": "Dit verwijdert de container van '{$name}', elk benoemd volume dat erbij hoort en elke hostmap die erin gemonteerd is. De bestanden zijn definitief weg. Typ de naam om te bevestigen.",
-    "scope": "instance"
-  },
+  "delete_with_data_confirm": [
+    {
+      "text": "Dit verwijdert de container van '{$name}', elk benoemd volume dat erbij hoort en elke hostmap die erin gemonteerd is. De bestanden zijn definitief weg. Typ de naam om te bevestigen.",
+      "scope": "instance"
+    },
+    {
+      "text": "Dit verwijdert de virtuele machine '{$name}' met haar schijven, elk benoemd volume dat erbij hoort en elke hostmap die erin gemonteerd is. De bestanden zijn definitief weg. Typ de naam om te bevestigen.",
+      "scope": "instance",
+      "workload": "virtual_machine"
+    }
+  ],
   "deleted_with_data_toast": {
     "text": "'{$name}' en de bijbehorende data zijn verwijderd",
+    "scope": "instance"
+  },
+  "environment_empty_project": {
+    "text": "{$project} heeft nog geen omgevingen. Voeg er een toe onder Omgevingen en kies ze dan hier.",
+    "scope": "instance"
+  },
+  "environment_empty_no_project": {
+    "text": "Alleen een app in een project kan in een omgeving staan, en deze hoort bij geen enkel project.",
     "scope": "instance"
   },
   "home_quota": [
@@ -12287,10 +12302,17 @@
     "text": "Dit verwijdert de workload van zijn host maar behoudt de gegevens. Deze sites stellen hem beschikbaar en worden UITGESCHAKELD zodat ze niet langer antwoorden: {$sites}. Hun hostnamen, certificaten en toegangsregels blijven behouden -- richt ze op een andere workload en schakel ze opnieuw in.",
     "scope": "instance"
   },
-  "delete_with_data_confirm_stranding": {
-    "text": "Dit verwijdert de container van '{$name}', elk benoemd volume dat erbij hoort en elke hostmap die erin gemonteerd is. De bestanden zijn definitief weg. Deze sites stellen hem beschikbaar en worden UITGESCHAKELD: {$sites}. Typ de naam om te bevestigen.",
-    "scope": "instance"
-  },
+  "delete_with_data_confirm_stranding": [
+    {
+      "text": "Dit verwijdert de container van '{$name}', elk benoemd volume dat erbij hoort en elke hostmap die erin gemonteerd is. De bestanden zijn definitief weg. Deze sites stellen hem beschikbaar en worden UITGESCHAKELD: {$sites}. Typ de naam om te bevestigen.",
+      "scope": "instance"
+    },
+    {
+      "text": "Dit verwijdert de virtuele machine '{$name}' met haar schijven, elk benoemd volume dat erbij hoort en elke hostmap die erin gemonteerd is. De bestanden zijn definitief weg. Deze sites stellen haar beschikbaar en worden UITGESCHAKELD: {$sites}. Typ de naam om te bevestigen.",
+      "scope": "instance",
+      "workload": "virtual_machine"
+    }
+  ],
   "state_on": {
     "text": "Aan",
     "scope": "access_rule"
@@ -15023,6 +15045,10 @@
     "text": "De naam en de host waarop het draait.",
     "scope": "put_online"
   },
+  "machine_lead": {
+    "text": "Maakt de machine aan op een host en start ze. Een machine krijgt geen webadres: je bereikt ze via haar scherm of over het netwerk.",
+    "scope": "put_online"
+  },
   "step_machine_settings_lead": {
     "text": "Het image waarmee het opstart, de grootte en hoe je aanmeldt: cloud-init user-data, zoals een SSH-sleutel, staat onder Gastconfiguratie.",
     "scope": "put_online"
@@ -17661,6 +17687,10 @@
   },
   "take_over": {
     "text": "Overnemen",
+    "scope": "instance_framebuffer"
+  },
+  "reconnect": {
+    "text": "Opnieuw verbinden",
     "scope": "instance_framebuffer"
   },
   "routes": { "text": "Meldingen per kanaal", "scope": "notification_channel" },

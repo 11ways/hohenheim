@@ -3,7 +3,9 @@
        watcher asks for control and the one holding it can give it back. Which button shows follows the role the
        viewer reflects on kvm-screen. The controller's element size goes to the guest, whose SPICE agent lays its
        display out at it; a guest without the agent keeps its own size. A console someone else holds (an operator's
-       incus console) reads "held", and only then does Take over show: it reconnects ending that console. */
+       incus console) reads "held", and only then does Take over show: it reconnects ending that console. A screen
+       that ended (a console forced away from it) offers Reconnect while kvm-screen says it may come back, which
+       opens it again without forcing anyone, so a console still held elsewhere reads "held" with its Take over. */
     public required endpoint: String
     public label: String = ""
 
@@ -19,6 +21,9 @@
         }
 
         kvm-screen:not([data-screen-status="held"]) ~ .hh-vm-screen-controls .hh-vm-screen-take-over,
+        kvm-screen:not([data-screen-reconnect]) ~ .hh-vm-screen-controls .hh-vm-screen-reconnect,
+        kvm-screen[data-screen-reconnect] ~ .hh-vm-screen-controls .hh-vm-screen-take,
+        kvm-screen[data-screen-reconnect] ~ .hh-vm-screen-controls .hh-vm-screen-release,
         kvm-screen:not([data-screen-role="watcher"]) ~ .hh-vm-screen-controls .hh-vm-screen-take,
         kvm-screen:not([data-screen-role="controller"]) ~ .hh-vm-screen-controls .hh-vm-screen-release {
             display: none;
@@ -34,6 +39,8 @@
                        event:click={% Kvm.control(screenEl, false) %}>{{ t("release_control", scope: "instance_framebuffer") }}</pl-button>
             <pl-button class="hh-vm-screen-take-over" variant="destructive"
                        event:click={% Kvm.takeOver(screenEl) %}>{{ t("take_over", scope: "instance_framebuffer") }}</pl-button>
+            <pl-button class="hh-vm-screen-reconnect" variant="outline"
+                       event:click={% Kvm.reconnect(screenEl) %}>{{ t("reconnect", scope: "instance_framebuffer") }}</pl-button>
         </div>
     }
 } %}

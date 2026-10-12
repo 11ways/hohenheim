@@ -156,6 +156,10 @@ public final class PutOnlinePage extends PanelPage {
             InstanceKindInfo info = InstanceKindRegistry.REGISTRY.get(Identifier.tryParse(workload));
             if (opened instanceof PageActions.Form form && info != null) {
                 vars.put("document", form.state().withJourney(BEFORE_WIZARD, AFTER_WIZARD));
+                // A machine gets no address or certificate, so it is not led in by the app flow's promise of both.
+                if (workloadAction == MACHINE) {
+                    vars.put("lead", HohenheimMicrocopy.PUT_ONLINE.of("machine_lead"));
+                }
                 vars.put("whatIcon", info.getIcon().name());
                 vars.put("what", resolve(info.getLabel(), request));
                 vars.put("whatDescription", resolve(info.getDescription(), request));

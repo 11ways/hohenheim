@@ -370,6 +370,9 @@ public final class InstanceParts {
             // owner, the rule its write hook refuses by, so the pick never offers what the save would refuse.
             .add(Select.of(InstanceModel.ENVIRONMENT_ID)
                 .options(OptionSource.dynamic(InstanceParts::environmentOptions))
+                // Nothing to offer is said in words: the owning project has no environment yet, or there is none.
+                .emptyReason(context -> ProjectGuards.noEnvironmentsReason(
+                    ProjectGuards.ownerOf(editedId(context), context.accessContext())))
                 .clearable(true)
                 .build())
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
@@ -410,14 +413,12 @@ public final class InstanceParts {
      * plus the one it already sits in: an unchanged environment is never judged.
      */
     private static @NonNull List<FieldOption<Integer>> environmentOptions(@NonNull EditContext context) {
-        Object recordId = context.record() instanceof Row row && row.has(InstanceModel.ID.getName())
-            ? row.get(InstanceModel.ID) : null;
         Object current = context.record() instanceof Row row && row.has(InstanceModel.ENVIRONMENT_ID.getName())
             ? row.get(InstanceModel.ENVIRONMENT_ID) : null;
         List<FieldOption<Integer>> options = new ArrayList<>();
         boolean currentOffered = current == null;
         for (Row environment : ProjectGuards.environmentsFor(
-                ProjectGuards.ownerOf(recordId, context.accessContext()))) {
+                ProjectGuards.ownerOf(editedId(context), context.accessContext()))) {
             Integer id = environment.get(EnvironmentModel.ID);
             currentOffered |= id.equals(current);
             options.add(FieldOption.of(id, Microcopy.literal(String.valueOf((Object) environment.get(
@@ -429,6 +430,12 @@ public final class InstanceParts {
                 : String.valueOf((Object) environment.get(EnvironmentModel.NAME)))));
         }
         return options;
+    }
+
+    /** @return the id of the instance the form edits, null on a create */
+    private static @Nullable Object editedId(@NonNull EditContext context) {
+        return context.record() instanceof Row row && row.has(InstanceModel.ID.getName())
+            ? row.get(InstanceModel.ID) : null;
     }
 
     private static @NonNull TableSpec<Row> adminTable() {

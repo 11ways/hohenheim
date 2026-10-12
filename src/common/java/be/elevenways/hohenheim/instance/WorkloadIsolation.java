@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.instance;
 
+import org.checkerframework.checker.nullness.qual.NonNull;
+
 /**
  * The boundary a workload's runtime puts between the guest and the host kernel -- the
  * ISOLATION axis of the "every workload declares trusted/operator-owned vs
@@ -20,5 +22,16 @@ public enum WorkloadIsolation {
     SHARED_KERNEL,
 
     /** A virtual machine: its own kernel behind a hypervisor boundary. */
-    VIRTUAL_MACHINE
+    VIRTUAL_MACHINE;
+
+    /**
+     * The {@code workload} filter value copy picks its wording by, so a sentence about the workload says "the
+     * container" or "the virtual machine" by this fact, never by the kind's name.
+     */
+    public @NonNull String token() {
+        return switch (this) {
+            case SHARED_KERNEL -> "shared_kernel";
+            case VIRTUAL_MACHINE -> "virtual_machine";
+        };
+    }
 }

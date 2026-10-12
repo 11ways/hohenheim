@@ -4,6 +4,7 @@ import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.InstanceStatus;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -403,8 +404,8 @@ final class InstanceActions {
     }
 
     /**
-     * The delete-with-data body, naming the sites the destroy will disable when any do.
-     * The typed-name gate on the dialog is unchanged either way.
+     * The delete-with-data body, naming the sites the destroy will disable when any do, and worded for what the
+     * record's kind runs (its isolation: a container, a virtual machine). The typed-name gate is unchanged either way.
      */
     private static @NonNull Microcopy withDataBody(@NonNull Row row) {
         String sites = InstanceParts.strandedSites(row);
@@ -412,6 +413,8 @@ final class InstanceActions {
             ? HohenheimMicrocopy.INSTANCE.of("delete_with_data_confirm")
             : HohenheimMicrocopy.INSTANCE.of("delete_with_data_confirm_stranding")
                 .withArg("sites", sites);
-        return body.withArg("name", row.get(InstanceModel.NAME));
+        InstanceKindHandler kind = InstanceKinds.handlerOf(row);
+        WorkloadIsolation isolation = kind == null ? WorkloadIsolation.SHARED_KERNEL : kind.isolation();
+        return body.withFilter("workload", isolation.token()).withArg("name", row.get(InstanceModel.NAME));
     }
 }

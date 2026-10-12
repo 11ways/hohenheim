@@ -380,6 +380,9 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         assertThat(wizard).as("step 2: the kind is transport")
             .contains("type=\"hidden\" name=\"kind\" value=\"hohenheim:vm\"");
         assertThat(wizard).as("step 2: the settings step asks its cloud-init user-data").contains("cloud_init");
+        assertThat(wizard).as("step 2: the lead speaks of a machine, never of the app flow's address and certificate")
+            .contains("A machine gets no web address")
+            .doesNotContain("Creates the app, its address and its certificate in one go.");
 
         // 3. The host pick is the kind's: a host that cannot run a virtual machine is refused on the host field.
         Map<String, Object> form = new LinkedHashMap<>();
@@ -407,6 +410,11 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         assertThat((Object) vm.get(InstanceModel.SERVER_ID)).as("step 4: on the host given").isEqualTo(hostId);
         assertThat(Models.get(SiteModel.class).find().where(SiteModel.INSTANCE_ID.eq(vm.get(InstanceModel.ID)))
             .first()).as("step 4: and no website").isNull();
+        // Posted without its typed name, the verb answers with its confirmation page and acts on nothing.
+        assertThat(adminPostForm("/admin/instances/invoke/hohenheim.destroy_instance_data?ids="
+                + vm.get(InstanceModel.ID), "").body())
+            .as("step 4: its Delete with data speaks of the virtual machine, by its kind's isolation")
+            .contains("This removes the virtual machine").doesNotContain("This removes the container");
 
         // 5. A kind that serves a website is not put online as a machine: refused on the kind, before a run.
         form.put(InstanceModel.NAME.getName(), PREFIX + "not-a-machine");

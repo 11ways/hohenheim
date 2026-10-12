@@ -401,7 +401,8 @@ class ProjectOwnershipTest extends HohenheimTestBase {
         page.click(environmentSelect + " .pl-select-field");
         page.waitForSelector(production);
 
-        // 2. An operator-owned record is not: the save would refuse it, so the pick never offers it.
+        // 2. An operator-owned record is not: the save would refuse it, so the pick never offers it, and its empty
+        //    list says why in words instead of a bare "No results".
         navigateToApp("/admin/instances/" + omegaId);
         waitForHydration();
         if (page.locator(environmentSelect + "[disabled]").count() == 0) {
@@ -411,7 +412,19 @@ class ProjectOwnershipTest extends HohenheimTestBase {
                 || page.locator(popup + " .pl-select-empty").count() > 0);
             assertThat(page.locator(production).count())
                 .as("step 2: another project's environment is not offered to an operator-owned record").isZero();
+            assertThat(page.locator(popup + " .pl-select-empty").textContent())
+                .as("step 2: the empty pick says the record belongs to no project")
+                .contains("belongs to no project");
         }
+
+        // 3. A record of a project without environments reads that project's name and where to add one.
+        navigateToApp("/admin/instances/" + gammaId);
+        waitForHydration();
+        page.click(environmentSelect + " .pl-select-field");
+        page.waitForSelector(popup + " .pl-select-empty");
+        assertThat(page.locator(popup + " .pl-select-empty").textContent())
+            .as("step 3: the empty pick names the project and where its environments are added")
+            .contains(PREFIX + "two has no environments yet").contains("Environments");
     }
 
     /** Environments group ONLY what their project owns, and their variables merge under. */

@@ -11993,12 +11993,27 @@
     "text": "Delete with data",
     "scope": "instance"
   },
-  "delete_with_data_confirm": {
-    "text": "This removes the container of '{$name}', every named volume it owns and every host directory mounted into it. The files are gone for good. Type the name to confirm.",
-    "scope": "instance"
-  },
+  "delete_with_data_confirm": [
+    {
+      "text": "This removes the container of '{$name}', every named volume it owns and every host directory mounted into it. The files are gone for good. Type the name to confirm.",
+      "scope": "instance"
+    },
+    {
+      "text": "This removes the virtual machine '{$name}' with its disks, every named volume it owns and every host directory mounted into it. The files are gone for good. Type the name to confirm.",
+      "scope": "instance",
+      "workload": "virtual_machine"
+    }
+  ],
   "deleted_with_data_toast": {
     "text": "'{$name}' and its data were deleted",
+    "scope": "instance"
+  },
+  "environment_empty_project": {
+    "text": "{$project} has no environments yet. Add one under Environments, then pick it here.",
+    "scope": "instance"
+  },
+  "environment_empty_no_project": {
+    "text": "Only an app in a project can sit in an environment, and this one belongs to no project.",
     "scope": "instance"
   },
   "home_quota": [
@@ -12287,10 +12302,17 @@
     "text": "This removes the workload from its host but keeps its data. These sites expose it and will be DISABLED so they stop answering: {$sites}. Their hostnames, certificates and access rules are kept -- point them at another workload and enable them again.",
     "scope": "instance"
   },
-  "delete_with_data_confirm_stranding": {
-    "text": "This removes the container of '{$name}', every named volume it owns and every host directory mounted into it. The files are gone for good. These sites expose it and will be DISABLED: {$sites}. Type the name to confirm.",
-    "scope": "instance"
-  },
+  "delete_with_data_confirm_stranding": [
+    {
+      "text": "This removes the container of '{$name}', every named volume it owns and every host directory mounted into it. The files are gone for good. These sites expose it and will be DISABLED: {$sites}. Type the name to confirm.",
+      "scope": "instance"
+    },
+    {
+      "text": "This removes the virtual machine '{$name}' with its disks, every named volume it owns and every host directory mounted into it. The files are gone for good. These sites expose it and will be DISABLED: {$sites}. Type the name to confirm.",
+      "scope": "instance",
+      "workload": "virtual_machine"
+    }
+  ],
   "state_on": {
     "text": "On",
     "scope": "access_rule"
@@ -15023,6 +15045,10 @@
     "text": "Its name and the host it runs on.",
     "scope": "put_online"
   },
+  "machine_lead": {
+    "text": "Creates the machine on a host and starts it. A machine gets no web address: you reach it through its screen or over the network.",
+    "scope": "put_online"
+  },
   "step_machine_settings_lead": {
     "text": "The image it boots, its size and how you sign in: cloud-init user-data, such as an SSH key, is under Guest configuration.",
     "scope": "put_online"
@@ -17661,6 +17687,10 @@
   },
   "take_over": {
     "text": "Take over",
+    "scope": "instance_framebuffer"
+  },
+  "reconnect": {
+    "text": "Reconnect",
     "scope": "instance_framebuffer"
   },
   "routes": { "text": "Events per channel", "scope": "notification_channel" },

@@ -211,6 +211,20 @@ public final class ProjectGuards {
     }
 
     /**
+     * Why {@link #environmentsFor} offers a record answering to {@code owner} nothing: its project has no environment
+     * yet, or it answers to no project at all (unreadable grants included, which place nothing either).
+     */
+    public static @NonNull Microcopy noEnvironmentsReason(@Nullable Set<String> owner) {
+        for (Row project : Models.get(ProjectModel.class).find().all()) {
+            if (owns(project, owner)) {
+                return HohenheimMicrocopy.INSTANCE.of("environment_empty_project")
+                    .withArg("project", String.valueOf((Object) project.get(ProjectModel.NAME)));
+            }
+        }
+        return HohenheimMicrocopy.INSTANCE.of("environment_empty_no_project");
+    }
+
+    /**
      * The owner an instance answers to for the grouping decision: a stored record's grant-derived subjects, or, for
      * a record not created yet, the creation owner of {@code creator}.
      *
