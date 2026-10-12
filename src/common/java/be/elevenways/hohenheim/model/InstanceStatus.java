@@ -123,6 +123,17 @@ public enum InstanceStatus {
     }
 
     /**
+     * Whether the record was ever deployed: {@code created} is the status of a record nobody deployed yet, so there is
+     * nothing to restart and its verdict is "not deployed yet", never a stopped workload.
+     */
+    public boolean deployed() {
+        return switch (this) {
+            case STARTING, RUNNING, STOPPED, ERROR, CAPTURING, RESTORING, MIGRATING -> true;
+            case CREATED -> false;
+        };
+    }
+
+    /**
      * THE token-to-member lookup.
      *
      * @return the member storing exactly this token, or null for an unknown token

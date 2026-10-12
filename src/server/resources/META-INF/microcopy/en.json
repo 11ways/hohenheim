@@ -14779,6 +14779,14 @@
     "text": "Deploy it to start it.",
     "scope": "app_health"
   },
+  "not_deployed": {
+    "text": "Not deployed yet",
+    "scope": "app_health"
+  },
+  "first_start_detail": {
+    "text": "Its first start is under way.",
+    "scope": "app_health"
+  },
   "fix_https": {
     "text": "Get a certificate",
     "scope": "app_health"
@@ -15009,6 +15017,14 @@
   },
   "step_settings_lead": {
     "text": "Where it comes from and how it runs. Everything except the source has a default.",
+    "scope": "put_online"
+  },
+  "step_machine_where_lead": {
+    "text": "Its name and the host it runs on.",
+    "scope": "put_online"
+  },
+  "step_machine_settings_lead": {
+    "text": "The image it boots, its size and how you sign in: cloud-init user-data, such as an SSH key, is under Guest configuration.",
     "scope": "put_online"
   },
   "step_https_lead": {

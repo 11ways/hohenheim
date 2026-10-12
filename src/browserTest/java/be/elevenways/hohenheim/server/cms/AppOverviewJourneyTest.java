@@ -161,6 +161,42 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
         }
     }
 
+    /** A record nobody deployed yet reads as not deployed yet, with Deploy as its verb, and offers no Restart. */
+    @Test
+    void aNeverDeployedWorkloadIsNotDeployedYetAndOffersNoRestart() throws Exception {
+        Row instance = instance("app-journey-never-deployed");
+        int id = instance.get(InstanceModel.ID);
+        HostFixtures.LocalHostState localBefore = HostFixtures.captureLocal();
+        try {
+            // 1. Just created on a host that takes it: nothing went wrong, so no attention verdict; it is not deployed
+            //    yet, and Deploy is its fix. Restart, which needs something to stop, is not offered.
+            HostFixtures.admitLocal();
+            status(id, InstanceModel.STATUS_CREATED);
+            String created = adminGet("/admin/instances/" + id + "/page/overview").body();
+            assertThat(created).as("step 1: a never-deployed workload is no attention verdict")
+                .doesNotContain("data-cms-record-health=\"attention\"")
+                .contains("data-cms-record-health=\"unknown\"")
+                .contains("Not deployed yet")
+                .doesNotContain(">Not running<");
+            assertThat(created).as("step 1: Deploy is offered")
+                .contains("/invoke/hohenheim.start_instance");
+            assertThat(created).as("step 1: Restart is not")
+                .doesNotContain("/invoke/hohenheim.restart_instance");
+
+            // 2. Once it ran and stopped, it is not running, and Restart is offered again.
+            status(id, InstanceModel.STATUS_STOPPED);
+            String stopped = adminGet("/admin/instances/" + id + "/page/overview").body();
+            assertThat(stopped).as("step 2: a stopped workload is an attention verdict")
+                .contains("data-cms-record-health=\"attention\"")
+                .contains("Not running");
+            assertThat(stopped).as("step 2: and offers Restart")
+                .contains("/invoke/hohenheim.restart_instance");
+        } finally {
+            localBefore.restore();
+            HardDeletes.row(Models.get(InstanceModel.class), instance);
+        }
+    }
+
     @Test
     void aWorkloadServedByASiteOpensThatSite() throws Exception {
         Row instance = instance("app-journey-served");
@@ -585,8 +621,8 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
         try {
             instances.save(app);
             int id = app.get(InstanceModel.ID);
-            // 1. Nothing serves yet: it is not running.
-            assertThat(headlineOf(id)).as("step 1: no release, so it is not running").isEqualTo("not_running");
+            // 1. Nothing serves yet and nothing ever did: it is not deployed yet.
+            assertThat(headlineOf(id)).as("step 1: no release ever, so it is not deployed yet").isEqualTo("not_deployed");
 
             // 2. Its serving release runs: the app is live, and its overview says so.
             ApplicationReleases.inScopeUnchecked(id, () -> {

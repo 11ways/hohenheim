@@ -14779,6 +14779,14 @@
     "text": "Deploy om het te starten.",
     "scope": "app_health"
   },
+  "not_deployed": {
+    "text": "Nog niet gedeployd",
+    "scope": "app_health"
+  },
+  "first_start_detail": {
+    "text": "De eerste start is bezig.",
+    "scope": "app_health"
+  },
   "fix_https": {
     "text": "Certificaat aanvragen",
     "scope": "app_health"
@@ -15009,6 +15017,14 @@
   },
   "step_settings_lead": {
     "text": "Waar het vandaan komt en hoe het draait. Alles behalve de bron heeft een standaardwaarde.",
+    "scope": "put_online"
+  },
+  "step_machine_where_lead": {
+    "text": "De naam en de host waarop het draait.",
+    "scope": "put_online"
+  },
+  "step_machine_settings_lead": {
+    "text": "Het image waarmee het opstart, de grootte en hoe je aanmeldt: cloud-init user-data, zoals een SSH-sleutel, staat onder Gastconfiguratie.",
     "scope": "put_online"
   },
   "step_https_lead": {

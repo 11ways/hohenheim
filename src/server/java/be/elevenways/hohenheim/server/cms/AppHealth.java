@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.server.proxy.RoutingProblem;
 import be.elevenways.hohenheim.server.sitetype.SiteHealth;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.zenit.server.operation.OperationRuns;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.panel.Panel;
@@ -408,13 +409,21 @@ final class AppHealth {
                 // /manage it is offered to a holder of power; everyone else reads who can (spokenTo).
                 yield root != null ? stopped : stopped.fixedBy(InstanceOperations.RESTART.id());
             }
-            case STOPPED, CREATED -> {
+            case STOPPED -> {
                 RecordHealth broken = siteBrokenOnItsOwn(facts.sitesByInstance.get(instance.get(InstanceModel.ID)),
                     facts.sites, delegated, viewer);
                 yield broken != null ? broken : RecordHealth.attention(Headline.NOT_RUNNING.copy())
                     .detail(HohenheimMicrocopy.APP_HEALTH.of("not_running_detail"))
                     .fixedBy(InstanceOperations.START.id());
             }
+            // Nobody deployed it yet: nothing went wrong, so it asks for nothing but its first deploy, and while the run
+            // that created it is still starting it (put online), it is deploying.
+            case CREATED -> firstStartUnderWay(instance, viewer)
+                ? RecordHealth.unknown(HohenheimMicrocopy.APP_HEALTH.of("deploying"))
+                    .detail(HohenheimMicrocopy.APP_HEALTH.of("first_start_detail"))
+                : RecordHealth.unknown(HohenheimMicrocopy.APP_HEALTH.of("not_deployed"))
+                    .detail(HohenheimMicrocopy.APP_HEALTH.of("not_running_detail"))
+                    .fixedBy(InstanceOperations.START.id());
             case STARTING, CAPTURING, RESTORING, MIGRATING -> RecordHealth.unknown(status.label());
         };
         // A running workload whose site turns visitors away serves nothing, though it runs.
@@ -432,6 +441,12 @@ final class AppHealth {
         InstanceKindHandler kind = InstanceKinds.handlerOf(instance);
         return (status == InstanceStatus.STOPPED || status == InstanceStatus.CREATED)
             && kind != null && kind.releaseManaged() && ApplicationReleases.deploying(instance.get(InstanceModel.ID));
+    }
+
+    /** Whether a background run on this never-deployed record (the put-online run that made it) is still open. */
+    private static boolean firstStartUnderWay(@NonNull Row instance, @Nullable AccessContext viewer) {
+        return viewer != null && OperationRuns.openFor(InstanceOperations.INSTANCE,
+            String.valueOf((Object) instance.get(InstanceModel.ID)), viewer) != null;
     }
 
     /**

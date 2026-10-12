@@ -4,6 +4,7 @@ import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.model.InstanceStatus;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -130,7 +131,8 @@ final class InstanceActions {
     }
 
     /**
-     * Stop and start again: the restart operation, ONE lock hold across both halves.
+     * Stop and start again: the restart operation, ONE lock hold across both halves. Hidden on a record nobody
+     * deployed yet: there is nothing to restart, and Deploy is its verb.
      *
      * @param delegated whether the button is drawn on /manage, where the host is operator inventory
      */
@@ -141,6 +143,8 @@ final class InstanceActions {
             .label(HohenheimMicrocopy.INSTANCE.of("restart"))
             .icon(Icon.of("rotate-right"))
             .inlineInRow(false)
+            .hiddenWhen(row -> !(InstanceStatus.forToken(row.get(InstanceModel.STATUS)) instanceof InstanceStatus status
+                && status.deployed()))
             .disabledWhen((row, access) -> OwnedInstances.placementReasonOf(row, delegated, access))
             .confirmation(ConfirmationSpec.verb(HohenheimMicrocopy.INSTANCE.of("restart"),
                 HohenheimMicrocopy.INSTANCE.of("restart_confirm"), ActionStyle.DEFAULT))
