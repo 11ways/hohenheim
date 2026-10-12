@@ -187,6 +187,8 @@ public final class InstanceParts {
         return ManageTwin.reached(entry(ManageTwin.id("instance")), TenantScopes.INSTANCES,
                 ResourceTabs.of(manageTabs()))
             .standsUnder(HohenheimSlugs.APPS)
+            // One of the tenant's apps, as the Apps list words it: what the landing's Recent rows name its kind.
+            .recordLabel(HohenheimMicrocopy.APP_LIST.of("singular"))
             .health(AppHealth.instances(true))
             // The host is operator inventory: never a rule, sort, search or value of this list.
             .withholds(HostFields.of(InstanceModel.MODEL_ID))

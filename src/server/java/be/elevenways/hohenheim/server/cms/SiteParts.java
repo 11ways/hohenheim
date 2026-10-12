@@ -183,6 +183,8 @@ public final class SiteParts {
         return ManageTwin.reached(entry(ManageTwin.id("site")), TenantScopes.SITES,
                 ResourceTabs.<Row>of(List.of(AppOverview.siteTab(), DOMAINS, PROTECTED_PATHS)).withContributions())
             .standsUnder(HohenheimSlugs.APPS)
+            // One of the tenant's apps, as the Apps list words it: what the landing's Recent rows name its kind.
+            .recordLabel(HohenheimMicrocopy.APP_LIST.of("singular"))
             .health(AppHealth.sites(true))
             .list(ResourceList.rows(TableSpec.<Row>builder()
                     .column(ColumnSpec.fromField(SiteModel.NAME).build())

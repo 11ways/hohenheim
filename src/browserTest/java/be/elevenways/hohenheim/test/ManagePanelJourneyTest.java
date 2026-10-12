@@ -539,6 +539,9 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
         assertThat(home).as("step 2: the band is headed Recent").contains(">Recent<");
         assertThat(home).as("step 2: the tenant's own act reads You").contains("You created tenant-survival");
         assertThat(home).as("step 2: the other entry about their app is listed too").contains("changed tenant-survival");
+        assertThat(home).as("step 2: each row names its kind of record as this panel does, an app")
+            .contains("<span class=\"widget-record-subtitle\">App</span>")
+            .doesNotContain("<span class=\"widget-record-subtitle\">Instance</span>");
 
         // 3. Nothing about a record the tenant may not see, and no door into the operator's activity log.
         assertThat(home).as("step 3: another tenant's app is never named").doesNotContain("someone-elses-app");
