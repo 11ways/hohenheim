@@ -36,6 +36,9 @@ public final class HohenheimStatsFunctions {
     /** Wire key of a sample's memory cap in bytes (0 when the runtime reports none). */
     public static final String MEMORY_LIMIT_KEY = "memory_limit";
 
+    /** Wire key a sample carries, true, when the runtime gives the workload no CPU reading at all. */
+    public static final String CPU_UNREPORTED_KEY = "cpu_unreported";
+
     private HohenheimStatsFunctions() {
     }
 
@@ -257,6 +260,20 @@ public final class HohenheimStatsFunctions {
         }
         double cores = cpuLimit != null && cpuLimit > 0 ? cpuLimit : 1d;
         return (int) Math.round(cpu.doubleValue() / cores);
+    }
+
+    /** @return true when the sample says the runtime gives no CPU reading (said in words, never a chart) */
+    @HawkeyeFunction(
+        name = "cpuUnreported",
+        namespace = "InstanceStats",
+        description = "Whether the runtime gives the workload no CPU reading at all",
+        returnType = Boolean.class,
+        returnsReference = false,
+        arguments = @Arg(name = "sample", required = false, type = Map.class, expectsReference = false,
+                         description = "The latest sample map")
+    )
+    public static boolean cpuUnreported(@Nullable Object sample) {
+        return sample instanceof Map<?, ?> map && Boolean.TRUE.equals(map.get(CPU_UNREPORTED_KEY));
     }
 
     /** @return the CPU chart's top edge in plot units (100 per core of the limit), or null with no limit */

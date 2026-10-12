@@ -24,6 +24,8 @@ import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution.WorkloadClaim;
 import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
+import be.elevenways.hohenheim.server.runtime.DockerStatsFeed;
+import be.elevenways.hohenheim.server.runtime.StatsFeed;
 import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.protoblast.common.registry.Identifier;
@@ -535,15 +537,16 @@ final class FakeNativeDaemons {
 
         // -- StatsStreamSupport -----------------------------------------------
 
+        /** The test pushes Docker's NDJSON stats encoding: this fake speaks the Docker driver's wire. */
         @Override
-        public @NonNull ConsoleStream openStats(@NonNull String handle) throws IOException {
+        public @NonNull StatsFeed openStats(@NonNull String handle) throws IOException {
             if (STATS_FAILS.contains(handle)) {
                 throw new IOException("the stats stream of " + handle + " did not answer");
             }
             requireRunning(handle);
             ScriptedStream stream = new ScriptedStream();
             STATS_STREAMS.put(handle, stream);
-            return stream;
+            return new DockerStatsFeed(stream);
         }
 
         // -- ConsoleStreamSupport ---------------------------------------------

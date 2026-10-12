@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.runtime;
 
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -61,7 +62,7 @@ import static be.elevenways.hohenheim.server.runtime.IncusDefinitions.ROOT_DEVIC
 public final class IncusInstanceRuntime
         implements InstanceRuntime, ConsoleStreamSupport, NativeSnapshotSupport,
         InstallSupport, AppUpdateSupport, DeviceAttachSupport, RootDiskSizeSupport,
-        RootDiskUsageSupport, ExecSupport, ImagePublishSupport, GuestAddressSupport {
+        RootDiskUsageSupport, ExecSupport, ImagePublishSupport, GuestAddressSupport, StatsStreamSupport {
 
     /** The public image server system-container aliases resolve against. */
     public static final String IMAGE_SERVER = "https://images.linuxcontainers.org";
@@ -510,6 +511,28 @@ public final class IncusInstanceRuntime
             }
         }
         return WorkloadLiveness.UNKNOWN;
+    }
+
+    // -- StatsStreamSupport ---------------------------------------------------
+
+    /**
+     * Polled readings of a running instance ({@link IncusStatsFeed}); a container's CPU share is of the cores its
+     * {@code limits.cpu} gives it, else every core of the host.
+     */
+    @Override
+    public @NonNull StatsFeed openStats(@NonNull String handle) throws IOException {
+        int cores = 1;
+        if (this.type == IncusWorkloadType.CONTAINER) {
+            Map<String, Object> config = RawValues.mapOrNull(this.incus.instance(handle).get("expanded_config"));
+            Object limit = config == null ? null : config.get("limits.cpu");
+            if (limit instanceof String text && text.matches("\\d+")) {
+                cores = Integer.parseInt(text);
+            } else {
+                Integer hostCpus = this.incus.resourceTotals().cpus();
+                cores = hostCpus == null ? 1 : hostCpus;
+            }
+        }
+        return new IncusStatsFeed(this.incus, handle, this.type, cores, IncusStatsFeed.INTERVAL_MS);
     }
 
     // -- GuestAddressSupport --------------------------------------------------

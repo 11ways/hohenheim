@@ -17782,6 +17782,16 @@
     "scope": "instance_overview",
     "text": "Its host's runtime gives no live readings to show here."
   },
+  "cpu_unreported": [
+    {
+      "scope": "instance_stats",
+      "text": "Its runtime gives no CPU reading for it. A virtual machine reports CPU through its guest agent, which is not answering."
+    },
+    {
+      "scope": "instance_overview",
+      "text": "No CPU reading: a virtual machine reports CPU through its guest agent, which is not answering."
+    }
+  ],
   "instance_kind_change_refused": {
     "scope": "violations",
     "text": "This workload cannot be changed into {$kind}: its host's driver cannot turn what runs now into that kind. Create a new one instead."

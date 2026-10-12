@@ -249,6 +249,11 @@ public class IncusClient {
         return syncMetadata("GET", "/1.0/instances/" + name + "/state", null, timeoutMs);
     }
 
+    /** The daemon's metrics in the Prometheus text format ({@code /1.0/metrics}), every instance of the project. */
+    public @NonNull String metricsText() throws IOException {
+        return rawText("/1.0/metrics");
+    }
+
     /**
      * Create one instance and WAIT for the operation (image download included, hence
      * the long deadline).

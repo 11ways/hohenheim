@@ -15,8 +15,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * An in-memory Incus daemon over what a controller sweep touches: the network-ACL and network collections and the
- * resource inventory, with named deletes it refuses the way a real daemon refuses an object in use.
+ * An in-memory Incus daemon over what a controller sweep and a stats feed touch: the network-ACL and network
+ * collections, the resource inventory, instances with their state, and the Prometheus metrics, with named deletes it
+ * refuses the way a real daemon refuses an object in use.
  *
  * AIDEV-NOTE: an unhandled request fails the test instead of answering success, so a sweep that starts asking the
  * daemon something new shows up here rather than passing on a default.
@@ -28,6 +29,7 @@ public final class EchoIncusDaemon implements IncusTransport {
 
     private static final String ACLS = "/1.0/network-acls";
     private static final String NETWORKS = "/1.0/networks";
+    private static final String INSTANCES = "/1.0/instances";
 
     /** The network ACLs, by name; a stored object carries the {@code used_by} a real daemon reports. */
     public final Map<String, Map<String, Object>> acls = new LinkedHashMap<>();
@@ -41,6 +43,15 @@ public final class EchoIncusDaemon implements IncusTransport {
     /** What {@code GET /1.0/resources} answers. */
     public Map<String, Object> resources = Map.of();
 
+    /** Instances by name, what {@code GET /1.0/instances/<name>} answers. */
+    public final Map<String, Map<String, Object>> instances = new LinkedHashMap<>();
+
+    /** Instance states by name, what {@code GET /1.0/instances/<name>/state} answers. */
+    public final Map<String, Map<String, Object>> instanceStates = new LinkedHashMap<>();
+
+    /** What {@code GET /1.0/metrics} answers, Prometheus text. */
+    public volatile String metrics = "";
+
     /** @return a client talking to this daemon */
     public @NonNull IncusClient client() {
         return new IncusClient(this);
@@ -53,6 +64,16 @@ public final class EchoIncusDaemon implements IncusTransport {
             ? pathAndQuery.substring(0, pathAndQuery.indexOf('?')) : pathAndQuery;
         if ("GET".equals(method) && path.equals("/1.0/resources")) {
             return sync(this.resources);
+        }
+        if ("GET".equals(method) && path.equals("/1.0/metrics")) {
+            return new Http11.Raw(200, Map.of(), this.metrics.getBytes(StandardCharsets.UTF_8));
+        }
+        if ("GET".equals(method) && path.startsWith(INSTANCES + "/")) {
+            String rest = path.substring(INSTANCES.length() + 1);
+            boolean state = rest.endsWith("/state");
+            String name = state ? rest.substring(0, rest.length() - "/state".length()) : rest;
+            Map<String, Object> object = state ? this.instanceStates.get(name) : this.instances.get(name);
+            return object == null ? error(404, "Instance not found") : sync(object);
         }
         if ("GET".equals(method) && path.equals(ACLS)) {
             return sync(List.copyOf(this.acls.values()));

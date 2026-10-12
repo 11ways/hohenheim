@@ -2,18 +2,15 @@ package be.elevenways.hohenheim.server.instance;
 
 import be.elevenways.hohenheim.HohenheimStatsFunctions;
 import be.elevenways.hohenheim.HohenheimStatsFunctions.Metric;
-import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
-import be.elevenways.hohenheim.server.runtime.ConsoleStream;
+import be.elevenways.hohenheim.server.runtime.StatsFeed;
+import be.elevenways.hohenheim.server.runtime.StatsReading;
 import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.dry.Dry;
-import be.elevenways.protoblast.common.time.Now;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,22 +46,34 @@ public final class InstanceStats {
     /**
      * One decoded sample.
      *
-     * @param cpuPercent   CPU use across all cores, 0..(100 * cores)
+     * @param cpuPercent   CPU use across all cores, 0..(100 * cores); 0 when {@code cpuReported} is false
      * @param memoryBytes  current working set
      * @param memoryLimit  the cgroup limit, or 0 when the daemon reports none
      * @param rxBytes      cumulative received bytes across every interface
      * @param txBytes      cumulative transmitted bytes
      * @param cores        the CPUs the daemon reports online for it, what {@code cpuPercent} is a share of (100 each)
+     * @param cpuReported  false when the runtime gives this workload no CPU reading at all (a VM without its agent)
      */
     public record Sample(long at, double cpuPercent, long memoryBytes, long memoryLimit,
-                         long rxBytes, long txBytes, int cores) {
+                         long rxBytes, long txBytes, int cores, boolean cpuReported) {
+
+        /** A sample whose CPU figure the runtime reported. */
+        public Sample(long at, double cpuPercent, long memoryBytes, long memoryLimit, long rxBytes, long txBytes,
+                      int cores) {
+            this(at, cpuPercent, memoryBytes, memoryLimit, rxBytes, txBytes, cores, true);
+        }
 
         /** The wire shape both the channel and the page render from; metric keys come
-         * from the one vocabulary the browser folds them back out with. */
+         * from the one vocabulary the browser folds them back out with. An unreported CPU
+         * carries no CPU figure, only the flag that says so. */
         public @NonNull Map<String, Object> toMap() {
             Map<String, Object> map = new LinkedHashMap<>();
             map.put(HohenheimStatsFunctions.AT_KEY, this.at);
-            map.put(Metric.CPU.key(), this.cpuPercent);
+            if (this.cpuReported) {
+                map.put(Metric.CPU.key(), this.cpuPercent);
+            } else {
+                map.put(HohenheimStatsFunctions.CPU_UNREPORTED_KEY, true);
+            }
             map.put(Metric.MEMORY.key(), this.memoryBytes);
             map.put(HohenheimStatsFunctions.MEMORY_LIMIT_KEY, this.memoryLimit);
             map.put(Metric.RX.key(), this.rxBytes);
@@ -151,7 +160,7 @@ public final class InstanceStats {
         private final List<Consumer<Sample>> viewers = new CopyOnWriteArrayList<>();
         private final List<Sample> ring = new ArrayList<>();
 
-        private @Nullable ConsoleStream stream;
+        private @Nullable StatsFeed stream;
         private volatile boolean running;
 
         Session(int instanceId) {
@@ -197,7 +206,7 @@ public final class InstanceStats {
 
         synchronized void stop() {
             this.running = false;
-            ConsoleStream stream = this.stream;
+            StatsFeed stream = this.stream;
             this.stream = null;
             if (stream != null) {
                 stream.close();
@@ -215,123 +224,63 @@ public final class InstanceStats {
             }
         }
 
-        /**
-         * Decode the daemon's NDJSON samples. Docker chunks one JSON object per interval,
-         * but a chunk boundary can split one, so the buffer is drained line by line and a
-         * partial tail is kept.
-         */
+        /** Turn the driver's readings into samples and fan each out to every viewer. */
         private void pump() {
-            StringBuilder buffer = new StringBuilder();
-            Map<String, Object> previous = null;
-            ConsoleStream stream = this.stream;
+            Decoder decoder = new Decoder();
+            StatsFeed stream = this.stream;
             while (this.running && stream != null) {
-                ConsoleStream.Chunk chunk = stream.next();
-                if (chunk == null) {
+                StatsReading reading = stream.next();
+                if (reading == null) {
                     break;
                 }
-                buffer.append(new String(chunk.data(), StandardCharsets.UTF_8));
-                int newline;
-                while ((newline = buffer.indexOf("\n")) >= 0) {
-                    String line = buffer.substring(0, newline).trim();
-                    buffer.delete(0, newline + 1);
-                    if (line.isEmpty()) {
-                        continue;
+                Sample sample = decoder.next(reading);
+                this.record(sample);
+                for (Consumer<Sample> viewer : this.viewers) {
+                    try {
+                        viewer.accept(sample);
+                    } catch (RuntimeException viewerFailure) {
+                        Blast.log("STATS: viewer of instance", this.instanceId,
+                            "threw:", viewerFailure.getMessage());
                     }
-                    Map<String, Object> parsed = parseSample(line);
-                    if (parsed == null) {
-                        continue;
-                    }
-                    Sample sample = decode(parsed, previous);
-                    previous = parsed;
-                    if (sample == null) {
-                        continue;
-                    }
-                    this.record(sample);
-                    for (Consumer<Sample> viewer : this.viewers) {
-                        try {
-                            viewer.accept(sample);
-                        } catch (RuntimeException viewerFailure) {
-                            Blast.log("STATS: viewer of instance", this.instanceId,
-                                "threw:", viewerFailure.getMessage());
-                        }
-                    }
-                }
-                // A stats line is small; a buffer this size means the stream is not what we
-                // think it is, and growing it without bound is how one wedged daemon
-                // becomes an OOM.
-                if (buffer.length() > 1_000_000) {
-                    Blast.log("STATS: instance", this.instanceId,
-                        "sent an unparseable stats stream; closing");
-                    break;
                 }
             }
             this.stop();
             SESSIONS.remove(this.instanceId, this);
         }
-
-        private static @Nullable Map<String, Object> parseSample(@NonNull String line) {
-            try {
-                Object parsed = new Dry().parse(line);
-                return RawValues.mapOrNull(parsed);
-            } catch (RuntimeException notJson) {
-                return null;
-            }
-        }
     }
 
     /**
-     * Turn one raw docker stats object into a sample. CPU is a DELTA between consecutive
-     * samples (the daemon reports cumulative nanoseconds), so the very first observation
-     * legitimately yields no CPU figure and is reported as zero rather than as a spike.
+     * Consecutive readings into samples. CPU is a DELTA between readings (every driver reports cumulative counters),
+     * so the very first observation legitimately yields no CPU figure and is reported as zero rather than as a spike.
+     *
+     * AIDEV-NOTE: a reading whose counters have not moved since the last measured one (an Incus VM's metrics refresh
+     * about every 8 seconds, slower than they are read) keeps the last measured window's share: that window is still
+     * the newest measurement, and a zero would be a dip that never happened.
      */
-    static @Nullable Sample decode(@NonNull Map<String, Object> current,
-                                   @Nullable Map<String, Object> previous) {
-        double cpu = 0;
-        Map<String, Object> cpuStats = child(current, "cpu_stats");
-        long cores = Math.max(1, number(cpuStats, "online_cpus"));
-        // AIDEV-NOTE: the previous SAMPLE, never the daemon's own precpu_stats on the first
-        // observation. Docker zeroes precpu on the first stream sample, so dividing by it
-        // yields the container's LIFETIME AVERAGE dressed up as an instantaneous reading --
-        // a number that looks live and is not. No previous sample means no CPU figure.
-        Map<String, Object> preCpuStats = previous == null ? null : child(previous, "cpu_stats");
-        if (cpuStats != null && preCpuStats != null) {
-            long usage = number(child(cpuStats, "cpu_usage"), "total_usage");
-            long previousUsage = number(child(preCpuStats, "cpu_usage"), "total_usage");
-            long system = number(cpuStats, "system_cpu_usage");
-            long previousSystem = number(preCpuStats, "system_cpu_usage");
-            long usageDelta = usage - previousUsage;
-            long systemDelta = system - previousSystem;
-            if (usageDelta > 0 && systemDelta > 0) {
-                cpu = (usageDelta / (double) systemDelta) * cores * 100.0;
+    static final class Decoder {
+
+        private @Nullable StatsReading base;
+        private double share;
+
+        @NonNull Sample next(@NonNull StatsReading reading) {
+            StatsReading.CpuCounters cpu = reading.cpu();
+            if (cpu == null) {
+                return sampleOf(reading, 0, false);
             }
+            StatsReading.CpuCounters previous = this.base == null ? null : this.base.cpu();
+            if (previous == null) {
+                this.base = reading;
+            } else if (cpu.total() - previous.total() > 0) {
+                double busy = cpu.busy() - previous.busy();
+                this.share = busy > 0 ? busy / (cpu.total() - previous.total()) * reading.cores() * 100.0 : 0;
+                this.base = reading;
+            }
+            return sampleOf(reading, this.share, true);
         }
 
-        Map<String, Object> memoryStats = child(current, "memory_stats");
-        long memory = number(memoryStats, "usage");
-        long limit = number(memoryStats, "limit");
-
-        long rx = 0;
-        long tx = 0;
-        Map<String, Object> networks = child(current, "networks");
-        if (networks != null) {
-            for (Object value : networks.values()) {
-                if (value instanceof Map<?, ?> iface) {
-                    rx += number(RawValues.map(iface), "rx_bytes");
-                    tx += number(RawValues.map(iface), "tx_bytes");
-                }
-            }
+        private static @NonNull Sample sampleOf(@NonNull StatsReading reading, double cpu, boolean reported) {
+            return new Sample(reading.at(), cpu, reading.memoryBytes(), reading.memoryLimit(), reading.rxBytes(),
+                reading.txBytes(), reading.cores(), reported);
         }
-        return new Sample(Now.millis(), cpu, memory, limit, rx, tx, (int) cores);
-    }
-
-    private static @Nullable Map<String, Object> child(@Nullable Map<String, Object> parent,
-                                                       @NonNull String key) {
-        Object value = parent == null ? null : parent.get(key);
-        return RawValues.mapOrNull(value);
-    }
-
-    private static long number(@Nullable Map<String, Object> parent, @NonNull String key) {
-        Object value = parent == null ? null : parent.get(key);
-        return value instanceof Number n ? n.longValue() : 0;
     }
 }

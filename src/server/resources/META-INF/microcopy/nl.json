@@ -17782,6 +17782,16 @@
     "scope": "instance_overview",
     "text": "De runtime van de host levert hier geen live metingen."
   },
+  "cpu_unreported": [
+    {
+      "scope": "instance_stats",
+      "text": "De runtime levert er geen CPU-meting voor. Een virtuele machine meldt haar CPU via haar gastagent, en die antwoordt niet."
+    },
+    {
+      "scope": "instance_overview",
+      "text": "Geen CPU-meting: een virtuele machine meldt haar CPU via haar gastagent, en die antwoordt niet."
+    }
+  ],
   "instance_kind_change_refused": {
     "scope": "violations",
     "text": "Deze workload kan niet veranderen in {$kind}: de driver van de host kan wat nu draait niet omzetten naar die soort. Maak een nieuwe aan."

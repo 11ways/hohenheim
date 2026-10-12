@@ -10,6 +10,12 @@ import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.runtime.Egress;
+import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
+import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
+import be.elevenways.hohenheim.server.runtime.StatsFeed;
+import be.elevenways.hohenheim.server.runtime.StatsReading;
+import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -279,6 +285,67 @@ class IncusInstanceRuntimeLiveTest {
                 cleanup(incus, handle);
             }
         });
+    }
+
+    /**
+     * The live-stats lane reads a RUNNING virtual machine the SECONDARY test host already has (it creates, starts and
+     * stops nothing): memory and network from its state, and its CPU from the daemon's metrics, which a VM's state
+     * does not carry.
+     */
+    @Test
+    void liveStatsReadARunningVirtualMachinesMemoryNetworkAndCpu() throws IOException {
+        LiveIncusHost vmHost = LiveIncusHost.requireSecondary();
+        String[] fingerprint = new String[1];
+        try {
+            Db.run(datasource, () -> {
+                fingerprint[0] = vmHost.enrollThroughProduct(HOST + "-vm", "hohenheim-live-stats");
+                readRunningVm(new ServerService().incusClientFor(HOST + "-vm"));
+            });
+        } finally {
+            System.out.println("=== cleanup: shared objects -> " + vmHost.releaseControllerSharedObjects());
+            System.out.println("=== cleanup: authorized_keys -> " + vmHost.releaseAuthorizedKeys());
+            if (fingerprint[0] != null) {
+                vmHost.removeTrustEntry(fingerprint[0]);
+            }
+        }
+    }
+
+    private static void readRunningVm(IncusClient incus) {
+        String vm = null;
+        try {
+            for (Map<String, Object> instance : incus.instances()) {
+                if ("virtual-machine".equals(instance.get("type")) && "Running".equals(instance.get("status"))) {
+                    vm = String.valueOf(instance.get("name"));
+                }
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+        LiveLane.require(LiveLane.Need.INCUS_HOST, vm != null, "the Incus test host runs no virtual machine");
+
+        // 1. The first reading: memory against the guest's total, a CPU reading from the metrics, its cores.
+        try (StatsFeed feed = new IncusInstanceRuntime(incus, Egress.OPEN, IncusWorkloadType.VIRTUAL_MACHINE)
+                .openStats(vm)) {
+            StatsReading first = feed.next();
+            assertThat(first).as("step 1: a running VM reads").isNotNull();
+            assertThat(first.memoryBytes()).as("step 1: memory in use").isPositive();
+            assertThat(first.memoryLimit()).as("step 1: of the guest's total").isGreaterThan(first.memoryBytes());
+            assertThat(first.cpu()).as("step 1: the VM's CPU comes from the metrics").isNotNull();
+            assertThat(first.cores()).as("step 1: its guest CPUs").isPositive();
+
+            // 2. Within a few metric refreshes (about 8 s each) the guest's busy seconds move.
+            StatsReading later = first;
+            for (int i = 0; i < 15 && later.cpu().busy() <= first.cpu().busy(); i++) {
+                later = feed.next();
+                assertThat(later).as("step 2: the VM keeps reading").isNotNull();
+            }
+            assertThat(later.cpu().busy()).as("step 2: the guest's busy seconds advance")
+                .isGreaterThan(first.cpu().busy());
+            assertThat(later.cpu().total()).as("step 2: within more guest seconds")
+                .isGreaterThan(first.cpu().total());
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     // -- plumbing -------------------------------------------------------------

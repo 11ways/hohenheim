@@ -26,6 +26,7 @@
     private computed now = latest{:} ?? latestSeed
     private computed before = latest{:} != null ? previous{:} : previousSeed
     private computed cpuShare = InstanceStats.cpuShare(now{:}, cpuLimit)
+    private computed cpuUnreported = InstanceStats.cpuUnreported(now{:})
     private computed memoryUsed = InstanceStats.memoryUsed(now{:})
     private computed memoryLimit = InstanceStats.memoryLimit(now{:})
     /* Every chart starts at zero, and a reading with a known cap tops out at that cap: an
@@ -67,6 +68,11 @@
                     <pl-card-description>{{ t("cpu_description", scope: "instance_stats") }}</pl-card-description>
                 </pl-card-header>
                 <pl-card-content>
+                    {#- A runtime that gives this workload no CPU reading (a VM without its guest agent) says so in
+                        words: a chart that can never fill reads as "waiting" forever. -#}
+                    {% if cpuUnreported{:} %}
+                    <p class="hh-stats-now" data-stats-now="cpu">{{ t("cpu_unreported", scope: "instance_stats") }}</p>
+                    {% else %}
                     <pl-sparkline size="block" area={% true %}
                                   label={% t("cpu", scope: "instance_stats") %}
                                   points={% cpu{:} ?? cpuSeed %}
@@ -85,6 +91,7 @@
                             {% /if %}
                         </strong>
                     </p>
+                    {% /if %}
                 </pl-card-content>
             </pl-card>
 

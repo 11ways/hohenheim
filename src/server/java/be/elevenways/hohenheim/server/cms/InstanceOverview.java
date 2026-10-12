@@ -365,6 +365,10 @@ public final class InstanceOverview {
                 observed)
             : UsageData.unmeasured(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("memory_no_limit")
                 .withArg("used", ByteText.human(last.memoryBytes())).resolve(locales, resolver));
+        if (!last.cpuReported()) {
+            return List.of(memory, UsageData.unmeasured(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("cpu_unreported")
+                .resolve(locales, resolver)));
+        }
         if (samples.size() < 2) {
             return List.of(memory,
                 UsageData.unmeasured(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("cpu_first_reading")

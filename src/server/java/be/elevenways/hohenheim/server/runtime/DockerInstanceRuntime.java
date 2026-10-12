@@ -880,8 +880,8 @@ public final class DockerInstanceRuntime
     // -- StatsStreamSupport ---------------------------------------------------
 
     @Override
-    public @NonNull ConsoleStream openStats(@NonNull String handle) throws IOException {
-        return this.docker.followStats(handle);
+    public @NonNull StatsFeed openStats(@NonNull String handle) throws IOException {
+        return new DockerStatsFeed(this.docker.followStats(handle));
     }
 
     // -- ConsoleStreamSupport -------------------------------------------------
