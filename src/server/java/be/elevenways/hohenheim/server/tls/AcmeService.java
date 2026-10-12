@@ -14,7 +14,6 @@ import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.net.Hostnames;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
-import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.protoblast.common.Blast;
@@ -185,13 +184,6 @@ public class AcmeService {
         }
     }
 
-    /**
-     * The built-in DNS-01 publishers, one instance each: every AcmeService registers them, and the publisher registry
-     * takes the same instance again as a repeat where another one would be a conflict.
-     */
-    private static final DnsTxtPublisher COMMAND_PUBLISHER = new CommandDnsTxtPublisher();
-    private static final DnsTxtPublisher INTERNAL_PUBLISHER = new InternalDnsTxtPublisher();
-
     public AcmeService(CertificateStore certificateStore) {
         this(certificateStore, JobRunner.createDaemonSerial("acme-renewal"));
     }
@@ -199,8 +191,6 @@ public class AcmeService {
     /** @param scheduler the lane renewal checks and manual DNS-01 expiry run on; a test fires its timers itself */
     AcmeService(CertificateStore certificateStore, JobRunner scheduler) {
         this.certificateStore = certificateStore;
-        DnsTxtPublishers.INSTANCE.register(COMMAND_PUBLISHER);
-        DnsTxtPublishers.INSTANCE.register(INTERNAL_PUBLISHER);
         this.scheduler = scheduler;
     }
 

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.tls;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.protoblast.common.registry.KeyedRegistry;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -10,8 +11,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * {@code ssl.dns_publisher} setting stores.
  *
  * AIDEV-NOTE: an id has one publisher: another publisher under a taken id is a RegistryConflictException, never a
- * silent overwrite that would send a certificate's challenge to whichever registered last. Built-ins register one
- * constant instance each (AcmeService), so a second AcmeService repeats them.
+ * silent overwrite that would send a certificate's challenge to whichever registered last. The built-ins arrive with
+ * the registry itself, once; constructing an AcmeService registers nothing.
  */
 public final class DnsTxtPublishers {
 
@@ -20,7 +21,10 @@ public final class DnsTxtPublishers {
     private final KeyedRegistry<String, DnsTxtPublisher> publishers =
         KeyedRegistry.create(HohenheimIds.id("dns_txt_publisher"));
 
-    private DnsTxtPublishers() {}
+    private DnsTxtPublishers() {
+        this.register(new CommandDnsTxtPublisher());
+        this.register(new InternalDnsTxtPublisher());
+    }
 
     /**
      * @throws be.elevenways.protoblast.common.registry.RegistryConflictException when another publisher holds the id
