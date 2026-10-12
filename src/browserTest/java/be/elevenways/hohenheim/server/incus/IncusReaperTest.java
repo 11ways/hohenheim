@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.incus;
 import be.elevenways.hohenheim.server.ControllerScope;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -176,6 +177,75 @@ class IncusReaperTest {
             .isFalse();
     }
 
+    /**
+     * A removal the daemon refuses at reap time keeps its controller's presence marker.
+     *
+     * The plan judges the marker reapable because every sibling is DEPARTED on paper; the
+     * daemon can still refuse one of those siblings when the reap actually runs. Removing
+     * the marker anyway left the refused object stamped by nobody, UNSTAMPED for ever --
+     * the 67 isolation ACLs and 6 hhx bridges found on daystrom, and 8 ACLs on nightstrom,
+     * 2026-10-12, none of which any automatic sweep may ever touch again.
+     */
+    @Test
+    void aMarkerOutlivesASiblingTheDaemonRefusedAtReapTime() throws IOException {
+        String bridgeRefused = "bridgeno";
+        String aclRefused = "aclnope1";
+        EchoIncusDaemon daemon = new EchoIncusDaemon();
+        // A departed controller whose bridge the daemon will refuse to delete...
+        daemon.acls.put(isolationName(bridgeRefused), acl(isolationName(bridgeRefused), List.of()));
+        daemon.acls.put(presenceName(bridgeRefused), presence(bridgeRefused, EXPIRED));
+        daemon.networks.put("hhx-" + bridgeRefused, network("hhx-" + bridgeRefused, List.of()));
+        daemon.refusedDeletes.add("hhx-" + bridgeRefused);
+        // ...one whose isolation ACL it will refuse...
+        daemon.acls.put(isolationName(aclRefused), acl(isolationName(aclRefused), List.of()));
+        daemon.acls.put(presenceName(aclRefused), presence(aclRefused, EXPIRED));
+        daemon.refusedDeletes.add(isolationName(aclRefused));
+        // ...and the positive anchor, which nothing refuses.
+        daemon.acls.put(isolationName(GONE), acl(isolationName(GONE), List.of()));
+        daemon.acls.put(presenceName(GONE), presence(GONE, EXPIRED));
+        daemon.networks.put("hhx-" + GONE, network("hhx-" + GONE, List.of()));
+
+        List<IncusReaper.Candidate> plan = IncusReaper.plan(List.copyOf(daemon.acls.values()),
+            List.copyOf(daemon.networks.values()), OURS, NOW, GRACE);
+        IncusReaper.Reaped reaped = IncusReaper.reap(daemon.client(), plan, false);
+
+        // 1. The anchor goes whole: all three of its objects.
+        assertThat(daemon.acls.keySet())
+            .as("step 1: the unrefused departed controller's ACL and marker are removed")
+            .doesNotContain(isolationName(GONE), presenceName(GONE));
+        assertThat(daemon.networks.keySet())
+            .as("step 1: and its bridge")
+            .doesNotContain("hhx-" + GONE);
+
+        // 2. A refused bridge keeps its controller's marker: removed BEFORE the bridge was
+        //    even tried, it took the evidence the bridge is judged by with it.
+        assertThat(daemon.acls.keySet())
+            .as("step 2: the marker of a controller whose bridge the daemon refused survives")
+            .contains(presenceName(bridgeRefused));
+
+        // 3. A refused isolation ACL keeps its controller's marker too.
+        assertThat(daemon.acls.keySet())
+            .as("step 3: the marker of a controller whose ACL the daemon refused survives")
+            .contains(isolationName(aclRefused), presenceName(aclRefused));
+
+        // 4. So the next sweep still judges the survivors DEPARTED and retries them,
+        //    instead of finding them UNSTAMPED and leaving them for ever.
+        List<IncusReaper.Candidate> next = IncusReaper.plan(List.copyOf(daemon.acls.values()),
+            List.copyOf(daemon.networks.values()), OURS, NOW, GRACE);
+        assertThat(verdictOf(next, "hhx-" + bridgeRefused))
+            .as("step 4: the refused bridge is still attributable on the next sweep")
+            .isEqualTo(IncusReaper.Verdict.DEPARTED);
+        assertThat(verdictOf(next, isolationName(aclRefused)))
+            .as("step 4: the refused ACL is still attributable on the next sweep")
+            .isEqualTo(IncusReaper.Verdict.DEPARTED);
+
+        // 5. The report names each refusal and each kept marker; nothing is silent.
+        assertThat(String.join("\n", reaped.refused()))
+            .as("step 5: the refusals and the kept markers are reported by name")
+            .contains("hhx-" + bridgeRefused, isolationName(aclRefused),
+                presenceName(bridgeRefused), presenceName(aclRefused));
+    }
+
     // -- fixtures -------------------------------------------------------------
 
     private static Map<String, Object> acl(String name, List<String> usedBy) {
@@ -187,11 +257,18 @@ class IncusReaperTest {
     }
 
     private static Map<String, Object> presence(String token, Instant seen) {
-        Map<String, Object> acl = acl(
-            ControllerScope.PREFIX + "-" + token + "-" + ControllerPresence.SUFFIX, List.of());
+        Map<String, Object> acl = acl(presenceName(token), List.of());
         castConfig(acl).put(ControllerPresence.CONFIG_CONTROLLER, token);
         castConfig(acl).put(ControllerPresence.CONFIG_SEEN, seen.toString());
         return acl;
+    }
+
+    private static String presenceName(String token) {
+        return ControllerScope.PREFIX + "-" + token + "-" + ControllerPresence.SUFFIX;
+    }
+
+    private static String isolationName(String token) {
+        return ControllerScope.PREFIX + "-" + token + "-isolation";
     }
 
     private static Map<String, Object> network(String name, List<String> usedBy) {

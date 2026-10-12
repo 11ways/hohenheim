@@ -8,9 +8,11 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * THE authority over per-controller SHARED objects left behind on a shared Incus daemon:
@@ -256,6 +258,12 @@ public final class IncusReaper {
     /**
      * Remove the reapable objects of a plan, RE-READING each one at the daemon first.
      *
+     * AIDEV-NOTE: a controller's presence marker goes LAST and only once every other object of that controller this
+     * reap tried actually went. The plan judges the marker reapable when all its siblings are DEPARTED on paper, but
+     * the daemon can still refuse one of them now; deleting the marker anyway left that object stamped by nobody,
+     * UNSTAMPED for ever, which no automatic sweep may touch again (67 isolation ACLs and 6 hhx bridges on daystrom,
+     * 8 ACLs on nightstrom, 2026-10-12). Kept, the marker lets the next sweep retry the refused object.
+     *
      * @param unstamped whether {@link Verdict#UNSTAMPED} objects are removed too -- never
      *                  true on an automatic sweep, only on a deliberate operator action
      *                  over a daemon whose pre-namespace leftovers a human has looked at
@@ -267,9 +275,18 @@ public final class IncusReaper {
                                        boolean unstamped) {
         List<String> removed = new ArrayList<>();
         List<String> refused = new ArrayList<>();
-        for (Candidate candidate : plan) {
+        Set<String> survivingTokens = new HashSet<>();
+        List<Candidate> markersLast = new ArrayList<>(plan.size());
+        plan.stream().filter(candidate -> !isPresenceMarker(candidate)).forEach(markersLast::add);
+        plan.stream().filter(IncusReaper::isPresenceMarker).forEach(markersLast::add);
+        for (Candidate candidate : markersLast) {
             if (!candidate.reapable()
                     && !(unstamped && candidate.verdict() == Verdict.UNSTAMPED)) {
+                continue;
+            }
+            if (isPresenceMarker(candidate) && survivingTokens.contains(candidate.token())) {
+                refused.add(candidate.name() + ": kept as the evidence its controller's refused objects are"
+                    + " judged by");
                 continue;
             }
             try {
@@ -278,9 +295,11 @@ public final class IncusReaper {
                     removed.add(candidate.kind() + " " + candidate.name());
                 } else {
                     refused.add(candidate.name() + ": " + refusal);
+                    survivingTokens.add(candidate.token());
                 }
             } catch (IOException failed) {
                 refused.add(candidate.name() + ": " + failed.getMessage());
+                survivingTokens.add(candidate.token());
             }
         }
         return new Reaped(List.copyOf(removed), List.copyOf(refused));
