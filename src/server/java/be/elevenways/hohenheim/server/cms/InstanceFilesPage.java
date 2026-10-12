@@ -134,6 +134,11 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
         String requested = conduit.getQueryParam(HohenheimParams.FILES_PATH.getName());
         String editing = conduit.getQueryParam(HohenheimParams.FILES_EDIT.getName());
         try {
+            // No volume is a state of the workload, not a refusal: it keeps no files to browse.
+            if (files.volumeRoots(instanceId).isEmpty()) {
+                vars.put("noVolumes", true);
+                return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_FILES, vars);
+            }
             InstanceFiles.Listing listing = files.list(instanceId, requested);
             vars.put("path", listing.path());
             vars.put("volumes", browseTargets(panel, instanceId, listing.volumeRoots()));

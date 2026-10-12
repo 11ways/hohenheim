@@ -226,6 +226,20 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
             .doesNotContain("Nothing serves").doesNotContain("data-files-unsupported");
     }
 
+    /** A workload without volumes says there is nothing to browse, instead of drawing a refusal. */
+    @Test
+    void aWorkloadWithoutVolumesSaysThereIsNothingToBrowse() throws Exception {
+        String page = httpGet("/admin/instances/" + dockerInstanceId + "/page/files", sessionToken).body();
+
+        // 1. THE DEFECT: "This instance declares no volumes to browse" arrived as a red error alert, which reads as
+        //    breakage for an app that simply keeps no files.
+        assertThat(page).as("step 1: no volumes is not drawn as an error").doesNotContain("data-files-error");
+        assertThat(page).as("step 1: it is a named empty state").contains("data-files-no-volumes");
+
+        // 2. The SFTP card still says how to connect, so a volume added later is reachable the same way.
+        assertThat(page).as("step 2: the SFTP card still renders").contains("data-sftp-card");
+    }
+
     /**
      * Stats states its contract: live-only rings, plus the ONE persisted observation and
      * why a Docker workload has none.

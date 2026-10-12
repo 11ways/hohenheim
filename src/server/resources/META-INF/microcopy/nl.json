@@ -10740,6 +10740,14 @@
     "text": "Alleen het Docker-stuurprogramma biedt een bestandskanaal. Deze workload draait op een runtime zonder dat kanaal, dus er valt hier nog niets te doorbladeren.",
     "scope": "instance_files"
   },
+  "no_volumes": {
+    "text": "Geen mappen om te doorbladeren",
+    "scope": "instance_files"
+  },
+  "no_volumes_hint": {
+    "text": "Alleen een volume bewaart bestanden over herstarts en deploys heen, en deze app heeft er geen. Voeg een volume toe om bestanden te bewaren en blader ze dan hier of via SFTP door.",
+    "scope": "instance_files"
+  },
   "live_only": {
     "text": "Elke paar seconden gemeten zolang deze pagina open staat. Er wordt niets bewaard, dus een gesloten pagina heeft geen geschiedenis.",
     "scope": "instance_stats"

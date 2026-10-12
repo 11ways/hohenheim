@@ -10740,6 +10740,14 @@
     "text": "Only the Docker driver exposes a file lane. This workload runs on a runtime that has none, so there is nothing to browse here yet.",
     "scope": "instance_files"
   },
+  "no_volumes": {
+    "text": "No folders to browse",
+    "scope": "instance_files"
+  },
+  "no_volumes_hint": {
+    "text": "Only a volume keeps files across restarts and deploys, and this app has none. Add a volume to keep files, then browse them here or over SFTP.",
+    "scope": "instance_files"
+  },
   "live_only": {
     "text": "Measured every few seconds while this page is open. Nothing is kept, so a closed page has no history.",
     "scope": "instance_stats"

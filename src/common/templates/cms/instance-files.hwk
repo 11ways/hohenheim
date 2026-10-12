@@ -11,6 +11,8 @@
 {% declare entries: List %}
 {% declare canWrite: Boolean = false %}
 {% declare supported: Boolean = true %}
+{#- The workload declares no volume, so it keeps no files to browse: a named state, never a refusal. -#}
+{% declare noVolumes: Boolean = false %}
 {#- A refusal from InstanceFiles (no volumes, not found, not a directory, ...). It is
     RENDERED: the page used to stash it in a variable the template never declared, so
     every refusal drew an empty page with nothing but the tabs on it. -#}
@@ -56,6 +58,13 @@
     <pl-empty-state icon="folder-tree" data-files-unsupported="1">
         <pl-empty-state-title>{{ t("unsupported", scope: "instance_files") }}</pl-empty-state-title>
         <pl-empty-state-description>{{ t("unsupported_hint", scope: "instance_files") }}</pl-empty-state-description>
+    </pl-empty-state>
+    {% /if %}
+
+    {% if noVolumes %}
+    <pl-empty-state icon="folder-tree" data-files-no-volumes="1">
+        <pl-empty-state-title>{{ t("no_volumes", scope: "instance_files") }}</pl-empty-state-title>
+        <pl-empty-state-description>{{ t("no_volumes_hint", scope: "instance_files") }}</pl-empty-state-description>
     </pl-empty-state>
     {% /if %}
 
