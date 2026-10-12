@@ -392,6 +392,34 @@ public final class ApplicationReleases {
     }
 
     /**
+     * Whether the application's stored configuration differs from the one its serving release was produced from, so a
+     * saved change is not live until the next deploy; false while nothing serves or the release names no fingerprint.
+     */
+    public static boolean configPending(@NonNull Row application) {
+        Row serving = ownedServing(application.get(InstanceModel.ID));
+        if (serving == null) {
+            return false;
+        }
+        String built = trimmed(storedSettings(serving).get("source_fingerprint"));
+        return !built.isEmpty() && !built.equals(configuredFingerprint(application, serving));
+    }
+
+    /**
+     * The source fingerprint a deploy of the application's stored configuration would produce over the commit its
+     * serving release was built from: the same resolution {@link #converge} fingerprints, the checkout path being
+     * volatile and never part of it.
+     */
+    public static @NonNull String configuredFingerprint(@NonNull Row application, @NonNull Row serving) {
+        Map<String, Object> overrides = new LinkedHashMap<>();
+        if (SiteSources.hasRepository(storedSettings(application))) {
+            overrides.put("build_context", "");
+            overrides.put("commit_sha", storedSettings(serving).get("commit_sha"));
+        }
+        int applicationId = application.get(InstanceModel.ID);
+        return ReleaseEngine.sourceFingerprint(applicationId, resolvedSettings(application, overrides));
+    }
+
+    /**
      * The row whose stored status speaks for each instance's runtime, keyed by instance id: an application's serving
      * release, its own record while nothing serves (which never runs), any other instance itself.
      *

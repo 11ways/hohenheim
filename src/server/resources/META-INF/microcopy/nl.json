@@ -12104,10 +12104,6 @@
       "scope": "certificate"
     }
   ],
-  "edit_title": {
-    "text": "Instantie bewerken",
-    "scope": "instance"
-  },
   "volume_backend_unsupported_title": {
     "text": "Volume-backend niet ondersteund",
     "scope": "server_overview"
@@ -15396,6 +15392,24 @@
   "mark_live": {
     "text": "Live",
     "scope": "deployments"
+  },
+  "kind_build": {
+    "text": "Build",
+    "scope": "deployments"
+  },
+  "changes_not_live": [
+    {
+      "text": "Wijzigingen nog niet live",
+      "scope": "app_health"
+    },
+    {
+      "text": "{$name} heeft wijzigingen die nog niet live zijn",
+      "scope": "attention_title"
+    }
+  ],
+  "changes_not_live_detail": {
+    "text": "De configuratie is gewijzigd nadat de draaiende release werd gebouwd. Deploy om de wijziging live te zetten.",
+    "scope": "app_health"
   },
   "mark_kept": {
     "text": "Bewaard om terug te rollen",

@@ -395,8 +395,8 @@ final class AppHealth {
         // cause its dashboard item folds under. An application's is its serving release's (ApplicationReleases).
         AttentionSubject root = status == InstanceStatus.ERROR ? WorkloadErrors.rootOf(runtime) : null;
         RecordHealth health = switch (status) {
-            case RUNNING -> runningVerdict(facts.sitesByInstance.get(instance.get(InstanceModel.ID)), facts.sites,
-                delegated, viewer);
+            case RUNNING -> changesNotLiveOr(instance, runningVerdict(facts.sitesByInstance.get(
+                instance.get(InstanceModel.ID)), facts.sites, delegated, viewer));
             // What stopped it, as its recorded cause says (the dashboard item's detail too), the failure's own message
             // as the band's technical line; a tenant reads the sentence without the daemon's own message.
             case ERROR -> {
@@ -432,6 +432,22 @@ final class AppHealth {
         InstanceKindHandler kind = InstanceKinds.handlerOf(instance);
         return (status == InstanceStatus.STOPPED || status == InstanceStatus.CREATED)
             && kind != null && kind.releaseManaged() && ApplicationReleases.deploying(instance.get(InstanceModel.ID));
+    }
+
+    /**
+     * A running application whose saved configuration its serving release was not produced from says so, with Deploy
+     * as its fix: the change is stored, not live. Whatever the running verdict already flags speaks first.
+     */
+    private static @NonNull RecordHealth changesNotLiveOr(@NonNull Row instance, @NonNull RecordHealth running) {
+        InstanceKindHandler kind = InstanceKinds.handlerOf(instance);
+        if (running.tone() != HealthTone.OK || kind == null || !kind.releaseManaged()
+                || ApplicationReleases.deploying(instance.get(InstanceModel.ID))
+                || !ApplicationReleases.configPending(instance)) {
+            return running;
+        }
+        return RecordHealth.attention(Headline.CHANGES_NOT_LIVE.copy())
+            .detail(HohenheimMicrocopy.APP_HEALTH.of("changes_not_live_detail"))
+            .fixedBy(InstanceOperations.START.id());
     }
 
     // -- stacks ----------------------------------------------------------------------
@@ -791,7 +807,8 @@ final class AppHealth {
         HTTPS_NOT_WORKING("https_not_working"),
         INSTALL_FAILED("install_failed"),
         CANNOT_START("cannot_start"),
-        NOT_RUNNING("not_running");
+        NOT_RUNNING("not_running"),
+        CHANGES_NOT_LIVE("changes_not_live");
 
         private final String key;
 

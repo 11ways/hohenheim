@@ -12104,10 +12104,6 @@
       "scope": "certificate"
     }
   ],
-  "edit_title": {
-    "text": "Edit instance",
-    "scope": "instance"
-  },
   "volume_backend_unsupported_title": {
     "text": "Volume backend not supported",
     "scope": "server_overview"
@@ -15396,6 +15392,24 @@
   "mark_live": {
     "text": "Live",
     "scope": "deployments"
+  },
+  "kind_build": {
+    "text": "Build",
+    "scope": "deployments"
+  },
+  "changes_not_live": [
+    {
+      "text": "Changes not live yet",
+      "scope": "app_health"
+    },
+    {
+      "text": "{$name} has changes that are not live yet",
+      "scope": "attention_title"
+    }
+  ],
+  "changes_not_live_detail": {
+    "text": "The configuration changed after the running release was built. Deploy to make the change live.",
+    "scope": "app_health"
   },
   "mark_kept": {
     "text": "Kept for rollback",

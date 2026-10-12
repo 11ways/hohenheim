@@ -322,10 +322,10 @@ public final class InstanceParts {
 
     private static @NonNull FormSpec createForm() {
         return FormSpec.builder()
-            // AIDEV-NOTE: a form page falls back to the RESOURCE label for its heading, and this label is the PLURAL
-            // the nav needs; createTitle/editTitle are the seam that gives the screen an honest singular heading.
+            // AIDEV-NOTE: a create page falls back to the RESOURCE label for its heading, and this label is the PLURAL
+            // the nav needs; createTitle gives it an honest singular. An edit page leads with the record's own name,
+            // like every other tab of the record, so no editTitle is declared.
             .createTitle(HohenheimMicrocopy.INSTANCE.of("create_title"))
-            .editTitle(HohenheimMicrocopy.INSTANCE.of("edit_title"))
             // AIDEV-NOTE: the kind entry offers only what a human may author (the generated kinds are refused by
             // OwnedInstances anyway). Supplied, never a resolved list: registry entries arrive via BlastAutoLoadInit
             // after class-load, and a Supplied source still resolves on the context-free coercion path, which is what

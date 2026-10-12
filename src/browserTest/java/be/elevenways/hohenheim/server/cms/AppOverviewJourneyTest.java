@@ -628,6 +628,32 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             assertThat(adminGet("/admin/instances/" + id + "/page/console").body())
                 .as("step 2c: the Console tab attaches to the running release").contains("<pl-terminal");
 
+            // 2d. The serving release was built from the app's saved configuration: nothing waits for a deploy.
+            Row serving = instances.findById(release[0]);
+            Map<String, Object> built = new LinkedHashMap<>(InstanceModel.settingsOf(serving));
+            built.put("source_fingerprint",
+                ApplicationReleases.configuredFingerprint(instances.findById(id), serving));
+            serving.set(InstanceModel.SETTINGS, built);
+            ApplicationReleases.inScopeUnchecked(id, () -> instances.save(serving));
+            assertThat(headlineOf(id)).as("step 2d: a release built from the saved configuration is up to date")
+                .isNotEqualTo("changes_not_live");
+
+            // 2e. A saved change the release was not built from is not live yet: the overview says so, Deploy fixes it.
+            Row edited = instances.findById(id);
+            Map<String, Object> changed = new LinkedHashMap<>(InstanceModel.settingsOf(edited));
+            changed.put("health_path", "/healthz");
+            edited.set(InstanceModel.SETTINGS, changed);
+            instances.save(edited);
+            assertThat(headlineOf(id)).as("step 2e: the saved change waits for a deploy")
+                .isEqualTo("changes_not_live");
+            String pending = adminGet("/admin/instances/" + id + "/page/overview").body();
+            assertThat(pending).as("step 2e: the overview's band asks for attention")
+                .contains("data-cms-record-health=\"attention\"");
+
+            // 2f. The Configuration tab is headed by the app's own name, like its other tabs.
+            assertThat(adminGet("/admin/instances/" + id).body()).as("step 2f: the form tab names the app")
+                .doesNotContain("Edit instance");
+
             // 3. The release stopped: so is the app.
             status(release[0], InstanceModel.STATUS_STOPPED);
             assertThat(headlineOf(id)).as("step 3: a stopped release is a stopped app").isEqualTo("not_running");

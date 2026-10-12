@@ -415,13 +415,16 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
      * to fix a build, so it stays visible where a release's daemon step log does not.
      */
     private static @NonNull Map<String, Object> buildEntry(@NonNull Row row, @NonNull WithheldFailure failures) {
-        return entry(row.get(BuildOperationModel.ID),
+        Map<String, Object> entry = entry(row.get(BuildOperationModel.ID),
             BuildOperationModel.STATUS, row.get(BuildOperationModel.STATUS), "",
             row.get(BuildOperationModel.SOURCE_REF),
             row.get(BuildOperationModel.DURATION_MS),
             failures.shown(row.get(BuildOperationModel.FAILURE_REASON)),
             row.get(BuildOperationModel.STARTED_AT),
             row.get(BuildOperationModel.LOG));
+        // The release lane's What column names each row; a build that has not (yet) become a release is a build.
+        entry.put("kindLabel", CmsSupport.resolvedTextOrDefault(HohenheimMicrocopy.DEPLOYMENTS.of("kind_build")));
+        return entry;
     }
 
     /** One history row in the shape both lanes and the shared deploy-detail partial read. */
