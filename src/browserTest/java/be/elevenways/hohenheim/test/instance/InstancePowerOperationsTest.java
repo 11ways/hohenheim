@@ -132,12 +132,16 @@ class InstancePowerOperationsTest {
             try {
                 // 1. Release-managed instances require Docker; use the shared admitted local-host fixture.
                 HostFixtures.makeLocalPlaceable(16L * 1024);
-                int id = BackupLaneFixture.instanceRecord("backup-deploy-target", fixture.hostId);
-                Row row = Models.get(InstanceModel.class).findById(id);
+                // A stored record keeps its kind (only kindChangesOf may change it), so the release-managed record
+                // is created with that kind rather than re-kinded from the fixture's fake one.
+                Row row = Models.get(InstanceModel.class).createEmptyRow();
+                row.set(InstanceModel.NAME, "backup-deploy-target");
                 row.set(InstanceModel.KIND, InstanceKinds.kindsWhere(handler -> handler.releaseManaged()).getFirst());
+                row.set(InstanceModel.SETTINGS, Map.of("image", "fake/image"));
                 row.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
                 row.set(InstanceModel.BACKUP_TARGET_ID, fixture.targetId);
                 Models.get(InstanceModel.class).save(row);
+                int id = row.get(InstanceModel.ID);
                 for (String capability : List.of(HohenheimCapabilities.VIEW, HohenheimCapabilities.BACKUPS)) {
                     RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, id, capability, true);
                 }
