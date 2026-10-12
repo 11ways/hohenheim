@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceLogModel;
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReconcileFindingModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -166,9 +167,10 @@ public final class HohenheimSources implements ZenitModule {
         // The /manage landing's Recent band: the entries about records each reader may see.
         ActivitySources.registerViewable(HohenheimSlugs.MANAGE);
 
-        // Sites carry field-level deltas in the activity log (the CMS history
-        // tab renders them); every other model stays on the default tier.
+        // Sites and instances carry field-level deltas in the activity log (the CMS history tab and the activity
+        // lines narrate them, an app's configuration changes included); every other model stays on the default tier.
         ActivityLog.setPolicy(SiteModel.MODEL_ID, ActivityPolicy.ALL);
+        ActivityLog.setPolicy(InstanceModel.MODEL_ID, ActivityPolicy.ALL);
 
         // Bookkeeping tables whose writes are machine-generated churn, not user
         // actions: instance logs upsert per console episode, and a release operation is

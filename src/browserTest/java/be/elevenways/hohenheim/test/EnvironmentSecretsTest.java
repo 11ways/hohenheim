@@ -1,12 +1,17 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
+import be.elevenways.zenit.common.orm.activity.ActivityText;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.narration.FieldValueText;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.revision.RevisionModel;
+import be.elevenways.zenit.test.support.TestAccessContexts;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
@@ -36,6 +41,8 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
     private static final String TOKEN_V1 = "pw-v1-hunter2-9f8e7d6c5b4a";
     private static final String TOKEN_V2 = "pw-v2-tr0ub4dor-3c2b1a0f9e8d";
     private static final String LEGACY_TOKEN = "legacy-plaintext-pw-0102030405";
+    private static final String GREETING_V1 = "hello-from-dep19-v1";
+    private static final String GREETING_V2 = "hello-from-dep19-v2";
 
     @Test
     void aStoredSecretNeverEntersDerivedSurfacesAndLegacyRestoreCannotRevive() throws Exception {
@@ -178,7 +185,57 @@ class EnvironmentSecretsTest extends HohenheimTestBase {
             .doesNotContain(LEGACY_TOKEN);
     }
 
+    @Test
+    void anAppsEnvironmentChangeNamesItsKeyAndNeverItsValue() {
+        InstanceModel instances = Models.get(InstanceModel.class);
+
+        // 1. An application whose environment holds a secret greeting.
+        Row app = instances.createEmptyRow();
+        app.set(InstanceModel.NAME, "env-activity-app");
+        app.set(InstanceModel.KIND, "hohenheim:application");
+        app.set(InstanceModel.SETTINGS, environment(GREETING_V1));
+        instances.save(app);
+        int appId = app.get(InstanceModel.ID);
+        int recorded = instanceActivityRows(appId).size();
+        assertThat(recorded).as("1. the create is recorded").isGreaterThanOrEqualTo(1);
+
+        // 2. Saving it unchanged only stamps the ORM's own timestamp: no activity entry.
+        Row saved = instances.findById(appId);
+        saved.set(InstanceModel.NAME, "env-activity-app");
+        instances.save(saved);
+        assertThat(instanceActivityRows(appId)).as("2. an unchanged save is no event").hasSize(recorded);
+
+        // 3. Changing the greeting records an update whose line names the key, and no value anywhere.
+        saved.set(InstanceModel.SETTINGS, environment(GREETING_V2));
+        instances.save(saved);
+        List<Row> entries = instanceActivityRows(appId);
+        assertThat(entries).as("3. the change is recorded once").hasSize(recorded + 1);
+        Row update = entries.get(entries.size() - 1);
+        assertThat((String) update.get(ActivityModel.DELTA))
+            .as("3. the delta names the key").contains("SITE_GREETING")
+            .as("3. and never a value").doesNotContain(GREETING_V1).doesNotContain(GREETING_V2);
+        assertThat(ActivityText.detail(update, FieldValueText.standard(), TestAccessContexts.allAllowed()))
+            .as("3. the activity line names the changed key").contains("SITE_GREETING")
+            .as("3. and never a value").doesNotContain(GREETING_V1).doesNotContain(GREETING_V2);
+    }
+
     // ------------------------------------------------------------------
+
+    private static Map<String, Object> environment(String greeting) {
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("environment_variables", new LinkedHashMap<>(Map.of("SITE_GREETING", greeting)));
+        return settings;
+    }
+
+    private static List<Row> instanceActivityRows(int instanceId) {
+        ActivityModel activity = new ActivityModel(
+            Models.get(InstanceModel.class).getResolvedDatasource());
+        return activity.find()
+            .where(ActivityModel.MODEL.eq(InstanceModel.MODEL_ID.toString()))
+            .where(ActivityModel.RECORD_ID.eq(String.valueOf(instanceId)))
+            .orderBy(ActivityModel.ID, SortOrder.ASC)
+            .all();
+    }
 
     @SuppressWarnings("unchecked")
     private static Map<String, Object> settingsOf(int siteId) {
