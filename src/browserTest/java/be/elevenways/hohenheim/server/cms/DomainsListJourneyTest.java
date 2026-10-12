@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.tls.HostnameReach;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -128,6 +129,16 @@ class DomainsListJourneyTest extends HohenheimTestBase {
             assertThat(html).as("step 3: the App cell links the app to its overview, the framework's front door")
                 .contains("class=\"cms-record-link\" href=\"/admin/" + HohenheimSlugs.SITES + "/"
                     + site.get(SiteModel.ID) + "/open\">addresses-" + suffix + "</a>");
+
+            // 3b. Its dialog asks about that very address, never the shell's generic "Are you sure?".
+            ConfirmationSpec ask = Objects.requireNonNull(
+                CertificateOperations.requestForDomainAction().confirmationFor(hereRow));
+            assertThat(ask.title().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 3b: the title names the address").isEqualTo("Get a certificate for " + here + "?");
+            assertThat(ask.title().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 3b: in Dutch too").isEqualTo("Een certificaat aanvragen voor " + here + "?");
+            assertThat(ask.body().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 3b: and the body says what the order does for it").contains(here).contains("rate limits");
 
             // 4. The HTTPS cell says why a name does not work: forced without a working certificate, and, for a name
             //    another server holds the certificate for (no "Get a certificate" there), that Let's Encrypt is told

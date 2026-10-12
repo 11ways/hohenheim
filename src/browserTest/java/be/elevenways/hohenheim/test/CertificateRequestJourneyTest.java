@@ -4,12 +4,16 @@ import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.SiteDomainModel;
+import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.ServerMain;
 import be.elevenways.hohenheim.server.cms.CertificateOperations;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.server.tls.AcmeProblem;
+import be.elevenways.hohenheim.test.tls.FakeAcmeServer;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -19,6 +23,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -117,10 +122,69 @@ class CertificateRequestJourneyTest extends HohenheimTestBase {
         }
     }
 
+    /** A finished order opens the certificate it wrote at its overview, never at the edit form with its PEM fields. */
+    @Test
+    void aFinishedOrderOpensTheCertificatesOverview() throws Exception {
+        String savedDirectory = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.ACME_DIRECTORY_URL);
+        String savedEmail = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL);
+        String host = "landing.request-journey.test";
+        try (FakeAcmeServer ca = new FakeAcmeServer()) {
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED, true);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.ACME_DIRECTORY_URL, ca.directoryUrl());
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL, "acme-test@example.com");
+
+            // 1. An address's row orders its certificate ("Get a certificate") with a manual DNS-01 challenge, so
+            //    nothing has to reach this host: the order waits for its TXT records.
+            Row domain = address(host);
+            String invoke = CmsRoutes.invoke(HohenheimSlugs.ADMIN, HohenheimSlugs.DOMAINS,
+                    CertificateOperations.REQUEST_FOR_DOMAIN.id())
+                .with(CmsEndpoints.SUBJECT_PARAM, String.valueOf((Object) domain.get(SiteDomainModel.ID))).toUrl();
+            HttpResponse<String> ordered = adminPostForm(invoke, ApiSupport.form("domains", host,
+                "nice_name", "request-journey-landing", "challenge_type", CertificateModel.CHALLENGE_DNS,
+                "dns_publisher", CertificateModel.DNS_PUBLISHER_MANUAL) + "&" + ApiSupport.invokeTransport());
+            Row certificate = certificateNamed(host);
+            assertThat(certificate).as("step 1: the order wrote its certificate (answered %s)", ordered.statusCode())
+                .isNotNull();
+            Object id = certificate.get(CertificateModel.ID);
+
+            // 2. THE ASSERTION: the answer opens that certificate at its front door, never at its record page, which
+            //    is the edit form for an operator.
+            assertThat(landingOf(ordered)).as("step 2: the order opens the certificate's front door")
+                .isEqualTo(CmsRoutes.open(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES, id).toUrl());
+
+            // 3. That door is the overview, where the waiting order's TXT records are.
+            HttpResponse<String> front = adminGet(landingOf(ordered));
+            assertThat(landingOf(front)).as("step 3: the front door is the overview")
+                .startsWith(CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.CERTIFICATES, id,
+                    RecordOverview.SLUG).toUrl());
+        } finally {
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.ACME_DIRECTORY_URL, savedDirectory);
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Ssl.LETSENCRYPT_EMAIL, savedEmail);
+        }
+    }
+
     private HttpResponse<String> request(String hostname) throws Exception {
         return adminPostForm(ApiSupport.requestCertificateTarget(), ApiSupport.form(
             "domains", hostname, "nice_name", "request-journey", "challenge_type", "http") + "&"
             + ApiSupport.invokeTransport());
+    }
+
+    /** @return a stored address row of a fresh redirect site */
+    private static Row address(String hostname) {
+        Row site = Models.get(SiteModel.class).createEmptyRow();
+        site.set(SiteModel.NAME, "request-journey " + hostname);
+        site.set(SiteModel.SLUG, "request-journey-landing");
+        site.set(SiteModel.UPSTREAM_KIND, "hohenheim:redirect");
+        site.set(SiteModel.SETTINGS, Map.of("target", "https://example.com"));
+        site.set(SiteModel.STATUS, "active");
+        site.set(SiteModel.ENABLED, true);
+        Models.get(SiteModel.class).save(site);
+        Row domain = Models.get(SiteDomainModel.class).createEmptyRow();
+        domain.set(SiteDomainModel.SITE_ID, site.get(SiteModel.ID));
+        domain.set(SiteDomainModel.HOSTNAME, hostname);
+        domain.set(SiteDomainModel.MATCH_TYPE, SiteDomainModel.MATCH_EXACT);
+        Models.get(SiteDomainModel.class).save(domain);
+        return domain;
     }
 
     private static Row certificateNamed(String hostname) {

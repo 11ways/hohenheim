@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.tls.CertificateCoverage;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
+import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.ActionRequest;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -190,7 +191,8 @@ public final class CertificateOperations {
     static @NonNull PanelAction<Row> requestForDomainAction() {
         init();
         return PanelAction.<Row, Integer>places(REQUEST_FOR_DOMAIN, ActionPlacement.ROW, CertificateOperations::opened)
-            .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.CERTIFICATE_REQUEST.of("uses_production"), false))
+            .confirmation(requestConfirmation(null))
+            .dynamicConfirmation(domain -> requestConfirmation(domain.get(SiteDomainModel.HOSTNAME)))
             .inSheet()
             .inputValues((domain, request) -> prefill(domain))
             // A name a working certificate already covers needs no new one: changing that certificate is its own
@@ -225,10 +227,29 @@ public final class CertificateOperations {
             .build();
     }
 
-    /** Every successful order opens the certificate it wrote, where a waiting DNS-01 order shows its TXT records. */
+    /**
+     * The row's dialog asks about the address it orders for; the fallback serves an offer drawn without its row.
+     *
+     * @param hostname the domain row's name, null for none
+     */
+    private static @NonNull ConfirmationSpec requestConfirmation(@Nullable String hostname) {
+        HohenheimMicrocopy copy = HohenheimMicrocopy.CERTIFICATE_REQUEST;
+        if (hostname == null || hostname.isBlank()) {
+            return ConfirmationSpec.of(copy.of("get_certificate_title"), copy.of("get_certificate"),
+                copy.of("uses_production"), ActionStyle.PRIMARY);
+        }
+        return ConfirmationSpec.of(copy.of("get_certificate_for").withArg("hostname", hostname),
+            copy.of("get_certificate"), copy.of("get_certificate_for_body").withArg("hostname", hostname),
+            ActionStyle.PRIMARY);
+    }
+
+    /**
+     * Every successful order opens the certificate it wrote at its front door: the overview, where a waiting DNS-01
+     * order shows its TXT records, never the edit form an operator lands on through the plain record URL.
+     */
     private static @NonNull CmsActionResult opened(@NonNull ActionRequest<Row> request,
                                                    @NonNull OperationResult<Integer> result) {
-        return CmsActionResult.redirect(new Uri(CmsRoutes.detail(request.request().panelSlug(),
+        return CmsActionResult.redirect(new Uri(CmsRoutes.open(request.request().panelSlug(),
             HohenheimSlugs.CERTIFICATES, result.value()).toUrl()));
     }
 

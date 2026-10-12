@@ -14334,6 +14334,18 @@
     "text": "Get a certificate",
     "scope": "certificate_request"
   },
+  "get_certificate_title": {
+    "text": "Get a certificate?",
+    "scope": "certificate_request"
+  },
+  "get_certificate_for": {
+    "text": "Get a certificate for {$hostname}?",
+    "scope": "certificate_request"
+  },
+  "get_certificate_for_body": {
+    "text": "Let's Encrypt checks that you control {$hostname}, then issues a certificate that renews on its own. This is a real order, which counts against Let's Encrypt's rate limits.",
+    "scope": "certificate_request"
+  },
   "uses_production": {
     "text": "This orders a real certificate from Let's Encrypt (production), which counts against its rate limits.",
     "scope": "certificate_request"

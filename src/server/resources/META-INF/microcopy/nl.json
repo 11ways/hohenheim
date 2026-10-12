@@ -14334,6 +14334,18 @@
     "text": "Certificaat aanvragen",
     "scope": "certificate_request"
   },
+  "get_certificate_title": {
+    "text": "Een certificaat aanvragen?",
+    "scope": "certificate_request"
+  },
+  "get_certificate_for": {
+    "text": "Een certificaat aanvragen voor {$hostname}?",
+    "scope": "certificate_request"
+  },
+  "get_certificate_for_body": {
+    "text": "Let's Encrypt controleert of je {$hostname} beheert en geeft dan een certificaat uit dat zichzelf vernieuwt. Dit is een echte aanvraag, die meetelt voor de limieten van Let's Encrypt.",
+    "scope": "certificate_request"
+  },
   "uses_production": {
     "text": "Dit vraagt een echt certificaat aan bij Let's Encrypt (productie), wat meetelt voor de limieten daar.",
     "scope": "certificate_request"

@@ -383,7 +383,7 @@ filter hostname at=0 kind=TEXT facet=false param=filter.hostname
 filter match_type at=1 kind=SELECT facet=true param=filter.match_type
 filter force_ssl at=2 kind=BOOLEAN facet=false param=filter.force_ssl
 row zenit:edit at=0 verb=link band=inline style=DEFAULT disabled= confirm= target=/{panel}/{entry}/{record}
-row hohenheim:request_domain_certificate at=1 verb=invoke band=inline style=DEFAULT disabled= confirm=style:PRIMARY,title:confirm_title%252Cscope%3Dcms,body:uses_production%252Cscope%3Dcertificate_request,confirm:confirm%252Cscope%3Dcms%25252Ctarget%3Daction,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_domain_certificate?ids%3D{record}
+row hohenheim:request_domain_certificate at=1 verb=invoke band=inline style=DEFAULT disabled= confirm=style:PRIMARY,title:get_certificate_for%252Cscope%3Dcertificate_request,body:get_certificate_for_body%252Cscope%3Dcertificate_request,confirm:get_certificate%252Cscope%3Dcertificate_request,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/invoke/hohenheim.request_domain_certificate?ids%3D{record}
 row hohenheim:check_address_reach at=2 verb=invoke band=overflow style=DEFAULT disabled= confirm= target=/{panel}/{entry}/invoke/hohenheim.check_address_reach?ids%3D{record}
 row zenit:delete at=3 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
 tab history at=0 landing=false view=false
