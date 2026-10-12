@@ -183,12 +183,15 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         // draining, so Deploy and Rollback were offered mid-switch.
         boolean inFlight = ApplicationReleases.deploying(instanceId);
         // A build that did not succeed never became a release: listed beside them, or a deploy a push or the
-        // scheduled check started and the build refused would leave no trace on this page.
-        List<Row> unreleased = Models.get(BuildOperationModel.class)
-            .findForOwner(InstanceModel.MODEL_ID.toString(), instanceId, 50).stream()
+        // scheduled check started and the build refused would leave no trace on this page. A build that did
+        // succeed shows on the release it made (builtImages).
+        List<Row> builds = Models.get(BuildOperationModel.class)
+            .findForOwner(InstanceModel.MODEL_ID.toString(), instanceId, 50);
+        List<Row> unreleased = builds.stream()
             .filter(row -> !BuildOperationModel.LIFECYCLE.is(row.get(BuildOperationModel.STATUS),
                 OperationStatus.SUCCEEDED))
             .toList();
+        Map<String, Row> builtImages = builtImages(builds);
         Row serving = ApplicationReleases.ownedServing(instanceId);
         Row kept = ReleaseEngine.newestRetired(instanceId);
         vars.put("isDeploying", inFlight);
@@ -217,6 +220,13 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
                 failures.operatorOnly(row.get(ReleaseOperationModel.STEP_LOG)));
             entry.put("kindLabel",
                 CmsSupport.enumLabel(ReleaseOperationModel.KIND, row.get(ReleaseOperationModel.KIND)));
+            entry.put("release", true);
+            // The output of the build that made this release's image is the tenant's own build, visible like the
+            // log of a build row: without it a release that runs the wrong thing cannot be traced to its build.
+            Row build = builtImages.get(Objects.toString(row.get(ReleaseOperationModel.IMAGE_ID), ""));
+            String buildLog = build == null ? null : build.get(BuildOperationModel.LOG);
+            entry.put("buildLog", buildLog == null ? "" : buildLog);
+            entry.put("hasBuildLog", buildLog != null && !buildLog.isBlank());
             boolean succeeded = ReleaseOperationModel.LIFECYCLE.is(
                     row.get(ReleaseOperationModel.STATUS), OperationStatus.SUCCEEDED);
             ReleaseMark mark = !succeeded || candidate == null ? null
@@ -235,6 +245,24 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         deployments.sort(Comparator.comparing((Map<String, Object> entry) ->
             Objects.toString(entry.get("startedAtIso"), "")).reversed());
         vars.put("deployments", deployments);
+    }
+
+    /**
+     * The succeeded build behind each image id, the newest when one image was built twice: a release names the image
+     * it deployed and the build that loaded that image stored the same id.
+     *
+     * @param builds the owner's builds, newest first
+     */
+    private static @NonNull Map<String, Row> builtImages(@NonNull List<Row> builds) {
+        Map<String, Row> byImage = new HashMap<>();
+        for (Row build : builds) {
+            String image = Objects.toString(build.get(BuildOperationModel.IMAGE_ID), "");
+            if (!image.isEmpty() && BuildOperationModel.LIFECYCLE.is(build.get(BuildOperationModel.STATUS),
+                    OperationStatus.SUCCEEDED)) {
+                byImage.putIfAbsent(image, build);
+            }
+        }
+        return byImage;
     }
 
     /** The short commit each release instance named, keyed by instance id, trashed instances included. */
@@ -454,6 +482,10 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         entry.put("startedAtIso", startedAt != null ? startedAt.toString() : "");
         entry.put("log", log != null ? log : "");
         entry.put("hasLog", log != null && !log.isBlank());
+        // Only a release row carries a build beside its own log; it overrides these.
+        entry.put("release", false);
+        entry.put("buildLog", "");
+        entry.put("hasBuildLog", false);
         return entry;
     }
 

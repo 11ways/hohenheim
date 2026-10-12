@@ -119,8 +119,10 @@
                         </pl-table-cell>
                         <pl-table-cell class="hh-deploys-when">{{ deploy.get("duration") }}</pl-table-cell>
                     </pl-table-row>
-                    {% if deploy.get("error") != "" or deploy.get("hasLog") == true %}
-                    {% render "hohenheim:cms/deploy-detail" var:deploy=deploy var:colspan=columnCount var:logLabel=t("build_log", scope: "deployments") %}
+                    {% if deploy.get("error") != "" or deploy.get("hasLog") == true or deploy.get("hasBuildLog") == true %}
+                    {#- A release row's own log is its release steps; the build that made its image rides beside it. -#}
+                    {% let logLabel = deploy.get("release") == true ? t("release_log", scope: "deployments") : t("build_log", scope: "deployments") %}
+                    {% render "hohenheim:cms/deploy-detail" var:deploy=deploy var:colspan=columnCount var:logLabel=logLabel var:buildLogLabel=t("build_log", scope: "deployments") %}
                     {% /if %}
                     {% /each %}
                 </pl-table-body>

@@ -44,6 +44,9 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
     private static final String LIVE_SHA = "aaaa1111bbbbcccc";
     private static final String KEPT_SHA = "bbbb2222ccccdddd";
     private static final String REPLACED_SHA = "cccc3333ddddeeee";
+    private static final String LIVE_IMAGE = "sha256:appdeploys-live-image";
+    private static final String LIVE_BUILD_OUTPUT = "appdeploys live build output: Successfully built";
+    private static final String LIVE_RELEASE_STEPS = "appdeploys live release steps: health ok";
 
     private static Integer applicationId;
     private static final List<Integer> releaseIds = new ArrayList<>();
@@ -73,14 +76,25 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         int replaced = release("replaced", REPLACED_SHA, null);
 
         operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), replaced, null, Instant
-            .parse("2026-09-01T08:00:00Z"));
+            .parse("2026-09-01T08:00:00Z"), null);
         operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), kept, null, Instant
-            .parse("2026-09-01T09:00:00Z"));
+            .parse("2026-09-01T09:00:00Z"), null);
         operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), live, null, Instant
-            .parse("2026-09-01T10:00:00Z"));
+            .parse("2026-09-01T10:00:00Z"), LIVE_IMAGE);
+        // The build that produced the live release's image: a succeeded build is no row of its own.
+        Row built = Models.get(BuildOperationModel.class).createEmptyRow();
+        built.set(BuildOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
+        built.set(BuildOperationModel.FOR_ID, applicationId);
+        built.set(BuildOperationModel.STATUS, BuildOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED));
+        built.set(BuildOperationModel.SOURCE_REF, LIVE_SHA);
+        built.set(BuildOperationModel.IMAGE_ID, LIVE_IMAGE);
+        built.set(BuildOperationModel.LOG, LIVE_BUILD_OUTPUT);
+        built.set(BuildOperationModel.STARTED_AT, Instant.parse("2026-09-01T09:58:00Z"));
+        Models.get(BuildOperationModel.class).save(built);
+        buildIds.add(built.get(BuildOperationModel.ID));
         operation(ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.FAILED), null,
             "Did not answer on port 3000 within 60 s",
-            Instant.parse("2026-09-01T11:00:00Z"));
+            Instant.parse("2026-09-01T11:00:00Z"), null);
         // A deploy whose build was refused never became a release.
         Row build = Models.get(BuildOperationModel.class).createEmptyRow();
         build.set(BuildOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
@@ -140,7 +154,8 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         return created[0];
     }
 
-    private static void operation(String status, Integer candidate, String failure, Instant startedAt) {
+    private static void operation(String status, Integer candidate, String failure, Instant startedAt,
+                                  String imageId) {
         Row op = Models.get(ReleaseOperationModel.class).createEmptyRow();
         op.set(ReleaseOperationModel.KIND, ReleaseOperationModel.KIND_RELEASE);
         op.set(ReleaseOperationModel.FOR_MODEL, InstanceModel.MODEL_ID.toString());
@@ -150,6 +165,10 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         op.set(ReleaseOperationModel.FAILURE_REASON, failure);
         op.set(ReleaseOperationModel.STARTED_AT, startedAt);
         op.set(ReleaseOperationModel.DURATION_MS, 108_000);
+        op.set(ReleaseOperationModel.IMAGE_ID, imageId);
+        if (imageId != null) {
+            op.set(ReleaseOperationModel.STEP_LOG, LIVE_RELEASE_STEPS);
+        }
         Models.get(ReleaseOperationModel.class).save(op);
         operationIds.add(op.get(ReleaseOperationModel.ID));
     }
@@ -217,6 +236,15 @@ class AppDeploysJourneyTest extends HohenheimTestBase {
         assertThat(refused).as("step 3b: the refused build states its reason").isPositive();
         assertThat(refused).as("step 3b: above the older failed release")
             .isLessThan(body.indexOf("Did not answer on port 3000 within 60 s"));
+
+        // 3c. A release row carries the output of the build that made its image beside its own release steps.
+        int liveRow = body.indexOf("data-hh-release-mark=\"live\"");
+        int keptRow = body.indexOf("data-hh-release-mark=\"kept\"");
+        String liveDetail = body.substring(liveRow, keptRow);
+        assertThat(liveDetail)
+            .as("step 3c: the live release shows its build output").contains(LIVE_BUILD_OUTPUT)
+            .as("step 3c: under the build log's name").contains("Build log")
+            .as("step 3c: beside its own release steps").contains(LIVE_RELEASE_STEPS).contains("Release steps");
 
         // 4. The running preview is listed with its pull request; a torn-down one is not.
         assertThat(body)

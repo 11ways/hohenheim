@@ -981,6 +981,10 @@
       "scope": "hohenheim_field"
     }
   ],
+  "release_log": {
+    "text": "Release steps",
+    "scope": "deployments"
+  },
   "cancel": [
     {
       "text": "Cancel deploy",
