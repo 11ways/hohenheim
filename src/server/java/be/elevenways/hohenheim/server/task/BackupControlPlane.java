@@ -11,6 +11,7 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.task.ScheduleDeclaration;
 import be.elevenways.zenit.common.task.ScheduledTask;
 import be.elevenways.zenit.common.task.TaskContext;
+import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.util.List;
@@ -57,8 +58,18 @@ public class BackupControlPlane extends ScheduledTask {
         return this.descriptionIn(HohenheimMicrocopy.HOHENHEIM.copy());
     }
 
+    /**
+     * AIDEV-NOTE: a backup with no destination chosen is NOT SET UP, not a failure: no alert, and the run's refusal
+     * folds on the dashboard under the item saying where to choose one (AttentionCollector.failedTasks). A real failure
+     * is alerted and stored as a sentence naming the target; the exception's own text (setting paths, target lists,
+     * transport errors) goes to the log and the alert only, never to the run's stored reason the dashboard reads.
+     */
     @Override
     public void executor(TaskContext ctx) {
+        String target = ControlPlaneBackups.configuredDestinationName();
+        if (target == null) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("control_plane_backup_not_set_up"));
+        }
         try {
             ControlPlaneBackups.backupNow();
         } catch (Exception error) {
@@ -68,9 +79,8 @@ public class BackupControlPlane extends ScheduledTask {
                 HohenheimMicrocopy.ALERT.of("control_plane_backup_failed_body")
                     .withArg("reason", String.valueOf(error.getMessage())));
             // Rethrow so the task run is recorded as FAILED, not green-with-a-log-line.
-            throw error instanceof RuntimeException runtime
-                ? runtime
-                : new IllegalStateException("Control-plane backup failed", error);
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("control_plane_backup_failed")
+                .withArg("target", target));
         }
     }
 }

@@ -76,8 +76,19 @@ public final class HohenheimViolations {
     }
 
     /**
-     * A stored reason as text for its reader: what {@link #reasonOf} stores, or, for a reason stored before it existed,
-     * the refusal it debug-rendered ("1 violation(s):  -> workspace_build_failed {reason=...}") in its own words.
+     * {@link #storedMessage} resolved in the installation's default content locale, for a reader with no locale.
+     *
+     * @return the stored text, or the one refusal it renders
+     */
+    public static @NonNull String storedText(@NonNull String stored) {
+        return textOf(storedMessage(stored));
+    }
+
+    /**
+     * A stored reason as a message for its reader: what {@link #reasonOf} stores, or, for a reason stored before it
+     * existed (and a task run's refusal, which the scheduler stores as thrown), the refusal it debug-rendered
+     * ("1 violation(s):  -> workspace_build_failed {reason=...}") as that refusal, which each reader resolves in its
+     * own locale.
      *
      * AIDEV-NOTE: only ONE violation is read back, because a list of them joins entries AND args with ", " and cannot
      * be split without guessing. A key this catalog does not hold, or any other shape, keeps the stored text: an old
@@ -85,35 +96,34 @@ public final class HohenheimViolations {
      * build failure took {@code code} where it stored {@code reason}) cannot be filled from the row: it reads as the
      * row's one stored argument when there is exactly one, else as stored.
      *
-     * @return the stored text, or the one refusal it renders in the installation's default content locale
+     * @return the one refusal the stored text renders, else the stored text as a literal
      */
-    public static @NonNull String storedText(@NonNull String stored) {
+    public static @NonNull Microcopy storedMessage(@NonNull String stored) {
         String prefix = "1 violation(s): ";
         int arrow = stored.indexOf(" -> ");
         if (!stored.startsWith(prefix) || arrow < prefix.length() - 1) {
-            return stored;
+            return Microcopy.literal(stored);
         }
         String entry = stored.substring(arrow + 4);
         int space = entry.indexOf(' ');
         String key = space < 0 ? entry : entry.substring(0, space);
         if (!isToken(key)) {
-            return stored;
+            return Microcopy.literal(stored);
         }
         Microcopy message = HohenheimMicrocopy.VIOLATIONS.of(key);
         if (space >= 0) {
             String args = entry.substring(space + 1);
             if (!args.startsWith("{") || !args.endsWith("}")) {
-                return stored;
+                return Microcopy.literal(stored);
             }
             message = withStoredArgs(message, args.substring(1, args.length() - 1));
             if (message == null) {
-                return stored;
+                return Microcopy.literal(stored);
             }
         }
         LocaleChain locales = LocaleChain.of(ContentLocales.getDefault());
-        String text = message.tryResolve(locales, MessageResolvers.getDefault());
-        if (text == null) {
-            return stored;
+        if (message.tryResolve(locales, MessageResolvers.getDefault()) == null) {
+            return Microcopy.literal(stored);
         }
         String source = message.resolveSource(locales, MessageResolvers.getDefault());
         int open = source.indexOf("{$");
@@ -123,12 +133,12 @@ public final class HohenheimViolations {
                 end++;
             }
             if (!message.args().asMap().containsKey(source.substring(open + 2, end))) {
-                return message.args().asMap().size() == 1
-                    ? String.valueOf(message.args().asMap().values().iterator().next()) : stored;
+                return Microcopy.literal(message.args().asMap().size() == 1
+                    ? String.valueOf(message.args().asMap().values().iterator().next()) : stored);
             }
             open = source.indexOf("{$", end);
         }
-        return text;
+        return message;
     }
 
     /** @return the message with each "name=value" of a debug-rendered args map, or null when one is malformed */

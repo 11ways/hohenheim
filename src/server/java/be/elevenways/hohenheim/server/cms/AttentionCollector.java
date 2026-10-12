@@ -308,7 +308,8 @@ public final class AttentionCollector {
                 HohenheimMicrocopy.ATTENTION_TITLE.of("control_plane_backup"),
                 HohenheimMicrocopy.ATTENTION_DETAIL.of("control_plane_backup"),
                 controlPlaneBackupTarget(),
-                HohenheimMicrocopy.ATTENTION_ACTION.of("act_choose_backup_target")).forStage(OnboardingStage.BACKUPS));
+                HohenheimMicrocopy.ATTENTION_ACTION.of("act_choose_backup_target")).forStage(OnboardingStage.BACKUPS)
+                .about(AttentionSubject.controlPlaneBackup(), null));
             return;
         }
         controlPlaneBackupFreshness(items);
@@ -383,17 +384,33 @@ public final class AttentionCollector {
             Row run = latest.get(0);
             if (TaskStatus.FAILED.name().equals(run.get(SystemTaskHistoryModel.STATUS))) {
                 Microcopy reason = failureOf(run.get(SystemTaskHistoryModel.ERROR));
-                // The isolation sweep cannot check a host whose firewall rules are switched off: that host's item
-                // is the root and this run's failure folds under it.
                 items.add(item(AttentionSeverity.WARNING, "clock",
                     HohenheimMicrocopy.ATTENTION_TITLE.of("task_failed").withArg("task", descriptor.label()),
                     reason != null ? reason : HohenheimMicrocopy.ATTENTION_DETAIL.of("last_run_failed"),
                     CmsRoutes.open(ADMIN, TaskAdmin.RUNS_SLUG, run.get(SystemTaskHistoryModel.ID)),
                     HohenheimMicrocopy.ATTENTION_ACTION.of("act_show_run"))
-                    .causedBy(VerifyWorkloadIsolation.ID.toString().equals(descriptor.typePath())
-                        && HohenheimRoles.hostWorkloadsEnabled() ? HostAttention.isolationRootOfSweep() : null));
+                    .causedBy(rootOfFailed(descriptor.typePath())));
             }
         }
+    }
+
+    /**
+     * The item a task type's failed run folds under, while that item is the run's cause.
+     *
+     * @return the isolation sweep's unenforcing host, or the unchosen backup destination for the control-panel backup;
+     *         null when the run stands on its own
+     */
+    private static @Nullable AttentionSubject rootOfFailed(@NonNull String typePath) {
+        // The isolation sweep cannot check a host whose firewall rules are switched off: that host's item is the
+        // root and this run's failure folds under it.
+        if (VerifyWorkloadIsolation.ID.toString().equals(typePath) && HohenheimRoles.hostWorkloadsEnabled()) {
+            return HostAttention.isolationRootOfSweep();
+        }
+        // A control-panel backup with nowhere to go is not set up, not failed: the destination item says where.
+        if (BackupControlPlane.ID.toString().equals(typePath) && ControlPlaneBackups.configuredDestinationName() == null) {
+            return AttentionSubject.controlPlaneBackup();
+        }
+        return null;
     }
 
     /**
@@ -404,6 +421,6 @@ public final class AttentionCollector {
      */
     private static @Nullable Microcopy failureOf(@Nullable String stored) {
         String message = TaskRunErrors.message(stored);
-        return message == null ? null : Microcopy.literal(HohenheimViolations.storedText(message));
+        return message == null ? null : HohenheimViolations.storedMessage(message);
     }
 }

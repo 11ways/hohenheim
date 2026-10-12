@@ -10070,6 +10070,14 @@
     "text": "You are not allowed to perform this action on this database",
     "scope": "violations"
   },
+  "control_plane_backup_not_set_up": {
+    "text": "Nothing was backed up: no backup target is chosen for the control panel yet. Choose one in the settings.",
+    "scope": "violations"
+  },
+  "control_plane_backup_failed": {
+    "text": "The control panel could not be backed up to {$target}; the server log names the cause.",
+    "scope": "violations"
+  },
   "tenant_database_not_allocatable": {
     "text": "Databases can only be created through the allocation form",
     "scope": "violations"

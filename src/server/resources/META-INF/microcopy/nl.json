@@ -10070,6 +10070,14 @@
     "text": "Je mag deze actie niet uitvoeren op deze database",
     "scope": "violations"
   },
+  "control_plane_backup_not_set_up": {
+    "text": "Er is niets geback-upt: er is nog geen back-updoel gekozen voor het controlepaneel. Kies er een in de instellingen.",
+    "scope": "violations"
+  },
+  "control_plane_backup_failed": {
+    "text": "Het controlepaneel kon niet naar {$target} geback-upt worden; het serverlogboek noemt de oorzaak.",
+    "scope": "violations"
+  },
   "tenant_database_not_allocatable": {
     "text": "Databases kunnen alleen via het toewijzingsformulier worden aangemaakt",
     "scope": "violations"

@@ -33,6 +33,7 @@ import be.elevenways.hohenheim.server.security.IsolationUnenforceable;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.task.IsolationFindings;
 import be.elevenways.hohenheim.server.task.VerifyWorkloadIsolation;
+import be.elevenways.hohenheim.server.task.BackupControlPlane;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -58,6 +59,7 @@ import be.elevenways.zenit.common.task.TaskDescriptor;
 import be.elevenways.zenit.common.task.TaskStatus;
 import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
+import be.elevenways.zenit.server.task.TaskRunErrors;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -759,6 +761,91 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
                 cleanup.get(i).run();
             }
         }
+    }
+
+    /**
+     * The nightly control-panel backup with no destination is not set up, never a failure: the dashboard says where
+     * to choose one and the run folds under that. A real failure reads as a sentence in en and nl; the exception's
+     * own text (setting paths, target lists, class names) stays in the log.
+     */
+    @Test
+    void aControlPanelBackupWithNowhereToGoIsNotSetUpWhileARealFailureIsASentence() throws Exception {
+        List<Runnable> cleanup = new ArrayList<>();
+        String original = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
+        cleanup.add(() -> Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET,
+            original == null ? "" : original));
+        try {
+            if (Models.get(SystemTaskHistoryModel.MODEL_ID) == null) {
+                SystemTaskHistoryModel history = new SystemTaskHistoryModel(Datasources.getDefault());
+                Models.registerInstance(history);
+                cleanup.add(() -> Models.unregisterInstance(history));
+            }
+            String nightly = BackupControlPlane.ID.toString();
+
+            // 1. No destination chosen: the run stores what the scheduler stores of the nightly run's outcome, and
+            //    its item says nothing was backed up because no target is chosen, in en and nl.
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, "");
+            Row unset = failedRun(nightly, TaskRunErrors.format(nightlyOutcome()));
+            cleanup.add(() -> HardDeletes.row(Models.get(SystemTaskHistoryModel.class), unset));
+            AttentionItem notSetUp = runItem(unset);
+            assertThat(say(notSetUp.detail())).as("step 1: the run reads as not set up, in words")
+                .isEqualTo("Nothing was backed up: no backup target is chosen for the control panel yet. Choose one"
+                    + " in the settings.");
+            assertThat(notSetUp.detail().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 1: in Dutch too").isEqualTo("Er is niets geback-upt: er is nog geen back-updoel gekozen"
+                    + " voor het controlepaneel. Kies er een in de instellingen.");
+
+            // 2. On the dashboard it is no failure: the item saying where to choose a target is shown, and the run
+            //    folds under it.
+            List<AttentionItem> items = new ArrayList<>();
+            AttentionCollector.controlPlaneBackupDestination(items);
+            AttentionCollector.failedTasks(items);
+            List<String> band = DashboardAttention.fold(List.of(), items).attention().stream()
+                .map(item -> say(item.title())).toList();
+            assertThat(band).as("step 2: the destination item says it").contains("Backups stay on this machine")
+                .as("step 2: and no failure is drawn beside it").doesNotContain(say(notSetUp.title()));
+
+            // 3. A destination naming no target is a real failure: a sentence naming the target, never the
+            //    exception's text, in en and nl.
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET, PREFIX + "gone");
+            Row failed = failedRun(nightly, TaskRunErrors.format(nightlyOutcome()));
+            cleanup.add(() -> HardDeletes.row(Models.get(SystemTaskHistoryModel.class), failed));
+            AttentionItem failure = runItem(failed);
+            assertThat(say(failure.title())).as("step 3: titled as the task's failure")
+                .isEqualTo("Back up the control panel failed");
+            assertThat(say(failure.detail())).as("step 3: saying what failed in a sentence")
+                .isEqualTo("The control panel could not be backed up to " + PREFIX + "gone; the server log names the"
+                    + " cause.")
+                .doesNotContain(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET.getPath())
+                .doesNotContain("Configured targets").doesNotContain("Exception");
+            assertThat(failure.detail().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 3: in Dutch too").isEqualTo("Het controlepaneel kon niet naar " + PREFIX + "gone"
+                    + " geback-upt worden; het serverlogboek noemt de oorzaak.");
+            List<AttentionItem> later = new ArrayList<>();
+            AttentionCollector.controlPlaneBackupDestination(later);
+            AttentionCollector.failedTasks(later);
+            assertThat(DashboardAttention.fold(List.of(), later).attention().stream().map(item -> say(item.title())))
+                .as("step 3: and the dashboard draws it").contains("Back up the control panel failed");
+        } finally {
+            for (int i = cleanup.size() - 1; i >= 0; i--) {
+                cleanup.get(i).run();
+            }
+        }
+    }
+
+    /** @return what the nightly control-panel backup threw, as the scheduler catches it */
+    private static Throwable nightlyOutcome() {
+        Throwable thrown = catchThrowableOfType(RuntimeException.class, () -> new BackupControlPlane().executor(null));
+        assertThat(thrown).as("the nightly backup cannot succeed here").isNotNull();
+        return thrown;
+    }
+
+    /** @return the failed-task item leading to this run */
+    private static AttentionItem runItem(Row run) {
+        List<AttentionItem> tasks = new ArrayList<>();
+        AttentionCollector.failedTasks(tasks);
+        return tasks.stream().filter(item -> item.target() != null && item.target().toUrl()
+            .equals("/admin/task-runs/" + run.get(SystemTaskHistoryModel.ID) + "/open")).findFirst().orElseThrow();
     }
 
     @Test

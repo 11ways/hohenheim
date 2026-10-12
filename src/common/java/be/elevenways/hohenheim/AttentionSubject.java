@@ -12,12 +12,14 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 /**
  * The record an attention item is about, so an item caused by it can name it as its root.
  *
- * AIDEV-NOTE: one subject is no stored record: {@link #httpsTermination()}, the HTTPS this installation's proxy
- * answers with (its listener and the certificates it loaded). While it cannot answer, every site sent to HTTPS gets
+ * AIDEV-NOTE: two subjects are no stored record. {@link #httpsTermination()}, the HTTPS this installation's proxy
+ * answers with (its listener and the certificates it loaded): while it cannot answer, every site sent to HTTPS gets
  * an error page for that one cause, so their items fold under its item instead of each naming its own address.
+ * {@link #controlPlaneBackup()}, where this installation's own backups go: while none is chosen, the nightly backup's
+ * refused run folds under the item saying where to choose one.
  *
- * @param model the record's model ({@link #HTTPS_TERMINATION} for the installation's HTTPS)
- * @param id    the record's id (0 for the installation's HTTPS, of which there is one)
+ * @param model the record's model ({@link #HTTPS_TERMINATION} or {@link #CONTROL_PLANE_BACKUP} for the installation's)
+ * @param id    the record's id (0 for an installation-wide subject, of which there is one)
  * @author Jelle De Loecker
  * @since  0.9.0
  */
@@ -30,6 +32,14 @@ public record AttentionSubject(@NonNull Identifier model, int id) {
     /** @return the HTTPS this installation's proxy answers with: its listener and the certificates it loaded */
     public static @NonNull AttentionSubject httpsTermination() {
         return new AttentionSubject(HTTPS_TERMINATION, 0);
+    }
+
+    /** The {@link #model} of {@link #controlPlaneBackup()}, a subject no model stores. */
+    public static final Identifier CONTROL_PLANE_BACKUP = HohenheimIds.id("control_plane_backup");
+
+    /** @return where this installation's own database and keys are backed up to */
+    public static @NonNull AttentionSubject controlPlaneBackup() {
+        return new AttentionSubject(CONTROL_PLANE_BACKUP, 0);
     }
 
     /** @return the host with this id */
