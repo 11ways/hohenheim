@@ -12180,6 +12180,10 @@
     "text": "De image van instantie {$name} bevat geen van deze shells: {$shell}",
     "scope": "violations"
   },
+  "app_not_serving": {
+    "text": "Nog niets bedient {$name}: zet het online om erin te werken",
+    "scope": "violations"
+  },
   "shell_not_running": {
     "text": "Instantie {$name} draait niet, dus er is geen shell om te openen",
     "scope": "violations"

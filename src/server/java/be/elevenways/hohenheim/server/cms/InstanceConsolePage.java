@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -95,7 +96,9 @@ public final class InstanceConsolePage implements ConsoleModes.Mode {
         }
         Conduit conduit = request.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
-        String status = instance.get(InstanceModel.STATUS);
+        // An application runs nothing itself: its console, stored episodes and status are its serving release's.
+        Row runtime = ApplicationReleases.runtimeRowOf(instance);
+        String status = runtime.get(InstanceModel.STATUS);
 
         Object templateId = instance.get(InstanceModel.TEMPLATE_ID);
         Row template = templateId instanceof Integer id
@@ -104,7 +107,7 @@ public final class InstanceConsolePage implements ConsoleModes.Mode {
             ? template.get(InstanceTemplateModel.STOP_COMMAND) : null;
 
         Map<String, Object> vars = this.modes.vars(request, instance, this);
-        this.addStoredLogs(conduit, request.panelSlug(), vars, instanceId);
+        this.addStoredLogs(conduit, request.panelSlug(), vars, instanceId, runtime.get(InstanceModel.ID));
         vars.put("status", status == null ? InstanceModel.STATUS_CREATED : status);
         vars.put("running", InstanceModel.STATUS_RUNNING.equals(status)
             || InstanceModel.STATUS_STARTING.equals(status));
@@ -136,17 +139,20 @@ public final class InstanceConsolePage implements ConsoleModes.Mode {
     }
 
     /**
-     * The persisted console episodes of this instance, and the one {@code ?log=<id>}
+     * The persisted console episodes of the instance's runtime, and the one {@code ?log=<id>}
      * selects. Retention without a reader would be storage for nobody, so the history the
      * sweeper prunes is the history this tab renders.
+     *
+     * @param instanceId the record this tab shows, which the episode links lead back to
+     * @param runtimeId  the record whose workload printed them (ApplicationReleases.runtimeRows)
      */
     private void addStoredLogs(@NonNull Conduit conduit, @NonNull String panel,
                                @NonNull Map<String, Object> vars,
-                               @Nullable Integer instanceId) {
+                               @Nullable Integer instanceId, @Nullable Integer runtimeId) {
         List<Map<String, Object>> logs = new ArrayList<>();
         InstanceLogModel model = Models.get(InstanceLogModel.class);
-        if (instanceId != null) {
-            for (Row log : model.findByInstanceId(instanceId, 50)) {
+        if (instanceId != null && runtimeId != null) {
+            for (Row log : model.findByInstanceId(runtimeId, 50)) {
                 Map<String, Object> entry = new HashMap<>();
                 entry.put("id", log.get(InstanceLogModel.ID));
                 entry.put("target", logTarget(panel, instanceId, log.get(InstanceLogModel.ID)));
@@ -163,10 +169,10 @@ public final class InstanceConsolePage implements ConsoleModes.Mode {
         Integer selected = CmsSupport.prefill(conduit, HohenheimParams.SELECTED_LOG);
         String text = "";
         String atIso = "";
-        if (selected != null && instanceId != null) {
+        if (selected != null && runtimeId != null) {
             Row log = model.findById(selected);
             // Ownership guard: a log id belonging to another instance must not render.
-            if (log != null && instanceId.equals(log.get(InstanceLogModel.INSTANCE_ID))) {
+            if (log != null && runtimeId.equals(log.get(InstanceLogModel.INSTANCE_ID))) {
                 // Already redacted at ingest, and still the workload's stdout VERBATIM:
                 // it leaves here as TEXT and the template renders it as a text node.
                 String stored = log.get(InstanceLogModel.LOG_TEXT);

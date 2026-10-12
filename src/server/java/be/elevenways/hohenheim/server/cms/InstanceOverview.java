@@ -129,14 +129,15 @@ public final class InstanceOverview {
         }
         // Memory, disk, CPU. Memory and CPU are the live stats hub's held samples, read while
         // someone watches the Metrics tab; never a stream opened by this render. An application's
-        // are its serving release's, the container that runs (ApplicationReleases.runtimeRows).
+        // three are its serving release's, the container that runs (ApplicationReleases.runtimeRows).
         Row runtime = ApplicationReleases.runtimeRowOf(instance);
         List<UsageData> live = liveUsage(runtime, InstanceStats.history(runtime.get(InstanceModel.ID)), locales,
             resolver);
         main.add(AppOverview.resources(List.of(
             AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("memory"), live.get(0)),
             AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("disk"),
-                diskUsage(instance, serverId, locales, resolver)),
+                diskUsage(runtime, ServerModel.canonicalServerId(runtime.get(InstanceModel.SERVER_ID)), locales,
+                    resolver)),
             AppOverview.gauge(HohenheimMicrocopy.INSTANCE_OVERVIEW.of("cpu"), live.get(1)))));
 
         List<WidgetInstance> side = new ArrayList<>();

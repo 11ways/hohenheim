@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
@@ -157,7 +158,7 @@ public final class InstanceShell {
     public @NonNull Availability availabilityOf(int instanceId) {
         Resolved resolved;
         try {
-            resolved = this.instances.resolve(instanceId);
+            resolved = this.instances.resolve(ApplicationReleases.requireWorkloadIdOf(instanceId));
         } catch (Violations unresolvable) {
             return Availability.NO_RUNTIME_LANE;
         }
@@ -189,7 +190,7 @@ public final class InstanceShell {
      * @param output    receives terminal bytes as text, on the session's pump thread
      * @param onEnd     runs once when the session ends for any reason (the socket's cue
      *                  to close); it must not throw
-     * @throws Violations {@code instance_not_permitted}, {@code shell_not_running},
+     * @throws Violations {@code instance_not_permitted}, {@code app_not_serving}, {@code shell_not_running},
      *         {@code shell_unsupported_runtime}, {@code shell_requires_nonroot_workload},
      *         {@code shell_missing_in_image}, {@code shell_too_many_sessions},
      *         {@code shell_failed}
@@ -207,7 +208,10 @@ public final class InstanceShell {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("instance_not_permitted"));
         }
 
-        Resolved resolved = this.instances.resolve(instanceId);
+        // An application runs nothing itself: its shell opens in the release serving it, keyed (and closed by its
+        // stop) as that release's, while the audit trail stays on the application the caller opened it on.
+        int workloadId = ApplicationReleases.requireWorkloadIdOf(instanceId);
+        Resolved resolved = this.instances.resolve(workloadId);
         Row instance = resolved.row();
         InstanceOperationGuard.requireOperable(instance);
 
@@ -236,7 +240,7 @@ public final class InstanceShell {
             throw HohenheimViolations.instanceRefusal("shell_unsupported_runtime", instance, null);
         }
 
-        List<Session> sessions = LIVE.computeIfAbsent(instanceId,
+        List<Session> sessions = LIVE.computeIfAbsent(workloadId,
             key -> new CopyOnWriteArrayList<>());
         // Bound BEFORE the daemon is asked for anything: an unbounded lane is a way to
         // spend a host's process table from a browser tab.
@@ -252,7 +256,7 @@ public final class InstanceShell {
         List<String> candidates = shellCandidates(instance);
         Started started = openFirstWorkingShell(pty, resolved, instance, candidates, cols, rows);
 
-        LiveSession session = new LiveSession(instanceId, runUser, started.shell(), started.pty(),
+        LiveSession session = new LiveSession(workloadId, instanceId, runUser, started.shell(), started.pty(),
             output, onEnd, accountabilityOf(principal), Db.currentOrDefault());
         sessions.add(session);
         session.start();
@@ -413,6 +417,8 @@ public final class InstanceShell {
     private static final class LiveSession implements Session {
 
         private final int instanceId;
+        /** The record the caller opened the shell on, which its audit entries land on. */
+        private final int recordId;
         private final int runUser;
         private final @NonNull String shell;
         private final PtySupport.@NonNull PtySession pty;
@@ -423,11 +429,12 @@ public final class InstanceShell {
         private final AtomicBoolean ended = new AtomicBoolean();
         private volatile long lastInputAt = Now.millis();
 
-        LiveSession(int instanceId, int runUser, @NonNull String shell,
+        LiveSession(int instanceId, int recordId, int runUser, @NonNull String shell,
                     PtySupport.@NonNull PtySession pty, @NonNull Consumer<String> output,
                     @NonNull Runnable onEnd, @NonNull Accountability accountability,
                     @Nullable Datasource datasource) {
             this.instanceId = instanceId;
+            this.recordId = recordId;
             this.runUser = runUser;
             this.shell = shell;
             this.pty = pty;
@@ -530,7 +537,7 @@ public final class InstanceShell {
          */
         void record(@NonNull HohenheimActivityAction action, @NonNull String detail) {
             Runnable write = () -> Accountability.runAs(this.accountability, () ->
-                ActivityLog.record(Models.get(InstanceModel.class), this.instanceId,
+                ActivityLog.record(Models.get(InstanceModel.class), this.recordId,
                     action, detail));
             try {
                 HandlerSupport.inScope(this.datasource, write);

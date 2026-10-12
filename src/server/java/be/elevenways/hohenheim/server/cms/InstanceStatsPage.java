@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.HohenheimStatsFunctions.Metric;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.docker.ResourceLimits;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.InstanceResize;
 import be.elevenways.hohenheim.server.instance.InstanceStats;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -47,8 +48,10 @@ public final class InstanceStatsPage implements RecordTab.Rendered<Row> {
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
         Conduit conduit = request.conduit();
         Integer instanceId = instance.get(InstanceModel.ID);
-        String status = instance.get(InstanceModel.STATUS);
-        List<InstanceStats.Sample> history = InstanceStats.history(instanceId);
+        // An application runs nothing itself: its samples, limits and disk are its serving release's container's.
+        Row runtime = ApplicationReleases.runtimeRowOf(instance);
+        String status = runtime.get(InstanceModel.STATUS);
+        List<InstanceStats.Sample> history = InstanceStats.history(runtime.get(InstanceModel.ID));
 
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", instance.get(InstanceModel.NAME));
@@ -74,7 +77,7 @@ public final class InstanceStatsPage implements RecordTab.Rendered<Row> {
         // live sample arrives, and the first live rate is taken against the newest.
         vars.put("latestSeed", wire.isEmpty() ? null : wire.get(wire.size() - 1));
         vars.put("previousSeed", wire.size() < 2 ? null : wire.get(wire.size() - 2));
-        Double cpus = ResourceLimits.fromSettings(InstanceResize.settingsOf(instance)).cpus();
+        Double cpus = ResourceLimits.fromSettings(InstanceResize.settingsOf(runtime)).cpus();
         boolean capped = cpus != null && cpus > 0;
         vars.put("cpuLimit", capped ? cpus : null);
         vars.put("cpuCores", capped ? coresText(cpus) : null);
@@ -83,7 +86,7 @@ public final class InstanceStatsPage implements RecordTab.Rendered<Row> {
         // enforces no root quota there is deliberately none. Stating both is the point --
         // a live-only page that silently omits the one stored figure reads as "we measure
         // nothing", which is wrong in one direction and right in the other.
-        vars.put("disk", InstanceOverview.diskViewOf(instance));
+        vars.put("disk", InstanceOverview.diskViewOf(runtime));
         vars.put("head", recordHead(conduit));
         return new RenderTemplateResult(HohenheimTemplateIds.INSTANCE_STATS, vars);
     }

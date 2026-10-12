@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.InstanceOperations;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -69,7 +70,8 @@ public final class InstanceShellPage implements ConsoleModes.Mode {
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
         Integer instanceId = instance.get(InstanceModel.ID);
-        String status = instance.get(InstanceModel.STATUS);
+        // An application runs nothing itself: its shell opens in the release serving it, so that release's status.
+        String status = ApplicationReleases.runtimeRowOf(instance).get(InstanceModel.STATUS);
 
         Map<String, Object> vars = this.modes.vars(request, instance, this);
         vars.put("running", InstanceModel.STATUS_RUNNING.equals(status));

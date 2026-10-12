@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimStatsFunctions;
 import be.elevenways.hohenheim.HohenheimStatsFunctions.Metric;
 import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.StatsStreamSupport;
 import be.elevenways.protoblast.common.Blast;
@@ -78,12 +79,17 @@ public final class InstanceStats {
      *
      * @return a handle whose {@code close()} detaches it (and tears the stream down when it
      *         was the last viewer)
-     * @throws IOException when the workload has no stats to follow (absent, stopped, or a
-     *                     driver without a streaming lane)
+     * @throws IOException when the workload has no stats to follow (absent, stopped, an
+     *                     application nothing serves, or a driver without a streaming lane)
      */
     public static @NonNull Subscription subscribe(int instanceId, @NonNull Consumer<Sample> viewer)
             throws IOException {
-        Session session = SESSIONS.compute(instanceId, (id, existing) -> {
+        // An application's samples are its serving release's: the ring the overview and the Metrics tab seed from.
+        Integer workloadId = ApplicationReleases.workloadIdOf(instanceId);
+        if (workloadId == null) {
+            throw new IOException("Nothing serves application " + instanceId + " yet");
+        }
+        Session session = SESSIONS.compute(workloadId, (id, existing) -> {
             if (existing != null && existing.isLive()) {
                 return existing;
             }

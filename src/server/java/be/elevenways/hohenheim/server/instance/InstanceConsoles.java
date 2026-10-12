@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.ports.PortLedger;
@@ -263,18 +264,21 @@ public final class InstanceConsoles {
 
     /**
      * The session of an instance, opening one on its RUNNING workload when none exists
-     * (the admin console path). Named refusals for a driver without streaming and for
-     * a workload that is not running.
+     * (the admin console path). An application's console is its serving release's: the
+     * session is that release's own, the one its deploy opened. Named refusals for an
+     * application nothing serves, a driver without streaming and a workload that is not
+     * running.
      *
-     * @throws Violations {@code console_unsupported}, {@code console_not_running}
+     * @throws Violations {@code app_not_serving}, {@code console_unsupported}, {@code console_not_running}
      */
     public static @NonNull InstanceConsoleSession ensureSession(int instanceId) {
-        InstanceConsoleSession existing = SESSIONS.get(instanceId);
+        int workloadId = ApplicationReleases.requireWorkloadIdOf(instanceId);
+        InstanceConsoleSession existing = SESSIONS.get(workloadId);
         if (existing != null && !existing.isEnded()) {
             return existing;
         }
         InstanceService service = new InstanceService();
-        InstanceService.Resolved resolved = service.resolve(instanceId);
+        InstanceService.Resolved resolved = service.resolve(workloadId);
         if (!(resolved.runtime() instanceof ConsoleStreamSupport support)) {
             throw HohenheimViolations.instanceRefusal("console_unsupported", resolved.row(), null);
         }
@@ -283,7 +287,7 @@ public final class InstanceConsoles {
         }
         String stopCommand = Texts.trimmedOrNull(
             templateValue(resolved.row(), InstanceTemplateModel.STOP_COMMAND));
-        return open(support, resolved, instanceId, stopCommand,
+        return open(support, resolved, workloadId, stopCommand,
             service.leases(), Db.currentOrDefault());
     }
 
@@ -301,12 +305,13 @@ public final class InstanceConsoles {
      * them. Redaction below is not a substitute for the gate; it only keeps stored
      * secrets out of output the caller is already entitled to.
      *
-     * @throws Violations {@code instance_not_permitted}, {@code console_unsupported},
-     *         {@code logs_unavailable}
+     * @throws Violations {@code instance_not_permitted}, {@code app_not_serving},
+     *         {@code console_unsupported}, {@code logs_unavailable}
      */
     public static @NonNull String tail(int instanceId, int lines) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.CONSOLE);
-        InstanceService.Resolved resolved = new InstanceService().resolve(instanceId);
+        int workloadId = ApplicationReleases.requireWorkloadIdOf(instanceId);
+        InstanceService.Resolved resolved = new InstanceService().resolve(workloadId);
         if (!(resolved.runtime() instanceof ConsoleStreamSupport support)) {
             throw HohenheimViolations.instanceRefusal("console_unsupported", resolved.row(), null);
         }
@@ -314,7 +319,7 @@ public final class InstanceConsoles {
             // The one-shot read bypasses the session, so it carries its own redaction --
             // otherwise the automation API would be the wider door the WebSocket is not.
             return ConsoleRedaction.redactWhole(
-                support.consoleTail(resolved.spec().handle(), lines), instanceId);
+                support.consoleTail(resolved.spec().handle(), lines), workloadId);
         } catch (IOException e) {
             throw HohenheimViolations.instanceRefusal("logs_unavailable", resolved.row(), null);
         }

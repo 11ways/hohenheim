@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.HohenheimCapabilities;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ExecSupport;
@@ -64,7 +65,7 @@ public final class InstanceExec {
      * the instance's running workload.
      *
      * @throws Violations {@code instance_not_permitted} when the caller lacks {@code exec},
-     *         {@code exec_command_required}, {@code exec_unsupported}, {@code exec_failed}
+     *         {@code exec_command_required}, {@code app_not_serving}, {@code exec_unsupported}, {@code exec_failed}
      */
     public @NonNull Run run(int instanceId, @NonNull String command) {
         // The gate, FIRST and on the funnel: nothing about the instance is resolved for a
@@ -77,7 +78,8 @@ public final class InstanceExec {
                 HohenheimMicrocopy.VIOLATIONS.of("exec_command_required"));
         }
 
-        Resolved resolved = this.instances.resolve(instanceId);
+        // An application runs nothing itself: the command runs in the release serving it.
+        Resolved resolved = this.instances.resolve(ApplicationReleases.requireWorkloadIdOf(instanceId));
         InstanceOperationGuard.requireOperable(resolved.row());
         if (!(resolved.runtime() instanceof ExecSupport support)) {
             throw HohenheimViolations.instanceRefusal("exec_unsupported", resolved.row(), null);

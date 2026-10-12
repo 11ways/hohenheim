@@ -12,7 +12,7 @@ column managed_by at=6 shown=true hidden=false sortable=false filterable=false c
 column created_at at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 filter name at=0 kind=TEXT facet=false param=filter.name
 filter kind at=1 kind=SELECT facet=true param=filter.kind
-filter status at=2 kind=SELECT facet=true param=filter.status
+filter status at=2 kind=leaf:variable%3Dstatus,key%3Dfilter.status,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.status%2525252Cprotoblast:text%2525252CENUM%2525252Ccreated%252525252Cstarting%252525252Crunning%252525252Cstopped%252525252Cerror%252525252Ccapturing%252525252Crestoring%252525252Cmigrating%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.status%3D%252525- facet=false param=filter.status
 filter server.name at=3 kind=TEXT facet=false param=filter.server.name
 link hohenheim:backup_target at=0 lead=false target=/{panel}/backup-targets
 link hohenheim:instance_quota at=1 lead=false target=/{panel}/instance-quotas
@@ -179,7 +179,7 @@ column managed_by at=6 shown=true hidden=false sortable=false filterable=false c
 column created_at at=7 shown=false hidden=true sortable=false filterable=true copyable=false subtext= relation=false
 filter name at=0 kind=TEXT facet=false param=filter.name
 filter kind at=1 kind=SELECT facet=true param=filter.kind
-filter status at=2 kind=SELECT facet=true param=filter.status
+filter status at=2 kind=leaf:variable%3Dstatus,key%3Dfilter.status,operators%3Dprotoblast:equals,controls%3Dreadings%3D%25252Cbound%3Dfalse%25252Ccontrol%3Dzenitforms:rule-value/choice%2525252Cfilter.status%2525252Cprotoblast:text%2525252CENUM%2525252Ccreated%252525252Cstarting%252525252Crunning%252525252Cstopped%252525252Cerror%252525252Ccapturing%252525252Crestoring%252525252Cmigrating%2525252Ctrue%2525252C%25252525-%2525252C-1%2525252Cfalse%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%252525250%2525252C%25252525-,chooses%3Dfalse,defaultType%3Dabsent,default%3Dfilter.status%3D%252525- facet=false param=filter.status
 filter server.name at=3 kind=TEXT facet=false param=filter.server.name
 link hohenheim:backup_target at=0 lead=false target=/{panel}/backup-targets
 link hohenheim:instance_quota at=1 lead=false target=/{panel}/instance-quotas

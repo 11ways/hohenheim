@@ -12180,6 +12180,10 @@
     "text": "The image of instance {$name} carries none of these shells: {$shell}",
     "scope": "violations"
   },
+  "app_not_serving": {
+    "text": "Nothing serves {$name} yet: deploy it to work inside it",
+    "scope": "violations"
+  },
   "shell_not_running": {
     "text": "Instance {$name} is not running, so there is no shell to open",
     "scope": "violations"

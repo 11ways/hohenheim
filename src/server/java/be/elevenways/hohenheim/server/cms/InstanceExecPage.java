@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations.ExecRun;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.InstanceOperationHandlers;
 import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -86,7 +87,9 @@ public final class InstanceExecPage implements ConsoleModes.Mode {
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request, @NonNull Row instance) {
         Conduit conduit = request.conduit();
-        boolean running = InstanceModel.STATUS_RUNNING.equals(instance.get(InstanceModel.STATUS));
+        // An application runs nothing itself: the command runs in the release serving it, so that release's status.
+        boolean running = InstanceModel.STATUS_RUNNING.equals(
+            ApplicationReleases.runtimeRowOf(instance).get(InstanceModel.STATUS));
         Map<String, Object> vars = this.modes.vars(request, instance, this);
         vars.put("running", running);
         if (running && PageActions.open(request, this, instance, EXEC.id()) instanceof PageActions.Form form) {

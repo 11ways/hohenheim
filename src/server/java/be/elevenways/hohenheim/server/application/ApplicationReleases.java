@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.application;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.instance.ConsoleKind;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -38,6 +39,7 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
+import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -394,11 +396,8 @@ public final class ApplicationReleases {
             }
         }
         if (!applicationIds.isEmpty()) {
-            // Oldest first, so the newest of a half-flipped switch's two serving rows wins, as in ownedServing.
-            for (Row release : servingReleases().where(InstanceModel.GENERATED_FOR_ID.in(applicationIds))
-                    .orderBy(InstanceModel.ID, SortOrder.ASC).all()) {
-                runtimes.put(release.get(InstanceModel.GENERATED_FOR_ID), release);
-            }
+            runtimes.putAll(servingByApplication(servingReleases()
+                .where(InstanceModel.GENERATED_FOR_ID.in(applicationIds))));
         }
         return runtimes;
     }
@@ -408,11 +407,74 @@ public final class ApplicationReleases {
         return runtimeRows(List.of(instance)).get((Integer) instance.get(InstanceModel.ID));
     }
 
+    /**
+     * The instances whose runtime row ({@link #runtimeRows}) matches {@code onRuntime}: an application through its
+     * serving release, every other instance and an application nothing serves through its own row.
+     *
+     * AIDEV-NOTE: a list filter on a runtime fact (the instance lists' Status) compiles through this, so it keeps
+     * exactly the rows whose drawn runtime cell carries the value; filtering the application's own column kept a live
+     * application out of "Running".
+     */
+    public static @NonNull Criteria runtimeMatches(@NonNull Criteria onRuntime) {
+        Map<Integer, Row> serving = servingByApplication(servingReleases());
+        if (serving.isEmpty()) {
+            return onRuntime;
+        }
+        List<Integer> releaseIds = new ArrayList<>();
+        for (Row release : serving.values()) {
+            releaseIds.add(release.get(InstanceModel.ID));
+        }
+        List<Integer> matched = new ArrayList<>();
+        for (Row release : Models.get(InstanceModel.class).find().where(InstanceModel.ID.in(releaseIds))
+                .where(onRuntime).all()) {
+            matched.add(release.get(InstanceModel.GENERATED_FOR_ID));
+        }
+        Criteria own = Criteria.and(InstanceModel.ID.notIn(serving.keySet()), onRuntime);
+        return matched.isEmpty() ? own : Criteria.or(own, InstanceModel.ID.in(matched));
+    }
+
+    /**
+     * The instance whose workload runs for this one: an application's serving release, null while nothing serves it
+     * (its own record never runs), any other instance (or a missing one, for its resolve to refuse) itself.
+     */
+    public static @Nullable Integer workloadIdOf(int instanceId) {
+        Row instance = Models.get(InstanceModel.class).findById(instanceId);
+        if (instance == null || !InstanceKinds.isReleaseManaged(instance.get(InstanceModel.KIND))) {
+            return instanceId;
+        }
+        Row serving = ownedServing(instanceId);
+        return serving == null ? null : serving.get(InstanceModel.ID);
+    }
+
+    /**
+     * {@link #workloadIdOf}, for a surface that works inside the workload (its console, shell or one-off command).
+     *
+     * @throws Violations {@code app_not_serving} naming the application when nothing serves it
+     */
+    public static int requireWorkloadIdOf(int instanceId) {
+        Integer workload = workloadIdOf(instanceId);
+        if (workload == null) {
+            throw HohenheimViolations.instanceRefusal("app_not_serving",
+                Objects.requireNonNull(Models.get(InstanceModel.class).findById(instanceId)), null);
+        }
+        return workload;
+    }
+
     /** Every application's serving releases. */
     private static @NonNull QueryBuilder<Row> servingReleases() {
         return Models.get(InstanceModel.class).find()
             .where(InstanceModel.GENERATED_FOR_MODEL.eq(InstanceModel.MODEL_ID.toString()))
             .where(InstanceModel.RUNTIME_ROLE.eq(InstanceModel.ROLE_SERVING));
+    }
+
+    /** The serving release of each application the query reads, keyed by application id. */
+    private static @NonNull Map<Integer, Row> servingByApplication(@NonNull QueryBuilder<Row> serving) {
+        Map<Integer, Row> byApplication = new HashMap<>();
+        // Oldest first, so the newest of a half-flipped switch's two serving rows wins, as in ownedServing.
+        for (Row release : serving.orderBy(InstanceModel.ID, SortOrder.ASC).all()) {
+            byApplication.put(release.get(InstanceModel.GENERATED_FOR_ID), release);
+        }
+        return byApplication;
     }
 
     /** Every live release of the application, whatever its role, newest first. */

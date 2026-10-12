@@ -90,6 +90,7 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * The instance tier's shared parts, and the admin instance resource and its /manage twin built from them: the
@@ -138,7 +139,7 @@ public final class InstanceParts {
             // panel. Because the rows 404 here, nothing may link to one directly: recordRoute is the one way a
             // surface links an instance row. Kind-filtering on "release" yields the framework's empty state.
             .scope(RowScope.within(() -> InstanceModel.KIND.ne(ReleaseKind.ID.toString())))
-            .reads(ResourceReads.rows().source(source -> source.vocabularyFrom(InstanceParts::filterVocabulary)))
+            .reads(runtimeReads(InstanceParts::filterVocabulary))
             // Same shape as sites: an instance fleet outgrows a filter row, so it keeps the rule builder and
             // per-operator saved views.
             .list(ResourceList.rows(table)
@@ -189,7 +190,7 @@ public final class InstanceParts {
             .health(AppHealth.instances(true))
             // The host is operator inventory: never a rule, sort, search or value of this list.
             .withholds(HostFields.of(InstanceModel.MODEL_ID))
-            .reads(ResourceReads.rows())
+            .reads(runtimeReads(() -> runtimeSchemaVocabulary().build()))
             // Not the admin fleet list's views and rule builder: a tenant sees their instances through two columns.
             .list(ResourceList.rows(TableSpec.<Row>builder()
                     .column(ColumnSpec.fromField(InstanceModel.NAME).subtext("kind").build())
@@ -401,8 +402,10 @@ public final class InstanceParts {
                 .label(FieldLabels.labelFor(InstanceModel.NAME)).build())
             .filter(FilterSpec.leaf(InstanceModel.KIND, CoreTypes.EQUALS)
                 .label(FieldLabels.labelFor(InstanceModel.KIND)).build())
-            .filter(FilterSpec.leaf(InstanceModel.STATUS, CoreTypes.EQUALS)
-                .label(FieldLabels.labelFor(InstanceModel.STATUS)).build())
+            // The runtime status (runtimeSchemaVocabulary), never a facet counted on the stored column: an
+            // application's own column is not what its row draws.
+            .filter(FilterSpec.globalLeaf(InstanceModel.STATUS.getName(), FieldLabels.labelFor(InstanceModel.STATUS),
+                InstanceModel.STATUS.getName(), CoreTypes.EQUALS).build())
             // Relational host filter: "the instances on daystrom" is a typed host name, riding the server.name
             // variable the declared source's vocabulary adds.
             .filter(FilterSpec.globalLeaf(HOST_FILTER, FieldLabels.labelFor(InstanceModel.SERVER_ID), HOST_FILTER,
@@ -419,15 +422,50 @@ public final class InstanceParts {
         return ColumnSpec.fromField(InstanceModel.INSTALL_STATE).renderer(HohenheimTemplateIds.CELL_INSTALL_STATE);
     }
 
-    /** The schema's variables plus the relational host name the strip filter rides. */
+    /** The runtime schema variables plus the relational host name the strip filter rides. */
     private static @NonNull RuleVocabulary filterVocabulary() {
-        RuleVocabulary.Builder vocabulary = RuleVocabulary.builder();
-        for (VariableDefinition definition : SchemaVocabulary.of(Models.get(InstanceModel.class)).definitions()) {
-            vocabulary.add(definition);
-        }
+        RuleVocabulary.Builder vocabulary = runtimeSchemaVocabulary();
         vocabulary.add(RelationRules.define(InstanceModel.SERVER, ServerModel.NAME)
             .label(FieldLabels.labelFor(InstanceModel.SERVER_ID)));
         return vocabulary.build();
+    }
+
+    /**
+     * The schema's variables, its Status lowered onto each instance's runtime row (ApplicationReleases.runtimeMatches),
+     * so a Status filter keeps exactly the rows whose drawn Status cell ({@link #runtimeReads}) says it.
+     */
+    private static RuleVocabulary.@NonNull Builder runtimeSchemaVocabulary() {
+        RuleVocabulary.Builder vocabulary = RuleVocabulary.builder();
+        for (VariableDefinition definition : SchemaVocabulary.of(Models.get(InstanceModel.class)).definitions()) {
+            vocabulary.add(InstanceModel.STATUS.getName().equals(definition.key())
+                ? definition.lowered(ApplicationReleases::runtimeMatches) : definition);
+        }
+        return vocabulary;
+    }
+
+    /**
+     * Both twins' row reads: the Status cell is each instance's runtime status, an application's that of the release
+     * serving it, read once per page; a lone row reads its own.
+     *
+     * AIDEV-NOTE: the application's own status column is never kept in step with its release (a mirror would make
+     * every live-workload sweep treat the application as a guest of its own), so the list draws and filters the
+     * runtime row's instead, both through ApplicationReleases.
+     */
+    private static @NonNull ResourceReads<Row> runtimeReads(@NonNull Supplier<RuleVocabulary> vocabulary) {
+        return ResourceReads.rows()
+            .mapCells((row, column) -> drawsStatus(column)
+                ? ApplicationReleases.runtimeRowOf(row).get(InstanceModel.STATUS) : null)
+            .pageBatch((rows, access) -> {
+                Map<Integer, Row> runtimes = ApplicationReleases.runtimeRows(rows);
+                return (row, column) -> drawsStatus(column)
+                    ? runtimes.get((Integer) row.get(InstanceModel.ID)).get(InstanceModel.STATUS) : null;
+            })
+            .source(source -> source.vocabularyFrom(vocabulary));
+    }
+
+    /** @return whether the column draws the Status, which the runtime row answers */
+    private static boolean drawsStatus(@NonNull ColumnSpec column) {
+        return column.source() == InstanceModel.STATUS;
     }
 
     /**

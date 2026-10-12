@@ -603,9 +603,31 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .contains("data-cms-record-health=\"ok\"")
                 .doesNotContain("It is not running, so it uses none.");
 
+            // 2b. The Instances list draws and filters the release's status: the app is among the running ones, read
+            //     as Running there, and no longer among the never-started.
+            String running = adminGet("/admin/instances?filter.status=running").body();
+            String drawn = null;
+            for (String part : running.split("<pl-table-row")) {
+                int end = part.indexOf("</pl-table-row>");
+                if (end >= 0 && part.substring(0, end).contains("app-journey-released")) {
+                    drawn = part.substring(0, end);
+                }
+            }
+            assertThat(drawn).as("step 2b: Status 'Running' keeps the live app, its row drawing it as running")
+                .isNotNull().contains("Running").doesNotContain("Not started yet");
+            assertThat(adminGet("/admin/instances?filter.status=created").body())
+                .as("step 2b: Status 'Not started yet' leaves it out").doesNotContain("app-journey-released");
+            // 2c. Its Metrics and Console tabs are the release's: live, never "not running".
+            assertThat(adminGet("/admin/instances/" + id + "/page/stats").body())
+                .as("step 2c: the Metrics tab follows the running release").contains("<hh-instance-stats");
+            assertThat(adminGet("/admin/instances/" + id + "/page/console").body())
+                .as("step 2c: the Console tab attaches to the running release").contains("<pl-terminal");
+
             // 3. The release stopped: so is the app.
             status(release[0], InstanceModel.STATUS_STOPPED);
             assertThat(headlineOf(id)).as("step 3: a stopped release is a stopped app").isEqualTo("not_running");
+            assertThat(adminGet("/admin/instances?filter.status=stopped").body())
+                .as("step 3: Status 'Stopped' now keeps it").contains("app-journey-released");
         } finally {
             if (release[0] != 0) {
                 // A generated row is the application's to remove: its own scope, as the release engine deletes.
