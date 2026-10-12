@@ -51,6 +51,12 @@
             "service": "hohenheim",
             "deploy": "tools/deploy-host.sh {target} {jar}"
         },
+        "daystrom": {
+            "ssh": "root@10.47.1.99",
+            "jar": "/opt/hohenheim/hohenheim-server.jar",
+            "service": "hohenheim",
+            "deploy": "tools/deploy-host.sh {target} {jar}"
+        },
         "kuifje": {
             "ssh": "debian@137.74.171.228",
             "jar": "/opt/hohenheim/hohenheim-server.jar",
