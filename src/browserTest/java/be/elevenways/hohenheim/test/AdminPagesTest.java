@@ -175,16 +175,19 @@ class AdminPagesTest extends HohenheimTestBase {
         prologue.fill("9");
         var threshold = page.locator("[data-path='blocking.domain_miss_threshold'] input");
         threshold.fill("7");
-        page.click(neverBan + " .pl-select-field");
+        // A free-entry chip input offers nothing to pick, so each Enter takes its chip and closes the popup: the
+        // operator opens it again per entry, from the keyboard, since a press on the field's middle can land on a
+        // chip's remove button once it holds chips.
+        String field = neverBan + " .pl-select-field";
         String chipInput = "he-bottom .pl-select-popup[data-open] .pl-select-search input";
         for (String entry : new String[] {"203.0.113.7", "198.51.100.0/24", "remove.example"}) {
+            page.locator(field).press("ArrowDown");
             page.locator(chipInput).pressSequentially(entry);
             page.locator(chipInput).press("Enter");
             waitForReactiveIdle();
         }
         String chips = neverBan + " pl-select-chip .chip";
         assertThat(page.locator(chips).count()).as("each Enter took one chip").isEqualTo(3);
-        page.keyboard().press("Escape");
         page.click(neverBan + " pl-select-chip .chip[data-value='remove.example'] button");
         waitForReactiveIdle();
         assertThat(page.locator(chips).count()).as("the removed chip is gone").isEqualTo(2);
