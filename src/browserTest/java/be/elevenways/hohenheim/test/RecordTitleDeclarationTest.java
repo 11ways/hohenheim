@@ -1,96 +1,28 @@
 package be.elevenways.hohenheim.test;
 
-import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.AccessListModel;
 import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.DnsZoneModel;
-import be.elevenways.zenit.cms.common.panel.Panel;
-import be.elevenways.zenit.cms.common.panel.PanelEntry;
-import be.elevenways.zenit.cms.common.panel.PanelRegistry;
-import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.common.orm.datasource.Row;
-import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Every record page of both panels is headed by something a human wrote down, never by
- * the class name the framework falls back to.
+ * The record pages the finding named are headed by something a human wrote down, never by the class name the
+ * framework falls back to.
  *
  * AIDEV-NOTE: the fallback this guards against is {@code Model.getDisplayTitle}'s last
  * resort, {@code getModelName() + " #" + pk} -- which is why the reported symptom was
- * literally "DnsZone #1" on a page whose own tabs said "starfleet.life". It is invisible
- * to every other test: the page renders, returns 200, and simply says the wrong thing.
- * The walk is driven off the PANELS, so a resource added tomorrow is covered without
- * anyone extending a list here.
+ * literally "DnsZone #1" on a page whose own tabs said "starfleet.life". That every resource of every panel CAN title
+ * its records is no longer walked here: zenit-cms's panel walk (FieldLabelAudit, RecordTitleSources) refuses an
+ * untitled resource and a title mapping that answers null in every test lane.
  */
 class RecordTitleDeclarationTest extends HohenheimTestBase {
-
-    /**
-     * Peers whose records legitimately have no title of their own AND no relation to
-     * borrow one from.
-     *
-     * AIDEV-NOTE: an allowlist, kept empty by intent -- every entry is a record page an
-     * operator can still reach and read a class name on. It exists so the walk can stay
-     * exhaustive rather than being narrowed to "the resources we already fixed".
-     */
-    private static final List<String> WITHOUT_A_TITLE = List.of();
-
-    /**
-     * Step 1-3: every model-backed resource of both panels can title one of its records,
-     * either from its schema's display fields or from its own override.
-     */
-    @Test
-    void everyResourceCanTitleItsOwnRecords() throws Exception {
-        List<PanelResource<?>> resources = new ArrayList<>();
-        for (String slug : List.of("admin", HohenheimSlugs.MANAGE)) {
-            Panel panel = PanelRegistry.getBySlug(slug);
-            assertThat(panel).as("step 1: the '" + slug + "' panel is registered").isNotNull();
-            for (PanelEntry entry : panel.entries()) {
-                if (entry instanceof PanelResource<?> resource) {
-                    resources.add(resource);
-                }
-            }
-        }
-        assertThat(resources).as("step 1: both panels expose their resources")
-            .hasSizeGreaterThan(30);
-
-        List<String> untitled = new ArrayList<>();
-        int walked = 0;
-        for (PanelResource<?> resource : resources) {
-            if (resource.subject().modelId() == null || WITHOUT_A_TITLE.contains(resource.slug())) {
-                // A model-independent resource titles its own rows through recordTitle,
-                // which has no schema to read and is checked by its own tests.
-                continue;
-            }
-            Model model = resource.model();
-            assertThat(model).as("step 2: %s resolves its declared model", resource.slug()).isNotNull();
-            walked++;
-            boolean declares = !model.requireSchema().getDisplayFields().isEmpty()
-                || resource.reads().titleMapping() != null;
-            if (!declares) {
-                untitled.add(resource.slug() + " -> " + model.getModelName()
-                    + " (no display fields, no declared title mapping)");
-            }
-        }
-
-        // 2. The walk cannot be allowed to empty itself: a filter that skipped everything
-        //    would report green about nothing at all.
-        assertThat(walked).as("step 2: model-backed resources actually walked")
-            .isGreaterThan(25);
-
-        // 3. And the finding itself.
-        assertThat(untitled)
-            .as("step 3: every record page is headed by a value, not by a class name")
-            .isEmpty();
-    }
 
     /**
      * Step 1-3: the three record pages the finding named say what the record IS -- the

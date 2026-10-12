@@ -320,6 +320,30 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
             .doesNotContain("data-cms-page-action-inline");
     }
 
+    /**
+     * On a phone the Devices tab's table scrolls inside the framework's scroll area instead of being clipped at the
+     * screen's edge, so every column stays reachable.
+     */
+    @Test
+    void theDevicesTableScrollsOnAPhoneInsteadOfClippingItsColumns() {
+        int instanceId = deviceCapableInstance("devsurf-phone");
+        new InstanceDevices().attachDisk(instanceId, NAME_PREFIX + "phone-data-disk", 20);
+        new InstanceDevices().attachCdrom(instanceId, NAME_PREFIX + "phone-cd", "debian-13-netinst-amd64.iso");
+        String scroller = "pl-scroll-area.cms-table-scroll";
+
+        // 1. On a phone the devices table sits in the framework's scroll area.
+        page.setViewportSize(390, 844);
+        navigateToApp("/admin/instances/" + instanceId + "/page/devices");
+        waitForHydration();
+        assertCount(scroller + " pl-table", 1, "step 1: the devices table sits in the scroll area");
+
+        // 2. It is a real scrollport: the table is wider than the phone, and the box scrolls rather than clips.
+        assertThat((Boolean) page.locator(scroller + " > .viewport")
+                .evaluate("el => el.scrollWidth > el.clientWidth + 1"))
+            .as("step 2: the table overflows the scrollport that holds it").isTrue();
+        page.setViewportSize(1280, 900);
+    }
+
     /** @return the Devices tab's rows by device name, each its cells' text by column heading */
     private static Map<String, Map<String, String>> deviceTable(String html) {
         List<String> heads = texts(html, "pl-table-head");

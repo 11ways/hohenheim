@@ -44,7 +44,10 @@
     {% /if %}
 
     {% if devices %}
-    <pl-table>
+    {#- The generated list's scrollport (plumage's pl-scroll-area), so a phone scrolls the columns instead of
+        clipping them at the screen's edge. -#}
+    <pl-scroll-area class="cms-table-scroll">
+    <pl-table class="cms-resource-list-table">
         <pl-table-header><pl-table-row>
             <pl-table-head>{{ t("name", scope: "hohenheim_field") }}</pl-table-head>
             <pl-table-head>{{ t("type", scope: "instance_device") }}</pl-table-head>
@@ -60,6 +63,7 @@
             {% /each %}
         </pl-table-body>
     </pl-table>
+    </pl-scroll-area>
     {% else %}
     <pl-empty-state icon="hard-drive">
         <pl-empty-state-title>{{ t("empty", scope: "instance_device") }}</pl-empty-state-title>
