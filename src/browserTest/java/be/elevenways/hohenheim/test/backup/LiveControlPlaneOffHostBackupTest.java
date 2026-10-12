@@ -84,7 +84,7 @@ class LiveControlPlaneOffHostBackupTest {
         new MigrationRunner(datasource).migrate().requireSuccess();
         previousDefault = Datasources.getDefault();
         previousBackupTarget = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
-        Datasources.register(Datasources.DEFAULT, datasource);
+        Datasources.replace(Datasources.DEFAULT, datasource);
         controlPlane = datasource;
 
         // A per-run remote directory, so a crashed run can never make a later one pass on
@@ -149,7 +149,7 @@ class LiveControlPlaneOffHostBackupTest {
                 datasource.close();
             }
             if (previousDefault != null) {
-                Datasources.register(Datasources.DEFAULT, previousDefault);
+                Datasources.replace(Datasources.DEFAULT, previousDefault);
             } else {
                 Datasources.unregister(Datasources.DEFAULT);
             }
@@ -276,7 +276,7 @@ class LiveControlPlaneOffHostBackupTest {
         // The restored database IS the controller now (its identity row came back with it),
         // and it stays open until tearDown has cleaned the remote through it.
         SqliteDatasource restored = new SqliteDatasource("jdbc:sqlite:" + dbFile.toAbsolutePath());
-        Datasources.register(Datasources.DEFAULT, restored);
+        Datasources.replace(Datasources.DEFAULT, restored);
         controlPlane = restored;
         Db.run(restored, () -> {
             KeyringGuard.runPerRegisteredModels();

@@ -99,7 +99,7 @@ public final class HohenheimTestRuntime {
             return;
         }
         if (HohenheimDatabase.datasource() != null) {
-            Datasources.register(Datasources.DEFAULT, HohenheimDatabase.datasource());
+            Datasources.replace(Datasources.DEFAULT, HohenheimDatabase.datasource());
             return;
         }
 

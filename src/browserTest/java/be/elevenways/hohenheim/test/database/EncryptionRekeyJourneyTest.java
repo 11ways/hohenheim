@@ -56,7 +56,7 @@ class EncryptionRekeyJourneyTest {
         SqliteDatasource datasource = new SqliteDatasource(
             "jdbc:sqlite:" + workspace.resolve("hohenheim.db").toAbsolutePath());
         new MigrationRunner(datasource).migrate().requireSuccess();
-        Datasources.register(Datasources.DEFAULT, datasource);
+        Datasources.replace(Datasources.DEFAULT, datasource);
 
         try {
             String firstKey = keyring.activeKeyId();

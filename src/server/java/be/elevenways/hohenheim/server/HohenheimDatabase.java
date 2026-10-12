@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.server.ServerZenitRuntime;
@@ -76,6 +77,11 @@ public class HohenheimDatabase {
         // Make this the framework's default datasource so model singletons resolve it. Done here
         // (not just at boot) so test classes that re-init with a fresh DB stay in sync. The
         // framework resolves the SAME inputs again, so what it opens is what was checked.
+        // AIDEV-NOTE: a re-init supersedes only the datasource THIS class opened before: the default registry
+        // refuses any other binding of the name, so a datasource someone else bound fails the boot loudly.
+        if (datasource != null) {
+            Datasources.unregister(Datasources.DEFAULT, datasource);
+        }
         datasource = ServerZenitRuntime.registerDefaultDatasource(fallback);
         return datasource;
     }

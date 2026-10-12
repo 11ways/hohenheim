@@ -104,7 +104,7 @@ public final class TestDatabases {
      *
      * AIDEV-NOTE: this exists to kill a copy-pasted fixture. 82 classes hand-rolled
      * "temp file -> new SqliteDatasource -> new MigrationRunner(ds).migrate() ->
-     * Datasources.register(DEFAULT, ds)", which bypasses the template entirely (and made
+     * Datasources.replace(DEFAULT, ds)", which bypasses the template entirely (and made
      * ensureDatasource early-return, so nothing downstream could rescue it): 45 full
      * migration sets still ran in the default lane at ~4.3s each. Going through
      * freshDatabase copies the migrated template instead, and also remints the controller

@@ -73,7 +73,7 @@ class EncryptedSecretsAtRestTest {
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        Datasources.replace(Datasources.DEFAULT, datasource);
         assertThat(scalar(datasource, "SELECT COUNT(*) AS c FROM sqlite_master"
                 + " WHERE type = 'table' AND name = 'zenit_encryption_keyring'"))
             .as("step 1: zenit's M001 marker table is created by a hohenheim migrate,"

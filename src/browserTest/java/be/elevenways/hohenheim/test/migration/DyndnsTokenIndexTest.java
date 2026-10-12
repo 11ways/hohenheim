@@ -32,7 +32,7 @@ class DyndnsTokenIndexTest {
         // daemon resource name) resolves through the CURRENT datasource, and a Db scope
         // is thread-local -- so a second, unregistered database would hand any
         // thread-hopping work a different controller's token than the records came from.
-        Datasources.register(Datasources.DEFAULT, datasource);
+        Datasources.replace(Datasources.DEFAULT, datasource);
         List<Row> stored = datasource.rawQuery(
             "SELECT name AS n, sql AS def FROM sqlite_master"
             + " WHERE type = ? AND tbl_name = ? AND sql LIKE ?",
