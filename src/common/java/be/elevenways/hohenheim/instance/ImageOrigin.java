@@ -69,6 +69,17 @@ public enum ImageOrigin {
         return this.vmOnly;
     }
 
+    /**
+     * Whether a workload of this origin is created from an image, so its records, specs and backups name one; an
+     * install-media VM is created empty and names none.
+     */
+    public boolean carriesImage() {
+        return switch (this) {
+            case CATALOG, PREPARED -> true;
+            case INSTALL_MEDIA -> false;
+        };
+    }
+
     /** @return CATALOG for null/blank; throws by name for an unknown key */
     public static @NonNull ImageOrigin fromKey(@Nullable String key) {
         if (key == null || key.isBlank()) {

@@ -6492,10 +6492,17 @@
     "text": "Nieuwe clientsleutel gegenereerd voor {$name}. Installeer de publieke sleutel die op het record staat.",
     "scope": "server"
   },
-  "trust_notice_body": {
-    "text": "Een host toevoegen geeft Hohenheim controle over zijn Docker-daemon, wat gelijkstaat aan root op die machine: het kan elke container starten, elk pad lezen dat een container koppelt, en het ontvangt elke inloggegeven die Hohenheim daar in werklasten injecteert. Voeg alleen machines toe die van jou zijn. Installeer na het opslaan de getoonde publieke sleutel op de host, scan de hostsleutel en bevestig de vingerafdruk buiten dit kanaal om.",
-    "scope": "server"
-  },
+  "trust_notice_body": [
+    {
+      "text": "Een host toevoegen geeft Hohenheim controle over zijn Docker-daemon, wat gelijkstaat aan root op die machine: het kan elke container starten, elk pad lezen dat een container koppelt, en het ontvangt elke inloggegeven die Hohenheim daar in werklasten injecteert. Voeg alleen machines toe die van jou zijn. Installeer na het opslaan de getoonde publieke sleutel op de host, scan de hostsleutel en bevestig de vingerafdruk buiten dit kanaal om.",
+      "scope": "server"
+    },
+    {
+      "scope": "server",
+      "runtime": "incus",
+      "text": "Een host toevoegen geeft Hohenheim controle over zijn Incus-daemon, wat gelijkstaat aan root op die machine: het kan elke container of VM starten en alles lezen wat ze koppelen. Voeg alleen machines toe die van jou zijn. Scan na het opslaan het servercertificaat, bevestig de vingerafdruk tegen incus info op de host zelf, en schrijf het clientcertificaat in (vertrouwenstoken of incus config trust)."
+    }
+  ],
   "trust_notice": {
     "text": "Wat je toekent",
     "scope": "hohenheim_field"
@@ -8724,10 +8731,6 @@
       "scope": "help"
     }
   ],
-  "trust_notice_body_incus": {
-    "text": "Een host toevoegen geeft Hohenheim controle over zijn Incus-daemon, wat gelijkstaat aan root op die machine: het kan elke container of VM starten en alles lezen wat ze koppelen. Voeg alleen machines toe die van jou zijn. Scan na het opslaan het servercertificaat, bevestig de vingerafdruk tegen incus info op de host zelf, en schrijf het clientcertificaat in (vertrouwenstoken of incus config trust).",
-    "scope": "server"
-  },
   "incus_url_format": {
     "text": "De Incus-URL moet https://host[:poort] of unix://[pad] zijn.",
     "scope": "violations"
@@ -8741,7 +8744,7 @@
     "scope": "violations"
   },
   "host_runtime_mismatch": {
-    "text": "Dit instantietype heeft een {$required}-host nodig, maar '{$name}' declareert de {$runtime}-runtime.",
+    "text": "Dit type draait alleen op {$required}-hosts, maar '{$name}' draait {$runtime}.",
     "scope": "violations"
   },
   "system_container": [
@@ -9370,6 +9373,10 @@
   },
   "install_media_not_on_host": {
     "text": "{$host} heeft geen installatiemedia met de naam {$media}",
+    "scope": "violations"
+  },
+  "restore_install_media_missing": {
+    "text": "{$host} heeft de installatiemedia {$media} niet die de geback-upte machine in zijn station heeft, en terugzetten daar heeft ze nodig. Koppel de installatiemedia los van de machine en maak opnieuw een back-up, of kies de host die ze heeft.",
     "scope": "violations"
   },
   "install_media_needs_empty_vm": {
@@ -11619,7 +11626,7 @@
     "scope": "violations"
   },
   "host_no_volume_quota": {
-    "text": "Host '{$name}' kan geen volumequota afdwingen (backend: {$backend}) en kan dus geen {$kind} draaien. Koppel een btrfs-bestandssysteem aan de volumemap of kies een andere host.",
+    "text": "Host '{$name}' kan geen volumequota afdwingen (backend: {$backend}), dus {$kind} kan er niet op draaien. Koppel een btrfs-bestandssysteem aan de volumemap of kies een andere host.",
     "scope": "violations"
   },
   "volume_backend_unimplemented": {
@@ -12025,7 +12032,7 @@
     "scope": "violations"
   },
   "runtime_image_no_variant": {
-    "text": "Runtime-image '{$name}' heeft geen {$runtime}-variant en kan dus niet op een {$runtime}-host draaien",
+    "text": "Runtime-image '{$name}' heeft geen {$runtime}-variant en kan dus niet op {$runtime}-hosts draaien",
     "scope": "violations"
   },
   "runtime_image_build_failed": {
@@ -15139,10 +15146,17 @@
     "text": "Hoe bezoekers het veilig bereiken.",
     "scope": "put_online"
   },
-  "run_app": {
-    "text": "De app aanmaken",
-    "scope": "put_online"
-  },
+  "run_app": [
+    {
+      "text": "De app aanmaken",
+      "scope": "put_online"
+    },
+    {
+      "scope": "put_online",
+      "what": "machine",
+      "text": "De machine aanmaken"
+    }
+  ],
   "run_install": {
     "text": "Installeren",
     "scope": "put_online"

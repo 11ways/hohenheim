@@ -229,7 +229,7 @@ public final class VmKind implements InstanceKindHandler {
      */
     @Override
     public boolean allowsBlankImage(@NonNull Map<String, Object> settings) {
-        return ImageOrigin.of(settings) == ImageOrigin.INSTALL_MEDIA;
+        return !ImageOrigin.of(settings).carriesImage();
     }
 
     /**

@@ -87,8 +87,6 @@ public final class ServerParts {
     static final StringField INCUS_TRUST_TOKEN = StringField.builder("incus_trust_token")
         .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("incus_trust_token"))
         .help(HohenheimMicrocopy.HELP.of("incus_trust_token")).build();
-    static final StringField TRUST_NOTICE = StringField.builder("trust_notice")
-        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("trust_notice")).visibleIn(EditView.CREATE).build();
     static final List<String> LOCAL_IMMUTABLE = List.of(ServerModel.NAME.getName(), ServerModel.RUNTIME.getName(),
         ServerModel.SSH_TARGET.getName(), ServerModel.INCUS_URL.getName());
     public static final Operation<Row, Void, Integer> DELETE = Operation.declare(HohenheimIds.id("delete_server"))
@@ -145,17 +143,23 @@ public final class ServerParts {
     }
 
     static FormSpec formSpec() {
-        return FormSpec.builder().createTitle(HohenheimMicrocopy.SERVER.of("create_title"))
+        FormSpec.Builder form = FormSpec.builder().createTitle(HohenheimMicrocopy.SERVER.of("create_title"))
             .add(ServerModel.NAME).add(FieldFormEntryRegistry.INSTANCE.deriveEntry(ServerModel.RUNTIME))
             .add(ServerModel.SSH_TARGET).add(ServerModel.INCUS_URL).add(INCUS_TRUST_TOKEN)
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(ServerModel.POSTURE))
-            .add(ServerModel.PUBLIC_IPV4).add(ServerModel.PUBLIC_IPV6)
-            .add(Computed.of(TRUST_NOTICE, values -> CmsSupport.resolvedTextOrDefault(HohenheimMicrocopy.SERVER.of(
-                ServerModel.RUNTIME_INCUS.equals(values.get("runtime")) ? "trust_notice_body_incus"
-                    : "trust_notice_body")))
-                .dependsOn("runtime").build())
-            .section(FormSection.advanced(ServerModel.PUBLIC_IPV4.getName(),
-                    ServerModel.PUBLIC_IPV6.getName())).build();
+            .add(ServerModel.PUBLIC_IPV4).add(ServerModel.PUBLIC_IPV6);
+        // What enrolling grants depends on the runtime chosen. One notice per runtime, each shown only under its own,
+        // because a Computed is resolved once on the server and never again when the runtime changes in the browser.
+        for (String runtime : ServerModel.RUNTIME.getValues().keySet()) {
+            StringField notice = StringField.builder("trust_notice_" + runtime)
+                .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("trust_notice")).visibleIn(EditView.CREATE).build();
+            form.add(Computed.of(notice, values -> CmsSupport.resolvedTextOrDefault(
+                    HohenheimMicrocopy.SERVER.of("trust_notice_body").withFilter("runtime", runtime)))
+                    .dependsOn(ServerModel.RUNTIME.getName()).build())
+                .showWhen(notice.getName(), ServerModel.RUNTIME.getName(), runtime);
+        }
+        return form.section(FormSection.advanced(ServerModel.PUBLIC_IPV4.getName(),
+                ServerModel.PUBLIC_IPV6.getName())).build();
     }
 
     /**

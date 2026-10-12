@@ -34,8 +34,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Operator-published install media (ISO volumes) on one Incus host: the storage half
@@ -169,12 +172,30 @@ public final class InstallMedia {
      * @throws Violations {@code install_media_not_on_host}
      */
     public void requireOn(int serverId, @NonNull String name) {
-        boolean held = this.optionsOn(serverId).stream().anyMatch(option -> name.equals(option.value()));
-        if (!held) {
+        if (!this.absentOn(serverId, List.of(name)).isEmpty()) {
             throw Violations.ofField(InstanceOperations.INSTALL_MEDIA.getName(), name,
                 HohenheimMicrocopy.VIOLATIONS.of("install_media_not_on_host").withArg("media", name)
                     .withArg("host", ServerModel.labelOf(serverId)));
         }
+    }
+
+    /**
+     * The media of these names the host does not hold; a host that cannot be read holds none.
+     *
+     * @return the absent names, in the order given
+     */
+    public @NonNull List<String> absentOn(int serverId, @NonNull Collection<String> names) {
+        Set<String> held = new HashSet<>();
+        for (FieldOption<String> option : this.optionsOn(serverId)) {
+            held.add(option.value());
+        }
+        List<String> absent = new ArrayList<>();
+        for (String name : names) {
+            if (!held.contains(name)) {
+                absent.add(name);
+            }
+        }
+        return absent;
     }
 
     private static @NonNull List<FieldOption<String>> options(@NonNull List<Medium> media, @Nullable String host) {

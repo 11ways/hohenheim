@@ -1,9 +1,11 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
+import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
@@ -19,6 +21,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
@@ -48,6 +51,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -364,6 +368,86 @@ class InstanceBackupsTest {
                 Models.get(ServerModel.class).delete(spareId);
             }
         });
+    }
+
+    /**
+     * A machine backed up with install media in its drive imports only where that ISO exists, so the backup names its
+     * media and a host that lacks them is refused by name, in the pick and in the write; without the media the same
+     * host takes the restore.
+     */
+    @Test
+    void aBackupWithInstallMediaRestoresOnlyWhereTheMediaAre() throws Exception {
+        try (FakeIncusSocket holding = FakeIncusSocket.start(); FakeIncusSocket lacking = FakeIncusSocket.start()) {
+            holding.daemon.customVolumes.put("alpine.iso", Map.of("name", "alpine.iso", "content_type", "iso"));
+            Db.run(datasource, () -> {
+                InstanceService service = new InstanceService();
+                InstanceBackups backups = new InstanceBackups();
+                int instanceId = instanceRecord("backup-with-media", hostId);
+                service.deploy(instanceId);
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
+                Row drive = Models.get(InstanceDeviceModel.class).createEmptyRow();
+                drive.set(InstanceDeviceModel.INSTANCE_ID, instanceId);
+                drive.set(InstanceDeviceModel.TYPE, InstanceDeviceModel.TYPE_CDROM);
+                drive.set(InstanceDeviceModel.NAME, "cdrom");
+                drive.set(InstanceDeviceModel.SOURCE_MEDIA, "alpine.iso");
+                Models.get(InstanceDeviceModel.class).save(drive);
+                int holdingId = HostFixtures.admittedIncusHost("media-holding-host");
+                int lackingId = HostFixtures.admittedIncusHost("media-lacking-host");
+                Models.get(ServerModel.class).find().where(ServerModel.ID.eq(holdingId))
+                    .assign(ServerModel.INCUS_URL, holding.url()).updateAll();
+                Models.get(ServerModel.class).find().where(ServerModel.ID.eq(lackingId))
+                    .assign(ServerModel.INCUS_URL, lacking.url()).updateAll();
+                try {
+                    // 1. The backup names the ISO in the machine's drive on its row.
+                    int withMedia = backups.backupNow(instanceId, targetId, target);
+                    Row backup = Models.get(InstanceBackupModel.class).findById(withMedia);
+                    assertThat(RawValues.map((Object) backup.get(InstanceBackupModel.SUMMARY)).get("install_media"))
+                        .as("step 1: the backup names its install media").isEqualTo(List.of("alpine.iso"));
+
+                    // 2. The restore pick offers the host holding the ISO and refuses the other by name, saying what
+                    //    to do about it.
+                    Map<Integer, InstanceBackups.Destination> picks = destinationsById(backup);
+                    assertThat(picks.get(holdingId).refusal()).as("step 2: the host holding the ISO is offered")
+                        .isNull();
+                    assertThat(picks.get(lackingId).refusal()).as("step 2: the host without it is refused")
+                        .isNotNull().extracting(Microcopy::key).isEqualTo("restore_install_media_missing");
+                    assertThat(ApiSupport.shippedText(picks.get(lackingId).refusal()))
+                        .as("step 2: naming the ISO and the way out")
+                        .contains("alpine.iso").contains("media-lacking-host").contains("Detach");
+
+                    // 3. The write refuses the same host with the same words, and creates nothing.
+                    long instancesBefore = Models.get(InstanceModel.class).find().count();
+                    assertThat(violationKeys(catchThrowable(() -> backups.restoreToNew(withMedia, "media-copy",
+                            lackingId))))
+                        .as("step 3: the restore onto the host without the ISO is refused by name")
+                        .isEqualTo("restore_install_media_missing ");
+                    assertThat(Models.get(InstanceModel.class).find().count())
+                        .as("step 3: no instance record was created").isEqualTo(instancesBefore);
+
+                    // 4. With the ISO out of the drive, a new backup names no media and that host takes it.
+                    Models.get(InstanceDeviceModel.class).delete(drive.get(InstanceDeviceModel.ID));
+                    Row without = Models.get(InstanceBackupModel.class)
+                        .findById(backups.backupNow(instanceId, targetId, target));
+                    assertThat(RawValues.map((Object) without.get(InstanceBackupModel.SUMMARY)).get("install_media"))
+                        .as("step 4: a backup without media names none").isEqualTo(List.of());
+                    assertThat(destinationsById(without).get(lackingId).refusal())
+                        .as("step 4: so the host without the ISO is offered").isNull();
+                } finally {
+                    Models.get(InstanceDeviceModel.class).find().where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
+                        .all().forEach(row -> Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID)));
+                    Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
+                    service.destroy(instanceId);
+                    Models.get(ServerModel.class).delete(holdingId);
+                    Models.get(ServerModel.class).delete(lackingId);
+                }
+            });
+        }
+    }
+
+    private static Map<Integer, InstanceBackups.Destination> destinationsById(Row backup) {
+        Map<Integer, InstanceBackups.Destination> byId = new HashMap<>();
+        InstanceBackups.destinationsFor(backup).forEach(destination -> byId.put(destination.serverId(), destination));
+        return byId;
     }
 
     private static OperationRequest<Row, ?, ?> restoreRequest(Row backup) {

@@ -444,12 +444,12 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
 
     /** The declared reason for a kind whose only host rule is the runtime. */
     private static final String RUNTIME_ONLY_REASON =
-        "No host runs a runtime this kind supports (docker)."
+        "No host runs a runtime this kind supports (Docker)."
             + " Enrol one under Hosts first.";
 
     /** The declared reason for a kind that also demands a quota-capable data root. */
     private static final String QUOTA_REASON =
-        "No host both runs a runtime this kind supports (docker, incus) and has a data"
+        "No host both runs a runtime this kind supports (Docker, Incus) and has a data"
             + " root that can enforce quotas. Under Hosts, mount a host's volumes"
             + " directory on btrfs, then check that host again.";
 

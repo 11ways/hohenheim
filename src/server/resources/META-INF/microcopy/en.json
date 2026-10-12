@@ -6492,10 +6492,17 @@
     "text": "New client key generated for {$name}. Install the public key shown on the record.",
     "scope": "server"
   },
-  "trust_notice_body": {
-    "text": "Enrolling a host gives Hohenheim control of its Docker daemon, which is equivalent to root on that machine: it can start any container, read any path a container mounts, and it receives every credential Hohenheim injects into workloads there. Only enroll machines you own. After saving, install the shown public key on the host, scan its host key, and confirm the fingerprint out of band.",
-    "scope": "server"
-  },
+  "trust_notice_body": [
+    {
+      "text": "Enrolling a host gives Hohenheim control of its Docker daemon, which is equivalent to root on that machine: it can start any container, read any path a container mounts, and it receives every credential Hohenheim injects into workloads there. Only enroll machines you own. After saving, install the shown public key on the host, scan its host key, and confirm the fingerprint out of band.",
+      "scope": "server"
+    },
+    {
+      "scope": "server",
+      "runtime": "incus",
+      "text": "Enrolling a host gives Hohenheim control of its Incus daemon, which is equivalent to root on that machine: it can start any container or VM and read anything they mount. Only enroll machines you own. After saving, scan the server certificate, confirm its fingerprint against incus info on the host itself, and enroll the client certificate (trust token or incus config trust)."
+    }
+  ],
   "trust_notice": {
     "text": "What you are granting",
     "scope": "hohenheim_field"
@@ -8724,10 +8731,6 @@
       "scope": "help"
     }
   ],
-  "trust_notice_body_incus": {
-    "text": "Enrolling a host gives Hohenheim control of its Incus daemon, which is equivalent to root on that machine: it can start any container or VM and read anything they mount. Only enroll machines you own. After saving, scan the server certificate, confirm its fingerprint against incus info on the host itself, and enroll the client certificate (trust token or incus config trust).",
-    "scope": "server"
-  },
   "incus_url_format": {
     "text": "The Incus URL must be https://host[:port] or unix://[path].",
     "scope": "violations"
@@ -8741,7 +8744,7 @@
     "scope": "violations"
   },
   "host_runtime_mismatch": {
-    "text": "Instance kind needs a {$required} host, but '{$name}' declares the {$runtime} runtime.",
+    "text": "This kind runs only on {$required} hosts, but '{$name}' runs {$runtime}.",
     "scope": "violations"
   },
   "system_container": [
@@ -9370,6 +9373,10 @@
   },
   "install_media_not_on_host": {
     "text": "{$host} holds no install media named {$media}",
+    "scope": "violations"
+  },
+  "restore_install_media_missing": {
+    "text": "{$host} does not hold the install media {$media} that the backed-up machine has in its drive, and restoring it there needs them. Detach the install media from the machine and back it up again, or pick the host that holds them.",
     "scope": "violations"
   },
   "install_media_needs_empty_vm": {
@@ -11619,7 +11626,7 @@
     "scope": "violations"
   },
   "host_no_volume_quota": {
-    "text": "Host '{$name}' cannot enforce a volume quota (backend: {$backend}), so it cannot run a {$kind}. Mount a btrfs filesystem at the volume root, or pick another host.",
+    "text": "Host '{$name}' cannot enforce a volume quota (backend: {$backend}), so {$kind} cannot run on it. Mount a btrfs filesystem at the volume root, or pick another host.",
     "scope": "violations"
   },
   "volume_backend_unimplemented": {
@@ -12025,7 +12032,7 @@
     "scope": "violations"
   },
   "runtime_image_no_variant": {
-    "text": "Runtime image '{$name}' has no {$runtime} variant, so it cannot run on a {$runtime} host",
+    "text": "Runtime image '{$name}' has no {$runtime} variant, so it cannot run on {$runtime} hosts",
     "scope": "violations"
   },
   "runtime_image_build_failed": {
@@ -15139,10 +15146,17 @@
     "text": "How visitors reach it securely.",
     "scope": "put_online"
   },
-  "run_app": {
-    "text": "Create the app",
-    "scope": "put_online"
-  },
+  "run_app": [
+    {
+      "text": "Create the app",
+      "scope": "put_online"
+    },
+    {
+      "scope": "put_online",
+      "what": "machine",
+      "text": "Create the machine"
+    }
+  ],
   "run_install": {
     "text": "Install",
     "scope": "put_online"

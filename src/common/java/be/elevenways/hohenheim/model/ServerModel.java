@@ -26,11 +26,14 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import static be.elevenways.hohenheim.RawValues.trimmed;
 
@@ -938,6 +941,21 @@ public class ServerModel extends Model {
         Row row = Models.get(ServerModel.class).findById(serverId);
         Object name = row != null ? row.get(NAME) : null;
         return name != null ? String.valueOf(name) : "#" + serverId;
+    }
+
+    /** The name a message shows for a {@link #RUNTIME} token: its translated label, the token itself when unknown. */
+    public static @NonNull Microcopy runtimeLabel(@Nullable String runtime) {
+        EnumField.EnumValue value = runtime == null ? null : RUNTIME.getValues().get(runtime);
+        return value != null ? value.getLabel() : Microcopy.literal(String.valueOf(runtime));
+    }
+
+    /** The names a message shows for several {@link #RUNTIME} tokens, in token order: a list message argument. */
+    public static @NonNull List<Microcopy> runtimeLabels(@NonNull Collection<String> runtimes) {
+        List<Microcopy> labels = new ArrayList<>();
+        for (String runtime : new TreeSet<>(runtimes)) {
+            labels.add(runtimeLabel(runtime));
+        }
+        return labels;
     }
 
     /** The registry key a type-settings map stores for a server ({@code hohenheim:<id>}). */

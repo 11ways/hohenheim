@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.runtime.DeviceAttachSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -179,10 +180,22 @@ public final class InstanceDevices {
 
     /** @return whether the instance has install media in a drive (a cdrom row) */
     public static boolean hasInstallMedia(int instanceId) {
-        return Models.get(InstanceDeviceModel.class).find()
-            .where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
-            .where(InstanceDeviceModel.TYPE.eq(DeviceType.CDROM.token()))
-            .count() > 0;
+        return !installMediaOf(instanceId).isEmpty();
+    }
+
+    /** @return the install media (ISO volume names) in the instance's drives, in the order they were attached */
+    public static @NonNull List<String> installMediaOf(int instanceId) {
+        List<String> media = new ArrayList<>();
+        for (Row row : Models.get(InstanceDeviceModel.class).find()
+                .where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
+                .where(InstanceDeviceModel.TYPE.eq(DeviceType.CDROM.token()))
+                .orderBy(InstanceDeviceModel.ID, SortOrder.ASC).all()) {
+            String medium = row.get(InstanceDeviceModel.SOURCE_MEDIA);
+            if (medium != null && !medium.isBlank()) {
+                media.add(medium);
+            }
+        }
+        return media;
     }
 
     /**

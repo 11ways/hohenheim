@@ -121,14 +121,40 @@ class ServerOverviewTest extends HohenheimTestBase {
         assertThat(detail.body())
             .withFailMessage("the EDIT form still renders the 'trust_notice' pseudo-field"
                 + " -- consent copy belongs on the enrolment form only")
-            .doesNotContain("data-path=\"trust_notice\"");
+            .doesNotContain("data-path=\"trust_notice");
 
         HttpResponse<String> create = adminGet("/admin/servers/new");
         assertThat(create.statusCode()).as("the create form renders").isEqualTo(200);
         assertThat(create.body())
             .as("positive anchor: the CREATE form still states what enrolling grants,"
                 + " so the edit-side absence is the view split and not a deleted notice")
-            .contains("data-path=\"trust_notice\"");
+            .contains("data-path=\"trust_notice");
+    }
+
+    /**
+     * The notice speaks of the runtime being chosen: the Docker wording under Docker, and choosing Incus swaps in the
+     * Incus wording on the page itself. It used to be computed once on the server, so an Incus host read Docker.
+     */
+    @Test
+    void choosingIncusShowsTheIncusTrustNotice() {
+        navigateToApp("/admin/servers/new");
+        waitForHydration();
+        String docker = "[data-path='trust_notice_docker']";
+        String incus = "[data-path='trust_notice_incus']";
+
+        // 1. The form opens on Docker, the default runtime: its notice speaks of the Docker daemon.
+        page.waitForCondition(() -> page.locator(docker).isVisible());
+        assertThat(page.locator(docker).textContent()).as("step 1: the Docker wording").contains("Docker daemon");
+        assertThat(page.locator(incus).isVisible()).as("step 1: no Incus wording yet").isFalse();
+
+        // 2. Choosing Incus shows the Incus wording and hides the Docker one, without a round trip.
+        page.click("pl-select[name='runtime'] .pl-select-field");
+        page.waitForSelector("he-bottom .pl-select-popup[data-open] div[role='option'][data-value='incus']");
+        page.click("he-bottom .pl-select-popup[data-open] div[role='option'][data-value='incus']");
+        waitForReactiveIdle();
+        page.waitForCondition(() -> page.locator(incus).isVisible());
+        assertThat(page.locator(incus).textContent()).as("step 2: the Incus wording").contains("Incus daemon");
+        assertThat(page.locator(docker).isVisible()).as("step 2: the Docker wording is gone").isFalse();
     }
 
     /**

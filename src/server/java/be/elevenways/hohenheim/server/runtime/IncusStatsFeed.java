@@ -19,10 +19,14 @@ import java.util.Set;
  * An Incus workload's live readings, polled while somebody watches: memory, network and (for a container) CPU from
  * {@code /1.0/instances/<name>/state}, and a virtual machine's CPU from {@code /1.0/metrics}.
  *
- * AIDEV-NOTE: a VM's state reports {@code cpu.usage: -1} (measured on Incus 7.3); its CPU exists only as the guest
- * agent's per-CPU {@code incus_cpu_seconds_total} in the Prometheus metrics, which the daemon refreshes about every
- * 8 seconds (measured on nightstrom). The hub therefore keeps the last measured window's share until the counters move
- * again, and a VM whose metrics carry no CPU lines (no guest agent) reads as "no CPU reading", never a flat zero.
+ * AIDEV-NOTE: a VM's state reports {@code cpu.usage: -1} (measured on Incus 7.3); its CPU exists only as
+ * {@code incus_cpu_seconds_total} in the Prometheus metrics, which the daemon refreshes about every 8 seconds
+ * (measured on nightstrom). With the guest agent those are the guest's per-CPU modes, idle included, and busy is a
+ * share of their sum. WITHOUT the agent Incus 7.3 reports the QEMU process's host seconds as cpu 0's {@code system}
+ * mode with every other mode, idle included, at zero; their sum is then busy itself and read 100% for ever, so busy is
+ * measured against elapsed time on the cores {@code limits.cpu} gives the VM, timed from when the counter last MOVED
+ * (a cached counter read later must not stretch the window). The hub keeps the last measured window's share until the
+ * counters move again, and metrics with no CPU lines at all read as "no CPU reading", never a flat zero.
  *
  * @author Jelle De Loecker
  * @since  0.10.0
@@ -38,22 +42,25 @@ public final class IncusStatsFeed implements StatsFeed {
     private final @NonNull IncusClient incus;
     private final @NonNull String handle;
     private final @NonNull IncusWorkloadType type;
-    private final int containerCores;
+    private final int limitCores;
     private final long intervalMs;
     private final Object lock = new Object();
     private boolean closed;
     private long nextAt;
+    private double lastBusy = -1;
+    private long busyMovedAt;
 
     /**
-     * @param containerCores the CPUs a container's share is of; a VM's come from its metrics
-     * @param intervalMs     the time between two reads
+     * @param limitCores the CPUs the workload's share is of: a container's always, a VM's when no guest agent reports
+     *                   its own CPUs
+     * @param intervalMs the time between two reads
      */
     public IncusStatsFeed(@NonNull IncusClient incus, @NonNull String handle, @NonNull IncusWorkloadType type,
-                          int containerCores, long intervalMs) {
+                          int limitCores, long intervalMs) {
         this.incus = incus;
         this.handle = handle;
         this.type = type;
-        this.containerCores = Math.max(1, containerCores);
+        this.limitCores = Math.max(1, limitCores);
         this.intervalMs = intervalMs;
     }
 
@@ -116,7 +123,7 @@ public final class IncusStatsFeed implements StatsFeed {
         int cores;
         if (metrics == null) {
             long usage = number(RawValues.mapOrNull(state.get("cpu")), "usage");
-            cores = this.containerCores;
+            cores = this.limitCores;
             // The cgroup's nanoseconds against elapsed nanoseconds on every core the container may use.
             cpu = usage < 0 ? null : new StatsReading.CpuCounters(usage, at * 1_000_000d * cores);
         } else {
@@ -129,15 +136,28 @@ public final class IncusStatsFeed implements StatsFeed {
                 }
             }
             double busy = 0;
-            double total = 0;
+            double idle = 0;
             for (Map.Entry<String, Double> entry : byCpuAndMode.entrySet()) {
-                total += entry.getValue();
-                if (!entry.getKey().endsWith("/idle") && !entry.getKey().endsWith("/iowait")) {
+                if (entry.getKey().endsWith("/idle") || entry.getKey().endsWith("/iowait")) {
+                    idle += entry.getValue();
+                } else {
                     busy += entry.getValue();
                 }
             }
-            cores = Math.max(1, cpus.size());
-            cpu = byCpuAndMode.isEmpty() ? null : new StatsReading.CpuCounters(busy, total);
+            if (byCpuAndMode.isEmpty()) {
+                cores = Math.max(1, cpus.size());
+                cpu = null;
+            } else if (idle > 0) {
+                cores = cpus.size();
+                cpu = new StatsReading.CpuCounters(busy, busy + idle);
+            } else {
+                cores = this.limitCores;
+                if (busy != this.lastBusy) {
+                    this.lastBusy = busy;
+                    this.busyMovedAt = at;
+                }
+                cpu = new StatsReading.CpuCounters(busy, this.busyMovedAt / 1000d * cores);
+            }
         }
         return new StatsReading(at, cpu, cores, number(memory, "usage"), number(memory, "total"), rx, tx);
     }

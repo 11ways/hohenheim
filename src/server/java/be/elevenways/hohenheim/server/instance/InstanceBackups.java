@@ -455,15 +455,23 @@ public final class InstanceBackups {
     }
 
     /**
-     * Every host, each with the verdict {@link #restoreToNew} would give it for this backup's kind.
+     * Every host, each with the verdict {@link #restoreToNew} would give it for this backup's kind and install media.
      *
      * AIDEV-NOTE: the SAME call the restore's gate makes ({@link #destinationRefusal}), so the pick and the write
-     * cannot disagree; the kind comes from the row's non-sensitive manifest summary, the archive is not opened.
+     * cannot disagree; the kind and the media come from the row's non-sensitive manifest summary, the archive is not
+     * opened.
      */
     public static @NonNull List<Destination> destinationsFor(@NonNull Row backup) {
-        String kindId = RawValues.nonBlankString(RawValues.map((Object) backup.get(InstanceBackupModel.SUMMARY))
-            .get("kind"));
+        Map<String, Object> summary = RawValues.map((Object) backup.get(InstanceBackupModel.SUMMARY));
+        String kindId = RawValues.nonBlankString(summary.get("kind"));
         InstanceKindHandler kind = InstanceKinds.getHandler(kindId);
+        List<String> installMedia = new ArrayList<>();
+        for (Object medium : RawValues.list(summary.get("install_media"))) {
+            String name = RawValues.nonBlankString(medium);
+            if (name != null) {
+                installMedia.add(name);
+            }
+        }
         List<Destination> destinations = new ArrayList<>();
         for (Row server : Models.get(ServerModel.class).find().all()) {
             Integer serverId = server.get(ServerModel.ID);
@@ -472,17 +480,23 @@ public final class InstanceBackups {
             }
             destinations.add(new Destination(serverId, String.valueOf((Object) server.get(ServerModel.NAME)),
                 kind == null ? HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown").withArg("kind", kindId)
-                    : destinationRefusal(serverId, kind)));
+                    : destinationRefusal(serverId, kind, installMedia)));
         }
         return destinations;
     }
 
     /**
-     * Why this host cannot receive a restore of this kind: the runtime it runs, then the instance placement gate.
+     * Why this host cannot receive a restore of this kind: the runtime it runs, the instance placement gate, then the
+     * install media the backed-up machine had in its drives, which an import needs on the destination.
+     *
+     * AIDEV-NOTE: the import's own device override cannot drop the cdrom (Incus 7.3 refuses {@code type=none} on a
+     * device with a boot priority), so a host without the ISO fails mid-import with "Storage volume not found". The
+     * operator's way out is to detach the media and back up again, or to pick the host that holds them.
      *
      * @return the first refusal, null when the host takes it
      */
-    private static @Nullable Microcopy destinationRefusal(int serverId, @NonNull InstanceKindHandler kind) {
+    private static @Nullable Microcopy destinationRefusal(int serverId, @NonNull InstanceKindHandler kind,
+                                                          @NonNull List<String> installMedia) {
         Row server = Models.get(ServerModel.class).findById(serverId);
         if (server != null) {
             Microcopy runtime = InstanceKinds.runtimeMismatch(String.valueOf((Object) server.get(ServerModel.NAME)),
@@ -493,7 +507,14 @@ public final class InstanceBackups {
         }
         // The record does not exist yet, so the owner it will be CHARGED to is asked for through the create hook's
         // own derivation -- never a second spelling.
-        return HostAdmission.instancePlacementRefusal(serverId, kind.isolation(), InstanceQuota.creationBucket());
+        Microcopy placement = HostAdmission.instancePlacementRefusal(serverId, kind.isolation(),
+            InstanceQuota.creationBucket());
+        if (placement != null || installMedia.isEmpty()) {
+            return placement;
+        }
+        List<String> absent = new InstallMedia().absentOn(serverId, installMedia);
+        return absent.isEmpty() ? null : HohenheimMicrocopy.VIOLATIONS.of("restore_install_media_missing")
+            .withArg("media", String.join(", ", absent)).withArg("host", ServerModel.labelOf(serverId));
     }
 
     /**
@@ -571,7 +592,7 @@ public final class InstanceBackups {
                 ? ServerModel.canonicalServerId(serverSpelling)
                 : InstancePlacement.chooseForBucket(InstanceQuota.creationBucket(),
                     InstancePlacement.Workload.imported(restoredKind, settings), null);
-            Microcopy refused = destinationRefusal(serverId, restoredKind);
+            Microcopy refused = destinationRefusal(serverId, restoredKind, manifest.installMedia());
             if (refused != null) {
                 throw Violations.ofForm(refused);
             }
@@ -1022,7 +1043,8 @@ public final class InstanceBackups {
             HostPreflight.controllerVersion(),
             String.valueOf((Object) owner.get(InstanceModel.NAME)),
             String.valueOf((Object) owner.get(InstanceModel.KIND)),
-            payload, settings, image.reference(), image.id(), ownership, containerPort,
+            payload, settings, image.reference(), image.id(), InstanceDevices.installMediaOf(instanceId), ownership,
+            containerPort,
             "tcp", volumes, profileOf(owner, instanceId), application);
     }
 

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.host;
 
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
@@ -150,12 +151,16 @@ class HostRuntimeTest {
             instance.set(InstanceModel.KIND, "hohenheim:docker_container");
             instance.set(InstanceModel.SETTINGS, Map.of("image", "alpine"));
             instance.set(InstanceModel.SERVER_ID, admitted.get(ServerModel.ID));
-            assertThat(catchThrowable(() -> Models.get(InstanceModel.class).save(instance)))
+            Throwable mismatch = catchThrowable(() -> Models.get(InstanceModel.class).save(instance));
+            assertThat(mismatch)
                 .as("step 5: a docker kind saved onto an incus host is a named refusal")
                 .isInstanceOfSatisfying(Violations.class, violations ->
                     assertThat(violations.all()).anySatisfy(violation ->
                         assertThat(violation.message().key())
                             .isEqualTo("host_runtime_mismatch")));
+            assertThat(ApiSupport.shippedText(((Violations) mismatch).all().getFirst().message()))
+                .as("step 5: worded with the runtimes' names and no article in front of them")
+                .contains("runs only on Docker hosts").contains("runs Incus");
             // Falsify it: the guard refuses the MISMATCH, not the write.
             instance.set(InstanceModel.SERVER_ID, dockerLocal.get(ServerModel.ID));
             Models.get(InstanceModel.class).save(instance);

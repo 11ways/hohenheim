@@ -202,7 +202,7 @@ public final class IncusInstanceRuntime
         // recreated from THAT image, never by re-resolving the mutable alias.
         Map<String, Object> source = new LinkedHashMap<>();
         boolean pinned = spec.imageFingerprint() != null && !spec.imageFingerprint().isBlank();
-        if (spec.imageOrigin() == ImageOrigin.INSTALL_MEDIA) {
+        if (!spec.imageOrigin().carriesImage()) {
             // An EMPTY workload: no image anywhere, the OS arrives interactively from
             // attached install media. VM-only -- a system container shares the host
             // kernel and has no firmware to boot an ISO with.
@@ -516,21 +516,21 @@ public final class IncusInstanceRuntime
     // -- StatsStreamSupport ---------------------------------------------------
 
     /**
-     * Polled readings of a running instance ({@link IncusStatsFeed}); a container's CPU share is of the cores its
-     * {@code limits.cpu} gives it, else every core of the host.
+     * Polled readings of a running instance ({@link IncusStatsFeed}); the CPU share is of the cores its
+     * {@code limits.cpu} gives it, else every core of the host for a container and the one core Incus gives a VM.
      */
     @Override
     public @NonNull StatsFeed openStats(@NonNull String handle) throws IOException {
-        int cores = 1;
-        if (this.type == IncusWorkloadType.CONTAINER) {
-            Map<String, Object> config = RawValues.mapOrNull(this.incus.instance(handle).get("expanded_config"));
-            Object limit = config == null ? null : config.get("limits.cpu");
-            if (limit instanceof String text && text.matches("\\d+")) {
-                cores = Integer.parseInt(text);
-            } else {
-                Integer hostCpus = this.incus.resourceTotals().cpus();
-                cores = hostCpus == null ? 1 : hostCpus;
-            }
+        Map<String, Object> config = RawValues.mapOrNull(this.incus.instance(handle).get("expanded_config"));
+        Object limit = config == null ? null : config.get("limits.cpu");
+        int cores;
+        if (limit instanceof String text && text.matches("\\d+")) {
+            cores = Integer.parseInt(text);
+        } else if (this.type == IncusWorkloadType.VIRTUAL_MACHINE) {
+            cores = 1;
+        } else {
+            Integer hostCpus = this.incus.resourceTotals().cpus();
+            cores = hostCpus == null ? 1 : hostCpus;
         }
         return new IncusStatsFeed(this.incus, handle, this.type, cores, IncusStatsFeed.INTERVAL_MS);
     }
@@ -692,10 +692,12 @@ public final class IncusInstanceRuntime
             ? WorkloadClaim.OURS : WorkloadClaim.FOREIGN;
     }
 
+    /** The reference is null for a workload created from no image (installed from media). */
     @Override
     public @NonNull ImageIdentity imageIdentity(@NonNull InstanceSpec spec)
             throws IOException {
-        return new ImageIdentity(spec.image(), baseImageOf(this.incus.instance(spec.handle())));
+        return new ImageIdentity(spec.imageOrigin().carriesImage() ? spec.image() : null,
+            baseImageOf(this.incus.instance(spec.handle())));
     }
 
     /**

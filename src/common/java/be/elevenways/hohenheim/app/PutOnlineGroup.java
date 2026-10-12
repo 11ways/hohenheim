@@ -45,6 +45,14 @@ public enum PutOnlineGroup {
     }
 
     /**
+     * The words a copy key has for what this group puts online: the one wording home of the start verb and of a
+     * put-online run's steps, each key carrying a {@code what} variant where a group words it differently.
+     */
+    public @NonNull Microcopy words(@NonNull Microcopy copy) {
+        return copy.withFilter("what", this.token());
+    }
+
+    /**
      * Whether this group's start verb only brings up something that is not running (a machine is started), so a
      * running record offers Restart and Stop instead; the other groups' start deploys again, which a running record
      * still means.

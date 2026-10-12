@@ -403,6 +403,9 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
                 CmsPlacementSurface.ADMIN_ACTION).caller(operator).form(form))), operator, "step 4");
         assertThat(Objects.requireNonNull(run.steps()).journeyBefore())
             .as("step 4: the run ends the journey the wizard walked: what, where, settings").hasSize(3);
+        assertThat(ApiSupport.shippedText(Objects.requireNonNull(run.steps()).steps().getFirst().label()))
+            .as("step 4: its first step makes a machine, in the start verb's words for one, never the app's")
+            .isEqualTo("Create the machine");
         Row vm = Models.get(InstanceModel.class).find().where(InstanceModel.NAME.eq(PREFIX + "vm")).first();
         assertThat(vm).as("step 4: the machine exists (%s)", run.outcome()).isNotNull();
         assertThat(String.valueOf((Object) vm.get(InstanceModel.KIND))).as("step 4: as a virtual machine")

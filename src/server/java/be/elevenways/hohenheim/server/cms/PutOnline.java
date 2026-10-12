@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
@@ -120,9 +121,9 @@ public final class PutOnline {
         OperationSteps.step("live", HohenheimMicrocopy.PUT_ONLINE.of("run_live")))
         .inJourney(List.of(STEP_WHAT, STEP_WHERE, STEP_OPTIONS, STEP_HTTPS), STEP_LIVE);
 
-    /** The run's steps for a machine: the app, then its first start. */
+    /** The run's steps for a machine: the machine, in its group's words, then its first start. */
     private static final OperationSteps MACHINE_STEPS = OperationSteps.of(
-        OperationSteps.step("app", HohenheimMicrocopy.PUT_ONLINE.of("run_app")),
+        OperationSteps.step("app", PutOnlineGroup.MACHINE.words(HohenheimMicrocopy.PUT_ONLINE.of("run_app"))),
         OperationSteps.step("live", HohenheimMicrocopy.PUT_ONLINE.of("run_live")))
         .inJourney(List.of(STEP_WHAT, STEP_WHERE, STEP_OPTIONS), STEP_LIVE);
 

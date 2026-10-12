@@ -126,7 +126,7 @@ final class InstanceActions {
     private static @NonNull Microcopy startWords(@NonNull String key, @NonNull Row row) {
         PutOnlineGroup group = InstanceKinds.startGroupOf(row);
         Microcopy words = HohenheimMicrocopy.INSTANCE.of(key);
-        return group == null ? words : words.withFilter("what", group.token());
+        return group == null ? words : group.words(words);
     }
 
     /**

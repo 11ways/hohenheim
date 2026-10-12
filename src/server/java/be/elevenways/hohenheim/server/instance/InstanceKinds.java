@@ -151,8 +151,8 @@ public final class InstanceKinds {
         }
         return HohenheimMicrocopy.VIOLATIONS.of("host_runtime_mismatch")
             .withArg("name", hostName)
-            .withArg("runtime", hostRuntime)
-            .withArg("required", String.join(", ", new TreeSet<>(supportedRuntimes)));
+            .withArg("runtime", ServerModel.runtimeLabel(hostRuntime))
+            .withArg("required", ServerModel.runtimeLabels(supportedRuntimes));
     }
 
     /** @throws Violations naming the host when its runtime is not one the kind supports */

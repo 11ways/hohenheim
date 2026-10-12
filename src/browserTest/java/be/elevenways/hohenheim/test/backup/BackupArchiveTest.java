@@ -42,7 +42,7 @@ class BackupArchiveTest {
             "test", "fixture", "hohenheim:docker_container",
             BackupManifest.PAYLOAD_VOLUME_TARS,
             Map.of("image", "alpine", "environment_variables", Map.of("SECRET", "s3cret")),
-            "alpine:latest", "sha256:abc", "", 8080, "tcp",
+            "alpine:latest", "sha256:abc", List.of(), "", 8080, "tcp",
             List.of(new BackupManifest.VolumeEntry("data", "/data", "data.tar", sha, size)),
             new BackupManifest.InstanceProfile(
                 new BackupManifest.TemplateRef(7, "velocity", 3),
@@ -187,6 +187,44 @@ class BackupArchiveTest {
             .as("step 4: a container's settings restore untouched").doesNotContainKey(GitSourceSchema.AUTO_DEPLOY);
     }
 
+    /**
+     * A virtual machine installed from install media has no image: its manifest carries no reference, an older one's
+     * blank reference still reads, and the install media in its drives travel to the backup row's summary.
+     */
+    @Test
+    void anImagelessMachinesManifestReadsAndNamesItsInstallMedia() throws IOException {
+        // 1. An install-media VM as this build writes it: no image reference, the ISO in its drive named.
+        Map<String, Object> map = new LinkedHashMap<>(manifest("0".repeat(64), 0).toMap());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> instance = new LinkedHashMap<>((Map<String, Object>) map.get("instance"));
+        instance.put("kind", "hohenheim:vm");
+        instance.put("settings", Map.of("image_origin", "install_media"));
+        instance.put("image_reference", null);
+        instance.put("install_media", List.of("alpine.iso"));
+        map.put("instance", instance);
+        BackupManifest imageless = BackupManifest.fromMap(map);
+        assertThat(imageless.imageReference()).as("step 1: no image, no reference").isNull();
+        assertThat(imageless.toSummary().get("install_media"))
+            .as("step 1: the row's summary names the media a restore destination must hold")
+            .isEqualTo(List.of("alpine.iso"));
+        assertThat(BackupManifest.fromMap(imageless.toMap()).toSummary().get("install_media"))
+            .as("step 1: and the media survive the archive's own round trip").isEqualTo(List.of("alpine.iso"));
+
+        // 2. The manifest an older build wrote for the same machine: a blank reference and no media list. It reads.
+        instance.put("image_reference", "");
+        instance.remove("install_media");
+        BackupManifest legacy = BackupManifest.fromMap(map);
+        assertThat(legacy.imageReference()).as("step 2: a blank reference reads as none").isNull();
+        assertThat(legacy.toSummary().get("install_media")).as("step 2: and it names no media").isEqualTo(List.of());
+
+        // 3. An origin that carries an image still requires its reference: the field is optional only where the
+        //    captured settings say there is no image.
+        instance.put("settings", Map.of("image_origin", "catalog"));
+        assertThat(catchThrowable(() -> BackupManifest.fromMap(map)))
+            .as("step 3: a catalog VM without its reference is refused by the field's name")
+            .isInstanceOf(IOException.class).hasMessageContaining("instance.image_reference");
+    }
+
     private BackupManifest withSource(int version, String kind, Map<String, Object> settings) throws IOException {
         Map<String, Object> map = new LinkedHashMap<>(manifest("0".repeat(64), 0).toMap());
         map.put("version", version);
@@ -310,7 +348,7 @@ class BackupArchiveTest {
             List.of(new BackupManifest.VolumeDeclaration("data", "/data", 1048576L, true)));
         BackupManifest manifest = new BackupManifest(BackupManifest.FORMAT_VERSION,
             base.created(), base.controllerVersion(), "uploaded-app", "hohenheim:application",
-            base.payload(), Map.of(), base.imageReference(), "sha256:" + "a".repeat(64),
+            base.payload(), Map.of(), base.imageReference(), "sha256:" + "a".repeat(64), base.installMedia(),
             base.ownership(), base.containerPort(), base.portProtocol(), base.volumes(),
             base.profile(), application);
         Path archive = tmp.resolve("application.hib");

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.typed.CoreTypes;
@@ -116,9 +117,8 @@ public final class HohenheimPickRules {
          * AIDEV-NOTE: the two branches are the two RULES above, and they must stay that
          * way: a reason naming something the narrowing does not test (host ADMISSION is
          * the tempting one -- it refuses at placement, not here) sends an operator to fix
-         * a fact that would not have widened this list. The runtime tokens are
-         * interpolated raw, the same spelling {@code InstanceKinds.runtimeMismatch}
-         * already shows an operator.
+         * a fact that would not have widened this list. The runtimes are named by their
+         * labels, the same spelling {@code InstanceKinds.runtimeMismatch} shows an operator.
          */
         @Override
         public @Nullable Microcopy reasonNothingQualifies(@NonNull Map<String, Object> siblingValues) {
@@ -134,7 +134,7 @@ public final class HohenheimPickRules {
                 ? "no_quota_capable_host"
                 : "no_runtime_host";
             return HohenheimMicrocopy.INSTANCE.of(key)
-                .withArg("runtimes", String.join(", ", runtimes));
+                .withArg("runtimes", ServerModel.runtimeLabels(runtimes));
         }
     }
 

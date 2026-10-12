@@ -32,6 +32,7 @@ class IncusStatsFeedTest {
     @Test
     void anIncusWorkloadsReadingsBecomeSamples() throws Exception {
         EchoIncusDaemon daemon = new EchoIncusDaemon();
+        daemon.instances.put("vm", Map.of("expanded_config", Map.of("limits.cpu", "2")));
         daemon.instanceStates.put("vm", state(-1, 100 * MIB, 512 * MIB, 1_000, 2_000));
         daemon.metrics = vmMetrics("vm", 10, 1_000, 5, 1_000);
 
@@ -97,6 +98,64 @@ class IncusStatsFeedTest {
         daemon.instanceStates.put("vm", Map.of("status", "Stopped"));
         assertThat(feed.next()).as("step 7: a stopped instance has no readings").isNull();
         feed.close();
+    }
+
+    /**
+     * A VM without its guest agent: Incus reports the QEMU process's host seconds as one CPU's {@code system} mode with
+     * every other mode, idle included, at zero (recorded on nightstrom, Incus 7.3). Its busy seconds are measured
+     * against elapsed time on the cores {@code limits.cpu} gives it, timed from when the counter last moved, because
+     * the daemon caches its metrics for about 8 seconds; dividing by the sum of the modes read 100% for ever.
+     */
+    @Test
+    void anAgentlessVmIsMeasuredAgainstElapsedTimeOnItsCores() throws Exception {
+        EchoIncusDaemon daemon = new EchoIncusDaemon();
+        daemon.instances.put("bare", Map.of("expanded_config", Map.of("limits.cpu", "2")));
+        daemon.instanceStates.put("bare", state(-1, 100 * MIB, 512 * MIB, 0, 0));
+        Duration offset = Now.offset();
+        try (StatsFeed feed = ((StatsStreamSupport) new IncusInstanceRuntime(daemon.client(), Egress.OPEN,
+                IncusWorkloadType.VIRTUAL_MACHINE)).openStats("bare")) {
+            InstanceStats.Decoder decoder = new InstanceStats.Decoder();
+
+            // 1. The first reading: CPU is reported, on the VM's two cores, with no window yet.
+            daemon.metrics = agentlessMetrics("bare", 18.22);
+            InstanceStats.Sample first = decoder.next(feed.next());
+            assertThat(first.cpuReported()).as("step 1: an agentless VM still reports its CPU").isTrue();
+            assertThat(first.cores()).as("step 1: the cores limits.cpu gives").isEqualTo(2);
+
+            // 2. Two seconds on, the daemon still serves its cached lines: no window, and never a full core.
+            Now.setOffset(offset.plusSeconds(2));
+            assertThat(decoder.next(feed.next()).cpuPercent()).as("step 2: the cached counter is no reading")
+                .isZero();
+
+            // 3. Ten seconds after the counter last moved it reads 29.22: 11 busy seconds in 10 seconds. The reads
+            //    themselves take real milliseconds on top of the offset, hence the tolerance; the old sum-of-modes
+            //    reading said 100.
+            Now.setOffset(offset.plusSeconds(10));
+            daemon.metrics = agentlessMetrics("bare", 29.22);
+            assertThat(decoder.next(feed.next()).cpuPercent()).as("step 3: busy against elapsed time")
+                .isCloseTo(110.0, within(2.0));
+
+            // 4. The recorded second window: 7.41 busy seconds in the next 10, read 12 seconds after the last move
+            //    because the cache hid it for two; the window still runs from move to move.
+            Now.setOffset(offset.plusSeconds(12));
+            assertThat(decoder.next(feed.next()).cpuPercent()).as("step 4: the window stands while cached")
+                .isCloseTo(110.0, within(2.0));
+            Now.setOffset(offset.plusSeconds(20));
+            daemon.metrics = agentlessMetrics("bare", 36.63);
+            assertThat(decoder.next(feed.next()).cpuPercent()).as("step 4: the second window")
+                .isCloseTo(74.1, within(2.0));
+        } finally {
+            Now.setOffset(offset);
+        }
+    }
+
+    /** An agentless VM's lines as Incus 7.3 serves them: every mode of cpu 0, only system counting. */
+    private static String agentlessMetrics(String name, double system) {
+        StringBuilder lines = new StringBuilder("# TYPE incus_cpu_seconds_total counter\n");
+        for (String mode : new String[] {"idle", "iowait", "irq", "nice", "softirq", "steal", "system", "user"}) {
+            lines.append(line(name, 0, mode, "system".equals(mode) ? system : 0));
+        }
+        return lines.toString();
     }
 
     private static Map<String, Object> state(long cpuUsage, long memory, long total, long rx, long tx) {

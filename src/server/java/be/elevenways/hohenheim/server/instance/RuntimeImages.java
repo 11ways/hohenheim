@@ -115,7 +115,7 @@ public final class RuntimeImages {
         if (reference == null || reference.isBlank()) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("runtime_image_no_variant")
                 .withArg("name", String.valueOf((Object) image.get(RuntimeImageModel.NAME)))
-                .withArg("runtime", runtime));
+                .withArg("runtime", ServerModel.runtimeLabel(runtime)));
         }
 
         return reference.trim();

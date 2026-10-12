@@ -27,6 +27,7 @@ import be.elevenways.hohenheim.server.runtime.ExecSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
+import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -216,10 +217,14 @@ class WorkspaceKindTest {
             int serverId = incusHost("ws-incus-only-docker");
             int id = workspace("ws-no-variant", imageId, serverId, Map.of());
 
-            assertThatThrownBy(() -> InstanceKinds.getHandler(KIND).specFor(id, Map.of()))
+            Throwable noVariant = catchThrowable(() -> InstanceKinds.getHandler(KIND).specFor(id, Map.of()));
+            assertThat(noVariant)
                 .as("an image with no incus variant cannot run on an incus host")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("runtime_image_no_variant");
+            assertThat(ApiSupport.shippedText(((Violations) noVariant).all().getFirst().message()))
+                .as("worded with the runtime's name and no article in front of it")
+                .contains("has no Incus variant").contains("on Incus hosts");
         });
     }
 
@@ -270,11 +275,13 @@ class WorkspaceKindTest {
         Db.run(datasource, () -> {
             String local = ServerModel.nameOf(ServerModel.localServerId());
             setBackend(VolumeBackend.NONE);
-            assertThatThrownBy(() -> InstanceKinds.getHandler(KIND)
-                    .requirePlaceableOn(local, Map.of()))
+            Throwable noQuota = catchThrowable(() -> InstanceKinds.getHandler(KIND).requirePlaceableOn(local, Map.of()));
+            assertThat(noQuota)
                 .as("step 1: a backend with no quota refuses placement by name")
                 .isInstanceOf(Violations.class)
                 .hasMessageContaining("host_no_volume_quota");
+            assertThat(ApiSupport.shippedText(((Violations) noQuota).all().getFirst().message()))
+                .as("step 1: naming the kind without an article in front of it").doesNotContain("run a ");
 
             // 2. FALSIFIED: the same call passes the moment the host CAN enforce one, so
             //    the refusal is the backend's doing and not a blanket "no workspaces".

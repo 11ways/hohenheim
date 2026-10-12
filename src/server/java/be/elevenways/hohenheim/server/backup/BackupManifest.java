@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 
 import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.server.util.Sha256;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -37,8 +38,11 @@ import be.elevenways.zenit.common.orm.model.Schema;
  * @param payload           how the payload entries unpack ({@link #PAYLOAD_VOLUME_TARS}
  *                          or {@link #PAYLOAD_INSTANCE_EXPORT})
  * @param settings          the instance's RAW stored settings map
- * @param imageReference    the image reference the workload ran
+ * @param imageReference    the image reference the workload ran, null for one created from no image (installed
+ *                          from media; a blank reference in an older manifest reads the same)
  * @param imageId           the daemon's immutable image id, when known
+ * @param installMedia      the install media (ISO volume names) in the workload's drives at capture: an import
+ *                          needs each of them on its destination host; empty in an older manifest
  * @param ownership         the packed manage-subject set at capture time (informational:
  *                          restore-to-new charges the RESTORING actor's owner derivation)
  * @param containerPort     the declared container port, or null
@@ -55,8 +59,9 @@ public record BackupManifest(int version,
                              @NonNull String kind,
                              @NonNull String payload,
                              @NonNull Map<String, Object> settings,
-                             @NonNull String imageReference,
+                             @Nullable String imageReference,
                              @Nullable String imageId,
+                             @NonNull List<String> installMedia,
                              @NonNull String ownership,
                              @Nullable Integer containerPort,
                              @NonNull String portProtocol,
@@ -201,6 +206,7 @@ public record BackupManifest(int version,
         instance.put("settings", this.settings);
         instance.put("image_reference", this.imageReference);
         instance.put("image_id", this.imageId);
+        instance.put("install_media", this.installMedia);
         instance.put("ownership", this.ownership);
         instance.put("container_port", this.containerPort);
         instance.put("port_protocol", this.portProtocol);
@@ -284,6 +290,7 @@ public record BackupManifest(int version,
         summary.put("payload", this.payload);
         summary.put("image_reference", this.imageReference);
         summary.put("image_id", this.imageId);
+        summary.put("install_media", this.installMedia);
         summary.put("volume_count", this.volumes.size());
         summary.put("volume_bytes", this.totalVolumeBytes());
         if (this.profile != null) {
@@ -333,8 +340,17 @@ public record BackupManifest(int version,
         if (!(instance.get("settings") instanceof Map<?, ?> settings)) {
             throw new IOException("Backup manifest has no 'instance.settings' map");
         }
-        String imageReference = requireText(instance.get("image_reference"), "instance.image_reference");
+        String imageReference = imageReferenceOf(instance.get("image_reference"), settings);
         String imageId = instance.get("image_id") instanceof String id && !id.isBlank() ? id : null;
+        List<String> installMedia = new ArrayList<>();
+        if (instance.get("install_media") != null) {
+            if (!(instance.get("install_media") instanceof List<?> media)) {
+                throw new IOException("Backup manifest 'instance.install_media' is not a list");
+            }
+            for (Object medium : media) {
+                installMedia.add(requireText(medium, "instance.install_media[]"));
+            }
+        }
         String ownership = instance.get("ownership") instanceof String packed ? packed : "";
         Integer containerPort = instance.get("container_port") instanceof Number port
             ? port.intValue() : null;
@@ -371,8 +387,27 @@ public record BackupManifest(int version,
         @SuppressWarnings("unchecked")
         Map<String, Object> typedSettings = (Map<String, Object>) settings;
         return new BackupManifest(version.intValue(), created, controllerVersion, name, kind,
-            payload, typedSettings, imageReference, imageId, ownership, containerPort,
+            payload, typedSettings, imageReference, imageId, List.copyOf(installMedia), ownership, containerPort,
             protocol, List.copyOf(volumes), profile, applicationFrom(root, version.intValue()));
+    }
+
+    /**
+     * The image reference, required only where the captured settings' origin carries an image: an install-media VM
+     * names none, and an older build wrote a blank one for it.
+     */
+    private static @Nullable String imageReferenceOf(@Nullable Object value, @NonNull Map<?, ?> settings)
+            throws IOException {
+        ImageOrigin origin;
+        try {
+            origin = ImageOrigin.fromKey(RawValues.nonBlankString(settings.get(ImageOrigin.SETTING)));
+        } catch (IllegalArgumentException unknown) {
+            throw new IOException("Backup manifest settings declare an unknown image origin: "
+                + unknown.getMessage(), unknown);
+        }
+        if (origin.carriesImage()) {
+            return requireText(value, "instance.image_reference");
+        }
+        return RawValues.nonBlankString(value);
     }
 
     private static Map<String, Object> payloadMap(PayloadEntry payload) {
