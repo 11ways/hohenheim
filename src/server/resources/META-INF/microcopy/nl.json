@@ -15724,6 +15724,10 @@
     "text": "{$commit} gevonden en het uitrollen gestart.",
     "scope": "deployments"
   },
+  "poll_busy": {
+    "text": "{$commit} gevonden terwijl een andere bewerking op dit record liep; bij de volgende controle wordt opnieuw gekeken.",
+    "scope": "deployments"
+  },
   "poll_build_failed": {
     "text": "de build van {$commit} is mislukt. Push een oplossing, of gebruik Nu uitrollen om het opnieuw te proberen.",
     "scope": "deployments"

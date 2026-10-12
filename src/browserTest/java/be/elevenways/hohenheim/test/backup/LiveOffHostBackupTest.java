@@ -160,7 +160,9 @@ class LiveOffHostBackupTest {
             "no private netns: the instance tier refuses to deploy unprotected");
 
         Db.run(datasource, () -> {
-            HostFixtures.admitLocal();
+            // Measured, not only admitted: the restore in step 6 places a new instance, and placement refuses a host
+            // whose capacity is unproven (host_capacity_unproven, run 1960).
+            HostFixtures.makeLocalPlaceable(4096);
 
             // 1. A configured SSH target pointing at the ENROLLED host record for the
             //    OTHER machine, whose pin an operator confirmed out of band in setUp.

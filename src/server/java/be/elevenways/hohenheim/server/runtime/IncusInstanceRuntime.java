@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.server.incus.ControllerPresence;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusKernelIsolation;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
+import be.elevenways.hohenheim.server.incus.IncusReaper;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -419,6 +420,26 @@ public final class IncusInstanceRuntime
                 throw e;   // refused: NOT gone
             }
             // 404 = observed absent, which is the outcome destroy exists for.
+        }
+        releaseSharedObjects();
+    }
+
+    /**
+     * Hands back this controller's shared objects on the daemon once the workload that went was the last to use them.
+     *
+     * AIDEV-NOTE: best-effort, like {@link #stampPresence}: the workload IS gone, and a destroy must not fail for a
+     * leftover ACL. What stays is retried by the next destroy here, or taken by the reaper once this controller departs.
+     */
+    private void releaseSharedObjects() {
+        String where = this.serverName == null ? "the local daemon" : this.serverName;
+        try {
+            IncusReaper.Reaped released = IncusReaper.releaseOwn(this.incus);
+            if (!released.removed().isEmpty() || !released.refused().isEmpty()) {
+                Blast.log("INCUS SHARED OBJECTS:", where, "released", released.removed(), ", refused",
+                    released.refused());
+            }
+        } catch (RuntimeException unreleased) {
+            Blast.log("INCUS SHARED OBJECTS: could not release on", where, "-", unreleased.getMessage());
         }
     }
 

@@ -101,6 +101,9 @@ class IncusKernelIsolationLiveTest {
         if (remote == null) {
             return;
         }
+        // Before the trust entry goes: after that the client cannot authenticate to hand anything back.
+        System.out.println("=== cleanup: shared objects -> "
+            + remote.releaseControllerSharedObjects());
         System.out.println("=== cleanup: authorized_keys -> "
             + remote.releaseAuthorizedKeys());
         if (enrolledFingerprint != null) {
@@ -331,12 +334,8 @@ class IncusKernelIsolationLiveTest {
             } finally {
                 remote.forceDelete(handleA);
                 remote.forceDelete(handleB);
-                // The shared isolation ACL is deliberately NOT deleted: it is durable
-                // daemon infrastructure, and under parallel forks a per-class delete
-                // races another class's no-write-then-verify deploy (ensureIsolationAcl
-                // reads it as present-and-exact, writes nothing, then finds it GONE at
-                // the read-back and refuses that tenant's install). Observed live
-                // 2026-08-06 under the eight-class run.
+                // The isolation ACL is this test controller's own (hohenheim-<token>-isolation); tearDown hands it
+                // back through LiveIncusHost.releaseControllerSharedObjects once nothing references it.
             }
         });
     }

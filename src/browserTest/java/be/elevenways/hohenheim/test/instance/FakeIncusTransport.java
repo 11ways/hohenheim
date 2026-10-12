@@ -10,6 +10,7 @@ import be.elevenways.protoblast.common.dry.Dry;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,34 +64,63 @@ final class FakeIncusTransport implements IncusTransport {
             return sync(Map.of("devices", devices));
         }
         // ACL routes take ANY name: the driver now writes the controller presence
-        // marker beside the isolation ACL, and both ride the same echo store. The
-        // fake adds the empty used_by a real daemon reports, because
-        // ControllerPresence.usedBy reads a MISSING field as "referenced" on purpose.
+        // marker beside the isolation ACL, and both ride the same echo store. used_by is
+        // DERIVED from the stored instances' NICs on every read, as a real daemon reports
+        // it, because ControllerPresence.usedBy reads a MISSING field as "referenced" on
+        // purpose and a release decides on exactly this field.
+        if ("GET".equals(method) && path.equals("/1.0/network-acls")) {
+            return sync(withUsedBy(this.aclStore, true));
+        }
         if ("GET".equals(method) && path.startsWith("/1.0/network-acls/")) {
-            Object stored = this.aclStore.get(
-                path.substring("/1.0/network-acls/".length()));
-            return stored == null ? notFound("Network ACL not found") : sync(stored);
+            String name = path.substring("/1.0/network-acls/".length());
+            Object stored = this.aclStore.get(name);
+            return stored == null ? notFound("Network ACL not found") : sync(withUsedBy(name, stored, true));
         }
         if ("POST".equals(method) && path.equals("/1.0/network-acls")) {
             Map<String, Object> body = new LinkedHashMap<>(parse(jsonBody));
-            body.putIfAbsent("used_by", List.of());
             this.aclStore.put(String.valueOf(body.get("name")), body);
             return sync(body);
         }
         if ("PUT".equals(method) && path.startsWith("/1.0/network-acls/")) {
             Map<String, Object> body = new LinkedHashMap<>(parse(jsonBody));
-            body.putIfAbsent("used_by", List.of());
             this.aclStore.put(path.substring("/1.0/network-acls/".length()), body);
             return sync(body);
+        }
+        if ("DELETE".equals(method) && path.startsWith("/1.0/network-acls/")) {
+            // The daemon's own guard: an ACL a NIC references is refused, never removed.
+            String name = path.substring("/1.0/network-acls/".length());
+            if (!this.aclStore.containsKey(name)) {
+                return notFound("Network ACL not found");
+            }
+            if (!usedBy(name, true).isEmpty()) {
+                return error(400, "Cannot delete an ACL that is in use");
+            }
+            this.aclStore.remove(name);
+            return sync(Map.of());
         }
         // The managed EXTRA-NIC bridge. A real daemon auto-assigns subnets and NAT for
         // an empty config and reports the result as managed, which is exactly what
         // ensureExtraNetwork read-back-verifies -- so the fake answers with a plausible
         // assignment rather than echoing the empty config it was sent, which would fail
         // the verification on the FAKE instead of on anything the driver did.
+        if ("GET".equals(method) && path.equals("/1.0/networks")) {
+            return sync(withUsedBy(this.networkStore, false));
+        }
         if ("GET".equals(method) && path.startsWith("/1.0/networks/")) {
-            Object stored = this.networkStore.get(path.substring("/1.0/networks/".length()));
-            return stored == null ? notFound("Network not found") : sync(stored);
+            String name = path.substring("/1.0/networks/".length());
+            Object stored = this.networkStore.get(name);
+            return stored == null ? notFound("Network not found") : sync(withUsedBy(name, stored, false));
+        }
+        if ("DELETE".equals(method) && path.startsWith("/1.0/networks/")) {
+            String name = path.substring("/1.0/networks/".length());
+            if (!this.networkStore.containsKey(name)) {
+                return notFound("Network not found");
+            }
+            if (!usedBy(name, false).isEmpty()) {
+                return error(400, "The network is currently in use");
+            }
+            this.networkStore.remove(name);
+            return sync(Map.of());
         }
         if ("POST".equals(method) && path.equals("/1.0/networks")) {
             Map<String, Object> body = new LinkedHashMap<>(parse(jsonBody));
@@ -221,11 +251,50 @@ final class FakeIncusTransport implements IncusTransport {
     }
 
     private static Http11.Raw notFound(String message) {
+        return error(404, message);
+    }
+
+    private static Http11.Raw error(int status, String message) {
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("type", "error");
-        envelope.put("error_code", 404);
+        envelope.put("error_code", status);
         envelope.put("error", message);
-        return raw(404, Json.stringify(envelope));
+        return raw(status, Json.stringify(envelope));
+    }
+
+    /** Every stored object of one store as the recursed listing answers it, each with its derived used_by. */
+    private List<Object> withUsedBy(Map<String, Object> store, boolean acl) {
+        return store.entrySet().stream().map(entry -> withUsedBy(entry.getKey(), entry.getValue(), acl)).toList();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object withUsedBy(String name, Object stored, boolean acl) {
+        Map<String, Object> read = new LinkedHashMap<>((Map<String, Object>) stored);
+        read.put("used_by", usedBy(name, acl));
+        return read;
+    }
+
+    /** The instances whose NICs name this ACL (security.acls) or sit on this network, as the daemon lists them. */
+    private List<String> usedBy(String name, boolean acl) {
+        List<String> users = new ArrayList<>();
+        for (Map.Entry<String, Map<String, Object>> instance : this.instances.entrySet()) {
+            if (!(instance.getValue().get("devices") instanceof Map<?, ?> devices)) {
+                continue;
+            }
+            for (Object device : devices.values()) {
+                if (!(device instanceof Map<?, ?> nic) || !"nic".equals(nic.get("type"))) {
+                    continue;
+                }
+                boolean uses = acl
+                    ? nic.get("security.acls") instanceof String acls && List.of(acls.split(",")).contains(name)
+                    : name.equals(nic.get("network"));
+                if (uses) {
+                    users.add("/1.0/instances/" + instance.getKey());
+                    break;
+                }
+            }
+        }
+        return users;
     }
 
     private static Http11.Raw raw(int status, String body) {

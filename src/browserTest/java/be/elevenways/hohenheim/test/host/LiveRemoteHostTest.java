@@ -6,6 +6,7 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostKeys;
@@ -154,9 +155,9 @@ class LiveRemoteHostTest {
                 assertThat(reached.memoryBytes())
                     .as("step 5: and real host memory, not a zeroed unreachable guess")
                     .isGreaterThan(0L);
-                assertThat(reached.operatingSystem())
-                    .as("step 5: the OS is the REMOTE machine's, not this workstation's")
-                    .isNotEqualTo(localOperatingSystem());
+                assertThat(daemonId(servers.clientFor(HOST)))
+                    .as("step 5: the daemon is the REMOTE machine's, not this workstation's")
+                    .isNotEqualTo(daemonId(new DockerClient()));
                 Row seen = model.findByName(HOST);
                 assertThat((Object) seen.get(ServerModel.LAST_SEEN_AT))
                     .as("step 5: and the contact is durably recorded").isNotNull();
@@ -265,9 +266,9 @@ class LiveRemoteHostTest {
                     .as("step 1: the remote daemon answered: %s",
                         report.check("daemon").detail())
                     .isEqualTo(HostPreflight.STATUS_PASS);
-                assertThat(String.valueOf(report.facts().get("os")))
-                    .as("step 1: and the OS fact is the REMOTE machine's")
-                    .isNotEqualTo(localOperatingSystem());
+                assertThat(daemonId(servers.clientFor(HOST)))
+                    .as("step 1: and the daemon it read is the REMOTE machine's")
+                    .isNotEqualTo(daemonId(new DockerClient()));
                 assertThat(String.valueOf(report.facts().get("kernel_version")))
                     .as("step 1: as is the kernel version")
                     .isNotEqualTo(System.getProperty("os.version"));
@@ -350,14 +351,19 @@ class LiveRemoteHostTest {
         return failed.toString();
     }
 
-    /** This machine's OperatingSystem string, so "the remote" can be proven remote. */
-    private static String localOperatingSystem() {
+    /**
+     * A Docker daemon's own ID, so "the remote" can be proven remote.
+     *
+     * AIDEV-NOTE: this compared the daemons' OperatingSystem strings, which proves nothing when both machines run the
+     * same distribution (daystrom and this workstation are both "Arch Linux": run 1957 failed both tests on it). The
+     * daemon ID is minted per daemon. An unreadable daemon answers its own marker, so it never equals the other side.
+     */
+    private static String daemonId(DockerClient client) {
         try {
-            Object os = new be.elevenways.hohenheim.server.docker.DockerClient()
-                .info().get("OperatingSystem");
-            return os != null ? String.valueOf(os) : "";
-        } catch (Exception noLocalDaemon) {
-            return "";
+            Object id = client.info().get("ID");
+            return id != null ? String.valueOf(id) : "no ID from " + client;
+        } catch (Exception unreadable) {
+            return "unreadable " + client + ": " + unreadable.getMessage();
         }
     }
 

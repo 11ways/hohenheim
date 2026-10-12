@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
@@ -58,7 +59,10 @@ public final class GitSourcePolls {
         DEPLOYING("poll_deploying"),
 
         /** The head is what the newest build tried, and that build failed: only a push or Deploy now tries again. */
-        BUILD_FAILED("poll_build_failed");
+        BUILD_FAILED("poll_build_failed"),
+
+        /** The head is new, but an operation holds the record: nothing was started, and the next check asks again. */
+        BUSY("poll_busy");
 
         private final String copyKey;
 
@@ -151,6 +155,14 @@ public final class GitSourcePolls {
             boolean failed = !BuildOperationModel.LIFECYCLE.is(status, OperationStatus.SUCCEEDED)
                 && !BuildOperationModel.LIFECYCLE.is(status, OperationStatus.RUNNING);
             return new Check(now, remote, null, failed ? Finding.BUILD_FAILED : Finding.CURRENT);
+        }
+        // AIDEV-NOTE: a head is never dispatched while an operation holds the record. The deploy it starts QUEUES on the
+        // record's claim, so dispatching beside the record's own first deploy (whose checkout lands this very head) put
+        // a second deploy of the same commit behind it, and that one then held the record when the operator's destroy
+        // came (refused as instance_operation_in_progress; run 1862 left its workspace on nightstrom). Nothing is marked
+        // dispatched, so the next interval asks again and finds the head current or still new.
+        if (!InstanceOperationLock.production().runIfIdle(instanceId, () -> { })) {
+            return new Check(now, remote, null, Finding.BUSY);
         }
         Blast.log("GIT POLL: new commit", remote, "on", branch, "of instance", instanceId + "; deploying");
         SourceDeploys.deployInBackground(instance, branch, remote, DeployTrigger.POLL);

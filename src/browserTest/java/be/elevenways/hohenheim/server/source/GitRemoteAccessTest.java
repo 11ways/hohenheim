@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.source;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.GitProviderModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.server.instance.InstanceOperationLock;
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -216,6 +217,39 @@ class GitRemoteAccessTest extends HohenheimTestBase {
         assertThat(failed.failed()).as("step 4: which reads as a failure").isTrue();
         assertThat(failed.deploying()).as("step 4: and nothing deploys again").isFalse();
         assertThat(failed.remoteCommit()).as("step 4: naming the head it saw").isEqualTo(head);
+    }
+
+    /**
+     * A new head found while an operation holds the record is not deployed beside it: the check reports the record
+     * busy, dispatches nothing, and asks again at its next interval.
+     *
+     * AIDEV-NOTE: run 1862 (saved run 89): the check found a workspace's first commit while the record's own deploy
+     * was still converting its image, queued a second deploy of the same commit behind it, and that queued deploy
+     * then held the record when the operator's destroy came, refused as instance_operation_in_progress.
+     */
+    @Test
+    void aNewHeadIsNotDeployedBesideAnOperationThatHoldsTheRecord() throws Exception {
+        Path upstream = Files.createTempDirectory("hohenheim-poll-busy");
+        String head = commit(upstream, "one");
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put(GitSourceSchema.REPOSITORY_URL, upstream.toString());
+        settings.put(GitSourceSchema.BRANCH, "main");
+        Row application = application("poll-busy-app", settings);
+        int id = application.get(InstanceModel.ID);
+        Instant now = Instant.parse("2026-10-13T12:00:00Z");
+
+        // 1. An operation holds the record while the check reads a head nothing built yet.
+        GitSourcePolls.Check busy = InstanceOperationLock.production().exclusive(id,
+            InstanceOperationLock.Contention.REFUSE, () -> GitSourcePolls.check(application, settings, now));
+
+        // 2. The check saw the head, reports the record busy and started nothing.
+        assertThat(busy.remoteCommit()).as("step 2: the head was read").isEqualTo(head);
+        assertThat(busy.finding()).as("step 2: the finding is the busy record")
+            .isEqualTo(GitSourcePolls.Finding.BUSY);
+        assertThat(busy.deploying()).as("step 2: nothing deploys beside the running operation").isFalse();
+        assertThat(busy.failed()).as("step 2: a busy record is no failure").isFalse();
+        assertThat(SourceDeploys.lastDispatched(id))
+            .as("step 2: the head is not marked dispatched, so the next interval asks again").isNull();
     }
 
     private static Row application(String name, Map<String, Object> settings) {

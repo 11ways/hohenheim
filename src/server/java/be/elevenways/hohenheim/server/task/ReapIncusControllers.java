@@ -38,16 +38,17 @@ import java.util.Map;
  * stamp, classifies every per-controller shared object on the host, REPORTS the whole
  * classification, and removes only the departed ones.
  *
- * AIDEV-NOTE: the stamp is written FIRST, before anything is judged, and that order is
- * the point. This sweep is the only thing that keeps a quiet controller's own objects
- * alive in every peer's eyes, so a run that judged before it stamped would be a run that
- * could let our own liveness lapse while we reasoned about someone else's.
+ * AIDEV-NOTE: the stamp is written before anything is removed, and that order is the point.
+ * This sweep is the only thing that keeps a quiet controller's own objects alive in every
+ * peer's eyes, so a run that reaped before it stamped could let our own liveness lapse while
+ * we reasoned about someone else's. It is written only where we still hold a shared object:
+ * the marker protects those objects and nothing else (IncusReaper.releaseOwn hands all three
+ * back when our last instance leaves a daemon).
  *
  * AIDEV-NOTE: this sweeps EVERY inventoried Incus host, not only hosts carrying running
  * instances (which is what {@link VerifyIncusIsolation} does, correctly, for its own
- * question). A controller with no workloads at all is exactly the controller whose stamp
- * must not lapse -- scoping this sweep to hosts with running instances would make an idle
- * controller stop stamping precisely while it looks most departed.
+ * question). An idle controller whose ACL is still on a daemon is exactly the controller
+ * whose stamp must not lapse there.
  *
  * The operator's preview: every candidate is logged with its verdict and the reason, on
  * every run, and the default grace is a week -- so an object is named in ~168 reports
@@ -140,15 +141,6 @@ public class ReapIncusControllers extends ScheduledTask {
     /** {@link #sweepHost(Row)} through a client already addressing the host's daemon. */
     public static @NonNull HostOutcome sweepHost(@NonNull Row server, @NonNull IncusClient incus) {
         String name = String.valueOf((Object) server.get(ServerModel.NAME));
-        try {
-            ControllerPresence.stamp(incus);
-        } catch (Exception unstamped) {
-            // A host we cannot stamp is a host we may not judge: our own liveness there is
-            // now as unprovable as anyone else's, and reaping on that footing would be
-            // reaping on evidence we just failed to produce ourselves.
-            return unreachable(name, "presence stamp failed", unstamped);
-        }
-
         List<IncusReaper.Candidate> plan;
         try {
             plan = IncusReaper.plan(incus.networkAcls(), incus.networks(),
@@ -156,11 +148,25 @@ public class ReapIncusControllers extends ScheduledTask {
         } catch (Exception unlistable) {
             return unreachable(name, "could not list shared objects", unlistable);
         }
-        // The stamp round trip IS a successful daemon contact, so this sweep doubles as
+        // AIDEV-NOTE: the stamp is written only where this controller still holds a shared object, and BEFORE any
+        // removal. It exists to keep those objects ours in every peer's eyes; a daemon where we hold nothing has
+        // nothing for it to protect, and stamping it anyway put the marker back every 15 minutes after the last
+        // destroy there had handed it back (IncusReaper.releaseOwn). A deploy stamps on its own as it mints the ACL.
+        if (IncusReaper.holdsOwnObjects(plan)) {
+            try {
+                ControllerPresence.stamp(incus);
+            } catch (Exception unstamped) {
+                // A host we cannot stamp is a host we may not judge: our own liveness there is
+                // now as unprovable as anyone else's, and reaping on that footing would be
+                // reaping on evidence we just failed to produce ourselves.
+                return unreachable(name, "presence stamp failed", unstamped);
+            }
+        }
+        // A successful listing IS a daemon contact, so this sweep doubles as
         // the Incus host heartbeat -- the Docker tier's reconcile has done exactly this
         // for Docker hosts all along, and an Incus host had no positive signal at all.
-        // Recorded only after the daemon actually ANSWERED (stamp written, objects
-        // listed), never off a client object that merely constructed.
+        // Recorded only after the daemon actually ANSWERED (objects listed, stamp written
+        // where one is due), never off a client object that merely constructed.
         // AIDEV-NOTE: the heartbeat carries the host's memory reading, as the Docker reconcile's does. Without it an
         // Incus host was measured only by a full preflight, so a host this sweep reached every 15 minutes still aged
         // past the freshness bound and silently stopped taking new apps (nightstrom on daystrom, 2026-10-12).
@@ -209,9 +215,11 @@ public class ReapIncusControllers extends ScheduledTask {
         String name = String.valueOf((Object) server.get(ServerModel.NAME));
         try {
             IncusClient incus = IncusClients.forServer(server);
-            ControllerPresence.stamp(incus);
             List<IncusReaper.Candidate> plan = IncusReaper.plan(incus.networkAcls(),
                 incus.networks(), ControllerIdentity.token(), Now.instant(), operatorGrace());
+            if (IncusReaper.holdsOwnObjects(plan)) {
+                ControllerPresence.stamp(incus);
+            }
             IncusReaper.Reaped reaped = IncusReaper.reap(incus, plan, true);
             for (String removed : reaped.removed()) {
                 ActivityLog.record(Models.get(ServerModel.class), server.get(ServerModel.ID),

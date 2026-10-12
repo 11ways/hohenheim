@@ -15724,6 +15724,10 @@
     "text": "found {$commit} and started deploying it.",
     "scope": "deployments"
   },
+  "poll_busy": {
+    "text": "found {$commit} while another operation was running on this record; it is checked again at the next interval.",
+    "scope": "deployments"
+  },
   "poll_build_failed": {
     "text": "the build of {$commit} failed. Push a fix, or use Deploy now to try it again.",
     "scope": "deployments"

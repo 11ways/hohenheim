@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.server.host.HostKeys;
 import be.elevenways.hohenheim.test.live.LiveLane;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.server.security.SshKeyType;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
@@ -129,7 +130,10 @@ public final class LiveRemoteHost {
      */
     public String scanVerifiedKeyLine() throws IOException {
         try {
-            Process scan = new ProcessBuilder("ssh-keyscan", "-T", "10", "--",
+            // AIDEV-NOTE: -t ed25519, the one type read below: ssh-keyscan otherwise opens one unauthenticated
+            // connection per key type, and OpenSSH 10's PerSourcePenalties (noauth) on daystrom then refused this
+            // machine's next real connection mid-test ("Connection reset", run 1957).
+            Process scan = new ProcessBuilder("ssh-keyscan", "-T", "10", "-t", SshKeyType.ED25519.keyscanType(), "--",
                 HostKeys.parseTarget(this.target).host()).start();
             String output = new String(scan.getInputStream().readAllBytes(),
                 StandardCharsets.UTF_8);

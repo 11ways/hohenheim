@@ -264,7 +264,9 @@ public final class HostKeys {
      */
     public static @NonNull Offer scan(@NonNull Row server) {
         Target target = parseTarget(server.get(ServerModel.SSH_TARGET));
-        List<String> argv = new ArrayList<>(List.of("ssh-keyscan", "-T", "10"));
+        // Only the pinnable families (SshKeyType.hostKeyScanTypes): every other family is one more unauthenticated
+        // connection OpenSSH 9.8+ penalizes, and the scan's own next login was refused for it (daystrom, run 1958).
+        List<String> argv = new ArrayList<>(List.of("ssh-keyscan", "-T", "10", "-t", SshKeyType.hostKeyScanTypes()));
         if (target.port() > 0) {
             argv.add("-p");
             argv.add(String.valueOf(target.port()));

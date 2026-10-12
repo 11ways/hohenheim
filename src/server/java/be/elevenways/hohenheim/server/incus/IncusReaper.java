@@ -305,6 +305,67 @@ public final class IncusReaper {
         return new Reaped(List.copyOf(removed), List.copyOf(refused));
     }
 
+    /** @return whether the plan holds a shared object of THIS controller other than its presence marker */
+    public static boolean holdsOwnObjects(@NonNull List<Candidate> plan) {
+        return plan.stream().anyMatch(candidate -> candidate.verdict() == Verdict.OURS && !isPresenceMarker(candidate));
+    }
+
+    /**
+     * Hand back THIS controller's shared objects on one daemon once nothing references them: the bridge and the
+     * isolation ACL, then the presence marker, and the marker only when both others are gone (it is the evidence any
+     * survivor is judged by).
+     *
+     * AIDEV-NOTE: the OWNER's half of the lifecycle the sweep covers for departed controllers. Called after an
+     * instance leaves a daemon, so a controller's objects live exactly as long as one of its instances there. Same
+     * re-read guard as {@link #reap}: used_by is read at removal time and the daemon itself refuses an ACL in use, so
+     * a running workload never loses its isolation. The blast radius of a race is the reaper's: a deploy of ours on
+     * this daemon that ensured the ACL just before this removed it fails its create naming the missing ACL, and its
+     * retry recreates it.
+     *
+     * @return what went; an object still referenced is kept silently, a failed read or delete is listed as refused
+     */
+    public static @NonNull Reaped releaseOwn(@NonNull IncusClient incus) {
+        return releaseOwn(incus, IncusNetworkPolicy.aclName(), IncusNetworkPolicy.extraNetwork(),
+            ControllerPresence.aclName());
+    }
+
+    /** {@link #releaseOwn(IncusClient)} for names captured earlier (a caller outside the controller's own scope). */
+    public static @NonNull Reaped releaseOwn(@NonNull IncusClient incus, @NonNull String isolationAcl,
+                                             @NonNull String bridge, @NonNull String presence) {
+        List<String> removed = new ArrayList<>();
+        List<String> refused = new ArrayList<>();
+        boolean bridgeGone = releaseIfUnused(incus, Kind.NETWORK, bridge, removed, refused);
+        boolean aclGone = releaseIfUnused(incus, Kind.NETWORK_ACL, isolationAcl, removed, refused);
+        if (bridgeGone && aclGone) {
+            releaseIfUnused(incus, Kind.NETWORK_ACL, presence, removed, refused);
+        }
+        return new Reaped(List.copyOf(removed), List.copyOf(refused));
+    }
+
+    /** @return whether the object is gone afterwards (absent counts as gone) */
+    private static boolean releaseIfUnused(IncusClient incus, Kind kind, String name, List<String> removed,
+                                           List<String> refused) {
+        try {
+            Map<String, Object> live = kind == Kind.NETWORK_ACL ? incus.networkAcl(name) : incus.network(name);
+            if (live == null) {
+                return true;
+            }
+            if (!ControllerPresence.usedBy(live).isEmpty()) {
+                return false;
+            }
+            String refusal = removeVerified(incus, new Candidate(kind, name, "", Verdict.OURS,
+                "released by its own controller once unreferenced"));
+            if (refusal == null) {
+                removed.add(kind + " " + name);
+                return true;
+            }
+            refused.add(name + ": " + refusal);
+        } catch (IOException failed) {
+            refused.add(name + ": " + failed.getMessage());
+        }
+        return false;
+    }
+
     /**
      * Re-read one candidate and delete it when the live object still agrees.
      *
