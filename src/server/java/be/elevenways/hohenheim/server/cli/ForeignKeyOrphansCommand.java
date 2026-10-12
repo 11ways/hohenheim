@@ -6,15 +6,19 @@ import be.elevenways.zenit.server.cli.OfflineCommand;
 import be.elevenways.zenit.server.cli.OfflineCommandContext;
 import be.elevenways.zenit.server.cli.OfflineCommandException;
 import be.elevenways.zenit.server.cli.ServerFlags;
+import be.elevenways.zenit.server.orm.SqliteDatasource;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * Break-glass: list the control-plane rows that violate a declared foreign key and, for ONE
- * named table at a time, delete them.
+ * Break-glass: list the rows of a NAMED control-plane database file that violate a declared foreign key and, for ONE
+ * named table at a time, delete them: {@code --foreign-key-orphans <database-file> [table]}.
  *
  * AIDEV-NOTE: the documented repair for the orphans a database accumulated while foreign
  * keys were not enforced (before zenit 8a86d3c2); CheckForeignKeys reports them, and nothing
@@ -25,6 +29,11 @@ import java.util.regex.Pattern;
  * template is gone) should be re-parented through the admin instead, and --dry-run shows
  * exactly which rowids a delete would take. Deleting a row that other rows reference is
  * refused by the constraint itself, so a parent-level orphan is repaired children first.
+ *
+ * AIDEV-NOTE: the database is NAMED, never the configured one. The deploy procedure runs this with the OLD jar against
+ * a byte copy, and a copied settings tree still names the live file by its absolute path: the check that was meant
+ * for the copy read production's open database (2026-10-12). A missing file is refused rather than opened, because
+ * SQLite would create it empty and the check would report that empty file clean.
  *
  * @author Jelle De Loecker
  * @since 0.1.0
@@ -43,8 +52,8 @@ public final class ForeignKeyOrphansCommand implements OfflineCommand {
 
     @Override
     public @NonNull String describe() {
-        return "[table]  list rows that violate a foreign key; with a table name, delete that"
-            + " table's orphaned rows (--dry-run lists what would go)";
+        return "<database-file> [table]  list the rows of that database file that violate a foreign key; with a"
+            + " table name, delete that table's orphaned rows (--dry-run lists what would go)";
     }
 
     @Override
@@ -54,10 +63,31 @@ public final class ForeignKeyOrphansCommand implements OfflineCommand {
 
     @Override
     public void run(@NonNull OfflineCommandContext context) {
-        SqlDatasource datasource = HohenheimDatabase.datasource();
+        List<String> operands = context.operands();
+        if (operands.isEmpty() || operands.get(0).isBlank()) {
+            throw new OfflineCommandException(FLAG + " needs the database file it inspects: " + FLAG
+                + " <database-file> [table]. It never reads the configured database on its own; name a byte copy, or"
+                + " the live file only while its server is stopped.");
+        }
+        Path file = Path.of(operands.get(0)).toAbsolutePath().normalize();
+        if (!Files.isRegularFile(file)) {
+            throw new OfflineCommandException("No database file at " + file + "; " + FLAG
+                + " inspects an existing file and never creates one.");
+        }
+        String table = operands.size() > 1 ? operands.get(1) : null;
+        SqliteDatasource datasource = new SqliteDatasource("jdbc:sqlite:" + file);
+        try {
+            context.print("Inspecting " + file);
+            inspect(context, datasource, table);
+        } finally {
+            datasource.close();
+        }
+    }
+
+    private static void inspect(@NonNull OfflineCommandContext context, @NonNull SqlDatasource datasource,
+                                @Nullable String table) {
         List<HohenheimDatabase.ForeignKeyViolation> violations =
             HohenheimDatabase.foreignKeyViolations(datasource);
-        String table = context.option(FLAG);
         if (table == null || table.isBlank()) {
             if (violations.isEmpty()) {
                 context.print("No row violates a declared foreign key.");
@@ -70,7 +100,7 @@ public final class ForeignKeyOrphansCommand implements OfflineCommand {
                 context.print("  " + violation.table() + " rowid " + violation.rowId()
                     + " -> missing " + violation.parent());
             }
-            context.print("Delete one table's orphans with " + FLAG + " <table> (add "
+            context.print("Delete one table's orphans with " + FLAG + " <database-file> <table> (add "
                 + ServerFlags.DRY_RUN.flag() + " to preview).");
             return;
         }
@@ -83,7 +113,7 @@ public final class ForeignKeyOrphansCommand implements OfflineCommand {
         }
         if (rowIds.isEmpty() || !TABLE_NAME.matcher(table).matches()) {
             throw new OfflineCommandException("Table '" + table + "' holds no row that violates a"
-                + " foreign key; run " + FLAG + " without a table to list them.");
+                + " foreign key; run " + FLAG + " <database-file> without a table to list them.");
         }
         boolean dryRun = context.has(ServerFlags.DRY_RUN.flag());
         int deleted = 0;

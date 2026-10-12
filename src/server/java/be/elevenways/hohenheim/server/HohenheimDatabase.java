@@ -202,7 +202,7 @@ public class HohenheimDatabase {
             return;
         }
         Blast.log("DATABASE INTEGRITY:", orphanedRows(violations.size()), "violate a declared foreign key;"
-            + " writes touching them will fail. Inspect with --foreign-key-orphans:", summarize(violations));
+            + " writes touching them will fail. Inspect with --foreign-key-orphans <database-file>:", summarize(violations));
     }
 
     /**

@@ -20,6 +20,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -120,27 +121,42 @@ class ForeignKeyIntegrityTest {
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("site_domains -> sites");
 
-        // 4. Nothing repaired itself; a dry run lists and changes nothing.
+        // 4. The check inspects only the database file it is NAMED: without one it refuses before reading anything (a
+        //    copied settings tree names the LIVE file, which is how a check meant for a byte copy read production), and
+        //    a file that does not exist is refused rather than created empty and reported clean.
+        String database = ControlPlaneBackups.databaseFile().toString();
+        assertThatThrownBy(() -> new ForeignKeyOrphansCommand().run(OfflineCommandContext.parse(
+                new String[] {ForeignKeyOrphansCommand.FLAG}, line -> { })))
+            .as("step 4: no database named, nothing inspected")
+            .isInstanceOf(OfflineCommandException.class).hasMessageContaining("database file");
+        Path missing = ControlPlaneBackups.databaseFile().resolveSibling("fk-missing-copy.db");
+        assertThatThrownBy(() -> new ForeignKeyOrphansCommand().run(OfflineCommandContext.parse(
+                new String[] {ForeignKeyOrphansCommand.FLAG, missing.toString()}, line -> { })))
+            .as("step 4: a missing file is refused").isInstanceOf(OfflineCommandException.class);
+        assertThat(missing).as("step 4: and never created").doesNotExist();
+
+        // 5. Nothing repaired itself; a dry run on the named file lists and changes nothing.
         List<String> out = new ArrayList<>();
         new ForeignKeyOrphansCommand().run(OfflineCommandContext.parse(new String[] {
-            ForeignKeyOrphansCommand.FLAG, "site_domains", "--dry-run"}, out::add));
+            ForeignKeyOrphansCommand.FLAG, database, "site_domains", "--dry-run"}, out::add));
         assertThat(String.join("\n", out))
-            .as("step 4: the dry run names what it would delete").contains("would delete site_domains");
+            .as("step 5: the run names the file it inspected").contains(database)
+            .as("step 5: the dry run names what it would delete").contains("would delete site_domains");
         assertThat(HohenheimDatabase.foreignKeyViolations())
-            .as("step 4: and deleted nothing").hasSize(1);
+            .as("step 5: and deleted nothing").hasSize(1);
 
-        // 5. A table with no orphan is refused by name rather than touched.
+        // 6. A table with no orphan is refused by name rather than touched.
         assertThatThrownBy(() -> new ForeignKeyOrphansCommand().run(OfflineCommandContext.parse(
-                new String[] {ForeignKeyOrphansCommand.FLAG, "sites"}, line -> { })))
-            .as("step 5: only a table that holds orphans can be repaired")
+                new String[] {ForeignKeyOrphansCommand.FLAG, database, "sites"}, line -> { })))
+            .as("step 6: only a table that holds orphans can be repaired")
             .isInstanceOf(OfflineCommandException.class);
 
-        // 6. The operator names the table: exactly its orphans go, and the check is clean.
+        // 7. The operator names the table: exactly its orphans go, and the check is clean.
         new ForeignKeyOrphansCommand().run(OfflineCommandContext.parse(new String[] {
-            ForeignKeyOrphansCommand.FLAG, "site_domains"}, line -> { }));
+            ForeignKeyOrphansCommand.FLAG, database, "site_domains"}, line -> { }));
         assertThat(HohenheimDatabase.foreignKeyViolations())
-            .as("step 6: the named repair removed the orphan").isEmpty();
+            .as("step 7: the named repair removed the orphan").isEmpty();
         assertThatCode(CheckForeignKeys::check)
-            .as("step 6: and the next run is clean again").doesNotThrowAnyException();
+            .as("step 7: and the next run is clean again").doesNotThrowAnyException();
     }
 }
