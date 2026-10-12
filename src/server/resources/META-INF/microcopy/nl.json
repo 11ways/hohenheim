@@ -10502,6 +10502,21 @@
     "text": "Alles op deze host: dezelfde records die cordon, drain en verwijderen blokkeren.",
     "scope": "server_overview"
   },
+  "workload_apps": [
+    {
+      "text": "Workload-apps",
+      "scope": "manage_app"
+    },
+    {
+      "text": "workload-apps",
+      "scope": "manage_app",
+      "case": "sentence"
+    }
+  ],
+  "workload_apps_hint": {
+    "text": "Je apps die als container of virtuele machine draaien: hun status, deploys en console.",
+    "scope": "manage_app"
+  },
   "workloads_empty": {
     "text": "Er draait niets op deze host",
     "scope": "server_overview"

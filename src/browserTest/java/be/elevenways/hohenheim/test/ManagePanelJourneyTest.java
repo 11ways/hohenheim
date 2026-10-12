@@ -24,6 +24,7 @@ import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelCluster;
 import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.common.panel.PanelNav;
+import be.elevenways.zenit.cms.common.render.panel.PanelNavStates;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
@@ -496,6 +497,25 @@ class ManagePanelJourneyTest extends HohenheimTestBase {
                 .as("step 7: the Apps lead is the tenant's")
                 .contains("Your apps, with their addresses and whether they work.")
                 .doesNotContain("sites, instances and stacks");
+
+            // 7b. The command palette finds the instance list, kept out of the sidebar, under Apps in the tenant's
+            //     words ("Workload apps"), never the operator's "Instances", which the admin panel keeps.
+            AccessContext viewer = AccessContext.of(TenantConduits.stubFor(
+                new UserPrincipal(this.tenantId, "Survival Tenant")));
+            List<String> palette = PanelNavStates.sections(manage, viewer, null).stream()
+                .flatMap(section -> section.items().stream())
+                .flatMap(item -> item.members().stream())
+                .map(member -> member.label().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .toList();
+            assertThat(palette).as("step 7b: the palette names the tenant's workloads as apps")
+                .contains("Workload apps").doesNotContain("Instances");
+            PanelEntry twin = Objects.requireNonNull(manage.entryBySlug(HohenheimSlugs.INSTANCES));
+            assertThat(twin.label().resolve(LocaleChain.ofTags("nl"), Zenit.getMessageResolver()))
+                .as("step 7b: in Dutch too").isEqualTo("Workload-apps");
+            PanelEntry operator = Objects.requireNonNull(Objects.requireNonNull(
+                PanelRegistry.getBySlug(HohenheimSlugs.ADMIN)).entryBySlug(HohenheimSlugs.INSTANCES));
+            assertThat(operator.label().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 7b: the operator's panel keeps its own word").isEqualTo("Instances");
 
             // 8. Databases is a row where the tenant may create one; never a door that refuses.
             assertThat(navLinks(page("/manage/dashboard")))

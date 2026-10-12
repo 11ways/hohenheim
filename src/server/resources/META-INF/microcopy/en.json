@@ -10502,6 +10502,21 @@
     "text": "Everything on this host: the same records that block cordon, drain and delete.",
     "scope": "server_overview"
   },
+  "workload_apps": [
+    {
+      "text": "Workload apps",
+      "scope": "manage_app"
+    },
+    {
+      "text": "workload apps",
+      "scope": "manage_app",
+      "case": "sentence"
+    }
+  ],
+  "workload_apps_hint": {
+    "text": "Your apps that run as a container or virtual machine: their status, deploys and console.",
+    "scope": "manage_app"
+  },
   "workloads_empty": {
     "text": "Nothing runs on this host",
     "scope": "server_overview"
