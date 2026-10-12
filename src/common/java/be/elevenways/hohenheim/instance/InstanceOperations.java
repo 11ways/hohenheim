@@ -334,6 +334,23 @@ public final class InstanceOperations {
     public record InstallMediaInput(@Nullable String installMedia) {
     }
 
+    /**
+     * Takes every ISO out of the machine's drives (the cdrom devices go, the ISO volumes stay on the host): the way to
+     * a backup that restores on a host without that ISO.
+     *
+     * AIDEV-NOTE: OPERATOR-ONLY like the attach (InstanceDevices.detach refuses a tenant on an operator-only type).
+     */
+    public static final Operation<Row, Void, Void> DETACH_INSTALL_MEDIA =
+        Operation.declare(HohenheimIds.id("detach_install_media"))
+            .happened(OperationSentences.of("detach_install_media"))
+            .label(HohenheimMicrocopy.INSTANCE_DEVICE.of("remove_media"))
+            .icon(Icon.of("compact-disc"))
+            .one(INSTANCE)
+            .gate(OperationGate.open())
+            .command(COMMAND_FACET)
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .register();
+
     /** The exec tab's input. */
     public record ExecInput(@Nullable String command) {
     }

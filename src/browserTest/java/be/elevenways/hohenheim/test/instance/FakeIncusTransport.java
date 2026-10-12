@@ -99,6 +99,10 @@ final class FakeIncusTransport implements IncusTransport {
             this.networkStore.put(String.valueOf(body.get("name")), body);
             return sync(body);
         }
+        if ("GET".equals(method) && path.equals("/1.0/storage-pools/default-pool/resources")) {
+            // A roomy pool: a restore's capacity probe reads it before anything is created.
+            return sync(Map.of("space", Map.of("total", 100L * 1024 * 1024 * 1024, "used", 0L)));
+        }
         if ("GET".equals(method) && path.equals("/1.0/storage-pools/default-pool/volumes/custom")) {
             return sync(List.copyOf(this.customVolumes.values()));
         }

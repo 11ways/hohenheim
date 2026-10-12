@@ -126,6 +126,16 @@ public final class InstanceOperationHandlers {
                     HohenheimActivityAction.DEVICE_ATTACHED, null);
                 return null;
             });
+        OperationHandlers.attach(InstanceOperations.DETACH_INSTALL_MEDIA).source(SUBJECTS)
+            .applies(instance -> authored(instance) && InstanceDevices.hasInstallMedia(instance.get(InstanceModel.ID)))
+            .authorize(HohenheimAccess.operatorOnly(OPERATOR_VERB))
+            .handle(call -> {
+                int instanceId = instanceId(call);
+                new InstanceDevices().detachInstallMedia(instanceId);
+                ActivityLog.record(Models.get(InstanceModel.class), instanceId,
+                    HohenheimActivityAction.DEVICE_DETACHED, null);
+                return null;
+            });
         OperationHandlers.attach(InstanceOperations.INSTALL).source(SUBJECTS)
             .applies(instance -> authored(instance) && instance.get(InstanceModel.TEMPLATE_ID) != null
                 && !InstanceModel.INSTALL_NONE.equals(instance.get(InstanceModel.INSTALL_STATE))

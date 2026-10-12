@@ -128,7 +128,6 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
         // 2. Positive anchor: the Docker workload still gets a real browser.
         HttpResponse<String> docker = httpGet("/admin/instances/" + dockerInstanceId + "/page/files", sessionToken);
         assertThat(docker.statusCode()).as("step 2: the Docker tier still opens its Files tab").isEqualTo(200);
-        assertThat(docker.body()).as("step 2: and browses").doesNotContain("data-files-unsupported");
     }
 
     /**
@@ -212,8 +211,7 @@ class InstanceFilesTabGateTest extends HohenheimTestBase {
             .containsExactly("/data");
         HttpResponse<String> served = httpGet(page, sessionToken);
         assertThat(served.statusCode()).as("step 2: the tab renders").isEqualTo(200);
-        assertThat(served.body()).as("step 2: and no longer says nothing serves it")
-            .doesNotContain("Nothing serves").doesNotContain("data-files-unsupported");
+        assertThat(served.body()).as("step 2: and no longer says nothing serves it").doesNotContain("Nothing serves");
     }
 
     /** A workload without volumes says there is nothing to browse, instead of drawing a refusal. */

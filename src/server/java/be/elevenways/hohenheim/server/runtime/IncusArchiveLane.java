@@ -92,7 +92,7 @@ final class IncusArchiveLane {
         }
     }
 
-    void importBackup(@NonNull InstanceSpec spec, @NonNull Path archive) throws IOException {
+    @NonNull Map<String, String> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive) throws IOException {
         // AIDEV-NOTE: the isolation ACL is ensured BEFORE the import, on THIS daemon. The
         // archive carries the source's device config, and its eth0 names this
         // controller's isolation ACL (`security.acls`); the daemon validates every
@@ -147,6 +147,8 @@ final class IncusArchiveLane {
             devices.put(IncusNetworkPolicy.NIC, nic);
         });
         this.runtime.verifyIsolated(spec);
+        // Read off the SAME definition the import landed (the edits above touch config and eth0 only).
+        return IncusDeviceLane.installMediaDrives(existing);
     }
 
     /**

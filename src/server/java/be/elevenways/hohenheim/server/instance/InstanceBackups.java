@@ -744,7 +744,9 @@ public final class InstanceBackups {
                 throw new IOException("Backup archive carries no 'instance'"
                     + " payload entry for its instance_export manifest");
             }
-            nativeSupport.importBackup(resolved.spec(), export);
+            // The export keeps a machine's ISO drives (an import onto a host holding the ISO lands them), so the new
+            // record gets the rows for what the daemon now holds, under the names it holds them.
+            InstanceDevices.recordImportedDrives(newId, nativeSupport.importBackup(resolved.spec(), export));
         } else {
             VolumeSnapshotSupport support = InstanceSnapshots.requireSupport(resolved);
             Map<String, String> volumes = InstanceSnapshots.logicalVolumes(resolved);

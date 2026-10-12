@@ -59,6 +59,17 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
         .selectedByRoute(instance -> String.valueOf((Object) instance.get(InstanceModel.ID)))
         .build();
 
+    /** Every ISO out of this tab's own record: offered while a drive holds one. */
+    private static final PanelAction<Row> DETACH_MEDIA = PanelAction.<Row, Void>places(
+            InstanceOperations.DETACH_INSTALL_MEDIA, ActionPlacement.PAGE,
+            (request, result) -> CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_DEVICE
+                .of("media_detached").withArg("name", request.subject().get(InstanceModel.NAME))))
+        .confirmation(ConfirmationSpec.of(HohenheimMicrocopy.INSTANCE_DEVICE.of("remove_media"),
+            HohenheimMicrocopy.INSTANCE_DEVICE.of("detach_media"),
+            HohenheimMicrocopy.INSTANCE_DEVICE.of("detach_media_lead"), ActionStyle.DEFAULT))
+        .selectedByRoute(instance -> String.valueOf((Object) instance.get(InstanceModel.ID)))
+        .build();
+
     @Override public @NonNull Identifier id() { return HohenheimIds.id("instance_devices"); }
     @Override public @NonNull Microcopy label() { return HohenheimMicrocopy.INSTANCE_DEVICE.of("plural"); }
     /**
@@ -90,7 +101,7 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
 
     @Override
     public @NonNull List<PanelAction<Row>> actions() {
-        return List.of(ATTACH_MEDIA);
+        return List.of(ATTACH_MEDIA, DETACH_MEDIA);
     }
 
     @Override
@@ -139,6 +150,10 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
         boolean canAttachMedia = InstanceOperationHandlers.offered(InstanceOperations.ATTACH_INSTALL_MEDIA,
             accessContext, instance);
         vars.put("mediaForm", canAttachMedia && PageActions.open(request, this, instance, ATTACH_MEDIA.id())
+            instanceof PageActions.Form form ? form.state() : null);
+        // The detach beside it, drawn while a drive holds an ISO: its handler applies exactly then.
+        vars.put("detachMediaForm", InstanceOperationHandlers.offered(InstanceOperations.DETACH_INSTALL_MEDIA,
+            accessContext, instance) && PageActions.open(request, this, instance, DETACH_MEDIA.id())
             instanceof PageActions.Form form ? form.state() : null);
         Integer serverId = instance.get(InstanceModel.SERVER_ID);
         vars.put("mediaHostTarget", canAttachMedia && serverId != null

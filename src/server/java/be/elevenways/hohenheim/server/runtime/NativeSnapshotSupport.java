@@ -4,6 +4,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Map;
 
 /**
  * The NATIVE snapshot half of the driver seam, for runtimes whose persistent state is
@@ -70,8 +71,11 @@ public interface NativeSnapshotSupport extends WorkloadAttribution {
      * and stamp {@code spec}'s owner labels onto it -- the import carries the SOURCE
      * instance's labels, and an unattributable window would defeat every ownership
      * guard, so re-attribution is part of this contract, not a caller nicety.
+     *
+     * @return the install-media drives the imported definition carries, device name to ISO volume (empty for none):
+     *         the export keeps them, so the new record's device rows are written from this answer
      */
-    void importBackup(@NonNull InstanceSpec spec, @NonNull Path archive) throws IOException;
+    @NonNull Map<String, String> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive) throws IOException;
 
     /**
      * The image identity the workload actually runs (for the backup manifest).

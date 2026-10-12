@@ -444,15 +444,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
                 Row instance = Models.get(InstanceModel.class).findById(instanceId);
 
                 // 1. The Devices tab places the attach as an operation on the record itself.
-                Operation<Row, ?, ?> attach = new InstanceDevicesPage().actions().stream()
-                    .map(PanelAction::operation)
-                    .filter(operation -> operation.id().equals(Identifier.of("hohenheim", "attach_install_media")))
-                    .map(operation -> {
-                        @SuppressWarnings("unchecked")
-                        Operation<Row, ?, ?> typed = (Operation<Row, ?, ?>) operation;
-                        return typed;
-                    })
-                    .findFirst().orElse(null);
+                Operation<Row, ?, ?> attach = tabOperation("attach_install_media");
                 assertThat(attach).as("step 1: the Devices tab places attach-install-media").isNotNull();
 
                 // 2. Its form asks only which ISO: no instance id (it is the record), no size (it is a CD), and the
@@ -509,6 +501,23 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
                     .entries().get(0);
                 assertThat(recordPick.emptyReason(operator)).as("step 6: the record's pick names its host")
                     .isNotNull().extracting(Microcopy::key).isEqualTo("install_media_none");
+
+                // 7. The Devices tab places the detach beside the attach, offered while a drive holds an ISO.
+                Operation<Row, ?, ?> detach = tabOperation("detach_install_media");
+                assertThat(detach).as("step 7: the Devices tab places detach-install-media").isNotNull();
+                assertThat(OperationPipeline.offer(detach, TenantConduits.operator(), instance))
+                    .as("step 7: offered to the operator while the drive holds an ISO")
+                    .isNotInstanceOf(OperationPipeline.Offer.Hidden.class);
+
+                // 8. Detaching takes the ISO out of the record's drive and the daemon's, leaving nothing to detach.
+                OperationPipeline.invoke(attachRequest(detach, instance));
+                assertThat(deviceRows(instanceId)).as("step 8: no device row is left").isEmpty();
+                assertThat(DAEMON.get(handleOf(instanceId)).cdroms).as("step 8: the daemon's drive is empty")
+                    .isEmpty();
+                assertThat(OperationPipeline.offer(detach, TenantConduits.operator(),
+                        Models.get(InstanceModel.class).findById(instanceId)))
+                    .as("step 8: so the detach is no longer offered")
+                    .isInstanceOf(OperationPipeline.Offer.Hidden.class);
             } finally {
                 // The derived device name carries no PREFIX, so its row goes here; the instance goes back to the
                 // class host, whose cleanup removes it, and the socket host leaves empty.
@@ -524,6 +533,19 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
     private static OperationRequest<Row, ?, ?> attachRequest(Operation<Row, ?, ?> attach, Row instance) {
         return OperationRequest.of(attach, CmsPlacementSurface.ADMIN_ACTION).caller(TenantConduits.operator())
             .subjects(List.of(instance));
+    }
+
+    /** @return the Devices tab's placed operation with this id, or null when the tab places none */
+    private static Operation<Row, ?, ?> tabOperation(String id) {
+        return new InstanceDevicesPage().actions().stream()
+            .map(PanelAction::operation)
+            .filter(operation -> operation.id().equals(Identifier.of("hohenheim", id)))
+            .map(operation -> {
+                @SuppressWarnings("unchecked")
+                Operation<Row, ?, ?> typed = (Operation<Row, ?, ?>) operation;
+                return typed;
+            })
+            .findFirst().orElse(null);
     }
 
     // -- capture --------------------------------------------------------------

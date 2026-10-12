@@ -667,9 +667,9 @@ public final class IncusInstanceRuntime
     }
 
     @Override
-    public void importBackup(@NonNull InstanceSpec spec, @NonNull Path archive)
+    public @NonNull Map<String, String> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive)
             throws IOException {
-        this.archive.importBackup(spec, archive);
+        return this.archive.importBackup(spec, archive);
     }
 
     @Override

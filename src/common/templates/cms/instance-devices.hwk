@@ -7,6 +7,7 @@
 {% declare addDiskTarget: RouteTarget = null %}
 {% declare addNicTarget: RouteTarget = null %}
 {% declare mediaForm: PageFormState = null %}
+{% declare detachMediaForm: PageFormState = null %}
 {% declare mediaHostTarget: RouteTarget = null %}
 {% declare mediaHostLabel: String = "" %}
 {% declare canEdit: Boolean = true %}
@@ -23,9 +24,10 @@
         {% /if %}
     </div>
 
-    {% if mediaForm != null %}
+    {% if mediaForm != null || detachMediaForm != null %}
     <div id="attach-media">
-        {% render "zenitcms:form/page-action" var:page=mediaForm %}
+        {% if mediaForm != null %}{% render "zenitcms:form/page-action" var:page=mediaForm %}{% /if %}
+        {% if detachMediaForm != null %}<div id="detach-media">{% render "zenitcms:form/page-action" var:page=detachMediaForm %}</div>{% /if %}
         {% if mediaHostTarget %}<a use:Zenit.route={% mediaHostTarget %} id="media-host-link">{{ mediaHostLabel }}</a>{% /if %}
     </div>
     {% /if %}

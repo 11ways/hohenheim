@@ -388,9 +388,13 @@ class InstanceBackupsTest {
                 Row drive = Models.get(InstanceDeviceModel.class).createEmptyRow();
                 drive.set(InstanceDeviceModel.INSTANCE_ID, instanceId);
                 drive.set(InstanceDeviceModel.TYPE, InstanceDeviceModel.TYPE_CDROM);
-                drive.set(InstanceDeviceModel.NAME, "cdrom");
+                drive.set(InstanceDeviceModel.NAME, "cdrom2");
                 drive.set(InstanceDeviceModel.SOURCE_MEDIA, "alpine.iso");
                 Models.get(InstanceDeviceModel.class).save(drive);
+                // The workload holds the drive too, under a name no derivation would pick: an import keeps it.
+                FakeNativeDaemons.daemonOf(hostId).get(FakeNativeDaemons.handleOf(instanceId)).cdroms
+                    .put("cdrom2", "alpine.iso");
+                List<Integer> restored = new ArrayList<>();
                 int holdingId = HostFixtures.admittedIncusHost("media-holding-host");
                 int lackingId = HostFixtures.admittedIncusHost("media-lacking-host");
                 Models.get(ServerModel.class).find().where(ServerModel.ID.eq(holdingId))
@@ -424,18 +428,37 @@ class InstanceBackupsTest {
                     assertThat(Models.get(InstanceModel.class).find().count())
                         .as("step 3: no instance record was created").isEqualTo(instancesBefore);
 
-                    // 4. With the ISO out of the drive, a new backup names no media and that host takes it.
+                    // 4. Onto the host that holds the ISO the restore imports the machine WITH its drive, and the new
+                    //    record has the device row for it under the name the daemon holds it, so its Devices tab
+                    //    shows what the machine carries and the deploy's reconcile adds no second drive.
+                    int copyId = backups.restoreToNew(withMedia, "media-copy", holdingId).instanceId();
+                    restored.add(copyId);
+                    assertThat(Models.get(InstanceDeviceModel.class).find()
+                            .where(InstanceDeviceModel.INSTANCE_ID.eq(copyId)).all())
+                        .as("step 4: the restored record has the drive's row").singleElement().satisfies(row -> {
+                            assertThat((String) row.get(InstanceDeviceModel.NAME)).isEqualTo("cdrom2");
+                            assertThat((String) row.get(InstanceDeviceModel.TYPE))
+                                .isEqualTo(InstanceDeviceModel.TYPE_CDROM);
+                            assertThat((String) row.get(InstanceDeviceModel.SOURCE_MEDIA)).isEqualTo("alpine.iso");
+                        });
+                    assertThat(FakeNativeDaemons.daemonOf(holdingId).get(FakeNativeDaemons.handleOf(copyId)).cdroms)
+                        .as("step 4: and the restored machine holds that one drive").containsExactly(
+                            Map.entry("cdrom2", "alpine.iso"));
+
+                    // 5. With the ISO out of the drive, a new backup names no media and that host takes it.
                     Models.get(InstanceDeviceModel.class).delete(drive.get(InstanceDeviceModel.ID));
+                    FakeNativeDaemons.daemonOf(hostId).get(FakeNativeDaemons.handleOf(instanceId)).cdroms.clear();
                     Row without = Models.get(InstanceBackupModel.class)
                         .findById(backups.backupNow(instanceId, targetId, target));
                     assertThat(RawValues.map((Object) without.get(InstanceBackupModel.SUMMARY)).get("install_media"))
-                        .as("step 4: a backup without media names none").isEqualTo(List.of());
+                        .as("step 5: a backup without media names none").isEqualTo(List.of());
                     assertThat(destinationsById(without).get(lackingId).refusal())
-                        .as("step 4: so the host without the ISO is offered").isNull();
+                        .as("step 5: so the host without the ISO is offered").isNull();
                 } finally {
                     Models.get(InstanceDeviceModel.class).find().where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
                         .all().forEach(row -> Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID)));
                     Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
+                    restored.forEach(service::destroy);
                     service.destroy(instanceId);
                     Models.get(ServerModel.class).delete(holdingId);
                     Models.get(ServerModel.class).delete(lackingId);

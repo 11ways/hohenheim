@@ -119,16 +119,6 @@ public final class InstanceFilesPage implements RecordTab.Rendered<Row> {
         vars.put("editPath", "");
         vars.put("editContent", "");
         vars.put("editTooLarge", false);
-
-        // A runtime that has no file lane at all is a NAMED state, not an error banner:
-        // only the Docker driver implements InstanceFileSupport, so an Incus workload
-        // renders "not available for this runtime yet" and no browser chrome.
-        boolean supported = files.isSupported(instanceId);
-        vars.put("supported", supported);
-        if (!supported) {
-            return new RenderTemplateResult(
-                HohenheimTemplateIds.INSTANCE_FILES, vars);
-        }
         putSftpCard(vars, conduit, accessContext, instanceId);
 
         String panel = request.panelSlug();

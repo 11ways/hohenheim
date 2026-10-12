@@ -271,6 +271,26 @@ final class IncusDeviceLane {
         requireDevicePresent(spec.handle(), deviceName);
     }
 
+    /**
+     * The install-media drives of an instance definition: the device shape {@link #ensureCdrom} writes (a disk with a
+     * source volume, no mount path and the media boot priority), read back by the import.
+     *
+     * @return device name to ISO volume, in definition order
+     */
+    static @NonNull Map<String, String> installMediaDrives(@NonNull Map<String, Object> instance) {
+        Map<String, String> drives = new LinkedHashMap<>();
+        if (instance.get("devices") instanceof Map<?, ?> devices) {
+            devices.forEach((name, device) -> {
+                if (device instanceof Map<?, ?> disk && "disk".equals(disk.get("type")) && disk.get("path") == null
+                        && disk.get("source") instanceof String source && !source.isBlank()
+                        && CDROM_BOOT_PRIORITY.equals(String.valueOf(disk.get("boot.priority")))) {
+                    drives.put(String.valueOf(name), source);
+                }
+            });
+        }
+        return drives;
+    }
+
     /** Stamp the root disk's boot priority ABOVE the media's (see ensureCdrom's note). */
     private void ensureRootBootPriority(@NonNull String handle) throws IOException {
         Map<String, Object> instance = this.incus.instance(handle);

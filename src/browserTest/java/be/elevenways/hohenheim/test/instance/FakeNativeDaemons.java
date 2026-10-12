@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
+import be.elevenways.hohenheim.server.runtime.DeviceAttachSupport;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.ImageIdentity;
@@ -153,6 +154,8 @@ final class FakeNativeDaemons {
         boolean tty;
         /** The last {@code cols x rows} a resize set, or null when nobody sized it. */
         String geometry;
+        /** Install-media drives, device name to ISO volume: an export carries them, an import lands them. */
+        final Map<String, String> cdroms = new LinkedHashMap<>();
     }
 
     /**
@@ -343,7 +346,7 @@ final class FakeNativeDaemons {
 
     static final class FakeNativeRuntime
             implements InstanceRuntime, NativeSnapshotSupport, StatsStreamSupport,
-                       ConsoleStreamSupport, InstallSupport {
+                       ConsoleStreamSupport, InstallSupport, DeviceAttachSupport {
 
         private final Map<String, FakeWorkload> daemon;
 
@@ -468,12 +471,14 @@ final class FakeNativeDaemons {
                 workload.snapshots.forEach(snapshot ->
                     text.append("snapshot ").append(snapshot).append('\n'));
             }
+            workload.cdroms.forEach((name, medium) ->
+                text.append("cdrom ").append(name).append('=').append(medium).append('\n'));
             Files.writeString(destination, text.toString());
             return Files.size(destination);
         }
 
         @Override
-        public void importBackup(@NonNull InstanceSpec spec, @NonNull Path archive)
+        public @NonNull Map<String, String> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive)
                 throws IOException {
             if (this.daemon.containsKey(spec.handle())) {
                 throw new IOException("already exists: " + spec.handle());
@@ -488,9 +493,53 @@ final class FakeNativeDaemons {
                     workload.data.put(pair[0], pair.length > 1 ? pair[1] : "");
                 } else if (line.startsWith("snapshot ")) {
                     workload.snapshots.add(line.substring(9));
+                } else if (line.startsWith("cdrom ")) {
+                    String[] drive = line.substring(6).split("=", 2);
+                    workload.cdroms.put(drive[0], drive[1]);
                 }
             }
             this.daemon.put(spec.handle(), workload);
+            return Map.copyOf(workload.cdroms);
+        }
+
+        // -- DeviceAttachSupport: install-media drives only ---------------------
+
+        @Override
+        public void ensureDisk(@NonNull InstanceSpec spec, @NonNull String deviceName, int sizeGb)
+                throws IOException {
+            throw new IOException("the fake native runtime carries install media only");
+        }
+
+        @Override
+        public void resizeDisk(@NonNull InstanceSpec spec, @NonNull String deviceName, int sizeGb)
+                throws IOException {
+            throw new IOException("the fake native runtime carries install media only");
+        }
+
+        @Override
+        public void ensureNic(@NonNull InstanceSpec spec, @NonNull String deviceName) throws IOException {
+            throw new IOException("the fake native runtime carries install media only");
+        }
+
+        @Override
+        public void ensureCdrom(@NonNull InstanceSpec spec, @NonNull String deviceName,
+                                @NonNull String mediaVolume) throws IOException {
+            require(spec.handle()).cdroms.put(deviceName, mediaVolume);
+        }
+
+        @Override
+        public void removeDevice(@NonNull InstanceSpec spec, @NonNull String deviceName, boolean hasVolume)
+                throws IOException {
+            require(spec.handle()).cdroms.remove(deviceName);
+        }
+
+        @Override
+        public void deleteVolumes(@NonNull InstanceSpec spec, @NonNull List<String> deviceNames) {
+        }
+
+        @Override
+        public @Nullable Integer diskSizeGb(@NonNull InstanceSpec spec, @NonNull String deviceName) {
+            return null;
         }
 
         @Override

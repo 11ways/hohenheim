@@ -22,6 +22,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Attach, resize and detach instance devices (extra disks and NICs) as DESIRED-STATE
@@ -186,16 +187,47 @@ public final class InstanceDevices {
     /** @return the install media (ISO volume names) in the instance's drives, in the order they were attached */
     public static @NonNull List<String> installMediaOf(int instanceId) {
         List<String> media = new ArrayList<>();
-        for (Row row : Models.get(InstanceDeviceModel.class).find()
-                .where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
-                .where(InstanceDeviceModel.TYPE.eq(DeviceType.CDROM.token()))
-                .orderBy(InstanceDeviceModel.ID, SortOrder.ASC).all()) {
+        for (Row row : drivesOf(instanceId)) {
             String medium = row.get(InstanceDeviceModel.SOURCE_MEDIA);
             if (medium != null && !medium.isBlank()) {
                 media.add(medium);
             }
         }
         return media;
+    }
+
+    /**
+     * Take every install medium out of the machine's drives, each through {@link #detach}: the ISO volumes stay on
+     * the host.
+     *
+     * @throws Violations as {@link #detach}
+     */
+    public void detachInstallMedia(int instanceId) {
+        for (Row drive : drivesOf(instanceId)) {
+            this.detach(instanceId, drive.get(InstanceDeviceModel.NAME));
+        }
+    }
+
+    /**
+     * Record the drives an import brought in its definition (a restore of a machine backed up with its ISO): the
+     * daemon already holds each one, so only the row is written, and the deploy's reconcile finds it in place.
+     *
+     * @param drives device name to ISO volume, as the driver read them off the imported workload
+     */
+    static void recordImportedDrives(int instanceId, @NonNull Map<String, String> drives) {
+        drives.forEach((name, medium) -> {
+            Row row = newDevice(instanceId, DeviceType.CDROM, name);
+            row.set(InstanceDeviceModel.SOURCE_MEDIA, medium);
+            Models.get(InstanceDeviceModel.class).save(row);
+        });
+    }
+
+    /** The instance's cdrom rows, oldest first. */
+    private static @NonNull List<Row> drivesOf(int instanceId) {
+        return Models.get(InstanceDeviceModel.class).find()
+            .where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
+            .where(InstanceDeviceModel.TYPE.eq(DeviceType.CDROM.token()))
+            .orderBy(InstanceDeviceModel.ID, SortOrder.ASC).all();
     }
 
     /**

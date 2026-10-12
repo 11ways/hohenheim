@@ -9371,6 +9371,22 @@
     "text": "De machine start van deze ISO voor haar eigen schijf tot je ze loskoppelt.",
     "scope": "instance_device"
   },
+  "remove_media": {
+    "text": "Installatiemedia loskoppelen",
+    "scope": "instance_device"
+  },
+  "detach_media": {
+    "text": "Loskoppelen",
+    "scope": "instance_device"
+  },
+  "detach_media_lead": {
+    "text": "Haalt de ISO uit de lade van de machine. De ISO blijft op haar host en de machine start van haar eigen schijf.",
+    "scope": "instance_device"
+  },
+  "media_detached": {
+    "text": "De lade van {$name} is leeg",
+    "scope": "instance_device"
+  },
   "install_media_not_on_host": {
     "text": "{$host} heeft geen installatiemedia met de naam {$media}",
     "scope": "violations"
@@ -10840,14 +10856,6 @@
   "no_public_address": {
     "text": "Deze host heeft geen publiek adres, dus alleen zijn eigen netwerk bereikt deze poort.",
     "scope": "instance_overview"
-  },
-  "unsupported": {
-    "text": "Nog niet beschikbaar voor deze runtime",
-    "scope": "instance_files"
-  },
-  "unsupported_hint": {
-    "text": "Alleen het Docker-stuurprogramma biedt een bestandskanaal. Deze workload draait op een runtime zonder dat kanaal, dus er valt hier nog niets te doorbladeren.",
-    "scope": "instance_files"
   },
   "no_volumes": {
     "text": "Geen mappen om te doorbladeren",
@@ -15519,6 +15527,7 @@
   "approve_template": { "text": "{$actor} keurde sjabloon {$subject} goed", "scope": "hohenheim", "target": "happened" },
   "unapprove_template": { "text": "{$actor} trok de goedkeuring van sjabloon {$subject} in", "scope": "hohenheim", "target": "happened" },
   "attach_install_media": { "text": "{$actor} plaatste installatiemedia in {$subject}", "scope": "hohenheim", "target": "happened" },
+  "detach_install_media": { "text": "{$actor} haalde de installatiemedia uit {$subject}", "scope": "hohenheim", "target": "happened" },
   "restore_backup": { "text": "{$actor} herstelde back-up {$subject}", "scope": "hohenheim", "target": "happened" },
   "delete_backup": { "text": "{$actor} verwijderde back-up {$subject}", "scope": "hohenheim", "target": "happened" },
   "detach_device": { "text": "{$actor} koppelde apparaat {$subject} los", "scope": "hohenheim", "target": "happened" },

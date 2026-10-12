@@ -9371,6 +9371,22 @@
     "text": "The machine starts from this ISO before its own disk until you detach it.",
     "scope": "instance_device"
   },
+  "remove_media": {
+    "text": "Detach install media",
+    "scope": "instance_device"
+  },
+  "detach_media": {
+    "text": "Detach",
+    "scope": "instance_device"
+  },
+  "detach_media_lead": {
+    "text": "Takes the ISO out of the machine's drive. The ISO stays on its host, and the machine boots from its own disk.",
+    "scope": "instance_device"
+  },
+  "media_detached": {
+    "text": "The drive of {$name} is empty",
+    "scope": "instance_device"
+  },
   "install_media_not_on_host": {
     "text": "{$host} holds no install media named {$media}",
     "scope": "violations"
@@ -10840,14 +10856,6 @@
   "no_public_address": {
     "text": "This host has no public address set, so only its own network reaches this port.",
     "scope": "instance_overview"
-  },
-  "unsupported": {
-    "text": "Not available for this runtime yet",
-    "scope": "instance_files"
-  },
-  "unsupported_hint": {
-    "text": "Only the Docker driver exposes a file lane. This workload runs on a runtime that has none, so there is nothing to browse here yet.",
-    "scope": "instance_files"
   },
   "no_volumes": {
     "text": "No folders to browse",
@@ -15519,6 +15527,7 @@
   "approve_template": { "text": "{$actor} approved template {$subject}", "scope": "hohenheim", "target": "happened" },
   "unapprove_template": { "text": "{$actor} withdrew the approval of template {$subject}", "scope": "hohenheim", "target": "happened" },
   "attach_install_media": { "text": "{$actor} put install media in {$subject}", "scope": "hohenheim", "target": "happened" },
+  "detach_install_media": { "text": "{$actor} took the install media out of {$subject}", "scope": "hohenheim", "target": "happened" },
   "restore_backup": { "text": "{$actor} restored backup {$subject}", "scope": "hohenheim", "target": "happened" },
   "delete_backup": { "text": "{$actor} deleted backup {$subject}", "scope": "hohenheim", "target": "happened" },
   "detach_device": { "text": "{$actor} detached device {$subject}", "scope": "hohenheim", "target": "happened" },
