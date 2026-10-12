@@ -416,7 +416,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Maximaal aantal CPU-kernen voor de container. Leeg betekent onbeperkt.",
+      "text": "Maximaal aantal CPU-kernen voor de workload. Leeg betekent onbeperkt.",
       "scope": "help"
     }
   ],

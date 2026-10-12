@@ -416,7 +416,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "Maximum CPU cores available to the container. Leave blank for no limit.",
+      "text": "Maximum CPU cores available to the workload. Leave blank for no limit.",
       "scope": "help"
     }
   ],
