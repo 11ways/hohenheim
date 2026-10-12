@@ -196,6 +196,9 @@ final class FakeNativeDaemons {
     /** Whether the fake's console is exclusive, the Incus shape: one console per workload. */
     static volatile boolean exclusiveConsoles;
 
+    /** Whether the fake's console only opens on a running workload, the Incus shape: the watch attaches after start. */
+    static volatile boolean deferredConsoles;
+
     /**
      * Consumed by the next {@code createSnapshot}: a writer that appears while the
      * daemon is taking the capture, on the caller's thread and datasource scope. That
@@ -249,6 +252,7 @@ final class FakeNativeDaemons {
         TAIL_FAILS.clear();
         TAILS.clear();
         exclusiveConsoles = false;
+        deferredConsoles = false;
     }
 
     /**
@@ -558,6 +562,11 @@ final class FakeNativeDaemons {
         }
 
         @Override
+        public boolean attachRequiresRunning() {
+            return deferredConsoles;
+        }
+
+        @Override
         public void resizeConsole(@NonNull String handle, int cols, int rows) throws IOException {
             FakeWorkload workload = require(handle);
             if (!workload.tty) {
@@ -571,6 +580,11 @@ final class FakeNativeDaemons {
                 throws IOException {
             if (TAIL_FAILS.contains(handle)) {
                 throw new IOException("the console of " + handle + " cannot be read");
+            }
+            // The Incus VM shape: while a console is attached, its log reads empty (the ring buffer is the console's).
+            ScriptedStream attached = CONSOLE_STREAMS.get(handle);
+            if (deferredConsoles && attached != null && !attached.isClosed()) {
+                return "";
             }
             return TAILS.getOrDefault(handle, "");
         }

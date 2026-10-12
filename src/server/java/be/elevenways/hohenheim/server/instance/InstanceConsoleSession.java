@@ -176,6 +176,11 @@ final class InstanceConsoleSession {
         return this.ended.getCount() == 0;
     }
 
+    /** Whether the hub closed this session itself (released, replaced), so its end was nobody else's. */
+    boolean closedByHub() {
+        return this.closedByHub;
+    }
+
     private void pump() {
         ConsoleStream stream = this.console.stream();
         ConsoleStream.Chunk chunk;
@@ -357,18 +362,25 @@ final class InstanceConsoleSession {
     }
 
     /**
-     * Closes this session when its console is exclusive and nothing needs it: no viewer follows it, no stop command
-     * waits on it and no readiness line is still awaited. Atomic with {@link #subscribe}.
+     * Closes this session when its console is exclusive and nothing needs it: no viewer follows it and no readiness
+     * line is still awaited. A stop command does not hold it: the stop opens the console for itself. Atomic with
+     * {@link #subscribe}.
      *
      * @return whether it closed
      */
     synchronized boolean releaseIfIdle() {
-        if (!this.exclusive || this.closedByHub || !this.listeners.isEmpty() || this.stopCommand != null
+        if (!this.exclusive || this.closedByHub || !this.listeners.isEmpty()
                 || (this.readinessLine != null && !this.readinessMatched)) {
             return false;
         }
         this.close();
         return true;
+    }
+
+    /** Stops awaiting the readiness line once its deadline gave up on it; a late line then fires nothing. */
+    synchronized void stopAwaitingReadiness() {
+        this.readinessLine = null;
+        this.readinessAction = null;
     }
 
     /**

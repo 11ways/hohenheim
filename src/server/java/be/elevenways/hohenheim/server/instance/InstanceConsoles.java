@@ -31,8 +31,11 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
@@ -56,6 +59,9 @@ public final class InstanceConsoles {
 
     /** How long an armed readiness matcher waits before stamping error. */
     private static final long READINESS_TIMEOUT_MS = 180_000;
+
+    /** How often an awaited readiness line's watch looks whether its console ended and must attach again. */
+    private static final long READINESS_REATTACH_MS = 2_000;
 
     /** Flap protection (the deleted process lane's shape): this many crashes ... */
     private static final int FLAP_THRESHOLD = 3;
@@ -130,14 +136,14 @@ public final class InstanceConsoles {
         }
         boolean exclusive = resolved.runtime() instanceof ConsoleStreamSupport streaming
             && streaming.consoleExclusive();
-        if ((!(resolved.runtime() instanceof ConsoleStreamSupport) || exclusive) && readiness == null
-                && stopCommand == null) {
+        if (exclusive && readiness == null
+                || !(resolved.runtime() instanceof ConsoleStreamSupport) && readiness == null && stopCommand == null) {
             // AIDEV-NOTE: restart alone never demands a console: without a stream to watch, the status reconciler
             // catches the unobserved exit at sweep cadence and redeploys it. Only a template's console contract
             // (readiness line, stop command) cannot be honoured blind. Restart became the default on 2026-10-07.
-            // An EXCLUSIVE console (Incus) is not held for restart alone either: holding it keeps the VM's screen
-            // and the operator's own console out for the workload's whole life, and Incus reports no exit status
-            // a console-observed exit could act on.
+            // An EXCLUSIVE console (Incus) is held only while the readiness line is awaited: holding it keeps the
+            // VM's screen and the operator's own console out, Incus reports no exit status a console-observed exit
+            // could act on, and the stop command opens the console for itself when the stop comes (tryGracefulStop).
             return null;
         }
         if (!(resolved.runtime() instanceof ConsoleStreamSupport support)) {
@@ -172,8 +178,7 @@ public final class InstanceConsoles {
         InstanceConsoleSession session = watch.session();
         if (session == null) {
             try {
-                session = open(watch.support(), watch.resolved(), instanceId,
-                    watch.stopCommand(), watch.leases(), watch.datasource());
+                session = attachDeferred(watch, instanceId);
             } catch (Violations refused) {
                 // The deploy's own thread, under its claim: no later generation can exist yet.
                 stampIfStatus(watch.leases(), watch.serverId(), watch.instanceName(),
@@ -181,41 +186,93 @@ public final class InstanceConsoles {
                     "deferred console attach failed", HohenheimActivityAction.WORKLOAD_START_FAILED, null);
                 throw refused;
             }
-            // Close the start-to-attach gap: what the daemon buffered before the
-            // attach seeds the ring, so armReadiness's backlog scan sees it.
-            try {
-                session.seedBacklog(watch.support()
-                    .consoleTail(watch.resolved().spec().handle(), 200));
-            } catch (IOException unreadable) {
-                Blast.log("CONSOLE: could not seed the console backlog of instance",
-                    instanceId, "-", unreadable.getMessage());
-            }
         }
-        String readiness = watch.readinessLine();
-        if (readiness == null) {
+        if (watch.readinessLine() == null) {
             return;
         }
-        final InstanceConsoleSession armed = session;
-        armed.armReadiness(readiness, () -> HandlerSupport.inScope(watch.datasource(), () ->
-            stampIfStatus(watch.leases(), watch.serverId(), watch.instanceName(), instanceId,
-                () -> isCurrent(armed), InstanceModel.STATUS_STARTING, InstanceModel.STATUS_RUNNING,
-                "readiness line observed on the console", null, null)));
+        armReadiness(watch, instanceId, session);
         long deadline = readinessTimeoutMs;
+        final InstanceConsoleSession first = session;
         JobRunner.startVirtualThread(() -> {
-            try {
-                Thread.sleep(deadline);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+            InstanceConsoleSession watching = first;
+            long until = Now.millis() + deadline;
+            // AIDEV-NOTE: a guest that reboots ends its console operation (an Alpine cloud VM resets ~30 s after its
+            // first start), so the console that watched for the line is gone before the line is printed. While the
+            // line is awaited, a deferred watch whose stream ended attaches again, seeded from the backlog.
+            while (!watching.readinessMatched() && Now.millis() < until) {
+                try {
+                    Thread.sleep(Math.min(READINESS_REATTACH_MS, Math.max(1, until - Now.millis())));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                if (watching.isEnded() && !watching.readinessMatched() && watch.session() == null
+                        && isCurrent(watching) && !watching.closedByHub()) {
+                    watching = reattachForReadiness(watch, instanceId, watching);
+                }
+            }
+            if (watching.readinessMatched()) {
                 return;
             }
-            if (armed.readinessMatched()) {
-                return;
-            }
+            final InstanceConsoleSession given = watching;
             HandlerSupport.inScope(watch.datasource(), () ->
                 stampIfStatus(watch.leases(), watch.serverId(), watch.instanceName(), instanceId,
-                    () -> isCurrent(armed), InstanceModel.STATUS_STARTING, InstanceModel.STATUS_ERROR,
+                    () -> isCurrent(given), InstanceModel.STATUS_STARTING, InstanceModel.STATUS_ERROR,
                     "readiness line not observed within " + deadline + "ms",
                     HohenheimActivityAction.WORKLOAD_NEVER_READY, null));
+            // Given up on: the line is no longer awaited, so an exclusive console is let go all the same.
+            given.stopAwaitingReadiness();
+            releaseIfIdle(given);
+        });
+    }
+
+    /**
+     * Attaches a deferred watch's console, seeded from what the daemon buffered before the attach so the readiness
+     * scan sees it. The backlog is read BEFORE the attach: an attached Incus VM console's log reads empty (its ring
+     * buffer is handed to the attached console), which made a VM miss every line printed while its deploy waited.
+     *
+     * @throws Violations {@code console_open_failed}
+     */
+    private static @NonNull InstanceConsoleSession attachDeferred(@NonNull Watch watch, int instanceId) {
+        String backlog = "";
+        try {
+            backlog = watch.support().consoleTail(watch.resolved().spec().handle(), 200);
+        } catch (IOException unreadable) {
+            Blast.log("CONSOLE: could not seed the console backlog of instance",
+                instanceId, "-", unreadable.getMessage());
+        }
+        InstanceConsoleSession session = open(watch.support(), watch.resolved(), instanceId,
+            watch.stopCommand(), watch.leases(), watch.datasource());
+        session.seedBacklog(backlog);
+        return session;
+    }
+
+    /** @return the session watching for the line again, or the ended one while the console cannot be opened yet */
+    private static @NonNull InstanceConsoleSession reattachForReadiness(@NonNull Watch watch, int instanceId,
+                                                                       @NonNull InstanceConsoleSession ended) {
+        List<InstanceConsoleSession> attached = new ArrayList<>(1);
+        try {
+            HandlerSupport.inScope(watch.datasource(), () -> attached.add(attachDeferred(watch, instanceId)));
+        } catch (Violations refused) {
+            Blast.log("CONSOLE: instance", instanceId, "console not open yet for its readiness line:",
+                refused.getMessage());
+            return ended;
+        }
+        InstanceConsoleSession session = attached.get(0);
+        Blast.log("CONSOLE: instance", instanceId, "console attached again to await its readiness line");
+        armReadiness(watch, instanceId, session);
+        return session;
+    }
+
+    /** Arms the readiness matcher on one session: the line flips starting to running and lets the console go. */
+    private static void armReadiness(@NonNull Watch watch, int instanceId, @NonNull InstanceConsoleSession session) {
+        session.armReadiness(Objects.requireNonNull(watch.readinessLine()), () -> {
+            HandlerSupport.inScope(watch.datasource(), () ->
+                stampIfStatus(watch.leases(), watch.serverId(), watch.instanceName(), instanceId,
+                    () -> isCurrent(session), InstanceModel.STATUS_STARTING, InstanceModel.STATUS_RUNNING,
+                    "readiness line observed on the console", null, null));
+            // Seen: an exclusive console has nothing left to watch for, so it is let go for the screen.
+            releaseIfIdle(session);
         });
     }
 
@@ -463,14 +520,18 @@ public final class InstanceConsoles {
     }
 
     /**
-     * Graceful console stop: when a live session exists, stdin is delivered and the
-     * template declares a stop command, send it and wait up to the grace window for
-     * the workload to exit on its own.
+     * Graceful console stop: when stdin is delivered and the template declares a stop command, send it and wait up to
+     * the grace window for the workload to exit on its own. An exclusive console nothing holds is opened for the
+     * command alone and let go after it, so a stop command never keeps the console between stops.
      *
      * @return true when the workload exited from the console command
      */
-    static boolean tryGracefulStop(int instanceId, int graceSeconds) {
+    static boolean tryGracefulStop(InstanceService.@NonNull Resolved resolved, int instanceId, int graceSeconds,
+                                   @NonNull HostLeases leases) {
         InstanceConsoleSession session = peek(instanceId);
+        if (session == null) {
+            session = openForStop(resolved, instanceId, leases);
+        }
         if (session == null || !session.stdinDelivered() || session.stopCommand() == null) {
             return false;
         }
@@ -480,9 +541,33 @@ public final class InstanceConsoles {
         } catch (IOException e) {
             Blast.log("CONSOLE: graceful stop of instance", instanceId, "could not send"
                 + " the stop command:", e.getMessage());
+            releaseIfIdle(session);
             return false;
         }
-        return session.awaitEnd(graceSeconds * 1000L);
+        boolean ended = session.awaitEnd(graceSeconds * 1000L);
+        releaseIfIdle(session);
+        return ended;
+    }
+
+    /**
+     * The session a stop opens to send its stop command, for an exclusive console only (any other keeps its session
+     * from deploy on); null when nothing is declared or the console cannot be opened (held by someone else), which
+     * leaves the stop to the daemon.
+     */
+    private static @Nullable InstanceConsoleSession openForStop(InstanceService.@NonNull Resolved resolved,
+                                                                int instanceId, @NonNull HostLeases leases) {
+        String stopCommand = Texts.trimmedOrNull(templateValue(resolved.row(), InstanceTemplateModel.STOP_COMMAND));
+        if (stopCommand == null || !(resolved.runtime() instanceof ConsoleStreamSupport support)
+                || !support.consoleExclusive()) {
+            return null;
+        }
+        try {
+            return open(support, resolved, instanceId, stopCommand, leases, Db.currentOrDefault());
+        } catch (Violations refused) {
+            Blast.log("CONSOLE: could not open the console of instance", instanceId, "for its stop command:",
+                refused.getMessage());
+            return null;
+        }
     }
 
     /** Mark the coming exit operator-intended (stop/destroy); no-op without a session. */

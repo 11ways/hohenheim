@@ -439,7 +439,7 @@ public final class InstanceService {
             // enforcement (SIGTERM, then SIGKILL after grace) when there was none.
             InstanceConsoles.markStopExpected(instanceId);
             InstanceShell.closeSessionsOf(instanceId, InstanceShell.EndReason.WORKLOAD_ENDED);
-            boolean graceful = InstanceConsoles.tryGracefulStop(instanceId, 10);
+            boolean graceful = InstanceConsoles.tryGracefulStop(resolved, instanceId, 10, this.leases);
             if (graceful) {
                 Blast.log("INSTANCE: stop of", resolved.spec().handle(),
                     "settled via the console stop command");
