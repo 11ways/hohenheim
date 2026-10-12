@@ -159,6 +159,12 @@ final class FakeIncusTransport implements IncusTransport {
         if ("PUT".equals(method) && path.endsWith("/state")) {
             return async();
         }
+        if ("DELETE".equals(method) && path.startsWith("/1.0/instances/")
+                && path.indexOf('/', "/1.0/instances/".length()) < 0) {
+            // A destroy's delete: an absent workload answers 404 like a real daemon, which the driver reads as gone.
+            return this.instances.remove(path.substring("/1.0/instances/".length())) == null
+                ? notFound("Instance not found") : async();
+        }
         if ("PUT".equals(method) && path.startsWith("/1.0/instances/")) {
             // MERGE, never replace: a real daemon's PUT rewrites the MUTABLE definition
             // (config, devices, profiles, description) and leaves the immutable identity

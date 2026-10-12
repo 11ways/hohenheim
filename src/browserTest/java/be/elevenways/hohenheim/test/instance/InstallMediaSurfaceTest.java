@@ -183,8 +183,8 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             .as("step 2: and the refusal happened before any create reached the daemon")
             .isNull();
 
-        // 3. resolve() allows a BLANK image only for this origin: a real vm
-        //    record with install_media resolves, the same record on catalog refuses.
+        // 3. resolve() answers for an imageless VM whatever its origin: the image is the DEPLOY's requirement
+        //    (aMachineWithoutAnImageChangesItsDevicesAndGoesAwayOnlyItsDeployNeedsOne), never every verb's.
         Row record = Models.get(InstanceModel.class).createEmptyRow();
         record.set(InstanceModel.NAME, PREFIX + "resolve");
         record.set(InstanceModel.KIND, "hohenheim:vm");
@@ -200,14 +200,6 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
         assertThat(resolved.spec().imageOrigin())
             .as("step 3: and the spec carries the declared origin")
             .isEqualTo(ImageOrigin.INSTALL_MEDIA);
-
-        record.set(InstanceModel.SETTINGS,
-            Map.of("image_origin", ImageOrigin.CATALOG.key()));
-        Models.get(InstanceModel.class).save(record);
-        assertThat(catchThrowable(() -> new InstanceService().resolve(recordId)))
-            .as("step 3: the SAME record on catalog keeps the blank-image refusal")
-            .isInstanceOf(Violations.class)
-            .hasMessageContaining("image");
     }
 
     /**
@@ -427,16 +419,7 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
             incus.daemon.customVolumes.put("debian.iso",
                 Map.of("name", "debian.iso", "content_type", "iso", "description", "Debian 13"));
             incus.daemon.customVolumes.put("data", Map.of("name", "data", "content_type", "block"));
-            Row socketHost = Models.get(ServerModel.class).createEmptyRow();
-            socketHost.set(ServerModel.NAME, PREFIX + "socket-host");
-            socketHost.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
-            socketHost.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
-            socketHost.set(ServerModel.INCUS_URL, incus.url());
-            socketHost.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
-            socketHost.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
-            Models.get(ServerModel.class).save(socketHost);
-            HostFixtures.acknowledgePosture(socketHost);
-            Integer socketHostId = socketHost.get(ServerModel.ID);
+            Integer socketHostId = socketHost(incus);
             try {
                 int instanceId = mediaCapableInstance("media-surf-attach");
                 Models.get(InstanceModel.class).find().where(InstanceModel.ID.eq(instanceId))
@@ -532,6 +515,91 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
                 Models.get(ServerModel.class).delete(socketHostId);
             }
         }
+    }
+
+    /**
+     * A machine whose record names no image changes its devices and goes away; only its deploy needs an image. An
+     * ISO-installed VM declares the install_media origin; a VM the put-online wizard left on the catalog origin
+     * without one (its first start refused, the record kept) is the record whose Detach met the deploy's refusal.
+     */
+    @Test
+    void aMachineWithoutAnImageChangesItsDevicesAndGoesAwayOnlyItsDeployNeedsOne() throws Exception {
+        try (FakeIncusSocket incus = FakeIncusSocket.start()) {
+            incus.daemon.customVolumes.put("debian.iso",
+                Map.of("name", "debian.iso", "content_type", "iso", "description", "Debian 13"));
+            Integer socketHostId = socketHost(incus);
+            Model instances = Models.get(InstanceModel.class);
+            List<Integer> machines = new ArrayList<>();
+            try {
+                Operation<Row, ?, ?> attach = tabOperation("attach_install_media");
+                Operation<Row, ?, ?> detach = tabOperation("detach_install_media");
+                for (ImageOrigin origin : List.of(ImageOrigin.INSTALL_MEDIA, ImageOrigin.CATALOG)) {
+                    String step = origin.key() + ": ";
+                    Row machine = instances.createEmptyRow();
+                    machine.set(InstanceModel.NAME, PREFIX + "imageless-" + origin.key());
+                    machine.set(InstanceModel.KIND, "hohenheim:vm");
+                    machine.set(InstanceModel.SETTINGS, Map.of(ImageOrigin.SETTING, origin.key()));
+                    machine.set(InstanceModel.SERVER_ID, socketHostId);
+                    instances.save(machine);
+                    int machineId = machine.get(InstanceModel.ID);
+                    machines.add(machineId);
+
+                    // 1. The Devices tab puts an ISO in the imageless machine's drive.
+                    OperationPipeline.invoke(attachRequest(attach, instances.findById(machineId))
+                        .form(Map.of("installMedia", "debian.iso")));
+                    assertThat(deviceRows(machineId)).as("step 1 " + step + "the drive holds the ISO")
+                        .singleElement()
+                        .satisfies(row -> assertThat((String) row.get(InstanceDeviceModel.SOURCE_MEDIA))
+                            .isEqualTo("debian.iso"));
+
+                    // 2. And takes it out again: the detach never asks for an image.
+                    OperationPipeline.invoke(attachRequest(detach, instances.findById(machineId)));
+                    assertThat(deviceRows(machineId)).as("step 2 " + step + "the drive is empty again").isEmpty();
+
+                    // 3. A NIC attaches and detaches the same way.
+                    new InstanceDevices().attachNic(machineId, PREFIX + "eth1");
+                    new InstanceDevices().detach(machineId, PREFIX + "eth1");
+                    assertThat(deviceRows(machineId)).as("step 3 " + step + "no NIC row is left").isEmpty();
+                }
+
+                // 4. The deploy is the one verb that needs an image: the catalog machine without one is refused by
+                //    name, the install_media machine is not refused for it.
+                Throwable deploy = catchThrowable(() -> new InstanceService().deploy(machines.get(1)));
+                assertThat(deploy).as("step 4: a catalog machine without an image does not deploy")
+                    .isInstanceOf(Violations.class);
+                assertThat(((Violations) deploy).all()).as("step 4: refused for its image, by name")
+                    .anySatisfy(violation -> assertThat(violation.fieldName()).isEqualTo("settings.image"));
+                Throwable emptyDeploy = catchThrowable(() -> new InstanceService().deploy(machines.get(0)));
+                if (emptyDeploy instanceof Violations refused) {
+                    assertThat(refused.all()).as("step 4: an install_media machine is never refused for its image")
+                        .noneSatisfy(violation -> assertThat(violation.fieldName()).isEqualTo("settings.image"));
+                }
+
+                // 5. The machine that never deployed goes away when destroyed.
+                new InstanceService().destroy(machines.get(1));
+                assertThat(instances.findById(machines.get(1)))
+                    .as("step 5: the imageless catalog machine is destroyed").isNull();
+            } finally {
+                Models.get(InstanceDeviceModel.class).find().where(InstanceDeviceModel.SOURCE_MEDIA.eq("debian.iso"))
+                    .all().forEach(row -> Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID)));
+                machines.forEach(id -> HardDeletes.byId(instances, id));
+                Models.get(ServerModel.class).delete(socketHostId);
+            }
+        }
+    }
+
+    /** @return a new admitted Incus host served by this fake socket */
+    private static Integer socketHost(FakeIncusSocket incus) {
+        Row socketHost = Models.get(ServerModel.class).createEmptyRow();
+        socketHost.set(ServerModel.NAME, PREFIX + "socket-host");
+        socketHost.set(ServerModel.RUNTIME, ServerModel.RUNTIME_INCUS);
+        socketHost.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
+        socketHost.set(ServerModel.INCUS_URL, incus.url());
+        socketHost.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+        socketHost.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+        Models.get(ServerModel.class).save(socketHost);
+        HostFixtures.acknowledgePosture(socketHost);
+        return socketHost.get(ServerModel.ID);
     }
 
     private static OperationRequest<Row, ?, ?> attachRequest(Operation<Row, ?, ?> attach, Row instance) {

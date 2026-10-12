@@ -248,6 +248,8 @@ public final class InstanceMigrations {
     /** {@link #migrateTo}'s body; the caller holds the instance's operation lock. */
     private void migrateToLocked(int instanceId, int targetServerId) {
         Resolved resolved = this.instances.resolve(instanceId);
+        // A destination may create the workload from its spec.
+        resolved.requireImage();
         InstanceOperationGuard.requireOperable(resolved.row());
         if (InstanceModel.INSTALL_INSTALLING.equals(
                 resolved.row().get(InstanceModel.INSTALL_STATE))) {

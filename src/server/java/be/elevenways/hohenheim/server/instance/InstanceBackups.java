@@ -541,8 +541,7 @@ public final class InstanceBackups {
         // backup_target_missing instead, which is a probe into control-plane state.
         refuseTenantRestore();
         Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
-        if (backup == null || !InstanceBackupModel.STATUS_COMPLETE.equals(
-                backup.get(InstanceBackupModel.STATUS))) {
+        if (backup == null || !InstanceBackupModel.isRestorable(backup)) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_not_restorable")
                 .withArg("id", backupId));
         }
@@ -556,8 +555,7 @@ public final class InstanceBackups {
                                           @Nullable String newName,
                                           @Nullable Object serverSpelling) {
         refuseTenantRestore();
-        if (!InstanceBackupModel.STATUS_COMPLETE.equals(
-                backup.get(InstanceBackupModel.STATUS))) {
+        if (!InstanceBackupModel.isRestorable(backup)) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("backup_not_restorable")
                 .withArg("id", backup.get(InstanceBackupModel.ID)));
         }
@@ -687,6 +685,7 @@ public final class InstanceBackups {
             }
 
             Resolved resolved = this.instances.resolve(newId);
+            resolved.requireImage();
             BackupArchive.Opened verified = opened;
             try {
                 // A new record has nothing running: the window restores into it, and a

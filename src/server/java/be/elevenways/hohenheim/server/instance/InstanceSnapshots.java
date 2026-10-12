@@ -267,6 +267,8 @@ public final class InstanceSnapshots {
             return;
         }
         VolumeSnapshotSupport support = requireSupport(resolved);
+        // The volume lane recreates the workload from its spec.
+        resolved.requireImage();
         Map<String, String> volumes = logicalVolumes(resolved);
 
         // -- verification, BEFORE any live state changes -----------------------

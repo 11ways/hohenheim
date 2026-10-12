@@ -566,6 +566,59 @@ class InstanceBackupsTest {
     }
 
     /**
+     * Restore is offered for, and accepted from, only a backup its status calls committed and that names the
+     * committed key: a row still uploading, failed, without a status, or complete without a key never completed.
+     */
+    @Test
+    void onlyACommittedBackupOffersItsRestore() {
+        List<Integer> rows = new ArrayList<>();
+        try {
+            // 1. Every never-completed shape hides the Restore and refuses a direct restore by name.
+            Object[][] neverCompleted = {
+                {InstanceBackupModel.STATUS_UPLOADING, "backups/uploading.hib"},
+                {InstanceBackupModel.STATUS_FAILED, "backups/failed.hib"},
+                {null, null},
+                {InstanceBackupModel.STATUS_COMPLETE, null},
+            };
+            for (Object[] shape : neverCompleted) {
+                Row row = backupRow((String) shape[0], (String) shape[1]);
+                rows.add(row.get(InstanceBackupModel.ID));
+                String step = "status " + shape[0] + ", key " + shape[1] + ": ";
+                assertThat(OperationPipeline.offer(InstanceBackupOperations.RESTORE_BACKUP, TenantConduits.operator(),
+                        row))
+                    .as("step 1 " + step + "the Restore is not offered")
+                    .isInstanceOf(OperationPipeline.Offer.Hidden.class);
+                assertThat(violationKeys(catchThrowable(() -> new InstanceBackups().restoreToNew(
+                        row.get(InstanceBackupModel.ID), null, null))))
+                    .as("step 1 " + step + "a direct restore is refused as not restorable")
+                    .contains("backup_not_restorable");
+            }
+
+            // 2. A complete backup naming its committed key offers its Restore.
+            Row committed = backupRow(InstanceBackupModel.STATUS_COMPLETE, "backups/committed.hib");
+            rows.add(committed.get(InstanceBackupModel.ID));
+            assertThat(OperationPipeline.offer(InstanceBackupOperations.RESTORE_BACKUP, TenantConduits.operator(),
+                    committed))
+                .as("step 2: a committed backup offers its Restore")
+                .isNotInstanceOf(OperationPipeline.Offer.Hidden.class);
+        } finally {
+            rows.forEach(id -> Models.get(InstanceBackupModel.class).delete(id));
+        }
+    }
+
+    /** @return a saved instance-less backup row of this status and remote key, both possibly null */
+    private static Row backupRow(String status, String key) {
+        Row row = Models.get(InstanceBackupModel.class).createEmptyRow();
+        row.set(InstanceBackupModel.INSTANCE_ID, (Integer) null);
+        row.set(InstanceBackupModel.REMOTE_KEY, key);
+        Models.get(InstanceBackupModel.class).save(row);
+        // The status is stamped after the save: a null one would otherwise take the field's default.
+        Models.get(InstanceBackupModel.class).find().where(InstanceBackupModel.ID.eq(row.get(InstanceBackupModel.ID)))
+            .assign(InstanceBackupModel.STATUS, status).updateAll();
+        return Models.get(InstanceBackupModel.class).findById(row.get(InstanceBackupModel.ID));
+    }
+
+    /**
      * The explicit-target flow (null target id: tests, future re-target flows) must not
      * produce rows retention can never remove: re-resolving a null TARGET_ID throws, so
      * the sweep run by the completing backup uses the target IT HOLDS for rows written

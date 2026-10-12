@@ -37,7 +37,7 @@ public final class InstanceBackupOperationHandlers {
 
     static {
         OperationHandlers.attach(InstanceBackupOperations.RESTORE_BACKUP)
-            .applies(backup -> InstanceBackupModel.STATUS_COMPLETE.equals(backup.get(InstanceBackupModel.STATUS)))
+            .applies(InstanceBackupModel::isRestorable)
             .inputScope(InstanceBackupOperationHandlers::destinations)
             .authorize(HohenheimAccess.operatorOnly("restore-to-new is an operator act"))
             .handle(InstanceBackupOperationHandlers::restore);

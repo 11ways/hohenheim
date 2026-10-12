@@ -173,6 +173,8 @@ public final class InstanceInstalls {
         CommunityScripts.requireVocabularyImplemented(
             template.get(InstanceTemplateModel.INSTALL_SCRIPT), "install script");
         requireNotRunning(resolved);
+        // The install environment defaults to the workload's own image, and the step creates the workload.
+        resolved.requireImage();
         if (!(resolved.runtime() instanceof InstallSupport support)) {
             throw HohenheimViolations.instanceRefusal("install_unsupported", resolved.row(), null);
         }

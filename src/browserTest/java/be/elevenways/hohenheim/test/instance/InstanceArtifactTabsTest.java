@@ -73,6 +73,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         Row backup = backups.createEmptyRow();
         backup.set(InstanceBackupModel.INSTANCE_ID, instanceId);
         backup.set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_COMPLETE);
+        backup.set(InstanceBackupModel.REMOTE_KEY, "artifact-tabs/complete.hib");
         backup.set(InstanceBackupModel.SIZE_BYTES, 67_890L);
         backup.set(InstanceBackupModel.CREATED_AT, Instant.parse("2026-08-10T13:00:00Z"));
         backups.save(backup);
@@ -224,9 +225,17 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         doomed.set(InstanceModel.SERVER_ID, ServerModel.localServerId());
         instances.save(doomed);
         int goneId = doomed.get(InstanceModel.ID);
+        // A complete backup names its committed key on its target; the delete in step 4 removes the (absent) artifact.
+        Row target = Models.get(BackupTargetModel.class).createEmptyRow();
+        target.set(BackupTargetModel.NAME, "artifact-orphan-target");
+        target.set(BackupTargetModel.KIND, "hohenheim:filesystem");
+        target.set(BackupTargetModel.SETTINGS, Map.of("path", System.getProperty("java.io.tmpdir")));
+        Models.get(BackupTargetModel.class).save(target);
         Row orphan = Models.get(InstanceBackupModel.class).createEmptyRow();
         orphan.set(InstanceBackupModel.INSTANCE_ID, goneId);
+        orphan.set(InstanceBackupModel.TARGET_ID, target.get(BackupTargetModel.ID));
         orphan.set(InstanceBackupModel.STATUS, InstanceBackupModel.STATUS_COMPLETE);
+        orphan.set(InstanceBackupModel.REMOTE_KEY, "artifact-tabs-orphan.hib");
         orphan.set(InstanceBackupModel.SUMMARY, Map.of("kind", "hohenheim:docker_container"));
         Models.get(InstanceBackupModel.class).save(orphan);
         int orphanId = orphan.get(InstanceBackupModel.ID);
@@ -258,10 +267,14 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
             .anySatisfy(destination -> assertThat(destination.serverId()).isEqualTo(ServerModel.localServerId()));
 
         // 4. The operator's delete removes it through the entry's own DELETE.
-        PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_BACKUPS, orphanId,
-            TenantConduits.operator());
-        assertThat(Models.get(InstanceBackupModel.class).findById(orphanId)).as("step 4: the backup is deleted")
-            .isNull();
+        try {
+            PanelResourceCalls.delete(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCE_BACKUPS, orphanId,
+                TenantConduits.operator());
+            assertThat(Models.get(InstanceBackupModel.class).findById(orphanId)).as("step 4: the backup is deleted")
+                .isNull();
+        } finally {
+            Models.get(BackupTargetModel.class).delete(target.get(BackupTargetModel.ID));
+        }
     }
 
     /**

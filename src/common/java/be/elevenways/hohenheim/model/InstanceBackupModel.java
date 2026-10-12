@@ -9,6 +9,7 @@ import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.ui.ColorHue;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
@@ -17,9 +18,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * NEW instance. Distinct from {@link InstanceSnapshotModel} by design -- a snapshot
  * shares the instance's failure domain, a backup is what survives losing it.
  *
- * AIDEV-NOTE: only COMPLETE rows are restorable, and a row is stamped complete only
- * after the target confirmed the committed artifact byte-for-byte (stored sha read
- * back from the target, never from memory) -- an interrupted upload leaves a failed
+ * AIDEV-NOTE: only a row whose {@link Status} is restorable AND that names its committed key is restorable
+ * ({@link #isRestorable}), and a row is stamped complete only after the target confirmed the committed artifact
+ * byte-for-byte (stored sha read back from the target, never from memory) -- an interrupted upload leaves a failed
  * row and no committed artifact, so nothing a later restore would accept.
  */
 public class InstanceBackupModel extends Model {
@@ -27,19 +28,61 @@ public class InstanceBackupModel extends Model {
     public static final Identifier MODEL_ID = HohenheimIds.id("instance_backup");
     public static final Schema SCHEMA = new Schema();
 
-    /** {@link #STATUS}: the archive is being built or uploaded; not restorable. */
-    public static final String STATUS_UPLOADING = "uploading";
+    /** The {@link #STATUS} vocabulary; each member states whether a backup in it can be restored. */
+    public enum Status {
 
-    /** {@link #STATUS}: committed on the target and verified end to end. */
-    public static final String STATUS_COMPLETE = "complete";
+        /** The archive is being built or uploaded. */
+        UPLOADING("uploading", "Uploading", "cloud-arrow-up", ColorHue.BLUE),
 
-    /**
-     * {@link #STATUS}: capture or upload failed; artifact removed, row kept as evidence.
-     * The one exception: a boot settle that could not reach the target stamps FAILED with
-     * the possibly-surviving key named in {@link #ERROR} (see
-     * {@code InstanceBackups.recoverInterrupted}).
-     */
-    public static final String STATUS_FAILED = "failed";
+        /** Committed on the target and verified end to end. */
+        COMPLETE("complete", "Complete", "circle-check", ColorHue.GREEN),
+
+        /**
+         * Capture or upload failed; artifact removed, row kept as evidence. The one exception: a boot settle that
+         * could not reach the target stamps FAILED with the possibly-surviving key named in {@link #ERROR} (see
+         * {@code InstanceBackups.recoverInterrupted}).
+         */
+        FAILED("failed", "Failed", "circle-exclamation", ColorHue.RED);
+
+        private final @NonNull String key;
+        private final @NonNull String displayName;
+        private final @NonNull String icon;
+        private final @NonNull ColorHue color;
+
+        Status(@NonNull String key, @NonNull String displayName, @NonNull String icon, @NonNull ColorHue color) {
+            this.key = key;
+            this.displayName = displayName;
+            this.icon = icon;
+            this.color = color;
+        }
+
+        /** The stored key this member round-trips through. */
+        public @NonNull String key() {
+            return this.key;
+        }
+
+        /** Whether a backup in this status holds a committed, verified archive a restore may read. */
+        public boolean restorable() {
+            return switch (this) {
+                case COMPLETE -> true;
+                case UPLOADING, FAILED -> false;
+            };
+        }
+
+        /** @return the member stored under this key, null for a blank or unknown one */
+        public static @Nullable Status parse(@Nullable String key) {
+            for (Status status : values()) {
+                if (status.key.equals(key)) {
+                    return status;
+                }
+            }
+            return null;
+        }
+    }
+
+    public static final String STATUS_UPLOADING = Status.UPLOADING.key();
+    public static final String STATUS_COMPLETE = Status.COMPLETE.key();
+    public static final String STATUS_FAILED = Status.FAILED.key();
 
     public static final IntegerField ID = SCHEMA.addField(IntegerField.builder().name("id").build());
 
@@ -53,15 +96,7 @@ public class InstanceBackupModel extends Model {
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("backup_target"))
             .build());
 
-    public static final EnumField STATUS = SCHEMA.addField(EnumField.builder("status")
-        .value(STATUS_UPLOADING, v -> v.displayName("Uploading").icon("cloud-arrow-up")
-            .label(HohenheimMicrocopy.BACKUP_STATUS.of("uploading")).color(ColorHue.BLUE))
-        .value(STATUS_COMPLETE, v -> v.displayName("Complete").icon("circle-check")
-            .label(HohenheimMicrocopy.BACKUP_STATUS.of("complete")).color(ColorHue.GREEN))
-        .value(STATUS_FAILED, v -> v.displayName("Failed").icon("circle-exclamation")
-            .label(HohenheimMicrocopy.BACKUP_STATUS.of("failed")).color(ColorHue.RED))
-        .defaultValue(STATUS_FAILED)
-        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("status")).build());
+    public static final EnumField STATUS = SCHEMA.addField(statusField());
 
     /** The committed key on the target (the .part staging key is never recorded). */
     public static final StringField REMOTE_KEY = SCHEMA.addField(
@@ -96,6 +131,25 @@ public class InstanceBackupModel extends Model {
     @Override public String getModelName() { return "InstanceBackup"; }
     @Override public String getTableName() { return "instance_backups"; }
     @Override public Schema getSchema() { return SCHEMA; }
+
+    /**
+     * Whether this backup can be restored: its status holds a committed archive and the row names its key; a row
+     * without a status or a key never completed, whatever else it says.
+     */
+    public static boolean isRestorable(@NonNull Row backup) {
+        Status status = Status.parse(backup.get(STATUS));
+        String key = backup.get(REMOTE_KEY);
+        return status != null && status.restorable() && key != null && !key.isBlank();
+    }
+
+    private static EnumField statusField() {
+        EnumField.Builder builder = EnumField.builder("status");
+        for (Status status : Status.values()) {
+            builder.value(status.key, value -> value.displayName(status.displayName).icon(status.icon)
+                .label(HohenheimMicrocopy.BACKUP_STATUS.of(status.key)).color(status.color));
+        }
+        return builder.defaultValue(Status.FAILED.key).label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("status")).build();
+    }
 
     /**
      * This instance's newest backup, whatever its status: by id, never created_at, which two backups inside one second

@@ -275,6 +275,7 @@ public final class InstanceService {
                                                       @Nullable RestoreVolumes restoreVolumes) {
         HohenheimAccess.requireOperationCapability(instanceId, HohenheimCapabilities.POWER);
         Resolved resolved = resolve(instanceId);
+        resolved.requireImage();
         // The trigger policy for every kind that owns a container directly -- a preview
         // refreshed by a push is the lane that reaches here on a third party's trigger.
         // The STORED status is the evidence: it is what an operator's stop wrote, and a
@@ -786,6 +787,19 @@ public final class InstanceService {
         public @NonNull InstanceStatus liveStatus() {
             return this.runtime.status(this.spec.handle());
         }
+
+        /**
+         * Asked by every path that creates a workload from this spec; a verb on a workload that exists, or never will,
+         * does not need an image.
+         *
+         * @throws Violations {@code instance_image_required} for a blank image the kind's settings do not allow
+         */
+        public void requireImage() {
+            if (this.spec.image().isBlank() && !this.handler.allowsBlankImage(this.settings)) {
+                throw Violations.ofField("settings.image", "",
+                    HohenheimMicrocopy.VIOLATIONS.of("instance_image_required"));
+            }
+        }
     }
 
     // -- interrupted capture/restore recovery ---------------------------------------
@@ -1042,7 +1056,11 @@ public final class InstanceService {
      * Load the record and resolve its kind handler, host, variables and spec (variables
      * merge into the env and substitute inside the command -- see InstanceVariables).
      *
-     * @throws Violations for a missing/trashed record, an unknown kind or a blank image
+     * AIDEV-NOTE: a blank image is NOT refused here (since 2026-10-12): every verb resolves, and only a path that
+     * creates a workload from the spec asks {@link Resolved#requireImage}. Refusing here made an imageless record's
+     * detach, stop and destroy answer "an image is required before this instance can be deployed".
+     *
+     * @throws Violations for a missing/trashed record or an unknown kind
      */
     public Resolved resolve(int instanceId) {
         Row row = Models.get(InstanceModel.class).findById(instanceId);
@@ -1069,9 +1087,6 @@ public final class InstanceService {
         Map<String, String> variables = InstanceVariables.layered(derived, declared);
         settings = instanceVariables.applyToSettings(settings, declared, derived);
         InstanceSpec spec = handler.specFor(instanceId, settings);
-        if (spec.image().isBlank() && !handler.allowsBlankImage(settings)) {
-            throw Violations.ofField("settings.image", "", HohenheimMicrocopy.VIOLATIONS.of("instance_image_required"));
-        }
         // The record's pinned resolved image identity rides the spec: a driver that
         // resolves by fingerprint recreates an ABSENT workload from the pin, never by
         // re-resolving the mutable alias (cleared on image change by the write hook).
