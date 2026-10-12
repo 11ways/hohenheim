@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimActivityAction;
+import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
@@ -22,10 +23,13 @@ import be.elevenways.hohenheim.test.ProxyTestSupport;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ActivityVisibility;
+import be.elevenways.zenit.common.operation.OperationRunModel;
+import be.elevenways.zenit.common.operation.OperationRunStatus;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.widget.common.data.UsageData;
@@ -38,6 +42,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -182,6 +187,24 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .contains("/invoke/hohenheim.start_instance");
             assertThat(created).as("step 1: Restart is not")
                 .doesNotContain("/invoke/hohenheim.restart_instance");
+            assertThat(statusFact(created)).as("step 1: the Details card's Status agrees with the band")
+                .contains("Not deployed yet")
+                .doesNotContain(">Unknown<");
+
+            // 1b. While the run that put it online is still open, it is deploying: the band and the Status say so,
+            //     and once that run ended it is not deployed yet again.
+            Row run = openRun(id);
+            try {
+                String deploying = adminGet("/admin/instances/" + id + "/page/overview").body();
+                assertThat(deploying).as("step 1b: the band says it is deploying")
+                    .contains("data-cms-record-health=\"unknown\"").contains("Deploying")
+                    .doesNotContain("Not deployed yet");
+                assertThat(statusFact(deploying)).as("step 1b: and so does the Status").contains("Deploying");
+            } finally {
+                HardDeletes.row(Models.get(OperationRunModel.class), run);
+            }
+            assertThat(statusFact(adminGet("/admin/instances/" + id + "/page/overview").body()))
+                .as("step 1b: the run gone, it is not deployed yet again").contains("Not deployed yet");
 
             // 2. Once it ran and stopped, it is not running, and Restart is offered again.
             status(id, InstanceModel.STATUS_STOPPED);
@@ -525,14 +548,11 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
                 .assign(InstanceModel.STATUS, InstanceModel.STATUS_CREATED)
                 .assign(InstanceModel.STATUS_OBSERVED_AT, null).bypassBehaviours().updateAll();
             String created = adminGet("/admin/instances/" + id + "/page/overview").body();
-            int status = created.indexOf("widget-facts-term\">Status</dt>");
             RecordHealth verdict = AppHealth.instances(false).read(Models.get(InstanceModel.class).findById(id),
                 TenantConduits.operator());
-            assertThat(created.substring(status, created.indexOf("</dd>", status)))
+            assertThat(statusFact(created))
                 .as("step 1: the Status says the band's verdict in one word")
-                .contains(AppParts.stateLabel(verdict.tone().token())
-                    .resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
-                .doesNotContain(verdict.headline().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .contains(AppParts.stateWord(verdict).resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
                 .doesNotContain("Not started yet");
             assertThat(created).as("step 1: a workload never started reads so, and when it was last checked")
                 .contains("Last checked")
@@ -711,6 +731,27 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
     private static String headlineOf(int instanceId) {
         return AppHealth.instances(false).read(Models.get(InstanceModel.class).findById(instanceId),
             TenantConduits.operator()).headline().key();
+    }
+
+    /** @return the Details card's Status fact of an overview page, its term through its value */
+    private static String statusFact(String page) {
+        int status = page.indexOf("widget-facts-term\">Status</dt>");
+        assertThat(status).as("the overview draws a Status fact").isNotNegative();
+        return page.substring(status, page.indexOf("</dd>", status));
+    }
+
+    /** @return a put-online run of this record left open, as one still starting it leaves it */
+    private static Row openRun(int instanceId) {
+        OperationRunModel runs = Models.get(OperationRunModel.class);
+        Row run = runs.createEmptyRow();
+        run.set(OperationRunModel.OPERATION, PutOnline.PUT_MACHINE_ONLINE.id().toString());
+        run.set(OperationRunModel.INVOCATION_ID, UUID.randomUUID());
+        run.set(OperationRunModel.SUBJECT_TYPE, InstanceOperations.INSTANCE.id().toString());
+        run.set(OperationRunModel.SUBJECT_KEY, String.valueOf(instanceId));
+        run.set(OperationRunModel.STATUS, OperationRunStatus.RUNNING.storageKey());
+        run.set(OperationRunModel.PROGRESS, 0.0);
+        run.set(OperationRunModel.STARTED_AT, Now.instant());
+        return runs.save(run);
     }
 
     private static void status(int instanceId, String status) {

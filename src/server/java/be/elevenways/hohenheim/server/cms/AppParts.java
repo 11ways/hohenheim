@@ -19,6 +19,7 @@ import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.resource.HealthTone;
+import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.RelatedPage;
@@ -267,8 +268,20 @@ public final class AppParts {
         return builder.label(HohenheimMicrocopy.APP_LIST.of("state")).build();
     }
 
-    /** @return a verdict tone's one word for an app ("Working"), the state filter's and the Details card's */
+    /** @return a verdict tone's one word for an app ("Working"), the state filter's */
     static @NonNull Microcopy stateLabel(@NonNull String toneToken) {
         return HohenheimMicrocopy.APP_LIST.of("state_" + toneToken);
+    }
+
+    /**
+     * The Details card's word for a verdict: its tone's word, except where the tone is unknown, whose word ("Unknown")
+     * would contradict a band that knows exactly what holds ("Not deployed yet", "Deploying"); every unknown verdict's
+     * headline is that short state.
+     */
+    static @NonNull Microcopy stateWord(@NonNull RecordHealth verdict) {
+        return switch (verdict.tone()) {
+            case OK, ATTENTION, BROKEN -> stateLabel(verdict.tone().token());
+            case UNKNOWN -> verdict.headline();
+        };
     }
 }

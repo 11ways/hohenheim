@@ -28,6 +28,7 @@ import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.auth.server.GrantAdministration;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.render.table.HealthCellState;
+import be.elevenways.zenit.cms.common.resource.RecordHealth;
 import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
@@ -180,12 +181,13 @@ public final class InstanceOverview {
         LocaleChain locales = viewer.conduit().getLocales();
         MessageResolver resolver = viewer.conduit().getMessageResolver();
         List<WidgetFact> facts = new ArrayList<>();
-        HealthCellState verdict = HealthCellState.of(AppHealth.instanceReading(instance, delegated, viewer).health(),
-            viewer);
+        RecordHealth reading = AppHealth.instanceReading(instance, delegated, viewer).health();
+        HealthCellState verdict = HealthCellState.of(reading, viewer);
         // The verdict's one word ("Working"), never its headline: the band above says the sentence ("Live at
-        // https://..."), which as a pill outgrew this narrow card.
+        // https://..."), which as a pill outgrew this narrow card. An unknown tone has no word of its own, so its
+        // short headline ("Not deployed yet") speaks, agreeing with the band (AppParts.stateWord).
         facts.add(WidgetFact.badge(AppOverview.text("state", locales, resolver),
-            new WidgetBadge(AppParts.stateLabel(verdict.tone()).resolve(locales, resolver), verdict.variant(), null,
+            new WidgetBadge(AppParts.stateWord(reading).resolve(locales, resolver), verdict.variant(), null,
                 verdict.icon(), true)));
         Object kind = instance.get(InstanceModel.KIND);
         if (kind != null) {
