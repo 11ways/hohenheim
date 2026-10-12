@@ -10,6 +10,8 @@ import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.util.Tar;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
+import java.time.Duration;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.io.DurableFiles;
 import be.elevenways.zenit.server.security.SecureTokens;
@@ -1253,7 +1255,7 @@ public class ManagedDatabase {
                 return;
             }
             try {
-                Thread.sleep(200);
+                Pace.sleep(Duration.ofMillis(200));
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
                 throw new IOException("Interrupted waiting for '" + handle + "' to stop");
@@ -1296,7 +1298,7 @@ public class ManagedDatabase {
                 last = e;   // exec can race container startup; retry until the deadline
             }
             try {
-                Thread.sleep(500);
+                Pace.sleep(Duration.ofMillis(500));
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
                 throw new IOException("Interrupted waiting for " + engine + " readiness");

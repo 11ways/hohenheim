@@ -2,6 +2,8 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.util.LoopbackPeers;
 import be.elevenways.hohenheim.server.util.SameUidListener;
+import be.elevenways.protoblast.common.time.Backoff;
+import be.elevenways.protoblast.common.time.Retry;
 import be.elevenways.protoblast.common.util.Closeables;
 
 import java.io.IOException;
@@ -9,6 +11,7 @@ import java.net.StandardProtocolFamily;
 import java.net.UnixDomainSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.time.Duration;
 import java.util.function.BinaryOperator;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -41,8 +44,7 @@ public final class UnixSocketBridge {
     // AIDEV-NOTE: a freshly spawned child may not have bound its AF_UNIX socket yet at the first dial
     // (the spawn TOCTOU window), so the upstream connect is retried briefly. These are the only race
     // attempts; once the socket exists the first try succeeds.
-    private static final int SPAWN_RACE_RETRIES = 3;
-    private static final long SPAWN_RACE_BACKOFF_MS = 100;
+    private static final Retry SPAWN_RACE = Retry.of(Backoff.fixed(Duration.ofMillis(100)), 3);
 
     private final UnixDomainSocketAddress upstream;
     private final SameUidListener listener;
@@ -104,23 +106,16 @@ public final class UnixSocketBridge {
     }
 
     private SocketChannel connectUpstream() throws IOException {
-        IOException last = null;
-        for (int attempt = 0; attempt < SPAWN_RACE_RETRIES; attempt++) {
+        return SPAWN_RACE.run(() -> {
+            SocketChannel unix = SocketChannel.open(StandardProtocolFamily.UNIX);
             try {
-                SocketChannel unix = SocketChannel.open(StandardProtocolFamily.UNIX);
                 unix.connect(upstream);
                 return unix;
-            } catch (IOException e) {
-                last = e;
-                try {
-                    Thread.sleep(SPAWN_RACE_BACKOFF_MS);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    throw new IOException("interrupted while connecting to " + upstream.getPath(), ie);
-                }
+            } catch (IOException refused) {
+                Closeables.closeQuietly(unix);
+                throw refused;
             }
-        }
-        throw last;
+        });
     }
 
     private static void copy(SocketChannel from, SocketChannel to) {

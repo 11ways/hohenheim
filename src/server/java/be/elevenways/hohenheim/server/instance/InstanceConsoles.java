@@ -20,6 +20,8 @@ import be.elevenways.hohenheim.server.runtime.ConsoleStreamSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
+import java.time.Duration;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -201,7 +203,7 @@ public final class InstanceConsoles {
             // line is awaited, a deferred watch whose stream ended attaches again, seeded from the backlog.
             while (!watching.readinessMatched() && Now.millis() < until) {
                 try {
-                    Thread.sleep(Math.min(READINESS_REATTACH_MS, Math.max(1, until - Now.millis())));
+                    Pace.sleep(Duration.ofMillis(Math.min(READINESS_REATTACH_MS, Math.max(1, until - Now.millis()))));
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     return;

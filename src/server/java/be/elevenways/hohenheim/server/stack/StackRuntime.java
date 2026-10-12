@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -747,7 +748,7 @@ public class StackRuntime {
                         + stateToken(status) + ")");
                 }
                 try {
-                    Thread.sleep(CONDITION_POLL_MS);
+                    Pace.sleep(Duration.ofMillis(CONDITION_POLL_MS));
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                     throw new IOException("Interrupted while waiting for dependency '"

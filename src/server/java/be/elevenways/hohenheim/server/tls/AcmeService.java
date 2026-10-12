@@ -5,6 +5,7 @@ import be.elevenways.protoblast.common.async.AsyncFailures;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -16,7 +17,6 @@ import be.elevenways.hohenheim.server.dns.GeneratedDnsRecords;
 import be.elevenways.hohenheim.server.dns.InternalDnsTxtPublisher;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.notification.Alerts;
-import be.elevenways.hohenheim.server.util.Pause;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.server.http.HostPattern;
@@ -68,10 +68,10 @@ public class AcmeService {
     private static final Backoff POLL = Backoff.fixed(POLL_CADENCE).honouringUpTo(POLL_BUDGET);
     private static final long MANUAL_DNS_ORDER_MINUTES = 30;
 
-    private volatile Pause pollPause = Pause.SLEEP;
+    private volatile Pace.Pause pollPause = Pace.Pause.REAL;
 
     /** Test seam: records each poll wait instead of sleeping through a CA delay. */
-    public void setPollPauseForTesting(Pause pause) {
+    public void setPollPauseForTesting(Pace.Pause pause) {
         this.pollPause = Objects.requireNonNull(pause);
     }
 
@@ -937,7 +937,7 @@ public class AcmeService {
                 int propagation = Zenit.SETTINGS_VALUES.getValue(
                     HohenheimSettings.Ssl.DNS_PROPAGATION_SECONDS);
                 if (propagation > 0 && !publisher.servesImmediately()) {
-                    Thread.sleep(TimeUnit.SECONDS.toMillis(propagation));
+                    Pace.sleep(Duration.ofSeconds(propagation));
                 }
                 PollBudget polls = new PollBudget();
                 completeDnsAuthorizations(context.authorizations(), polls);

@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.docker;
 
 import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.server.util.Watchdog;
+import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.protoblast.server.io.BulkInputStream;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -13,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -233,7 +235,7 @@ final class DockerWire {
                     return n;
                 }
                 try {
-                    Thread.sleep(1);
+                    Pace.sleep(Duration.ofMillis(1));
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     throw new IOException("Docker stream read interrupted");

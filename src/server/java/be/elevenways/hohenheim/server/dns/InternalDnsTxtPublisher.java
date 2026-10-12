@@ -10,6 +10,8 @@ import be.elevenways.hohenheim.server.tls.DnsTxtPublisher;
 import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
+import java.time.Duration;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -228,7 +230,7 @@ public final class InternalDnsTxtPublisher implements DnsTxtPublisher {
             if (Now.millis() >= deadline) {
                 break;
             }
-            Thread.sleep(PROPAGATION_POLL_MS);
+            Pace.sleep(Duration.ofMillis(PROPAGATION_POLL_MS));
         }
         Blast.log("ACME: replica of", origin, "did not serve the challenge for",
             record.name(), "within the propagation window");
@@ -327,7 +329,7 @@ public final class InternalDnsTxtPublisher implements DnsTxtPublisher {
                 return;
             }
             try {
-                Thread.sleep(PROPAGATION_POLL_MS);
+                Pace.sleep(Duration.ofMillis(PROPAGATION_POLL_MS));
             }
             catch (InterruptedException e) {
                 Thread.currentThread().interrupt();

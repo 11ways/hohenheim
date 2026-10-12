@@ -16,6 +16,8 @@ import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
+import java.time.Duration;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -345,7 +347,7 @@ public final class InstanceShell {
             }
             boolean dead;
             try {
-                Thread.sleep(START_SETTLE_MS);
+                Pace.sleep(Duration.ofMillis(START_SETTLE_MS));
                 dead = attempt.failedToStart();
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();

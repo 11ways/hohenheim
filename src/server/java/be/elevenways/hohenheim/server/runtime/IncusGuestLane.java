@@ -4,11 +4,13 @@ import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusConsoleOperation;
 import be.elevenways.hohenheim.server.incus.IncusWebSocket;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Backoff;
+import be.elevenways.protoblast.common.time.Retry;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -179,23 +181,16 @@ final class IncusGuestLane {
                                                           @NonNull List<String> command,
                                                           @NonNull Map<String, String> env,
                                                           long timeoutMs) throws IOException {
-        long deadline = Now.millis() + this.type.execReadyTimeoutMs();
-        while (true) {
-            try {
-                return this.incus.exec(handle, command, env, timeoutMs);
-            } catch (IncusClient.ApiException refused) {
-                if (Now.millis() >= deadline) {
-                    throw refused;
-                }
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    throw refused;
-                }
-            }
-        }
+        // A daemon refusal is retried every second until the window closes; any other failure is final.
+        Retry bringUp = Retry.of(BRING_UP_POLL, Integer.MAX_VALUE)
+            .within(Duration.ofMillis(Math.max(1, this.type.execReadyTimeoutMs())))
+            .judgedBy(failure -> failure instanceof IncusClient.ApiException ? Retry.Verdict.AGAIN
+                : Retry.Verdict.FINAL);
+        return bringUp.run(() -> this.incus.exec(handle, command, env, timeoutMs));
     }
+
+    /** How long apart an exec refused during bring-up is asked for again. */
+    private static final Backoff BRING_UP_POLL = Backoff.fixed(Duration.ofSeconds(1));
 
     private static @NonNull String tailOf(@NonNull String output) {
         if (output.length() <= OUTPUT_TAIL_CHARS) {

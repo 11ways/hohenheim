@@ -9,6 +9,8 @@ import be.elevenways.hohenheim.server.incus.IncusClients;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.security.NftRunner;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
+import java.time.Duration;
 import be.elevenways.protoblast.common.util.BlastString;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -347,7 +349,7 @@ public final class IncusPreflight {
                 // the instance is still coming up; the deadline is the only verdict
             }
             try {
-                Thread.sleep(1000);
+                Pace.sleep(Duration.ofSeconds(1));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 return null;

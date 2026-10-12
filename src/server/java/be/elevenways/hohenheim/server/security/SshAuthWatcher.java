@@ -1,10 +1,10 @@
 package be.elevenways.hohenheim.server.security;
 
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.server.util.Pause;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.RunningProcess;
 import be.elevenways.protoblast.server.process.Subprocess;
@@ -85,7 +85,7 @@ public final class SshAuthWatcher {
 
     private final Journal journal;
     private final BiConsumer<String, String> sink;
-    private final Pause pause;
+    private final Pace.Pause pause;
     private final AtomicLong signals = new AtomicLong();
 
     private volatile boolean running;
@@ -101,12 +101,12 @@ public final class SshAuthWatcher {
 
     /** Test constructor: inject the child and the scoring sink. */
     SshAuthWatcher(@NonNull Journal journal, @NonNull BiConsumer<String, String> sink) {
-        this(journal, sink, Pause.SLEEP);
+        this(journal, sink, Pace.Pause.REAL);
     }
 
     /** Test constructor: additionally inject how a backoff is waited out. */
     SshAuthWatcher(@NonNull Journal journal, @NonNull BiConsumer<String, String> sink,
-                   @NonNull Pause pause) {
+                   Pace.@NonNull Pause pause) {
         this.journal = journal;
         this.sink = sink;
         this.pause = pause;

@@ -13,6 +13,8 @@ import be.elevenways.hohenheim.server.util.PermissionBits;
 import be.elevenways.hohenheim.server.util.PosixPaths;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
+import java.time.Duration;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -1022,7 +1024,7 @@ public final class DockerInstanceRuntime
                         + "' exceeded its " + timeoutMs + "ms timeout and was removed");
                 }
                 try {
-                    Thread.sleep(INSTALL_POLL_MS);
+                    Pace.sleep(Duration.ofMillis(INSTALL_POLL_MS));
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                     throw new IOException("Install wait interrupted for '" + spec.handle() + "'");

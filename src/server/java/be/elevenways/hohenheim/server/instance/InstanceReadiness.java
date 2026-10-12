@@ -8,6 +8,8 @@ import be.elevenways.hohenheim.server.application.ReleaseEngine;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
+import java.time.Duration;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
@@ -135,7 +137,7 @@ public final class InstanceReadiness {
             }
             lastReason = "connection refused";
             try {
-                Thread.sleep(INTERVAL_MS);
+                Pace.sleep(Duration.ofMillis(INTERVAL_MS));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 break;

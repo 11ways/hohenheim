@@ -9,10 +9,10 @@ import be.elevenways.hohenheim.server.tls.CertificateAuthority;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.DnsTxtPublishers;
 import be.elevenways.hohenheim.server.tls.DnsTxtRecord;
-import be.elevenways.hohenheim.server.util.Pause;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -141,7 +141,7 @@ class AcmeIssuanceContractTest {
                     assertThat(wait).as("step 3: DNS poll uses the CA floor").isGreaterThan(Duration.ofSeconds(3));
                 }
             } finally {
-                acme.setPollPauseForTesting(Pause.SLEEP);
+                acme.setPollPauseForTesting(Pace.Pause.REAL);
                 ca.deferPolls(null);
             }
         });
@@ -223,7 +223,7 @@ class AcmeIssuanceContractTest {
                 assertThat((String) row.get(CertificateModel.STATUS)).as("step 2: an active certificate")
                         .isEqualTo(CertificateModel.STATUS_ACTIVE);
             } finally {
-                acme.setPollPauseForTesting(Pause.SLEEP);
+                acme.setPollPauseForTesting(Pace.Pause.REAL);
                 ca.validateSlowly(0);
                 Now.setOffset(offset);
             }
@@ -261,7 +261,7 @@ class AcmeIssuanceContractTest {
                 assertThat((Instant) row.get(CertificateModel.NEXT_ATTEMPT_AT)).as("step 2: the retry is scheduled")
                         .isNotNull();
             } finally {
-                acme.setPollPauseForTesting(Pause.SLEEP);
+                acme.setPollPauseForTesting(Pace.Pause.REAL);
                 ca.deferPolls(null);
             }
         });

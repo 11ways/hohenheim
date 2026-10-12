@@ -16,6 +16,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.net.SocketException;
+import be.elevenways.protoblast.common.time.Pace;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -289,7 +290,7 @@ public final class PublicTcpListener implements AutoCloseable {
      */
     private boolean sleepAcceptBackoff(int failureCount) {
         try {
-            Thread.sleep(acceptBackoff.delayAfter(failureCount));
+            Pace.sleep(acceptBackoff.delayAfter(failureCount));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return false;

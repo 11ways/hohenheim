@@ -12,6 +12,7 @@ import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.thread.ScheduledJob;
 import be.elevenways.protoblast.common.time.Backoff;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
 import be.elevenways.protoblast.server.process.ProcessOutcome;
 import be.elevenways.protoblast.server.process.Subprocess;
 import be.elevenways.protoblast.server.process.Termination;
@@ -869,7 +870,7 @@ public final class SpamserviceManager {
             } catch (IOException ignored) {
                 // Binding and bootstrapping are still in progress.
             }
-            Thread.sleep(200);
+            Pace.sleep(Duration.ofMillis(200));
         }
         return false;
     }

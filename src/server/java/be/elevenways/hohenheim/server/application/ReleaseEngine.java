@@ -35,6 +35,8 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
+import java.time.Duration;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Datasource;
@@ -536,7 +538,7 @@ public final class ReleaseEngine {
         long waitMs = Math.max(0, (seconds != null ? seconds : 15) * 1000L);
         JobRunner.startVirtualThread(() -> ExecutionIdentity.runDetachedAsSystem("release-drain", () -> {
             try {
-                Thread.sleep(waitMs);
+                Pace.sleep(Duration.ofMillis(waitMs));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 return;
@@ -921,7 +923,7 @@ public final class ReleaseEngine {
                     .withArg("reason", "interrupted"));
             }
             try {
-                Thread.sleep(pause);
+                Pace.sleep(Duration.ofMillis(pause));
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 break;

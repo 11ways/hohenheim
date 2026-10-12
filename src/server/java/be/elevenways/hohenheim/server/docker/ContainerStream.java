@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.docker;
 import be.elevenways.hohenheim.server.runtime.ConsoleStream;
 import be.elevenways.hohenheim.server.util.Watchdog;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.time.Pace;
+import java.time.Duration;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -36,7 +38,7 @@ public final class ContainerStream implements ConsoleStream {
     /** Pause between zero-byte reads, so "nothing yet" never becomes a busy loop. */
     private static void idle() {
         try {
-            Thread.sleep(1);
+            Pace.sleep(Duration.ofMillis(1));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
