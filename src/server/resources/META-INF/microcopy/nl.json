@@ -6588,7 +6588,11 @@
     "scope": "violations"
   },
   "migrate_devices_present": {
-    "text": ".match {$count :number}\none {{Instantie {$name} heeft 1 gekoppeld apparaat; zijn volume reist niet mee in een volledige export, dus migreren zou het stilzwijgend verliezen. Koppel het apparaat eerst los.}}\n* {{Instantie {$name} heeft {$count} gekoppelde apparaten; hun volumes reizen niet mee in een volledige export, dus migreren zou ze stilzwijgend verliezen. Koppel de apparaten eerst los.}}",
+    "text": ".match {$count :number}\none {{Instantie {$name} heeft 1 gekoppeld apparaat, en zijn host of de bestemming kan geen apparaatvolumes overzetten, dus migreren zou het stilzwijgend verliezen. Koppel het apparaat eerst los.}}\n* {{Instantie {$name} heeft {$count} gekoppelde apparaten, en zijn host of de bestemming kan geen apparaatvolumes overzetten, dus migreren zou ze stilzwijgend verliezen. Koppel de apparaten eerst los.}}",
+    "scope": "violations"
+  },
+  "migrate_install_media_present": {
+    "text": "Instantie {$name} heeft installatiemedia {$media} in het station; een ISO staat alleen op zijn eigen host, dus koppel de installatiemedia los voor je migreert.",
     "scope": "violations"
   },
   "migrate_publication_present": {

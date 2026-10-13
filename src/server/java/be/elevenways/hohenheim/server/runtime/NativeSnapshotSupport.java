@@ -92,6 +92,11 @@ public interface NativeSnapshotSupport extends WorkloadAttribution {
      * @param sizeGb the volume's declared size
      */
     record ExportedDisk(@NonNull String device, @NonNull Path file, long size, int sizeGb) {
+
+        /** @return what a disk of {@code sizeGb} claims on the host it lands on: its declared size, never its archive */
+        public static long claimedBytes(int sizeGb) {
+            return Math.multiplyExact((long) sizeGb, 1024L * 1024 * 1024);
+        }
     }
 
     /**

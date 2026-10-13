@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
+import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -13,6 +14,7 @@ import be.elevenways.hohenheim.server.game.GameDomains;
 import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
+import be.elevenways.hohenheim.server.runtime.DeviceAttachSupport;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
@@ -194,10 +196,9 @@ public final class InstanceMigrations {
         if (!sourceTransportable || !hasTransport(targetRuntime)) {
             return HohenheimViolations.instanceRefusalText("migrate_unsupported", resolved.row(), null);
         }
-        long devices = deviceCountOf(resolved.row().get(InstanceModel.ID));
-        if (devices > 0) {
-            return HohenheimViolations.instanceRefusalText("migrate_devices_present", resolved.row(), null)
-                .withArg("count", devices);
+        Microcopy deviceRefusal = deviceRefusal(resolved, targetRuntime);
+        if (deviceRefusal != null) {
+            return deviceRefusal;
         }
         if (GameDomains.isPaired(resolved.row().get(InstanceModel.ID))) {
             return HohenheimViolations.instanceRefusalText("migrate_game_paired", resolved.row(), null);
@@ -275,18 +276,12 @@ public final class InstanceMigrations {
         if (transport == null) {
             throw HohenheimViolations.instanceRefusal("migrate_unsupported", resolved.row(), null);
         }
-        // Device rows are UNMOVABLE for now, refused by name: neither transport
-        // carries custom volumes (the native export skips them, the volume capture
-        // reads only the DECLARED logical volumes), and the destination deploy's device
-        // reconcile would attach FRESH EMPTY volumes -- a migration that "succeeds"
-        // while silently emptying a tenant's disk is exactly the silent-success shape
-        // this refusal exists to kill. Extra NICs are refused with them: their bridge
-        // is host-local and an import naming it can fail or dangle.
-        long devices = deviceCountOf(instanceId);
-        if (devices > 0) {
-            throw Violations.ofForm(HohenheimViolations.instanceRefusalText("migrate_devices_present",
-                    resolved.row(), null)
-                .withArg("count", devices));
+        // A data disk and an extra NIC travel with a native transfer (the disk's volume exported beside the instance
+        // and landed first on the destination, the NIC's bridge ensured by the import); install media is refused by
+        // name -- see deviceRefusal.
+        Microcopy deviceRefusal = deviceRefusal(resolved, targetRuntime);
+        if (deviceRefusal != null) {
+            throw Violations.ofForm(deviceRefusal);
         }
         // A game-domain mapping binds this instance to its proxy/backend PARTNER over a
         // host-local link network (GameDomains refuses a cross-host mapping by the same
@@ -623,8 +618,16 @@ public final class InstanceMigrations {
             return true;
         }
         if (targetClaim == WorkloadClaim.OURS) {
-            // Forward: the only copy lives on the destination; complete the handoff.
+            // Forward: the only copy lives on the destination; complete the handoff. The source's disk volumes are the
+            // remnant the window may have left beside the removed workload: tenant data on the old host.
             this.instances.leases().requireFence(targetId);
+            try {
+                InstanceDevices.deleteVolumesOn(resolved.runtime(), resolved);
+            } catch (IOException undeletable) {
+                Blast.log("MIGRATE: completing", handle, "could not remove the source's disk volumes on",
+                    ServerModel.nameOf(resolved.serverId()), ":", undeletable.getMessage());
+                return false;
+            }
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, instanceId);
             InstanceOperationGuard.handoff(this.instances.leases(), instanceId,
                 resolved.serverId(), targetId,
@@ -717,12 +720,16 @@ public final class InstanceMigrations {
         return null;
     }
 
-    /** The daemon's own whole-instance export/import (snapshots ride along). */
+    /**
+     * The daemon's own whole-instance export/import (snapshots ride along), with each data disk's volume exported
+     * beside it and landed first on the destination under the same device-volume naming.
+     */
     private static final class NativeTransport implements Transport {
 
         private final @NonNull Resolved resolved;
         private final @NonNull NativeSnapshotSupport source;
         private final @NonNull NativeSnapshotSupport target;
+        private final @NonNull Map<String, Path> disks = new LinkedHashMap<>();
         private @Nullable Path export;
 
         NativeTransport(@NonNull Resolved resolved, @NonNull NativeSnapshotSupport source,
@@ -735,8 +742,16 @@ public final class InstanceMigrations {
         @Override
         public long exportFromSource(@NonNull Path staging) throws IOException {
             this.export = staging.resolve("instance.tar");
-            return this.source.exportBackup(this.resolved.spec(), this.export,
+            long total = this.source.exportBackup(this.resolved.spec(), this.export,
                 InstanceSnapshots.maxArchiveBytes(), true);
+            Path diskDirectory = Files.createDirectories(staging.resolve("disks"));
+            for (NativeSnapshotSupport.ExportedDisk disk : this.source.exportDisks(this.resolved.spec(),
+                    diskDirectory, InstanceSnapshots.maxArchiveBytes())) {
+                this.disks.put(disk.device(), disk.file());
+                // A disk claims its declared size on the destination, as a restored one does.
+                total = Math.addExact(total, NativeSnapshotSupport.ExportedDisk.claimedBytes(disk.sizeGb()));
+            }
+            return total;
         }
 
         @Override
@@ -744,15 +759,16 @@ public final class InstanceMigrations {
             if (this.export == null) {
                 throw new IOException("importOnTarget before exportFromSource");
             }
-            // No disks: migration refuses a record with device rows before it exports anything. The extra interfaces
-            // are read off the same rows, so the destination's shared objects come through the import's one ensure.
-            this.target.importBackup(this.resolved.spec(), this.export, Map.of(),
+            // The extra interfaces are read off the record's rows, so the destination's bridge comes through the
+            // import's one ensure before the daemon validates the definition naming it.
+            this.target.importBackup(this.resolved.spec(), this.export, this.disks,
                 !InstanceDevices.extraNicsOf(this.resolved.row().get(InstanceModel.ID)).isEmpty());
         }
 
         @Override
-        public void removeSourceRemnants() {
-            // The whole instance IS the export; destroy already removed everything.
+        public void removeSourceRemnants() throws IOException {
+            // destroy removed the instance; its data disks are custom volumes beside it.
+            InstanceDevices.deleteVolumesOn(this.resolved.runtime(), this.resolved);
         }
     }
 
@@ -814,25 +830,65 @@ public final class InstanceMigrations {
     }
 
     /**
-     * Remove a same-record migration copy from a daemon: the container and, on a
-     * volume-transport runtime, the named volumes a later import would otherwise
-     * merge-restore over. The caller has already established the claim is OURS.
+     * Remove a same-record migration copy from a daemon: the container, the volumes of its device rows that landed
+     * beside it (a native copy's data disks) and, on a volume-transport runtime, the named volumes a later import
+     * would otherwise merge-restore over. The caller has already established the claim is OURS.
      * Package-visible for {@code InstanceService.destroy}'s abandon-ship cleanup.
      */
     static void removeMigrationCopy(@NonNull InstanceRuntime runtime,
                                     @NonNull Resolved resolved) throws IOException {
         runtime.destroy(resolved.spec().handle());
+        InstanceDevices.deleteVolumesOn(runtime, resolved);
         if (runtime instanceof VolumeSnapshotSupport volumes) {
             Map<String, String> logical = InstanceSnapshots.logicalVolumes(resolved);
             volumes.removeVolumesForRestore(resolved.spec(), logical, logical.keySet());
         }
     }
 
-    /** Attached device rows of one instance; unmovable for now, refused by name. */
-    private static long deviceCountOf(int instanceId) {
-        return Models.get(InstanceDeviceModel.class).find()
-            .where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
-            .count();
+    /**
+     * The named refusal the record's device rows raise for a move between these runtimes, or null when every device
+     * travels: a data disk and an extra NIC ride a native transfer between hosts that attach devices; install media
+     * is a volume of the source host only, so a drive holding an ISO refuses, naming it.
+     *
+     * AIDEV-NOTE: install media is refused rather than carried (decided round r2q): the ISO is operator-published
+     * shared state on ONE host, and carrying only the reference would land a definition the destination's daemon
+     * refuses unless that host happens to hold a same-named volume, which may be a different image. An unknown
+     * device type fails closed.
+     */
+    private static @Nullable Microcopy deviceRefusal(@NonNull Resolved resolved,
+                                                     @NonNull InstanceRuntime targetRuntime) {
+        int instanceId = resolved.row().get(InstanceModel.ID);
+        List<Row> rows = InstanceDevices.devicesOf(instanceId);
+        if (rows.isEmpty()) {
+            return null;
+        }
+        if (!carriesDevices(resolved.runtime()) || !carriesDevices(targetRuntime)) {
+            return HohenheimViolations.instanceRefusalText("migrate_devices_present", resolved.row(), null)
+                .withArg("count", rows.size());
+        }
+        for (Row device : rows) {
+            Object token = device.get(InstanceDeviceModel.TYPE);
+            DeviceType type = DeviceType.parse(token);
+            if (type == null) {
+                return HohenheimMicrocopy.VIOLATIONS.of("device_type_unknown").withArg("type", String.valueOf(token));
+            }
+            // Exhaustive: a new device type does not compile here until it says whether it travels.
+            Microcopy refusal = switch (type) {
+                case DISK, NIC -> null;
+                case CDROM -> HohenheimViolations.instanceRefusalText("migrate_install_media_present",
+                        resolved.row(), null)
+                    .withArg("media", String.join(", ", InstanceDevices.installMediaOf(instanceId)));
+            };
+            if (refusal != null) {
+                return refusal;
+            }
+        }
+        return null;
+    }
+
+    /** Whether a runtime can hand a record's devices over in a migration: a native transfer of attachable devices. */
+    private static boolean carriesDevices(@NonNull InstanceRuntime runtime) {
+        return runtime instanceof NativeSnapshotSupport && runtime instanceof DeviceAttachSupport;
     }
 
 

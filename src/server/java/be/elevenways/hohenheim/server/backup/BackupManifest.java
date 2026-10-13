@@ -12,6 +12,7 @@ import java.util.Map;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
+import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.util.Sha256;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -230,7 +231,7 @@ public record BackupManifest(int version,
     public long totalDiskBytes() {
         long total = 0;
         for (DiskEntry disk : this.disks) {
-            total = Math.addExact(total, Math.multiplyExact((long) disk.sizeGb(), 1024L * 1024 * 1024));
+            total = Math.addExact(total, NativeSnapshotSupport.ExportedDisk.claimedBytes(disk.sizeGb()));
         }
         return total;
     }

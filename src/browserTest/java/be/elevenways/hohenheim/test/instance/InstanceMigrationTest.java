@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
+import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -161,6 +162,86 @@ class InstanceMigrationTest {
     }
 
     @Test
+    void coldMigrationCarriesDataDisksAndExtraNicsToTheDestination() {
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            InstanceMigrations migrations = migrations();
+            InstanceDevices devices = new InstanceDevices(service);
+            int id = instanceRecord("disk-mover", alphaId, FakeNativeDaemons.FakeNativeKind.ID.toString());
+            String handle = handleOf(id);
+            String volume = handle + "-data";
+
+            // 1. A running workload on alpha with a 2 GB data disk holding a marker and an extra NIC; the
+            //    destination holds no extra-NIC bridge of this controller yet.
+            service.deploy(id);
+            devices.attachDisk(id, "data", 2);
+            devices.attachNic(id, "lan2");
+            FakeNativeDaemons.volumesOf(alphaId).get(volume).data.put("marker", "on-disk");
+            FakeNativeDaemons.EXTRA_BRIDGES.remove(ServerModel.nameOf(betaId));
+            assertThat(migrations.destinationsFor(id))
+                .as("step 1: the survey offers the destination: disks and NICs travel")
+                .anySatisfy(destination -> {
+                    assertThat(destination.serverId()).isEqualTo(betaId);
+                    assertThat(destination.refusal()).isNull();
+                });
+
+            // 1b. A failure right after the import rolls back: the destination's copy AND its landed disk volume go,
+            //     the source keeps its workload and its disk, and a later attempt is not blocked by debris.
+            InstanceMigrations crashing = new InstanceMigrations(service, step -> {
+                if ("imported".equals(step)) {
+                    throw new IllegalStateException("simulated failure after the import");
+                }
+            }, (serverId, bytes) -> {});
+            assertThat(catchThrowable(() -> crashing.migrateTo(id, betaId)))
+                .as("step 1b: the failure surfaces").isInstanceOf(IllegalStateException.class);
+            assertThat(daemonOf(betaId).containsKey(handle)).as("step 1b: no destination copy").isFalse();
+            assertThat(FakeNativeDaemons.volumesOf(betaId)).as("step 1b: no destination disk volume")
+                .doesNotContainKey(volume);
+            assertThat(FakeNativeDaemons.volumesOf(alphaId).get(volume).data)
+                .as("step 1b: the source disk is untouched").containsEntry("marker", "on-disk");
+            assertThat((Object) Models.get(InstanceModel.class).findById(id).get(InstanceModel.SERVER_ID))
+                .as("step 1b: the record stays on the source").isEqualTo(alphaId);
+
+            // 2. The migration carries both: the disk's contents land on the destination's own volume, the NIC rides
+            //    the bridge the import ensured, and the record keeps its device rows.
+            migrations.migrateTo(id, betaId);
+            Row row = Models.get(InstanceModel.class).findById(id);
+            assertThat((Object) row.get(InstanceModel.SERVER_ID))
+                .as("step 2: the record names the destination host")
+                .isEqualTo(betaId);
+            assertThat((String) row.get(InstanceModel.STATUS))
+                .as("step 2: the running workload runs again")
+                .isEqualTo(InstanceModel.STATUS_RUNNING);
+            FakeNativeDaemons.FakeVolume landed = FakeNativeDaemons.volumesOf(betaId).get(volume);
+            assertThat(landed).as("step 2: the destination holds the disk's volume").isNotNull();
+            assertThat(landed.data).as("step 2: with the contents written on the source")
+                .containsEntry("marker", "on-disk");
+            assertThat(landed.sizeGb).as("step 2: at its declared size").isEqualTo(2);
+            FakeNativeDaemons.FakeWorkload moved = daemonOf(betaId).get(handle);
+            assertThat(moved.disks).as("step 2: the moved workload's disk points at it")
+                .containsEntry("data", volume);
+            assertThat(moved.nics).as("step 2: the extra NIC travelled").containsExactly("lan2");
+            assertThat(FakeNativeDaemons.EXTRA_BRIDGES)
+                .as("step 2: the destination now holds the bridge the NIC rides")
+                .contains(ServerModel.nameOf(betaId));
+            assertThat(devices.rowsFor(id)).extracting(device -> (String) device.get(InstanceDeviceModel.NAME))
+                .as("step 2: the record keeps its device rows")
+                .containsExactlyInAnyOrder("data", "lan2");
+
+            // 3. Nothing stays behind on the source: no workload and no disk volume.
+            assertThat(daemonOf(alphaId).containsKey(handle)).as("step 3: no source workload").isFalse();
+            assertThat(FakeNativeDaemons.volumesOf(alphaId))
+                .as("step 3: the source's disk volume went with it (tenant data left behind is the leak)")
+                .doesNotContainKey(volume);
+
+            // 4. Destroying the moved workload removes the destination's volume.
+            service.destroy(id);
+            assertThat(FakeNativeDaemons.volumesOf(betaId)).as("step 4: destroy removes the moved disk")
+                .doesNotContainKey(volume);
+        });
+    }
+
+    @Test
     void refusalsAreNamedAndLeaveTheWorkloadUntouched() {
         Db.run(datasource, () -> {
             InstanceService service = new InstanceService();
@@ -173,16 +254,21 @@ class InstanceMigrationTest {
             assertRefusal(() -> migrations.migrateTo(id, alphaId), "migrate_same_host",
                 "step 1: migrating onto the current host refuses");
 
-            // 2. Attached devices: their volumes do not travel; refused BY NAME, and
-            //    the workload keeps running exactly where it was.
+            // 2. Install media in the drive: the ISO is a volume of THIS host only, so the move is refused BY NAME,
+            //    naming the medium, and the workload keeps running exactly where it was.
             Row device = Models.get(InstanceDeviceModel.class).createEmptyRow();
             device.set(InstanceDeviceModel.INSTANCE_ID, id);
-            device.set(InstanceDeviceModel.TYPE, InstanceDeviceModel.TYPE_DISK);
-            device.set(InstanceDeviceModel.NAME, "data0");
-            device.set(InstanceDeviceModel.SIZE_GB, 1);
+            device.set(InstanceDeviceModel.TYPE, InstanceDeviceModel.TYPE_CDROM);
+            device.set(InstanceDeviceModel.NAME, "cdrom");
+            device.set(InstanceDeviceModel.SOURCE_MEDIA, "debian-13.iso");
             Models.get(InstanceDeviceModel.class).save(device);
-            assertRefusal(() -> migrations.migrateTo(id, betaId), "migrate_devices_present",
-                "step 2: a device-bearing workload is unmovable, by name");
+            assertRefusal(() -> migrations.migrateTo(id, betaId), "migrate_install_media_present",
+                "step 2: a workload with an ISO in its drive is unmovable, by name");
+            assertThat(catchThrowable(() -> migrations.migrateTo(id, betaId)))
+                .as("step 2: the refusal names the medium in the drive")
+                .isInstanceOfSatisfying(Violations.class, violations ->
+                    assertThat(violations.all()).anySatisfy(violation ->
+                        assertThat(violation.message().args().asMap()).containsEntry("media", "debian-13.iso")));
             assertThat(daemonOf(alphaId).get(handle).running)
                 .as("step 2: the refused workload was never stopped")
                 .isTrue();
@@ -360,18 +446,19 @@ class InstanceMigrationTest {
             service.deploy(movable1);
             service.deploy(movable2);
             service.deploy(held);
+            // Install media in its drive is the one device that does not travel (the ISO is a volume of this host).
             Row device = Models.get(InstanceDeviceModel.class).createEmptyRow();
             device.set(InstanceDeviceModel.INSTANCE_ID, held);
-            device.set(InstanceDeviceModel.TYPE, InstanceDeviceModel.TYPE_DISK);
-            device.set(InstanceDeviceModel.NAME, "data0");
-            device.set(InstanceDeviceModel.SIZE_GB, 1);
+            device.set(InstanceDeviceModel.TYPE, InstanceDeviceModel.TYPE_CDROM);
+            device.set(InstanceDeviceModel.NAME, "cdrom");
+            device.set(InstanceDeviceModel.SOURCE_MEDIA, "debian-13.iso");
             Models.get(InstanceDeviceModel.class).save(device);
 
             // 1. Drain refuses on a host that is not cordoned -- deliberate two-step.
             assertRefusal(() -> migrations.drain(gammaId), "drain_requires_cordon",
                 "step 1: drain demands the cordon first");
 
-            // 2. Cordon, then drain: the movable pair moves, the device-bearing one is
+            // 2. Cordon, then drain: the movable pair moves, the one with install media is
             //    refused BY NAME and left running; the report says INCOMPLETE.
             Row gamma = Models.get(ServerModel.class).findById(gammaId);
             gamma.set(ServerModel.ADMISSION, ServerModel.ADMISSION_CORDONED);
@@ -385,7 +472,7 @@ class InstanceMigrationTest {
             assertThat(report.refused().get(0).name()).isEqualTo("drain-held");
             assertThat(report.refused().get(0).detail())
                 .as("step 2: the refusal carries its NAMED reason")
-                .contains("device");
+                .contains("debian-13.iso");
             assertThat(report.complete())
                 .as("step 2: a drain that left a workload behind says so")
                 .isFalse();

@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.DeviceAttachSupport;
+import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -316,6 +317,11 @@ public final class InstanceDevices {
 
     /** The device rows of one instance (admin surfaces, reconcile, tests). */
     public @NonNull List<Row> rowsFor(int instanceId) {
+        return devicesOf(instanceId);
+    }
+
+    /** @return every device row of the instance */
+    static @NonNull List<Row> devicesOf(int instanceId) {
         return Models.get(InstanceDeviceModel.class).findAll(InstanceDeviceModel.INSTANCE_ID, instanceId);
     }
 
@@ -376,22 +382,38 @@ public final class InstanceDevices {
         if (rows.isEmpty()) {
             return;
         }
-        if (resolved.runtime() instanceof DeviceAttachSupport support) {
-            List<String> diskNames = new ArrayList<>();
-            for (Row row : rows) {
-                // An unknown token owns no volume we can name; its row still goes below.
-                DeviceType type = DeviceType.parse(row.get(InstanceDeviceModel.TYPE));
-                if (type != null && type.ownsVolume()) {
-                    diskNames.add(row.get(InstanceDeviceModel.NAME));
-                }
-            }
-            support.deleteVolumes(resolved.spec(), diskNames);
-        }
+        deleteVolumesOn(resolved.runtime(), resolved);
         for (Row row : rows) {
             Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID));
         }
         Blast.log("INSTANCE: removed", rows.size(), "device row(s) of instance", instanceId,
             "- volumes deleted at the daemon, reservations released");
+    }
+
+    /**
+     * Delete, on {@code runtime}'s daemon, the backing volume of every device row of {@code resolved}'s record that
+     * owns one, each verified removed-or-absent; a runtime without device support holds none.
+     *
+     * AIDEV-NOTE: the runtime is a parameter because a migration holds the record's volumes on TWO daemons under the
+     * same names: the destroy path passes the record's own host, a migration the copy it is taking back.
+     *
+     * @throws IOException when a volume could not be confirmed gone
+     */
+    static void deleteVolumesOn(@NonNull InstanceRuntime runtime, @NonNull Resolved resolved) throws IOException {
+        if (!(runtime instanceof DeviceAttachSupport support)) {
+            return;
+        }
+        List<String> diskNames = new ArrayList<>();
+        for (Row row : devicesOf(resolved.row().get(InstanceModel.ID))) {
+            // An unknown token owns no volume we can name.
+            DeviceType type = DeviceType.parse(row.get(InstanceDeviceModel.TYPE));
+            if (type != null && type.ownsVolume()) {
+                diskNames.add(row.get(InstanceDeviceModel.NAME));
+            }
+        }
+        if (!diskNames.isEmpty()) {
+            support.deleteVolumes(resolved.spec(), diskNames);
+        }
     }
 
     // -- plumbing -------------------------------------------------------------

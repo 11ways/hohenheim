@@ -6588,7 +6588,11 @@
     "scope": "violations"
   },
   "migrate_devices_present": {
-    "text": ".match {$count :number}\none {{Instance {$name} carries 1 attached device; its volume does not travel in a whole-instance export, so migrating would silently lose it. Detach the device first.}}\n* {{Instance {$name} carries {$count} attached devices; their volumes do not travel in a whole-instance export, so migrating would silently lose them. Detach the devices first.}}",
+    "text": ".match {$count :number}\none {{Instance {$name} carries 1 attached device, and its host or the destination cannot carry device volumes across, so migrating would silently lose it. Detach the device first.}}\n* {{Instance {$name} carries {$count} attached devices, and its host or the destination cannot carry device volumes across, so migrating would silently lose them. Detach the devices first.}}",
+    "scope": "violations"
+  },
+  "migrate_install_media_present": {
+    "text": "Instance {$name} has install media {$media} in its drive; an ISO is stored on its own host only, so detach the install media before migrating.",
     "scope": "violations"
   },
   "migrate_publication_present": {

@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
+import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
@@ -36,14 +37,16 @@ import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * A VM's data disk and extra NIC travel with its backup, live on TWO real Incus hosts: a marker written into the disk's
- * volume on daystrom (from the host side, at a fixed offset of the raw block image, so no guest agent is involved) is
- * read back from the restored machine's OWN volume on nightstrom, the restored device points at that volume, the
- * restore lands the extra NIC on a host that did not hold this controller's extra-NIC bridge (it ensures it first), the
- * record has both rows, deleting the backup removes the one artifact that carried the disk, and destroying both
- * machines removes both volumes and releases the bridge on both hosts.
+ * A VM's data disk and extra NIC travel with its backup AND with its cold migration, live on TWO real Incus hosts: a
+ * marker written into the disk's volume on daystrom (from the host side, at a fixed offset of the raw block image, so
+ * no guest agent is involved) is read back from the restored or moved machine's volume on nightstrom, the device points
+ * at that volume, the extra NIC lands on a host that did not hold this controller's extra-NIC bridge (the import
+ * ensures it first), the record has both rows, deleting the backup removes the one artifact that carried the disk, a
+ * migration leaves no volume on the source, and destroying the machines removes their volumes and releases the bridge
+ * on both hosts.
  *
  * Skips (never fails) when the second host is not enrolled in
  * {@code ~/.config/hohenheim-livehost/incus.properties} ({@code url_b} keys).
@@ -199,6 +202,86 @@ class IncusDataDiskBackupLiveTest {
                     remoteB.forceDelete(restoredHandle);
                 }
                 deleteRecursively(targetDir);
+            }
+        });
+    }
+
+    @Test
+    void aVmsDataDiskAndExtraNicMoveWithItsMigration() {
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            InstanceMigrations migrations = new InstanceMigrations();
+            int hostAId = Models.get(ServerModel.class).findByName(HOST_A).get(ServerModel.ID);
+            int hostBId = Models.get(ServerModel.class).findByName(HOST_B).get(ServerModel.ID);
+            IncusClient daemonA = new ServerService().incusClientFor(HOST_A);
+            IncusClient daemonB = new ServerService().incusClientFor(HOST_B);
+            int vmId = vmRecord("disk-mover", hostAId);
+            String handle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, vmId);
+            String volume = handle + "-" + DEVICE;
+            String marker = "HHMIG-" + Now.millis();
+            try {
+                // 1. A VM with a 1 GB data disk and an extra NIC runs on daystrom.
+                InstanceDevices devices = new InstanceDevices(service);
+                devices.attachDisk(vmId, DEVICE, 1);
+                devices.attachNic(vmId, NIC);
+                assertThat(service.deploy(vmId).running()).as("step 1: the VM runs on " + HOST_A).isTrue();
+                Disk source = diskOf(daemonA, handle);
+                assertThat(source.volume()).as("step 1: the disk is the record's own volume").isEqualTo(volume);
+                String bridge = IncusNetworkPolicy.extraNetwork();
+
+                // 2. The marker is written into the disk from the host side and reads back there.
+                host(remoteA, "sh", "-c", "'printf " + marker + " | dd of=" + source.image()
+                    + " bs=1 seek=" + MARKER_OFFSET + " conv=notrunc,fsync status=none'");
+                assertThat(readMarker(remoteA, source, marker.length()))
+                    .as("step 2: the marker is on the source disk").isEqualTo(marker);
+
+                // 3. Migrated to nightstrom, which holds no bridge of this controller: the disk lands as the same
+                //    record's volume there holding the marker, the NIC rides the bridge the import ensured, and the
+                //    machine runs again (its deploy re-ensured the disk, which refuses a volume not attributed to the
+                //    record, so running proves the attribution).
+                assertThat(daemonB.network(bridge)).as("step 3: " + HOST_B + " holds no " + bridge + " before")
+                    .isNull();
+                migrations.migrateTo(vmId, hostBId);
+                assertThat((Object) Models.get(InstanceModel.class).findById(vmId).get(InstanceModel.SERVER_ID))
+                    .as("step 3: the record lives on " + HOST_B).isEqualTo(hostBId);
+                Disk landed = diskOf(daemonB, handle);
+                assertThat(landed.volume()).as("step 3: the moved disk is the record's own volume there")
+                    .isEqualTo(volume);
+                assertThat(readMarker(remoteB, landed, marker.length()))
+                    .as("step 3: the moved volume holds the marker written on " + HOST_A).isEqualTo(marker);
+                assertThat(nicNetworkOf(daemonB, handle))
+                    .as("step 3: the moved NIC rides the bridge the import ensured").isEqualTo(bridge);
+                assertThat(String.valueOf(daemonB.instance(handle).get("status")))
+                    .as("step 3: the moved machine runs").isEqualTo("Running");
+                assertThat(devices.rowsFor(vmId)).extracting(row -> (String) row.get(InstanceDeviceModel.NAME))
+                    .as("step 3: the record keeps both device rows").containsExactlyInAnyOrder(DEVICE, NIC);
+
+                // 4. Nothing of it stays on daystrom: no instance, no disk volume.
+                assertThat(catchThrowable(() -> daemonA.instance(handle)))
+                    .as("step 4: no instance left on " + HOST_A)
+                    .isInstanceOfSatisfying(IncusClient.ApiException.class,
+                        missing -> assertThat(missing.isNotFound()).isTrue());
+                assertThat(daemonA.customVolume(source.pool(), volume))
+                    .as("step 4: the source disk volume is gone from " + HOST_A).isNull();
+
+                // 5. Destroying the moved machine removes its volume and releases the bridge on both hosts.
+                service.destroy(vmId);
+                assertThat(daemonB.customVolume(landed.pool(), volume))
+                    .as("step 5: the moved disk volume is gone from " + HOST_B).isNull();
+                assertThat(daemonB.network(bridge)).as("step 5: " + HOST_B + " released " + bridge).isNull();
+                assertThat(daemonA.network(bridge)).as("step 5: " + HOST_A + " released " + bridge).isNull();
+            } catch (IOException daemon) {
+                throw new RuntimeException(daemon);
+            } finally {
+                for (LiveIncusHost remote : new LiveIncusHost[] {remoteA, remoteB}) {
+                    remote.forceDelete(handle);
+                    try {
+                        remote.hostCommand("sh", "-c", "'incus storage volume delete default " + volume
+                            + " 2>/dev/null || true'");
+                    } catch (IOException cleanup) {
+                        System.out.println("live-disk volume cleanup failed: " + cleanup.getMessage());
+                    }
+                }
             }
         });
     }
