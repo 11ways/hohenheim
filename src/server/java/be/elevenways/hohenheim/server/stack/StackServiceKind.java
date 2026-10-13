@@ -6,7 +6,7 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.zenit.common.coerce.PrimitiveCoercion;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
-import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
@@ -21,7 +21,6 @@ import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.field.DoubleField;
 import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.ListField;
-import be.elevenways.zenit.common.orm.field.SchemaField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.field.StringMapField;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -109,26 +108,11 @@ public final class StackServiceKind implements InstanceKindHandler {
             .build());
 
     /**
-     * One {@code ports} entry. AIDEV-NOTE: the names are the SERVICE record's port columns,
-     * because the entries are written by {@code StackSpec.PortSpec.toMap} -- one shape for
-     * the snapshot and this setting, read back here by these same fields.
+     * The service's compose ports, in the one published-port vocabulary ({@link PublishedPort}): written by
+     * {@code StackSpec.PortSpec.published} when the stack lowers a service, read back by {@link #specFor}.
      */
-    public static final Schema PORT_SCHEMA = new Schema();
-    public static final IntegerField PORT_CONTAINER = PORT_SCHEMA.addField(
-        IntegerField.builder().name(StackServiceModel.PORT_CONTAINER.getName())
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("container_port")).build());
-    public static final IntegerField PORT_HOST = PORT_SCHEMA.addField(
-        IntegerField.builder().name(StackServiceModel.PORT_HOST.getName())
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("host_port")).build());
-    public static final StringField PORT_PROTOCOL = PORT_SCHEMA.addField(
-        StringField.builder().name(StackServiceModel.PORT_PROTOCOL.getName()).build());
-    public static final StringField PORT_HOST_IP = PORT_SCHEMA.addField(
-        StringField.builder().name(StackServiceModel.PORT_HOST_IP.getName())
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("host_ip")).build());
-
-    public static final SchemaField PORTS = SETTINGS_SCHEMA.addField(
-        SchemaField.builder("ports").subSchema(PORT_SCHEMA).list()
-            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("ports")).build());
+    public static final StringMapField PUBLISHED_PORTS = SETTINGS_SCHEMA.addField(
+        InstanceKindFields.publishedPorts());
 
     public static final ListField<String> CAPABILITIES = SETTINGS_SCHEMA.addField(
         ListField.builder(StringField.builder().name("capability").build()).name("capabilities")
@@ -293,50 +277,25 @@ public final class StackServiceKind implements InstanceKindHandler {
             .command(command.isEmpty() ? null : command)
             .env(EnvVars.toMap(settings.get(ENVIRONMENT_VARIABLES.getName())))
             .volumes(volumes)
-            .publications(publicationsOf(settings, name))
+            .publications(publicationsOf(settings))
             .tmpfs(tmpfs)
             .healthCheck(health)
             .build();
     }
 
     /**
-     * The service's declared host-port publications. Every stack port is an
-     * operator-FIXED host port, so every one of them rides the pre-allocation strategy
-     * and holds a real ledger claim before its container exists -- which the pre-lowering
-     * tier's own {@code syncStackService} claim could not guarantee, because it was
-     * written when the row was SAVED and never checked against the daemon.
+     * The service's declared host-port publications. Every stack port is an operator-FIXED host port, so every one of
+     * them rides the pre-allocation strategy and holds a real ledger claim before its container exists -- which the
+     * pre-lowering tier's own {@code syncStackService} claim could not guarantee, because it was written when the row
+     * was SAVED and never checked against the daemon.
      *
-     * @throws Violations naming the bind address when it is neither the whole host nor
-     *         loopback: {@link PortPublication} expresses exactly those two exposures, and
-     *         accepting a third spelling would publish somewhere nothing declared
+     * @throws Violations naming an entry that is no port spelling; the lowering ({@code StackSpec.PortSpec.published})
+     *         already refused a bind address that is neither the whole host nor loopback
      */
-    private static @NonNull List<PortPublication> publicationsOf(@NonNull Map<String, Object> settings,
-                                                                 @NonNull String service) {
+    private static @NonNull List<PortPublication> publicationsOf(@NonNull Map<String, Object> settings) {
         List<PortPublication> publications = new ArrayList<>();
-        for (Object entry : RawValues.list(settings.get(PORTS.getName()))) {
-            if (!(entry instanceof Map<?, ?> port)) {
-                continue;
-            }
-            int containerPort = RawValues.intOr(port.get(PORT_CONTAINER.getName()), 0);
-            int hostPort = RawValues.intOr(port.get(PORT_HOST.getName()), 0);
-            if (containerPort <= 0 || hostPort <= 0) {
-                continue;
-            }
-            String hostIp = trimmed(port.get(PORT_HOST_IP.getName()));
-            boolean publicExposure;
-            if (hostIp.isEmpty() || "0.0.0.0".equals(hostIp) || "::".equals(hostIp)) {
-                publicExposure = true;
-            } else if ("127.0.0.1".equals(hostIp) || "localhost".equals(hostIp)) {
-                publicExposure = false;
-            } else {
-                throw Violations.ofField("settings.ports", hostIp,
-                    HohenheimMicrocopy.VIOLATIONS.of("stack_port_bind_unsupported")
-                        .withArg("service", service).withArg("address", hostIp));
-            }
-            String protocol = trimmed(port.get(PORT_PROTOCOL.getName()));
-            publications.add(new PortPublication(containerPort,
-                PortPublication.UDP.equals(protocol) ? PortPublication.UDP : PortPublication.TCP,
-                publicExposure, hostPort, null));
+        for (PublishedPort port : PublishedPort.of(settings)) {
+            publications.add(PortPublication.of(port));
         }
         return List.copyOf(publications);
     }

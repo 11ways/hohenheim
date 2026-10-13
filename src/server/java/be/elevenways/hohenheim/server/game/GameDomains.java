@@ -13,6 +13,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -927,13 +928,21 @@ public final class GameDomains {
         }
     }
 
+    /**
+     * The port Velocity listens on inside its container: its published game port, else (a proxy made before the
+     * Velocity template published one) the routing tier's single port, else Velocity's default.
+     */
     private static int proxyBindPort(int proxyId) {
         // Trashed included: destroy re-renders a dying proxy's config while it deletes the
         // proxy's mappings, and its own setting is still the port that config binds.
         Row proxy = StoredRows.byId(Models.get(InstanceModel.class), proxyId);
-        if (proxy != null && proxy.get(InstanceModel.SETTINGS) instanceof Map<?, ?> settings
-                && settings.get("container_port") instanceof Number port
-                && port.intValue() > 0) {
+        Map<String, Object> settings = proxy == null ? Map.of() : InstanceModel.settingsOf(proxy);
+        for (PublishedPort port : PublishedPort.of(settings)) {
+            if (port.purpose().carriesSrv()) {
+                return port.containerPort();
+            }
+        }
+        if (settings.get("container_port") instanceof Number port && port.intValue() > 0) {
             return port.intValue();
         }
         return VelocityConfigs.DEFAULT_BIND_PORT;

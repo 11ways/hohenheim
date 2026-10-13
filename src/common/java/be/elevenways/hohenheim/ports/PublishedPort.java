@@ -12,23 +12,29 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * One port a workload publishes on every address of its host, as its kind settings' {@code published_ports} map
- * declares it: the port's name (its {@link PortPurpose}) to Docker's own {@code [host:]container[/protocol]} spelling.
+ * One port a workload publishes on its host, as its kind settings' {@code published_ports} map declares it: the
+ * port's name (its {@link PortPurpose}) to Docker's own {@code [bind:][host:]container[/protocol]} spelling.
  *
  * AIDEV-NOTE: a template declares {@code "game": "25565/tcp"} (no host port); putting it online writes the host port
  * the ledger claimed ({@code "30001:25565/tcp"}), so the number is fixed from creation, as a Pterodactyl allocation is.
  * An empty host part means the deploy claims a free one. The single {@code container_port} publication beside it is
- * the routing tier's port and is not one of these.
+ * the routing tier's port and is not one of these. A stack service lowers its compose ports onto this same map
+ * ({@code StackSpec.PortSpec.published}); a bind part publishes on loopback ({@code 127.0.0.1}) or the whole host, the
+ * two exposures a port publication expresses, and any other address is refused.
  *
  * @param name          the port's name, its purpose when the vocabulary knows it
  * @param hostPort      the host port, or null for one the ledger picks
  * @param containerPort the port inside the workload
  * @param protocol      {@code tcp} or {@code udp}
+ * @param loopback      whether only this host may reach it, instead of the whole world
  * @author Jelle De Loecker
  * @since  0.9.0
  */
 public record PublishedPort(@NonNull String name, @Nullable Integer hostPort, int containerPort,
-                            @NonNull String protocol) {
+                            @NonNull String protocol, boolean loopback) {
+
+    /** The bind address that publishes on loopback only. */
+    public static final String LOOPBACK = "127.0.0.1";
 
     /** The kind settings key holding the map. */
     public static final String FIELD = "published_ports";
@@ -58,7 +64,8 @@ public record PublishedPort(@NonNull String name, @Nullable Integer hostPort, in
 
     /**
      * @return the entry Docker's port spelling describes
-     * @throws Violations when the spelling is not {@code [host:]container[/protocol]} with ports in 1-65535
+     * @throws Violations when the spelling is not {@code [bind:][host:]container[/protocol]} with ports in 1-65535, or
+     *         binds an address that is neither loopback nor the whole host
      */
     public static @NonNull PublishedPort parse(@NonNull String name, @NonNull String spec) {
         String text = spec.trim();
@@ -69,16 +76,22 @@ public record PublishedPort(@NonNull String name, @Nullable Integer hostPort, in
             text = text.substring(0, slash).trim();
         }
         Integer host = null;
-        int colon = text.indexOf(':');
+        boolean loopback = false;
+        int colon = text.lastIndexOf(':');
         if (colon >= 0) {
-            String hostText = text.substring(0, colon).trim();
-            host = hostText.isEmpty() ? null : port(name, spec, hostText);
+            String front = text.substring(0, colon).trim();
             text = text.substring(colon + 1).trim();
+            int bindColon = front.lastIndexOf(':');
+            String hostText = bindColon >= 0 ? front.substring(bindColon + 1).trim() : front;
+            if (bindColon >= 0) {
+                loopback = loopbackBind(name, front.substring(0, bindColon).trim());
+            }
+            host = hostText.isEmpty() ? null : port(name, spec, hostText);
         }
         if (!TCP.equals(protocol) && !UDP.equals(protocol)) {
             throw invalid(name, spec);
         }
-        return new PublishedPort(name.trim(), host, port(name, spec, text), protocol);
+        return new PublishedPort(name.trim(), host, port(name, spec, text), protocol, loopback);
     }
 
     /** @return the purpose this port's name declares */
@@ -88,12 +101,13 @@ public record PublishedPort(@NonNull String name, @Nullable Integer hostPort, in
 
     /** @return Docker's spelling of this entry, the value stored under its name */
     public @NonNull String spec() {
-        return (this.hostPort == null ? "" : this.hostPort + ":") + this.containerPort + "/" + this.protocol;
+        String published = (this.hostPort == null ? "" : this.hostPort + ":") + this.containerPort + "/" + this.protocol;
+        return this.loopback ? LOOPBACK + ":" + (this.hostPort == null ? ":" : "") + published : published;
     }
 
     /** @return this entry published on {@code port} of its host */
     public @NonNull PublishedPort withHostPort(int port) {
-        return new PublishedPort(this.name, port, this.containerPort, this.protocol);
+        return new PublishedPort(this.name, port, this.containerPort, this.protocol, this.loopback);
     }
 
     /** @return the settings map value for these entries, keyed by name */
@@ -103,6 +117,22 @@ public record PublishedPort(@NonNull String name, @Nullable Integer hostPort, in
             map.put(port.name(), port.spec());
         }
         return map;
+    }
+
+    /**
+     * @return whether the bind address publishes on loopback only
+     * @throws Violations when it is neither loopback nor the whole host
+     */
+    private static boolean loopbackBind(@NonNull String name, @NonNull String bind) {
+        String address = bind.startsWith("[") && bind.endsWith("]") ? bind.substring(1, bind.length() - 1) : bind;
+        if (address.isEmpty() || "0.0.0.0".equals(address) || "::".equals(address)) {
+            return false;
+        }
+        if (LOOPBACK.equals(address) || "localhost".equals(address)) {
+            return true;
+        }
+        throw Violations.ofField("settings." + FIELD, bind, HohenheimMicrocopy.VIOLATIONS.of("port_bind_unsupported")
+            .withArg("name", name).withArg("address", bind));
     }
 
     private static int port(@NonNull String name, @NonNull String spec, @NonNull String text) {

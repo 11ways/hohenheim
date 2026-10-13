@@ -219,6 +219,8 @@ public class InstanceModel extends Model {
     public static final StringField GAME_ADDRESS = SCHEMA.addField(
         StringField.builder().name("game_address")
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("game_address"))
+            .help(HohenheimMicrocopy.HELP.of("game_address"))
+            .placeholder("mc.example.com")
             .build());
 
     /**

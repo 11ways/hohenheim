@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
+import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceStatus;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -72,6 +73,12 @@ public final class InstanceKinds {
     /** @return the handler of the instance row's kind, or null for an unknown kind */
     public static @Nullable InstanceKindHandler handlerOf(@NonNull Row instance) {
         return getHandler(instance.get(InstanceModel.KIND));
+    }
+
+    /** @return how the instance is reached from outside, by its kind and its settings; NONE for an unknown kind */
+    public static @NonNull PutOnlineReach reachOf(@NonNull Row instance) {
+        InstanceKindHandler handler = handlerOf(instance);
+        return handler == null ? PutOnlineReach.NONE : handler.reachOf(InstanceModel.settingsOf(instance));
     }
 
     private static @Nullable InstanceKindHandler handlerFor(@Nullable Identifier id) {

@@ -333,7 +333,7 @@ final class PutOnlineHandlers {
         int serverId = ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
         List<PortPublication> wanted = new ArrayList<>();
         for (PublishedPort port : ports) {
-            wanted.add(new PortPublication(port.containerPort(), port.protocol(), true, port.hostPort(), null));
+            wanted.add(PortPublication.of(port));
         }
         List<PublishedPort> published = new ArrayList<>();
         try {

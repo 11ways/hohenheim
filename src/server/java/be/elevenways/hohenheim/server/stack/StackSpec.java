@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackFileModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
+import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -157,11 +158,21 @@ public record StackSpec(
     /**
      * A fixed host-port publication. Blank {@code hostIp} publishes on all interfaces.
      *
-     * AIDEV-NOTE: {@link #toMap} is ALSO the entry shape of the {@code stack_service} kind's
-     * {@code ports} setting (StackInstances.desiredSettings), so the snapshot and the
-     * instance settings cannot drift apart; StackServiceKind declares the same names.
+     * AIDEV-NOTE: {@link #toMap} is the deployment snapshot's and the service record's entry shape (compose authoring);
+     * the {@code stack_service} kind's own setting is the one published-port vocabulary, {@link #published}.
      */
     public record PortSpec(int containerPort, int hostPort, @NonNull String protocol, @NonNull String hostIp) {
+
+        /**
+         * This publication as the instance kind's published port, named by its protocol and host port, which the
+         * ledger keeps unique on a host.
+         *
+         * @throws Violations when it binds an address that is neither the whole host nor loopback
+         */
+        public @NonNull PublishedPort published() {
+            return PublishedPort.parse(this.protocol + "-" + this.hostPort, (this.hostIp.isBlank() ? ""
+                : this.hostIp.trim() + ":") + this.hostPort + ":" + this.containerPort + "/" + this.protocol);
+        }
 
         /** @return the publication a stored record or snapshot entry declares; null for an incomplete one */
         static @Nullable PortSpec read(@NonNull Function<String, Object> field) {

@@ -482,10 +482,10 @@ class StackInstancesTest {
         assertThatThrownBy(() -> runtime.deploy(stackId, "weird-bind"))
             .isInstanceOf(IOException.class)
             .hasMessageContaining("10.11.12.13");
-        String container = containerOf(serviceId);
-        assertThatThrownBy(() -> docker.inspectContainer(container))
-            .as("nothing was created for the refused service")
-            .isInstanceOf(IOException.class);
+        Row[] owned = new Row[1];
+        Db.run(datasource, () -> owned[0] = StackInstances.owned(serviceId));
+        assertThat(owned[0]).as("nothing was created for the refused service: its lowering refused the bind")
+            .isNull();
     }
 
     /**

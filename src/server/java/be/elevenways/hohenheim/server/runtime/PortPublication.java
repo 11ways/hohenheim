@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.runtime;
 
+import be.elevenways.hohenheim.ports.PublishedPort;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -30,6 +31,12 @@ public record PortPublication(int containerPort,
 
     public static final String TCP = "tcp";
     public static final String UDP = "udp";
+
+    /** @return the publication a declared published port asks for, its host port pre-allocated when it names one */
+    public static @NonNull PortPublication of(@NonNull PublishedPort port) {
+        return new PortPublication(port.containerPort(), UDP.equals(port.protocol()) ? UDP : TCP, !port.loopback(),
+            port.hostPort(), null);
+    }
 
     /** Whether this publication's host port must be claimed BEFORE the container exists. */
     public boolean requiresPreallocation() {

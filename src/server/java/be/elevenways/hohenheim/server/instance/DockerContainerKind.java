@@ -212,7 +212,7 @@ public final class DockerContainerKind implements InstanceKindHandler {
     }
 
     /**
-     * The routing tier's single publication, then every published port, each on the whole host.
+     * The routing tier's single publication, then every published port.
      *
      * @throws Violations naming a half-declared single port or a published port that is no port spelling
      */
@@ -223,9 +223,7 @@ public final class DockerContainerKind implements InstanceKindHandler {
             publications.add(single);
         }
         for (PublishedPort port : PublishedPort.of(settings)) {
-            publications.add(new PortPublication(port.containerPort(),
-                PublishedPort.UDP.equals(port.protocol()) ? PortPublication.UDP : PortPublication.TCP, true,
-                port.hostPort(), null));
+            publications.add(PortPublication.of(port));
         }
         return publications;
     }

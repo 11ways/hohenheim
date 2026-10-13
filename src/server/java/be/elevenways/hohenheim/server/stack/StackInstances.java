@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.ports.PortLedger;
+import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -519,9 +520,9 @@ public final class StackInstances {
      * Map one resolved SERVICE onto the stack_service kind settings.
      *
      * AIDEV-NOTE: written by the kind's own field names and read back by
-     * {@link StackServiceKind#specFor} through the SAME fields; a port entry is
-     * {@link StackSpec.PortSpec}'s own map, the shape the deployment snapshot stores. The
-     * environment is included here and detached by the caller into secret variables.
+     * {@link StackServiceKind#specFor} through the SAME fields; the ports are the one published-port vocabulary
+     * ({@link StackSpec.PortSpec#published}). The environment is included here and detached by the caller into secret
+     * variables.
      */
     static @NonNull Map<String, Object> desiredSettings(@NonNull StackSpec spec,
                                                         StackSpec.@NonNull ServiceSpec service) {
@@ -544,11 +545,11 @@ public final class StackInstances {
         settings.put(StackServiceKind.VOLUMES.getName(), volumes);
         settings.put(StackServiceKind.TMPFS_PATHS.getName(), tmpfs);
 
-        List<Map<String, Object>> ports = new ArrayList<>();
+        List<PublishedPort> ports = new ArrayList<>();
         for (StackSpec.PortSpec port : service.ports()) {
-            ports.add(port.toMap());
+            ports.add(port.published());
         }
-        settings.put(StackServiceKind.PORTS.getName(), ports);
+        settings.put(StackServiceKind.PUBLISHED_PORTS.getName(), PublishedPort.toSettings(ports));
 
         if (service.healthCmd() != null) {
             settings.put(StackServiceKind.HEALTH_CMD.getName(), service.healthCmd());

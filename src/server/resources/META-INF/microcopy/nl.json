@@ -8289,8 +8289,8 @@
       "scope": "hohenheim_field"
     }
   ],
-  "stack_port_bind_unsupported": {
-    "text": "Service {$service} publiceert op {$address}, dat noch de hele host noch loopback is",
+  "port_bind_unsupported": {
+    "text": "Poort {$name} publiceert op {$address}, dat noch de hele host noch loopback is",
     "scope": "violations"
   },
   "database_container": [
@@ -15647,9 +15647,9 @@
   "rollback_release": { "text": "{$actor} zette {$subject} terug naar de vorige release", "scope": "hohenheim", "target": "happened" },
   "test_git_provider": { "text": "{$actor} testte de verbinding met {$subject}", "scope": "hohenheim", "target": "happened" },
   "wordpress": { "text": "Een WordPress-site met een eigen database.", "scope": "put_online", "target": "card" },
-  "minecraft_server": { "text": "Een Minecraftserver voor je netwerk, achter zijn proxy.", "scope": "put_online", "target": "card" },
+  "minecraft_backend": { "text": "Een Minecraftserver voor je netwerk, achter zijn proxy.", "scope": "put_online", "target": "card" },
   "velocity_proxy": { "text": "De ingang waarmee spelers verbinden, voor je Minecraftservers.", "scope": "put_online", "target": "card" },
-  "minecraft": { "text": "Een Minecraftserver waarmee spelers rechtstreeks verbinden, op een eigen poort.", "scope": "put_online", "target": "card" },
+  "minecraft_server": { "text": "Een Minecraftserver waarmee spelers rechtstreeks verbinden, op een eigen poort.", "scope": "put_online", "target": "card" },
   "rotate_incus_cert": { "text": "{$actor} gaf {$subject} een nieuwe Incus-clientidentiteit", "scope": "hohenheim", "target": "happened" },
   "rotate_host_key": { "text": "{$actor} gaf {$subject} een nieuwe SSH-clientidentiteit", "scope": "hohenheim", "target": "happened" },
   "edit_remote_dns_record": { "text": "{$actor} wijzigde een record van {$subject} op de primaire server", "scope": "hohenheim", "target": "happened" },
@@ -17987,7 +17987,8 @@
   ],
   "game_address": [
     {"scope": "put_online", "text": "Speladres"},
-    {"scope": "hohenheim_field", "text": "Speladres"}
+    {"scope": "hohenheim_field", "text": "Speladres"},
+    {"scope": "help", "text": "Een naam in een zone die Hohenheim beheert, zoals mc.example.com: die wijst naar deze host en krijgt een SRV-record voor de spelpoort. Leeg: geen speladres, en zijn records verdwijnen."}
   ],
   "port_spec_invalid": {"scope": "violations", "text": "Poort {$name} is niet geschreven als [hostpoort:]containerpoort/protocol: {$spec}."},
   "game_address_no_zone": {"scope": "violations", "text": "Geen zone die Hohenheim beheert omvat {$address}. Voeg de zone eerst toe onder DNS, of laat het speladres leeg."}

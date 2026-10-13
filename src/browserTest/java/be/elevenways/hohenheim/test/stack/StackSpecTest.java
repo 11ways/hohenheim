@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test.stack;
 
+import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.server.stack.StackSpec;
+import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.Test;
 
 import java.util.LinkedHashMap;
@@ -9,6 +11,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
  * StackSpec mechanics: dependency ordering, cycle/unknown refusal, and the
@@ -79,6 +82,36 @@ class StackSpecTest {
 
         StackSpec revived = StackSpec.fromMap(original.toMap());
         assertThat(revived).isEqualTo(original);
+    }
+
+    /**
+     * A compose port lowers onto the one published-port vocabulary: named by protocol and host port, its bind kept
+     * as loopback or the whole host, read back exactly as written; any other bind address is refused by name.
+     */
+    @Test
+    void composePortsLowerOntoPublishedPorts() {
+        // 1. A loopback TCP port and a whole-host UDP port, each in Docker's spelling under its name.
+        PublishedPort loopback = new StackSpec.PortSpec(80, 8080, "tcp", "127.0.0.1").published();
+        PublishedPort open = new StackSpec.PortSpec(51820, 51820, "udp", "").published();
+        assertThat(List.of(loopback.name(), loopback.spec(), String.valueOf(loopback.loopback())))
+            .as("step 1: the loopback port").containsExactly("tcp-8080", "127.0.0.1:8080:80/tcp", "true");
+        assertThat(List.of(open.name(), open.spec(), String.valueOf(open.loopback())))
+            .as("step 1: the whole-host port").containsExactly("udp-51820", "51820:51820/udp", "false");
+
+        // 2. The settings map round-trips through the one reader, binds included.
+        Map<String, Object> settings = Map.of(PublishedPort.FIELD,
+            PublishedPort.toSettings(List.of(loopback, open)));
+        assertThat(PublishedPort.of(settings)).as("step 2: read back exactly").containsExactly(loopback, open);
+        assertThat(PublishedPort.parse("v6", ":::9000:90/tcp").loopback())
+            .as("step 2: the IPv6 whole host is not loopback").isFalse();
+
+        // 3. A bind address that is neither is refused, naming the port and the address.
+        Violations refused = catchThrowableOfType(Violations.class,
+            () -> new StackSpec.PortSpec(80, 8081, "tcp", "10.0.0.5").published());
+        assertThat((Object) refused).as("step 3: a third bind address is refused").isNotNull();
+        assertThat(refused.all().getFirst().message().args().asMap())
+            .as("step 3: naming the port and the address")
+            .containsEntry("name", "tcp-8081").containsEntry("address", "10.0.0.5");
     }
 
     @Test

@@ -122,8 +122,7 @@ public final class InstanceOverview {
         // says how it is connected and the addresses its guest holds. Both read the kind's and its driver's facts.
         List<WidgetInstance> main = new ArrayList<>();
         InstanceKindHandler kind = InstanceKinds.handlerOf(instance);
-        Map<String, Object> settings = settingsOf(instance);
-        PutOnlineReach reach = kind == null ? PutOnlineReach.NONE : kind.reachOf(settings);
+        PutOnlineReach reach = InstanceKinds.reachOf(instance);
         if (kind != null && reach.asksAddress()) {
             List<Row> sites = Models.get(SiteModel.class).find().where(SiteModel.INSTANCE_ID.eq(instanceId)).all();
             main.add(AppOverview.addresses(sites, accessContext));

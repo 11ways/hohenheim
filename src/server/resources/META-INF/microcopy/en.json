@@ -8299,8 +8299,8 @@
       "scope": "hohenheim_field"
     }
   ],
-  "stack_port_bind_unsupported": {
-    "text": "Service {$service} publishes on {$address}, which is neither the whole host nor loopback",
+  "port_bind_unsupported": {
+    "text": "Port {$name} publishes on {$address}, which is neither the whole host nor loopback",
     "scope": "violations"
   },
   "database_engine_unknown": {
@@ -15647,9 +15647,9 @@
   "rollback_release": { "text": "{$actor} rolled {$subject} back to its previous release", "scope": "hohenheim", "target": "happened" },
   "test_git_provider": { "text": "{$actor} tested the connection to {$subject}", "scope": "hohenheim", "target": "happened" },
   "wordpress": { "text": "A WordPress site with its own database.", "scope": "put_online", "target": "card" },
-  "minecraft_server": { "text": "A Minecraft server for your network, behind its proxy.", "scope": "put_online", "target": "card" },
+  "minecraft_backend": { "text": "A Minecraft server for your network, behind its proxy.", "scope": "put_online", "target": "card" },
   "velocity_proxy": { "text": "The entrance players connect to, in front of your Minecraft servers.", "scope": "put_online", "target": "card" },
-  "minecraft": { "text": "A Minecraft server players connect to directly, on its own port.", "scope": "put_online", "target": "card" },
+  "minecraft_server": { "text": "A Minecraft server players connect to directly, on its own port.", "scope": "put_online", "target": "card" },
   "rotate_incus_cert": { "text": "{$actor} gave {$subject} a new Incus client identity", "scope": "hohenheim", "target": "happened" },
   "rotate_host_key": { "text": "{$actor} gave {$subject} a new SSH client identity", "scope": "hohenheim", "target": "happened" },
   "edit_remote_dns_record": { "text": "{$actor} changed a record of {$subject} on its primary", "scope": "hohenheim", "target": "happened" },
@@ -17987,7 +17987,8 @@
   ],
   "game_address": [
     {"scope": "put_online", "text": "Game address"},
-    {"scope": "hohenheim_field", "text": "Game address"}
+    {"scope": "hohenheim_field", "text": "Game address"},
+    {"scope": "help", "text": "A name in a zone Hohenheim manages, such as mc.example.com: it points at this host and gets an SRV record for the game port. Empty: no game address, and its records go."}
   ],
   "port_spec_invalid": {"scope": "violations", "text": "Port {$name} is not written as [host port:]container port/protocol: {$spec}."},
   "game_address_no_zone": {"scope": "violations", "text": "No zone Hohenheim manages covers {$address}. Add the zone under DNS first, or leave the game address empty."}

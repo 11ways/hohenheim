@@ -375,7 +375,7 @@ class GameDomainLiveTest {
      * file, verbatim, over a small image that actually listens on a TCP port.
      */
     private static Row standInBackendTemplate() {
-        Row minecraft = templateNamed("Minecraft server (Paper)");
+        Row minecraft = templateNamed(GameTemplateSeeder.MINECRAFT_BACKEND);
         int minecraftId = minecraft.get(InstanceTemplateModel.ID);
 
         var templates = Models.get(InstanceTemplateModel.class);

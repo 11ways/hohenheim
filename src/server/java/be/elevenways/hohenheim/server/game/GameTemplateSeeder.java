@@ -13,24 +13,37 @@ import be.elevenways.zenit.server.orm.seed.SeedContext;
 import be.elevenways.zenit.server.orm.seed.Seeder;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
- * Starter game templates: a Velocity proxy and a Paper Minecraft backend, the pair the
- * game-domains mapping fronts. Ledgered {@code once} starter content -- operator edits
- * and deletions stick -- and both land UNAPPROVED: only an explicit operator act makes
- * a template tenant-selectable.
+ * Starter game templates: a Minecraft server players reach directly, and a Velocity proxy with a Paper backend, the
+ * pair the game-domains mapping fronts. Ledgered {@code once} starter content -- operator edits and deletions stick
+ * -- and all land UNAPPROVED: only an explicit operator act makes a template tenant-selectable.
  *
- * AIDEV-NOTE: the Velocity template ships NO velocity.toml -- that file is GENERATED
- * wholly by GameDomains from the mappings (attributed instance_files row). It ships the
- * forwarding.secret file riding the auto-generated FORWARDING_SECRET variable, and the
- * backend template consumes the SAME value via VELOCITY_FORWARDING_SECRET (generate off:
- * the mapping materializer fills it from the proxy, a random mint would break the pair).
+ * AIDEV-NOTE: the Velocity template ships NO velocity.toml -- that file is GENERATED wholly by GameDomains from the
+ * mappings (attributed instance_files row). It ships the forwarding.secret file riding the auto-generated
+ * FORWARDING_SECRET variable, and the backend template consumes the SAME value via VELOCITY_FORWARDING_SECRET
+ * (generate off: the mapping materializer fills it from the proxy, a random mint would break the pair). A change to
+ * a seeded starter is a new once-key that upgrades installed rows still carrying what was seeded
+ * ({@link #upgradeStarters}), never an edit of a ledgered block alone, which would reach fresh installs only.
  */
 public final class GameTemplateSeeder implements Seeder {
 
     private static final String KIND_DOCKER = "hohenheim:docker_container";
     private static final String TYPE_SECRET = "hohenheim:secret";
+
+    /** The standalone server's name, shown as the chooser's "Minecraft server" family. */
+    public static final String MINECRAFT_SERVER = "Minecraft server";
+
+    /** The behind-the-proxy backend's name: a family of its own, never the standalone server's. */
+    public static final String MINECRAFT_BACKEND = "Minecraft backend (behind Velocity)";
+
+    public static final String VELOCITY_PROXY = "Velocity proxy";
+
+    /** The port Velocity listens on inside its container, published as its game port. */
+    private static final int VELOCITY_PORT = 25577;
 
     public GameTemplateSeeder() {
     }
@@ -42,6 +55,57 @@ public final class GameTemplateSeeder implements Seeder {
             seedMinecraft();
         });
         ctx.once("hohenheim.game-templates.standalone", GameTemplateSeeder::seedMinecraftStandalone);
+        ctx.once("hohenheim.game-templates.names-and-ports", GameTemplateSeeder::upgradeStarters);
+    }
+
+    /**
+     * Bring installed starter rows to what is seeded today, each only while it still carries what an earlier seed
+     * wrote (an operator's rename or edit sticks): the standalone server and the backend get names that cannot be
+     * confused, and the Velocity proxy publishes its entry port as a published game port (so it is put online through
+     * the Ports step and gets a game address) instead of the routing tier's single public port.
+     */
+    public static void upgradeStarters() {
+        rename("Minecraft (Paper)", MINECRAFT_SERVER);
+        rename("Minecraft server (Paper)", MINECRAFT_BACKEND);
+        var model = Models.get(InstanceTemplateModel.class);
+        for (Row row : starters(VELOCITY_PROXY)) {
+            Map<String, Object> settings = new LinkedHashMap<>();
+            if (row.get(InstanceTemplateModel.SETTINGS) instanceof Map<?, ?> stored) {
+                stored.forEach((key, value) -> settings.put(String.valueOf(key), value));
+            }
+            if (!(settings.get("container_port") instanceof Number port && port.intValue() == VELOCITY_PORT)
+                    || !"public".equals(settings.get("port_exposure")) || PublishedPort.declaredIn(settings)) {
+                continue;
+            }
+            settings.remove("container_port");
+            settings.remove("port_exposure");
+            settings.putAll(velocityPorts());
+            row.set(InstanceTemplateModel.SETTINGS, settings);
+            model.save(row);
+        }
+    }
+
+    private static void rename(@NonNull String seeded, @NonNull String name) {
+        var model = Models.get(InstanceTemplateModel.class);
+        for (Row row : starters(seeded)) {
+            row.set(InstanceTemplateModel.NAME, name);
+            model.save(row);
+        }
+    }
+
+    /** @return the starter rows still carrying this seeded name */
+    private static @NonNull List<Row> starters(@NonNull String name) {
+        return Models.get(InstanceTemplateModel.class).find()
+            .where(InstanceTemplateModel.NAME.eq(name))
+            .and(InstanceTemplateModel.SOURCE.eq(InstanceTemplateModel.SOURCE_STARTER))
+            .all();
+    }
+
+    /** The Velocity proxy's entry port: a published game port with its SRV service, players' way in. */
+    private static @NonNull Map<String, Object> velocityPorts() {
+        return Map.of(
+            PublishedPort.FIELD, Map.of(PortPurpose.GAME.token(), VELOCITY_PORT + "/" + PublishedPort.TCP),
+            PublishedPort.SRV_SERVICE, "minecraft");
     }
 
     /**
@@ -49,13 +113,13 @@ public final class GameTemplateSeeder implements Seeder {
      * it, putting it online picks the host port) and a game address gets an SRV record for it. Online mode stays on,
      * since nothing in front of it checks who joins.
      *
-     * AIDEV-NOTE: named "Minecraft (Paper)", family "Minecraft" (TemplateFamily reads the family off the name). Named
-     * "Minecraft server" it folded into the "Minecraft server (Paper)" backend's family, whose card opens its last
-     * member in name order: the chooser then put the behind-Velocity backend online instead of this one.
+     * AIDEV-NOTE: TemplateFamily reads the family off the name ("Name (variant)" folds into "Name"), so the backend is
+     * named "Minecraft backend (...)": named "Minecraft server (Paper)" it folded into this server's family and the
+     * chooser's card opened the behind-Velocity backend instead of this one.
      */
     private static void seedMinecraftStandalone() {
         template(
-            "Minecraft (Paper)",
+            MINECRAFT_SERVER,
             "A Paper server with a world volume and a console, reached on its own game port.",
             Map.of(
                 InstanceKindFields.IMAGE, "itzg/minecraft-server",
@@ -73,20 +137,20 @@ public final class GameTemplateSeeder implements Seeder {
     }
 
     private static void seedVelocity() {
+        Map<String, Object> settings = new LinkedHashMap<>(Map.of(
+            InstanceKindFields.IMAGE, "dockcenter/velocity",
+            "tag", "latest",
+            InstanceKindFields.ENVIRONMENT_VARIABLES, Map.of("JAVA_MEMORY", "512M"),
+            "volumes", Map.of("data", "/data"),
+            InstanceKindFields.MEMORY_LIMIT_MB, 768));
+        // The proxy IS the public entry: players connect to its published game port (the SRV rides it). The backend
+        // template stays unpublished.
+        settings.putAll(velocityPorts());
         int templateId = template(
-            "Velocity proxy",
+            VELOCITY_PROXY,
             "Fronts Minecraft backends: forced hosts, modern player-info forwarding"
                 + " and the public entry port. Backends attach via game-domain mappings.",
-            Map.of(
-                InstanceKindFields.IMAGE, "dockcenter/velocity",
-                "tag", "latest",
-                "container_port", 25577,
-                // The proxy IS the public entry: players connect to its pre-allocated
-                // public port (the SRV rides it). The backend template stays unpublished.
-                "port_exposure", "public",
-                InstanceKindFields.ENVIRONMENT_VARIABLES, Map.of("JAVA_MEMORY", "512M"),
-                "volumes", Map.of("data", "/data"),
-                InstanceKindFields.MEMORY_LIMIT_MB, 768),
+            settings,
             "Done (",
             "shutdown");
         variable(templateId, GameDomains.PROXY_SECRET_KEY, "Forwarding secret",
@@ -99,7 +163,7 @@ public final class GameTemplateSeeder implements Seeder {
 
     private static void seedMinecraft() {
         int templateId = template(
-            "Minecraft server (Paper)",
+            MINECRAFT_BACKEND,
             "A Paper Minecraft backend behind Velocity: no published port of its own,"
                 + " reachable only through the proxy's link network.",
             Map.of(

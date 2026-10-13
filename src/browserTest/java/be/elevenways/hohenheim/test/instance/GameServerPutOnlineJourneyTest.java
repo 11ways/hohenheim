@@ -22,6 +22,7 @@ import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
+import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.operation.OperationRunStatus;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -38,12 +39,14 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
@@ -78,7 +81,7 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
     static void seed() {
         Seeds.run(Datasources.getDefault(), new GameTemplateSeeder());
         minecraft = Models.get(InstanceTemplateModel.class).find()
-            .where(InstanceTemplateModel.NAME.eq("Minecraft (Paper)")).first();
+            .where(InstanceTemplateModel.NAME.eq(GameTemplateSeeder.MINECRAFT_SERVER)).first();
         daemon = new FakeDockerDaemon();
         daemon.install();
         daemon.installContainerKind();
@@ -130,12 +133,12 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
         assertThat(minecraft).as("the standalone Minecraft template is seeded").isNotNull();
         int templateId = minecraft.get(InstanceTemplateModel.ID);
 
-        // 1. The chooser offers the game server as a family of its own, and Continue opens THAT template, never the
-        //    behind-the-proxy backend whose name it shares a word with.
+        // 1. The chooser offers the game server as a family of its own, named as the board names it, and Continue
+        //    opens THAT template, never the behind-the-proxy backend.
         String chooser = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE).body();
         assertThat(chooser).as("step 1: the chooser offers the standalone game server with its own card line")
             .contains("A Minecraft server players connect to directly, on its own port.");
-        assertThat(adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?choice=template:Minecraft").headers()
+        assertThat(adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?choice=template:Minecraft%20server").headers()
                 .firstValue("location").orElse(""))
             .as("step 1: its card opens the standalone template's wizard")
             .contains("template=" + templateId);
@@ -222,6 +225,118 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
         int row = overview.indexOf("data-endpoint-port=\"" + hostPort + "\"");
         assertThat(overview.substring(row, overview.indexOf("</pl-table-row>", row)))
             .as("step 6: and says it is the game port").contains("data-endpoint-purpose").contains(">Game<");
+
+        // 7. Its Configuration shows the game address it was given, as an operator's entry; a container reached as a
+        //    website has no such entry.
+        assertThat(adminGet("/admin/instances/" + appId).body())
+            .as("step 7: the game server's Configuration carries its game address")
+            .contains("name=\"" + InstanceModel.GAME_ADDRESS.getName() + "\"").contains("value=\"" + gameAddress + "\"");
+        assertThat(adminGet("/admin/instances/" + holderId).body())
+            .as("step 7: a container reached as a website has no game address entry")
+            .doesNotContain("name=\"" + InstanceModel.GAME_ADDRESS.getName() + "\"");
+
+        // 8. Changing it there moves its records: the old name's SRV and A records go, the new name's appear.
+        String moved = "play." + ORIGIN;
+        PanelResourceCalls.patch("admin", HohenheimSlugs.INSTANCES, appId,
+            Map.of(InstanceModel.GAME_ADDRESS.getName(), "Play." + ORIGIN + "."), operator);
+        assertThat((String) Models.get(InstanceModel.class).findById(appId).get(InstanceModel.GAME_ADDRESS))
+            .as("step 8: the new game address is stored as a plain name").isEqualTo(moved);
+        assertThat(zoneRecord("_minecraft._tcp.mc", DnsRecordModel.TYPE_SRV)).as("step 8: the old SRV is gone").isNull();
+        assertThat(zoneRecord("mc", DnsRecordModel.TYPE_A)).as("step 8: the old A record is gone").isNull();
+        Row movedSrv = zoneRecord("_minecraft._tcp.play", DnsRecordModel.TYPE_SRV);
+        assertThat(movedSrv).as("step 8: the new name has its SRV").isNotNull();
+        assertThat(DnsRecordModel.portOf(movedSrv)).as("step 8: on the same game port").isEqualTo(hostPort);
+        assertThat(zoneRecord("play", DnsRecordModel.TYPE_A)).as("step 8: and its A record").isNotNull();
+
+        // 9. A name no managed zone covers is refused on the entry, and the stored address stays.
+        Throwable uncovered = catchThrowable(() -> PanelResourceCalls.patch("admin", HohenheimSlugs.INSTANCES,
+            appId, Map.of(InstanceModel.GAME_ADDRESS.getName(), "mc.unmanaged.test"), operator));
+        assertThat(uncovered).as("step 9: an uncovered name is refused").isNotNull();
+        assertThat((String) Models.get(InstanceModel.class).findById(appId).get(InstanceModel.GAME_ADDRESS))
+            .as("step 9: and the address stays").isEqualTo(moved);
+
+        // 10. Emptying it removes the address and every record it made.
+        PanelResourceCalls.patch("admin", HohenheimSlugs.INSTANCES, appId,
+            Map.of(InstanceModel.GAME_ADDRESS.getName(), ""), operator);
+        assertThat((String) Models.get(InstanceModel.class).findById(appId).get(InstanceModel.GAME_ADDRESS))
+            .as("step 10: no game address").isNull();
+        assertThat(List.of(String.valueOf(zoneRecord("_minecraft._tcp.play", DnsRecordModel.TYPE_SRV)),
+                String.valueOf(zoneRecord("play", DnsRecordModel.TYPE_A))))
+            .as("step 10: its records are gone").containsOnly("null");
+    }
+
+    /**
+     * An install seeded before the starters were renamed and the Velocity proxy published its game port: the rows
+     * still carrying what was seeded are upgraded, an operator's edit sticks, and the proxy is put online through the
+     * Ports step with a game address.
+     */
+    @Test
+    void installedStartersAreUpgradedAndTheProxyGoesOnlineOnItsPorts() throws Exception {
+        List<Row> made = new ArrayList<>();
+        try {
+            // 1. Starter rows as the earlier seed wrote them, and a proxy whose port an operator changed.
+            Row server = starter(made, "Minecraft (Paper)", Map.of("image", "itzg/minecraft-server"));
+            Row backend = starter(made, "Minecraft server (Paper)", Map.of("image", "itzg/minecraft-server"));
+            Row proxy = starter(made, GameTemplateSeeder.VELOCITY_PROXY, Map.of("image", "dockcenter/velocity",
+                "container_port", 25577, "port_exposure", "public"));
+            Row edited = starter(made, GameTemplateSeeder.VELOCITY_PROXY, Map.of("image", "dockcenter/velocity",
+                "container_port", 25599, "port_exposure", "public"));
+
+            // 2. The upgrade renames the two servers so the chooser cannot confuse them.
+            GameTemplateSeeder.upgradeStarters();
+            assertThat(List.of(nameOf(server), nameOf(backend)))
+                .as("step 2: the standalone server and the backend behind Velocity")
+                .containsExactly(GameTemplateSeeder.MINECRAFT_SERVER, GameTemplateSeeder.MINECRAFT_BACKEND);
+
+            // 3. The seeded proxy publishes its entry port as its game port with the SRV service; the edited one
+            //    keeps what the operator made of it.
+            Map<String, Object> upgraded = settingsOf(proxy);
+            assertThat(PublishedPort.of(upgraded)).as("step 3: the proxy's game port")
+                .containsExactly(PublishedPort.parse("game", "25577/tcp"));
+            assertThat(upgraded).as("step 3: its SRV service, and no single public port any more")
+                .containsEntry(PublishedPort.SRV_SERVICE, "minecraft")
+                .doesNotContainKeys("container_port", "port_exposure");
+            assertThat(settingsOf(edited)).as("step 3: an operator's edit sticks")
+                .containsEntry("container_port", 25599).doesNotContainKey(PublishedPort.FIELD);
+
+            // 4. Its wizard is the Ports flow: its game port and a game address, no address of the proxy, no HTTPS.
+            String wizard = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?template="
+                + proxy.get(InstanceTemplateModel.ID)).body();
+            assertThat(wizard).as("step 4: a Ports step with the game port and the game address")
+                .contains("data-zf-step=\"ports\"").contains("name=\"" + PutOnline.PORTS + ".game\"")
+                .contains("name=\"" + PutOnline.GAME_ADDRESS.getName() + "\"");
+            assertThat(wizard).as("step 4: no HTTPS step").doesNotContain("data-zf-step=\"https\"");
+        } finally {
+            for (Row row : made) {
+                HardDeletes.row(Models.get(InstanceTemplateModel.class), row);
+            }
+        }
+    }
+
+    /** @return a starter template row as a seed writes it */
+    private static Row starter(List<Row> made, String name, Map<String, Object> settings) {
+        Row row = Models.get(InstanceTemplateModel.class).createEmptyRow();
+        row.set(InstanceTemplateModel.NAME, name);
+        row.set(InstanceTemplateModel.KIND, "hohenheim:docker_container");
+        row.set(InstanceTemplateModel.SETTINGS, new LinkedHashMap<>(settings));
+        row.set(InstanceTemplateModel.SOURCE, InstanceTemplateModel.SOURCE_STARTER);
+        Models.get(InstanceTemplateModel.class).save(row);
+        made.add(row);
+        return row;
+    }
+
+    private static String nameOf(Row template) {
+        return Models.get(InstanceTemplateModel.class).findById(template.get(InstanceTemplateModel.ID))
+            .get(InstanceTemplateModel.NAME);
+    }
+
+    private static Map<String, Object> settingsOf(Row template) {
+        Map<String, Object> settings = new LinkedHashMap<>();
+        if (Models.get(InstanceTemplateModel.class).findById(template.get(InstanceTemplateModel.ID))
+                .get(InstanceTemplateModel.SETTINGS) instanceof Map<?, ?> stored) {
+            stored.forEach((key, value) -> settings.put(String.valueOf(key), value));
+        }
+        return settings;
     }
 
     /**

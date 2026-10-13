@@ -657,6 +657,8 @@ public final class InstanceBackups {
             record.set(InstanceModel.TEMPLATE_ID, localTemplateId(profile, notRestored));
             record.set(InstanceModel.BACKUP_TARGET_ID, localTargetId(profile, notRestored));
             noteUnrestorableGrouping(profile, notRestored);
+            // No game address, deliberately: the same name on this copy would take the players from the original
+            // (GameAddresses); the operator points it here on the copy's Configuration when that is what they want.
             Models.get(InstanceModel.class).save(record);
             int newId = record.get(InstanceModel.ID);
             try {

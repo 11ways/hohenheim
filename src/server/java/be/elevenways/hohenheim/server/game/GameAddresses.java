@@ -23,9 +23,11 @@ import java.util.Objects;
  * zone that covers it. The records are generated through {@link GameDomains#reconcileRecords}, attributed to the
  * instance, so they live and die with the address and the instance.
  *
- * AIDEV-NOTE: an operator act, asked by the caller (the put-online run admits it to an operator only): a name in a
- * managed zone is never a tenant's to aim. The SRV service label is the template's fact ({@code srv_service} in the
- * kind settings); the SRV rides the first port whose purpose carries one ({@code PortPurpose.carriesSrv}).
+ * AIDEV-NOTE: an operator act, asked by the caller (the put-online run admits it to an operator only; the
+ * Configuration offers the entry on the operator twin alone): a name in a managed zone is never a tenant's to aim. The
+ * SRV service label is the template's fact ({@code srv_service} in the kind settings); the SRV rides the first port
+ * whose purpose carries one ({@code PortPurpose.carriesSrv}). A restored copy (restore-to-new) does NOT carry the
+ * address: the same name on a second host would take the players away from the original; the operator re-points it.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -41,16 +43,27 @@ public final class GameAddresses {
      * @throws Violations on {@code game_address} when no enabled zone this installation is primary for covers the name
      */
     public static void set(int instanceId, @Nullable String address) {
+        InstanceModel instances = Models.get(InstanceModel.class);
+        Row instance = Objects.requireNonNull(instances.findById(instanceId), "the instance");
+        instance.set(InstanceModel.GAME_ADDRESS, address);
+        prepare(instance);
+        instances.save(instance);
+        reconcile(instanceId);
+    }
+
+    /**
+     * Normalize the game address an instance row is about to be saved with; the caller saves it and then
+     * {@link #reconcile}s (the Configuration's save hooks do both around the framework's write).
+     *
+     * @throws Violations on {@code game_address} when no enabled zone this installation is primary for covers the name
+     */
+    public static void prepare(@NonNull Row instance) {
+        String address = instance.get(InstanceModel.GAME_ADDRESS);
         Violations uncovered = uncoveredRefusal(address);
         if (uncovered != null) {
             throw uncovered;
         }
-        String hostname = normalized(address);
-        InstanceModel instances = Models.get(InstanceModel.class);
-        Row instance = Objects.requireNonNull(instances.findById(instanceId), "the instance");
-        instance.set(InstanceModel.GAME_ADDRESS, hostname);
-        instances.save(instance);
-        reconcile(instanceId);
+        instance.set(InstanceModel.GAME_ADDRESS, normalized(address));
     }
 
     /**
