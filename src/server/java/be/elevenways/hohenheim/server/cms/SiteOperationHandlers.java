@@ -19,6 +19,7 @@ import be.elevenways.hohenheim.server.preview.PreviewDeployments;
 import be.elevenways.hohenheim.server.upstream.kinds.DevNamespaceUpstreamKind;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.site.SiteOperations;
+import be.elevenways.protoblast.common.text.SlugText;
 import be.elevenways.zenit.cms.server.page.ResourcePageEndpoints;
 import be.elevenways.zenit.common.edit.FormSecrets;
 import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
@@ -30,7 +31,6 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.text.Slugs;
 import be.elevenways.zenit.common.text.Texts;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.operation.Authorizer;
@@ -297,7 +297,7 @@ public final class SiteOperationHandlers {
 
         Row clone = siteModel.createEmptyRow();
         clone.set(SiteModel.NAME, name);
-        clone.set(SiteModel.SLUG, Slugs.slugify(name));
+        clone.set(SiteModel.SLUG, SlugText.slugify(name));
         clone.set(SiteModel.UPSTREAM_KIND, site.get(SiteModel.UPSTREAM_KIND));
         Map<String, Object> storedSettings = RawValues.mapOrNull(site.get(SiteModel.SETTINGS));
         clone.set(SiteModel.SETTINGS, storedSettings != null ? new LinkedHashMap<>(storedSettings) : null);
@@ -356,7 +356,7 @@ public final class SiteOperationHandlers {
         site.set(SiteModel.NAME, name);
         // Derived once, at create (and clone), and STORED: nothing re-derives it from the name, so a rename keeps the
         // slug the site's paths and containers were named by.
-        site.set(SiteModel.SLUG, Slugs.slugify(name));
+        site.set(SiteModel.SLUG, SlugText.slugify(name));
         site.set(SiteModel.STATUS, SiteModel.STATUS_ACTIVE);
         site.set(SiteModel.UPSTREAM_KIND, input.upstream_kind());
         site.set(SiteModel.INSTANCE_ID, input.instance_id());

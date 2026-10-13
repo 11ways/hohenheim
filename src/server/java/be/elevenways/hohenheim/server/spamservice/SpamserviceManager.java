@@ -710,7 +710,7 @@ public final class SpamserviceManager {
                                                        @NonNull Path executableDirectory) throws Exception {
         createDirectoriesNoSymlinks(executableDirectory);
         Path temporary = Files.createTempFile(executableDirectory, ".spamservice-server-", ".jar.part");
-        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        MessageDigest digest = SecureTokens.sha256();
         try {
             try (InputStream input = source.open();
                  FileChannel channel = FileChannel.open(temporary, StandardOpenOption.WRITE,

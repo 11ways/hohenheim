@@ -20,6 +20,8 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.schedule.ScheduleRunStatuses;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
+import be.elevenways.protoblast.diagnostic.Brackets;
+import be.elevenways.protoblast.diagnostic.JavaText;
 import be.elevenways.plumage.component.StatusDotStatus;
 import be.elevenways.plumage.icon.IconRegistry;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -467,10 +469,12 @@ class StatusPresentationDriftTest {
         List<String> offenders = new ArrayList<>();
         for (Path file : javaSourcesContaining(".displayName(\"")) {
             String source = Files.readString(file);
-            Matcher matcher = Pattern.compile("\\.value\\(").matcher(source);
+            // The code alone (protoblast's JavaText mask keeps every index): "Foreign (known)" is one display name.
+            String code = JavaText.codeOnly(source);
+            Matcher matcher = Pattern.compile("\\.value\\(").matcher(code);
             while (matcher.find()) {
                 int open = matcher.end() - 1;
-                int close = matchingParen(source, open);
+                int close = Brackets.closing(code, open, '(', ')');
                 if (close < 0) {
                     continue;
                 }
@@ -482,34 +486,6 @@ class StatusPresentationDriftTest {
             }
         }
         return offenders;
-    }
-
-    /**
-     * Index of the {@code )} closing the {@code (} at {@code open}, or -1; parentheses
-     * inside a string literal do not count ({@code "Foreign (known)"} is one display name).
-     */
-    private static int matchingParen(String source, int open) {
-        int depth = 0;
-        boolean inString = false;
-        for (int i = open; i < source.length(); i++) {
-            char c = source.charAt(i);
-            if (inString) {
-                if (c == '\\') {
-                    i++;
-                } else if (c == '"') {
-                    inString = false;
-                }
-                continue;
-            }
-            if (c == '"') {
-                inString = true;
-            } else if (c == '(') {
-                depth++;
-            } else if (c == ')' && --depth == 0) {
-                return i;
-            }
-        }
-        return -1;
     }
 
     /** Public static String constants of a class whose NAME starts with the prefix. */

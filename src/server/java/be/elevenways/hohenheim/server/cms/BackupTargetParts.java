@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -47,7 +48,11 @@ import java.util.Objects;
  * @author Jelle De Loecker
  * @since  0.9.0
  */
+@BlastAutoLoad
 public final class BackupTargetParts {
+
+    /** Read by the autoload index, which loads the class and so runs the DRY registration below at boot. */
+    public static final Object LOADED = new Object();
 
     private static final SubjectType<Row> SUBJECT = SubjectType.record(BackupTargetModel.MODEL_ID);
 

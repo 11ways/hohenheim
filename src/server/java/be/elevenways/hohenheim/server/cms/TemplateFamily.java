@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.cms;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.text.SlugText;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -15,7 +16,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -82,9 +82,9 @@ record TemplateFamily(@NonNull String name, @NonNull List<Row> members) {
         return Microcopy.literal(this.description());
     }
 
-    /** @return the catalogue key of a starter family's card line: its name in lower snake case */
+    /** @return the catalogue key of a starter family's card line: its name in lower snake case (SlugText's fold) */
     static @NonNull String cardKey(@NonNull String familyName) {
-        return familyName.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "_").replaceAll("^_|_$", "");
+        return SlugText.slugify(familyName, "_");
     }
 
     /** @return whether a template of this id is one of the members */

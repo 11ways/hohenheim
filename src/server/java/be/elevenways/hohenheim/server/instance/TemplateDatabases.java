@@ -7,13 +7,12 @@ import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
-import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.database.ManagedDatabase;
 import be.elevenways.hohenheim.server.database.TenantDatabases;
+import be.elevenways.protoblast.common.text.SlugText;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.text.Slugs;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -137,8 +136,8 @@ public final class TemplateDatabases {
      * prefix, inside the funnel's own label ceiling ("anymedia-wordpress-db").
      */
     public static @NonNull String labelFor(@NonNull String instanceName, @NonNull String prefix) {
-        String suffix = "-" + Slugs.slugify(prefix);
-        String head = Slugs.slugify(instanceName);
+        String suffix = "-" + SlugText.slugify(prefix);
+        String head = SlugText.slugify(instanceName);
         int room = MAX_LABEL_LENGTH - suffix.length();
         if (head.length() > room) {
             head = head.substring(0, room);

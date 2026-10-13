@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.site.ProtectPath;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.text.SlugText;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
@@ -20,7 +21,6 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.routing.RouteTarget;
 import be.elevenways.zenit.common.routing.UrlTarget;
-import be.elevenways.zenit.common.text.Slugs;
 import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -248,7 +248,7 @@ final class SiteActions {
         for (int number = 2; ; number++) {
             String candidate = name + " " + number;
             if (Models.get(SiteModel.class).find().withTrashed()
-                    .where(SiteModel.SLUG.eq(Slugs.slugify(candidate))).first() == null) {
+                    .where(SiteModel.SLUG.eq(SlugText.slugify(candidate))).first() == null) {
                 return candidate;
             }
         }

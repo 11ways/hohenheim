@@ -41,6 +41,7 @@ import be.elevenways.hohenheim.server.source.GitCheckout;
 import be.elevenways.hohenheim.server.util.EnvVars;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.text.SlugText;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.common.security.ExecutionIdentity;
 import be.elevenways.zenit.common.Zenit;
@@ -48,7 +49,6 @@ import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
-import be.elevenways.zenit.common.text.Slugs;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.security.SecureTokens;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
@@ -787,7 +787,7 @@ public final class PreviewDeployments {
 
     /** One DNS-safe label: THE shared slugifier, with a placeholder for an empty result. */
     private static @NonNull String labelOf(@NonNull String value) {
-        String label = Slugs.slugify(value);
+        String label = SlugText.slugify(value);
         return label.isEmpty() ? "x" : label;
     }
 

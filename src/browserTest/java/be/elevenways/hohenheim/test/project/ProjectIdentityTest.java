@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * AIDEV-NOTE: both are STORED on a running installation (the group slug names the membership
  * permission, the owner token is packed into owner sets), so this pins what must never move:
  * the token keeps its {@code group:<id>} shape and a rename never re-slugs a group. Only a NEW
- * group's slug comes from zenit's Slugs, which folds letters the old slugifier dropped.
+ * group's slug comes from protoblast's SlugText, which folds letters the old slugifier dropped.
  */
 class ProjectIdentityTest extends HohenheimTestBase {
 

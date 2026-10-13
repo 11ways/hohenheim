@@ -12,11 +12,11 @@ import be.elevenways.hohenheim.instance.ImageOrigin;
 import be.elevenways.hohenheim.server.runtime.ImagePublishSupport;
 import be.elevenways.hohenheim.server.util.UtcStamp;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.text.SlugText;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.text.Slugs;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -131,7 +131,7 @@ public final class InstanceTemplateCapture {
 
     /** A daemon-safe alias derived from the instance: {@code tpl-<slug>-<stamp>}. */
     static @NonNull String aliasFor(@NonNull Row instance) {
-        String slug = Slugs.slugify(InstanceModel.nameOf(instance));
+        String slug = SlugText.slugify(InstanceModel.nameOf(instance));
         if (slug.isEmpty()) {
             slug = "instance";
         }

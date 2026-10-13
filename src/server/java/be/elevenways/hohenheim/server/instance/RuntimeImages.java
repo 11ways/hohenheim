@@ -18,6 +18,7 @@ import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.security.SecureTokens;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -29,11 +30,9 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileTime;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
-import java.util.HexFormat;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -290,15 +289,15 @@ public final class RuntimeImages {
         return CONTEXT_IDENTITIES.computeIfAbsent(declared == null ? "" : declared, ignored -> {
             Path context = materializeContext(image);
             try (var walk = Files.walk(context)) {
-                MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                MessageDigest digest = SecureTokens.sha256();
                 for (Path path : walk.filter(Files::isRegularFile).sorted().toList()) {
                     digest.update(context.relativize(path).toString().getBytes(StandardCharsets.UTF_8));
                     digest.update((byte) 0);
                     digest.update(Files.readAllBytes(path));
                     digest.update((byte) 0);
                 }
-                return HexFormat.of().formatHex(digest.digest());
-            } catch (IOException | NoSuchAlgorithmException failed) {
+                return SecureTokens.hex(digest.digest());
+            } catch (IOException failed) {
                 throw new IllegalStateException("Unable to fingerprint packaged runtime", failed);
             } finally {
                 deleteTree(context);

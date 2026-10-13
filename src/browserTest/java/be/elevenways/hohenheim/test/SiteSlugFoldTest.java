@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * FOLDING a non-ASCII letter the regex used to drop.
  *
  * WHY IT EXISTS: SiteResource carried its own lowercase-and-regex slugify, a second spelling beside
- * zenit's Slugs; the switch must not move any ASCII slug an existing install already stores.
+ * protoblast's SlugText; the switch must not move any ASCII slug an existing install already stores.
  */
 class SiteSlugFoldTest extends HohenheimTestBase {
 

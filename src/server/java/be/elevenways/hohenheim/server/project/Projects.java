@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
+import be.elevenways.protoblast.common.text.SlugText;
 import be.elevenways.zenit.auth.model.ApiKeyPrincipal;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
@@ -28,7 +29,6 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.security.AccessContext;
-import be.elevenways.zenit.common.text.Slugs;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -420,13 +420,13 @@ public final class Projects {
     /**
      * The name half of a NEW project group's slug.
      *
-     * AIDEV-NOTE: zenit's Slugs.slugify, the one fold every slug uses. It folds a few letters
+     * AIDEV-NOTE: protoblast's SlugText.slugify, the one fold every slug uses. It folds a few letters
      * the old BlastString.slug dropped (a German sharp s becomes "ss"), which is safe only
      * because a group slug is minted ONCE at creation and never recomputed (a rename keeps
      * it, see syncGroupTitle): every existing project keeps the slug it was created with.
      */
     private static @NonNull String safeSlug(@NonNull String name) {
-        String slug = Slugs.slugify(name);
+        String slug = SlugText.slugify(name);
         return slug.isEmpty() ? "unnamed" : slug;
     }
 }
