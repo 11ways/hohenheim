@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.instance.InstanceBackupOperations;
 import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
+import be.elevenways.hohenheim.model.InstanceVolumeModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerIdentity;
@@ -46,6 +47,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -399,7 +401,7 @@ class InstanceBackupsTest {
                     try {
                         Files.writeString(sourceHome.resolve("notes.txt"), "kept in home");
                     } catch (IOException e) {
-                        throw new java.io.UncheckedIOException(e);
+                        throw new UncheckedIOException(e);
                     }
 
                     // 1. The backup names the host volume it carries.
@@ -424,7 +426,7 @@ class InstanceBackupsTest {
                     restored.add(newId);
                     List<Row> declared = InstanceVolumes.declaredFor(newId);
                     assertThat(declared).as("step 3: the restored record declares the host volume").hasSize(1);
-                    assertThat((String) declared.get(0).get(be.elevenways.hohenheim.model.InstanceVolumeModel.CONTAINER_PATH))
+                    assertThat((String) declared.get(0).get(InstanceVolumeModel.CONTAINER_PATH))
                         .as("step 3: at its captured path").isEqualTo("/home/dev");
                     assertThat(storage.directoryOf("backup-volume-spare", InstanceVolumes.hostPathFor(newId, "home"))
                             .resolve("notes.txt"))
@@ -826,7 +828,7 @@ class InstanceBackupsTest {
             int instanceId = instanceRecord("backup-boot-settle", hostId);
             service.deploy(instanceId);
             Instant beforeThisProcess = Instant.ofEpochMilli(
-                java.lang.management.ManagementFactory.getRuntimeMXBean().getStartTime())
+                ManagementFactory.getRuntimeMXBean().getStartTime())
                 .minusSeconds(3600);
 
             // 1. THREE uploading rows: a dead one whose artifact committed, a dead one

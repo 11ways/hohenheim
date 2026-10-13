@@ -43,7 +43,7 @@ public enum DelegationVerdict {
     SOA_MNAME_UNLISTED("soa_mname_unlisted", AttentionSeverity.WARNING, "code-branch", ColorHue.ORANGE),
 
     /** The parent's nameservers could not be reached, so nothing could be judged. */
-    PARENT_UNREACHABLE("parent_unreachable", AttentionSeverity.WARNING, "question", ColorHue.GRAY),
+    PARENT_UNREACHABLE("parent_unreachable", AttentionSeverity.WARNING, "circle-exclamation", ColorHue.GRAY),
 
     /** The parent holds no delegation for the zone at all (the registrar step is pending). */
     NOT_DELEGATED("not_delegated", AttentionSeverity.WARNING, "link-slash", ColorHue.ORANGE),
@@ -58,7 +58,7 @@ public enum DelegationVerdict {
     NS_STALE_SERIAL("ns_stale_serial", AttentionSeverity.WARNING, "hourglass-half", ColorHue.ORANGE),
 
     /** An in-bailiwick nameserver is delegated without a glue address at the parent. */
-    MISSING_GLUE("missing_glue", AttentionSeverity.ERROR, "unlink", ColorHue.RED),
+    MISSING_GLUE("missing_glue", AttentionSeverity.ERROR, "link-slash", ColorHue.RED),
 
     /** A delegated nameserver does not answer authoritatively for the zone: a lame delegation. */
     NS_UNREACHABLE("ns_unreachable", AttentionSeverity.ERROR, "triangle-exclamation", ColorHue.RED);
