@@ -52,7 +52,8 @@ class BackupArchiveTest {
                 List.of(new BackupManifest.FileEntry("/config/velocity.toml",
                         "secret = \"{{FORWARDING_SECRET}}\"", "0640", null),
                     new BackupManifest.FileEntry("/config/forced-hosts.toml",
-                        "generated", "0644", "game_domain"))), null);
+                        "generated", "0644", "game_domain")),
+                Map.of("name", "debian-13", "docker_image", "hohenheim/debian-13:1")), null);
     }
 
     private Path buildArchive(EncryptionKeyring keyring, byte[] payload) throws IOException {
@@ -107,6 +108,9 @@ class BackupArchiveTest {
                     "secret = \"{{FORWARDING_SECRET}}\"", "0640", null),
                 new BackupManifest.FileEntry("/config/forced-hosts.toml",
                     "generated", "0644", "game_domain"));
+        assertThat(profile.runtimeImage())
+            .as("step 3: the runtime image the record names survives as its identity")
+            .isEqualTo(Map.of("name", "debian-13", "docker_image", "hohenheim/debian-13:1"));
 
         // 4. Payload extracts byte-identical.
         Map<String, Path> tars = BackupArchive.extractVolumes(opened, tmp.resolve("out"));

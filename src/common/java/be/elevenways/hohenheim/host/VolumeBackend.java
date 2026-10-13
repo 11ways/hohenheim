@@ -54,7 +54,7 @@ public enum VolumeBackend {
      * refuses placement like {@link #NONE}, and the host page says it could not check and why instead of advising a
      * filesystem the host may well have.
      */
-    UNCHECKED("unchecked", "Not checked", false, false, false, "circle-question", BadgeVariant.WARNING);
+    UNCHECKED("unchecked", "Not checked", false, false, false, "circle-exclamation", BadgeVariant.WARNING);
 
     private final String token;
     private final String displayName;

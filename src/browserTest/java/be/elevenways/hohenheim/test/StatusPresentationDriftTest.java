@@ -21,6 +21,7 @@ import be.elevenways.hohenheim.schedule.ScheduleRunStatuses;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.plumage.component.StatusDotStatus;
+import be.elevenways.plumage.icon.IconRegistry;
 import be.elevenways.zenit.common.orm.field.EnumField;
 import be.elevenways.zenit.common.orm.field.RegistryMemberField;
 import be.elevenways.zenit.common.task.record.RecordScheduleRunModel;
@@ -224,10 +225,12 @@ class StatusPresentationDriftTest {
             }
         }
 
-        // 3. The volume backend also carries the pill facets the host page renders, and
-        //    the refusing member is the one that shouts.
+        // 3. The volume backend also carries the pill facets the host page renders (an icon plumage bundles, never
+        //    the missing-icon square), and the refusing member is the one that shouts.
         for (VolumeBackend backend : VolumeBackend.values()) {
             assertThat(backend.icon()).as("step 3: %s declares an icon", backend).isNotBlank();
+            assertThat(IconRegistry.isKnown(backend.icon()))
+                .as("step 3: %s's icon %s is bundled", backend, backend.icon()).isTrue();
             assertThat(backend.color()).as("step 3: %s declares a colour", backend).isNotNull();
         }
         assertThat(VolumeBackend.NONE.color())

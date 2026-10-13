@@ -195,13 +195,17 @@ public record BackupManifest(int version,
      * @param environmentName   informational: restore-to-new charges the RESTORING actor,
      *                          so the project grouping cannot be re-established
      * @param backupTargetName  the source's backup destination, re-bound BY NAME
+     * @param runtimeImage      the runtime image the record names, as its identity (re-bound by name, like an
+     *                          application's); null when it names none, for an application (whose own entry carries
+     *                          it) and in an older manifest
      */
     public record InstanceProfile(@Nullable TemplateRef template,
                                   @NonNull String crashPolicy,
                                   @Nullable String environmentName,
                                   @Nullable String backupTargetName,
                                   @NonNull List<VariableEntry> variables,
-                                  @NonNull List<FileEntry> files) {}
+                                  @NonNull List<FileEntry> files,
+                                  @Nullable Map<String, Object> runtimeImage) {}
 
     /**
      * The settings map a restore stores: a git source in a manifest older than {@link #VERSION_AUTO_DEPLOY_ON} whose
@@ -291,6 +295,9 @@ public record BackupManifest(int version,
             instance.put("crash_policy", this.profile.crashPolicy());
             instance.put("environment", this.profile.environmentName());
             instance.put("backup_target", this.profile.backupTargetName());
+            if (this.profile.runtimeImage() != null) {
+                instance.put("runtime_image", this.profile.runtimeImage());
+            }
         }
         root.put("instance", instance);
         List<Map<String, Object>> volumeList = new ArrayList<>();
@@ -661,6 +668,15 @@ public record BackupManifest(int version,
                 && !policy.isBlank() ? policy : "none";
         String environment = RawValues.nonBlankString(instance.get("environment"));
         String backupTarget = RawValues.nonBlankString(instance.get("backup_target"));
+        Map<String, Object> runtimeImage = null;
+        if (instance.get("runtime_image") instanceof Map<?, ?> runtime) {
+            requireText(runtime.get("name"), "instance.runtime_image.name");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> identity = (Map<String, Object>) runtime;
+            runtimeImage = identity;
+        } else if (instance.get("runtime_image") != null) {
+            throw new IOException("Backup manifest runtime_image is not a map");
+        }
 
         List<VariableEntry> variables = new ArrayList<>();
         if (root.get("variables") instanceof List<?> list) {
@@ -689,7 +705,7 @@ public record BackupManifest(int version,
             }
         }
         return new InstanceProfile(template, crashPolicy, environment, backupTarget,
-            List.copyOf(variables), List.copyOf(files));
+            List.copyOf(variables), List.copyOf(files), runtimeImage);
     }
 
     private static @NonNull String requireText(@Nullable Object value, @NonNull String field)

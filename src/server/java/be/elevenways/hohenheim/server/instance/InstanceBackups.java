@@ -631,6 +631,10 @@ public final class InstanceBackups {
                 runtimeImageId = bindRuntimeImage(manifest.application().runtimeImage());
             } else if (manifest.application() != null) {
                 throw new IllegalStateException("Application payload belongs to a non-application kind");
+            } else if (manifest.profile() != null && manifest.profile().runtimeImage() != null) {
+                // A workspace cannot exist without the runtime image it runs inside: re-bound by name, refused when
+                // this controller's image of that name differs.
+                runtimeImageId = bindRuntimeImage(manifest.profile().runtimeImage());
             }
 
             // -- create the NEW record (quota reserves in the save pipeline) ----
@@ -1223,11 +1227,16 @@ public final class InstanceBackups {
                 file.get(InstanceFileModel.GENERATED_BY)));
         }
 
+        // An application's runtime image rides its own entry; one authority per fact in the archive.
+        Integer runtimeImageId = row.get(InstanceModel.RUNTIME_IMAGE_ID);
+        Row runtimeImage = runtimeImageId != null && !InstanceKinds.isReleaseManaged(row.get(InstanceModel.KIND))
+            ? Models.get(RuntimeImageModel.class).findById(runtimeImageId) : null;
         return new InstanceProfile(template,
             crashPolicy != null ? crashPolicy : InstanceModel.CRASH_NONE,
             environmentName(row.get(InstanceModel.ENVIRONMENT_ID)),
             targetName(row.get(InstanceModel.BACKUP_TARGET_ID)),
-            List.copyOf(variables), List.copyOf(files));
+            List.copyOf(variables), List.copyOf(files),
+            runtimeImage != null ? runtimeIdentity(runtimeImage) : null);
     }
 
     /** The grouping environment's name, or null when unset or dangling. */

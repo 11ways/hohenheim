@@ -1,7 +1,10 @@
 package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.model.BackupTargetModel;
+import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
@@ -11,6 +14,8 @@ import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceExec;
+import be.elevenways.hohenheim.server.instance.InstanceBackups;
+import be.elevenways.hohenheim.server.instance.InstanceMigrations;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.instance.WorkspaceBuilds;
@@ -33,9 +38,15 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -51,10 +62,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code hohenheim-init} really becomes PID 1. Every one of those is a kernel and daemon
  * behaviour the hermetic {@code WorkspaceKindTest} structurally cannot reach.
  *
- * AIDEV-NOTE: it runs on the SECONDARY live host (nightstrom) so the Docker half of this
- * pair can hold daystrom without the two runs fighting over one machine's 3.9 GiB.
+ * AIDEV-NOTE: the lifecycle runs on the SECONDARY live host (nightstrom) so the Docker half of this
+ * pair can hold daystrom without the two runs fighting over one machine's 3.9 GiB. The travel journey
+ * enrolls the PRIMARY (daystrom) as well: a home backed up and moved there lands on nightstrom.
  *
- * AIDEV-NOTE: everything is carved under one uuid-named directory in the Incus pool and
+ * AIDEV-NOTE: everything is carved under one uuid-named directory in the Incus pool of each host and
  * removed in tearDown -- the pool's own {@code images/}, {@code containers/} and
  * {@code custom/} subvolumes are never touched.
  */
@@ -63,6 +75,9 @@ class WorkspaceIncusLiveTest {
 
     /** Unique per live class: the authorized_keys sweep is keyed on this name. */
     private static final String HOST = "live-incus-workspace";
+
+    /** The primary host the travel journey starts on. */
+    private static final String HOST_A = "live-incus-workspace-a";
 
     /** The pool filesystem the throwaway data root is carved out of. */
     private static final String POOL = System.getProperty(
@@ -73,21 +88,29 @@ class WorkspaceIncusLiveTest {
 
     private static SqlDatasource datasource;
     private static LiveIncusHost remote;
+    private static LiveIncusHost remoteA;
     private static String enrolledFingerprint;
+    private static String enrolledFingerprintA;
     private static String dataPath;
     private static String savedDataPath;
     private static HostShell shell;
+    private static HostShell shellA;
     private static Integer instanceId;
+    private static final List<Integer> travelled = new ArrayList<>();
+    private static Path targetDir;
 
     @BeforeAll
     static void setUp() throws Exception {
         remote = LiveIncusHost.requireSecondary();
+        remoteA = LiveIncusHost.requirePrimary();
 
         datasource = TestDatabases.freshDatasource();
         HohenheimTestRuntime.ensureBooted();
 
-        Db.run(datasource, () -> enrolledFingerprint =
-            remote.enrollThroughProduct(HOST, "hohenheim-live-workspace"));
+        Db.run(datasource, () -> {
+            enrolledFingerprint = remote.enrollThroughProduct(HOST, "hohenheim-live-workspace");
+            enrolledFingerprintA = remoteA.enrollThroughProduct(HOST_A, "hohenheim-live-workspace-a");
+        });
 
         // The data root is this run's own directory inside the pool, so the volume backend
         // probe finds btrfs and every path this test makes is removable by one prefix.
@@ -99,55 +122,154 @@ class WorkspaceIncusLiveTest {
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_ROOT, dataPath);
 
         Db.run(datasource, () -> {
-            Row server = Models.get(ServerModel.class).findByName(HOST);
-            shell = HostShell.forServer(server);
-            shell.run("mkdir -p " + HostShell.quote(dataPath));
-            VolumeBackends.Detection detection = VolumeBackends.runAndStore(HOST);
-            LiveLane.require(LiveLane.Need.INCUS_HOST,
-                detection.backend() == VolumeBackend.BTRFS,
-                "the live data root is not on btrfs: " + detection.detail());
+            shell = HostShell.forServer(Models.get(ServerModel.class).findByName(HOST));
+            shellA = HostShell.forServer(Models.get(ServerModel.class).findByName(HOST_A));
+            for (String host : List.of(HOST, HOST_A)) {
+                HostShell hostShell = HOST.equals(host) ? shell : shellA;
+                hostShell.run("mkdir -p " + HostShell.quote(dataPath));
+                VolumeBackends.Detection detection = VolumeBackends.runAndStore(host);
+                LiveLane.require(LiveLane.Need.INCUS_HOST,
+                    detection.backend() == VolumeBackend.BTRFS,
+                    "the live data root on " + host + " is not on btrfs: " + detection.detail());
+            }
         });
     }
 
     @AfterAll
     static void tearDown() {
-        if (datasource != null && instanceId != null) {
+        if (datasource != null) {
             Db.run(datasource, () -> {
-                try {
-                    new InstanceService().destroyWithData(instanceId);
-                } catch (RuntimeException alreadyGone) {
-                    System.out.println("=== cleanup: instance -> " + alreadyGone.getMessage());
+                List<Integer> leftovers = new ArrayList<>(travelled);
+                if (instanceId != null) {
+                    leftovers.add(instanceId);
+                }
+                for (Integer leftover : leftovers) {
+                    try {
+                        new InstanceService().destroyWithData(leftover);
+                    } catch (RuntimeException alreadyGone) {
+                        System.out.println("=== cleanup: instance " + leftover + " -> " + alreadyGone.getMessage());
+                    }
                 }
             });
         }
-        if (shell != null && dataPath != null) {
+        if (targetDir != null) {
+            deleteRecursively(targetDir);
+        }
+        for (HostShell hostShell : new HostShell[] {shell, shellA}) {
+            if (hostShell == null || dataPath == null) {
+                continue;
+            }
             // Subvolumes cannot be rmdir'd; the listing is scoped to this run's own
             // directory name, which is what keeps the pool's own subvolumes out of it.
-            shell.run("btrfs subvolume list -o " + HostShell.quote(POOL)
+            hostShell.run("btrfs subvolume list -o " + HostShell.quote(POOL)
                 + " 2>/dev/null | awk '{print $NF}' | grep -F "
                 + HostShell.quote(baseName()) + " | sort -r | while read -r p; do"
                 + " btrfs subvolume delete " + HostShell.quote(POOL) + "/\"$p\" >/dev/null;"
                 + " done");
-            shell.run("rm -rf " + HostShell.quote(dataPath));
-            shell.run("incus image delete " + HostShell.quote(incusAlias()) + " 2>/dev/null;"
+            hostShell.run("rm -rf " + HostShell.quote(dataPath));
+            hostShell.run("incus image delete " + HostShell.quote(incusAlias()) + " 2>/dev/null;"
                 + " docker rmi " + HostShell.quote(dockerReference()) + " >/dev/null 2>&1;"
                 + " true", 120);
         }
         Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.VOLUME_ROOT,
             savedDataPath);
-        if (remote != null) {
-            System.out.println("=== cleanup: shared objects -> "
-                + remote.releaseControllerSharedObjects());
-            System.out.println("=== cleanup: authorized_keys -> "
-                + remote.releaseAuthorizedKeys());
-        }
-        if (remote != null && enrolledFingerprint != null) {
-            try {
-                remote.removeTrustEntry(enrolledFingerprint);
-            } catch (IOException ignored) {
-                // nothing enrolled, nothing to remove
+        for (LiveIncusHost host : new LiveIncusHost[] {remote, remoteA}) {
+            if (host != null) {
+                System.out.println("=== cleanup: shared objects -> " + host.releaseControllerSharedObjects());
+                System.out.println("=== cleanup: authorized_keys -> " + host.releaseAuthorizedKeys());
             }
         }
+        try {
+            if (remote != null && enrolledFingerprint != null) {
+                remote.removeTrustEntry(enrolledFingerprint);
+            }
+            if (remoteA != null && enrolledFingerprintA != null) {
+                remoteA.removeTrustEntry(enrolledFingerprintA);
+            }
+        } catch (IOException ignored) {
+            // nothing enrolled, nothing to remove
+        }
+    }
+
+    /**
+     * A workspace's home rides its plain backup and its cold migration between two real Incus hosts: the restored
+     * copy on nightstrom holds the marker owned by the NEW record's mapped uid, and the moved workspace holds it there
+     * with daystrom's copy gone.
+     */
+    @Test
+    void aWorkspaceHomeTravelsWithItsBackupAndItsMigration() {
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            InstanceBackups backups = new InstanceBackups();
+            int hostId = Models.get(ServerModel.class).findByName(HOST).get(ServerModel.ID);
+            int hostAId = Models.get(ServerModel.class).findByName(HOST_A).get(ServerModel.ID);
+
+            // 1. A workspace runs on daystrom and a marker is written into its home from inside.
+            Map<String, Object> settings = new LinkedHashMap<>();
+            settings.put("memory_limit_mb", 512);
+            settings.put("home_quota_mb", 256);
+            int sourceId = workspaceRecord(runtimeImageRow(), settings, "live-travel", hostAId);
+            travelled.add(sourceId);
+            assertThat(service.deploy(sourceId).state())
+                .as("step 1: the workspace runs on " + HOST_A).isEqualTo(ContainerState.RUNNING);
+            String marker = "HHHOME-" + UUID.randomUUID();
+            new InstanceExec().run(sourceId,
+                "/bin/sh -c 'echo " + marker + " > " + WorkspaceKind.HOME_PATH + "/marker.txt'");
+            String sourceHome = InstanceVolumes.hostPathFor(sourceId, WorkspaceKind.HOME_VOLUME);
+            assertThat(shellA.run("cat " + HostShell.quote(sourceHome + "/marker.txt")).text())
+                .as("step 1: daystrom's home holds the marker").isEqualTo(marker);
+
+            // 2. A plain backup of the running workspace names its home.
+            targetDir = createTempDirectory();
+            int backupId = offHostBackup(sourceId, targetDir);
+            Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
+            assertThat(List.<Object>copyOf(RawValues.list(RawValues.map((Object) backup.get(InstanceBackupModel.SUMMARY))
+                    .get(InstanceBackupModel.SUMMARY_HOST_VOLUMES))))
+                .as("step 2: the backup carries the home").containsExactly(WorkspaceKind.HOME_VOLUME);
+
+            // 3. Restored onto nightstrom, the new record's home holds the marker, owned by the host uid the NEW
+            //    record's namespace id maps to there, and the restored workspace reads it from inside.
+            int restoredId = backups.restoreToNew(backupId, "live-travel-restored", HOST).instanceId();
+            travelled.add(restoredId);
+            String restoredHome = InstanceVolumes.hostPathFor(restoredId, WorkspaceKind.HOME_VOLUME);
+            assertThat(shell.run("cat " + HostShell.quote(restoredHome + "/marker.txt")).text())
+                .as("step 3: nightstrom's restored home holds the marker").isEqualTo(marker);
+            int restoredHostUid = WorkspaceUids.incusHostUid(WorkspaceUids.forInstance(restoredId),
+                WorkspaceUids.incusSubuidBase(HOST, shell));
+            assertThat(shell.run("stat -c %u " + HostShell.quote(restoredHome + "/marker.txt")).text().trim())
+                .as("step 3: owned by the new record's mapped uid").isEqualTo(String.valueOf(restoredHostUid));
+            assertThat(new InstanceExec().run(restoredId, "cat " + WorkspaceKind.HOME_PATH + "/marker.txt")
+                    .output().trim())
+                .as("step 3: the restored workspace reads it from inside").isEqualTo(marker);
+            assertThat(shellA.run("cat " + HostShell.quote(sourceHome + "/marker.txt")).text())
+                .as("step 3: the source keeps its own copy").isEqualTo(marker);
+            service.destroyWithData(restoredId);
+            travelled.remove(Integer.valueOf(restoredId));
+
+            // 4. Migrated to nightstrom, the same record's home there holds the marker owned by its mapped uid,
+            //    the workspace reads it from inside, and daystrom keeps no copy.
+            new InstanceMigrations().migrateTo(sourceId, hostId);
+            assertThat((Object) Models.get(InstanceModel.class).findById(sourceId).get(InstanceModel.SERVER_ID))
+                .as("step 4: the record lives on " + HOST).isEqualTo(hostId);
+            assertThat(shell.run("cat " + HostShell.quote(sourceHome + "/marker.txt")).text())
+                .as("step 4: nightstrom's home holds the marker").isEqualTo(marker);
+            int movedHostUid = WorkspaceUids.incusHostUid(WorkspaceUids.forInstance(sourceId),
+                WorkspaceUids.incusSubuidBase(HOST, shell));
+            assertThat(shell.run("stat -c %u " + HostShell.quote(sourceHome + "/marker.txt")).text().trim())
+                .as("step 4: owned by the record's mapped uid there").isEqualTo(String.valueOf(movedHostUid));
+            assertThat(new InstanceExec().run(sourceId, "cat " + WorkspaceKind.HOME_PATH + "/marker.txt")
+                    .output().trim())
+                .as("step 4: the moved workspace reads it from inside").isEqualTo(marker);
+            assertThat(shellA.run("test -e " + HostShell.quote(sourceHome)).ok())
+                .as("step 4: daystrom's copy of the home is gone").isFalse();
+
+            // 5. Delete-with-data removes the moved home, and the backup goes with its artifact.
+            service.destroyWithData(sourceId);
+            travelled.remove(Integer.valueOf(sourceId));
+            assertThat(shell.run("test -e " + HostShell.quote(sourceHome)).ok())
+                .as("step 5: nightstrom's home is gone").isFalse();
+            backups.delete(backupId);
+        });
     }
 
     @Test
@@ -289,8 +411,13 @@ class WorkspaceIncusLiveTest {
         return "hohenheim/livetest-debian-13";
     }
 
+    /** The test's runtime image row, made once per class database (both journeys use it). */
     private static int runtimeImageRow() {
         RuntimeImageModel model = Models.get(RuntimeImageModel.class);
+        Row existing = model.find().where(RuntimeImageModel.NAME.eq("livetest-debian-13")).first();
+        if (existing != null) {
+            return existing.get(RuntimeImageModel.ID);
+        }
         Row row = model.createEmptyRow();
         row.set(RuntimeImageModel.NAME, "livetest-debian-13");
         row.set(RuntimeImageModel.DOCKER_IMAGE, dockerReference());
@@ -303,16 +430,49 @@ class WorkspaceIncusLiveTest {
     }
 
     private static int workspaceRecord(int imageId, Map<String, Object> settings) {
-        Row host = Models.get(ServerModel.class).findByName(HOST);
+        return workspaceRecord(imageId, settings, "live-workspace",
+            Models.get(ServerModel.class).findByName(HOST).get(ServerModel.ID));
+    }
+
+    private static int workspaceRecord(int imageId, Map<String, Object> settings, String name, int hostId) {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
-        row.set(InstanceModel.NAME, "live-workspace");
+        row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, WorkspaceKind.ID.toString());
         row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.SERVER_ID, host.get(ServerModel.ID));
+        row.set(InstanceModel.SERVER_ID, hostId);
         row.set(InstanceModel.RUNTIME_IMAGE_ID, imageId);
         Models.get(InstanceModel.class).save(row);
         // No volume is declared here on purpose: the deploy's own preparation declares the
         // home from the settings, and a hand-written row would prove the fixture instead.
         return row.get(InstanceModel.ID);
+    }
+
+    /** A filesystem backup target on the controller + one COMPLETE backup of the instance. */
+    private static int offHostBackup(int ownerId, Path directory) {
+        Row target = Models.get(BackupTargetModel.class).createEmptyRow();
+        target.set(BackupTargetModel.NAME, "workspace-live-target");
+        target.set(BackupTargetModel.KIND, "hohenheim:filesystem");
+        target.set(BackupTargetModel.SETTINGS, new LinkedHashMap<>(Map.of("path", directory.toString())));
+        Models.get(BackupTargetModel.class).save(target);
+        Row instance = Models.get(InstanceModel.class).findById(ownerId);
+        instance.set(InstanceModel.BACKUP_TARGET_ID, target.get(BackupTargetModel.ID));
+        Models.get(InstanceModel.class).save(instance);
+        return new InstanceBackups().backupNow(ownerId);
+    }
+
+    private static Path createTempDirectory() {
+        try {
+            return Files.createTempDirectory("workspace-backup-target");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static void deleteRecursively(Path root) {
+        try (Stream<Path> paths = Files.walk(root)) {
+            paths.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
+        } catch (IOException ignored) {
+            // best effort
+        }
     }
 }

@@ -40,13 +40,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * (2026-08-29). Editing an APPLIED migration makes the next --run-migrations rehearsal
  * refuse under database.migration_integrity=fail, and "applied" stopped meaning "001" the
  * day starfleet ran M002/M003. So exactly one fact is declared here -- DEPLOYED_THROUGH,
- * the highest version a PRODUCTION install (kuifje, robbedoes) has applied -- and the rule
+ * the highest version an install that must keep booting has applied -- and the rule
  * derives from it: every discovered migration at or below the mark MUST carry a digest in
- * the committed pin table, and that digest MUST still match. A migration ABOVE the mark is
- * not pinned and is edited, never followed by a new one: the test installs (starfleet,
- * daystrom) that applied it have their ledger re-recorded instead (2026-09-30, when M011-M017
- * became one M011). Raising the mark plus pasting the pin lines the failure prints is the
- * ONE edit a production deploy that applied migrations owes;
+ * the committed pin table, and that digest MUST still match. Until 2026-10-13 the mark followed
+ * production (kuifje, robbedoes) only and the deploy-lane installs (starfleet, daystrom) had their
+ * ledger re-recorded by hand after an edit (2026-09-30, when M011-M017 became one M011). That
+ * ended with M011: a re-record never runs the edited steps there, so the mark now covers every
+ * install the deploy lane serves, and a change appends a migration. Raising the mark plus pasting
+ * the pin lines the failure prints is the ONE edit a deploy that applied migrations owes;
  * a pin is never regenerated to make a red build green. Comments and formatting are outside the digest. The lines to
  * paste are printed by the offline command {@code --migration-checksums} of the deployed jar, so
  * raising the mark never needs a red run of this test to learn a digest.
@@ -54,10 +55,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class MigrationIntegrityTest {
 
     /**
-     * The highest migration version a production install has applied (robbedoes); see
-     * the class note.
+     * The highest migration version an install that must keep booting has applied (starfleet and daystrom at 011);
+     * see the class note.
      */
-    private static final String DEPLOYED_THROUGH = "010";
+    private static final String DEPLOYED_THROUGH = "011";
 
     /**
      * The highest migration version shipped by commit 91191333, the build the oldest production install

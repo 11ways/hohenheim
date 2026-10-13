@@ -2,8 +2,11 @@ package be.elevenways.hohenheim.test.instance;
 
 import be.elevenways.hohenheim.model.OperationStatus;
 import be.elevenways.hohenheim.HohenheimSettings;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.BuildOperationModel;
+import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -11,6 +14,7 @@ import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.host.HostShell;
 import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
+import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceExec;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
@@ -34,9 +38,15 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -81,6 +91,8 @@ class WorkspaceDockerLiveTest {
     private static HostShell shell;
     private static Integer instanceId;
     private static Boolean savedNftables;
+    private static final List<Integer> travelled = new ArrayList<>();
+    private static Path targetDir;
 
     @BeforeAll
     static void setUp() throws Exception {
@@ -127,14 +139,23 @@ class WorkspaceDockerLiveTest {
 
     @AfterAll
     static void tearDown() {
-        if (datasource != null && instanceId != null) {
+        if (datasource != null) {
             Db.run(datasource, () -> {
-                try {
-                    new InstanceService().destroyWithData(instanceId);
-                } catch (RuntimeException alreadyGone) {
-                    System.out.println("=== cleanup: instance -> " + alreadyGone.getMessage());
+                List<Integer> leftovers = new ArrayList<>(travelled);
+                if (instanceId != null) {
+                    leftovers.add(instanceId);
+                }
+                for (Integer leftover : leftovers) {
+                    try {
+                        new InstanceService().destroyWithData(leftover);
+                    } catch (RuntimeException alreadyGone) {
+                        System.out.println("=== cleanup: instance " + leftover + " -> " + alreadyGone.getMessage());
+                    }
                 }
             });
+        }
+        if (targetDir != null) {
+            deleteRecursively(targetDir);
         }
         if (shell != null && dataPath != null) {
             shell.run("btrfs subvolume list -o " + HostShell.quote(POOL)
@@ -161,6 +182,66 @@ class WorkspaceDockerLiveTest {
                 // nothing enrolled, nothing to remove
             }
         }
+    }
+
+    /**
+     * A workspace's home rides its plain backup on the real Docker host: the restored record's home holds the marker
+     * written inside the source, owned by the NEW record's uid, and the source keeps its own copy.
+     */
+    @Test
+    void aWorkspaceHomeRidesItsBackupToANewRecord() {
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            InstanceBackups backups = new InstanceBackups();
+            int hostId = Models.get(ServerModel.class).findByName(HOST).get(ServerModel.ID);
+
+            // 1. A workspace runs and a marker is written into its home from inside.
+            Map<String, Object> settings = new LinkedHashMap<>();
+            settings.put("memory_limit_mb", 512);
+            settings.put("home_quota_mb", 256);
+            int sourceId = workspaceRecord(runtimeImageRow(), settings, "live-docker-travel", hostId);
+            travelled.add(sourceId);
+            assertThat(service.deploy(sourceId).state())
+                .as("step 1: the workspace runs").isEqualTo(ContainerState.RUNNING);
+            String marker = "HHHOME-" + UUID.randomUUID();
+            new InstanceExec().run(sourceId,
+                "/bin/sh -c 'echo " + marker + " > " + WorkspaceKind.HOME_PATH + "/marker.txt'");
+            String sourceHome = InstanceVolumes.hostPathFor(sourceId, WorkspaceKind.HOME_VOLUME);
+            assertThat(shell.run("cat " + HostShell.quote(sourceHome + "/marker.txt")).text())
+                .as("step 1: the home holds the marker").isEqualTo(marker);
+
+            // 2. A plain backup of the running workspace names its home.
+            targetDir = createTempDirectory();
+            int backupId = offHostBackup(sourceId, targetDir);
+            Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
+            assertThat(List.<Object>copyOf(RawValues.list(RawValues.map((Object) backup.get(InstanceBackupModel.SUMMARY))
+                    .get(InstanceBackupModel.SUMMARY_HOST_VOLUMES))))
+                .as("step 2: the backup carries the home").containsExactly(WorkspaceKind.HOME_VOLUME);
+
+            // 3. Restored as a new record, its home holds the marker owned by the new record's uid, and the restored
+            //    workspace reads it from inside; the source keeps its own copy.
+            int restoredId = backups.restoreToNew(backupId, "live-docker-restored", HOST).instanceId();
+            travelled.add(restoredId);
+            String restoredHome = InstanceVolumes.hostPathFor(restoredId, WorkspaceKind.HOME_VOLUME);
+            assertThat(shell.run("cat " + HostShell.quote(restoredHome + "/marker.txt")).text())
+                .as("step 3: the restored home holds the marker").isEqualTo(marker);
+            assertThat(shell.run("stat -c %u " + HostShell.quote(restoredHome + "/marker.txt")).text().trim())
+                .as("step 3: owned by the new record's uid")
+                .isEqualTo(String.valueOf(WorkspaceUids.forInstance(restoredId)));
+            assertThat(new InstanceExec().run(restoredId, "cat " + WorkspaceKind.HOME_PATH + "/marker.txt")
+                    .output().trim())
+                .as("step 3: the restored workspace reads it from inside").isEqualTo(marker);
+            assertThat(shell.run("cat " + HostShell.quote(sourceHome + "/marker.txt")).text())
+                .as("step 3: the source keeps its own copy").isEqualTo(marker);
+
+            // 4. Delete-with-data removes both homes, and the backup goes with its artifact.
+            service.destroyWithData(restoredId);
+            service.destroyWithData(sourceId);
+            travelled.clear();
+            assertThat(shell.run("test -e " + HostShell.quote(restoredHome)).ok())
+                .as("step 4: the restored home is gone").isFalse();
+            backups.delete(backupId);
+        });
     }
 
     @Test
@@ -311,8 +392,13 @@ class WorkspaceDockerLiveTest {
         return "hohenheim/livetest-ws-debian-13:1";
     }
 
+    /** The test's runtime image row, made once per class database (both journeys use it). */
     private static int runtimeImageRow() {
         RuntimeImageModel model = Models.get(RuntimeImageModel.class);
+        Row existing = model.find().where(RuntimeImageModel.NAME.eq("livetest-ws-debian-13")).first();
+        if (existing != null) {
+            return existing.get(RuntimeImageModel.ID);
+        }
         Row row = model.createEmptyRow();
         row.set(RuntimeImageModel.NAME, "livetest-ws-debian-13");
         row.set(RuntimeImageModel.DOCKER_IMAGE, dockerReference());
@@ -325,14 +411,47 @@ class WorkspaceDockerLiveTest {
     }
 
     private static int workspaceRecord(int imageId, Map<String, Object> settings) {
-        Row host = Models.get(ServerModel.class).findByName(HOST);
+        return workspaceRecord(imageId, settings, "live-workspace-docker",
+            Models.get(ServerModel.class).findByName(HOST).get(ServerModel.ID));
+    }
+
+    private static int workspaceRecord(int imageId, Map<String, Object> settings, String name, int hostId) {
         Row row = Models.get(InstanceModel.class).createEmptyRow();
-        row.set(InstanceModel.NAME, "live-workspace-docker");
+        row.set(InstanceModel.NAME, name);
         row.set(InstanceModel.KIND, WorkspaceKind.ID.toString());
         row.set(InstanceModel.SETTINGS, settings);
-        row.set(InstanceModel.SERVER_ID, host.get(ServerModel.ID));
+        row.set(InstanceModel.SERVER_ID, hostId);
         row.set(InstanceModel.RUNTIME_IMAGE_ID, imageId);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
+    }
+
+    /** A filesystem backup target on the controller + one COMPLETE backup of the instance. */
+    private static int offHostBackup(int ownerId, Path directory) {
+        Row target = Models.get(BackupTargetModel.class).createEmptyRow();
+        target.set(BackupTargetModel.NAME, "workspace-docker-live-target");
+        target.set(BackupTargetModel.KIND, "hohenheim:filesystem");
+        target.set(BackupTargetModel.SETTINGS, new LinkedHashMap<>(Map.of("path", directory.toString())));
+        Models.get(BackupTargetModel.class).save(target);
+        Row instance = Models.get(InstanceModel.class).findById(ownerId);
+        instance.set(InstanceModel.BACKUP_TARGET_ID, target.get(BackupTargetModel.ID));
+        Models.get(InstanceModel.class).save(instance);
+        return new InstanceBackups().backupNow(ownerId);
+    }
+
+    private static Path createTempDirectory() {
+        try {
+            return Files.createTempDirectory("workspace-docker-backup-target");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static void deleteRecursively(Path root) {
+        try (Stream<Path> paths = Files.walk(root)) {
+            paths.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
+        } catch (IOException ignored) {
+            // best effort
+        }
     }
 }

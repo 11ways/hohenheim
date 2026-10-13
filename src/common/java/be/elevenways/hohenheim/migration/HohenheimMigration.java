@@ -10,8 +10,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
  * AIDEV-NOTE: zenit chains every stream in version order (a115be18), so a migration declares
  * only its cross-stream edges, never its predecessor. MigrationIntegrityTest pins that this
  * stream's execution order is its version order and upgrades an install from every
- * production version. A change no production install has applied edits the newest migration
- * (see MigrationIntegrityTest.DEPLOYED_THROUGH) instead of appending one.
+ * production version. A migration at or below MigrationIntegrityTest.DEPLOYED_THROUGH is applied on an install that
+ * must keep booting and is never edited; a change appends a migration.
  *
  * @author Jelle De Loecker
  * @since  0.1.0
