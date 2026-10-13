@@ -14,6 +14,7 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.server.instance.variable.VariableTypeHandler;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.submit.FormValidator;
 import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
@@ -475,6 +476,19 @@ public final class InstanceTemplates {
                 templateFile.get(InstanceTemplateFileModel.MODE));
             files.save(file);
         }
+    }
+
+    /**
+     * Why this template's workload cannot be placed on this host when charged to that bucket: THE kind-on-host verdict
+     * ({@link InstancePlacement#kindRefusalOn}) for the template's kind and the settings its create places with.
+     */
+    public static @Nullable Microcopy hostRefusal(@NonNull Row template, int serverId, @NonNull String bucket) {
+        String kind = template.get(InstanceTemplateModel.KIND);
+        InstanceKindHandler handler = InstanceKinds.getHandler(kind);
+        if (handler == null) {
+            return HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown").withArg("kind", String.valueOf(kind));
+        }
+        return InstancePlacement.kindRefusalOn(serverId, handler, bucket, copiedSettings(template));
     }
 
     /** A deep-enough copy of the template's settings map (never the shared instance). */

@@ -186,7 +186,9 @@ public final class InstanceTemplateHandlers {
 
     /**
      * The input one admitted template asks of this caller: its variable form, the host pick for an operator alone and
-     * the projects the caller may create into, each replacing the declared entry of the same name.
+     * the projects the caller may create into, each replacing the declared entry of the same name. Each host is judged
+     * for the template's kind and settings, charged to the owner the create would charge (the chosen project's, else
+     * the caller's), through the verdict the create's own placement refuses by.
      *
      * AIDEV-NOTE: shared with "Put something online", whose input declares these entries under the same names; any
      * other entry of {@code declared} is kept as it is.
@@ -203,6 +205,12 @@ public final class InstanceTemplateHandlers {
             .subSpec(templates.variableFormSpec(templateId)).build());
         replaced.put(InstanceTemplateOperations.SERVER_ID.getName(), Select.of(InstanceTemplateOperations.SERVER_ID)
             .options(OptionSource.of(access != null && HohenheimAccess.isAdmin(access) ? hostOptions() : List.of()))
+            .judgedBySiblings(List.of(InstanceTemplateOperations.PROJECT_ID.getName(),
+                    InstanceTemplateOperations.ENVIRONMENT_ID.getName()),
+                (context, siblings) -> InstanceQuota.creationBucketInto(
+                    siblings.get(InstanceTemplateOperations.PROJECT_ID.getName()),
+                    siblings.get(InstanceTemplateOperations.ENVIRONMENT_ID.getName()), context.accessContext()),
+                (context, bucket, serverId) -> InstanceTemplates.hostRefusal(template, serverId, bucket))
             .build());
         replaced.put(InstanceTemplateOperations.PROJECT_ID.getName(), Select.of(InstanceTemplateOperations.PROJECT_ID)
             .options(OptionSource.of(access == null ? List.of() : projects(access))).build());

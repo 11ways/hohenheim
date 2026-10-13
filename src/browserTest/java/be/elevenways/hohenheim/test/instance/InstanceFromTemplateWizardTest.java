@@ -4,7 +4,7 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
-import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
@@ -37,6 +37,9 @@ class InstanceFromTemplateWizardTest extends HohenheimTestBase {
 
     private static int templateId;
 
+    /** An admitted host: the named host is judged by the placement verdict, which refuses an unadmitted one. */
+    private static int hostId;
+
     @BeforeAll
     static void seed() {
         Model templates = Models.get(InstanceTemplateModel.class);
@@ -51,6 +54,7 @@ class InstanceFromTemplateWizardTest extends HohenheimTestBase {
         templateId = template.get(InstanceTemplateModel.ID);
         variable("SITE_TITLE", "hohenheim:string", "");
         variable("ADMIN_PASSWORD", "hohenheim:secret", SECRET_DEFAULT);
+        hostId = HostFixtures.admittedDockerHost(PREFIX + "host", 16384);
     }
 
     @Test
@@ -81,7 +85,7 @@ class InstanceFromTemplateWizardTest extends HohenheimTestBase {
         String target = ApiSupport.fromTemplateTarget(HohenheimSlugs.ADMIN, templateId);
         String transport = "&" + ApiSupport.fromTemplateTransport();
         HttpResponse<String> refused = httpPostForm(target, "name=" + PREFIX + "refused"
-            + "&serverId=" + ServerModel.localServerId() + "&variables.SITE_TITLE=" + transport,
+            + "&serverId=" + hostId + "&variables.SITE_TITLE=" + transport,
             sessionToken, csrfToken);
         assertThat(refused.statusCode()).as("step 4: a blank required variable is refused").isEqualTo(422);
         assertThat(Models.get(InstanceModel.class).find()
@@ -91,7 +95,7 @@ class InstanceFromTemplateWizardTest extends HohenheimTestBase {
         // 5. The corrected submit lands, answers with the new instance in this panel, stores the typed variable and
         //    the blank secret's declared default.
         HttpResponse<String> created = httpPostForm(target, "name=" + PREFIX + "created"
-            + "&serverId=" + ServerModel.localServerId() + "&variables.SITE_TITLE=Hello" + transport,
+            + "&serverId=" + hostId + "&variables.SITE_TITLE=Hello" + transport,
             sessionToken, csrfToken);
         assertThat(created.statusCode()).as("step 5: the create lands").isIn(302, 303);
         Row instance = Models.get(InstanceModel.class).find()

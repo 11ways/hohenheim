@@ -3,6 +3,7 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.orm.GeneratedRows;
+import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.server.quota.ChargedDimension;
 import be.elevenways.hohenheim.server.quota.ChargedModel;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
@@ -12,6 +13,8 @@ import be.elevenways.hohenheim.server.quota.QuotaReconciler;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.quota.Quotas;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -231,6 +234,33 @@ public final class InstanceQuota {
      */
     public static @NonNull String creationBucket() {
         return OwnerBudget.INSTANCES.bucketOf(creationOwnerPackOf());
+    }
+
+    /**
+     * The count bucket a create INTO the submitted project or environment would be charged to: {@link
+     * #creationBucket} run inside THE create-into funnel ({@code Projects.createInto}) the save runs in, so a host
+     * judged before the submit is judged for the owner the submit charges.
+     *
+     * @param projectToken     the submitted project id as posted text, null when none was chosen
+     * @param environmentToken the submitted environment id as posted text, null when none was chosen
+     * @return null when the funnel refuses what was submitted (the save refuses it on its own field)
+     */
+    public static @Nullable String creationBucketInto(@Nullable String projectToken, @Nullable String environmentToken,
+                                                      @Nullable AccessContext ctx) {
+        Integer projectId;
+        Integer environmentId;
+        try {
+            projectId = projectToken == null ? null : Integer.valueOf(projectToken.trim());
+            environmentId = environmentToken == null ? null : Integer.valueOf(environmentToken.trim());
+        } catch (NumberFormatException malformed) {
+            return null;
+        }
+        try {
+            return Projects.createInto(projectId, environmentId, ctx, "project_id", "environment_id",
+                InstanceQuota::creationBucket);
+        } catch (Violations refused) {
+            return null;
+        }
     }
 
     /**

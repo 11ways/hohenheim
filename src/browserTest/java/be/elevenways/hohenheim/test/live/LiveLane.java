@@ -81,6 +81,21 @@ public final class LiveLane {
             return this.key;
         }
 
+        /**
+         * Whether satisfying this need acts on ANOTHER machine (an operator's enrolled Incus or ssh host), which a
+         * run must therefore request by declaring it ({@code -Dhohenheim.live.require}) before a gate ever passes.
+         *
+         * AIDEV-NOTE: run 2049 named live Incus classes in an ordinary class filter; their gates passed because the
+         * config file existed and the hosts answered, and the JVM killed at the run's timeout left instances, ACLs
+         * and trust entries on both hosts. A configured host is not consent to use it.
+         */
+        public boolean reachesAnotherMachine() {
+            return switch (this) {
+                case INCUS_HOST, REMOTE_HOST -> true;
+                case DOCKER_SOCKET, DOCKER_IMAGE, NETNS, SSH_TOOLS, NODE, UNPRIVILEGED_FS -> false;
+            };
+        }
+
         static Need ofKey(@NonNull String key) {
             for (Need need : values()) {
                 if (need.key.equals(key)) {
@@ -112,11 +127,23 @@ public final class LiveLane {
     /**
      * Pass when {@code satisfied}, otherwise abort (or fail, under the policy) naming
      * {@code need}. The caller keeps its own predicate: this replaces the ABORT, never
-     * the check.
+     * the check. A need that {@linkplain Need#reachesAnotherMachine reaches another machine}
+     * aborts unless this run declared it, whatever the predicate says.
      */
     public static void require(@NonNull Need need, boolean satisfied, @NonNull String reason) {
+        requireRequested(need);
         if (!satisfied) {
             skip(need, reason);
+        }
+    }
+
+    /**
+     * Abort, never probing anything, when {@code need} acts on another machine and this run did not declare it.
+     */
+    private static void requireRequested(@NonNull Need need) {
+        if (need.reachesAnotherMachine() && !required.contains(need)) {
+            skip(need, "not requested: a run acts on another machine only when it declares "
+                + "-Dhohenheim.live.require=" + need.key());
         }
     }
 
@@ -134,6 +161,7 @@ public final class LiveLane {
      */
     public static void requireReachable(@NonNull Need need, @NonNull String what,
                                         @NonNull String host, int port) {
+        requireRequested(need);
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(host, port), REACHABILITY_TIMEOUT_MILLIS);
         } catch (IOException | IllegalArgumentException unreachable) {

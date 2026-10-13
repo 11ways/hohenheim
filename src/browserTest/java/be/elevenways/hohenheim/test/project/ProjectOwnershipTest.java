@@ -10,6 +10,7 @@ import be.elevenways.hohenheim.model.InstanceVariableModel;
 import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostPreflight;
+import be.elevenways.hohenheim.server.host.PlacementRefusal;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
@@ -34,6 +35,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import com.microsoft.playwright.Locator;
 
 import java.net.http.HttpResponse;
 import java.util.List;
@@ -543,6 +545,141 @@ class ProjectOwnershipTest extends HohenheimTestBase {
             Models.get(EnvironmentModel.class).delete(foreignId);
             Models.get(ServerModel.class).delete(hostId);
         }
+    }
+
+    /**
+     * A host pick judges a host for the owner the save charges: a host dedicated to project one is refused to the
+     * operator's own create and to project two, and offered once project one, or one of its environments, is chosen;
+     * the template create's host pick judges the same way, and each submit agrees with what the pick showed.
+     */
+    @Test
+    void aDedicatedHostIsJudgedForTheOwnerTheCreateCharges() throws Exception {
+        String hostSelect = "pl-select[name='server_id']";
+        String projectSelect = "pl-select[name='project_id']";
+        String environmentSelect = "pl-select[name='environment_id']";
+        String popup = "he-bottom .pl-select-popup[data-open]";
+        String hostName = PREFIX + "dedicated";
+        int hostId = HostFixtures.admittedDockerHost(hostName, 16384);
+        Model servers = Models.get(ServerModel.class);
+        Model instances = Models.get(InstanceModel.class);
+        Row dedicated = servers.findById(hostId);
+        dedicated.set(ServerModel.POSTURE, ServerModel.POSTURE_DEDICATED);
+        servers.save(dedicated);
+        HostFixtures.acknowledgePosture(servers.findById(hostId));
+        String bucketOne = OwnerBudget.INSTANCES.bucketOf(HohenheimAccess.packSubjects(
+            Projects.ownerSubjectsOf(projectOne)));
+        int occupant = instance(PREFIX + "dedicated-occupant");
+        instances.find().where(InstanceModel.ID.eq(occupant))
+            .assign(InstanceModel.SERVER_ID, hostId)
+            .assign(InstanceModel.QUOTA_BUCKET, bucketOne)
+            .bypassBehaviours()
+            .updateAll();
+        String refusal = ApiSupport.shippedText(PlacementRefusal.DEDICATED_TO_OTHER.text().withArg("name", hostName));
+        String transport = "&" + ApiSupport.fromTemplateTransport();
+        try {
+            // 1. The operator's own create (no project chosen): the host carries project one's workload, so it is
+            //    offered disabled with the dedication refusal.
+            navigateToApp("/admin/instances/new");
+            waitForHydration();
+            page.locator("pl-choice-card[data-value='hohenheim:docker_container']").click();
+            waitForReactiveIdle();
+            assertThat(hostOption(hostSelect, popup, hostId).getAttribute("aria-disabled"))
+                .as("step 1: the operator's own create is refused the dedicated host").isEqualTo("true");
+            assertThat(hostOption(hostSelect, popup, hostId).innerText()).as("step 1: in the gate's words")
+                .contains(refusal);
+            page.keyboard().press("Escape");
+
+            // 2. Choosing project one judges the host for project one's bucket: offered, live, without a reload.
+            choose(projectSelect, popup, projectOneId);
+            page.waitForCondition(() -> !"true".equals(
+                hostOption(hostSelect, popup, hostId).getAttribute("aria-disabled")));
+            page.keyboard().press("Escape");
+
+            // 3. Project two is another owner again.
+            choose(projectSelect, popup, projectTwoId);
+            page.waitForCondition(() -> "true".equals(
+                hostOption(hostSelect, popup, hostId).getAttribute("aria-disabled")));
+            page.keyboard().press("Escape");
+
+            // 4. A fresh form, no project but one of project one's environments: the create lands in project one, so
+            //    the host is offered again.
+            navigateToApp("/admin/instances/new");
+            waitForHydration();
+            page.locator("pl-choice-card[data-value='hohenheim:docker_container']").click();
+            waitForReactiveIdle();
+            choose(environmentSelect, popup, environmentId);
+            page.waitForCondition(() -> !"true".equals(
+                hostOption(hostSelect, popup, hostId).getAttribute("aria-disabled")));
+            page.keyboard().press("Escape");
+
+            // 5. The submits agree with the pick: refused for the operator, landing for project one and for its
+            //    environment.
+            HttpResponse<String> refused = httpPostForm("/admin/instances/new", "name=" + PREFIX + "ded-operator"
+                + "&kind=hohenheim%3Adocker_container&server_id=" + hostId, sessionToken, csrfToken);
+            assertThat(refused.statusCode()).as("step 5: the operator's create is refused").isNotIn(302, 303);
+            assertThat(refused.body()).as("step 5: in the words the pick showed").contains(refusal);
+            HttpResponse<String> intoProject = httpPostForm("/admin/instances/new", "name=" + PREFIX
+                + "ded-project&kind=hohenheim%3Adocker_container&server_id=" + hostId + "&project_id="
+                + projectOneId, sessionToken, csrfToken);
+            assertThat(intoProject.statusCode()).as("step 5: project one's create lands").isIn(302, 303);
+            HttpResponse<String> intoEnvironment = httpPostForm("/admin/instances/new", "name=" + PREFIX
+                + "ded-environment&kind=hohenheim%3Adocker_container&server_id=" + hostId + "&environment_id="
+                + environmentId, sessionToken, csrfToken);
+            assertThat(intoEnvironment.statusCode()).as("step 5: its environment's create lands").isIn(302, 303);
+            assertThat(instances.find().where(InstanceModel.NAME.startsWith(PREFIX + "ded-")).count())
+                .as("step 5: exactly the two accepted creates landed").isEqualTo(2);
+
+            // 6. Creating from a template judges its host pick the same way, by the project chosen beside it.
+            navigateToApp("/" + HohenheimSlugs.ADMIN + "/" + HohenheimSlugs.INSTANCES_FROM_TEMPLATE
+                + "?template=" + templateId);
+            waitForHydration();
+            String templateHost = "pl-select[name='serverId']";
+            assertThat(hostOption(templateHost, popup, hostId).getAttribute("aria-disabled"))
+                .as("step 6: the template create refuses the operator the dedicated host").isEqualTo("true");
+            assertThat(hostOption(templateHost, popup, hostId).innerText()).as("step 6: with its reason")
+                .contains(refusal);
+            page.keyboard().press("Escape");
+            choose("pl-select[name='projectId']", popup, projectOneId);
+            page.waitForCondition(() -> !"true".equals(
+                hostOption(templateHost, popup, hostId).getAttribute("aria-disabled")));
+            page.keyboard().press("Escape");
+
+            // 7. And its submit agrees: refused for the operator, landing for project one.
+            String target = ApiSupport.fromTemplateTarget(HohenheimSlugs.ADMIN, templateId);
+            HttpResponse<String> templateRefused = httpPostForm(target, "name=" + PREFIX + "ded-template-operator"
+                + "&serverId=" + hostId + transport, sessionToken, csrfToken);
+            assertThat(templateRefused.statusCode()).as("step 7: the operator's template create is refused")
+                .isEqualTo(422);
+            HttpResponse<String> templateLanded = httpPostForm(target, "name=" + PREFIX + "ded-template-project"
+                + "&serverId=" + hostId + "&projectId=" + projectOneId + transport, sessionToken, csrfToken);
+            assertThat(templateLanded.statusCode()).as("step 7: project one's template create lands")
+                .isIn(302, 303);
+        } finally {
+            for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX + "ded"))
+                    .all()) {
+                HardDeletes.byId(instances, row.get(InstanceModel.ID));
+            }
+            servers.delete(hostId);
+        }
+    }
+
+    /** Opens the select when it is closed and answers its option for that value. */
+    private Locator hostOption(String select, String popup, int value) {
+        if (page.locator(popup).count() == 0) {
+            page.click(select + " .pl-select-field");
+        }
+        String option = popup + " div[role='option'][data-value='" + value + "']";
+        page.waitForSelector(option);
+        return page.locator(option);
+    }
+
+    /** Chooses one value of a select and waits for the form to settle. */
+    private void choose(String select, String popup, int value) {
+        page.click(select + " .pl-select-field");
+        String option = popup + " div[role='option'][data-value='" + value + "']";
+        page.waitForSelector(option);
+        page.click(option);
+        waitForReactiveIdle();
     }
 
     /** Environments group ONLY what their project owns, and their variables merge under. */

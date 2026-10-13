@@ -469,36 +469,68 @@ public final class InstanceParts {
     /**
      * THE host pick of a form that names its kind in a {@code kind} entry: every host, each judged by the chosen kind
      * through the placement verdict ({@link InstancePlacement#kindRefusalOn}) the restore dialog and the migrate page
-     * show, live as the kind changes and again on submit. Blank stays a choice: placement then picks the host.
+     * show, charged to the owner the save would charge (the chosen project, else the chosen environment's, else the
+     * caller's), live as those change and again on submit. Blank stays a choice: placement then picks the host.
      */
     static @NonNull Select<Integer> hostPick(@NonNull IntegerField field) {
         return Select.of(field)
             .options(OptionSource.dynamic(context -> InstanceTemplateHandlers.hostOptions()))
-            .judgedBySibling(InstanceModel.KIND.getName(), InstanceParts::hostRefusal)
+            .judgedBySiblings(List.of(InstanceModel.KIND.getName(), PROJECT.getName(),
+                InstanceModel.ENVIRONMENT_ID.getName()), InstanceParts::placementSubject, InstanceParts::hostRefusal)
             .build();
     }
 
     /**
-     * Why the chosen kind cannot be placed on this host, charged to the edited record's bucket or, on a create, to the
-     * caller's creation bucket.
+     * What a host is judged for: the chosen kind, charged to the edited record's bucket or, on a create, to the bucket
+     * the create-into funnel charges for the chosen project or environment.
+     *
+     * @return null without a kind, or when the funnel refuses the chosen project (the save refuses it on that field)
+     */
+    private static @Nullable HostSubject placementSubject(@NonNull EditContext context,
+                                                          @NonNull Map<String, String> siblings) {
+        String kind = siblings.get(InstanceModel.KIND.getName());
+        if (kind == null) {
+            return null;
+        }
+        Row stored = storedRecord(context);
+        String bucket = stored != null ? stored.get(InstanceModel.QUOTA_BUCKET)
+            : InstanceQuota.creationBucketInto(siblings.get(PROJECT.getName()),
+                siblings.get(InstanceModel.ENVIRONMENT_ID.getName()), context.accessContext());
+        return stored == null && bucket == null ? null : new HostSubject(kind, bucket);
+    }
+
+    /**
+     * A kind and the bucket its workload is charged to.
+     *
+     * @param bucket null only for a stored record charged to none
+     */
+    private record HostSubject(@NonNull String kind, @Nullable String bucket) {
+    }
+
+    /**
+     * Why the subject's kind cannot be placed on this host, charged to its bucket.
      *
      * AIDEV-NOTE: the host a stored record already names under its stored kind is never judged: moving or keeping a
      * placed workload is the migrate operation's question, and an unrelated edit must not be refused over it.
      */
-    private static @Nullable Microcopy hostRefusal(@NonNull EditContext context, @NonNull String kind,
+    private static @Nullable Microcopy hostRefusal(@NonNull EditContext context, @NonNull HostSubject subject,
                                                    @NonNull Integer serverId) {
-        Row stored = context.record() instanceof Row row && row.has(InstanceModel.ID.getName())
-            && row.get(InstanceModel.ID) != null ? row : null;
+        Row stored = storedRecord(context);
         if (stored != null && serverId.equals(stored.get(InstanceModel.SERVER_ID))
-                && kind.equals(stored.get(InstanceModel.KIND))) {
+                && subject.kind().equals(stored.get(InstanceModel.KIND))) {
             return null;
         }
-        InstanceKindHandler handler = InstanceKinds.getHandler(kind);
+        InstanceKindHandler handler = InstanceKinds.getHandler(subject.kind());
         if (handler == null) {
-            return HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown").withArg("kind", kind);
+            return HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown").withArg("kind", subject.kind());
         }
-        String bucket = stored != null ? stored.get(InstanceModel.QUOTA_BUCKET) : InstanceQuota.creationBucket();
-        return InstancePlacement.kindRefusalOn(serverId, handler, bucket, Map.of());
+        return InstancePlacement.kindRefusalOn(serverId, handler, subject.bucket(), Map.of());
+    }
+
+    /** @return the stored record the form edits, null on a create */
+    private static @Nullable Row storedRecord(@NonNull EditContext context) {
+        return context.record() instanceof Row row && row.has(InstanceModel.ID.getName())
+            && row.get(InstanceModel.ID) != null ? row : null;
     }
 
     /**
@@ -563,8 +595,8 @@ public final class InstanceParts {
 
     /** @return the id of the instance the form edits, null on a create */
     private static @Nullable Object editedId(@NonNull EditContext context) {
-        return context.record() instanceof Row row && row.has(InstanceModel.ID.getName())
-            ? row.get(InstanceModel.ID) : null;
+        Row stored = storedRecord(context);
+        return stored == null ? null : stored.get(InstanceModel.ID);
     }
 
     private static @NonNull TableSpec<Row> adminTable() {

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.model.HostTrustSlot;
+import be.elevenways.hohenheim.model.ControllerIdentityModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.host.HostAdmission;
@@ -13,6 +14,7 @@ import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.incus.IncusReaper;
 import be.elevenways.hohenheim.server.incus.IncusTrust;
 import be.elevenways.hohenheim.server.task.ReapIncusControllers;
+import be.elevenways.hohenheim.server.ControllerIdentity;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.test.live.LiveLane;
@@ -34,6 +36,10 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -421,13 +427,145 @@ public final class LiveIncusHost {
         return parts;
     }
 
+    /** The live identities this JVM pinned, so a class's second enrollment keeps the identity of its first. */
+    private static final Set<String> PINNED_IDENTITIES = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Pin the current database's controller identity to a token derived from {@code seed} (the class's first trust
+     * client name), so every run of one live class names its daemon objects with the SAME prefix and a later run can
+     * find what a killed one left.
+     *
+     * AIDEV-NOTE: a deliberate test-fixture exception to ControllerIdentity's "no fixed token" rule, scoped to the
+     * live classes' own fresh databases: one token per class, never shared by two classes (parallel forks would sweep
+     * each other's live objects) and never an operator controller's (a random token's chance of matching one is
+     * ~2^-41). A database whose identity this JVM already pinned keeps it, so a class enrolling two daemons names both
+     * with one prefix.
+     */
+    private static void pinLiveIdentity(String seed) {
+        if (PINNED_IDENTITIES.contains(ControllerIdentity.token())) {
+            return;
+        }
+        String token = liveToken(seed);
+        Models.get(ControllerIdentityModel.class).find().where(ControllerIdentityModel.SINGLETON.eq(1))
+            .assign(ControllerIdentityModel.TOKEN, token)
+            .bypassBehaviours()
+            .updateAll();
+        ControllerIdentity.forgetForTest();
+        if (!token.equals(ControllerIdentity.token())) {
+            throw new IllegalStateException("The live identity " + token + " did not take");
+        }
+        PINNED_IDENTITIES.add(token);
+    }
+
+    /** @return a controller token (lowercase alphanumeric, a letter first) derived from {@code seed} */
+    static String liveToken(String seed) {
+        String alphabet = "0123456789abcdefghijklmnopqrstuvwxyz";
+        byte[] digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256").digest(("hohenheim-live:" + seed)
+                .getBytes(StandardCharsets.UTF_8));
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+        StringBuilder token = new StringBuilder(ControllerIdentity.TOKEN_LENGTH);
+        token.append(alphabet.charAt(10 + Math.floorMod(digest[0], 26)));
+        for (int i = 1; i < ControllerIdentity.TOKEN_LENGTH; i++) {
+            token.append(alphabet.charAt(Math.floorMod(digest[i], alphabet.length())));
+        }
+        return token.toString();
+    }
+
+    /**
+     * Remove, over the host's own CLI, what an earlier run of THIS live class left on this daemon: every instance
+     * and custom volume named with this controller's prefix, its isolation and presence ACLs and its bridge, and a
+     * trust entry or pending trust token named {@code clientName}. A run killed mid-test (the JVM a timeout ended)
+     * never reaches its tearDown, so the next run cleans up before it starts.
+     *
+     * AIDEV-NOTE: names only ever match this class's pinned identity and its own client name, so an operator's
+     * controller (u548fz9h, its alpvm instance) and another class's objects are never candidates. Run inside the
+     * class's Db scope, after {@link #pinLiveIdentity}.
+     *
+     * @return what was removed, or "nothing left"
+     */
+    private String sweepOwnLeftovers(String clientName) {
+        String prefix = ControllerScope.scoped("");
+        List<String> removed = new ArrayList<>();
+        try {
+            for (String name : csvColumn(ssh(List.of("incus", "list", "--format", "csv", "-c", "n")), 0)) {
+                if (name.startsWith(prefix)) {
+                    ssh(List.of("incus", "delete", "--force", name));
+                    removed.add("instance " + name);
+                }
+            }
+            for (String pool : csvColumn(ssh(List.of("incus", "storage", "list", "--format", "csv", "-c", "n")),
+                    0)) {
+                for (String line : ssh(List.of("incus", "storage", "volume", "list", pool, "--format", "csv",
+                        "-c", "tn")).split("\n")) {
+                    String[] cells = line.trim().split(",", 2);
+                    if (cells.length == 2 && "custom".equals(cells[0]) && cells[1].startsWith(prefix)) {
+                        ssh(List.of("incus", "storage", "volume", "delete", pool, cells[1]));
+                        removed.add("volume " + pool + "/" + cells[1]);
+                    }
+                }
+            }
+            List<String> acls = csvColumn(ssh(List.of("incus", "network", "acl", "list", "--format", "csv")), 0);
+            for (String acl : List.of(IncusNetworkPolicy.aclName(), ControllerPresence.aclName())) {
+                if (acls.contains(acl)) {
+                    ssh(List.of("incus", "network", "acl", "delete", acl));
+                    removed.add("acl " + acl);
+                }
+            }
+            String bridge = IncusNetworkPolicy.extraNetwork();
+            if (csvColumn(ssh(List.of("incus", "network", "list", "--format", "csv", "-c", "n")), 0)
+                    .contains(bridge)) {
+                ssh(List.of("incus", "network", "delete", bridge));
+                removed.add("network " + bridge);
+            }
+            for (String line : ssh(List.of("incus", "config", "trust", "list", "--format", "csv", "-c", "nf"))
+                    .split("\n")) {
+                String[] cells = line.trim().split(",", 2);
+                if (cells.length == 2 && clientName.equals(cells[0])) {
+                    ssh(List.of("incus", "config", "trust", "remove", cells[1]));
+                    removed.add("trust " + clientName);
+                }
+            }
+            for (String token : csvColumn(ssh(List.of("incus", "config", "trust", "list-tokens", "--format", "csv",
+                    "-c", "n")), 0)) {
+                if (clientName.equals(token)) {
+                    ssh(List.of("incus", "config", "trust", "revoke-token", clientName));
+                    removed.add("trust token " + clientName);
+                }
+            }
+        } catch (IOException failed) {
+            throw new UncheckedIOException("The pre-run sweep of " + prefix + "* on " + this.trustTarget
+                + " failed after removing " + removed, failed);
+        }
+        return removed.isEmpty() ? "nothing left" : String.join(", ", removed);
+    }
+
+    /** @return one column of csv output, one value per non-blank line */
+    private static List<String> csvColumn(String csv, int column) {
+        List<String> values = new ArrayList<>();
+        for (String line : csv.split("\n")) {
+            String[] cells = line.trim().split(",", -1);
+            if (cells.length > column && !cells[column].isBlank()) {
+                values.add(cells[column].trim());
+            }
+        }
+        return values;
+    }
+
     /**
      * The DAEMON half of the ceremony only -- identity, pin, confirm, token enrollment --
-     * leaving the host unpreflighted, unadmitted and without a kernel-truth lane.
+     * leaving the host unpreflighted, unadmitted and without a kernel-truth lane. First pins this database's
+     * controller identity to the live class's own ({@link #pinLiveIdentity}) and removes what an earlier run of the
+     * same class left on this daemon ({@link #sweepOwnLeftovers}).
      *
      * @return the enrolled client certificate's fingerprint (for trust cleanup)
      */
     public String enrollDaemonTrustThroughProduct(String hostName, String clientName) {
+        pinLiveIdentity(clientName);
+        System.out.println("=== pre-run sweep on " + hostName + ": " + sweepOwnLeftovers(clientName));
         Row host = enrol(hostName);
         IncusTrust.ensureIdentity(host);
         String fingerprint = IncusTrust.fingerprintOf(
