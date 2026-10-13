@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.instance.DeviceDetail;
 import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.instance.InstanceAttachmentOperations;
 import be.elevenways.hohenheim.model.DatabaseModel;
@@ -24,7 +25,8 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
-import be.elevenways.zenit.cms.common.panel.PanelRequest;
+import be.elevenways.zenit.cms.common.page.CmsEndpoints;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -103,13 +105,7 @@ public final class InstanceAttachmentParts {
      *         types without one and refuses a hand-posted cdrom itself
      */
     public static @NonNull PanelResource<Row> devicesAdmin() {
-        FormSpec form = FormSpec.builder()
-            .add(InstanceDeviceModel.INSTANCE_ID)
-            .add(Select.of(InstanceDeviceModel.TYPE).options(OptionSource.of(typeOptions(type -> true))).build())
-            .add(InstanceDeviceModel.NAME)
-            .add(InstanceDeviceModel.SIZE_GB)
-            .build();
-        return devices(HohenheimIds.id("instance_device"), form)
+        return devices(HohenheimIds.id("instance_device"), deviceForm(type -> true))
             .scope(DEVICE_ROWS)
             .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
             .build();
@@ -121,16 +117,36 @@ public final class InstanceAttachmentParts {
      *         refused by the select itself -- hide AND enforce
      */
     public static @NonNull PanelResource<Row> devicesManage() {
-        FormSpec form = FormSpec.builder()
-            .add(InstanceDeviceModel.INSTANCE_ID)
-            .add(Select.of(InstanceDeviceModel.TYPE)
-                .options(OptionSource.of(typeOptions(type -> !type.operatorOnly()))).build())
-            .add(InstanceDeviceModel.NAME)
-            .add(InstanceDeviceModel.SIZE_GB)
+        return ManageTwin.reached(devices(ManageTwin.id("instance_device"), deviceForm(type -> !type.operatorOnly())),
+                TenantScopes.INSTANCE_DEVICES, ResourceTabs.<Row>none().withContributions())
             .build();
-        return ManageTwin.reached(devices(ManageTwin.id("instance_device"), form), TenantScopes.INSTANCE_DEVICES,
-                ResourceTabs.<Row>none().withContributions())
-            .build();
+    }
+
+    /**
+     * The device form: its instance is the fixed parent (shown, never edited), and its detail entries DERIVE from the
+     * type facts ({@link DeviceType#details()}, the vocabulary the Devices tab's columns read): a detail some offered
+     * type means is an entry, shown only while the picked type means it.
+     */
+    private static @NonNull FormSpec deviceForm(@NonNull Predicate<DeviceType> offered) {
+        Predicate<DeviceType> formable = type -> !type.ownAttachAction() && offered.test(type);
+        FormSpec.Builder form = FormSpec.builder()
+            .add(RelationPick.of(InstanceDeviceModel.INSTANCE_ID, InstanceModel.MODEL_ID).build())
+            .add(Select.of(InstanceDeviceModel.TYPE).options(OptionSource.of(typeOptions(formable))).build())
+            .add(InstanceDeviceModel.NAME);
+        for (DeviceDetail detail : DeviceDetail.values()) {
+            List<String> meaning = new ArrayList<>();
+            for (DeviceType type : DeviceType.values()) {
+                if (formable.test(type) && type.details().contains(detail)) {
+                    meaning.add(type.token());
+                }
+            }
+            if (!meaning.isEmpty()) {
+                form.add(detail.field())
+                    .showWhen(detail.field().getName(), InstanceDeviceModel.TYPE.getName(),
+                        meaning.toArray(String[]::new));
+            }
+        }
+        return form.build();
     }
 
     private static PanelResource.@NonNull Builder<Row> devices(@NonNull Identifier id, @NonNull FormSpec form) {
@@ -149,20 +165,24 @@ public final class InstanceAttachmentParts {
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .navOrder(19)
             .showInNav(false)
+            // A device's instance is its identity at the daemon: the parent is fixed, the create is written under the
+            // instance the Devices tab names, and no edit moves it.
             .parent(ResourceParent.of(HohenheimSlugs.INSTANCES, InstanceDeviceModel.INSTANCE_ID)
-            .tab(HohenheimSlugs.Tab.DEVICES))
+                .tab(HohenheimSlugs.Tab.DEVICES).fixed())
             .reads(ResourceReads.rows())
             .form(ResourceForm.<Row>of(form).createDefaults(request -> {
-                Map<String, Object> values = instancePrefilled(form, request);
                 DeviceType type = DeviceType.parse(CmsSupport.prefill(request.conduit(),
                     HohenheimParams.DEVICE_TYPE_PREFILL));
-                if (type == null) {
-                    return values;
+                Map<String, Object> values = new LinkedHashMap<>(form.defaultValues());
+                if (type != null) {
+                    values.put(InstanceDeviceModel.TYPE.getName(), type.token());
                 }
-                Map<String, Object> typed = new LinkedHashMap<>(values);
-                typed.put(InstanceDeviceModel.TYPE.getName(), type.token());
-                return Map.copyOf(typed);
-            }).build())
+                return Map.copyOf(values);
+            })
+                // An attached device is seen where it lives: its instance's Devices tab, beside its siblings.
+                .createdRecordUrl((device, request) -> CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.INSTANCES,
+                    device.get(InstanceDeviceModel.INSTANCE_ID), HohenheimSlugs.Tab.DEVICES))
+                .build())
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).build())
             // AIDEV-NOTE: attaching reaches the DAEMON, so the framework's rollback-after-the-fact scope verification
             // must not wrap it: a rolled-back create would remove the row and leave the volume, and the host lease
@@ -197,21 +217,18 @@ public final class InstanceAttachmentParts {
     private static boolean mayAttach(@NonNull AccessContext access) {
         Conduit conduit = access.conduit();
         Integer instanceId = conduit == null ? null : CmsSupport.scopedParentId(conduit,
-            HohenheimParams.INSTANCE_ID_PREFILL.getName(), HohenheimSlugs.INSTANCES);
+            CmsEndpoints.PARENT_PARAM.getName(), HohenheimSlugs.INSTANCES);
         return instanceId != null ? InstanceDevices.mayChangeDevicesOf(access, instanceId)
             : InstanceDevices.mayChangeAnyDevices(access);
     }
 
-    /**
-     * The TYPE vocabulary's options a device form offers: never a type attached through its own action, and only those
-     * {@code offered} accepts.
-     */
-    private static @NonNull List<FieldOption<String>> typeOptions(@NonNull Predicate<DeviceType> offered) {
+    /** The TYPE vocabulary's options a device form offers: only those {@code formable} accepts. */
+    private static @NonNull List<FieldOption<String>> typeOptions(@NonNull Predicate<DeviceType> formable) {
         List<FieldOption<String>> options = new ArrayList<>();
         for (Map.Entry<String, EnumField.EnumValue> value : InstanceDeviceModel.TYPE.getValues().entrySet()) {
             // Fail closed: a token that is no member is never offered either.
             DeviceType type = DeviceType.parse(value.getKey());
-            if (type == null || type.ownAttachAction() || !offered.test(type)) {
+            if (type == null || !formable.test(type)) {
                 continue;
             }
             options.add(FieldOption.of(value.getKey(), value.getValue().getLabel()));
@@ -474,19 +491,6 @@ public final class InstanceAttachmentParts {
                         .withArg("prefix", prefix.toUpperCase(Locale.ROOT)));
             }
         }
-    }
-
-    // -- plumbing ----------------------------------------------------------------------------------------------------
-
-    /** The instance's tab links here with ?instance_id= so the owner is preset. */
-    private static @NonNull Map<String, Object> instancePrefilled(@NonNull FormSpec form,
-                                                                  @NonNull PanelRequest request) {
-        Map<String, Object> values = new LinkedHashMap<>(form.defaultValues());
-        Integer instanceId = CmsSupport.prefill(request.conduit(), HohenheimParams.INSTANCE_ID_PREFILL);
-        if (instanceId != null) {
-            values.put("instance_id", instanceId);
-        }
-        return Map.copyOf(values);
     }
 
 }

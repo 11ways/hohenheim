@@ -218,12 +218,11 @@ public final class InstanceDevicesPage implements RecordTab.Rendered<Row> {
         return value == null ? "-" : String.valueOf(value);
     }
 
-    /** The device create form, opened with its kind and owning instance prefilled. */
+    /** The device create form under this instance (its fixed parent), opened with its kind prefilled. */
     private static @NonNull RouteTarget newDeviceTarget(@NonNull String panel,
                                                         @NonNull DeviceType type,
                                                         @NonNull Integer instanceId) {
-        return CmsRoutes.create(panel, HohenheimSlugs.INSTANCE_DEVICES)
-            .with(HohenheimParams.DEVICE_TYPE_PREFILL, type.token())
-            .with(HohenheimParams.INSTANCE_ID_PREFILL, instanceId);
+        return CmsRoutes.createUnder(panel, HohenheimSlugs.INSTANCE_DEVICES, instanceId)
+            .with(HohenheimParams.DEVICE_TYPE_PREFILL, type.token());
     }
 }

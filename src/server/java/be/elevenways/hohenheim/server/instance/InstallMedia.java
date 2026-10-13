@@ -330,6 +330,8 @@ public final class InstallMedia {
                 .withArg("media", name)
                 .withArg("reason", HohenheimViolations.reasonOf(e)));
         }
+        // The fetch that brought it in no longer says anything true: "Available" would name a deleted volume.
+        InstallMediaFetches.forgetEnded(server.get(ServerModel.ID), name);
     }
 
     /** Names of instances ON THIS HOST whose cdrom rows reference the medium. */

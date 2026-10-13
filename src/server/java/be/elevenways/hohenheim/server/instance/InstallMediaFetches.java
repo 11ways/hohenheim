@@ -193,6 +193,25 @@ public final class InstallMediaFetches {
         return shown;
     }
 
+    /**
+     * Forget the ENDED fetches of {@code name} onto one host: called when its volume is deleted, since a stored
+     * "Available" ending then names a medium that no longer exists. An in-flight fetch keeps its row (it writes its
+     * own ending).
+     */
+    public static void forgetEnded(int serverId, @NonNull String name) {
+        List<String> ended = new ArrayList<>();
+        for (InstallMediaFetchState state : InstallMediaFetchState.values()) {
+            if (!state.active()) {
+                ended.add(state.token());
+            }
+        }
+        Models.get(InstallMediaFetchModel.class).find()
+            .where(InstallMediaFetchModel.SERVER_ID.eq(serverId))
+            .where(InstallMediaFetchModel.NAME.eq(name))
+            .where(InstallMediaFetchModel.STATE.in(ended))
+            .delete();
+    }
+
     /** @return the row's state; an unknown token fails closed as FAILED */
     public static @NonNull InstallMediaFetchState stateOf(@NonNull Row row) {
         return InstallMediaFetchState.of(row.get(InstallMediaFetchModel.STATE));

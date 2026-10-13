@@ -22,27 +22,18 @@
 {% block "main" %}
 <section class="cms-resource-list-page">
     {% if head != null %}{% render "zenitcms:record-head" var:head=head %}{% /if %}
-    <div class="hh-tab-tools">
-        {% if canEdit %}
-        <pl-button variant="primary" use:Zenit.route={% addDiskTarget %} id="add-disk-link">{{ t("add_disk", scope: "instance_device") }}</pl-button>
-        <pl-button use:Zenit.route={% addNicTarget %} id="add-nic-link">{{ t("add_nic", scope: "instance_device") }}</pl-button>
-        {% /if %}
-    </div>
-
-    {% if mediaSection %}
-    <section id="attach-media" class="mb-xl">
+    {#- The devices table is its own section under its own heading, the attaches in that heading's actions, so it
+        never reads as part of the install-media section beside it. -#}
+    <section id="devices" class="mb-xl">
         <pl-section-header>
-            <h2>{{ t("install_media", scope: "instance_device") }}</h2>
+            <h2>{{ t("plural", scope: "instance_device") }}</h2>
+            {% if canEdit %}
             <pl-section-header-actions>
-                {% if mediaHostTarget %}<pl-button variant="text" use:Zenit.route={% mediaHostTarget %} id="media-host-link">{{ mediaHostLabel }}</pl-button>{% /if %}
-                {% if detachMediaForm != null %}<div id="detach-media">{% render "zenitcms:form/page-action" var:page=detachMediaForm %}</div>{% /if %}
+                <pl-button variant="primary" use:Zenit.route={% addDiskTarget %} id="add-disk-link">{{ t("add_disk", scope: "instance_device") }}</pl-button>
+                <pl-button use:Zenit.route={% addNicTarget %} id="add-nic-link">{{ t("add_nic", scope: "instance_device") }}</pl-button>
             </pl-section-header-actions>
-            <pl-section-header-lead id="media-in-drive">{{ mediaLead }}</pl-section-header-lead>
+            {% /if %}
         </pl-section-header>
-        {% if mediaForm != null %}{% render "zenitcms:form/page-action" var:page=mediaForm var:inline=true %}{% /if %}
-    </section>
-    {% /if %}
-
     {% if devices %}
     {#- The generated list's scrollport (plumage's pl-scroll-area), so a phone scrolls the columns instead of
         clipping them at the screen's edge. -#}
@@ -69,6 +60,21 @@
         <pl-empty-state-title>{{ t("empty", scope: "instance_device") }}</pl-empty-state-title>
         <pl-empty-state-description>{{ t("empty_description", scope: "instance_device") }}</pl-empty-state-description>
     </pl-empty-state>
+    {% /if %}
+    </section>
+
+    {% if mediaSection %}
+    <section id="attach-media" class="mb-xl">
+        <pl-section-header>
+            <h2>{{ t("install_media", scope: "instance_device") }}</h2>
+            <pl-section-header-actions>
+                {% if mediaHostTarget %}<pl-button variant="text" use:Zenit.route={% mediaHostTarget %} id="media-host-link">{{ mediaHostLabel }}</pl-button>{% /if %}
+                {% if detachMediaForm != null %}<div id="detach-media">{% render "zenitcms:form/page-action" var:page=detachMediaForm %}</div>{% /if %}
+            </pl-section-header-actions>
+            <pl-section-header-lead id="media-in-drive">{{ mediaLead }}</pl-section-header-lead>
+        </pl-section-header>
+        {% if mediaForm != null %}{% render "zenitcms:form/page-action" var:page=mediaForm var:inline=true %}{% /if %}
+    </section>
     {% /if %}
 </section>
 {% /block %}

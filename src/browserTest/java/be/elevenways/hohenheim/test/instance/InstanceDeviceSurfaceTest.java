@@ -198,47 +198,68 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
     @Test
     void theDevicesTabAttachesResizesAndDetachesAtTheDaemon() throws Exception {
         int instanceId = deviceCapableInstance("devsurf-journey");
+        int otherId = deviceCapableInstance("devsurf-elsewhere");
         String handle = handleOf(instanceId);
         String device = NAME_PREFIX + "data";
 
-        // 1. The tab EXISTS and offers both attach affordances. Before this tab there
-        //    was no page, no link and no route that could write a device row at all.
+        // 1. The tab EXISTS and offers both attach affordances, each a create UNDER this instance (its fixed parent).
+        //    Before this tab there was no page, no link and no route that could write a device row at all.
         HttpResponse<String> tab = adminGet("/admin/instances/" + instanceId + "/page/devices");
         assertThat(tab.statusCode())
             .as("step 1: the Devices tab renders").isEqualTo(200);
         assertThat(tab.body())
-            .as("step 1: and it offers attach-disk and attach-NIC, preset to this instance")
-            .contains("/admin/instance-devices/new?type=disk&instance_id=" + instanceId)
-            .contains("/admin/instance-devices/new?type=nic&instance_id=" + instanceId)
+            .as("step 1: and it offers attach-disk and attach-NIC under this instance")
+            .contains("/admin/instance-devices/new?parent=" + instanceId + "&type=disk")
+            .contains("/admin/instance-devices/new?parent=" + instanceId + "&type=nic")
             .as("step 1: under the lead sentence the shared record heading draws")
             .contains("data-cms-tab-lead")
-            .contains("Data disks and extra network interfaces attached to this instance");
+            .contains("Data disks and extra network interfaces attached to this instance")
+            .as("step 1: and the devices table stands in its own section under its own heading")
+            .contains("id=\"devices\"");
+        assertThat(texts(tab.body(), "h2")).as("step 1: the devices section's heading").contains("Devices");
 
-        // 2. Attaching a disk through the form creates the VOLUME at the daemon.
-        HttpResponse<String> attached = adminPostForm("/admin/instance-devices/new",
-            "instance_id=" + instanceId + "&type=disk&name=" + device + "&size_gb=2");
+        // 1b. The create forms show the instance as the record it is, never a number to type; a NIC form asks no size,
+        //     a disk form does (the entries follow DeviceType.details()).
+        String nicForm = adminGet("/admin/instance-devices/new?parent=" + instanceId + "&type=nic").body();
+        assertThat(nicForm).as("step 1b: the instance is no input of the form").doesNotContain("name=\"instance_id\"")
+            .as("step 1b: it reads as the instance's name").contains(">devsurf-journey<");
+        assertThat(conditionalHidden(nicForm, "size_gb")).as("step 1b: a NIC form hides the size").isTrue();
+        String diskForm = adminGet("/admin/instance-devices/new?parent=" + instanceId + "&type=disk").body();
+        assertThat(conditionalHidden(diskForm, "size_gb")).as("step 1b: a disk form shows the size").isFalse();
+
+        // 2. Attaching a disk through the form creates the VOLUME at the daemon, under the instance the create names:
+        //    a posted instance_id naming another instance is no part of the write.
+        HttpResponse<String> attached = adminPostForm("/admin/instance-devices/new?parent=" + instanceId,
+            "instance_id=" + otherId + "&type=disk&name=" + device + "&size_gb=2");
         assertThat(attached.statusCode())
-            .as("step 2: the attach form was accepted").isIn(200, 302, 303);
+            .as("step 2: the attach form was accepted").isIn(302, 303);
+        assertThat(attached.headers().firstValue("location").orElse(""))
+            .as("step 2: and lands on the instance's Devices tab, not the device record")
+            .contains("/admin/instances/" + instanceId + "/page/devices");
         assertThat(FakeDeviceDaemon.DAEMON.get(handle).disks.get(device))
             .as("step 2: the DAEMON holds a 2 GB volume -- a form that wrote only the row"
                 + " would report success and attach nothing")
             .isEqualTo(2);
+        assertThat(deviceRows(otherId)).as("step 2: the posted other instance got nothing").isEmpty();
         Row row = deviceRows(instanceId).get(0);
         assertThat((Integer) row.get(InstanceDeviceModel.SIZE_GB))
             .as("step 2: and the desired-state row agrees").isEqualTo(2);
 
-        // 3. Editing the size RESIZES the volume at the daemon.
+        // 3. Editing the size RESIZES the volume at the daemon; a posted instance never moves the device.
         HttpResponse<String> resized = adminPostForm(
             "/admin/instance-devices/" + row.get(InstanceDeviceModel.ID),
-            "instance_id=" + instanceId + "&type=disk&name=" + device + "&size_gb=5");
+            "instance_id=" + otherId + "&type=disk&name=" + device + "&size_gb=5");
         assertThat(resized.statusCode())
             .as("step 3: the resize form was accepted").isIn(200, 302, 303);
         assertThat(FakeDeviceDaemon.DAEMON.get(handle).disks.get(device))
             .as("step 3: the daemon volume grew to 5 GB").isEqualTo(5);
+        assertThat((Integer) Models.get(InstanceDeviceModel.class).findById(row.get(InstanceDeviceModel.ID))
+                .get(InstanceDeviceModel.INSTANCE_ID))
+            .as("step 3: and the device stays on its instance").isEqualTo(instanceId);
 
         // 4. Attaching an extra NIC is the same door.
-        HttpResponse<String> nic = adminPostForm("/admin/instance-devices/new",
-            "instance_id=" + instanceId + "&type=nic&name=" + NAME_PREFIX + "net");
+        HttpResponse<String> nic = adminPostForm("/admin/instance-devices/new?parent=" + instanceId,
+            "type=nic&name=" + NAME_PREFIX + "net");
         assertThat(nic.statusCode())
             .as("step 4: the NIC attach was accepted").isIn(200, 302, 303);
         assertThat(FakeDeviceDaemon.DAEMON.get(handle).nics)
@@ -730,5 +751,13 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
     private static boolean detachOffered(Row device, AccessContext access) {
         return !(OperationPipeline.offer(InstanceAttachmentOperations.DETACH_DEVICE, access, device)
             instanceof OperationPipeline.Offer.Hidden);
+    }
+
+    /** Whether the form's conditional entry at {@code path} renders hidden (its condition unmet). */
+    private static boolean conditionalHidden(String html, String path) {
+        Matcher fieldset = Pattern.compile("<fieldset[^>]*data-conditional-entry=\"" + Pattern.quote(path)
+            + "\"[^>]*>").matcher(html);
+        assertThat(fieldset.find()).as("the form carries the conditional entry " + path).isTrue();
+        return Pattern.compile("\\shidden(\\s|=|>)").matcher(fieldset.group()).find();
     }
 }

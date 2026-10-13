@@ -22,6 +22,12 @@ import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.model.InstallMediaFetchModel;
+import be.elevenways.hohenheim.instance.InstallMediaFetchState;
+import be.elevenways.hohenheim.instance.InstallMediaFetchView;
+import be.elevenways.hohenheim.server.cms.ServerMediaTab;
+import be.elevenways.hohenheim.server.instance.InstallMedia;
+import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.docker.ContainerHardening;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
@@ -515,6 +521,63 @@ class InstallMediaSurfaceTest extends HohenheimTestBase {
                 Models.get(ServerModel.class).delete(socketHostId);
             }
         }
+    }
+
+    /**
+     * A fetch's "Available" ending is about its volume: deleting the medium forgets it, and a volume the host no longer
+     * lists (removed outside Hohenheim) stops showing as available on the tab.
+     */
+    @Test
+    void aFetchedMediumsAvailableEndingFollowsItsVolume() throws Exception {
+        try (FakeIncusSocket incus = FakeIncusSocket.start()) {
+            incus.daemon.customVolumes.put("fetched.iso", Map.of("name", "fetched.iso", "content_type", "iso"));
+            incus.daemon.customVolumes.put("outside.iso", Map.of("name", "outside.iso", "content_type", "iso"));
+            Integer socketHostId = socketHost(incus);
+            try {
+                Row server = Models.get(ServerModel.class).findById(socketHostId);
+                int fetched = readyFetch(socketHostId, "fetched.iso");
+                readyFetch(socketHostId, "outside.iso");
+
+                // 1. While both volumes exist, both fetches read Available on the tab.
+                assertThat(availableFetches(server)).as("step 1: both fetched media read available")
+                    .containsExactlyInAnyOrder("fetched.iso", "outside.iso");
+
+                // 2. Deleting a medium forgets its ended fetch: the row is gone and the tab no longer says Available.
+                new InstallMedia().delete(server, "fetched.iso");
+                assertThat(Models.get(InstallMediaFetchModel.class).findById(fetched))
+                    .as("step 2: the deleted medium's fetch row is forgotten").isNull();
+                assertThat(availableFetches(server)).as("step 2: and the tab no longer lists it as available")
+                    .containsExactly("outside.iso");
+
+                // 3. A volume removed outside Hohenheim: its Available ending follows the host's listing.
+                incus.daemon.customVolumes.remove("outside.iso");
+                assertThat(availableFetches(server)).as("step 3: a volume the host no longer lists is not available")
+                    .isEmpty();
+            } finally {
+                Models.get(InstallMediaFetchModel.class).find()
+                    .where(InstallMediaFetchModel.SERVER_ID.eq(socketHostId)).delete();
+                Models.get(ServerModel.class).delete(socketHostId);
+            }
+        }
+    }
+
+    /** A stored READY fetch of {@code name} onto the host, as the background lane writes its ending. */
+    private static int readyFetch(int serverId, @NonNull String name) {
+        Row row = Models.get(InstallMediaFetchModel.class).createEmptyRow();
+        row.set(InstallMediaFetchModel.SERVER_ID, serverId);
+        row.set(InstallMediaFetchModel.NAME, name);
+        row.set(InstallMediaFetchModel.STATE, InstallMediaFetchState.READY.token());
+        row.set(InstallMediaFetchModel.PROGRESS, 1.0);
+        row.set(InstallMediaFetchModel.FINISHED_AT, Now.instant());
+        Models.get(InstallMediaFetchModel.class).save(row);
+        return row.get(InstallMediaFetchModel.ID);
+    }
+
+    /** The names the host's Install media tab shows as fetched and available. */
+    private static List<String> availableFetches(@NonNull Row server) {
+        return ServerMediaTab.view(server).fetches().stream()
+            .filter(fetch -> !fetch.active() && fetch.reason() == null)
+            .map(InstallMediaFetchView::name).toList();
     }
 
     /**

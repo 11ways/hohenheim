@@ -32,7 +32,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 
 /**
@@ -118,8 +120,19 @@ public final class ServerMediaTab implements RecordTab.Rendered<Row> {
 
         List<InstallMediaFetchView> fetches = new ArrayList<>();
         Integer serverId = server.get(ServerModel.ID);
+        Set<String> listed = new HashSet<>();
+        for (InstallMediumView medium : media) {
+            listed.add(medium.name());
+        }
         for (Row fetch : InstallMediaFetches.shownFor(serverId)) {
             InstallMediaFetchState state = InstallMediaFetches.stateOf(fetch);
+            // A READY ending is about its volume: once the host no longer lists it (deleted outside this tab, or
+            // before the delete forgot it), "Available" would be false, so it follows the listing. An unreadable
+            // listing proves nothing either way.
+            if (state == InstallMediaFetchState.READY && loadError == null
+                    && !listed.contains(fetch.get(InstallMediaFetchModel.NAME))) {
+                continue;
+            }
             Double progress = fetch.get(InstallMediaFetchModel.PROGRESS);
             fetches.add(new InstallMediaFetchView(
                 fetch.get(InstallMediaFetchModel.NAME),

@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.docker.ServerService;
 import be.elevenways.hohenheim.server.incus.IncusClient;
+import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.server.instance.InstanceService;
@@ -37,11 +38,12 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A VM's data disk travels with its backup, live on TWO real Incus hosts: a marker written into the disk's volume on
- * daystrom (from the host side, at a fixed offset of the raw block image, so no guest agent is involved) is read
- * back from the restored machine's OWN volume on nightstrom, the restored device points at that volume, the record
- * has the disk's row, deleting the backup removes the one artifact that carried it, and destroying both machines
- * removes both volumes.
+ * A VM's data disk and extra NIC travel with its backup, live on TWO real Incus hosts: a marker written into the disk's
+ * volume on daystrom (from the host side, at a fixed offset of the raw block image, so no guest agent is involved) is
+ * read back from the restored machine's OWN volume on nightstrom, the restored device points at that volume, the
+ * restore lands the extra NIC on a host that did not hold this controller's extra-NIC bridge (it ensures it first), the
+ * record has both rows, deleting the backup removes the one artifact that carried the disk, and destroying both
+ * machines removes both volumes and releases the bridge on both hosts.
  *
  * Skips (never fails) when the second host is not enrolled in
  * {@code ~/.config/hohenheim-livehost/incus.properties} ({@code url_b} keys).
@@ -56,6 +58,7 @@ class IncusDataDiskBackupLiveTest {
     private static final String HOST_B = "live-disk-b";
     private static final String VM_IMAGE = "alpine/3.22/cloud";
     private static final String DEVICE = "data";
+    private static final String NIC = "eth1";
 
     /** Where the marker sits in the raw disk image: past any partition table a guest could write. */
     private static final long MARKER_OFFSET = 1024 * 1024;
@@ -116,13 +119,19 @@ class IncusDataDiskBackupLiveTest {
             String restoredHandle = null;
             Path targetDir = createTempDirectory();
             try {
-                // 1. A VM with a 1 GB data disk deploys on daystrom: the disk row lands first, the deploy's reconcile
-                //    creates the volume and attaches it, and the VM runs.
-                new InstanceDevices(service).attachDisk(vmId, DEVICE, 1);
+                // 1. A VM with a 1 GB data disk and an extra NIC deploys on daystrom: the device rows land first, the
+                //    deploy's reconcile creates the volume, ensures this controller's extra-NIC bridge and attaches
+                //    both, and the VM runs.
+                InstanceDevices devices = new InstanceDevices(service);
+                devices.attachDisk(vmId, DEVICE, 1);
+                devices.attachNic(vmId, NIC);
                 assertThat(service.deploy(vmId).running()).as("step 1: the VM runs on " + HOST_A).isTrue();
                 Disk source = diskOf(daemonA, handle);
                 assertThat(source.volume()).as("step 1: the disk is the record's own volume")
                     .isEqualTo(handle + "-" + DEVICE);
+                String bridge = IncusNetworkPolicy.extraNetwork();
+                assertThat(nicNetworkOf(daemonA, handle)).as("step 1: the extra NIC rides the controller's bridge")
+                    .isEqualTo(bridge);
 
                 // 2. The marker is written into the disk from the host side and reads back there.
                 host(remoteA, "sh", "-c", "'printf " + marker + " | dd of=" + source.image()
@@ -136,9 +145,12 @@ class IncusDataDiskBackupLiveTest {
                 assertThat(RawValues.map((Object) backup.get(InstanceBackupModel.SUMMARY)).get("disks"))
                     .as("step 3: the backup names the data disk it carries").isEqualTo(List.of(DEVICE));
 
-                // 4. Restored onto nightstrom: the new machine's disk is a volume of its OWN naming there, holding the
-                //    marker; the record has the disk's row; and the machine runs (its deploy re-ensured the disk,
-                //    which refuses a volume not attributed to the record, so running proves the attribution too).
+                // 4. Restored onto nightstrom, which holds no bridge of this controller: the restore ensures it before
+                //    the daemon validates the archived NIC. The new machine's disk is a volume of its OWN naming there,
+                //    holding the marker; the record has both rows; and the machine runs (its deploy re-ensured the
+                //    disk, which refuses a volume not attributed to the record, so running proves the attribution).
+                assertThat(daemonB.network(bridge)).as("step 4: " + HOST_B + " holds no " + bridge + " before")
+                    .isNull();
                 restoredId = backups.restoreToNew(backupId, "disk-restored", HOST_B).instanceId();
                 restoredHandle = ControllerScope.handle(ControllerScope.KIND_INSTANCE, restoredId);
                 assertThat((Object) Models.get(InstanceModel.class).findById(restoredId).get(InstanceModel.SERVER_ID))
@@ -148,15 +160,21 @@ class IncusDataDiskBackupLiveTest {
                     .isEqualTo(restoredHandle + "-" + DEVICE);
                 assertThat(readMarker(remoteB, landed, marker.length()))
                     .as("step 4: the restored volume holds the marker written on " + HOST_A).isEqualTo(marker);
-                assertThat(Models.get(InstanceDeviceModel.class).find()
-                        .where(InstanceDeviceModel.INSTANCE_ID.eq(restoredId)).all())
-                    .as("step 4: the restored record has the disk's row at its size").singleElement()
-                    .satisfies(row -> {
-                        assertThat((String) row.get(InstanceDeviceModel.NAME)).isEqualTo(DEVICE);
-                        assertThat((String) row.get(InstanceDeviceModel.TYPE))
-                            .isEqualTo(InstanceDeviceModel.TYPE_DISK);
-                        assertThat((Integer) row.get(InstanceDeviceModel.SIZE_GB)).isEqualTo(1);
-                    });
+                assertThat(nicNetworkOf(daemonB, restoredHandle))
+                    .as("step 4: the restored NIC rides the bridge the restore ensured").isEqualTo(bridge);
+                assertThat(daemonB.network(bridge)).as("step 4: " + HOST_B + " now holds " + bridge).isNotNull();
+                Map<String, Row> rows = new LinkedHashMap<>();
+                for (Row row : Models.get(InstanceDeviceModel.class).find()
+                        .where(InstanceDeviceModel.INSTANCE_ID.eq(restoredId)).all()) {
+                    rows.put(row.get(InstanceDeviceModel.NAME), row);
+                }
+                assertThat(rows).as("step 4: the restored record has the disk's and the NIC's rows")
+                    .containsOnlyKeys(DEVICE, NIC);
+                assertThat((String) rows.get(DEVICE).get(InstanceDeviceModel.TYPE))
+                    .isEqualTo(InstanceDeviceModel.TYPE_DISK);
+                assertThat((Integer) rows.get(DEVICE).get(InstanceDeviceModel.SIZE_GB)).isEqualTo(1);
+                assertThat((String) rows.get(NIC).get(InstanceDeviceModel.TYPE))
+                    .isEqualTo(InstanceDeviceModel.TYPE_NIC);
                 assertThat(String.valueOf(daemonB.instance(restoredHandle).get("status")))
                     .as("step 4: the restored machine runs").isEqualTo("Running");
 
@@ -164,13 +182,15 @@ class IncusDataDiskBackupLiveTest {
                 backups.delete(backupId);
                 assertThat(artifactsIn(targetDir)).as("step 5: the target holds no artifact any more").isEmpty();
 
-                // 6. Destroying both machines removes both disk volumes.
+                // 6. Destroying both machines removes both disk volumes and releases the bridge on both hosts.
                 service.destroy(restoredId);
                 service.destroy(vmId);
                 assertThat(daemonB.customVolume(landed.pool(), landed.volume()))
                     .as("step 6: the restored disk volume is gone from " + HOST_B).isNull();
                 assertThat(daemonA.customVolume(source.pool(), source.volume()))
                     .as("step 6: the source disk volume is gone from " + HOST_A).isNull();
+                assertThat(daemonB.network(bridge)).as("step 6: " + HOST_B + " released " + bridge).isNull();
+                assertThat(daemonA.network(bridge)).as("step 6: " + HOST_A + " released " + bridge).isNull();
             } catch (IOException daemon) {
                 throw new RuntimeException(daemon);
             } finally {
@@ -195,6 +215,14 @@ class IncusDataDiskBackupLiveTest {
         Map<?, ?> device = (Map<?, ?>) devices.get(DEVICE);
         assertThat(device).as(handle + " carries the '" + DEVICE + "' device").isNotNull();
         return new Disk(String.valueOf(device.get("pool")), String.valueOf(device.get("source")));
+    }
+
+    /** @return the network the instance's extra NIC device names */
+    private static String nicNetworkOf(IncusClient daemon, String handle) throws IOException {
+        Map<?, ?> devices = (Map<?, ?>) daemon.instance(handle).get("devices");
+        Map<?, ?> nic = (Map<?, ?>) devices.get(NIC);
+        assertThat(nic).as(handle + " carries the '" + NIC + "' device").isNotNull();
+        return String.valueOf(nic.get("network"));
     }
 
     private static String readMarker(LiveIncusHost remote, Disk disk, int length) {
