@@ -588,10 +588,10 @@ public class ServerModel extends Model {
      * @throws Violations naming the server and what still owns it
      */
     static void refuseRemovalWhileOwned(@NonNull RemoveFromDatasource context) {
-        for (Row doomed : context.doomedRows()) {
+        context.eachDoomedRow(doomed -> {
             Integer serverId = doomed.get(ID);
             if (serverId == null) {
-                continue;
+                return;
             }
             Row migrating = migrationsByTarget().get(serverId);
             if (migrating != null) {
@@ -606,7 +606,7 @@ public class ServerModel extends Model {
             }
             InstanceModel.detachTrashed(InstanceModel.SERVER_ID,
                 InstanceModel.SERVER_ID.eq(serverId));
-        }
+        });
     }
 
     /**

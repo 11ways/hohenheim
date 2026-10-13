@@ -141,9 +141,8 @@ public final class DynamicDnsService {
         }
         cascadeInstalled = true;
         DnsRecordModel.SCHEMA.addBeforeRemoveHook(context -> {
-            for (Row record : context.doomedRows()) {
-                Integer recordId = record.get(DnsRecordModel.ID);
-                if (recordId != null) {
+            for (Object key : context.doomedPrimaryKeys()) {
+                if (key instanceof Integer recordId) {
                     TenantWrites.inAuthorizedOperation(() -> revokeFor(recordId));
                 }
             }

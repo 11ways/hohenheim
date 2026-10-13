@@ -219,15 +219,15 @@ public class SiteModel extends Model {
      * Remove the domain rows of every site a pending delete will remove.
      *
      * A remove hook fires ONCE for the whole delete with a criteria-only context whose row
-     * is null, so the doomed ids come from the context's own read of the pending delete
-     * ({@link RemoveFromDatasource#doomedRows()}, trashed sites included). Deleting the
+     * is null, so the doomed ids come from the context's own capture of the pending delete
+     * ({@link RemoveFromDatasource#doomedPrimaryKeys()}, trashed sites included). Deleting the
      * children BEFORE the parents also keeps the claim release ordered: SiteDomainModel's
      * own remove hook still sees rows whose site exists.
      */
     private static void cascadeDomainRows(RemoveFromDatasource context) {
         List<Integer> doomed = new ArrayList<>();
-        for (Row site : context.doomedRows()) {
-            if (site.get(ID) instanceof Integer siteId) {
+        for (Object key : context.doomedPrimaryKeys()) {
+            if (key instanceof Integer siteId) {
                 doomed.add(siteId);
             }
         }

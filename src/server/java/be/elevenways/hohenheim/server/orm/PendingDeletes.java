@@ -15,9 +15,9 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * as {@code Criteria.related} over these criteria never reads the doomed rows at all,
  * removes a whole level in one statement and terminates on a count. When the rows
  * themselves are needed (a per-row refusal message, a ledger entry), read them through
- * {@code RemoveFromDatasource.doomedRows()} -- once per delete, shared by every hook -- and
- * when something must happen AFTER the delete, register the pair through
- * {@code DoomedRows.handOver}. Never a private re-read of the criteria.
+ * {@code RemoveFromDatasource.doomedPrimaryKeys()} / {@code eachDoomedRow} -- captured once per
+ * delete, locked, shared by every hook -- and when something must happen AFTER the delete,
+ * register the pair through {@code DoomedRows.handOver}. Never a private re-read of the criteria.
  */
 public final class PendingDeletes {
 

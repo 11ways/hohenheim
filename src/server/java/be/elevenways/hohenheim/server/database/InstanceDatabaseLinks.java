@@ -73,12 +73,12 @@ public final class InstanceDatabaseLinks {
         // then or it would vote to keep its own network.
         DoomedRows.handOverInDeletesDatasource(InstanceDatabaseModel.SCHEMA, context -> {
             Set<Integer> detached = new LinkedHashSet<>();
-            for (Row row : context.doomedRows()) {
+            context.eachDoomedRow(row -> {
                 Integer instanceId = row.get(InstanceDatabaseModel.INSTANCE_ID);
                 if (instanceId != null) {
                     detached.add(instanceId);
                 }
-            }
+            });
             return detached.isEmpty() ? null : detached;
         }, (context, detached) -> {
             for (Integer instanceId : detached) {

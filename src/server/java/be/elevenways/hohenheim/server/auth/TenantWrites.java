@@ -276,9 +276,7 @@ public final class TenantWrites {
             if (!isTenantOriginated()) {
                 return;
             }
-            for (Row doomed : context.doomedRows()) {
-                requireManagedSite(doomed.get(SiteDomainModel.SITE_ID));
-            }
+            context.eachDoomedRow(doomed -> requireManagedSite(doomed.get(SiteDomainModel.SITE_ID)));
         });
         SiteModel.SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
@@ -310,9 +308,7 @@ public final class TenantWrites {
             if (!isTenantOriginated()) {
                 return;
             }
-            for (Row doomed : context.doomedRows()) {
-                requireVariableConfig(doomed.get(InstanceVariableModel.INSTANCE_ID));
-            }
+            context.eachDoomedRow(doomed -> requireVariableConfig(doomed.get(InstanceVariableModel.INSTANCE_ID)));
         });
         DatabaseModel.SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
@@ -324,14 +320,14 @@ public final class TenantWrites {
             if (!isTenantOriginated()) {
                 return;
             }
-            for (Row doomed : context.doomedRows()) {
+            context.eachDoomedRow(doomed -> {
                 Object id = doomed.get(DatabaseModel.ID);
                 if (id == null) {
                     throw HohenheimViolations.databaseNotPermitted();
                 }
                 HohenheimAccess.requireDatabaseCapability(
                     (Integer) id, HohenheimCapabilities.DESTROY);
-            }
+            });
         });
         InstanceDatabaseModel.SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
@@ -353,10 +349,8 @@ public final class TenantWrites {
             if (!isTenantOriginated()) {
                 return;
             }
-            for (Row doomed : context.doomedRows()) {
-                requireInstanceLinkAuthority(doomed.get(InstanceDatabaseModel.INSTANCE_ID),
-                    doomed.get(InstanceDatabaseModel.DATABASE_ID));
-            }
+            context.eachDoomedRow(doomed -> requireInstanceLinkAuthority(
+                doomed.get(InstanceDatabaseModel.INSTANCE_ID), doomed.get(InstanceDatabaseModel.DATABASE_ID)));
         });
         DnsRecordModel.SCHEMA.addBeforeRemoveHook(context -> {
             if (!isTenantOriginated()) {
@@ -364,7 +358,7 @@ public final class TenantWrites {
             }
             AccessContext ctx = acting();
             HostnameAuthority.Snapshot snapshot = HostnameAuthority.Snapshot.load();
-            for (Row doomed : context.doomedRows()) {
+            context.eachDoomedRow(doomed -> {
                 refuseForeignRecordType(doomed.get(DnsRecordModel.TYPE));
                 // Removing a row is authority over the row, so it asks the SAME question a
                 // write does -- minus the claim half, since a delete claims no new name. An
@@ -377,7 +371,7 @@ public final class TenantWrites {
                     throw Violations.ofField(DnsRecordModel.NAME.getName(), doomed.get(DnsRecordModel.NAME),
                         HohenheimMicrocopy.VIOLATIONS.of("tenant_record_not_authorized"));
                 }
-            }
+            });
         });
         // The dyndns CREDENTIAL is grant-gated on EVERY lane, hostname authority included:
         // the minted token is a bearer credential that survives grant revocation and
@@ -399,9 +393,7 @@ public final class TenantWrites {
             // inAuthorizedOperation (the release is a mandated consequence of a
             // domain delete that already passed its own gate), which makes the
             // write non-tenant-originated and never reaches here.
-            for (Row doomed : context.doomedRows()) {
-                checkCredentialWrite(doomed.get(DnsDyndnsCredentialModel.RECORD_ID));
-            }
+            context.eachDoomedRow(doomed -> checkCredentialWrite(doomed.get(DnsDyndnsCredentialModel.RECORD_ID)));
         });
         AccessListModel.SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
@@ -413,9 +405,7 @@ public final class TenantWrites {
             if (!isTenantOriginated()) {
                 return;
             }
-            for (Row doomed : context.doomedRows()) {
-                requireAccessListAuthority(doomed.get(AccessListModel.ID));
-            }
+            context.eachDoomedRow(doomed -> requireAccessListAuthority(doomed.get(AccessListModel.ID)));
         });
         AccessRuleModel.SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
@@ -427,9 +417,7 @@ public final class TenantWrites {
             if (!isTenantOriginated()) {
                 return;
             }
-            for (Row doomed : context.doomedRows()) {
-                requireAccessListAuthority(doomed.get(AccessRuleModel.ACCESS_LIST_ID));
-            }
+            context.eachDoomedRow(doomed -> requireAccessListAuthority(doomed.get(AccessRuleModel.ACCESS_LIST_ID)));
         });
         ProtectedPathModel.SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
@@ -441,9 +429,7 @@ public final class TenantWrites {
             if (!isTenantOriginated()) {
                 return;
             }
-            for (Row doomed : context.doomedRows()) {
-                requireManagedSite(doomed.get(ProtectedPathModel.SITE_ID));
-            }
+            context.eachDoomedRow(doomed -> requireManagedSite(doomed.get(ProtectedPathModel.SITE_ID)));
         });
         GitProviderModel.SCHEMA.addBeforeValidateHook(context -> {
             Row row = context.getRow();
@@ -455,9 +441,7 @@ public final class TenantWrites {
             if (!isTenantOriginated()) {
                 return;
             }
-            for (Row doomed : context.doomedRows()) {
-                requireGitProviderAuthority(doomed.get(GitProviderModel.ID));
-            }
+            context.eachDoomedRow(doomed -> requireGitProviderAuthority(doomed.get(GitProviderModel.ID)));
         });
     }
 

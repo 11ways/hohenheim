@@ -98,15 +98,13 @@ public final class ReleasedClaims {
      * Record the release of every claim the rows a pending DELETE will remove are holding.
      *
      * AIDEV-NOTE: a remove hook fires ONCE for the whole delete with a criteria-only context
-     * whose row is null, so the doomed rows come from the context's own read of the pending
-     * delete ({@link RemoveFromDatasource#doomedRows()}). This is a beforeRemove hook and
+     * whose row is null, so the doomed rows come from the context's own capture of the pending
+     * delete ({@link RemoveFromDatasource#eachDoomedRow}). This is a beforeRemove hook and
      * needs no after-hook partner: it only READS what the delete is about to remove, and its
      * ledger insert rolls back with the delete's transaction.
      */
     public static void recordReleaseOfDoomedRows(@NonNull RemoveFromDatasource context) {
-        for (Row domain : context.doomedRows()) {
-            recordReleaseOf(domain);
-        }
+        context.eachDoomedRow(ReleasedClaims::recordReleaseOf);
     }
 
     /**

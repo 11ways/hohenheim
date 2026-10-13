@@ -136,17 +136,16 @@ public final class DnsClaimReleases {
 
         // Deleting the domain row itself -- the most ordinary way a tenant releases one
         // hostname while keeping the site. Criteria-only context, so the doomed rows
-        // come from the context's own read of the pending delete.
+        // come from the context's own capture of the pending delete.
         SiteDomainModel.SCHEMA.addBeforeRemoveHook(context -> {
-            List<Row> doomed = context.doomedRows();
             Set<Integer> leaving = new HashSet<>();
-            for (Row domain : doomed) {
-                leaving.add(domain.get(SiteDomainModel.ID));
+            for (Object key : context.doomedPrimaryKeys()) {
+                if (key instanceof Integer domainId) {
+                    leaving.add(domainId);
+                }
             }
-            for (Row domain : doomed) {
-                releaseName(domain.get(SiteDomainModel.HOSTNAME),
-                    domain.get(SiteDomainModel.MATCH_TYPE), leaving);
-            }
+            context.eachDoomedRow(domain -> releaseName(domain.get(SiteDomainModel.HOSTNAME),
+                domain.get(SiteDomainModel.MATCH_TYPE), leaving));
         });
     }
 

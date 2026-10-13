@@ -165,12 +165,12 @@ public final class ProtectedPathInvariant {
     private static void refuseOpeningRuleRemoval(@NonNull RemoveFromDatasource context) {
         Set<Object> doomed = new HashSet<>();
         Set<Integer> lists = new LinkedHashSet<>();
-        for (Row rule : context.doomedRows()) {
+        context.eachDoomedRow(rule -> {
             doomed.add(rule.get(AccessRuleModel.ID));
             if (rule.get(AccessRuleModel.ACCESS_LIST_ID) instanceof Integer listId) {
                 lists.add(listId);
             }
-        }
+        });
         for (Integer listId : lists) {
             List<Row> before = rulesOf(listId);
             List<Row> after = new ArrayList<>(before);

@@ -134,9 +134,8 @@ public final class GameDomains {
         }
         installed = true;
         SiteDomainModel.SCHEMA.addBeforeRemoveHook(context -> {
-            for (Row domain : context.doomedRows()) {
-                Integer domainId = domain.get(SiteDomainModel.ID);
-                if (domainId == null) {
+            for (Object key : context.doomedPrimaryKeys()) {
+                if (!(key instanceof Integer domainId)) {
                     continue;
                 }
                 for (Row mapping : Models.get(GameDomainModel.class)

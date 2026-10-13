@@ -115,10 +115,10 @@ public class BackupTargetModel extends Model {
     static void refuseRemovalWhileReferenced(@NonNull RemoveFromDatasource context) {
         String controlPlane = Zenit.SETTINGS_VALUES.getValue(
             HohenheimSettings.Database.CONTROL_PLANE_BACKUP_TARGET);
-        for (Row doomed : context.doomedRows()) {
+        context.eachDoomedRow(doomed -> {
             Integer targetId = doomed.get(ID);
             if (targetId == null) {
-                continue;
+                return;
             }
             String name = String.valueOf((Object) doomed.get(NAME));
             if (controlPlane != null && !controlPlane.isBlank()
@@ -148,7 +148,7 @@ public class BackupTargetModel extends Model {
                 .where(InstanceBackupModel.STATUS.eq(InstanceBackupModel.STATUS_FAILED))
                 .assign(InstanceBackupModel.TARGET_ID, null)
                 .updateAll();
-        }
+        });
     }
 
     @Override public Identifier getModelId() { return MODEL_ID; }

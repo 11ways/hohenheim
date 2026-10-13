@@ -139,9 +139,8 @@ public final class ProjectGuards {
         // and silently drop its variables out of every future deploy. The refusal NAMES
         // the holders: "instances or variables" left the operator guessing which.
         EnvironmentModel.SCHEMA.addBeforeRemoveHook(context -> {
-            for (Row doomed : context.doomedRows()) {
-                Integer id = doomed.get(EnvironmentModel.ID);
-                if (id == null) {
+            for (Object key : context.doomedPrimaryKeys()) {
+                if (!(key instanceof Integer id)) {
                     continue;
                 }
                 EnvironmentUsage usage = usageOf(id);
@@ -306,9 +305,8 @@ public final class ProjectGuards {
 
     /** A permission group a live project still points at cannot be deleted on its own. */
     private static void refuseProjectOwnedGroup(@NonNull RemoveFromDatasource context) {
-        for (Row group : context.doomedRows()) {
-            Integer groupId = group.get(PermissionGroupModel.ID);
-            if (groupId == null) {
+        for (Object key : context.doomedPrimaryKeys()) {
+            if (!(key instanceof Integer groupId)) {
                 continue;
             }
             Row project = Projects.projectForGroup(groupId);
@@ -325,7 +323,7 @@ public final class ProjectGuards {
      */
     private static @Nullable List<Integer> refuseNonEmptyAndCapture(@NonNull RemoveFromDatasource context) {
         List<Integer> doomedGroups = new ArrayList<>();
-        for (Row project : context.doomedRows()) {
+        context.eachDoomedRow(project -> {
             Integer id = project.get(ProjectModel.ID);
             Integer groupId = project.get(ProjectModel.GROUP_ID);
             if (groupId != null && Projects.ownedRecordCount(groupId) > 0) {
@@ -337,7 +335,7 @@ public final class ProjectGuards {
             if (groupId != null) {
                 doomedGroups.add(groupId);
             }
-        }
+        });
         return doomedGroups.isEmpty() ? null : doomedGroups;
     }
 

@@ -183,11 +183,11 @@ public final class GeneratedRows {
             if (inSystemScope()) {
                 return;
             }
-            for (Row doomed : context.doomedRows()) {
+            context.eachDoomedRow(doomed -> {
                 if (doomed.get(columns.by()) != null) {
                     throw readOnly(columns, doomed, readOnlyKey);
                 }
-            }
+            });
         });
     }
 

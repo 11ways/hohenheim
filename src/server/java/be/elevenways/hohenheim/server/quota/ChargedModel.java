@@ -295,10 +295,10 @@ public enum ChargedModel {
     private @Nullable List<Release> doomedReleases(@NonNull RemoveFromDatasource context) {
         Model model = this.model();
         List<Release> releases = new ArrayList<>();
-        for (Row row : context.doomedRows()) {
+        context.eachDoomedRow(row -> {
             // A trashed row already released on its soft-delete transition.
             if (!this.isLive(row)) {
-                continue;
+                return;
             }
             for (ChargedDimension dimension : this.dimensions) {
                 Charge held = dimension.held(row);
@@ -306,7 +306,7 @@ public enum ChargedModel {
                     releases.add(new Release(dimension, model.getPrimaryKeyValue(row), held));
                 }
             }
-        }
+        });
         return releases.isEmpty() ? null : releases;
     }
 
