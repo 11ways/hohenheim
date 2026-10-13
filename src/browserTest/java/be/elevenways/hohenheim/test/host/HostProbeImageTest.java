@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
+import be.elevenways.hohenheim.server.host.PreflightFinding;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusTransport;
 import be.elevenways.hohenheim.server.incus.IncusWebSocket;
@@ -62,7 +63,8 @@ class HostProbeImageTest {
             .isTrue();
 
         // 3. A daemon that cannot obtain the image (an air-gapped host, a pruned build): every
-        //    verdict is UNKNOWN, and the detail names the exact image the operator must provide.
+        //    verdict fails on the probe-instance finding (worded "... is unknown"), and its
+        //    evidence names the exact image the operator must provide and the server it is from.
         ScriptedDaemon refusing = new ScriptedDaemon(true);
         IncusPreflight.KernelProbe refused =
             IncusPreflight.probeInstanceKernel(new IncusClient(refusing), true);
@@ -70,13 +72,15 @@ class HostProbeImageTest {
             .as("step 3: nothing ran, so no build is claimed")
             .isNull();
         assertThat(refused.checks())
-            .as("step 3: every verdict fails as UNKNOWN, naming the image and its server")
+            .as("step 3: every verdict fails on the probe-instance finding, naming the image and its server")
             .allSatisfy(check -> {
                 assertThat(check.status()).isEqualTo(HostPreflight.STATUS_FAIL);
-                assertThat(check.detail())
-                    .contains("UNKNOWN")
-                    .contains(IncusPreflight.PROBE_IMAGE)
-                    .contains(IncusInstanceRuntime.IMAGE_SERVER);
+                assertThat(check.found()).isNotNull();
+                assertThat(check.found().finding()).isEqualTo(PreflightFinding.PROBE_INSTANCE_FAILED);
+                assertThat(check.found().args())
+                    .containsEntry("image", IncusPreflight.PROBE_IMAGE)
+                    .containsEntry("server", IncusInstanceRuntime.IMAGE_SERVER)
+                    .hasEntrySatisfying("error", error -> assertThat(error).contains("Image not found"));
             });
     }
 
