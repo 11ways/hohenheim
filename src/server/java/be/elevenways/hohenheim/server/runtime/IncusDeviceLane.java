@@ -229,9 +229,7 @@ final class IncusDeviceLane {
     void ensureNic(@NonNull InstanceSpec spec, @NonNull String deviceName) throws IOException {
         // The same throwing appliers as the primary NIC: ACL verified in the daemon,
         // the extra bridge verified managed-with-subnet, BEFORE the device lands.
-        this.policy.ensureIsolationAcl();
-        this.policy.ensureExtraNetwork();
-        this.runtime.stampPresence();
+        this.runtime.ensureSharedObjects(true);
         putDevice(spec.handle(), deviceName,
             this.policy.extraNicDevice(this.egress, spec.networkLimitMbit()));
         this.runtime.verifyIsolated(spec);

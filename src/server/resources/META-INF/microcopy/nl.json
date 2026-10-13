@@ -6789,6 +6789,10 @@
     "text": "Deze snapshot herstellen op {$name}? Alles wat sinds de opname geschreven is gaat verloren. Typ de naam van de instantie om te bevestigen.",
     "scope": "instance_snapshot"
   },
+  "data_disks": {
+    "text": "Dataschijven",
+    "scope": "instance_backup"
+  },
   "restore_new": {
     "text": "Herstellen naar nieuwe instantie",
     "scope": "instance_backup"
@@ -11619,6 +11623,10 @@
     "text": "ZFS",
     "scope": "volume_backend"
   },
+  "unchecked": {
+    "text": "Niet gecontroleerd",
+    "scope": "volume_backend"
+  },
   "xfs_prjquota": {
     "text": "XFS-projectquota",
     "scope": "volume_backend"
@@ -12237,6 +12245,14 @@
   "status_never_confirmed": {
     "text": "Nog niet",
     "scope": "instance_overview"
+  },
+  "volume_backend_unchecked_title": {
+    "text": "Volume-opslag niet gecontroleerd",
+    "scope": "server_overview"
+  },
+  "volume_backend_unchecked_body": {
+    "text": "Hohenheim kon de dataroot van deze host niet lezen, dus weet het niet of workspaces en applicaties hier geplaatst kunnen worden, en plaatst er geen tot het dat wel kan. Waar de controle op stuitte: {$reason}. Controleer deze host opnieuw zodra Hohenheim hem kan bereiken.",
+    "scope": "server_overview"
   },
   "volume_backend_none_title": {
     "text": "Geen volume-opslag",

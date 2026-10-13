@@ -648,70 +648,13 @@ public final class InstanceBackups {
             noteUnrestorableGrouping(profile, notRestored);
             Models.get(InstanceModel.class).save(record);
             int newId = record.get(InstanceModel.ID);
-
-            // The table-backed rows the settings map cannot carry, BEFORE resolve():
-            // variable values substitute into the spec's command and environment, so a
-            // spec resolved without them is a spec for a different workload.
-            restoreVariables(newId, profile);
-            restoreFiles(newId, profile, notRestored);
-            if (application) {
-                try {
-                    requireRematerialized(profile, newId);
-                    for (BackupManifest.VolumeDeclaration volume : manifest.application().declarations()) {
-                        InstanceVolumes.declare(newId, volume.name(), volume.containerPath(),
-                            volume.quotaBytes(), volume.exclusive());
-                    }
-                    Map<String, Path> applicationFiles = BackupArchive.extractApplication(opened,
-                        staging.resolve("application"));
-                    ArtifactDeploys.restoreSource(newId,
-                        applicationFiles.get(manifest.application().artifact().file()));
-                    DockerClient docker = new ServerService().clientFor(serverId);
-                    this.instances.leases().requireFence(serverId);
-                    docker.loadImage(applicationFiles.get(manifest.application().image().file()));
-                    if (!manifest.imageId().equals(docker.inspectImage(manifest.imageId()).get("Id"))) {
-                        throw new IOException("Imported runtime image identity does not match backup");
-                    }
-                    Map<String, Path> tars = BackupArchive.extractVolumes(opened,
-                        staging.resolve("volumes"));
-                    ApplicationReleases.restore(newId, manifest.imageId(), candidate -> {
-                        Map<String, String> declared = applicationVolumes(newId);
-                        if (!declared.keySet().equals(tars.keySet())) {
-                            throw new IOException("Restored application volume inventory differs from backup");
-                        }
-                        InstanceSnapshots.requireSupport(candidate).restoreVolumes(candidate.spec(),
-                            declared, tars);
-                    });
-                    Restored restored = new Restored(newId, List.copyOf(notRestored));
-                    recordRestore(newId, backup.get(InstanceBackupModel.ID), restored);
-                    return restored;
-                } catch (IOException | RuntimeException error) {
-                    throw HohenheimViolations.instanceRefusal("instance_restore_failed", record,
-                        new IOException("Application restore failed; the new application is not"
-                            + " a verified recovery", error));
-                }
-            }
-
-            Resolved resolved = this.instances.resolve(newId);
-            resolved.requireImage();
-            BackupArchive.Opened verified = opened;
             try {
-                // A new record has nothing running: the window restores into it, and a
-                // failure holds it in error (a named refusal like backup_payload_mismatch
-                // included), while success starts it through the ordinary deploy funnel.
-                InstanceMaintenanceWindow.run(this.instances, resolved,
-                    new InstanceMaintenanceWindow.Plan(InstanceModel.STATUS_RESTORING, false,
-                        InstanceModel.STATUS_STOPPED, true,
-                        InstanceMaintenanceWindow.Failure.HOLD_ERROR),
-                    () -> restorePayload(profile, newId, manifest, resolved, verified, staging));
-            } catch (IOException error) {
-                throw HohenheimViolations.instanceRefusal("instance_restore_failed", record, error);
+                return landRestore(backup, manifest, opened, staging, profile, application, record, newId,
+                    notRestored);
+            } catch (RuntimeException failed) {
+                abandonRestore(newId, failed);
+                throw failed;
             }
-            Restored restored = new Restored(newId, List.copyOf(notRestored));
-            recordRestore(newId, backup.get(InstanceBackupModel.ID), restored);
-            Blast.log("BACKUP: restored backup", backup.get(InstanceBackupModel.ID),
-                "to NEW instance", newId, restored.complete()
-                    ? "(complete)" : "- NOT restored: " + restored.describeLosses());
-            return restored;
         } finally {
             if (opened != null) {
                 try {
@@ -721,6 +664,100 @@ public final class InstanceBackups {
                 }
             }
             FileTrees.deleteQuietly(staging);
+        }
+    }
+
+    /**
+     * Land a verified archive in the record {@link #restoreToNew} just created: its table rows, then the payload,
+     * then the first start through the ordinary deploy.
+     *
+     * @throws Violations naming the failure; the caller takes the record back
+     */
+    private @NonNull Restored landRestore(@NonNull Row backup, @NonNull BackupManifest manifest,
+                                          BackupArchive.@NonNull Opened opened, @NonNull Path staging,
+                                          @Nullable InstanceProfile profile, boolean application, @NonNull Row record,
+                                          int newId, @NonNull List<String> notRestored) {
+        // The table-backed rows the settings map cannot carry, BEFORE resolve():
+        // variable values substitute into the spec's command and environment, so a
+        // spec resolved without them is a spec for a different workload.
+        restoreVariables(newId, profile);
+        restoreFiles(newId, profile, notRestored);
+        if (application) {
+            try {
+                requireRematerialized(profile, newId);
+                for (BackupManifest.VolumeDeclaration volume : manifest.application().declarations()) {
+                    InstanceVolumes.declare(newId, volume.name(), volume.containerPath(),
+                        volume.quotaBytes(), volume.exclusive());
+                }
+                Map<String, Path> applicationFiles = BackupArchive.extractApplication(opened,
+                    staging.resolve("application"));
+                ArtifactDeploys.restoreSource(newId,
+                    applicationFiles.get(manifest.application().artifact().file()));
+                int serverId = record.get(InstanceModel.SERVER_ID);
+                DockerClient docker = new ServerService().clientFor(serverId);
+                this.instances.leases().requireFence(serverId);
+                docker.loadImage(applicationFiles.get(manifest.application().image().file()));
+                if (!manifest.imageId().equals(docker.inspectImage(manifest.imageId()).get("Id"))) {
+                    throw new IOException("Imported runtime image identity does not match backup");
+                }
+                Map<String, Path> tars = BackupArchive.extractVolumes(opened,
+                    staging.resolve("volumes"));
+                ApplicationReleases.restore(newId, manifest.imageId(), candidate -> {
+                    Map<String, String> declared = applicationVolumes(newId);
+                    if (!declared.keySet().equals(tars.keySet())) {
+                        throw new IOException("Restored application volume inventory differs from backup");
+                    }
+                    InstanceSnapshots.requireSupport(candidate).restoreVolumes(candidate.spec(),
+                        declared, tars);
+                });
+                Restored restored = new Restored(newId, List.copyOf(notRestored));
+                recordRestore(newId, backup.get(InstanceBackupModel.ID), restored);
+                return restored;
+            } catch (IOException | RuntimeException error) {
+                throw HohenheimViolations.instanceRefusal("instance_restore_failed", record,
+                    new IOException("Application restore failed; the new application is not"
+                        + " a verified recovery", error));
+            }
+        }
+
+        Resolved resolved = this.instances.resolve(newId);
+        resolved.requireImage();
+        try {
+            // A new record has nothing running: the window restores into it, and a
+            // failure holds it in error (a named refusal like backup_payload_mismatch
+            // included) until the caller takes it back, while success starts it through the ordinary deploy funnel.
+            InstanceMaintenanceWindow.run(this.instances, resolved,
+                new InstanceMaintenanceWindow.Plan(InstanceModel.STATUS_RESTORING, false,
+                    InstanceModel.STATUS_STOPPED, true,
+                    InstanceMaintenanceWindow.Failure.HOLD_ERROR),
+                () -> restorePayload(profile, newId, manifest, resolved, opened, staging));
+        } catch (IOException error) {
+            throw HohenheimViolations.instanceRefusal("instance_restore_failed", record, error);
+        }
+        Restored restored = new Restored(newId, List.copyOf(notRestored));
+        recordRestore(newId, backup.get(InstanceBackupModel.ID), restored);
+        Blast.log("BACKUP: restored backup", backup.get(InstanceBackupModel.ID),
+            "to NEW instance", newId, restored.complete()
+                ? "(complete)" : "- NOT restored: " + restored.describeLosses());
+        return restored;
+    }
+
+    /**
+     * Take back what a failed restore-to-new made, through the ordinary destroy: the workload, the volumes its device
+     * rows name and the record (its quota reservation with it).
+     *
+     * AIDEV-NOTE: decided in round r2p: a failed restore leaves nothing behind. The record it made never ran, so held
+     * in error it only offered Restart over a workload that was never whole; the refusal the restore answers with is
+     * what says what went wrong. Only when the destroy itself fails (an unreachable daemon) does the record stay, held
+     * in error by that destroy, its failure attached to the restore's.
+     */
+    private void abandonRestore(int newId, @NonNull RuntimeException failure) {
+        try {
+            this.instances.destroy(newId);
+        } catch (RuntimeException cleanupFailed) {
+            failure.addSuppressed(cleanupFailed);
+            Blast.log("BACKUP: could not take back the record of a failed restore", newId, "-",
+                cleanupFailed.getMessage());
         }
     }
 
@@ -762,7 +799,8 @@ public final class InstanceBackups {
             manifest.disks().forEach(disk -> diskSizes.put(disk.device(), disk.sizeGb()));
             InstanceDevices.recordRestoredDisks(newId, diskSizes);
             Map<String, Path> disks = BackupArchive.extractDisks(opened, staging.resolve("disks"));
-            InstanceDevices.recordImportedDevices(newId, nativeSupport.importBackup(resolved.spec(), export, disks));
+            InstanceDevices.recordImportedDevices(newId,
+                nativeSupport.importBackup(resolved.spec(), export, disks, manifest.mayCarryExtraNics()));
         } else {
             VolumeSnapshotSupport support = InstanceSnapshots.requireSupport(resolved);
             Map<String, String> volumes = InstanceSnapshots.logicalVolumes(resolved);
@@ -1076,7 +1114,8 @@ public final class InstanceBackups {
             HostPreflight.controllerVersion(),
             String.valueOf((Object) owner.get(InstanceModel.NAME)),
             String.valueOf((Object) owner.get(InstanceModel.KIND)),
-            payload, settings, image.reference(), image.id(), InstanceDevices.installMediaOf(instanceId), ownership,
+            payload, settings, image.reference(), image.id(), InstanceDevices.installMediaOf(instanceId),
+            InstanceDevices.extraNicsOf(instanceId), ownership,
             containerPort,
             "tcp", volumes, disks, profileOf(owner, instanceId), application);
     }

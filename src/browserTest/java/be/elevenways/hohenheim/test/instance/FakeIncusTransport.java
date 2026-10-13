@@ -9,6 +9,7 @@ import be.elevenways.protoblast.common.dry.Dry;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -316,7 +317,7 @@ final class FakeIncusTransport implements IncusTransport {
     @Override
     public Http11.Raw exchangeUpload(String method, String pathAndQuery, Path bodyFile,
                                      String contentType, Map<String, String> extraHeaders,
-                                     long timeoutMs) {
+                                     long timeoutMs) throws IOException {
         // The ISO import lane: a streamed POST onto the custom-volume collection with
         // the name/type headers, exactly the wire shape IncusClient.importIsoVolume
         // sends. Anything else stays a loud gap.
@@ -330,8 +331,56 @@ final class FakeIncusTransport implements IncusTransport {
             this.customVolumes.put(name, volume);
             return async();
         }
+        if ("POST".equals(method) && pathAndQuery.equals("/1.0/instances") && extraHeaders != null
+                && extraHeaders.get("X-Incus-Name") != null) {
+            return importInstance(bodyFile, extraHeaders);
+        }
         throw new UnsupportedOperationException("not exercised by this journey: "
             + method + " " + pathAndQuery);
+    }
+
+    /**
+     * The instance import lane. The fake's "export tarball" is the exported definition as JSON (what
+     * {@link #instances} holds); the device overrides merge per key, and every NIC is validated against the networks
+     * and ACLs this daemon holds, as a real daemon refuses an import naming one it does not have.
+     */
+    @SuppressWarnings("unchecked")
+    private Http11.Raw importInstance(Path archive, Map<String, String> headers) throws IOException {
+        Map<String, Object> definition = new LinkedHashMap<>(parse(Files.readString(archive)));
+        Map<String, Object> devices = new LinkedHashMap<>();
+        if (definition.get("devices") instanceof Map<?, ?> exported) {
+            exported.forEach((key, value) -> devices.put(String.valueOf(key),
+                new LinkedHashMap<>((Map<String, Object>) value)));
+        }
+        String overrides = headers.get("X-Incus-devices");
+        if (overrides != null) {
+            for (String entry : overrides.split(" ")) {
+                String[] parts = entry.split(",", 2);
+                String[] keyValue = parts[1].split("=", 2);
+                ((Map<String, Object>) devices.computeIfAbsent(parts[0], absent -> new LinkedHashMap<>()))
+                    .put(keyValue[0], keyValue[1]);
+            }
+        }
+        for (Map.Entry<String, Object> device : devices.entrySet()) {
+            Map<String, Object> nic = (Map<String, Object>) device.getValue();
+            if (!"nic".equals(nic.get("type"))) {
+                continue;
+            }
+            Object network = nic.get("network");
+            if (network != null && !"incusbr0".equals(network) && !this.networkStore.containsKey(network)) {
+                return error(400, "Failed creating instance record: Failed initializing instance: Invalid devices:"
+                    + " Device validation failed for \"" + device.getKey() + "\": Failed to load network \""
+                    + network + "\" for project \"default\": Network not found");
+            }
+            if (nic.get("security.acls") instanceof String acl && !this.aclStore.containsKey(acl)) {
+                return error(400, "Failed creating instance record: Network ACL \"" + acl + "\" does not exist");
+            }
+        }
+        String name = headers.get("X-Incus-Name");
+        definition.put("name", name);
+        definition.put("devices", devices);
+        this.instances.put(name, definition);
+        return async();
     }
 
     @Override

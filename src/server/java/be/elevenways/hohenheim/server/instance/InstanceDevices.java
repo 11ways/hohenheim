@@ -188,13 +188,22 @@ public final class InstanceDevices {
     /** @return the install media (ISO volume names) in the instance's drives, in the order they were attached */
     public static @NonNull List<String> installMediaOf(int instanceId) {
         List<String> media = new ArrayList<>();
-        for (Row row : drivesOf(instanceId)) {
+        for (Row row : rowsOf(instanceId, DeviceType.CDROM)) {
             String medium = row.get(InstanceDeviceModel.SOURCE_MEDIA);
             if (medium != null && !medium.isBlank()) {
                 media.add(medium);
             }
         }
         return media;
+    }
+
+    /** @return the device names of the instance's extra network interfaces, in the order they were attached */
+    public static @NonNull List<String> extraNicsOf(int instanceId) {
+        List<String> nics = new ArrayList<>();
+        for (Row row : rowsOf(instanceId, DeviceType.NIC)) {
+            nics.add(row.get(InstanceDeviceModel.NAME));
+        }
+        return nics;
     }
 
     /**
@@ -204,7 +213,7 @@ public final class InstanceDevices {
      * @throws Violations as {@link #detach}
      */
     public void detachInstallMedia(int instanceId) {
-        for (Row drive : drivesOf(instanceId)) {
+        for (Row drive : rowsOf(instanceId, DeviceType.CDROM)) {
             this.detach(instanceId, drive.get(InstanceDeviceModel.NAME));
         }
     }
@@ -259,11 +268,11 @@ public final class InstanceDevices {
         rows.forEach(row -> Models.get(InstanceDeviceModel.class).save(row));
     }
 
-    /** The instance's cdrom rows, oldest first. */
-    private static @NonNull List<Row> drivesOf(int instanceId) {
+    /** The instance's rows of one device type, oldest first. */
+    private static @NonNull List<Row> rowsOf(int instanceId, @NonNull DeviceType type) {
         return Models.get(InstanceDeviceModel.class).find()
             .where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
-            .where(InstanceDeviceModel.TYPE.eq(DeviceType.CDROM.token()))
+            .where(InstanceDeviceModel.TYPE.eq(type.token()))
             .orderBy(InstanceDeviceModel.ID, SortOrder.ASC).all();
     }
 

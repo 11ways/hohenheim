@@ -149,7 +149,14 @@ public final class ServerOverviewState {
                 HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend").resolve(locales, resolver),
                 WidgetBadge.of(volumeBackend.label().resolve(locales, resolver),
                     volumeBackend.color(), volumeBackend.icon())))));
-        if (!volumeBackend.supportsQuota() && volumeBackend.filesystemEnforcesQuota()) {
+        if (volumeBackend == VolumeBackend.UNCHECKED) {
+            // The probe could not read the host: say so and why, never advise a filesystem it may already have.
+            state.add(alert(AlertVariant.WARNING, NoticeData.of(
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_unchecked_title").resolve(locales, resolver),
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_unchecked_body")
+                    .withArg("reason", Objects.toString(server.get(ServerModel.VOLUME_BACKEND_DETAIL), ""))
+                    .resolve(locales, resolver))));
+        } else if (!volumeBackend.supportsQuota() && volumeBackend.filesystemEnforcesQuota()) {
             // The filesystem COULD enforce a quota; this build has no operations for it.
             // Telling the operator to mount something else here would be a lie in the
             // other direction -- they already mounted a quota-capable filesystem.

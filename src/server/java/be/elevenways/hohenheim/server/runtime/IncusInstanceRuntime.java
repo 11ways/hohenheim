@@ -114,6 +114,28 @@ public final class IncusInstanceRuntime
     }
 
     /**
+     * THE ensure of this controller's shared objects on this daemon, before anything that names them lands there: the
+     * isolation ACL every NIC carries, the extra-NIC bridge when an extra interface is about to exist, then the
+     * presence marker that makes them attributable. Create, an extra NIC's attach and an import (restore, cold
+     * migration) all come through here.
+     *
+     * AIDEV-NOTE: the objects live exactly as long as one of this controller's instances on the daemon (destroy hands
+     * them back through IncusReaper.releaseOwn), so a host that once held them may not any more: every path that
+     * lands a definition naming them must ensure them first. A restore that did not ("Failed to load network
+     * hhx-...: Network not found", round r2o) is why the import passes its extra-NIC fact here.
+     *
+     * @param extraNics whether an extra interface is about to land, so the bridge must exist
+     * @throws IOException when the daemon refuses or an object reads back unusable
+     */
+    void ensureSharedObjects(boolean extraNics) throws IOException {
+        this.policy.ensureIsolationAcl();
+        if (extraNics) {
+            this.policy.ensureExtraNetwork();
+        }
+        stampPresence();
+    }
+
+    /**
      * Best-effort presence refresh beside every shared-object write.
      *
      * AIDEV-NOTE: this is what makes a controller ATTRIBUTABLE the moment it mints its
@@ -126,7 +148,7 @@ public final class IncusInstanceRuntime
      * a liveness marker. {@code ControllerPresence.stamp} no-ops while fresh, so this
      * costs one GET per deploy.
      */
-    void stampPresence() {
+    private void stampPresence() {
         try {
             ControllerPresence.stamp(this.incus);
         } catch (Exception unstamped) {
@@ -159,8 +181,7 @@ public final class IncusInstanceRuntime
         // The shared isolation ACL, VERIFIED in the daemon, BEFORE any instance is created
         // on it -- an Incus host whose ACL support does not really enforce refuses here,
         // never at the point where a tenant container is already running unisolated.
-        this.policy.ensureIsolationAcl();
-        stampPresence();
+        ensureSharedObjects(false);
         Map<String, Object> nic = this.policy.nicDevice(
             IncusDefinitions.managedNetworkName(this.incus), this.egress, spec.networkLimitMbit());
 
@@ -695,8 +716,9 @@ public final class IncusInstanceRuntime
 
     @Override
     public @NonNull List<ImportedDevice> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive,
-                                                      @NonNull Map<String, Path> disks) throws IOException {
-        return this.archive.importBackup(spec, archive, disks);
+                                                      @NonNull Map<String, Path> disks, boolean extraNics)
+            throws IOException {
+        return this.archive.importBackup(spec, archive, disks, extraNics);
     }
 
     @Override

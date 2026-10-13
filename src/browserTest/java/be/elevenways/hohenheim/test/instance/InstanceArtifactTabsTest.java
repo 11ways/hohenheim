@@ -15,6 +15,8 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -24,6 +26,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -76,6 +79,8 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         backup.set(InstanceBackupModel.REMOTE_KEY, "artifact-tabs/complete.hib");
         backup.set(InstanceBackupModel.SIZE_BYTES, 67_890L);
         backup.set(InstanceBackupModel.CREATED_AT, Instant.parse("2026-08-10T13:00:00Z"));
+        backup.set(InstanceBackupModel.SUMMARY, Map.of("kind", "hohenheim:docker_container",
+            "disks", List.of("artifactdisk-a", "artifactdisk-b")));
         backups.save(backup);
         backupId = backup.get(InstanceBackupModel.ID);
 
@@ -119,6 +124,12 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         assertThat(backups.body())
             .withFailMessage("step 3: the backup restore operation is not relayed from the panel's backup entry")
             .contains("/admin/instance-backups/invoke/hohenheim.restore_backup?ids=" + backupId);
+
+        // 4. The data disks a backup carries are named in its row and on its own page, read off its stored summary.
+        assertThat(backups.body()).as("step 4: the backup row names the data disks it carries")
+            .contains("artifactdisk-a, artifactdisk-b");
+        assertThat(httpGet(backupPage(HohenheimSlugs.ADMIN, backupId), sessionToken).body())
+            .as("step 4: and so does the backup's page").contains("artifactdisk-a, artifactdisk-b");
     }
 
     /**
@@ -243,7 +254,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         assertThat(instances.findById(goneId)).as("step 1: and gone from every default read").isNull();
 
         // 2. The backup's record page still offers restore-to-new and delete.
-        HttpResponse<String> page = httpGet("/admin/instance-backups/" + orphanId, sessionToken);
+        HttpResponse<String> page = httpGet(backupPage(HohenheimSlugs.ADMIN, orphanId), sessionToken);
         assertThat(page.statusCode()).as("step 2: the backup record renders").isEqualTo(200);
         assertThat(page.body())
             .withFailMessage("step 2: the backup of a deleted instance offers no restore")
@@ -304,7 +315,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         RecordGrants.grant(GrantSubjectType.USER, tenantId, InstanceModel.MODEL_ID, hiddenId,
             HohenheimCapabilities.BACKUPS, true);
         String tenantSession = sessionFor(tenantId).token();
-        String pagePath = "/manage/" + HohenheimSlugs.INSTANCE_BACKUPS + "/" + backupRowId;
+        String pagePath = backupPage(HohenheimSlugs.MANAGE, backupRowId);
 
         // 2. Live: the tenant reaches the backup, headed by when it was taken (no keyless "InstanceBackup #N").
         HttpResponse<String> live = httpGet(pagePath, tenantSession);
@@ -321,7 +332,7 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
             .as("step 3: nor does its backup list").doesNotContain("unreadable-gone");
 
         // 4. The positive anchor: the operator, who may read the trashed instance, reads its name marked deleted.
-        assertThat(httpGet("/admin/" + HohenheimSlugs.INSTANCE_BACKUPS + "/" + backupRowId, sessionToken).body())
+        assertThat(httpGet(backupPage(HohenheimSlugs.ADMIN, backupRowId), sessionToken).body())
             .as("step 4: the operator reads the deleted instance by name")
             .contains("unreadable-gone (deleted)");
     }
@@ -372,5 +383,10 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
 
     private static String url(String slug) {
         return "/admin/instances/" + instanceId + "/page/" + slug;
+    }
+
+    /** A backup's record page: its overview, where the bare record route lands. */
+    private static String backupPage(String panel, int backupId) {
+        return CmsRoutes.subpage(panel, HohenheimSlugs.INSTANCE_BACKUPS, backupId, RecordOverview.SLUG).toUrl();
     }
 }

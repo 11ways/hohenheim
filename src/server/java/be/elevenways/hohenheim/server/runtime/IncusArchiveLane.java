@@ -159,23 +159,23 @@ final class IncusArchiveLane {
 
     @NonNull List<NativeSnapshotSupport.ImportedDevice> importBackup(@NonNull InstanceSpec spec,
                                                                      @NonNull Path archive,
-                                                                     @NonNull Map<String, Path> disks)
+                                                                     @NonNull Map<String, Path> disks,
+                                                                     boolean extraNics)
             throws IOException {
-        // AIDEV-NOTE: the isolation ACL is ensured BEFORE the import, on THIS daemon. The
-        // archive carries the source's device config, and its eth0 names this
-        // controller's isolation ACL (`security.acls`); the daemon validates every
-        // device while creating the instance record, so a destination that has never
-        // placed one of our workloads refused the whole import with `Network ACL
-        // "hohenheim-<token>-isolation" does not exist` (F1, cold migration daystrom ->
-        // nightstrom, 2026-08-29). The live proof never caught it because its peer
-        // container deployed on the destination first, which created the ACL there
-        // through the ordinary create() path. This is the SAME ensure the source used
-        // (conditional write, verified read-back), never a copy of the source's object
-        // -- and doing it here is strictly safer than after the import: a conditional
-        // UPDATE of a stale ACL retriggers every referencing NIC, and before the import
-        // the clone that could carry a duplicate MAC does not exist yet.
-        this.policy.ensureIsolationAcl();
-        this.runtime.stampPresence();
+        // AIDEV-NOTE: the controller's shared objects are ensured BEFORE the import, on THIS
+        // daemon, through the runtime's one ensure. The archive carries the source's device
+        // config: its eth0 names this controller's isolation ACL (`security.acls`) and an
+        // extra NIC names its `hhx-<token>` bridge, and the daemon validates every device
+        // while creating the instance record, so a destination that has never placed one of
+        // our workloads (or released them with its last instance) refused the whole import:
+        // `Network ACL "hohenheim-<token>-isolation" does not exist` (F1, cold migration
+        // daystrom -> nightstrom, 2026-08-29) and `Failed to load network "hhx-<token>"`
+        // (restore of a VM with an extra NIC, round r2o). This is the SAME ensure create and
+        // attach use (conditional write, verified read-back), never a copy of the source's
+        // objects -- and doing it here is strictly safer than after the import: a conditional
+        // UPDATE of a stale ACL retriggers every referencing NIC, and before the import the
+        // clone that could carry a duplicate MAC does not exist yet.
+        this.runtime.ensureSharedObjects(extraNics);
         importWithDisks(spec, archive, disks);
         // Re-identification is part of the import contract: the tarball carries the
         // SOURCE instance's user.* labels (until they are replaced the import is

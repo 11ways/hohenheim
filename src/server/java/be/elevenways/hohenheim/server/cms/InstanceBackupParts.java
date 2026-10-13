@@ -19,16 +19,23 @@ import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
 import be.elevenways.zenit.cms.common.resource.ResourceList;
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceParent;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.TableSpec;
+import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.edit.FormSpec;
 import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.widget.common.WidgetInstance;
+import be.elevenways.zenit.widget.common.WidgetTree;
+import be.elevenways.zenit.widget.common.builtin.FactListWidget;
+import be.elevenways.zenit.widget.common.data.WidgetFact;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -36,6 +43,8 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * The backup entries from shared parts: the operator's on /admin and the tenant's on /manage. Backups are born from
@@ -51,6 +60,9 @@ import java.util.List;
  */
 public final class InstanceBackupParts {
 
+    /** The virtual column naming the data disks a backup carries, and the copy key of its label. */
+    private static final String DATA_DISKS_COLUMN = "data_disks";
+
     private InstanceBackupParts() {
     }
 
@@ -65,19 +77,47 @@ public final class InstanceBackupParts {
     public static @NonNull PanelResource<Row> admin() {
         return base(HohenheimIds.id("instance_backup"), instanceParent().survivingArchive())
             .actions(List.of(restore()))
-            .tabs(ResourceTabs.<Row>none().withHistory().withContributions())
+            .tabs(ResourceTabs.<Row>of(List.of(overview())).withHistory().withContributions())
             .build();
     }
 
     /**
      * The tenant's backups: those of instances it holds {@code backups} on, through the walk's tri-state (an id set
-     * cannot express a whole-model row). The contributed tabs only: the admin history stays off the delegated
-     * surface, which also 404s its routes.
+     * cannot express a whole-model row). The overview and the contributed tabs only: the admin history stays off the
+     * delegated surface, which also 404s its routes.
      */
     public static @NonNull PanelResource<Row> manage() {
         return ManageTwin.reached(base(ManageTwin.id("instance_backup"), instanceParent()),
-                TenantScopes.INSTANCE_BACKUPS, ResourceTabs.<Row>none().withContributions())
+                TenantScopes.INSTANCE_BACKUPS, ResourceTabs.<Row>of(List.of(overview())).withContributions())
             .build();
+    }
+
+    /** A backup's front door: its fields, then what it carries beyond the instance export (its data disks). */
+    private static @NonNull RecordOverview<Row> overview() {
+        return RecordOverview.<Row>fields().widgets(InstanceBackupParts::contents);
+    }
+
+    /** The contents fact, null for a backup that carries nothing beside the instance itself. */
+    private static @Nullable WidgetTree contents(@NonNull Row backup, @NonNull AccessContext access) {
+        String disks = dataDisksText(backup);
+        if (disks == null) {
+            return null;
+        }
+        Conduit conduit = access.conduit();
+        String label = HohenheimMicrocopy.INSTANCE_BACKUP.of(DATA_DISKS_COLUMN)
+            .resolve(conduit.getLocales(), conduit.getMessageResolver());
+        return new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of())
+            .withData(List.of(WidgetFact.of(label, disks)))));
+    }
+
+    /**
+     * The data disks a backup carries as one line, the row's column and the page's fact alike.
+     *
+     * @return the device names joined, null for none
+     */
+    static @Nullable String dataDisksText(@NonNull Row backup) {
+        List<String> disks = InstanceBackupModel.dataDisksOf(backup);
+        return disks.isEmpty() ? null : String.join(", ", disks);
     }
 
     /** A backup belongs to its instance: listed in the instance's Backups tab, its record page leads back there. */
@@ -96,6 +136,8 @@ public final class InstanceBackupParts {
                 .relation(RelationPick.of(InstanceBackupModel.TARGET_ID, BackupTargetModel.MODEL_ID).build())
                 .build())
             .column(ColumnSpec.fromField(InstanceBackupModel.STATUS).filterable().subtext("size_bytes").build())
+            .column(ColumnSpec.virtual(DATA_DISKS_COLUMN, HohenheimMicrocopy.INSTANCE_BACKUP.of(DATA_DISKS_COLUMN))
+                .build())
             .column(ColumnSpec.fromField(InstanceBackupModel.SIZE_BYTES).byteSize().hidden().build())
             // AIDEV-NOTE: the remote key is what a restore is driven by on the target itself. It stays out of the
             // default layout (it is long and noise on a healthy list) but the picker can bring it back, chip and all.
@@ -113,8 +155,12 @@ public final class InstanceBackupParts {
             .reads(ResourceReads.rows().title(InstanceBackupParts::title))
             // A backup is immutable evidence: no create (born from the instance action or the nightly task) and no
             // update; readers view, actions act.
-            .form(ResourceForm.<Row>of(FormSpec.builder().add(instance).build()).build())
-            .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).build())
+            .form(ResourceForm.<Row>of(FormSpec.builder().add(instance).build())
+                .landingTab(RecordOverview.SLUG).build())
+            .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL)
+                .computed(Objects.requireNonNull(table.column(DATA_DISKS_COLUMN)),
+                    (backup, request) -> dataDisksText(backup))
+                .build())
             .writes(ResourceMutations.rows().delete(InstanceBackupOperations.DELETE_BACKUP).build());
     }
 

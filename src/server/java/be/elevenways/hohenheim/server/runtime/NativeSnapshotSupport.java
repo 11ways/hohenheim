@@ -103,11 +103,15 @@ public interface NativeSnapshotSupport extends WorkloadAttribution {
      * @param disks the exported data disks by device name: each lands first as a new volume under {@code spec}'s
      *              own device-volume naming, attributed to {@code spec}, and the imported device is pointed at it; a
      *              disk device without an entry keeps naming the source's volume
+     * @param extraNics whether the definition may carry an extra network interface: the controller's shared objects
+     *                  it names (the extra-NIC bridge) are ensured on this daemon before the import, as attach and
+     *                  deploy ensure them, because the daemon validates every device while it creates the instance
      * @return the devices the imported definition carries that Hohenheim models as device rows, in definition order
      *         (empty for none): the export keeps them, so the new record's rows are written from this answer
      */
     @NonNull List<ImportedDevice> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive,
-                                               @NonNull Map<String, Path> disks) throws IOException;
+                                               @NonNull Map<String, Path> disks, boolean extraNics)
+        throws IOException;
 
     /**
      * One device an imported definition carries, as the device-row vocabulary names it.

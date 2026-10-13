@@ -744,8 +744,10 @@ public final class InstanceMigrations {
             if (this.export == null) {
                 throw new IOException("importOnTarget before exportFromSource");
             }
-            // No disks: migration refuses a record with device rows before it exports anything.
-            this.target.importBackup(this.resolved.spec(), this.export, Map.of());
+            // No disks: migration refuses a record with device rows before it exports anything. The extra interfaces
+            // are read off the same rows, so the destination's shared objects come through the import's one ensure.
+            this.target.importBackup(this.resolved.spec(), this.export, Map.of(),
+                !InstanceDevices.extraNicsOf(this.resolved.row().get(InstanceModel.ID)).isEmpty());
         }
 
         @Override

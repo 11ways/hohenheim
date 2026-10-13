@@ -4,10 +4,12 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column instance_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column target_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column status at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext=size_bytes relation=false
-column size_bytes at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column remote_key at=4 shown=false hidden=true sortable=false filterable=false copyable=true subtext= relation=false
-column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-tab history at=0 landing=false view=false
+column data_disks at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column size_bytes at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column remote_key at=5 shown=false hidden=true sortable=false filterable=false copyable=true subtext= relation=false
+column created_at at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+tab overview at=0 landing=true view=true
+tab history at=1 landing=false view=false
 
 case admin.instance-backups.tenant-backups admin instance-backups tenant-backups v2
 admission - verdict=zenit:forbidden
@@ -20,13 +22,15 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column instance_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column target_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column status at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext=size_bytes relation=false
-column size_bytes at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column remote_key at=4 shown=false hidden=true sortable=false filterable=false copyable=true subtext= relation=false
-column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column data_disks at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column size_bytes at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column remote_key at=5 shown=false hidden=true sortable=false filterable=false copyable=true subtext= relation=false
+column created_at at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 row hohenheim:restore_backup at=0 verb=invoke band=inline style=DEFAULT disabled= confirm=style:DEFAULT,title:restore_new%252Cscope%3Dinstance_backup,body:restore_new_confirm%252Cscope%3Dinstance_backup,confirm:restore_new%252Cscope%3Dinstance_backup,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:true target=/{panel}/{entry}/{record}/action/restore_backup
 row zenit:delete at=1 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
-tab history at=0 landing=false view=false
-control EDIT%20instance_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:true,creatable:false
+tab overview at=0 landing=true view=true
+tab history at=1 landing=false view=false
+control DETAIL%20instance_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:true,creatable:false
 
 case admin.instance-backups.operator.failed admin instance-backups operator v2
 admission - verdict=admitted
@@ -36,12 +40,14 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column instance_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column target_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column status at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext=size_bytes relation=false
-column size_bytes at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column remote_key at=4 shown=false hidden=true sortable=false filterable=false copyable=true subtext= relation=false
-column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column data_disks at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column size_bytes at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column remote_key at=5 shown=false hidden=true sortable=false filterable=false copyable=true subtext= relation=false
+column created_at at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 row zenit:delete at=0 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
-tab history at=0 landing=false view=false
-control EDIT%20instance_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:true,creatable:false
+tab overview at=0 landing=true view=true
+tab history at=1 landing=false view=false
+control DETAIL%20instance_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:true,creatable:false
 
 case admin.instance-backups.operator.sel admin instance-backups operator v2
 admission - verdict=admitted
@@ -49,10 +55,12 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column instance_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column target_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column status at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext=size_bytes relation=false
-column size_bytes at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column remote_key at=4 shown=false hidden=true sortable=false filterable=false copyable=true subtext= relation=false
-column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
-tab history at=0 landing=false view=false
+column data_disks at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column size_bytes at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column remote_key at=5 shown=false hidden=true sortable=false filterable=false copyable=true subtext= relation=false
+column created_at at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+tab overview at=0 landing=true view=true
+tab history at=1 landing=false view=false
 
 case manage.instance-backups.tenant-backups manage instance-backups tenant-backups v2
 admission - verdict=admitted
@@ -60,9 +68,11 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column instance_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column target_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column status at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext=size_bytes relation=false
-column size_bytes at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column remote_key at=4 shown=false hidden=true sortable=false filterable=false copyable=true subtext= relation=false
-column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column data_disks at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column size_bytes at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column remote_key at=5 shown=false hidden=true sortable=false filterable=false copyable=true subtext= relation=false
+column created_at at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+tab overview at=0 landing=true view=true
 
 case manage.instance-backups.tenant-backups.complete manage instance-backups tenant-backups v2
 admission - verdict=admitted
@@ -72,9 +82,11 @@ chrome - views=false advanced=false search=true columns=false rail=false selecti
 column instance_id at=0 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column target_id at=1 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=true
 column status at=2 shown=true hidden=false sortable=false filterable=true copyable=false subtext=size_bytes relation=false
-column size_bytes at=3 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
-column remote_key at=4 shown=false hidden=true sortable=false filterable=false copyable=true subtext= relation=false
-column created_at at=5 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column data_disks at=3 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
+column size_bytes at=4 shown=false hidden=true sortable=false filterable=false copyable=false subtext= relation=false
+column remote_key at=5 shown=false hidden=true sortable=false filterable=false copyable=true subtext= relation=false
+column created_at at=6 shown=true hidden=false sortable=false filterable=false copyable=false subtext= relation=false
 row zenit:delete at=0 verb=invoke band=destructive style=DESTRUCTIVE disabled= confirm=style:DESTRUCTIVE,title:confirm_title%252Cscope%3Dcms,body:delete_confirm%252Cscope%3Dcms%25252Ctarget%3Dtitled,confirm:delete%252Cscope%3Dcms,cancel:cancel%252Cscope%3Dcms%25252Ctarget%3Daction,typed:,input:false target=/{panel}/{entry}/{record}/delete
-control EDIT%20instance_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:true,creatable:false
+tab overview at=0 landing=true view=true
+control DETAIL%20instance_id at=0 kind=zenitforms:form/relation-pick input=number required=false readonly=true options= binding=source:hohenheim.instance,rules:,siblings:,resolver:,clearable:true,creatable:false
 

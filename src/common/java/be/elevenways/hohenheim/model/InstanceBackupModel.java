@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.model;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -11,6 +12,9 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.ui.ColorHue;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * One portable, encrypted instance export written to a {@link BackupTargetModel}:
@@ -140,6 +144,26 @@ public class InstanceBackupModel extends Model {
         Status status = Status.parse(backup.get(STATUS));
         String key = backup.get(REMOTE_KEY);
         return status != null && status.restorable() && key != null && !key.isBlank();
+    }
+
+    /** The summary key naming the data disks a backup carries, written by the manifest's summary. */
+    public static final String SUMMARY_DISKS = "disks";
+
+    /**
+     * The data disks (device names) this backup carries, read off its stored summary: the one read every surface
+     * naming them goes through.
+     *
+     * @return the names in capture order, empty for a backup without disks or written before disks were captured
+     */
+    public static @NonNull List<String> dataDisksOf(@NonNull Row backup) {
+        List<String> disks = new ArrayList<>();
+        for (Object device : RawValues.list(RawValues.map((Object) backup.get(SUMMARY)).get(SUMMARY_DISKS))) {
+            String name = RawValues.nonBlankString(device);
+            if (name != null) {
+                disks.add(name);
+            }
+        }
+        return disks;
     }
 
     private static EnumField statusField() {

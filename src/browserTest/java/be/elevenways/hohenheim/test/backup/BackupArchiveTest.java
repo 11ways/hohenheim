@@ -42,7 +42,7 @@ class BackupArchiveTest {
             "test", "fixture", "hohenheim:docker_container",
             BackupManifest.PAYLOAD_VOLUME_TARS,
             Map.of("image", "alpine", "environment_variables", Map.of("SECRET", "s3cret")),
-            "alpine:latest", "sha256:abc", List.of(), "", 8080, "tcp",
+            "alpine:latest", "sha256:abc", List.of(), List.of(), "", 8080, "tcp",
             List.of(new BackupManifest.VolumeEntry("data", "/data", "data.tar", sha, size)), List.of(),
             new BackupManifest.InstanceProfile(
                 new BackupManifest.TemplateRef(7, "velocity", 3),
@@ -238,7 +238,8 @@ class BackupArchiveTest {
         BackupManifest base = manifest("0".repeat(64), 0);
         BackupManifest withDisk = new BackupManifest(BackupManifest.FORMAT_VERSION, base.created(),
             base.controllerVersion(), "machine", "hohenheim:vm", BackupManifest.PAYLOAD_INSTANCE_EXPORT,
-            Map.of("image", "alpine"), base.imageReference(), base.imageId(), List.of(), base.ownership(), null, "tcp",
+            Map.of("image", "alpine"), base.imageReference(), base.imageId(), List.of(), List.of("eth1"),
+            base.ownership(), null, "tcp",
             List.of(new BackupManifest.VolumeEntry("instance", "/", "instance.tar",
                 BackupArchive.sha256Of(instance), Files.size(instance))),
             List.of(new BackupManifest.DiskEntry("data1", 3, new BackupManifest.PayloadEntry("disk-1.tar",
@@ -254,6 +255,8 @@ class BackupArchiveTest {
             .containsExactlyElementsOf(withDisk.disks());
         assertThat(Files.readString(BackupArchive.extractDisks(opened, tmp.resolve("disks-out")).get("data1")))
             .as("step 1: the disk extracts by device, byte-identical").isEqualTo("disk-volume-export");
+        assertThat(opened.manifest().extraNics()).as("step 1: the manifest names the extra interface the import "
+            + "needs this controller's bridge for").containsExactly("eth1");
         assertThat(BackupArchive.extractVolumes(opened, tmp.resolve("volumes-out")).keySet())
             .as("step 1: and it is no volume of the instance").containsExactly("instance");
         Files.deleteIfExists(opened.zip());
@@ -277,6 +280,12 @@ class BackupArchiveTest {
         Map<String, Object> legacy = new LinkedHashMap<>(withDisk.toMap());
         legacy.remove("disks");
         assertThat(BackupManifest.fromMap(legacy).disks()).as("step 4: an older manifest carries no disks").isEmpty();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> legacyInstance = new LinkedHashMap<>((Map<String, Object>) legacy.get("instance"));
+        legacyInstance.remove("extra_nics");
+        legacy.put("instance", legacyInstance);
+        assertThat(BackupManifest.fromMap(legacy).extraNics())
+            .as("step 4: and says nothing about extra interfaces, which is not the same as none").isNull();
 
         // 5. Disks beside a volume-tar payload are refused: only an instance export names devices to point them at.
         Map<String, Object> volumeTars = new LinkedHashMap<>(withDisk.toMap());
@@ -413,6 +422,7 @@ class BackupArchiveTest {
         BackupManifest manifest = new BackupManifest(BackupManifest.FORMAT_VERSION,
             base.created(), base.controllerVersion(), "uploaded-app", "hohenheim:application",
             base.payload(), Map.of(), base.imageReference(), "sha256:" + "a".repeat(64), base.installMedia(),
+            base.extraNics(),
             base.ownership(), base.containerPort(), base.portProtocol(), base.volumes(), base.disks(),
             base.profile(), application);
         Path archive = tmp.resolve("application.hib");

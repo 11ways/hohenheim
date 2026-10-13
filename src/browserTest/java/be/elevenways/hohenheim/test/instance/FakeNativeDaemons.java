@@ -191,6 +191,12 @@ final class FakeNativeDaemons {
      */
     static final AtomicBoolean EXPORTS_DISKS = new AtomicBoolean(true);
 
+    /**
+     * Hosts holding this controller's extra-NIC bridge: an extra interface's attach ensures it, and an import whose
+     * definition carries one is refused where it is missing, as a real daemon validates every device of an import.
+     */
+    static final Set<String> EXTRA_BRIDGES = ConcurrentHashMap.newKeySet();
+
     // -- the observability lanes ----------------------------------------------
     // AIDEV-NOTE: stats and console live HERE rather than in a second fake because they
     // are DRIVER CAPABILITIES of the same workload, exactly as they are on the real
@@ -365,9 +371,11 @@ final class FakeNativeDaemons {
         private final Map<String, FakeWorkload> daemon;
         /** The host's volume store: data disks live here, beside the Docker-tier named volumes. */
         private final Map<String, FakeVolume> volumes;
+        private final String serverName;
 
         FakeNativeRuntime(String serverName) {
             followDatabase();
+            this.serverName = serverName;
             this.daemon = DAEMONS.computeIfAbsent(serverName,
                 name -> new ConcurrentHashMap<>());
             this.volumes = VOLUME_STORES.computeIfAbsent(serverName,
@@ -528,9 +536,14 @@ final class FakeNativeDaemons {
 
         @Override
         public @NonNull List<ImportedDevice> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive,
-                                                          @NonNull Map<String, Path> disks) throws IOException {
+                                                          @NonNull Map<String, Path> disks, boolean extraNics)
+                throws IOException {
             if (this.daemon.containsKey(spec.handle())) {
                 throw new IOException("already exists: " + spec.handle());
+            }
+            if (extraNics) {
+                // The Incus lane's one ensure: the extra-NIC bridge exists before the definition naming it lands.
+                EXTRA_BRIDGES.add(this.serverName);
             }
             OwnerLabels.Owner owner = ownerOf(spec);
             // The disks land first, as volumes of this workload's own naming owned by it: the Incus lane's order.
@@ -574,6 +587,11 @@ final class FakeNativeDaemons {
                     workload.disks.put(disk[0], landed.getOrDefault(disk[0], disk[1]));
                 }
             }
+            if (!workload.nics.isEmpty() && !EXTRA_BRIDGES.contains(this.serverName)) {
+                landed.values().forEach(this.volumes::remove);
+                throw new IOException("Failed creating instance record: Invalid devices: Failed to load network"
+                    + " \"hhx-fake\" for project \"default\": Network not found");
+            }
             this.daemon.put(spec.handle(), workload);
             // The definition's devices in the import's own vocabulary, the shape the Incus lane reads back.
             List<ImportedDevice> devices = new ArrayList<>();
@@ -613,6 +631,7 @@ final class FakeNativeDaemons {
         @Override
         public void ensureNic(@NonNull InstanceSpec spec, @NonNull String deviceName) throws IOException {
             List<String> nics = require(spec.handle()).nics;
+            EXTRA_BRIDGES.add(this.serverName);
             if (!nics.contains(deviceName)) {
                 nics.add(deviceName);
             }

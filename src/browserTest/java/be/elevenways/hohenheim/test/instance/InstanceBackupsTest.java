@@ -56,6 +56,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -498,10 +499,16 @@ class InstanceBackupsTest {
             Models.get(ServerModel.class).find().where(ServerModel.ID.eq(landingId))
                 .assign(ServerModel.INCUS_URL, landing.url()).updateAll();
             try {
-                // 1. The restored record has the interface's row under the name the daemon holds it by.
+                // 1. The restored record has the interface's row under the name the daemon holds it by. The landing
+                //    host never held one of this controller's extra interfaces, so the bridge they sit on does not
+                //    exist there: the restore ensures it before the import, as attach and deploy do.
+                assertThat(FakeNativeDaemons.EXTRA_BRIDGES).as("step 1: the landing host has no extra bridge yet")
+                    .doesNotContain("device-landing-host");
                 int withNic = backups.backupNow(instanceId, targetId, target);
                 int copyId = backups.restoreToNew(withNic, "nic-copy", landingId).instanceId();
                 restored.add(copyId);
+                assertThat(FakeNativeDaemons.EXTRA_BRIDGES).as("step 1: the restore ensured the bridge first")
+                    .contains("device-landing-host");
                 assertThat(Models.get(InstanceDeviceModel.class).find()
                         .where(InstanceDeviceModel.INSTANCE_ID.eq(copyId)).all())
                     .as("step 1: the restored record has the interface's row").singleElement().satisfies(row -> {
@@ -556,12 +563,30 @@ class InstanceBackupsTest {
                 assertThat(Models.get(InstanceModel.class).find().count()).as("step 3: and nothing was created")
                     .isEqualTo(beforeFull);
 
-                // 4. A backup an older build wrote names the disk but carries no volume: the restore holds in error,
-                //    naming the disk.
+                // 3b. The same refusal through the operation, then the same invocation once the pool has room: a
+                //     refused restore leaves its invocation free, so pressing the dialog's submit again runs it.
+                Row diskBackup = Models.get(InstanceBackupModel.class).findById(withDisk);
+                UUID invocation = UUID.randomUUID();
+                landing.daemon.poolTotalBytes = 2L * 1024 * 1024 * 1024;
+                assertThat(violationKeys(catchThrowable(() -> OperationPipeline.invoke(restoreRequest(diskBackup)
+                        .invocation(invocation).form(Map.of("serverId", landingId))))))
+                    .as("step 3b: the operation refuses for capacity").isEqualTo("restore_capacity ");
+                landing.daemon.poolTotalBytes = 100L * 1024 * 1024 * 1024;
+                InstanceBackupOperations.Restored retried = (InstanceBackupOperations.Restored) OperationPipeline
+                    .invoke(restoreRequest(diskBackup).invocation(invocation).form(Map.of("serverId", landingId)))
+                    .value();
+                restored.add(retried.instanceId());
+                assertThat((Integer) Models.get(InstanceModel.class).findById(retried.instanceId())
+                        .get(InstanceModel.SERVER_ID))
+                    .as("step 3b: the same invocation submitted again ran the restore").isEqualTo(landingId);
+
+                // 4. A backup an older build wrote names the disk but carries no volume: the restore is refused naming
+                //    the disk, and it leaves no half-made record (one in error offered Restart) and no volume behind.
                 FakeNativeDaemons.EXPORTS_DISKS.set(false);
                 int legacy = backups.backupNow(instanceId, targetId, target);
                 FakeNativeDaemons.EXPORTS_DISKS.set(true);
                 long before = Models.get(InstanceModel.class).find().count();
+                Set<String> volumesBefore = Set.copyOf(FakeNativeDaemons.volumesOf(landingId).keySet());
                 Throwable refused = catchThrowable(() -> restored.add(
                     backups.restoreToNew(legacy, "legacy-copy", landingId).instanceId()));
                 Models.get(InstanceModel.class).find().where(InstanceModel.NAME.eq("legacy-copy")).all()
@@ -569,11 +594,15 @@ class InstanceBackupsTest {
                 assertThat(refused).as("step 4: the restore is refused").isInstanceOf(Violations.class);
                 assertThat(((Violations) refused).all()).as("step 4: naming the data disk").anySatisfy(violation ->
                     assertThat(ApiSupport.shippedText(violation.message())).contains("data1"));
-                assertThat(Models.get(InstanceModel.class).find().count()).as("step 4: the record is held, not lost")
-                    .isEqualTo(before + 1);
+                assertThat(Models.get(InstanceModel.class).find().count())
+                    .as("step 4: the failed restore leaves no record behind").isEqualTo(before);
+                assertThat(FakeNativeDaemons.volumesOf(landingId).keySet())
+                    .as("step 4: nor a volume it landed").isEqualTo(volumesBefore);
             } finally {
                 FakeNativeDaemons.EXPORTS_DISKS.set(true);
+                FakeNativeDaemons.EXTRA_BRIDGES.remove("device-landing-host");
                 source.disks.clear();
+                source.nics.clear();
                 sourceVolumes.remove("source-data1");
                 Models.get(InstanceDeviceModel.class).find().where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
                     .all().forEach(row -> Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID)));

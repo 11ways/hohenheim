@@ -11,6 +11,7 @@ import java.util.Map;
 
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.instance.ImageOrigin;
+import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.server.util.Sha256;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.zenit.common.orm.model.Schema;
@@ -43,6 +44,9 @@ import be.elevenways.zenit.common.orm.model.Schema;
  * @param imageId           the daemon's immutable image id, when known
  * @param installMedia      the install media (ISO volume names) in the workload's drives at capture: an import
  *                          needs each of them on its destination host; empty in an older manifest
+ * @param extraNics         the extra network interfaces (device names) the workload had at capture: their import
+ *                          needs this controller's extra-NIC bridge on the destination; null in an older manifest,
+ *                          which says nothing about them (see {@link #mayCarryExtraNics})
  * @param ownership         the packed manage-subject set at capture time (informational:
  *                          restore-to-new charges the RESTORING actor's owner derivation)
  * @param containerPort     the declared container port, or null
@@ -64,6 +68,7 @@ public record BackupManifest(int version,
                              @Nullable String imageReference,
                              @Nullable String imageId,
                              @NonNull List<String> installMedia,
+                             @Nullable List<String> extraNics,
                              @NonNull String ownership,
                              @Nullable Integer containerPort,
                              @NonNull String portProtocol,
@@ -209,6 +214,18 @@ public record BackupManifest(int version,
         return total;
     }
 
+    /**
+     * Whether the export may carry an extra network interface, so its import needs this controller's extra-NIC bridge
+     * on the destination first.
+     *
+     * AIDEV-NOTE: an older manifest names no interfaces at all, and its silence is read as "maybe": the bridge it then
+     * ensures is released with the restored instance's destroy, while guessing "none" fails the import on a host
+     * without the bridge ("Failed to load network hhx-...: Network not found").
+     */
+    public boolean mayCarryExtraNics() {
+        return this.extraNics == null || !this.extraNics.isEmpty();
+    }
+
     /** What the restored data disks claim on their host: each volume at its declared size. */
     public long totalDiskBytes() {
         long total = 0;
@@ -232,6 +249,9 @@ public record BackupManifest(int version,
         instance.put("image_reference", this.imageReference);
         instance.put("image_id", this.imageId);
         instance.put("install_media", this.installMedia);
+        if (this.extraNics != null) {
+            instance.put("extra_nics", this.extraNics);
+        }
         instance.put("ownership", this.ownership);
         instance.put("container_port", this.containerPort);
         instance.put("port_protocol", this.portProtocol);
@@ -326,7 +346,7 @@ public record BackupManifest(int version,
         summary.put("install_media", this.installMedia);
         summary.put("volume_count", this.volumes.size());
         summary.put("volume_bytes", this.totalVolumeBytes());
-        summary.put("disks", this.disks.stream().map(DiskEntry::device).toList());
+        summary.put(InstanceBackupModel.SUMMARY_DISKS, this.disks.stream().map(DiskEntry::device).toList());
         if (this.profile != null) {
             TemplateRef template = this.profile.template();
             summary.put("template", template != null ? template.name() : null);
@@ -385,6 +405,16 @@ public record BackupManifest(int version,
                 installMedia.add(requireText(medium, "instance.install_media[]"));
             }
         }
+        List<String> extraNics = null;
+        if (instance.get("extra_nics") != null) {
+            if (!(instance.get("extra_nics") instanceof List<?> nics)) {
+                throw new IOException("Backup manifest 'instance.extra_nics' is not a list");
+            }
+            extraNics = new ArrayList<>();
+            for (Object nic : nics) {
+                extraNics.add(requireText(nic, "instance.extra_nics[]"));
+            }
+        }
         String ownership = instance.get("ownership") instanceof String packed ? packed : "";
         Integer containerPort = instance.get("container_port") instanceof Number port
             ? port.intValue() : null;
@@ -426,7 +456,8 @@ public record BackupManifest(int version,
         @SuppressWarnings("unchecked")
         Map<String, Object> typedSettings = (Map<String, Object>) settings;
         return new BackupManifest(version.intValue(), created, controllerVersion, name, kind,
-            payload, typedSettings, imageReference, imageId, List.copyOf(installMedia), ownership, containerPort,
+            payload, typedSettings, imageReference, imageId, List.copyOf(installMedia),
+            extraNics == null ? null : List.copyOf(extraNics), ownership, containerPort,
             protocol, List.copyOf(volumes), disks, profile, applicationFrom(root, version.intValue()));
     }
 

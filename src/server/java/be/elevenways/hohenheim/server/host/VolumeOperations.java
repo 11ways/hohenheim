@@ -78,7 +78,7 @@ public interface VolumeOperations {
                                                 @NonNull HostShell shell) {
         return switch (backend) {
             case BTRFS -> new BtrfsVolumeOperations(shell);
-            case ZFS, XFS_PRJQUOTA, NONE -> new UnimplementedVolumeOperations(backend);
+            case ZFS, XFS_PRJQUOTA, NONE, UNCHECKED -> new UnimplementedVolumeOperations(backend);
         };
     }
 

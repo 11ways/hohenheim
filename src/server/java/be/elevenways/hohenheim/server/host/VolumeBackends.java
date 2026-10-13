@@ -97,10 +97,10 @@ public final class VolumeBackends {
     /**
      * Read the filesystem type and mount options of this host's volume root.
      *
-     * AIDEV-NOTE: an UNREADABLE root is {@link VolumeBackend#NONE} with the error text as
-     * its detail, never an exception. A host nobody could probe must refuse workspaces the
-     * same way a host with no quota does -- throwing here would have taken the whole
-     * preflight down over one unreachable machine.
+     * AIDEV-NOTE: an UNREADABLE root is {@link VolumeBackend#UNCHECKED} with the shell's own text as its detail, never
+     * an exception and never {@link VolumeBackend#NONE}. It refuses workspaces like a host with no quota (throwing here
+     * would take the whole preflight down over one unreachable machine), but the host page must not tell an operator
+     * to mount btrfs on a host whose pool is btrfs and whose only fault was a refused SSH key (round r2o, daystrom).
      */
     public static @NonNull Detection probe(@NonNull Row server) {
 
@@ -115,8 +115,9 @@ public final class VolumeBackends {
         HostShell.Result result = HostShell.forServer(server).run(script);
 
         if (result.exitCode() != 0) {
-            return new Detection(VolumeBackend.NONE, root,
-                "probe failed (exit " + result.exitCode() + "): " + result.text());
+            String said = result.text().strip();
+            return new Detection(VolumeBackend.UNCHECKED, root,
+                said.isEmpty() ? "exit " + result.exitCode() : said);
         }
 
         return classify(root, result.text());

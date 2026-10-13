@@ -6789,6 +6789,10 @@
     "text": "Restore this snapshot onto {$name}? Everything written since the capture is lost. Type the instance name to confirm.",
     "scope": "instance_snapshot"
   },
+  "data_disks": {
+    "text": "Data disks",
+    "scope": "instance_backup"
+  },
   "restore_new": {
     "text": "Restore to new instance",
     "scope": "instance_backup"
@@ -11619,6 +11623,10 @@
     "text": "ZFS",
     "scope": "volume_backend"
   },
+  "unchecked": {
+    "text": "Not checked",
+    "scope": "volume_backend"
+  },
   "xfs_prjquota": {
     "text": "XFS project quota",
     "scope": "volume_backend"
@@ -12237,6 +12245,14 @@
   "status_never_confirmed": {
     "text": "Not yet",
     "scope": "instance_overview"
+  },
+  "volume_backend_unchecked_title": {
+    "text": "Volume storage not checked",
+    "scope": "server_overview"
+  },
+  "volume_backend_unchecked_body": {
+    "text": "Hohenheim could not read this host's data root, so it cannot tell whether workspaces and applications can be placed here, and places none until it can. What the check ran into: {$reason}. Check this host again once Hohenheim can reach it.",
+    "scope": "server_overview"
   },
   "volume_backend_none_title": {
     "text": "No volume storage",

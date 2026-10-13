@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimIds;
+import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.host.HostPreflightReportView;
 import be.elevenways.hohenheim.host.PreflightCheckView;
 import be.elevenways.hohenheim.host.PreflightStatus;
@@ -16,6 +17,8 @@ import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.cms.common.action.CmsPlacementSurface;
 import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.resource.RecordOverview;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -49,7 +52,7 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
     private static final LocaleChain NL = LocaleChain.ofTags("nl");
 
     @Test
-    void aWaitingHostIsCheckedAndAdmittedThroughOneVerb() {
+    void aWaitingHostIsCheckedAndAdmittedThroughOneVerb() throws Exception {
         Row host = sshHost("check-journey");
         PanelAction<Row> check = action("check_host");
 
@@ -99,6 +102,18 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
             .as("step 3: a finding this build does not know reads as its stored text").isEqualTo("stored words");
         assertThat(report.advice()).as("step 3: advice never holds a required check")
             .noneMatch(PreflightCheckView::required);
+
+        // 3b. The volume probe could not read the host either: its finding says it could not check and why, never a
+        //     "None" with advice to mount a filesystem the host may well have.
+        assertThat((String) stored.get(ServerModel.VOLUME_BACKEND)).as("step 3b: the probe could not check")
+            .isEqualTo("unchecked");
+        assertThat((String) stored.get(ServerModel.VOLUME_BACKEND_DETAIL)).as("step 3b: and keeps why")
+            .isNotBlank();
+        String hostPage = httpGet(CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.SERVERS,
+            stored.get(ServerModel.ID), RecordOverview.SLUG).toUrl(), sessionToken).body();
+        assertThat(hostPage).as("step 3b: the host page says the volume storage could not be checked")
+            .contains("Volume storage not checked")
+            .doesNotContain("Mount a btrfs filesystem");
 
         // 4. An admitted host is only checked again: its verb says so, and checking never changes admission there.
         stored.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);

@@ -47,7 +47,14 @@ public enum VolumeBackend {
     XFS_PRJQUOTA("xfs_prjquota", "XFS project quota", false, true, false, "hard-drive", BadgeVariant.WARNING),
 
     /** A plain filesystem: no quota, no snapshot, and therefore no workspace or application. */
-    NONE("none", "None", false, false, false, "circle-xmark", BadgeVariant.DESTRUCTIVE);
+    NONE("none", "None", false, false, false, "circle-xmark", BadgeVariant.DESTRUCTIVE),
+
+    /**
+     * The probe could not read the volume root (the host refused or could not be reached): nothing is known, so it
+     * refuses placement like {@link #NONE}, and the host page says it could not check and why instead of advising a
+     * filesystem the host may well have.
+     */
+    UNCHECKED("unchecked", "Not checked", false, false, false, "circle-question", BadgeVariant.WARNING);
 
     private final String token;
     private final String displayName;

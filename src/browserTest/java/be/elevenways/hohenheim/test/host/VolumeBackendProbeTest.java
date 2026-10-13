@@ -63,8 +63,8 @@ class VolumeBackendProbeTest {
                 .isEqualTo(VolumeBackend.NONE);
         }
 
-        // 4. A probe that could not run at all is NONE too, never an exception and never a
-        //    guess: a host nobody could read must refuse workspaces like a host with no quota.
+        // 4. A probe that ran but named no filesystem is NONE too, never an exception and never a guess (a probe the
+        //    host refused to run at all is UNCHECKED, HostCheckAndAdmitJourneyTest step 3b).
         assertThat(classify("").backend())
             .as("step 4: empty probe output is not a filesystem")
             .isEqualTo(VolumeBackend.NONE);

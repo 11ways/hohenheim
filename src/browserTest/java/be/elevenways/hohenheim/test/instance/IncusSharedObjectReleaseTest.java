@@ -10,15 +10,20 @@ import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
+import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.task.ReapIncusControllers;
+import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -89,6 +94,50 @@ class IncusSharedObjectReleaseTest extends HohenheimTestBase {
         ReapIncusControllers.sweepHost(host, client);
         assertThat(daemon.aclStore).as("step 2: the marker is stamped while our objects are here")
             .containsKey(ControllerPresence.aclName());
+    }
+
+    /**
+     * An import lands a definition whose extra NIC names this controller's bridge and ACL: the destination ensures
+     * both through the same path attach and deploy use, BEFORE the import, so a host that never held one of this
+     * controller's extra NICs takes the restore (live: "Failed to load network hhx-... Network not found").
+     */
+    @Test
+    void anImportCarryingAnExtraNicEnsuresTheBridgeOnTheDestinationFirst() throws Exception {
+        FakeIncusTransport source = new FakeIncusTransport();
+        IncusInstanceRuntime sourceRuntime = runtime(source);
+        InstanceSpec machine = spec(PREFIX + "nic-source");
+        sourceRuntime.create(machine);
+        sourceRuntime.ensureNic(machine, "eth1");
+        Path exported = Files.createTempFile("hohenheim-fake-export", ".json");
+        Files.writeString(exported, Json.stringify(source.instances.get(machine.handle())));
+        try {
+            // 1. A destination daemon holding none of this controller's objects.
+            FakeIncusTransport destination = new FakeIncusTransport();
+            assertThat(destination.networkStore).as("step 1: the destination has no extra-NIC bridge")
+                .doesNotContainKey(IncusNetworkPolicy.extraNetwork());
+
+            // 2. The import of a definition carrying the extra NIC lands, the bridge ensured first.
+            InstanceSpec copy = spec(PREFIX + "nic-copy");
+            List<NativeSnapshotSupport.ImportedDevice> devices = runtime(destination)
+                .importBackup(copy, exported, Map.of(), true);
+            assertThat(destination.networkStore).as("step 2: the bridge exists on the destination")
+                .containsKey(IncusNetworkPolicy.extraNetwork());
+            assertThat(destination.aclStore).as("step 2: and so does the isolation ACL")
+                .containsKey(IncusNetworkPolicy.aclName());
+            assertThat(devices).as("step 2: the imported definition carries the interface")
+                .extracting(NativeSnapshotSupport.ImportedDevice::name).containsExactly("eth1");
+
+            // 3. An import that carries no extra NIC leaves a fresh daemon without the bridge: it exists on demand.
+            InstanceSpec plain = spec(PREFIX + "plain-source");
+            sourceRuntime.create(plain);
+            Files.writeString(exported, Json.stringify(source.instances.get(plain.handle())));
+            FakeIncusTransport bare = new FakeIncusTransport();
+            runtime(bare).importBackup(spec(PREFIX + "plain-copy"), exported, Map.of(), false);
+            assertThat(bare.networkStore).as("step 3: no bridge where no extra NIC landed")
+                .doesNotContainKey(IncusNetworkPolicy.extraNetwork());
+        } finally {
+            Files.deleteIfExists(exported);
+        }
     }
 
     private static IncusInstanceRuntime runtime(FakeIncusTransport daemon) {
