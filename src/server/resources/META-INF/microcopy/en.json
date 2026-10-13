@@ -15649,6 +15649,7 @@
   "wordpress": { "text": "A WordPress site with its own database.", "scope": "put_online", "target": "card" },
   "minecraft_server": { "text": "A Minecraft server for your network, behind its proxy.", "scope": "put_online", "target": "card" },
   "velocity_proxy": { "text": "The entrance players connect to, in front of your Minecraft servers.", "scope": "put_online", "target": "card" },
+  "minecraft": { "text": "A Minecraft server players connect to directly, on its own port.", "scope": "put_online", "target": "card" },
   "rotate_incus_cert": { "text": "{$actor} gave {$subject} a new Incus client identity", "scope": "hohenheim", "target": "happened" },
   "rotate_host_key": { "text": "{$actor} gave {$subject} a new SSH client identity", "scope": "hohenheim", "target": "happened" },
   "edit_remote_dns_record": { "text": "{$actor} changed a record of {$subject} on its primary", "scope": "hohenheim", "target": "happened" },
@@ -17957,5 +17958,37 @@
   "instance_kind_change_refused": {
     "scope": "violations",
     "text": "This workload cannot be changed into {$kind}: its host's driver cannot turn what runs now into that kind. Create a new one instead."
-  }
+  },
+  "step_ports": {"scope": "put_online", "text": "Ports"},
+  "step_ports_lead": {"scope": "put_online", "text": "The ports players connect to, published on every address of its host. Leave a port empty and Hohenheim picks a free one."},
+  "step_service_where_lead": {"scope": "put_online", "text": "Name it and pick where it runs. It is reached on its own ports, not through an address of the proxy."},
+  "service_lead": {"scope": "put_online", "text": "Creates it, publishes its ports and, when you give one, its game address."},
+  "game_address_help": {"scope": "put_online", "text": "Optional. A name in a zone Hohenheim manages, such as mc.example.com: it points at this host and gets an SRV record for the game port, so players type only the name."},
+  "summary_game_address": {"scope": "put_online", "text": "Game address"},
+  "port_host_help": {"scope": "put_online", "text": "The host port for its {$port}. Empty: Hohenheim picks a free one."},
+  "run_ports": {"scope": "put_online", "text": "Publish its ports"},
+  "run_game_address": {"scope": "put_online", "text": "Point its game address here"},
+  "purpose_game": {"scope": "port_purpose", "text": "Game"},
+  "purpose_query": {"scope": "port_purpose", "text": "Query"},
+  "purpose_rcon": {"scope": "port_purpose", "text": "Remote console"},
+  "purpose_voice": {"scope": "port_purpose", "text": "Voice"},
+  "purpose_other": {"scope": "port_purpose", "text": "Other"},
+  "connect": {"scope": "instance_overview", "text": "Connect to"},
+  "connect_hint": {"scope": "instance_overview", "text": "Players and clients connect to these ports of its host."},
+  "connect_name": {"scope": "instance_overview", "text": "Players connect to {$address}, or to a port below."},
+  "port_for": {"scope": "instance_overview", "text": "For"},
+  "published_ports": [
+    {"scope": "hohenheim_field", "text": "Published ports"},
+    {"scope": "help", "text": "Ports published on every address of the host, by name: game, query, rcon or voice, then [host port:]container port/protocol, such as 25565/tcp. An empty host port is picked when it starts."}
+  ],
+  "srv_service": [
+    {"scope": "hohenheim_field", "text": "SRV service"},
+    {"scope": "help", "text": "The service a game address publishes an SRV record for, such as minecraft for _minecraft._tcp."}
+  ],
+  "game_address": [
+    {"scope": "put_online", "text": "Game address"},
+    {"scope": "hohenheim_field", "text": "Game address"}
+  ],
+  "port_spec_invalid": {"scope": "violations", "text": "Port {$name} is not written as [host port:]container port/protocol: {$spec}."},
+  "game_address_no_zone": {"scope": "violations", "text": "No zone Hohenheim manages covers {$address}. Add the zone under DNS first, or leave the game address empty."}
 }

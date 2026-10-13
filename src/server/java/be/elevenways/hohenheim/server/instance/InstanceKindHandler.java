@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.instance;
 
+import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.ServerModel;
@@ -303,6 +304,14 @@ public interface InstanceKindHandler extends InstanceKindInfo {
      */
     default boolean supportsSiteUpstream() {
         return false;
+    }
+
+    /**
+     * How a workload of this kind with these settings is reached from outside, the steps "Put something online" asks;
+     * a kind a site serves is a website and any other a machine, unless the kind answers from its settings.
+     */
+    default @NonNull PutOnlineReach reachOf(@NonNull Map<String, Object> settings) {
+        return supportsSiteUpstream() ? PutOnlineReach.WEBSITE : PutOnlineReach.NONE;
     }
 
     /**

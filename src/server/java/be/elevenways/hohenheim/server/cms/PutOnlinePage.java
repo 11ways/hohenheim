@@ -15,6 +15,8 @@ import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.instance.InstanceDevices;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
@@ -67,6 +69,14 @@ public final class PutOnlinePage extends PanelPage {
         .fixed((template, request) -> fixed(request.access()))
         .build();
 
+    /** A template reached on its ports (a game server), put online with its ports and its game address. */
+    public static final PanelAction<Row> FROM_SERVICE_TEMPLATE = PanelAction.<Row, Integer>placesRun(
+            PutOnline.PUT_SERVICE_ONLINE, ActionPlacement.PAGE)
+        .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
+        .selectedBy(HohenheimParams.FROM_TEMPLATE_TEMPLATE.getName())
+        .fixed((template, request) -> serviceFixed(request.access()))
+        .build();
+
     /** An address that needs no workload: a redirect, an existing service, static files, TLS passthrough. */
     public static final PanelAction<Object> ADDRESS = PanelAction.<Object, Integer>placesRun(
             PutOnline.PUT_ADDRESS_ONLINE, ActionPlacement.PAGE)
@@ -110,7 +120,8 @@ public final class PutOnlinePage extends PanelPage {
     @Override
     @SuppressWarnings({"unchecked", "rawtypes"})
     public @NonNull List<PanelAction<Row>> actions() {
-        return List.of(FROM_TEMPLATE, (PanelAction) ADDRESS, (PanelAction) WORKLOAD, (PanelAction) MACHINE);
+        return List.of(FROM_TEMPLATE, FROM_SERVICE_TEMPLATE, (PanelAction) ADDRESS, (PanelAction) WORKLOAD,
+            (PanelAction) MACHINE);
     }
 
     @Override
@@ -124,9 +135,13 @@ public final class PutOnlinePage extends PanelPage {
         String workload = request.conduit().getQueryParam(HohenheimParams.PUT_ONLINE_WORKLOAD.getName());
         PanelAction<Object> workloadAction = kindAction(workload);
         if (template != null && !template.isBlank()) {
-            PageActions.Opened opened = PageActions.open(request, this, FROM_TEMPLATE.id());
+            PanelAction<Row> templateAction = templateAction(template);
+            PageActions.Opened opened = PageActions.open(request, this, templateAction.id());
             if (opened instanceof PageActions.Form form) {
                 Row chosen = (Row) form.subject();
+                if (templateAction == FROM_SERVICE_TEMPLATE) {
+                    vars.put("lead", HohenheimMicrocopy.PUT_ONLINE.of("service_lead"));
+                }
                 InstanceKindInfo kindInfo = InstanceKindRegistry.REGISTRY.get(
                     Identifier.tryParse(String.valueOf((Object) chosen.get(InstanceTemplateModel.KIND))));
                 vars.put("document", form.state().withJourney(BEFORE_WIZARD, AFTER_WIZARD));
@@ -255,6 +270,22 @@ public final class PutOnlinePage extends PanelPage {
         return PutOnline.offeredAsMachine(kind) ? MACHINE : null;
     }
 
+    /**
+     * The flow a template is put online by, from how its workload is reached ({@link PutOnline#reachOf}): a service
+     * gets its Ports step; a website, and a machine whose address the operator may still give, the address flow.
+     */
+    private static @NonNull PanelAction<Row> templateAction(@NonNull String templateId) {
+        Integer id = RawValues.parsedInt(templateId);
+        Row template = id == null ? null : Models.get(InstanceTemplateModel.class).findById(id);
+        if (template == null) {
+            return FROM_TEMPLATE;
+        }
+        return switch (PutOnline.reachOf(template)) {
+            case PORTS -> FROM_SERVICE_TEMPLATE;
+            case WEBSITE, NONE -> FROM_TEMPLATE;
+        };
+    }
+
     /** The chosen template's other versions (its family's other members), each opening its own document. */
     private static @NonNull List<Map<String, Object>> otherVersions(@NonNull PanelRequest request,
             @NonNull Row chosen) {
@@ -287,6 +318,15 @@ public final class PutOnlinePage extends PanelPage {
         if (!HohenheimAccess.isAdmin(access)) {
             fixed.put(PutOnline.HOSTNAME.getName(), null);
             fixed.put(PutOnline.HTTPS.getName(), PutOnline.HTTPS_LATER);
+        }
+        return fixed;
+    }
+
+    /** The template form's own fixed entries, plus the game address for everyone but an operator. */
+    private static @NonNull Map<String, @Nullable Object> serviceFixed(@NonNull AccessContext access) {
+        Map<String, @Nullable Object> fixed = new LinkedHashMap<>(InstanceFromTemplatePage.fixed(access));
+        if (!HohenheimAccess.isAdmin(access)) {
+            fixed.put(PutOnline.GAME_ADDRESS.getName(), null);
         }
         return fixed;
     }

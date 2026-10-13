@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
@@ -434,6 +435,13 @@ public final class FakeDockerDaemon implements DockerTransport {
 
         @Override
         public boolean supportsSiteUpstream() { return this.real.supportsSiteUpstream(); }
+
+        // How the real kind is reached (a container publishing ports is a service): the interface default would
+        // read every fake container as a website and put a game server online through the address flow.
+        @Override
+        public @NonNull PutOnlineReach reachOf(@NonNull Map<String, Object> settings) {
+            return this.real.reachOf(settings);
+        }
 
         @Override
         public boolean supportsVolumes() { return this.real.supportsVolumes(); }

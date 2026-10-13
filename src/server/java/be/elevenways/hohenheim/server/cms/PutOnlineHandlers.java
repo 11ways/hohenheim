@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
+import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.site.SiteOperations;
@@ -36,6 +37,17 @@ import be.elevenways.zenit.server.operation.OperationCall;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import be.elevenways.zenit.server.operation.InputScope;
+import be.elevenways.zenit.common.edit.FormSpec;
+import be.elevenways.zenit.common.edit.Nested;
+import be.elevenways.zenit.common.orm.field.IntegerField;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.ports.PortPurpose;
+import be.elevenways.hohenheim.ports.PublishedPort;
+import be.elevenways.hohenheim.server.game.GameAddresses;
+import be.elevenways.hohenheim.server.instance.PortPublications;
+import be.elevenways.hohenheim.server.runtime.PortPublication;
+import java.util.ArrayList;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -68,6 +80,11 @@ final class PutOnlineHandlers {
             .inputScope(InstanceTemplateHandlers::inputScope)
             .authorize(PutOnlineHandlers::addressAuthority)
             .handle(PutOnlineHandlers::putOnline);
+        OperationHandlers.attach(PutOnline.PUT_SERVICE_ONLINE)
+            .source(InstanceTemplateHandlers.selectableTemplates())
+            .inputScope(PutOnlineHandlers::serviceScope)
+            .authorize(PutOnlineHandlers::serviceAuthority)
+            .handle(PutOnlineHandlers::putServiceOnline);
         OperationHandlers.attach(PutOnline.PUT_ADDRESS_ONLINE)
             .authorize(PutOnlineHandlers::admitAddress)
             .handle(PutOnlineHandlers::putAddressOnline);
@@ -93,6 +110,83 @@ final class PutOnlineHandlers {
             return null;
         }
         return new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "an address is given by an operator");
+    }
+
+    /**
+     * The template's own input ({@link InstanceTemplateHandlers#inputScope}) with its Ports step: one host port entry
+     * per port the template declares, empty for one Hohenheim picks.
+     */
+    private static @NonNull InputScope serviceScope(@Nullable Row template, @NonNull FormSpec declared,
+                                                    @Nullable AccessContext access) {
+        InputScope scope = InstanceTemplateHandlers.inputScope(template, declared, access);
+        if (template == null) {
+            return scope;
+        }
+        FormSpec.Builder ports = FormSpec.builder();
+        for (PublishedPort port : declaredPorts(template)) {
+            PortPurpose purpose = port.purpose();
+            ports.add(IntegerField.builder().name(port.name())
+                .label(purpose == PortPurpose.OTHER ? Microcopy.literal(port.name()) : purpose.label())
+                .help(HohenheimMicrocopy.PUT_ONLINE.of("port_host_help")
+                    .withArg("port", port.containerPort() + "/" + port.protocol()))
+                .build());
+        }
+        return new InputScope(InstanceTemplateHandlers.replacing(scope.form(), Map.of(PutOnline.PORTS,
+            Nested.of(PutOnline.PORTS).subSpec(ports.build()).build())), scope.serverDefaults());
+    }
+
+    /**
+     * A game address is an operator act in a zone Hohenheim manages, and a chosen host port must be free on a chosen
+     * host, both before anything is made (on a host placement picks, the run's own claim refuses a port the same way).
+     */
+    private static @Nullable DomainRefusal serviceAuthority(@NonNull Row template, PutOnline.@Nullable Service input,
+                                                            @NonNull AccessContext access) {
+        if (input == null) {
+            return null;
+        }
+        if (Texts.trimmedOrNull(input.game_address()) != null && !HohenheimAccess.isAdmin(access)) {
+            return new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "a game address is given by an operator");
+        }
+        Violations uncovered = GameAddresses.uncoveredRefusal(input.game_address());
+        if (uncovered != null) {
+            return new DomainRefusal(ZenitRefusalReason.INVALID, "no managed zone covers the game address",
+                PutOnline.GAME_ADDRESS.getName(), uncovered.all().getFirst().message());
+        }
+        List<PublishedPort> ports;
+        try {
+            ports = chosenPorts(template, input.ports());
+        } catch (Violations unspelled) {
+            return new DomainRefusal(ZenitRefusalReason.INVALID, "a chosen port is no port", PutOnline.PORTS,
+                unspelled.all().getFirst().message());
+        }
+        for (PublishedPort port : ports) {
+            Violations taken = port.hostPort() == null || input.serverId() == null ? null
+                : PortPublications.takenRefusal(input.serverId(), port.hostPort(), port.protocol());
+            if (taken != null) {
+                return new DomainRefusal(ZenitRefusalReason.INVALID, "port " + port.hostPort() + " is taken",
+                    PutOnline.PORTS + "." + port.name(), taken.all().getFirst().message());
+            }
+        }
+        return null;
+    }
+
+    /** @return the ports the template declares, each with the host port the input chose for it (null: open) */
+    private static @NonNull List<PublishedPort> chosenPorts(@NonNull Row template, @NonNull Map<String, Object> given) {
+        List<PublishedPort> ports = new ArrayList<>();
+        for (PublishedPort port : declaredPorts(template)) {
+            Object chosen = given.get(port.name());
+            if (chosen == null || chosen.toString().isBlank()) {
+                ports.add(port);
+                continue;
+            }
+            ports.add(PublishedPort.parse(port.name(), chosen.toString().trim() + ":" + port.containerPort() + "/"
+                + port.protocol()));
+        }
+        return ports;
+    }
+
+    private static @NonNull List<PublishedPort> declaredPorts(@NonNull Row template) {
+        return PublishedPort.of(PutOnline.templateSettings(template));
     }
 
     /**
@@ -156,21 +250,109 @@ final class PutOnlineHandlers {
         ProgressSink progress = call.progress();
 
         // 1. The app: the template's own create funnel (quota, placement, databases, variables).
-        int instanceId = new InstanceTemplates().createFromTemplate(template, input.create(), call.access());
+        int instanceId = createApp(call, template, input.create());
         Row instance = Objects.requireNonNull(Models.get(InstanceModel.class).findById(instanceId), "the new app");
         call.attachSubject(InstanceOperations.INSTANCE, instance);
         progress.reportProgressPart();
 
-        // 2. Its install step, when the template declares one, as the system: it stamps pipeline-owned columns. A
-        //    template without one passes the step, and the run page says so instead of calling it done.
+        // 2. Its install step, when the template declares one.
+        installStep(call, template, instanceId);
+
+        return goLive(call, instance, input.hostname(), input.https());
+    }
+
+    /**
+     * Its install step, when the template declares one, as the system: it stamps pipeline-owned columns. A template
+     * without one passes the step, and the run page says so instead of calling it done.
+     */
+    private static void installStep(@NonNull OperationCall<Row, ?> call, @NonNull Row template, int instanceId) {
         if (InstanceTemplates.hasInstallStep(template)) {
             ExecutionIdentity.runAsSystem("template-install", () -> new InstanceInstalls().install(instanceId));
-            progress.reportProgressPart();
+            call.progress().reportProgressPart();
         } else {
             call.reportStepSkipped();
         }
+    }
 
-        return goLive(call, instance, input.hostname(), input.https());
+    /**
+     * The app, through the template's own create funnel (quota, placement, databases, variables). After the request
+     * its refusal (no host with room, a quota) is the run's words, never an unexplained error.
+     *
+     * @return the new instance's id
+     */
+    private static int createApp(@NonNull OperationCall<Row, ?> call, @NonNull Row template,
+                                 InstanceTemplateOperations.@NonNull CreateFromTemplate create) {
+        try {
+            return new InstanceTemplates().createFromTemplate(template, create, call.access());
+        } catch (Violations refused) {
+            throw refusedAs("app", refused);
+        }
+    }
+
+    /**
+     * App, install, ports, game address, live.
+     *
+     * @return the new instance's id
+     */
+    private static @NonNull Integer putServiceOnline(@NonNull OperationCall<Row, PutOnline.Service> call) {
+        PutOnline.Service input = Objects.requireNonNull(call.input(), "put online has its input");
+        Row template = call.subject();
+        int instanceId = createApp(call, template, input.create());
+        Row instance = Objects.requireNonNull(Models.get(InstanceModel.class).findById(instanceId), "the new app");
+        call.attachSubject(InstanceOperations.INSTANCE, instance);
+        call.progress().reportProgressPart();
+        installStep(call, template, instanceId);
+        publishPorts(call, instance, chosenPorts(template, input.ports()));
+        String gameAddress = Texts.trimmedOrNull(input.game_address());
+        if (gameAddress == null) {
+            call.reportStepSkipped();
+        } else {
+            try {
+                GameAddresses.set(instanceId, gameAddress);
+            } catch (Violations refused) {
+                throw refusedAs("game address", refused);
+            }
+            call.progress().reportProgressPart();
+        }
+        firstStart(call, instanceId, null, null);
+        return instanceId;
+    }
+
+    /**
+     * Claims every declared port's host port on the instance's host through the ledger's one claim
+     * ({@link PortPublications#reserve}) and writes the numbers into its settings, so its first deploy publishes
+     * exactly those and the Overview and the game address read them.
+     */
+    private static void publishPorts(@NonNull OperationCall<?, ?> call, @NonNull Row instance,
+                                     @NonNull List<PublishedPort> ports) {
+        if (ports.isEmpty()) {
+            call.reportStepSkipped();
+            return;
+        }
+        int instanceId = instance.get(InstanceModel.ID);
+        int serverId = ServerModel.canonicalServerId(instance.get(InstanceModel.SERVER_ID));
+        List<PortPublication> wanted = new ArrayList<>();
+        for (PublishedPort port : ports) {
+            wanted.add(new PortPublication(port.containerPort(), port.protocol(), true, port.hostPort(), null));
+        }
+        List<PublishedPort> published = new ArrayList<>();
+        try {
+            List<PortPublication> claimed = PortPublications.reserve(instanceId, serverId, wanted);
+            for (int index = 0; index < ports.size(); index++) {
+                published.add(ports.get(index).withHostPort(
+                    Objects.requireNonNull(claimed.get(index).preallocatedPort(), "a claimed port")));
+            }
+            Map<String, Object> settings = new LinkedHashMap<>();
+            if (instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> stored) {
+                stored.forEach((key, value) -> settings.put(String.valueOf(key), value));
+            }
+            settings.put(PublishedPort.FIELD, PublishedPort.toSettings(published));
+            instance.set(InstanceModel.SETTINGS, settings);
+            Models.get(InstanceModel.class).save(instance);
+        } catch (Violations refused) {
+            throw refusedAs("ports", refused);
+        }
+        call.progress().reportProgressPart();
     }
 
     /**

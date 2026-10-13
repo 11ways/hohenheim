@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.instance.ReadinessKind;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
+import be.elevenways.hohenheim.ports.PortPurpose;
+import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.server.orm.seed.SeedContext;
@@ -39,6 +41,35 @@ public final class GameTemplateSeeder implements Seeder {
             seedVelocity();
             seedMinecraft();
         });
+        ctx.once("hohenheim.game-templates.standalone", GameTemplateSeeder::seedMinecraftStandalone);
+    }
+
+    /**
+     * A Minecraft server players connect to directly: its game port is published on its host (the template declares
+     * it, putting it online picks the host port) and a game address gets an SRV record for it. Online mode stays on,
+     * since nothing in front of it checks who joins.
+     *
+     * AIDEV-NOTE: named "Minecraft (Paper)", family "Minecraft" (TemplateFamily reads the family off the name). Named
+     * "Minecraft server" it folded into the "Minecraft server (Paper)" backend's family, whose card opens its last
+     * member in name order: the chooser then put the behind-Velocity backend online instead of this one.
+     */
+    private static void seedMinecraftStandalone() {
+        template(
+            "Minecraft (Paper)",
+            "A Paper server with a world volume and a console, reached on its own game port.",
+            Map.of(
+                InstanceKindFields.IMAGE, "itzg/minecraft-server",
+                "tag", "latest",
+                InstanceKindFields.ENVIRONMENT_VARIABLES, Map.of(
+                    "EULA", "TRUE",
+                    "TYPE", "PAPER",
+                    "MEMORY", "1G"),
+                "volumes", Map.of("data", "/data"),
+                PublishedPort.FIELD, Map.of(PortPurpose.GAME.token(), "25565/" + PublishedPort.TCP),
+                PublishedPort.SRV_SERVICE, "minecraft",
+                InstanceKindFields.MEMORY_LIMIT_MB, 1536),
+            ")! For help, type",
+            "stop");
     }
 
     private static void seedVelocity() {

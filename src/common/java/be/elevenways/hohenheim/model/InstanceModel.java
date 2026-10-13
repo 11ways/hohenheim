@@ -213,6 +213,15 @@ public class InstanceModel extends Model {
             .build());
 
     /**
+     * The name players type to reach this game server, whose A/AAAA and SRV records live in the managed zone that
+     * covers it; null for none. Written only through GameAddresses, an operator act (M013).
+     */
+    public static final StringField GAME_ADDRESS = SCHEMA.addField(
+        StringField.builder().name("game_address")
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("game_address"))
+            .build());
+
+    /**
      * The runtime image ("yolk") a workspace or application runs inside.
      *
      * AIDEV-NOTE: a COLUMN and not a settings key for the TEMPLATE_ID reason above -- the

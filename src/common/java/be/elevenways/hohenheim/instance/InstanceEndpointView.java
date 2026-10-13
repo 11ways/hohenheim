@@ -18,6 +18,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  *                     as opposed to an ephemeral observation of the running workload
  * @param note         why a port without an address reaches only so far, worded for its reader (a tenant reads no
  *                     host internals); null when it has an address
+ * @param purpose      what the port is for (Game, Query) when its published-port settings name it; null otherwise
  */
 @HawkeyeClass
 public record InstanceEndpointView(
@@ -27,6 +28,7 @@ public record InstanceEndpointView(
     @NonNull String stateKey,
     @NonNull Microcopy state,
     boolean preallocated,
-    @Nullable Microcopy note
+    @Nullable Microcopy note,
+    @Nullable Microcopy purpose
 ) {
 }

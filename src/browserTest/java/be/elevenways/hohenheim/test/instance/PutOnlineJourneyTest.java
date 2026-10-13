@@ -160,8 +160,10 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         String wizard = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?template=" + template
             .get(InstanceTemplateModel.ID))
             .body();
-        assertThat(wizard).as("step 2: the template's wizard has its Where and HTTPS steps")
-            .contains("data-zf-step=\"where\"").contains("data-zf-step=\"https\"");
+        assertThat(wizard).as("step 2: the template's wizard has its Where and HTTPS steps, and no Ports step: a"
+                + " website is reached on its address, never on ports of its own")
+            .contains("data-zf-step=\"where\"").contains("data-zf-step=\"https\"")
+            .doesNotContain("data-zf-step=\"ports\"");
         String addressWizard = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?kind=hohenheim:redirect").body();
         assertThat(addressWizard).as("step 2: an address kind opens its own wizard")
             .contains("data-zf-step=\"where\"").contains("data-zf-step=\"https\"");
@@ -386,8 +388,10 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         String wizard = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?workload=hohenheim:vm").body();
         assertThat(wizard).as("step 2: where and settings")
             .contains("data-zf-step=\"where\"").contains("data-zf-step=\"settings\"");
-        assertThat(wizard).as("step 2: no HTTPS step and no address").doesNotContain("data-zf-step=\"https\"")
-            .doesNotContain("name=\"" + PutOnline.HOSTNAME.getName() + "\"");
+        assertThat(wizard).as("step 2: no HTTPS step, no address and no Ports step")
+            .doesNotContain("data-zf-step=\"https\"")
+            .doesNotContain("name=\"" + PutOnline.HOSTNAME.getName() + "\"")
+            .doesNotContain("data-zf-step=\"ports\"");
         assertThat(wizard).as("step 2: the kind is transport")
             .contains("type=\"hidden\" name=\"kind\" value=\"hohenheim:vm\"");
         assertThat(wizard).as("step 2: the settings step asks its cloud-init user-data").contains("cloud_init");
@@ -444,13 +448,12 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
     }
 
     /** @return the run a background answer names */
-    private static long runOf(OperationResult<?> answer) {
+    static long runOf(OperationResult<?> answer) {
         Long run = answer.run();
         assertThat(run).as("a background answer names its run").isNotNull();
         return run;
     }
 
-    /** Polls until the run has ended, failing after twenty seconds. */
     @Test
     void theHttpsStepSummarizesWhatWillBeCreatedAndWhetherTheAddressPointsHere() {
         var servers = Models.get(ServerModel.class);
@@ -498,7 +501,8 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         }
     }
 
-    private static OperationRun ended(long runId, AccessContext viewer, String step) throws InterruptedException {
+    /** Polls until the run has ended, failing after twenty seconds. */
+    static OperationRun ended(long runId, AccessContext viewer, String step) throws InterruptedException {
         long deadline = System.nanoTime() + 20_000_000_000L;
         BooleanSupplier done = () -> {
             OperationRun run = OperationRuns.of(runId, viewer);

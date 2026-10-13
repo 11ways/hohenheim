@@ -15649,6 +15649,7 @@
   "wordpress": { "text": "Een WordPress-site met een eigen database.", "scope": "put_online", "target": "card" },
   "minecraft_server": { "text": "Een Minecraftserver voor je netwerk, achter zijn proxy.", "scope": "put_online", "target": "card" },
   "velocity_proxy": { "text": "De ingang waarmee spelers verbinden, voor je Minecraftservers.", "scope": "put_online", "target": "card" },
+  "minecraft": { "text": "Een Minecraftserver waarmee spelers rechtstreeks verbinden, op een eigen poort.", "scope": "put_online", "target": "card" },
   "rotate_incus_cert": { "text": "{$actor} gaf {$subject} een nieuwe Incus-clientidentiteit", "scope": "hohenheim", "target": "happened" },
   "rotate_host_key": { "text": "{$actor} gaf {$subject} een nieuwe SSH-clientidentiteit", "scope": "hohenheim", "target": "happened" },
   "edit_remote_dns_record": { "text": "{$actor} wijzigde een record van {$subject} op de primaire server", "scope": "hohenheim", "target": "happened" },
@@ -17957,5 +17958,37 @@
   "instance_kind_change_refused": {
     "scope": "violations",
     "text": "Deze workload kan niet veranderen in {$kind}: de driver van de host kan wat nu draait niet omzetten naar die soort. Maak een nieuwe aan."
-  }
+  },
+  "step_ports": {"scope": "put_online", "text": "Poorten"},
+  "step_ports_lead": {"scope": "put_online", "text": "De poorten waarmee spelers verbinden, gepubliceerd op elk adres van de host. Laat een poort leeg en Hohenheim kiest een vrije."},
+  "step_service_where_lead": {"scope": "put_online", "text": "Geef het een naam en kies waar het draait. Het is bereikbaar op zijn eigen poorten, niet via een adres van de proxy."},
+  "service_lead": {"scope": "put_online", "text": "Maakt het aan, publiceert zijn poorten en, als je er een geeft, zijn speladres."},
+  "game_address_help": {"scope": "put_online", "text": "Optioneel. Een naam in een zone die Hohenheim beheert, zoals mc.example.com: die wijst naar deze host en krijgt een SRV-record voor de spelpoort, zodat spelers alleen de naam typen."},
+  "summary_game_address": {"scope": "put_online", "text": "Speladres"},
+  "port_host_help": {"scope": "put_online", "text": "De hostpoort voor zijn {$port}. Leeg: Hohenheim kiest een vrije."},
+  "run_ports": {"scope": "put_online", "text": "Zijn poorten publiceren"},
+  "run_game_address": {"scope": "put_online", "text": "Zijn speladres hierheen laten wijzen"},
+  "purpose_game": {"scope": "port_purpose", "text": "Spel"},
+  "purpose_query": {"scope": "port_purpose", "text": "Query"},
+  "purpose_rcon": {"scope": "port_purpose", "text": "Console op afstand"},
+  "purpose_voice": {"scope": "port_purpose", "text": "Spraak"},
+  "purpose_other": {"scope": "port_purpose", "text": "Andere"},
+  "connect": {"scope": "instance_overview", "text": "Verbinden met"},
+  "connect_hint": {"scope": "instance_overview", "text": "Spelers en clients verbinden met deze poorten van zijn host."},
+  "connect_name": {"scope": "instance_overview", "text": "Spelers verbinden met {$address}, of met een poort hieronder."},
+  "port_for": {"scope": "instance_overview", "text": "Voor"},
+  "published_ports": [
+    {"scope": "hohenheim_field", "text": "Gepubliceerde poorten"},
+    {"scope": "help", "text": "Poorten gepubliceerd op elk adres van de host, per naam: game, query, rcon of voice, dan [hostpoort:]containerpoort/protocol, zoals 25565/tcp. Een lege hostpoort wordt gekozen bij het starten."}
+  ],
+  "srv_service": [
+    {"scope": "hohenheim_field", "text": "SRV-dienst"},
+    {"scope": "help", "text": "De dienst waarvoor een speladres een SRV-record publiceert, zoals minecraft voor _minecraft._tcp."}
+  ],
+  "game_address": [
+    {"scope": "put_online", "text": "Speladres"},
+    {"scope": "hohenheim_field", "text": "Speladres"}
+  ],
+  "port_spec_invalid": {"scope": "violations", "text": "Poort {$name} is niet geschreven als [hostpoort:]containerpoort/protocol: {$spec}."},
+  "game_address_no_zone": {"scope": "violations", "text": "Geen zone die Hohenheim beheert omvat {$address}. Voeg de zone eerst toe onder DNS, of laat het speladres leeg."}
 }

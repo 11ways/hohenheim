@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.zenit.common.edit.submit.SubmittedValueCoercion;
 import be.elevenways.zenit.common.orm.field.DoubleField;
 import be.elevenways.zenit.common.orm.field.EnumField;
@@ -70,6 +71,20 @@ public final class InstanceKindFields {
         return ConsoleKind.fieldBuilder()
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("console_kind"))
             .help(HohenheimMicrocopy.HELP.of("console_kind")).build();
+    }
+
+    /** The ports a workload publishes on its host, by name ({@link PublishedPort} reads and writes the values). */
+    public static @NonNull StringMapField publishedPorts() {
+        return StringMapField.builder(PublishedPort.FIELD)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("published_ports"))
+            .help(HohenheimMicrocopy.HELP.of("published_ports")).build();
+    }
+
+    /** The SRV service a game address publishes for the game port, such as {@code minecraft}. */
+    public static @NonNull StringField srvService() {
+        return StringField.builder().name(PublishedPort.SRV_SERVICE)
+            .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("srv_service"))
+            .help(HohenheimMicrocopy.HELP.of("srv_service")).build();
     }
 
     /** @param vm whether the kind is a VM, the only one offered the VM-only origins */

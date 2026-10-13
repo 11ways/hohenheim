@@ -42,7 +42,7 @@ import java.util.Set;
  * compared against the claim -- a mismatch stops the workload rather than reporting a
  * deploy that "succeeded" on a bind nothing declared.
  */
-final class PortPublications {
+public final class PortPublications {
 
     private PortPublications() {
     }
@@ -78,7 +78,7 @@ final class PortPublications {
         List<Row> existing = PortLedger.preallocatedClaimsOf(InstanceModel.MODEL_ID, instanceId);
         for (PortPublication publication : spec.publications()) {
             claimed.add(publication.requiresPreallocation()
-                ? claimOne(resolved, instanceId, publication, existing, consumed)
+                ? claimOne(resolved.serverId(), instanceId, publication, existing, consumed)
                 : publication);
         }
         // Reservations no publication resolved to end OBSERVED, never silently deleted.
@@ -91,8 +91,44 @@ final class PortPublications {
         return spec.withPreallocatedPorts(claimed);
     }
 
+    /**
+     * Claims the host port of every publication of an instance that has not started yet, on the host it was placed
+     * on, through the same claim the deploy makes: an operator-chosen port is refused when another owner holds it, an
+     * open one takes the first free port of the window. The deploy's {@link #ensureClaimed} then reuses each claim.
+     *
+     * @return the publications, each carrying the host port it was given, in the same order
+     * @throws Violations naming a taken port's holder, or the exhausted window
+     */
+    public static @NonNull List<PortPublication> reserve(int instanceId, int serverId,
+                                                         @NonNull List<PortPublication> publications) {
+        // Chosen ports first: an open port must never take, from the window, a number a later entry chose.
+        PortPublication[] claimed = new PortPublication[publications.size()];
+        Set<Integer> consumed = new HashSet<>();
+        List<Row> existing = PortLedger.preallocatedClaimsOf(InstanceModel.MODEL_ID, instanceId);
+        for (boolean chosen : new boolean[] {true, false}) {
+            for (int index = 0; index < claimed.length; index++) {
+                PortPublication publication = publications.get(index);
+                if ((publication.declaredHostPort() != null) == chosen) {
+                    claimed[index] = claimOne(serverId, instanceId, publication, existing, consumed);
+                }
+            }
+        }
+        return List.of(claimed);
+    }
+
+    /**
+     * The refusal a new instance's chosen public host port meets on this host, asked before anything is created; the
+     * claim itself is {@link #reserve}'s and refuses the same way when a rival got there in between.
+     *
+     * @return the refusal naming the port (and its holder to a reader who may know it), or null when it is free
+     */
+    public static @Nullable Violations takenRefusal(int serverId, int port, @NonNull String protocol) {
+        Row rival = PortLedger.rivalHolder(serverId, "", port, protocol, null, null);
+        return rival == null ? null : conflictRefusal(port, rival, PortLedger.describeHolder(rival));
+    }
+
     /** Resolve ONE pre-allocation-shaped publication to a held claim. */
-    private static @NonNull PortPublication claimOne(InstanceService.@NonNull Resolved resolved,
+    private static @NonNull PortPublication claimOne(int serverId,
                                                      int instanceId,
                                                      @NonNull PortPublication publication,
                                                      @NonNull List<Row> existing,
@@ -107,7 +143,7 @@ final class PortPublications {
             }
             Integer port = claim.get(PortAllocationModel.PORT);
             boolean matches = reusable == null
-                && Objects.equals(claim.get(PortAllocationModel.SERVER_ID), resolved.serverId())
+                && Objects.equals(claim.get(PortAllocationModel.SERVER_ID), serverId)
                 && protocol.equals(claim.get(PortAllocationModel.PROTOCOL))
                 && bind.equals(claim.get(PortAllocationModel.HOST_IP))
                 && (publication.declaredHostPort() == null
@@ -120,22 +156,22 @@ final class PortPublications {
         if (reusable != null) {
             int port = reusable.get(PortAllocationModel.PORT);
             // Re-claim (replaces the own row, flipping a releasing park back to held).
-            PortLedger.claimPreallocated(resolved.serverId(), bind, port, protocol,
+            PortLedger.claimPreallocated(serverId, bind, port, protocol,
                 InstanceModel.MODEL_ID, instanceId, null);
             return publication.withPreallocatedPort(port);
         }
 
-        boolean localHost = isLocalServer(resolved.serverId());
+        boolean localHost = isLocalServer(serverId);
         if (publication.declaredHostPort() != null) {
             int port = publication.declaredHostPort();
-            claimOrRefuse(resolved.serverId(), bind, port, protocol, instanceId, localHost);
+            claimOrRefuse(serverId, bind, port, protocol, instanceId, localHost);
             return publication.withPreallocatedPort(port);
         }
 
         int first = windowFirst();
         int count = windowCount();
         for (int port = first; port < first + count; port++) {
-            if (PortLedger.conflictingHolder(resolved.serverId(), bind, port, protocol) != null) {
+            if (PortLedger.conflictingHolder(serverId, bind, port, protocol) != null) {
                 continue;
             }
             // AIDEV-NOTE: the OS probe runs AFTER the ledger check and only for the LOCAL
@@ -148,7 +184,7 @@ final class PortPublications {
                 continue;
             }
             try {
-                PortLedger.claimPreallocated(resolved.serverId(), bind, port, protocol,
+                PortLedger.claimPreallocated(serverId, bind, port, protocol,
                     InstanceModel.MODEL_ID, instanceId, null);
             } catch (PortLedger.PortConflict lost) {
                 continue;   // a rival writer took it between the read and the insert

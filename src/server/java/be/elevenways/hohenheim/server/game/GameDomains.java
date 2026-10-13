@@ -37,6 +37,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import be.elevenways.protoblast.common.registry.Identifier;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -192,6 +193,7 @@ public final class GameDomains {
                 reconcileDns(mapping);
             }
         }
+        GameAddresses.afterServerAddressChange(serverId);
     }
 
     // -- the authorized write funnel ------------------------------------------
@@ -341,6 +343,7 @@ public final class GameDomains {
         for (Row mapping : Models.get(GameDomainModel.class).findByInstanceId(instanceId)) {
             deleteMapping(mapping, true);
         }
+        GameAddresses.removeFor(instanceId);
     }
 
     /**
@@ -375,6 +378,7 @@ public final class GameDomains {
         for (Row mapping : Models.get(GameDomainModel.class).findByProxyId(instanceId)) {
             reconcileDns(mapping);
         }
+        GameAddresses.reconcile(instanceId);
     }
 
     // -- materialization ------------------------------------------------------
@@ -547,58 +551,68 @@ public final class GameDomains {
     }
 
     /**
-     * Reconcile the mapping's generated DNS output: an SRV row aimed at the mapped
-     * hostname on the proxy's PUBLIC pre-allocated port, plus an A (and AAAA) row at
-     * that hostname carrying the host's DECLARED public address, so the SRV target
-     * resolves off our own zone. Updates or removes ONLY rows carrying this mapping's
-     * exact attribution; a foreign or hand-authored row is never touched.
-     *
-     * AIDEV-NOTE: DNS materializes ONLY off a PUBLIC publication. A loopback-published
-     * proxy is unreachable from outside by design, so an SRV/A pair pointing at it would
-     * be exactly the dangling-pointer shape this class exists to kill -- the rows come
-     * down (or never appear) instead. A rows additionally need the server-address
-     * authority (servers.public_ipv4/6); a public port on a host with no declared
-     * address generates the SRV only, for operators whose A records live elsewhere.
+     * Reconcile the mapping's generated DNS output: an SRV row aimed at the mapped hostname on the proxy's PUBLIC
+     * pre-allocated port, plus its A/AAAA rows ({@link #reconcileRecords}).
      */
     static void reconcileDns(@NonNull Row mapping) {
         Integer mappingId = mapping.get(GameDomainModel.ID);
         if (mappingId == null) {
             return;
         }
+        Row domain = mappingDomain(mapping);
+        String hostname = Boolean.TRUE.equals(mapping.get(GameDomainModel.ENABLED)) && domain != null
+            ? domain.get(SiteDomainModel.HOSTNAME) : null;
+        Integer proxyId = mapping.get(GameDomainModel.PROXY_INSTANCE_ID);
+        reconcileRecords(GameDomainModel.MODEL_ID, mappingId, hostname, SRV_PREFIX,
+            proxyId == null ? null : publicProxyPort(proxyId), proxyId == null ? null : proxyServer(proxyId));
+    }
+
+    /**
+     * Reconcile one owner's generated game records: an SRV row at {@code <srvPrefix>.<hostname>} aimed at the
+     * hostname on its PUBLIC host port, plus an A (and AAAA) row at that hostname carrying the host's DECLARED public
+     * address, so the SRV target resolves off our own zone. Updates or removes ONLY rows carrying this owner's exact
+     * attribution; a foreign or hand-authored row is never touched. A game mapping and a game server's own game
+     * address both write through here.
+     *
+     * AIDEV-NOTE: DNS materializes ONLY off a PUBLIC publication. A loopback-published
+     * workload is unreachable from outside by design, so an SRV/A pair pointing at it would
+     * be exactly the dangling-pointer shape this class exists to kill -- the rows come
+     * down (or never appear) instead. A rows additionally need the server-address
+     * authority (servers.public_ipv4/6); a public port on a host with no declared
+     * address generates the SRV only, for operators whose A records live elsewhere.
+     *
+     * @param hostname   the name, or null when the owner wants no records (they come down)
+     * @param srvPrefix  the SRV owner label ({@code _minecraft._tcp}), or null for the address records alone
+     * @param publicPort the public host port, or null when there is none (the records come down)
+     * @param server     the host's row, whose declared addresses the A/AAAA rows carry
+     */
+    public static void reconcileRecords(@NonNull Identifier ownerModel, int ownerId, @Nullable String hostname,
+                                        @Nullable String srvPrefix, @Nullable Integer publicPort,
+                                        @Nullable Row server) {
         Model records = Models.get(DnsRecordModel.class);
-        List<Row> owned = ownedDnsRows(mappingId);
+        List<Row> owned = ownedDnsRows(ownerModel, ownerId);
 
         Row desiredZone = null;
         List<DesiredRecord> desired = new ArrayList<>();
-        Row domain = mappingDomain(mapping);
-        if (Boolean.TRUE.equals(mapping.get(GameDomainModel.ENABLED)) && domain != null) {
-            String hostname = domain.get(SiteDomainModel.HOSTNAME);
-            if (hostname != null && !hostname.isBlank()) {
-                desiredZone = zoneFor(hostname);
-                Integer publicPort = publicProxyPort(
-                    mapping.get(GameDomainModel.PROXY_INSTANCE_ID));
-                if (desiredZone != null && publicPort != null) {
-                    String origin = desiredZone.get(DnsZoneModel.ORIGIN);
-                    String relative = DnsNames.relative(origin, hostname);
-                    String srvOwner = DnsNames.APEX.equals(relative)
-                        ? SRV_PREFIX : SRV_PREFIX + "." + relative;
-                    desired.add(new DesiredRecord(DnsRecordModel.TYPE_SRV, srvOwner,
-                        hostname, publicPort));
-                    Row server = proxyServer(mapping.get(GameDomainModel.PROXY_INSTANCE_ID));
-                    String v4 = server != null ? server.get(ServerModel.PUBLIC_IPV4) : null;
-                    String v6 = server != null ? server.get(ServerModel.PUBLIC_IPV6) : null;
-                    if (v4 != null && !v4.isBlank()) {
-                        desired.add(new DesiredRecord(DnsRecordModel.TYPE_A, relative,
-                            v4, null));
-                    }
-                    if (v6 != null && !v6.isBlank()) {
-                        desired.add(new DesiredRecord(DnsRecordModel.TYPE_AAAA, relative,
-                            v6, null));
-                    }
+        if (hostname != null && !hostname.isBlank()) {
+            desiredZone = zoneFor(hostname);
+            if (desiredZone != null && publicPort != null) {
+                String origin = desiredZone.get(DnsZoneModel.ORIGIN);
+                String relative = DnsNames.relative(origin, hostname);
+                if (srvPrefix != null) {
+                    String srvOwner = DnsNames.APEX.equals(relative) ? srvPrefix : srvPrefix + "." + relative;
+                    desired.add(new DesiredRecord(DnsRecordModel.TYPE_SRV, srvOwner, hostname, publicPort));
+                }
+                String v4 = server != null ? server.get(ServerModel.PUBLIC_IPV4) : null;
+                String v6 = server != null ? server.get(ServerModel.PUBLIC_IPV6) : null;
+                if (v4 != null && !v4.isBlank()) {
+                    desired.add(new DesiredRecord(DnsRecordModel.TYPE_A, relative, v4, null));
+                }
+                if (v6 != null && !v6.isBlank()) {
+                    desired.add(new DesiredRecord(DnsRecordModel.TYPE_AAAA, relative, v6, null));
                 }
             }
         }
-
         Set<Integer> touchedZones = new LinkedHashSet<>();
         for (Row row : owned) {
             touchedZones.add(row.get(DnsRecordModel.ZONE_ID));
@@ -643,7 +657,7 @@ public final class GameDomains {
                 }
                 extra.addAll(reusable.values());
                 GeneratedRows.as(new GeneratedRows.Attribution(SOURCE,
-                    GameDomainModel.MODEL_ID.toString(), mappingId), () -> {
+                    ownerModel.toString(), ownerId), () -> {
                         for (Row target : writes) {
                             records.save(target);
                         }
@@ -664,7 +678,12 @@ public final class GameDomains {
 
     /** Remove every DNS row carrying this mapping's attribution. */
     static void removeDnsFor(int mappingId) {
-        List<Row> owned = ownedDnsRows(mappingId);
+        removeRecordsFor(GameDomainModel.MODEL_ID, mappingId);
+    }
+
+    /** Remove every game DNS row carrying this owner's attribution. */
+    public static void removeRecordsFor(@NonNull Identifier ownerModel, int ownerId) {
+        List<Row> owned = ownedDnsRows(ownerModel, ownerId);
         if (owned.isEmpty()) {
             return;
         }
@@ -805,11 +824,11 @@ public final class GameDomains {
 
     // -- helpers --------------------------------------------------------------
 
-    private static @NonNull List<Row> ownedDnsRows(int mappingId) {
+    private static @NonNull List<Row> ownedDnsRows(@NonNull Identifier ownerModel, int ownerId) {
         return Models.get(DnsRecordModel.class).find()
             .where(DnsRecordModel.GENERATED_BY.eq(SOURCE))
-            .and(DnsRecordModel.GENERATED_FOR_MODEL.eq(GameDomainModel.MODEL_ID.toString()))
-            .and(DnsRecordModel.GENERATED_FOR_ID.eq(mappingId))
+            .and(DnsRecordModel.GENERATED_FOR_MODEL.eq(ownerModel.toString()))
+            .and(DnsRecordModel.GENERATED_FOR_ID.eq(ownerId))
             .all();
     }
 
@@ -895,7 +914,7 @@ public final class GameDomains {
     }
 
     /** The servers row of the proxy's host, or null when it cannot be resolved. */
-    private static @Nullable Row proxyServer(int proxyId) {
+    static @Nullable Row proxyServer(int proxyId) {
         Row proxy = Models.get(InstanceModel.class).findById(proxyId);
         if (proxy == null) {
             return null;

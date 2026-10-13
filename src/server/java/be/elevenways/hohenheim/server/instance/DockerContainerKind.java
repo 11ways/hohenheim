@@ -3,6 +3,8 @@ package be.elevenways.hohenheim.server.instance;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
+import be.elevenways.hohenheim.app.PutOnlineReach;
+import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.HohenheimFormSections;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.instance.ConsoleKind;
@@ -29,6 +31,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -124,6 +127,12 @@ public final class DockerContainerKind implements InstanceKindHandler {
         IntegerField.builder().name("host_port").label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("host_port"))
             .help(HohenheimMicrocopy.HELP.of("host_port")).build());
 
+    // The ports a service publishes on every address of its host, by name (a game server's game and query ports);
+    // a template declares them, putting it online writes the host port each was given.
+    public static final StringMapField PUBLISHED_PORTS = SETTINGS_SCHEMA.addField(InstanceKindFields.publishedPorts());
+
+    public static final StringField SRV_SERVICE = SETTINGS_SCHEMA.addField(InstanceKindFields.srvService());
+
     // secret(): redacted on derived surfaces, masked in forms, kept on blank submit.
     public static final StringMapField ENVIRONMENT_VARIABLES = SETTINGS_SCHEMA.addField(
         InstanceKindFields.environmentVariables());
@@ -146,7 +155,8 @@ public final class DockerContainerKind implements InstanceKindHandler {
     // AIDEV-NOTE: after the fields -- Schema.addSection validates membership eagerly.
     static {
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.PORTS,
-            List.of(PORT_PROTOCOL.getName(), PORT_EXPOSURE.getName(), HOST_PORT.getName())));
+            List.of(PORT_PROTOCOL.getName(), PORT_EXPOSURE.getName(), HOST_PORT.getName(), PUBLISHED_PORTS.getName(),
+                SRV_SERVICE.getName())));
         SETTINGS_SCHEMA.addSection(HohenheimFormSections.collapsed(HohenheimFormSections.LIMITS,
             List.of(MEMORY_LIMIT_MB.getName(), CPU_LIMIT.getName())));
         // The console shape has a working default (plain); a TUI workload opts in.
@@ -174,6 +184,12 @@ public final class DockerContainerKind implements InstanceKindHandler {
     /** A published container port is exposable through a site's {@code instance} upstream. */
     @Override public boolean supportsSiteUpstream() { return true; }
 
+    /** A container that publishes ports of its own is a service reached on them; any other is a website. */
+    @Override
+    public @NonNull PutOnlineReach reachOf(@NonNull Map<String, Object> settings) {
+        return PublishedPort.declaredIn(settings) ? PutOnlineReach.PORTS : PutOnlineReach.WEBSITE;
+    }
+
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
         return DockerInstanceRuntime.onServer(serverName, Egress.OPEN);
@@ -191,8 +207,27 @@ public final class DockerContainerKind implements InstanceKindHandler {
 
         return ContainerSettings.spec(instanceId, settings, defaultFootprintMb(settings), HARDENING)
             .volumes(volumes)
-            .publication(publicationOf(settings))
+            .publications(publicationsOf(settings))
             .build();
+    }
+
+    /**
+     * The routing tier's single publication, then every published port, each on the whole host.
+     *
+     * @throws Violations naming a half-declared single port or a published port that is no port spelling
+     */
+    static @NonNull List<PortPublication> publicationsOf(@NonNull Map<String, Object> settings) {
+        List<PortPublication> publications = new ArrayList<>();
+        PortPublication single = publicationOf(settings);
+        if (single != null) {
+            publications.add(single);
+        }
+        for (PublishedPort port : PublishedPort.of(settings)) {
+            publications.add(new PortPublication(port.containerPort(),
+                PublishedPort.UDP.equals(port.protocol()) ? PortPublication.UDP : PortPublication.TCP, true,
+                port.hostPort(), null));
+        }
+        return publications;
     }
 
     /** An application container: its own userland and heap, nothing underneath it. */

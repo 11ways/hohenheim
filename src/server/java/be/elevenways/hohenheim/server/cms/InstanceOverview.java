@@ -4,6 +4,10 @@ import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
+import be.elevenways.hohenheim.app.PutOnlineReach;
+import be.elevenways.hohenheim.ports.PortPurpose;
+import be.elevenways.hohenheim.ports.PublishedPort;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.runtime.WorkloadLane;
 import be.elevenways.hohenheim.HohenheimWidgets;
@@ -118,7 +122,9 @@ public final class InstanceOverview {
         // says how it is connected and the addresses its guest holds. Both read the kind's and its driver's facts.
         List<WidgetInstance> main = new ArrayList<>();
         InstanceKindHandler kind = InstanceKinds.handlerOf(instance);
-        if (kind != null && kind.supportsSiteUpstream()) {
+        Map<String, Object> settings = settingsOf(instance);
+        PutOnlineReach reach = kind == null ? PutOnlineReach.NONE : kind.reachOf(settings);
+        if (kind != null && reach.asksAddress()) {
             List<Row> sites = Models.get(SiteModel.class).find().where(SiteModel.INSTANCE_ID.eq(instanceId)).all();
             main.add(AppOverview.addresses(sites, accessContext));
             WidgetInstance protection = AppOverview.protection(sites, accessContext);
@@ -132,9 +138,14 @@ public final class InstanceOverview {
         // reached through its addresses alone, where "holds no port claim" was ledger words about nothing.
         List<InstanceEndpointView> ports = endpointsOf(instanceId, delegated);
         if (!ports.isEmpty()) {
+            // A service is reached on its ports: the card says where to connect, and names the game address first.
+            boolean service = reach.asksPorts();
+            String gameAddress = instance.get(InstanceModel.GAME_ADDRESS);
             main.add(new WidgetInstance(CardWidget.ID, Map.of(
-                    "title", HohenheimMicrocopy.INSTANCE_OVERVIEW.of("endpoint"),
-                    "lead", HohenheimMicrocopy.INSTANCE_OVERVIEW.of("endpoint_hint")),
+                    "title", HohenheimMicrocopy.INSTANCE_OVERVIEW.of(service ? "connect" : "endpoint"),
+                    "lead", service && gameAddress != null
+                        ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("connect_name").withArg("address", gameAddress)
+                        : HohenheimMicrocopy.INSTANCE_OVERVIEW.of(service ? "connect_hint" : "endpoint_hint")),
                 new WidgetTree(List.of(new WidgetInstance(HohenheimWidgets.INSTANCE_ENDPOINTS.id(), Map.of())
                     .withData(ports)))));
         }
@@ -444,6 +455,8 @@ public final class InstanceOverview {
      */
     static @NonNull List<InstanceEndpointView> endpointsOf(int instanceId, boolean delegated) {
         List<InstanceEndpointView> endpoints = new ArrayList<>();
+        Row instance = Models.get(InstanceModel.class).findById(instanceId);
+        List<PublishedPort> named = instance == null ? List.of() : namedPorts(settingsOf(instance));
         for (Row claim : PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId)) {
             Integer port = claim.get(PortAllocationModel.PORT);
             if (port == null) {
@@ -451,18 +464,46 @@ public final class InstanceOverview {
             }
             PortState state = PortState.of(claim);
             String address = addressOf(claim);
+            String protocol = Objects.toString(claim.get(PortAllocationModel.PROTOCOL), "");
             endpoints.add(new InstanceEndpointView(
                 address,
                 port,
-                Objects.toString(claim.get(PortAllocationModel.PROTOCOL), ""),
+                protocol,
                 state.key(),
                 state.words(),
                 PortLedger.isPreallocated(claim),
                 !address.isBlank() ? null
                     : delegated ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("no_public_address_delegated")
-                    : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("no_public_address")));
+                    : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("no_public_address"),
+                purposeOf(named, port, protocol)));
         }
         return endpoints;
+    }
+
+    /** @return what the published port on this host port and protocol is for, or null when none names it */
+    private static @Nullable Microcopy purposeOf(@NonNull List<PublishedPort> named, int port,
+                                                 @NonNull String protocol) {
+        for (PublishedPort published : named) {
+            if (Integer.valueOf(port).equals(published.hostPort()) && published.protocol().equals(protocol)) {
+                PortPurpose purpose = published.purpose();
+                return purpose == PortPurpose.OTHER ? Microcopy.literal(published.name()) : purpose.label();
+            }
+        }
+        return null;
+    }
+
+    /** @return the published ports the settings name, none when their spelling is refused (the deploy says why) */
+    private static @NonNull List<PublishedPort> namedPorts(@NonNull Map<String, Object> settings) {
+        try {
+            return PublishedPort.of(settings);
+        } catch (Violations unspelled) {
+            return List.of();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static @NonNull Map<String, Object> settingsOf(@NonNull Row instance) {
+        return instance.get(InstanceModel.SETTINGS) instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
     }
 
     /** What a claim means to an operator, as a stable hook and in words; never the ledger's own status word. */

@@ -10,7 +10,7 @@ import be.elevenways.zenit.common.orm.model.Models;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 /** The DNS row fixtures the browser tests share: zones, records, peers and their links. */
-final class DnsFixtures {
+public final class DnsFixtures {
 
     private DnsFixtures() {
     }
@@ -21,7 +21,7 @@ final class DnsFixtures {
     }
 
     /** An enabled zone in the given role, secondaries naming the peer they pull from. */
-    static int createZone(String origin, String role, @Nullable Integer primaryPeerId) {
+    public static int createZone(String origin, String role, @Nullable Integer primaryPeerId) {
         return zone(origin, role, primaryPeerId, false);
     }
 

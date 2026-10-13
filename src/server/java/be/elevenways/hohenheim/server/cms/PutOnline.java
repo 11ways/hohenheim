@@ -5,6 +5,8 @@ import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
+import be.elevenways.hohenheim.app.PutOnlineReach;
+import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
@@ -46,15 +48,18 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * "Put something online": one flow that creates an app, its address and its certificate, as background operations
  * behind one wizard page ({@link PutOnlinePage}).
  *
- * AIDEV-NOTE: four operations because the input differs by WHAT is put online. A template's form is that template's
+ * AIDEV-NOTE: five operations because the input differs by WHAT is put online. A template's form is that template's
  * own variables, resolved per selected template (the subject), so {@link #PUT_ONLINE} takes the template as its
- * subject, exactly as the create-from-template lane does. An address that needs no workload (a redirect, an existing
- * service, static files, TLS passthrough) has no subject; {@link #PUT_ADDRESS_ONLINE} asks the site form's upstream
+ * subject, exactly as the create-from-template lane does; a template whose workload is reached on its ports
+ * ({@code PutOnlineReach.PORTS}, a game server) is {@link #PUT_SERVICE_ONLINE} instead, with a Ports step and an
+ * optional game address where the others ask an address and HTTPS. An address that needs no workload (a redirect, an
+ * existing service, static files, TLS passthrough) has no subject; {@link #PUT_ADDRESS_ONLINE} asks the site form's upstream
  * kind and settings. A workload of a kind that serves a website (a Git app, a container image) has no subject either;
  * {@link #PUT_WORKLOAD_ONLINE} asks that kind's own settings, the instance form's. A machine of a kind that serves no
  * website (a virtual machine, a Linux container) is {@link #PUT_MACHINE_ONLINE}: the same kind's own settings, without
@@ -90,12 +95,23 @@ public final class PutOnline {
     public static final StringField HTTPS = StringField.builder("https")
         .label(HohenheimMicrocopy.PUT_ONLINE.of("certificate")).build();
 
+    /** The host ports a service's declared ports are published on, one entry per declared port (per template). */
+    public static final String PORTS = "ports";
+
+    /** The optional name players type to reach a game server; an operator's to give, like an address. */
+    public static final StringField GAME_ADDRESS = StringField.builder(InstanceModel.GAME_ADDRESS.getName())
+        .label(HohenheimMicrocopy.PUT_ONLINE.of("game_address"))
+        .help(HohenheimMicrocopy.PUT_ONLINE.of("game_address_help"))
+        .placeholder("mc.example.com")
+        .build();
+
     /* The journey's step names, one home: the chooser, the wizard's own steps and the run that ends it. */
     static final Microcopy STEP_WHAT = HohenheimMicrocopy.PUT_ONLINE.of("step_what");
     static final Microcopy STEP_WHERE = HohenheimMicrocopy.PUT_ONLINE.of("step_where");
     static final Microcopy STEP_OPTIONS = HohenheimMicrocopy.PUT_ONLINE.of("step_options");
     static final Microcopy STEP_HTTPS = HohenheimMicrocopy.PUT_ONLINE.of("step_https");
     static final Microcopy STEP_LIVE = HohenheimMicrocopy.PUT_ONLINE.of("step_live");
+    static final Microcopy STEP_PORTS = HohenheimMicrocopy.PUT_ONLINE.of("step_ports");
 
     /** The run's steps for a template: the app, its install, its website, its certificate, then live. */
     private static final OperationSteps APP_STEPS = OperationSteps.of(
@@ -105,6 +121,15 @@ public final class PutOnline {
         OperationSteps.step("certificate", HohenheimMicrocopy.PUT_ONLINE.of("run_certificate")),
         OperationSteps.step("live", HohenheimMicrocopy.PUT_ONLINE.of("run_live")))
         .inJourney(List.of(STEP_WHAT, STEP_WHERE, STEP_OPTIONS, STEP_HTTPS), STEP_LIVE);
+
+    /** The run's steps for a service from a template: the app, its install, its ports, its game address, then live. */
+    private static final OperationSteps SERVICE_STEPS = OperationSteps.of(
+        OperationSteps.step("app", HohenheimMicrocopy.PUT_ONLINE.of("run_app")),
+        OperationSteps.step("install", HohenheimMicrocopy.PUT_ONLINE.of("run_install")),
+        OperationSteps.step("ports", HohenheimMicrocopy.PUT_ONLINE.of("run_ports")),
+        OperationSteps.step("game_address", HohenheimMicrocopy.PUT_ONLINE.of("run_game_address")),
+        OperationSteps.step("live", HohenheimMicrocopy.PUT_ONLINE.of("run_live")))
+        .inJourney(List.of(STEP_WHAT, STEP_WHERE, STEP_OPTIONS, STEP_PORTS), STEP_LIVE);
 
     /** The run's steps for an address: its website and its certificate. */
     private static final OperationSteps ADDRESS_STEPS = OperationSteps.of(
@@ -144,6 +169,30 @@ public final class PutOnline {
         .step(FormStep.of("https", STEP_HTTPS, HTTPS.getName())
             .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_https_lead"))
             .summarizedBy(PutOnline::templateSummary))
+        .build();
+
+    /**
+     * A service template's input: where it runs and the template's variables as for a website, then its Ports step
+     * instead of an address and HTTPS. The ports entry is the template's own (PutOnlineHandlers.serviceScope).
+     */
+    private static final FormSpec SERVICE_INPUT = FormSpec.builder()
+        .add(InstanceTemplateOperations.NAME)
+        .add(InstanceTemplateOperations.SERVER_ID)
+        .add(InstanceTemplateOperations.PROJECT_ID)
+        .add(InstanceTemplateOperations.ENVIRONMENT_ID)
+        .add(Nested.of(InstanceTemplateOperations.VARIABLES).subSpec(FormSpec.builder().build()).build())
+        .add(Nested.of(PORTS).subSpec(FormSpec.builder().build()).build())
+        .add(GAME_ADDRESS)
+        .step(FormStep.of("where", STEP_WHERE, InstanceTemplateOperations.NAME.getName(),
+            InstanceTemplateOperations.SERVER_ID.getName(), InstanceTemplateOperations.PROJECT_ID.getName(),
+            InstanceTemplateOperations.ENVIRONMENT_ID.getName())
+                .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_service_where_lead")))
+        .step(new FormStep(InstanceTemplateOperations.VARIABLES, STEP_OPTIONS,
+            HohenheimMicrocopy.PUT_ONLINE.of("step_options_lead"),
+            List.of(InstanceTemplateOperations.VARIABLES)))
+        .step(FormStep.of(PORTS, STEP_PORTS, PORTS, GAME_ADDRESS.getName())
+            .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_ports_lead"))
+            .summarizedBy(PutOnline::serviceSummary))
         .build();
 
     private static final FormSpec ADDRESS_INPUT = FormSpec.builder()
@@ -221,6 +270,22 @@ public final class PutOnline {
         }
     }
 
+    /**
+     * A service template's create (named as its form names it), the host port per declared port, its game address.
+     *
+     * @param game_address spelled as its form field, which the boot check holds every record component to
+     */
+    public record Service(@Nullable String name, @Nullable Integer serverId, @Nullable Integer projectId,
+                          @Nullable Integer environmentId, @NonNull Map<String, Object> variables,
+                          @NonNull Map<String, Object> ports, @Nullable String game_address) {
+
+        /** @return the template create funnel's own input */
+        public InstanceTemplateOperations.@NonNull CreateFromTemplate create() {
+            return new InstanceTemplateOperations.CreateFromTemplate(this.name, this.serverId, this.projectId,
+                this.environmentId, this.variables);
+        }
+    }
+
     /** An address that needs no workload: what it serves (the site's upstream kind and settings) and its HTTPS. */
     public record Address(@Nullable String name, @Nullable String hostname, @Nullable String upstream_kind,
                           @Nullable Map<String, Object> settings, @Nullable String https) {
@@ -255,6 +320,28 @@ public final class PutOnline {
             .facts(OperationFact.REACHES_OUTSIDE)
             .command(OperationCommand.perSubject().execution(CommandExecution.OUTSIDE_TRANSACTION))
             .background(APP_STEPS)
+            .register();
+
+    /** Puts one service template online, reached on its ports: the app, its ports, its game address, its start. */
+    public static final Operation<Row, Service, Integer> PUT_SERVICE_ONLINE =
+        Operation.declare(HohenheimIds.id("put_service_online"))
+            .label(HohenheimMicrocopy.PUT_ONLINE.of("put_online"))
+            .happened(HohenheimMicrocopy.PUT_ONLINE.of("happened"))
+            .icon(Icon.of("rocket"))
+            .one(InstanceTemplateOperations.TEMPLATE)
+            .gate(OperationGate.open())
+            .input(OperationInput.of(SERVICE_INPUT, Service.class, values -> new Service(
+                values.get(InstanceTemplateOperations.NAME), values.get(InstanceTemplateOperations.SERVER_ID),
+                values.get(InstanceTemplateOperations.PROJECT_ID),
+                values.get(InstanceTemplateOperations.ENVIRONMENT_ID),
+                InstanceTemplateOperations.variables(values.get(InstanceTemplateOperations.VARIABLES)),
+                Objects.requireNonNullElse(RawValues.mapOrNull(values.get(PORTS)), Map.of()),
+                values.get(GAME_ADDRESS))))
+            .result(Integer.class)
+            .rateLimit(HohenheimEndpoints.INSTANCE_CREATE_LIMIT)
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .command(OperationCommand.perSubject().execution(CommandExecution.OUTSIDE_TRANSACTION))
+            .background(SERVICE_STEPS)
             .register();
 
     /** Puts one address online that needs no workload: its website, then its certificate. */
@@ -330,14 +417,48 @@ public final class PutOnline {
 
     /** @return whether a workload of the kind with this stored id is put online from its own settings and address */
     static boolean offeredAsWorkload(@Nullable String kind) {
-        InstanceKindHandler handler = InstanceKinds.getHandler(kind);
-        return handler != null && handler.putOnlineGroup() != null && handler.supportsSiteUpstream();
+        return reachOfKind(kind) == PutOnlineReach.WEBSITE;
     }
 
     /** @return whether a machine of the kind with this stored id is put online from its own settings, without one */
     static boolean offeredAsMachine(@Nullable String kind) {
+        return reachOfKind(kind) == PutOnlineReach.NONE;
+    }
+
+    /** @return how a kind put online from its own (empty) settings is reached, or null for a kind not offered */
+    private static @Nullable PutOnlineReach reachOfKind(@Nullable String kind) {
         InstanceKindHandler handler = InstanceKinds.getHandler(kind);
-        return handler != null && handler.putOnlineGroup() != null && !handler.supportsSiteUpstream();
+        return handler == null || handler.putOnlineGroup() == null ? null : handler.reachOf(Map.of());
+    }
+
+    /** @return how a template's workload is reached, from its kind and its settings baseline */
+    static @NonNull PutOnlineReach reachOf(@NonNull Row template) {
+        InstanceKindHandler handler = InstanceKinds.getHandler(String.valueOf((Object) template.get(
+            InstanceTemplateModel.KIND)));
+        return handler == null ? PutOnlineReach.WEBSITE : handler.reachOf(templateSettings(template));
+    }
+
+    /** @return a template's settings baseline, empty when it has none */
+    @SuppressWarnings("unchecked")
+    static @NonNull Map<String, Object> templateSettings(@NonNull Row template) {
+        return template.get(InstanceTemplateModel.SETTINGS) instanceof Map<?, ?> map
+            ? (Map<String, Object>) map : Map.of();
+    }
+
+    /** What a service's Ports step shows of Where: its name, where it runs, its ports and its game address. */
+    private static @NonNull List<SummaryLine> serviceSummary(@NonNull StepAnswers answers) {
+        List<SummaryLine> lines = new ArrayList<>();
+        String name = answers.text(InstanceTemplateOperations.NAME.getName());
+        if (name != null) {
+            lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_name"), Microcopy.literal(name)));
+        }
+        lines.add(runsOnLine(answers));
+        String address = answers.text(GAME_ADDRESS.getName());
+        if (address != null) {
+            lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_game_address"),
+                Microcopy.literal(address)));
+        }
+        return lines;
     }
 
     /** What a template's HTTPS step shows of Where and Options in its summary. */
