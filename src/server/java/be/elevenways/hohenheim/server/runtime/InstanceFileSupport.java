@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.runtime;
 
+import be.elevenways.zenit.server.io.FilesystemNodeKind;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
 import java.io.IOException;
@@ -25,19 +26,16 @@ import java.util.Map;
  */
 public interface InstanceFileSupport {
 
-    /** What a directory entry is; SYMLINK is never followed by this seam. */
-    enum Kind { FILE, DIRECTORY, SYMLINK, OTHER }
-
     /**
      * One entry as the driver observed it.
      *
      * @param name      the basename only (never a path)
-     * @param kind      lstat kind
+     * @param kind      lstat kind; SYMLINK is never followed by this seam
      * @param size      bytes for a file, the link text length for a symlink
      * @param modified  epoch seconds, or 0 when the driver could not tell
      * @param mode      permission bits as a 4-digit octal string, e.g. {@code 0644}
      */
-    record Entry(@NonNull String name, @NonNull Kind kind, long size, long modified,
+    record Entry(@NonNull String name, @NonNull FilesystemNodeKind kind, long size, long modified,
                  @NonNull String mode) {}
 
     /**

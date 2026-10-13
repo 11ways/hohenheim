@@ -16,6 +16,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.io.FilesystemNodeKind;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -160,7 +161,7 @@ public final class InstanceFiles {
         if (leaf == null) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_not_found"));
         }
-        if (leaf.kind() != InstanceFileSupport.Kind.DIRECTORY) {
+        if (leaf.kind() != FilesystemNodeKind.DIRECTORY) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_not_a_directory"));
         }
 
@@ -212,7 +213,7 @@ public final class InstanceFiles {
         if (leaf == null) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_not_found"));
         }
-        if (leaf.kind() != InstanceFileSupport.Kind.FILE) {
+        if (leaf.kind() != FilesystemNodeKind.FILE) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_not_a_file"));
         }
         if (leaf.size() > cap) {
@@ -376,7 +377,7 @@ public final class InstanceFiles {
         Opened opened = target.opened();
         try {
             opened.files().delete(opened.handle(), target.path().absolute(),
-                target.leaf().kind() == InstanceFileSupport.Kind.DIRECTORY, opened.ownerLabels());
+                target.leaf().kind() == FilesystemNodeKind.DIRECTORY, opened.ownerLabels());
         } catch (IOException e) {
             throw failure(e);
         }
@@ -455,7 +456,7 @@ public final class InstanceFiles {
         if (leaf == null) {
             return new FileTarget(opened, target, "0644");
         }
-        if (leaf.kind() != InstanceFileSupport.Kind.FILE) {
+        if (leaf.kind() != FilesystemNodeKind.FILE) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_not_a_file"));
         }
         if (!replace) {
@@ -485,8 +486,8 @@ public final class InstanceFiles {
     /** {@link #existingTarget}, never a link: the entry whose attributes change. */
     private @NonNull ExistingTarget attributeTarget(int instanceId, @NonNull String requestedPath) {
         ExistingTarget target = existingTarget(instanceId, requestedPath);
-        InstanceFileSupport.Kind kind = target.leaf().kind();
-        if (kind != InstanceFileSupport.Kind.FILE && kind != InstanceFileSupport.Kind.DIRECTORY) {
+        FilesystemNodeKind kind = target.leaf().kind();
+        if (kind != FilesystemNodeKind.FILE && kind != FilesystemNodeKind.DIRECTORY) {
             throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_link_refused"));
         }
         return target;
@@ -532,7 +533,7 @@ public final class InstanceFiles {
             if (entry == null) {
                 return false;
             }
-            if (entry.kind() != InstanceFileSupport.Kind.DIRECTORY) {
+            if (entry.kind() != FilesystemNodeKind.DIRECTORY) {
                 throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("files_path_refused"));
             }
         }

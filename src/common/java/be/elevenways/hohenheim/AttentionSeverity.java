@@ -18,6 +18,10 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * member of this enum (null raises nothing, as DelegationVerdict, HostStanding and DatabaseVerdict.State do), and a
  * framework verdict is read through {@link #ofTone}, never a private tone switch.
  *
+ * AIDEV-NOTE: a vocabulary of its own, checked against the homes it resembles (cohesion I10): zenit's
+ * ActivitySeverity names what a logged verb MEANT (created, changed, removed, reversed), never an urgency, and
+ * protoblast's DiagnosticSeverity grades a compiler finding; neither raises a dashboard item.
+ *
  * @author Jelle De Loecker
  * @since  0.1.0
  */

@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
 import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.hohenheim.server.util.PermissionBits;
+import be.elevenways.zenit.server.io.FilesystemNodeKind;
 
 import be.elevenways.hohenheim.server.util.PosixPaths;
 import be.elevenways.protoblast.common.Blast;
@@ -620,21 +621,21 @@ public final class DockerInstanceRuntime
     }
 
     /** POSIX {@code st_mode} type nibble, as {@code stat -c %f} reports it. */
-    private static @NonNull Kind kindOfStatMode(long mode) {
+    private static @NonNull FilesystemNodeKind kindOfStatMode(long mode) {
         return switch ((int) (mode & 0170000)) {
-            case 0040000 -> Kind.DIRECTORY;
-            case 0120000 -> Kind.SYMLINK;
-            case 0100000 -> Kind.FILE;
-            default -> Kind.OTHER;
+            case 0040000 -> FilesystemNodeKind.DIRECTORY;
+            case 0120000 -> FilesystemNodeKind.SYMLINK;
+            case 0100000 -> FilesystemNodeKind.FILE;
+            default -> FilesystemNodeKind.OTHER;
         };
     }
 
     @Override
     public @NonNull Entry stat(@NonNull String handle, @NonNull String path) throws IOException {
         DockerClient.PathStat stat = this.docker.statArchivePath(handle, path);
-        Kind kind = stat.isSymlink() ? Kind.SYMLINK
-            : stat.isDirectory() ? Kind.DIRECTORY
-            : stat.isRegularFile() ? Kind.FILE : Kind.OTHER;
+        FilesystemNodeKind kind = stat.isSymlink() ? FilesystemNodeKind.SYMLINK
+            : stat.isDirectory() ? FilesystemNodeKind.DIRECTORY
+            : stat.isRegularFile() ? FilesystemNodeKind.FILE : FilesystemNodeKind.OTHER;
         return new Entry(PosixPaths.nameOf(path), kind, stat.size(), 0,
             stat.permissions());
     }

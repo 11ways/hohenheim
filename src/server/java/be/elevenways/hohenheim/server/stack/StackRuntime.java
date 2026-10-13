@@ -330,7 +330,7 @@ public class StackRuntime {
     }
 
     /** Live per-service states, best-effort; empty when the stack is unknown. */
-    public @NonNull Map<String, String> serviceStates(int stackId) {
+    public @NonNull Map<String, ServiceState> serviceStates(int stackId) {
         try {
             return onWorker(stackId, () -> {
                 // Unordered: an admin page must still show live state for a stack whose
@@ -378,7 +378,7 @@ public class StackRuntime {
         }
 
         StackSpec spec = scoped(() -> StackSpec.fromRecordsUnordered(stack));
-        Map<String, String> states;
+        Map<String, ServiceState> states;
         try {
             // Even a spec with ZERO services runs the live status: the label sweep can
             // still surface orphaned containers of deleted services, and reading such a
@@ -400,7 +400,7 @@ public class StackRuntime {
                 Alerts.trySend(NotificationEvents.STACK_HEALTH, Alerts.about(StackModel.MODEL_ID, stackId),
                     HohenheimMicrocopy.ALERT.of(StackModel.STATUS_FAILED.equals(next) ? "stack_failed_subject"
                         : "stack_degraded_subject").withArg("name", spec.name()),
-                    HohenheimMicrocopy.ALERT.of("stack_unhealthy_body").withArg("states", String.valueOf(states)));
+                    HohenheimMicrocopy.ALERT.of("stack_unhealthy_body").withArg("states", tokens(states)));
             }
         }
         return next;
@@ -528,15 +528,12 @@ public class StackRuntime {
 
     /**
      * Every service good = active; none running = failed (or stays stopped after an
-     * explicit stop); a mix = degraded. "starting" counts as good to avoid flapping
-     * while a healthcheck warms up. "orphaned" entries (owned containers whose service
-     * left the records) are never good: records and reality disagree, and the operator
-     * must see that as degraded, not active.
+     * explicit stop); a mix = degraded. Which state is good is {@link ServiceState#good()}.
      */
-    private static @NonNull String aggregate(@NonNull Map<String, String> states, @Nullable String previous) {
+    private static @NonNull String aggregate(@NonNull Map<String, ServiceState> states, @Nullable String previous) {
         int good = 0;
-        for (String state : states.values()) {
-            if ("healthy".equals(state) || "running".equals(state) || "starting".equals(state)) {
+        for (ServiceState state : states.values()) {
+            if (state.good()) {
                 good++;
             }
         }
@@ -548,6 +545,13 @@ public class StackRuntime {
                 ? StackModel.STATUS_STOPPED : StackModel.STATUS_FAILED;
         }
         return StackModel.STATUS_DEGRADED;
+    }
+
+    /** @return the states as an operator reads them in an alert: each service with its state's token */
+    private static @NonNull String tokens(@NonNull Map<String, ServiceState> states) {
+        Map<String, String> tokens = new LinkedHashMap<>();
+        states.forEach((service, state) -> tokens.put(service, state.token()));
+        return String.valueOf(tokens);
     }
 
     // -- internals -------------------------------------------------------------
@@ -745,7 +749,7 @@ public class StackRuntime {
                     throw new IOException("Timed out waiting for dependency '"
                         + dependency.service() + "' to become "
                         + (needHealthy ? "healthy" : "running") + " (state: "
-                        + stateToken(status) + ")");
+                        + ServiceState.of(status).token() + ")");
                 }
                 try {
                     Pace.sleep(Duration.ofMillis(CONDITION_POLL_MS));
@@ -833,40 +837,25 @@ public class StackRuntime {
 
     /**
      * Live per-service state, best-effort. Services whose record was disabled but whose
-     * workload still exists are reported too, keyed by service id with state "orphaned":
+     * workload still exists are reported too, keyed by service id with {@link ServiceState#ORPHANED}:
      * records and reality disagree, and the operator must see that as degraded, not
      * active (which would also unlock renaming and orphan the workload for good).
      */
-    private @NonNull Map<String, String> serviceStates(@NonNull StackSpec spec) {
-        Map<String, String> states = new LinkedHashMap<>();
+    private @NonNull Map<String, ServiceState> serviceStates(@NonNull StackSpec spec) {
+        Map<String, ServiceState> states = new LinkedHashMap<>();
         Set<Integer> declared = new LinkedHashSet<>();
         for (StackSpec.ServiceSpec service : spec.services()) {
             declared.add(service.serviceId());
             states.put(service.name(),
-                stateToken(scoped(() -> StackInstances.liveStatus(service.serviceId()))));
+                ServiceState.of(scoped(() -> StackInstances.liveStatus(service.serviceId()))));
         }
         for (Map.Entry<Integer, Row> owned : scoped(() ->
                 StackInstances.ownedByStack(spec.stackId())).entrySet()) {
             if (!declared.contains(owned.getKey())) {
-                states.put(String.valueOf(owned.getValue().get(InstanceModel.NAME)), "orphaned");
+                states.put(String.valueOf(owned.getValue().get(InstanceModel.NAME)), ServiceState.ORPHANED);
             }
         }
         return states;
-    }
-
-    /** The UI's state vocabulary, from the typed status the driver reports. */
-    private static @NonNull String stateToken(@NonNull InstanceStatus status) {
-        return switch (status.state()) {
-            case ABSENT -> "missing";
-            case UNREACHABLE -> "unreachable";
-            case STOPPED -> "stopped";
-            case RUNNING -> switch (status.health()) {
-                case HEALTHY -> "healthy";
-                case UNHEALTHY -> "unhealthy";
-                case STARTING -> "starting";
-                case NONE -> "running";
-            };
-        };
     }
 
     private @Nullable StackSpec currentSpec(int stackId) {

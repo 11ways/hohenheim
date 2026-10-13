@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
+import be.elevenways.hohenheim.server.stack.ServiceState;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.stack.StackServiceKind;
 import be.elevenways.hohenheim.server.stack.StackRuntime;
@@ -312,11 +313,11 @@ class StackInstancesTest {
 
         // 8. Ordering: the declared healthcheck is evaluated BY THE RUNTIME and the
         //    follower waited for it. "healthy" here is the daemon's own verdict.
-        Map<String, String> states = runtime.serviceStates(stackId);
+        Map<String, ServiceState> states = runtime.serviceStates(stackId);
         assertThat(states.get("base"))
             .as("step 8: the daemon reports the declared healthcheck as healthy")
-            .isEqualTo("healthy");
-        assertThat(states.get("follower")).as("step 8: the follower runs").isEqualTo("running");
+            .isEqualTo(ServiceState.HEALTHY);
+        assertThat(states.get("follower")).as("step 8: the follower runs").isEqualTo(ServiceState.RUNNING);
     }
 
     /**

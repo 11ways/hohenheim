@@ -12,6 +12,7 @@ import be.elevenways.hohenheim.model.StackModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.StackServiceModel;
 import be.elevenways.hohenheim.server.runtime.WorkloadNetworks;
+import be.elevenways.hohenheim.server.stack.ServiceState;
 import be.elevenways.hohenheim.server.stack.StackInstances;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.security.WorkloadNetworkPolicy;
@@ -225,8 +226,8 @@ class StackRuntimeFlowTest {
             Row stack = Models.get(StackModel.class).findById(stackId);
             assertThat(stack.get(StackModel.STATUS)).isEqualTo(StackModel.STATUS_STOPPED);
         });
-        Map<String, String> serviceStates = runtime.serviceStates(stackId);
-        assertThat(serviceStates.get("app")).isEqualTo("stopped");
+        Map<String, ServiceState> serviceStates = runtime.serviceStates(stackId);
+        assertThat(serviceStates.get("app")).isEqualTo(ServiceState.STOPPED);
     }
 
     /**

@@ -17061,6 +17061,10 @@
       "text": "cannot be reached",
       "scope": "database_status",
       "case": "sentence"
+    },
+    {
+      "text": "Host unreachable",
+      "scope": "stack_state"
     }
   ],
   "sftp_title": {

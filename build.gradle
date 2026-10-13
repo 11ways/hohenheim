@@ -106,6 +106,33 @@ blastGuards {
         exclude 'src/server/java/be/elevenways/hohenheim/server/instance/InstanceQuota.java',
                 'moveOwnerCharges, the uncapped heal when ownership moves.'
     }
+
+    // A stack service's live state is ServiceState: its token, its badge and whether it counts as serving are facts
+    // on the member. The states were once strings switched on in the runtime, the aggregate and the services page,
+    // and the page painted an unknown one neutral. ServiceStateLabelsTest keeps the copy half.
+    rule('service-state-literals') {
+        consequence 'A stack service state spelled as a string. Read ServiceState: its token(), variant() and' +
+                ' good() are the one spelling; Docker\'s own health words are the runtime driver\'s, outside these roots.'
+        roots 'src/server/java/be/elevenways/hohenheim/server/stack', 'src/server/java/be/elevenways/hohenheim/server/cms'
+        extensions 'java'
+        commentMode 'STRIP_BLOCK_AWARE'
+        pattern 'state case', /case\s+"(?:healthy|unhealthy|running|starting|stopped|missing|unreachable|orphaned)"/
+        pattern 'state comparison',
+                /"(?:healthy|unhealthy|running|starting|stopped|missing|unreachable|orphaned)"\.equals\(/
+    }
+
+    // What an LSTAT saw is zenit core's FilesystemNodeKind, shared with zenit-forms' browser and zenit-sftp's mounts.
+    // The instance-files seam once declared its own copy, mapped onto the SFTP module's by a switch.
+    rule('filesystem-node-kinds') {
+        consequence 'A filesystem entry kind re-declared. Read zenit core\'s FilesystemNodeKind (FILE, DIRECTORY,' +
+                ' SYMLINK, OTHER); a tar header\'s entry kinds (hard links among them) are the archive\'s own.'
+        roots 'src/server/java', 'src/common/java'
+        extensions 'java'
+        commentMode 'STRIP_BLOCK_AWARE'
+        pattern 'node kind members', /\{\s*FILE\s*,\s*DIRECTORY\s*,\s*SYMLINK\b/
+        exclude 'src/server/java/be/elevenways/hohenheim/server/util/Tar.java',
+                'A tar header\'s entry types, which name hard links: the archive format\'s vocabulary, not an lstat.'
+    }
 }
 
 hawkeye {

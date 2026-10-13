@@ -7,6 +7,7 @@ import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.refusal.ZenitRefusalReason;
 import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
+import be.elevenways.zenit.server.io.FilesystemNodeKind;
 import be.elevenways.zenit.sftp.server.SftpEntry;
 import be.elevenways.zenit.sftp.server.SftpMount;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -161,21 +162,12 @@ final class InstanceSftpMount implements SftpMount {
     }
 
     private static @NonNull SftpEntry virtualEntry(@NonNull String name) {
-        return new SftpEntry(name, SftpEntry.Kind.DIRECTORY, 0, 0, VIRTUAL_MODE);
+        return new SftpEntry(name, FilesystemNodeKind.DIRECTORY, 0, 0, VIRTUAL_MODE);
     }
 
     private static @NonNull SftpEntry entryOf(InstanceFiles.@NonNull Entry entry) {
-        return new SftpEntry(entry.name(), kindOf(InstanceFileSupport.Kind.valueOf(entry.kind())), entry.size(),
-            entry.modified(), entry.mode());
-    }
-
-    private static SftpEntry.@NonNull Kind kindOf(InstanceFileSupport.@NonNull Kind kind) {
-        return switch (kind) {
-            case FILE -> SftpEntry.Kind.FILE;
-            case DIRECTORY -> SftpEntry.Kind.DIRECTORY;
-            case SYMLINK -> SftpEntry.Kind.SYMLINK;
-            case OTHER -> SftpEntry.Kind.OTHER;
-        };
+        return new SftpEntry(entry.name(), FilesystemNodeKind.valueOf(entry.kind()), entry.size(), entry.modified(),
+            entry.mode());
     }
 
 
