@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.RawValues;
+import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -49,10 +51,13 @@ import be.elevenways.hohenheim.server.instance.PortPublications;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
 import java.util.ArrayList;
 
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.function.IntConsumer;
 
 /**
@@ -91,6 +96,9 @@ final class PutOnlineHandlers {
         OperationHandlers.attach(PutOnline.PUT_WORKLOAD_ONLINE)
             .authorize(PutOnlineHandlers::admitWorkload)
             .handle(PutOnlineHandlers::putWorkloadOnline);
+        OperationHandlers.attach(PutOnline.PUT_WORKLOAD_SERVICE_ONLINE)
+            .authorize(PutOnlineHandlers::admitWorkloadService)
+            .handle(PutOnlineHandlers::putWorkloadServiceOnline);
         OperationHandlers.attach(PutOnline.PUT_MACHINE_ONLINE)
             .authorize(PutOnlineHandlers::admitMachine)
             .handle(PutOnlineHandlers::putMachineOnline);
@@ -123,10 +131,9 @@ final class PutOnlineHandlers {
             return scope;
         }
         FormSpec.Builder ports = FormSpec.builder();
-        for (PublishedPort port : declaredPorts(template)) {
-            PortPurpose purpose = port.purpose();
+        for (PublishedPort port : PutOnline.declaredPorts(template)) {
             ports.add(IntegerField.builder().name(port.name())
-                .label(purpose == PortPurpose.OTHER ? Microcopy.literal(port.name()) : purpose.label())
+                .label(PutOnline.portLabel(port))
                 .help(HohenheimMicrocopy.PUT_ONLINE.of("port_host_help")
                     .withArg("port", port.containerPort() + "/" + port.protocol()))
                 .build());
@@ -135,22 +142,11 @@ final class PutOnlineHandlers {
             Nested.of(PutOnline.PORTS).subSpec(ports.build()).build())), scope.serverDefaults());
     }
 
-    /**
-     * A game address is an operator act in a zone Hohenheim manages, and a chosen host port must be free on a chosen
-     * host, both before anything is made (on a host placement picks, the run's own claim refuses a port the same way).
-     */
+    /** A service template's request checks ({@link #serviceRefusal}), its chosen host ports read per declared port. */
     private static @Nullable DomainRefusal serviceAuthority(@NonNull Row template, PutOnline.@Nullable Service input,
                                                             @NonNull AccessContext access) {
         if (input == null) {
             return null;
-        }
-        if (Texts.trimmedOrNull(input.game_address()) != null && !HohenheimAccess.isAdmin(access)) {
-            return new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "a game address is given by an operator");
-        }
-        Violations uncovered = GameAddresses.uncoveredRefusal(input.game_address());
-        if (uncovered != null) {
-            return new DomainRefusal(ZenitRefusalReason.INVALID, "no managed zone covers the game address",
-                PutOnline.GAME_ADDRESS.getName(), uncovered.all().getFirst().message());
         }
         List<PublishedPort> ports;
         try {
@@ -159,12 +155,35 @@ final class PutOnlineHandlers {
             return new DomainRefusal(ZenitRefusalReason.INVALID, "a chosen port is no port", PutOnline.PORTS,
                 unspelled.all().getFirst().message());
         }
+        return serviceRefusal(access, input.game_address(), input.serverId(), ports,
+            port -> PutOnline.PORTS + "." + port.name());
+    }
+
+    /**
+     * What both service flows refuse in the request, before anything exists: a game address given by anyone but an
+     * operator or in no zone Hohenheim manages, and a chosen host port another owner holds on a chosen host (on a host
+     * placement picks, the run's own claim refuses it the same way).
+     *
+     * @param fieldOf the form path a port's host port is chosen at
+     */
+    private static @Nullable DomainRefusal serviceRefusal(@NonNull AccessContext access, @Nullable String gameAddress,
+                                                          @Nullable Integer serverId,
+                                                          @NonNull List<PublishedPort> ports,
+                                                          @NonNull Function<PublishedPort, String> fieldOf) {
+        if (Texts.trimmedOrNull(gameAddress) != null && !HohenheimAccess.isAdmin(access)) {
+            return new DomainRefusal(ZenitRefusalReason.FORBIDDEN, "a game address is given by an operator");
+        }
+        Violations uncovered = GameAddresses.uncoveredRefusal(gameAddress);
+        if (uncovered != null) {
+            return new DomainRefusal(ZenitRefusalReason.INVALID, "no managed zone covers the game address",
+                PutOnline.GAME_ADDRESS.getName(), uncovered.all().getFirst().message());
+        }
         for (PublishedPort port : ports) {
-            Violations taken = port.hostPort() == null || input.serverId() == null ? null
-                : PortPublications.takenRefusal(input.serverId(), port.hostPort(), port.protocol());
+            Violations taken = port.hostPort() == null || serverId == null ? null
+                : PortPublications.takenRefusal(serverId, port.hostPort(), port.protocol());
             if (taken != null) {
                 return new DomainRefusal(ZenitRefusalReason.INVALID, "port " + port.hostPort() + " is taken",
-                    PutOnline.PORTS + "." + port.name(), taken.all().getFirst().message());
+                    fieldOf.apply(port), taken.all().getFirst().message());
             }
         }
         return null;
@@ -173,7 +192,7 @@ final class PutOnlineHandlers {
     /** @return the ports the template declares, each with the host port the input chose for it (null: open) */
     private static @NonNull List<PublishedPort> chosenPorts(@NonNull Row template, @NonNull Map<String, Object> given) {
         List<PublishedPort> ports = new ArrayList<>();
-        for (PublishedPort port : declaredPorts(template)) {
+        for (PublishedPort port : PutOnline.declaredPorts(template)) {
             Object chosen = given.get(port.name());
             if (chosen == null || chosen.toString().isBlank()) {
                 ports.add(port);
@@ -185,8 +204,60 @@ final class PutOnlineHandlers {
         return ports;
     }
 
-    private static @NonNull List<PublishedPort> declaredPorts(@NonNull Row template) {
-        return PublishedPort.of(PutOnline.templateSettings(template));
+    /**
+     * The ports a kind-led service publishes: those its settings already declare, then its Ports step's rows (the
+     * purpose's token names one, or the given name for Other), each mapped to the form path it is refused at.
+     *
+     * @throws DomainRefusal on the offending entry: a published port in the settings that is no port, an Other row
+     *                       without a name, a name given twice (also one the settings declare), a port out of range
+     */
+    private static @NonNull Map<PublishedPort, String> servicePorts(PutOnline.@NonNull WorkloadService input) {
+        Map<PublishedPort, String> ports = new LinkedHashMap<>();
+        Set<String> names = new HashSet<>();
+        String settingsField = InstanceModel.SETTINGS.getName() + "." + PublishedPort.FIELD;
+        try {
+            for (PublishedPort port : PublishedPort.of(input.settings() == null ? Map.of() : input.settings())) {
+                names.add(port.name());
+                ports.put(port, settingsField);
+            }
+        } catch (Violations unspelled) {
+            throw new DomainRefusal(ZenitRefusalReason.INVALID, "a published port is no port", settingsField,
+                unspelled.all().getFirst().message());
+        }
+        for (int index = 0; index < input.ports().size(); index++) {
+            Map<String, Object> row = input.ports().get(index);
+            String at = PutOnline.PORTS + "." + index + ".";
+            PortPurpose purpose = PortPurpose.forName(RawValues.nonBlankString(
+                row.get(PutOnline.PORT_PURPOSE.getName())));
+            boolean named = purpose == PortPurpose.OTHER;
+            String name = named ? RawValues.nonBlankString(row.get(PutOnline.PORT_NAME.getName())) : purpose.token();
+            String nameField = at + (named ? PutOnline.PORT_NAME : PutOnline.PORT_PURPOSE).getName();
+            if (name == null) {
+                throw new DomainRefusal(ZenitRefusalReason.INVALID, "an Other port has no name", nameField,
+                    HohenheimMicrocopy.VIOLATIONS.of("service_port_name_required"));
+            }
+            if (!names.add(name.trim())) {
+                throw new DomainRefusal(ZenitRefusalReason.INVALID, "port " + name + " is named twice", nameField,
+                    HohenheimMicrocopy.VIOLATIONS.of("service_port_name_taken").withArg("name", name.trim()));
+            }
+            Integer container = RawValues.parsedInt(row.get(PutOnline.PORT_CONTAINER.getName()));
+            Integer host = RawValues.parsedInt(row.get(PutOnline.PORT_HOST.getName()));
+            String outOfRange = !inPortRange(container) ? PutOnline.PORT_CONTAINER.getName()
+                : host != null && !inPortRange(host) ? PutOnline.PORT_HOST.getName() : null;
+            if (outOfRange != null) {
+                throw new DomainRefusal(ZenitRefusalReason.INVALID, "port " + name + " is out of range",
+                    at + outOfRange, HohenheimMicrocopy.VIOLATIONS.of("service_port_invalid").withArg("name", name));
+            }
+            String protocol = PublishedPort.UDP.equals(row.get(PutOnline.PORT_PROTOCOL.getName()))
+                ? PublishedPort.UDP : PublishedPort.TCP;
+            ports.put(new PublishedPort(name.trim(), host, container, protocol, false),
+                at + PutOnline.PORT_HOST.getName());
+        }
+        return ports;
+    }
+
+    private static boolean inPortRange(@Nullable Integer port) {
+        return port != null && port >= 1 && port <= 65535;
     }
 
     /**
@@ -216,14 +287,36 @@ final class PutOnlineHandlers {
     private static @Nullable DomainRefusal admitWorkload(@Nullable Void none, PutOnline.@Nullable Workload input,
                                                          @NonNull AccessContext access) {
         return admitKind(access, input == null ? null : input.kind(), input != null
-            && !PutOnline.offeredAsWorkload(input.kind()));
+            && !PutOnline.offeredWith(input.kind(), PutOnlineReach.WEBSITE));
+    }
+
+    /**
+     * In the request, before a run is recorded: an operator, a kind put online reached on its ports, its ports
+     * ({@link #servicePorts}) and the service checks the template flow makes too ({@link #serviceRefusal}).
+     */
+    private static @Nullable DomainRefusal admitWorkloadService(@Nullable Void none,
+                                                                PutOnline.@Nullable WorkloadService input,
+                                                                @NonNull AccessContext access) {
+        DomainRefusal refusal = admitKind(access, input == null ? null : input.kind(), input != null
+            && !PutOnline.offeredWith(input.kind(), PutOnlineReach.PORTS));
+        if (refusal != null || input == null) {
+            return refusal;
+        }
+        Map<PublishedPort, String> ports;
+        try {
+            ports = servicePorts(input);
+        } catch (DomainRefusal refused) {
+            return refused;
+        }
+        return serviceRefusal(access, input.game_address(), input.serverId(), List.copyOf(ports.keySet()),
+            ports::get);
     }
 
     /** In the request, before a run is recorded: an operator, and a kind that is put online as a machine. */
     private static @Nullable DomainRefusal admitMachine(@Nullable Void none, PutOnline.@Nullable Machine input,
                                                         @NonNull AccessContext access) {
         return admitKind(access, input == null ? null : input.kind(), input != null
-            && !PutOnline.offeredAsMachine(input.kind()));
+            && !PutOnline.offeredWith(input.kind(), PutOnlineReach.NONE));
     }
 
     /** An operator's, and refused on the kind when this flow does not put that kind online. */
@@ -303,19 +396,24 @@ final class PutOnlineHandlers {
         call.progress().reportProgressPart();
         installStep(call, template, instanceId);
         publishPorts(call, instance, chosenPorts(template, input.ports()));
-        String gameAddress = Texts.trimmedOrNull(input.game_address());
-        if (gameAddress == null) {
-            call.reportStepSkipped();
-        } else {
-            try {
-                GameAddresses.set(instanceId, gameAddress);
-            } catch (Violations refused) {
-                throw refusedAs("game address", refused);
-            }
-            call.progress().reportProgressPart();
-        }
+        gameAddressStep(call, instanceId, input.game_address());
         firstStart(call, instanceId, null, null);
         return instanceId;
+    }
+
+    /** The game address step: set through its one home ({@link GameAddresses#set}) when given, skipped when not. */
+    private static void gameAddressStep(@NonNull OperationCall<?, ?> call, int instanceId, @Nullable String given) {
+        String gameAddress = Texts.trimmedOrNull(given);
+        if (gameAddress == null) {
+            call.reportStepSkipped();
+            return;
+        }
+        try {
+            GameAddresses.set(instanceId, gameAddress);
+        } catch (Violations refused) {
+            throw refusedAs("game address", refused);
+        }
+        call.progress().reportProgressPart();
     }
 
     /**
@@ -364,6 +462,23 @@ final class PutOnlineHandlers {
         PutOnline.Workload input = Objects.requireNonNull(call.input(), "put online has its input");
         Row instance = createOfKind(call, input.name(), input.serverId(), input.kind(), input.settings(), null);
         return goLive(call, instance, input.hostname(), input.https());
+    }
+
+    /**
+     * App, ports, game address, live.
+     *
+     * @return the new instance's id
+     */
+    private static @NonNull Integer putWorkloadServiceOnline(
+            @NonNull OperationCall<Void, PutOnline.WorkloadService> call) {
+        PutOnline.WorkloadService input = Objects.requireNonNull(call.input(), "put online has its input");
+        List<PublishedPort> ports = List.copyOf(servicePorts(input).keySet());
+        Row instance = createOfKind(call, input.name(), input.serverId(), input.kind(), input.settings(), null);
+        int instanceId = instance.get(InstanceModel.ID);
+        publishPorts(call, instance, ports);
+        gameAddressStep(call, instanceId, input.game_address());
+        firstStart(call, instanceId, null, null);
+        return instanceId;
     }
 
     /**

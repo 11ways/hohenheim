@@ -10,6 +10,8 @@ import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.server.instance.InstallMedia;
+import be.elevenways.hohenheim.ports.PortPurpose;
+import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
@@ -40,9 +42,11 @@ import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.common.operation.OperationSteps;
 import be.elevenways.zenit.common.orm.command.CommandExecution;
 import be.elevenways.zenit.common.orm.datasource.Row;
+import be.elevenways.zenit.common.orm.field.IntegerField;
 import be.elevenways.zenit.common.orm.field.StringField;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.forms.common.edit.ItemList;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -55,18 +59,20 @@ import java.util.Objects;
  * "Put something online": one flow that creates an app, its address and its certificate, as background operations
  * behind one wizard page ({@link PutOnlinePage}).
  *
- * AIDEV-NOTE: five operations because the input differs by WHAT is put online. A template's form is that template's
+ * AIDEV-NOTE: six operations because the input differs by WHAT is put online. A template's form is that template's
  * own variables, resolved per selected template (the subject), so {@link #PUT_ONLINE} takes the template as its
  * subject, exactly as the create-from-template lane does; a template whose workload is reached on its ports
  * ({@code PutOnlineReach.PORTS}, a game server) is {@link #PUT_SERVICE_ONLINE} instead, with a Ports step and an
  * optional game address where the others ask an address and HTTPS. An address that needs no workload (a redirect, an
  * existing service, static files, TLS passthrough) has no subject; {@link #PUT_ADDRESS_ONLINE} asks the site form's upstream
  * kind and settings. A workload of a kind that serves a website (a Git app, a container image) has no subject either;
- * {@link #PUT_WORKLOAD_ONLINE} asks that kind's own settings, the instance form's. A machine of a kind that serves no
- * website (a virtual machine, a Linux container) is {@link #PUT_MACHINE_ONLINE}: the same kind's own settings, without
- * the address and HTTPS steps. The workload ones end in the same Website and Certificate steps (PutOnlineHandlers),
- * so the going-live half is one implementation, and every run starts what it made the same way. All run in the
- * background: their run page is the "Going live" step.
+ * {@link #PUT_WORKLOAD_ONLINE} asks that kind's own settings, the instance form's. The same kind reached on ports it
+ * publishes (a container image of a game server) is {@link #PUT_WORKLOAD_SERVICE_ONLINE}: its settings, then the
+ * ports themselves as rows and the game address. A machine of a kind that serves no website (a virtual machine, a
+ * Linux container) is {@link #PUT_MACHINE_ONLINE}: the same kind's own settings, without the address and HTTPS steps.
+ * The workload ones end in the same Website and Certificate steps (PutOnlineHandlers), so the going-live half is one
+ * implementation, and every run starts what it made the same way. All run in the background: their run page is the
+ * "Going live" step.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -157,6 +163,60 @@ public final class PutOnline {
         OperationSteps.step("app", PutOnlineGroup.MACHINE.words(HohenheimMicrocopy.PUT_ONLINE.of("run_app"))),
         OperationSteps.step("live", HohenheimMicrocopy.PUT_ONLINE.of("run_live")))
         .inJourney(MACHINE_JOURNEY, STEP_LIVE);
+
+    /** The run's steps for a service of one kind: the app, its ports, its game address, then live. */
+    private static final OperationSteps WORKLOAD_SERVICE_STEPS = OperationSteps.of(
+        OperationSteps.step("app", HohenheimMicrocopy.PUT_ONLINE.of("run_app")),
+        OperationSteps.step("ports", HohenheimMicrocopy.PUT_ONLINE.of("run_ports")),
+        OperationSteps.step("game_address", HohenheimMicrocopy.PUT_ONLINE.of("run_game_address")),
+        OperationSteps.step("live", HohenheimMicrocopy.PUT_ONLINE.of("run_live")))
+        .inJourney(SERVICE_JOURNEY, STEP_LIVE);
+
+    /** What one port of a kind-led service is for; Other names it with {@link #PORT_NAME}. */
+    public static final StringField PORT_PURPOSE = StringField.builder("purpose")
+        .label(HohenheimMicrocopy.PUT_ONLINE.of("service_port_purpose"))
+        .defaultValue(PortPurpose.GAME.token())
+        .build();
+
+    /** The name of a port whose purpose is Other: its key in the published ports. */
+    public static final StringField PORT_NAME = StringField.builder("name")
+        .label(HohenheimMicrocopy.PUT_ONLINE.of("service_port_name"))
+        .help(HohenheimMicrocopy.PUT_ONLINE.of("service_port_name_help"))
+        .placeholder("metrics")
+        .build();
+
+    public static final IntegerField PORT_CONTAINER = IntegerField.builder().name("container_port")
+        .label(HohenheimMicrocopy.PUT_ONLINE.of("service_port_container"))
+        .required()
+        .build();
+
+    public static final StringField PORT_PROTOCOL = StringField.builder("protocol")
+        .label(HohenheimMicrocopy.PUT_ONLINE.of("service_port_protocol"))
+        .defaultValue(PublishedPort.TCP)
+        .build();
+
+    /** The host port it is published on; empty for one the ledger picks when the run claims it. */
+    public static final IntegerField PORT_HOST = IntegerField.builder().name("host_port")
+        .label(HohenheimMicrocopy.PUT_ONLINE.of("service_port_host"))
+        .help(HohenheimMicrocopy.PUT_ONLINE.of("service_port_host_help"))
+        .build();
+
+    /**
+     * The ports a kind-led service publishes, one row each, named as the template flow's host ports are
+     * ({@link #PORTS}): the same step, a different shape, since nothing declared them before.
+     */
+    public static final ItemList SERVICE_PORTS = ItemList.of(PORTS, FormSpec.builder()
+        .add(Select.of(PORT_PURPOSE).options(OptionSource.of(purposeOptions())).clearable(false).build())
+        .add(PORT_NAME)
+        .add(PORT_CONTAINER)
+        .add(Select.of(PORT_PROTOCOL)
+            .options(OptionSource.of(
+                FieldOption.of(PublishedPort.TCP, HohenheimMicrocopy.PUT_ONLINE.of("service_port_tcp")),
+                FieldOption.of(PublishedPort.UDP, HohenheimMicrocopy.PUT_ONLINE.of("service_port_udp"))))
+            .clearable(false)
+            .build())
+        .add(PORT_HOST)
+        .build());
 
     /** The host pick and the owner a template's app is charged to: Online-2's "Runs on" card. */
     private static final FormSection RUNS_ON = FormSection.of("runs_on",
@@ -271,7 +331,33 @@ public final class PutOnline {
         .step(FormStep.of("settings", STEP_OPTIONS, InstanceModel.SETTINGS.getName(),
                 InstanceOperations.INSTALL_MEDIA.getName())
             .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_machine_settings_lead"))
-            .summarizedBy(PutOnline::machineSummary))
+            .summarizedBy(PutOnline::kindSummary))
+        .build();
+
+    /**
+     * A service of one kind: where it runs, its kind's own settings, then its Ports step: the ports as rows and the
+     * game address. No address and no HTTPS: it is reached on its ports.
+     *
+     * AIDEV-NOTE: the kind's settings keep their own published-ports entry (Options, folded under "Port publishing"):
+     * the settings form is the kind's one schema, the same one the Configuration edits later, and narrowing it per
+     * flow needs a mechanism no form has. Its entries are honoured exactly as the rows are (claimed by the run), and a
+     * row naming a port it already declares is refused (PutOnlineHandlers.servicePorts).
+     */
+    private static final FormSpec WORKLOAD_SERVICE_INPUT = FormSpec.builder()
+        .add(InstanceModel.NAME)
+        .add(declaredHostPick())
+        .add(InstanceModel.KIND)
+        .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
+        .add(SERVICE_PORTS)
+        .add(GAME_ADDRESS)
+        .step(FormStep.of("where", STEP_WHERE, InstanceModel.NAME.getName(),
+            InstanceTemplateOperations.SERVER_ID.getName(), InstanceModel.KIND.getName())
+                .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_service_where_lead")))
+        .step(FormStep.of("settings", STEP_OPTIONS, InstanceModel.SETTINGS.getName())
+            .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_settings_lead")))
+        .step(FormStep.of(PORTS, STEP_PORTS, PORTS, GAME_ADDRESS.getName())
+            .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_service_ports_lead"))
+            .summarizedBy(PutOnline::kindSummary))
         .build();
 
     /** The template's own create (named as its form names it), its address and its HTTPS choice. */
@@ -315,6 +401,18 @@ public final class PutOnline {
     /** A machine of one kind: its name, host (null: placement picks), settings and, for an empty VM, its ISO. */
     public record Machine(@Nullable String name, @Nullable Integer serverId, @Nullable String kind,
                           @Nullable Map<String, Object> settings, @Nullable String installMedia) {
+    }
+
+    /**
+     * A service of one kind: its name, host (null: placement picks), settings, the ports it publishes and its game
+     * address.
+     *
+     * @param ports        the Ports step's rows, as its item list coerced them
+     * @param game_address spelled as its form field, which the boot check holds every record component to
+     */
+    public record WorkloadService(@Nullable String name, @Nullable Integer serverId, @Nullable String kind,
+                                  @Nullable Map<String, Object> settings, @NonNull List<Map<String, Object>> ports,
+                                  @Nullable String game_address) {
     }
 
     /** Puts one template online: the app, its address, its certificate, then the first deploy. */
@@ -416,6 +514,29 @@ public final class PutOnline {
             .background(MACHINE_STEPS)
             .register();
 
+    /**
+     * Puts one service online from its kind's own settings, reached on the ports it publishes: the app, its ports,
+     * its game address, its start.
+     */
+    public static final Operation<Void, WorkloadService, Integer> PUT_WORKLOAD_SERVICE_ONLINE =
+        Operation.declare(HohenheimIds.id("put_workload_service_online"))
+            .label(HohenheimMicrocopy.PUT_ONLINE.of("put_online"))
+            .happened(HohenheimMicrocopy.PUT_ONLINE.of("happened"))
+            .icon(Icon.of("rocket"))
+            .noSubject()
+            .gate(OperationGate.open())
+            .input(OperationInput.of(WORKLOAD_SERVICE_INPUT, WorkloadService.class, values -> new WorkloadService(
+                values.get(InstanceModel.NAME), values.get(InstanceTemplateOperations.SERVER_ID),
+                values.get(InstanceModel.KIND), RawValues.mapOrNull(values.get(InstanceModel.SETTINGS.getName())),
+                RawValues.list(values.get(PORTS)).stream().map(RawValues::map).toList(),
+                values.get(GAME_ADDRESS))))
+            .result(Integer.class)
+            .rateLimit(HohenheimEndpoints.INSTANCE_CREATE_LIMIT)
+            .facts(OperationFact.REACHES_OUTSIDE)
+            .command(CmsCommands.EXTERNAL)
+            .background(WORKLOAD_SERVICE_STEPS)
+            .register();
+
     private PutOnline() {
     }
 
@@ -444,20 +565,18 @@ public final class PutOnline {
         return info != null && info.offeredAsApp();
     }
 
-    /** @return whether a workload of the kind with this stored id is put online from its own settings and address */
-    static boolean offeredAsWorkload(@Nullable String kind) {
-        return reachOfKind(kind) == PutOnlineReach.WEBSITE;
-    }
-
-    /** @return whether a machine of the kind with this stored id is put online from its own settings, without one */
-    static boolean offeredAsMachine(@Nullable String kind) {
-        return reachOfKind(kind) == PutOnlineReach.NONE;
-    }
-
-    /** @return how a kind put online from its own (empty) settings is reached, or null for a kind not offered */
-    private static @Nullable PutOnlineReach reachOfKind(@Nullable String kind) {
+    /**
+     * @return the ways a kind with this stored id is put online from its own settings, the kind's own card's first;
+     *         empty for a kind the chooser does not offer
+     */
+    static @NonNull List<PutOnlineReach> reachesOf(@Nullable String kind) {
         InstanceKindHandler handler = InstanceKinds.getHandler(kind);
-        return handler == null || handler.putOnlineGroup() == null ? null : handler.reachOf(Map.of());
+        return handler == null || handler.putOnlineGroup() == null ? List.of() : handler.putOnlineReaches();
+    }
+
+    /** @return whether a kind with this stored id is put online from its own settings, reached this way */
+    static boolean offeredWith(@Nullable String kind, @NonNull PutOnlineReach reach) {
+        return reachesOf(kind).contains(reach);
     }
 
     /** @return how a template's workload is reached, from its kind and its settings baseline */
@@ -474,7 +593,23 @@ public final class PutOnline {
             ? (Map<String, Object>) map : Map.of();
     }
 
-    /** What a service's Ports step shows of Where: its name, where it runs, its ports and its game address. */
+    /** @return the ports a template declares, in declaration order, without host ports */
+    static @NonNull List<PublishedPort> declaredPorts(@NonNull Row template) {
+        return PublishedPort.of(templateSettings(template));
+    }
+
+    /** @return a port's purpose in words, or its own name for one the purpose vocabulary does not know */
+    static @NonNull Microcopy portLabel(@NonNull PublishedPort port) {
+        PortPurpose purpose = port.purpose();
+        return purpose == PortPurpose.OTHER ? Microcopy.literal(port.name()) : purpose.label();
+    }
+
+    /**
+     * What a service's Ports step shows of Where: its name, where it runs, then each port the chosen template declares.
+     *
+     * AIDEV-NOTE: the host ports and the game address are asked on that same step, below this summary, so neither is
+     * an answer here: a port's line says how its host port is chosen instead of naming one.
+     */
     private static @NonNull List<SummaryLine> serviceSummary(@NonNull StepAnswers answers) {
         List<SummaryLine> lines = new ArrayList<>();
         String name = answers.text(InstanceTemplateOperations.NAME.getName());
@@ -482,10 +617,12 @@ public final class PutOnline {
             lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_name"), Microcopy.literal(name)));
         }
         lines.add(runsOnLine(answers));
-        String address = answers.text(GAME_ADDRESS.getName());
-        if (address != null) {
-            lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_game_address"),
-                Microcopy.literal(address)));
+        Row template = answers.subject(Row.class);
+        if (template != null) {
+            for (PublishedPort port : declaredPorts(template)) {
+                lines.add(new SummaryLine(portLabel(port), HohenheimMicrocopy.PUT_ONLINE.of("summary_port")
+                    .withArg("port", port.containerPort() + "/" + port.protocol())));
+            }
         }
         return lines;
     }
@@ -522,8 +659,8 @@ public final class PutOnline {
             answers.text(HOSTNAME.getName()), runsOnLine(answers));
     }
 
-    /** What a machine's settings step shows of Where: its kind, its name and where it runs. */
-    private static @NonNull List<SummaryLine> machineSummary(@NonNull StepAnswers answers) {
+    /** What a kind-led step shows of Where: its kind, its name and where it runs. */
+    private static @NonNull List<SummaryLine> kindSummary(@NonNull StepAnswers answers) {
         List<SummaryLine> lines = new ArrayList<>();
         InstanceKindHandler handler = InstanceKinds.getHandler(answers.text(InstanceModel.KIND.getName()));
         if (handler != null) {
@@ -611,5 +748,14 @@ public final class PutOnline {
             .presentation(Select.Presentation.CARDS)
             .clearable(false)
             .build();
+    }
+
+    /** @return one option per port purpose, in the vocabulary's order */
+    private static @NonNull List<FieldOption<String>> purposeOptions() {
+        List<FieldOption<String>> options = new ArrayList<>();
+        for (PortPurpose purpose : PortPurpose.values()) {
+            options.add(FieldOption.of(purpose.token(), purpose.label()));
+        }
+        return options;
     }
 }

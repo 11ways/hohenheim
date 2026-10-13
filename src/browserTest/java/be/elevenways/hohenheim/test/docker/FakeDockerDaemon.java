@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test.docker;
 
+import be.elevenways.hohenheim.app.PutOnlineGroup;
 import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.server.docker.DockerClient;
@@ -442,6 +443,13 @@ public final class FakeDockerDaemon implements DockerTransport {
         public @NonNull PutOnlineReach reachOf(@NonNull Map<String, Object> settings) {
             return this.real.reachOf(settings);
         }
+
+        // Offered by "Put something online" as the real kind is, in the same ways.
+        @Override
+        public PutOnlineGroup putOnlineGroup() { return this.real.putOnlineGroup(); }
+
+        @Override
+        public @NonNull List<PutOnlineReach> putOnlineReaches() { return this.real.putOnlineReaches(); }
 
         @Override
         public boolean supportsVolumes() { return this.real.supportsVolumes(); }

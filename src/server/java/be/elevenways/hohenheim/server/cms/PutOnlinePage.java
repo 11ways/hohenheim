@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.HohenheimParams;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimTemplateIds;
 import be.elevenways.hohenheim.app.PutOnlineGroup;
+import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.instance.InstanceKindInfo;
 import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -49,9 +50,12 @@ import java.util.Map;
  * ({@code ?template=}); an address kind opens {@link PutOnline#PUT_ADDRESS_ONLINE} with the kind preset
  * ({@code ?kind=}); for an operator, an instance kind opens the flow its declarations put it online by
  * ({@code ?workload=}, the kind preset): {@link PutOnline#PUT_WORKLOAD_ONLINE} for one that serves a website (a Git
- * app, a container image), {@link PutOnline#PUT_MACHINE_ONLINE} for one that does not (a virtual machine, a Linux
- * container). All are the framework's stepped PAGE document, and all run in the background, so a submit lands on the
- * run page ("Going live"). Every kind for a tenant still opens the instance create form.
+ * app, a container image), {@link PutOnline#PUT_WORKLOAD_SERVICE_ONLINE} for one reached on ports it publishes (a
+ * container image of a game server, {@code &reach=ports}), {@link PutOnline#PUT_MACHINE_ONLINE} for one that does not
+ * (a virtual machine, a Linux container). A kind offered more than one way ({@code InstanceKindHandler
+ * .putOnlineReaches}) gets one card per way. All are the framework's stepped PAGE document, and all run in the
+ * background, so a submit lands on the run page ("Going live"). Every kind for a tenant still opens the instance
+ * create form.
  *
  * @author Jelle De Loecker
  * @since  0.9.0
@@ -93,6 +97,13 @@ public final class PutOnlinePage extends PanelPage {
         .transport(InstanceModel.KIND.getName())
         .build();
 
+    /** A service of one kind, put online from that kind's own settings and reached on the ports it publishes. */
+    public static final PanelAction<Object> WORKLOAD_SERVICE = PanelAction.<Object, Integer>placesRun(
+            PutOnline.PUT_WORKLOAD_SERVICE_ONLINE, ActionPlacement.PAGE)
+        .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
+        .transport(InstanceModel.KIND.getName())
+        .build();
+
     /**
      * A machine of one kind, put online from that kind's own settings, with no address to give. A machine created
      * with install media opens on its screen once its run finished, where its installer is waiting; any other on its
@@ -121,7 +132,7 @@ public final class PutOnlinePage extends PanelPage {
     @SuppressWarnings({"unchecked", "rawtypes"})
     public @NonNull List<PanelAction<Row>> actions() {
         return List.of(FROM_TEMPLATE, FROM_SERVICE_TEMPLATE, (PanelAction) ADDRESS, (PanelAction) WORKLOAD,
-            (PanelAction) MACHINE);
+            (PanelAction) WORKLOAD_SERVICE, (PanelAction) MACHINE);
     }
 
     @Override
@@ -133,7 +144,9 @@ public final class PutOnlinePage extends PanelPage {
         String kind = request.conduit().getQueryParam(HohenheimParams.PUT_ONLINE_KIND.getName());
         String template = request.conduit().getQueryParam(HohenheimParams.FROM_TEMPLATE_TEMPLATE.getName());
         String workload = request.conduit().getQueryParam(HohenheimParams.PUT_ONLINE_WORKLOAD.getName());
-        PanelAction<Object> workloadAction = kindAction(workload);
+        PutOnlineReach reach = askedReach(workload,
+            request.conduit().getQueryParam(HohenheimParams.PUT_ONLINE_REACH.getName()));
+        PanelAction<Object> workloadAction = reach == null ? null : kindAction(workload, reach);
         if (template != null && !template.isBlank()) {
             PanelAction<Row> templateAction = templateAction(template);
             PageActions.Opened opened = PageActions.open(request, this, templateAction.id());
@@ -167,13 +180,19 @@ public final class PutOnlinePage extends PanelPage {
             InstanceKindInfo info = InstanceKindRegistry.REGISTRY.get(Identifier.tryParse(workload));
             if (opened instanceof PageActions.Form form && info != null) {
                 vars.put("document", form.state().withJourney(BEFORE_WIZARD, AFTER_WIZARD));
-                // A machine gets no address or certificate, so it is not led in by the app flow's promise of both.
-                if (workloadAction == MACHINE) {
-                    vars.put("lead", HohenheimMicrocopy.PUT_ONLINE.of("machine_lead"));
+                // Only a website is led in by the app flow's promise of an address and a certificate.
+                switch (reach) {
+                    case WEBSITE -> { }
+                    case PORTS -> vars.put("lead", HohenheimMicrocopy.PUT_ONLINE.of("service_lead"));
+                    case NONE -> vars.put("lead", HohenheimMicrocopy.PUT_ONLINE.of("machine_lead"));
                 }
                 vars.put("whatIcon", info.getIcon().name());
-                vars.put("what", resolve(info.getLabel(), request));
-                vars.put("whatDescription", resolve(info.getDescription(), request));
+                // A kind put online another way than its own card's is named as the chooser's card for that way.
+                String label = resolve(info.getLabel(), request);
+                boolean ownWay = reach == PutOnline.reachesOf(workload).getFirst();
+                vars.put("what", ownWay ? label : resolve(reach.cardLabel().withArg("kind", label), request));
+                vars.put("whatDescription", resolve(ownWay ? info.getDescription() : reach.cardDescription(),
+                    request));
             }
         }
         if (!vars.containsKey("document")) {
@@ -218,15 +237,27 @@ public final class PutOnlinePage extends PanelPage {
         boolean admin = HohenheimAccess.isAdmin(request.access());
         for (InstanceKindInfo info : InstanceKindRegistry.REGISTRY) {
             PutOnlineGroup group = info.putOnlineGroup();
-            if (group != null) {
-                String kind = info.typeId().toString();
-                card(cards, targets, group, "instance:" + info.typeId(), info.getIcon().name(),
-                    resolve(info.getLabel(), request), resolve(info.getDescription(), request),
-                    admin && kindAction(kind) != null
-                        ? CmsRoutes.list(request.panelSlug(), HohenheimSlugs.PUT_ONLINE)
-                            .with(HohenheimParams.PUT_ONLINE_WORKLOAD, kind)
-                        : CmsRoutes.create(request.panelSlug(), HohenheimSlugs.INSTANCES)
-                            .with(HohenheimParams.PUT_ONLINE_KIND, kind));
+            if (group == null) {
+                continue;
+            }
+            String kind = info.typeId().toString();
+            List<PutOnlineReach> reaches = PutOnline.reachesOf(kind);
+            String label = resolve(info.getLabel(), request);
+            RouteTarget workload = CmsRoutes.list(request.panelSlug(), HohenheimSlugs.PUT_ONLINE)
+                .with(HohenheimParams.PUT_ONLINE_WORKLOAD, kind);
+            card(cards, targets, group, "instance:" + info.typeId(), info.getIcon().name(), label,
+                resolve(info.getDescription(), request),
+                admin && !reaches.isEmpty() ? workload
+                    : CmsRoutes.create(request.panelSlug(), HohenheimSlugs.INSTANCES)
+                        .with(HohenheimParams.PUT_ONLINE_KIND, kind));
+            // The kind's other ways are operator flows of their own; a tenant has the create form behind its card.
+            for (PutOnlineReach reach : reaches) {
+                if (admin && reach != reaches.getFirst()) {
+                    card(cards, targets, group, "instance:" + info.typeId() + "@" + reach.token(),
+                        info.getIcon().name(), resolve(reach.cardLabel().withArg("kind", label), request),
+                        resolve(reach.cardDescription(), request),
+                        workload.with(HohenheimParams.PUT_ONLINE_REACH, reach.token()));
+                }
             }
         }
         if (admin) {
@@ -265,12 +296,31 @@ public final class PutOnlinePage extends PanelPage {
         targets.put(value, target);
     }
 
-    /** @return the flow an instance kind with this stored id is put online by, or null when it opens the create form */
-    private static @Nullable PanelAction<Object> kindAction(@Nullable String kind) {
-        if (PutOnline.offeredAsWorkload(kind)) {
-            return WORKLOAD;
+    /**
+     * @return the way a kind is asked to be put online: the route's reach, else the kind's own card's; null for a
+     *         reach the vocabulary does not know or a kind not offered
+     */
+    private static @Nullable PutOnlineReach askedReach(@Nullable String kind, @Nullable String reach) {
+        if (reach != null) {
+            return PutOnlineReach.ofToken(reach);
         }
-        return PutOnline.offeredAsMachine(kind) ? MACHINE : null;
+        List<PutOnlineReach> reaches = PutOnline.reachesOf(kind);
+        return reaches.isEmpty() ? null : reaches.getFirst();
+    }
+
+    /**
+     * @return the flow an instance kind with this stored id is put online by when reached this way, or null when the
+     *         kind is not offered that way (it opens the create form)
+     */
+    private static @Nullable PanelAction<Object> kindAction(@Nullable String kind, @NonNull PutOnlineReach reach) {
+        if (!PutOnline.offeredWith(kind, reach)) {
+            return null;
+        }
+        return switch (reach) {
+            case WEBSITE -> WORKLOAD;
+            case PORTS -> WORKLOAD_SERVICE;
+            case NONE -> MACHINE;
+        };
     }
 
     /**

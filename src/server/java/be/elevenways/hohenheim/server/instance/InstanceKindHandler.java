@@ -14,6 +14,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import be.elevenways.hohenheim.server.runtime.DockerInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -312,6 +313,14 @@ public interface InstanceKindHandler extends InstanceKindInfo {
      */
     default @NonNull PutOnlineReach reachOf(@NonNull Map<String, Object> settings) {
         return supportsSiteUpstream() ? PutOnlineReach.WEBSITE : PutOnlineReach.NONE;
+    }
+
+    /**
+     * The ways a workload of this kind is put online from its own settings, each a card of "Put something online";
+     * the first is the kind's own card. A kind offers how its empty settings are reached unless it answers more.
+     */
+    default @NonNull List<PutOnlineReach> putOnlineReaches() {
+        return List.of(reachOf(Map.of()));
     }
 
     /**

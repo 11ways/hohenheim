@@ -190,6 +190,12 @@ public final class DockerContainerKind implements InstanceKindHandler {
         return PublishedPort.declaredIn(settings) ? PutOnlineReach.PORTS : PutOnlineReach.WEBSITE;
     }
 
+    /** A container image is put online as a website, or as a service reached on ports it publishes. */
+    @Override
+    public @NonNull List<PutOnlineReach> putOnlineReaches() {
+        return List.of(PutOnlineReach.WEBSITE, PutOnlineReach.PORTS);
+    }
+
     @Override
     public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
         return DockerInstanceRuntime.onServer(serverName, Egress.OPEN);

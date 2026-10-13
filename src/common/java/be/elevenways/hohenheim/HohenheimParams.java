@@ -87,6 +87,14 @@ public final class HohenheimParams {
         ParameterDefinition.builder(String.class).name("workload")
             .stringResolver(value -> value).build();
 
+    /**
+     * How that instance kind is reached once online ({@code PutOnlineReach.token()}), when the chooser offers it more
+     * than one way; absent, the kind's own card's way.
+     */
+    public static final ParameterDefinition<String> PUT_ONLINE_REACH =
+        ParameterDefinition.builder(String.class).name("reach")
+            .stringResolver(value -> value).build();
+
     /** The application a preview create form opens for: the Deploys tab's "Preview a branch". */
     public static final ParameterDefinition<Integer> PREVIEW_APPLICATION =
         ParameterDefinition.builder(Integer.class).name("application")

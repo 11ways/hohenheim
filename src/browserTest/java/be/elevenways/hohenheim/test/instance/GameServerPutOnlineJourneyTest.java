@@ -30,6 +30,8 @@ import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.server.operation.OperationPipeline;
+import be.elevenways.zenit.common.edit.FormStep;
+import be.elevenways.zenit.common.edit.SummaryLine;
 import be.elevenways.zenit.server.operation.OperationRequest;
 import be.elevenways.zenit.server.operation.OperationRun;
 import be.elevenways.zenit.server.orm.seed.Seeds;
@@ -385,6 +387,150 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
             .as("step 2: the chosen port is the one published").isEqualTo(chosen);
     }
 
+    /**
+     * The Ports step's summary names what the chosen template declares, read off the operation's subject through the
+     * pipeline that draws the step: one line per declared port with its container port, and no game address line,
+     * since that is asked on the same step, after the summary.
+     */
+    @Test
+    void thePortsStepSummaryListsTheTemplatesDeclaredPorts() {
+        AccessContext operator = TenantConduits.operator();
+        List<FormStep> steps = PutOnline.PUT_SERVICE_ONLINE.input().form().steps();
+        int portsAt = steps.indexOf(steps.stream().filter(step -> step.id().equals(PutOnline.PORTS)).findFirst()
+            .orElseThrow());
+        List<String> before = steps.subList(0, portsAt).stream().flatMap(step -> step.entryNames().stream()).toList();
+
+        // 1. Validating Where and Options for the standalone Minecraft template answers the Ports step's summary:
+        //    its name, where it runs, then its one declared port.
+        List<SummaryLine> lines = OperationPipeline.validate(OperationRequest.of(PutOnline.PUT_SERVICE_ONLINE,
+                CmsPlacementSurface.ADMIN_ACTION).caller(operator).subjects(List.of(minecraft))
+                .form(serviceForm(PREFIX + "summary", "", "")),
+            before, steps.get(portsAt).summary());
+        assertThat(lines).extracting(line -> line.label().key())
+            .as("step 1: name, host, then the game port by its purpose")
+            .containsExactly("summary_name", "summary_runs_on", "purpose_game");
+
+        // 2. The port's line names its container port and says how its host port is chosen.
+        SummaryLine game = lines.get(2);
+        assertThat(game.value().key()).as("step 2: the port line's words").isEqualTo("summary_port");
+        assertThat(String.valueOf(game.value().args().get("port"))).as("step 2: its container port and protocol")
+            .isEqualTo("25565/tcp");
+    }
+
+    /**
+     * A container image goes online as a service on its own ports, without a template: the chooser offers it on its
+     * ports beside the website card; that wizard asks Where, Options and Ports, never an address or HTTPS; a port
+     * name given twice is refused before a run; one run creates the container with a game and a query port, both
+     * claimed publicly on its host and written as published ports, and its game address gets the game port's SRV.
+     */
+    @Test
+    void aContainerImageGoesOnlineOnItsOwnPortsWithoutATemplate() throws Exception {
+        AccessContext operator = TenantConduits.operator();
+        String kind = "hohenheim:docker_container";
+
+        // 1. The chooser offers the container image a second way, on its own ports; that card opens the ports flow,
+        //    and the kind's own card still opens the website flow.
+        String chooser = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE).body();
+        assertThat(chooser).as("step 1: a card for the container image on its own ports")
+            .contains("instance:" + kind + "@ports")
+            .contains("on its own ports")
+            .contains("clients connect to ports published on its host.");
+        assertThat(adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?choice=instance:" + kind + "@ports").headers()
+                .firstValue("location").orElse(""))
+            .as("step 1: the ports card opens the kind's wizard reached on its ports")
+            .contains("workload=hohenheim%3Adocker_container").contains("reach=ports");
+        assertThat(adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?choice=instance:" + kind).headers()
+                .firstValue("location").orElse(""))
+            .as("step 1: the kind's own card opens its website wizard")
+            .contains("workload=hohenheim%3Adocker_container").doesNotContain("reach=");
+
+        // 2. The ports wizard asks where it runs, the image's settings and its ports with the game address; no
+        //    address, no HTTPS. The website wizard of the same kind keeps its HTTPS step.
+        String wizard = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?workload=" + kind + "&reach=ports").body();
+        assertThat(wizard).as("step 2: where, options and ports")
+            .contains("data-zf-step=\"where\"").contains("data-zf-step=\"settings\"")
+            .contains("data-zf-step=\"ports\"").contains("name=\"" + PutOnline.GAME_ADDRESS.getName() + "\"");
+        assertThat(wizard).as("step 2: no HTTPS step and no address")
+            .doesNotContain("data-zf-step=\"https\"")
+            .doesNotContain("name=\"" + PutOnline.HOSTNAME.getName() + "\"");
+        assertThat(wizard).as("step 2: the lead speaks of ports, never of a certificate")
+            .contains("publishes its ports");
+        assertThat(adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?workload=" + kind).body())
+            .as("step 2: the same kind as a website keeps its HTTPS step").contains("data-zf-step=\"https\"");
+
+        // 3. A port name given twice is refused in the request, on the second row, and nothing is made; so is a row
+        //    naming a port the image's settings already publish.
+        Map<String, Object> twice = imageServiceForm(PREFIX + "image-twice", Map.of(),
+            List.of(portRow("game", "25565", "tcp"), portRow("game", "25566", "tcp")), "");
+        DomainRefusal refused = catchThrowableOfType(DomainRefusal.class, () -> OperationPipeline.invoke(
+            OperationRequest.of(PutOnline.PUT_WORKLOAD_SERVICE_ONLINE, CmsPlacementSurface.ADMIN_ACTION)
+                .caller(operator).form(twice)));
+        assertThat(refused).as("step 3: a port name given twice is refused before a run").isNotNull();
+        assertThat(refused.field()).as("step 3: on the second row's purpose").isEqualTo(PutOnline.PORTS + ".1.purpose");
+        Map<String, Object> declared = imageServiceForm(PREFIX + "image-declared",
+            Map.of(PublishedPort.FIELD, Map.of("0", Map.of("key", "game", "value", "25565/tcp"))),
+            List.of(portRow("game", "25565", "tcp")), "");
+        DomainRefusal again = catchThrowableOfType(DomainRefusal.class, () -> OperationPipeline.invoke(
+            OperationRequest.of(PutOnline.PUT_WORKLOAD_SERVICE_ONLINE, CmsPlacementSurface.ADMIN_ACTION)
+                .caller(operator).form(declared)));
+        assertThat(again).as("step 3: a row naming a port the settings publish is refused").isNotNull();
+        assertThat(again.field()).as("step 3: on that row").isEqualTo(PutOnline.PORTS + ".0.purpose");
+        assertThat(List.of(String.valueOf(Models.get(InstanceModel.class).find()
+                    .where(InstanceModel.NAME.eq(PREFIX + "image-twice")).first()),
+                String.valueOf(Models.get(InstanceModel.class).find()
+                    .where(InstanceModel.NAME.eq(PREFIX + "image-declared")).first())))
+            .as("step 3: and nothing was made").containsOnly("null");
+
+        // 4. One run with a game port, a query port and a game address: app, ports and game address done.
+        String gameAddress = "svc." + ORIGIN;
+        OperationRun run = PutOnlineJourneyTest.ended(PutOnlineJourneyTest.runOf(OperationPipeline.invoke(
+                OperationRequest.of(PutOnline.PUT_WORKLOAD_SERVICE_ONLINE, CmsPlacementSurface.ADMIN_ACTION)
+                    .caller(operator).form(imageServiceForm(PREFIX + "image-service", Map.of(),
+                        List.of(portRow("game", "25565", "tcp"), portRow("query", "25565", "udp")), gameAddress)))),
+            operator, "step 4");
+        assertThat(run.status()).as("step 4: the run succeeded (%s)", run.outcome())
+            .isEqualTo(OperationRunStatus.SUCCEEDED);
+        assertThat(Objects.requireNonNull(run.steps()).journeyBefore())
+            .as("step 4: the run ends the journey the wizard walked: what, where, options, ports").hasSize(4);
+        assertThat(List.of(run.skipped(1), run.skipped(2)))
+            .as("step 4: its ports and its game address were done").containsExactly(false, false);
+
+        // 5. The container publishes both ports, each on the host port the ledger holds publicly for it.
+        Row app = Models.get(InstanceModel.class).find().where(InstanceModel.NAME.eq(PREFIX + "image-service"))
+            .first();
+        assertThat(app).as("step 5: the container exists").isNotNull();
+        assertThat((String) app.get(InstanceModel.KIND)).as("step 5: as a container image").isEqualTo(kind);
+        int appId = app.get(InstanceModel.ID);
+        List<PublishedPort> published = PublishedPort.of(InstanceModel.settingsOf(app));
+        assertThat(published).extracting(PublishedPort::name).as("step 5: the game and the query port")
+            .containsExactly("game", "query");
+        assertThat(published).as("step 5: each with a concrete host port")
+            .allSatisfy(port -> assertThat(port.hostPort()).isNotNull());
+        assertThat(published.get(0).spec()).as("step 5: the game port in Docker's spelling")
+            .isEqualTo(published.get(0).hostPort() + ":25565/tcp");
+        assertThat(published.get(1).spec()).as("step 5: the query port in Docker's spelling")
+            .isEqualTo(published.get(1).hostPort() + ":25565/udp");
+        for (PublishedPort port : published) {
+            assertThat(PortLedger.claimsOf(InstanceModel.MODEL_ID, appId))
+                .as("step 5: the ledger holds %s publicly on its host", port.spec())
+                .anySatisfy(claim -> {
+                    assertThat((Integer) claim.get(PortAllocationModel.PORT)).isEqualTo(port.hostPort());
+                    assertThat((String) claim.get(PortAllocationModel.PROTOCOL)).isEqualTo(port.protocol());
+                    assertThat((String) claim.get(PortAllocationModel.HOST_IP)).isEmpty();
+                    assertThat((Integer) claim.get(PortAllocationModel.SERVER_ID)).isEqualTo(hostId);
+                    assertThat(PortLedger.isReleasing(claim)).isFalse();
+                });
+        }
+
+        // 6. Its game address is stored and its SRV record points at the game port, never the query port.
+        assertThat((String) Models.get(InstanceModel.class).findById(appId).get(InstanceModel.GAME_ADDRESS))
+            .as("step 6: the game address is the container's").isEqualTo(gameAddress);
+        Row srv = zoneRecord("_minecraft._tcp.svc", DnsRecordModel.TYPE_SRV);
+        assertThat(srv).as("step 6: an SRV record for the game address exists").isNotNull();
+        assertThat(DnsRecordModel.portOf(srv)).as("step 6: on the game port's host port")
+            .isEqualTo(published.get(0).hostPort());
+    }
+
     /** A container template that publishes no ports of its own is a website: its wizard asks an address and HTTPS. */
     @Test
     void aContainerTemplateWithoutPublishedPortsKeepsTheWebsiteSteps() throws Exception {
@@ -418,6 +564,28 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
         form.put(PutOnline.PORTS, Map.of("game", gamePort));
         form.put(PutOnline.GAME_ADDRESS.getName(), gameAddress);
         return form;
+    }
+
+    /** @return the kind-led service form for a container image on the test host */
+    private static Map<String, Object> imageServiceForm(String name, Map<String, Object> moreSettings,
+                                                        List<Map<String, Object>> ports, String gameAddress) {
+        Map<String, Object> settings = new LinkedHashMap<>(Map.of("image", "alpine", "tag", "latest",
+            PublishedPort.SRV_SERVICE, "minecraft"));
+        settings.putAll(moreSettings);
+        Map<String, Object> form = new LinkedHashMap<>();
+        form.put(InstanceModel.NAME.getName(), name);
+        form.put("serverId", hostId);
+        form.put(InstanceModel.KIND.getName(), "hohenheim:docker_container");
+        form.put(InstanceModel.SETTINGS.getName(), settings);
+        form.put(PutOnline.PORTS, ports);
+        form.put(PutOnline.GAME_ADDRESS.getName(), gameAddress);
+        return form;
+    }
+
+    /** @return one Ports row as the item list posts it */
+    private static Map<String, Object> portRow(String purpose, String containerPort, String protocol) {
+        return Map.of(PutOnline.PORT_PURPOSE.getName(), purpose, PutOnline.PORT_CONTAINER.getName(), containerPort,
+            PutOnline.PORT_PROTOCOL.getName(), protocol);
     }
 
     /** @return the record of this name and type in the test zone, or null */
