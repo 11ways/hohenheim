@@ -210,12 +210,28 @@ public final class InstanceDevices {
     }
 
     /**
+     * Record the data disks a backup carries, BEFORE anything lands at the daemon: the quota judges each at its
+     * captured size first, and a restore that fails after the import is cleaned up by the destroy's own volume
+     * walk over these rows.
+     *
+     * @param sizesGb device name to declared size, in the backup's order
+     */
+    static void recordRestoredDisks(int instanceId, @NonNull Map<String, Integer> sizesGb) {
+        sizesGb.forEach((name, sizeGb) -> {
+            Row row = newDevice(instanceId, DeviceType.DISK, name);
+            row.set(InstanceDeviceModel.SIZE_GB, sizeGb);
+            Models.get(InstanceDeviceModel.class).save(row);
+        });
+    }
+
+    /**
      * Record the devices an import brought in its definition: the daemon already holds each NIC and drive, so only
-     * the row is written, and the deploy's reconcile finds it in place. A data disk refuses the whole restore before
-     * any row is written: no export carries its volume, so the imported device still names the SOURCE's disk.
+     * the row is written, and the deploy's reconcile finds it in place. A data disk already has its row when the
+     * backup carried it ({@link #recordRestoredDisks}); one without refuses the whole restore before any row is
+     * written, because nothing carried its volume and the imported device still names the SOURCE's disk.
      *
      * @param devices the modelled devices as the driver read them off the imported workload
-     * @throws IOException naming a data disk the import carries
+     * @throws IOException naming a data disk the backup did not carry
      */
     static void recordImportedDevices(int instanceId, @NonNull List<NativeSnapshotSupport.ImportedDevice> devices)
             throws IOException {
@@ -226,9 +242,17 @@ public final class InstanceDevices {
                 case CDROM -> row.set(InstanceDeviceModel.SOURCE_MEDIA, device.source());
                 case NIC -> {
                 }
-                case DISK -> throw new IOException("The backup's machine carries data disk '" + device.name()
-                    + "' on volume '" + device.source() + "', which an export does not carry; detach the data disk"
-                    + " before backing up, or copy its data another way");
+                case DISK -> {
+                    Row restored = rowOf(instanceId, device.name());
+                    if (restored == null
+                            || DeviceType.parse(restored.get(InstanceDeviceModel.TYPE)) != DeviceType.DISK) {
+                        throw new IOException("The backup's machine carries data disk '" + device.name()
+                            + "' on volume '" + device.source() + "', which this backup does not carry (it was"
+                            + " written before backups captured data disks); take a new backup, which carries it,"
+                            + " or copy the disk's data another way");
+                    }
+                    continue;
+                }
             }
             rows.add(row);
         }

@@ -43,7 +43,7 @@ class BackupArchiveTest {
             BackupManifest.PAYLOAD_VOLUME_TARS,
             Map.of("image", "alpine", "environment_variables", Map.of("SECRET", "s3cret")),
             "alpine:latest", "sha256:abc", List.of(), "", 8080, "tcp",
-            List.of(new BackupManifest.VolumeEntry("data", "/data", "data.tar", sha, size)),
+            List.of(new BackupManifest.VolumeEntry("data", "/data", "data.tar", sha, size)), List.of(),
             new BackupManifest.InstanceProfile(
                 new BackupManifest.TemplateRef(7, "velocity", 3),
                 "restart", "staging", "offsite",
@@ -225,6 +225,70 @@ class BackupArchiveTest {
             .isInstanceOf(IOException.class).hasMessageContaining("instance.image_reference");
     }
 
+    /**
+     * A machine's data disks ride the archive as their own payloads: the manifest names each device and its size,
+     * the archive verifies and extracts them by device apart from the instance's volumes, the capacity input counts
+     * them at their declared size, and a manifest written before disks were captured reads as carrying none.
+     */
+    @Test
+    void dataDisksRideTheArchiveAsTheirOwnVerifiedPayloads() throws IOException {
+        EncryptionKeyring keyring = EncryptionKeyring.loadOrCreate(tmp.resolve("disks.keys"));
+        Path instance = Files.writeString(tmp.resolve("instance.tar"), "instance-export");
+        Path disk = Files.writeString(tmp.resolve("disk-1.tar"), "disk-volume-export");
+        BackupManifest base = manifest("0".repeat(64), 0);
+        BackupManifest withDisk = new BackupManifest(BackupManifest.FORMAT_VERSION, base.created(),
+            base.controllerVersion(), "machine", "hohenheim:vm", BackupManifest.PAYLOAD_INSTANCE_EXPORT,
+            Map.of("image", "alpine"), base.imageReference(), base.imageId(), List.of(), base.ownership(), null, "tcp",
+            List.of(new BackupManifest.VolumeEntry("instance", "/", "instance.tar",
+                BackupArchive.sha256Of(instance), Files.size(instance))),
+            List.of(new BackupManifest.DiskEntry("data1", 3, new BackupManifest.PayloadEntry("disk-1.tar",
+                BackupArchive.sha256Of(disk), Files.size(disk)))),
+            base.profile(), null);
+
+        // 1. The archive carries the disk beside the instance export; both verify, and each extracts in its lane.
+        Path archive = tmp.resolve("disks.hib");
+        BackupArchive.create(withDisk, Map.of("instance.tar", instance,
+            BackupArchive.DISK_PREFIX + "disk-1.tar", disk), archive, keyring);
+        BackupArchive.Opened opened = BackupArchive.openVerified(archive, tmp, keyring);
+        assertThat(opened.manifest().disks()).as("step 1: the manifest names the disk, its size and its payload")
+            .containsExactlyElementsOf(withDisk.disks());
+        assertThat(Files.readString(BackupArchive.extractDisks(opened, tmp.resolve("disks-out")).get("data1")))
+            .as("step 1: the disk extracts by device, byte-identical").isEqualTo("disk-volume-export");
+        assertThat(BackupArchive.extractVolumes(opened, tmp.resolve("volumes-out")).keySet())
+            .as("step 1: and it is no volume of the instance").containsExactly("instance");
+        Files.deleteIfExists(opened.zip());
+
+        // 2. The capacity input counts the disk at its declared size, and the row summary names it.
+        assertThat(withDisk.totalDiskBytes()).as("step 2: 3 GB declared, 3 GiB claimed")
+            .isEqualTo(3L * 1024 * 1024 * 1024);
+        assertThat(withDisk.toSummary().get("disks")).as("step 2: the summary names the disk")
+            .isEqualTo(List.of("data1"));
+
+        // 3. A disk payload that disagrees with its checksum refuses the whole archive.
+        Path wrong = Files.writeString(tmp.resolve("wrong-disk.tar"), "another-disk");
+        Path corrupt = tmp.resolve("bad-disks.hib");
+        BackupArchive.create(withDisk, Map.of("instance.tar", instance,
+            BackupArchive.DISK_PREFIX + "disk-1.tar", wrong), corrupt, keyring);
+        assertThat(catchThrowable(() -> BackupArchive.openVerified(corrupt, tmp, keyring)))
+            .as("step 3: a mismatching disk refuses the archive by the entry's name")
+            .isInstanceOf(IOException.class).hasMessageContaining("disks/disk-1.tar");
+
+        // 4. A manifest written before disks were captured has no disk list: it reads as carrying none.
+        Map<String, Object> legacy = new LinkedHashMap<>(withDisk.toMap());
+        legacy.remove("disks");
+        assertThat(BackupManifest.fromMap(legacy).disks()).as("step 4: an older manifest carries no disks").isEmpty();
+
+        // 5. Disks beside a volume-tar payload are refused: only an instance export names devices to point them at.
+        Map<String, Object> volumeTars = new LinkedHashMap<>(withDisk.toMap());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> section = new LinkedHashMap<>((Map<String, Object>) volumeTars.get("instance"));
+        section.put("payload", BackupManifest.PAYLOAD_VOLUME_TARS);
+        volumeTars.put("instance", section);
+        assertThat(catchThrowable(() -> BackupManifest.fromMap(volumeTars)))
+            .as("step 5: disks on a volume-tar payload are refused").isInstanceOf(IOException.class)
+            .hasMessageContaining("data disks");
+    }
+
     private BackupManifest withSource(int version, String kind, Map<String, Object> settings) throws IOException {
         Map<String, Object> map = new LinkedHashMap<>(manifest("0".repeat(64), 0).toMap());
         map.put("version", version);
@@ -349,7 +413,7 @@ class BackupArchiveTest {
         BackupManifest manifest = new BackupManifest(BackupManifest.FORMAT_VERSION,
             base.created(), base.controllerVersion(), "uploaded-app", "hohenheim:application",
             base.payload(), Map.of(), base.imageReference(), "sha256:" + "a".repeat(64), base.installMedia(),
-            base.ownership(), base.containerPort(), base.portProtocol(), base.volumes(),
+            base.ownership(), base.containerPort(), base.portProtocol(), base.volumes(), base.disks(),
             base.profile(), application);
         Path archive = tmp.resolve("application.hib");
         BackupArchive.create(manifest, Map.of("data.tar", data,

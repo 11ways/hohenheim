@@ -225,6 +225,7 @@ public final class InstanceBackups {
         // What the capture produced, filled in by the window's work.
         List<List<VolumeSnapshotSupport.CapturedVolume>> capturedHolder = new ArrayList<>(1);
         List<ImageIdentity> imageHolder = new ArrayList<>(1);
+        List<NativeSnapshotSupport.ExportedDisk> disks = new ArrayList<>();
         String payload;
         if (nativeSupport != null) {
             // -- capture phase (native lane: LIVE, crash-consistent) ------------
@@ -246,6 +247,8 @@ public final class InstanceBackups {
                             InstanceSnapshots.maxArchiveBytes(), false);
                         capturedHolder.add(List.of(new VolumeSnapshotSupport.CapturedVolume(
                             "instance", "/", export, size)));
+                        disks.addAll(nativeSupport.exportDisks(resolved.spec(), staging,
+                            InstanceSnapshots.maxArchiveBytes()));
                     });
             } catch (IOException | RuntimeException error) {
                 FileTrees.deleteQuietly(staging);
@@ -346,11 +349,14 @@ public final class InstanceBackups {
             .set(InstanceBackupModel.REMOTE_KEY, key)
             .write();
         try {
-            BackupManifest manifest = buildManifest(owner, image, payload, captured,
+            BackupManifest manifest = buildManifest(owner, image, payload, captured, disks,
                 applicationEntry);
             Map<String, Path> files = new LinkedHashMap<>(applicationFiles);
             for (VolumeSnapshotSupport.CapturedVolume volume : captured) {
                 files.put(volume.file().getFileName().toString(), volume.file());
+            }
+            for (NativeSnapshotSupport.ExportedDisk disk : disks) {
+                files.put(BackupArchive.DISK_PREFIX + disk.file().getFileName(), disk.file());
             }
             Path archive = staging.resolve("archive.hib");
             long size = BackupArchive.create(manifest, files, archive, keyring());
@@ -599,7 +605,8 @@ public final class InstanceBackups {
             if (refused != null) {
                 throw Violations.ofForm(refused);
             }
-            RestoreCapacity.require(serverId, manifest.totalVolumeBytes());
+            // The data disks count at their declared size: that is what each restored volume claims on the host.
+            RestoreCapacity.require(serverId, Math.addExact(manifest.totalVolumeBytes(), manifest.totalDiskBytes()));
             boolean application = InstanceKinds.isReleaseManaged(manifest.kind());
             Integer runtimeImageId = null;
             if (application) {
@@ -748,9 +755,14 @@ public final class InstanceBackups {
                 throw new IOException("Backup archive carries no 'instance'"
                     + " payload entry for its instance_export manifest");
             }
-            // The export keeps a machine's ISO drives and extra NICs (an import onto a host holding the ISO lands
-            // them), so the new record gets the rows for what the daemon now holds, under the names it holds them.
-            InstanceDevices.recordImportedDevices(newId, nativeSupport.importBackup(resolved.spec(), export));
+            // The export keeps a machine's ISO drives, extra NICs and data disks (an import onto a host holding the
+            // ISO lands them), so the new record gets the rows for what the daemon now holds, under the names it
+            // holds them. The disks the backup carries get theirs FIRST: their quota is judged before anything lands.
+            Map<String, Integer> diskSizes = new LinkedHashMap<>();
+            manifest.disks().forEach(disk -> diskSizes.put(disk.device(), disk.sizeGb()));
+            InstanceDevices.recordRestoredDisks(newId, diskSizes);
+            Map<String, Path> disks = BackupArchive.extractDisks(opened, staging.resolve("disks"));
+            InstanceDevices.recordImportedDevices(newId, nativeSupport.importBackup(resolved.spec(), export, disks));
         } else {
             VolumeSnapshotSupport support = InstanceSnapshots.requireSupport(resolved);
             Map<String, String> volumes = InstanceSnapshots.logicalVolumes(resolved);
@@ -1041,6 +1053,7 @@ public final class InstanceBackups {
             @NonNull ImageIdentity image,
             @NonNull String payload,
             @NonNull List<VolumeSnapshotSupport.CapturedVolume> captured,
+            @NonNull List<NativeSnapshotSupport.ExportedDisk> exportedDisks,
             BackupManifest.@Nullable ApplicationEntry application) throws IOException {
         int instanceId = owner.get(InstanceModel.ID);
         Set<String> subjects = HohenheimAccess.manageSubjectsOf(InstanceModel.MODEL_ID, instanceId);
@@ -1054,13 +1067,18 @@ public final class InstanceBackups {
                 volume.file().getFileName().toString(),
                 BackupArchive.sha256Of(volume.file()), volume.size()));
         }
+        List<BackupManifest.DiskEntry> disks = new ArrayList<>();
+        for (NativeSnapshotSupport.ExportedDisk disk : exportedDisks) {
+            disks.add(new BackupManifest.DiskEntry(disk.device(), disk.sizeGb(), new BackupManifest.PayloadEntry(
+                disk.file().getFileName().toString(), BackupArchive.sha256Of(disk.file()), disk.size())));
+        }
         return new BackupManifest(BackupManifest.FORMAT_VERSION, Now.instant().toString(),
             HostPreflight.controllerVersion(),
             String.valueOf((Object) owner.get(InstanceModel.NAME)),
             String.valueOf((Object) owner.get(InstanceModel.KIND)),
             payload, settings, image.reference(), image.id(), InstanceDevices.installMediaOf(instanceId), ownership,
             containerPort,
-            "tcp", volumes, profileOf(owner, instanceId), application);
+            "tcp", volumes, disks, profileOf(owner, instanceId), application);
     }
 
     /**

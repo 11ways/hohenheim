@@ -688,9 +688,15 @@ public final class IncusInstanceRuntime
     }
 
     @Override
-    public @NonNull List<ImportedDevice> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive)
-            throws IOException {
-        return this.archive.importBackup(spec, archive);
+    public @NonNull List<ExportedDisk> exportDisks(@NonNull InstanceSpec spec, @NonNull Path directory,
+                                                   long maxBytes) throws IOException {
+        return this.archive.exportDisks(spec, directory, maxBytes);
+    }
+
+    @Override
+    public @NonNull List<ImportedDevice> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive,
+                                                      @NonNull Map<String, Path> disks) throws IOException {
+        return this.archive.importBackup(spec, archive, disks);
     }
 
     @Override

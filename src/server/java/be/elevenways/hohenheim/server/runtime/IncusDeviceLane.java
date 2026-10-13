@@ -305,6 +305,13 @@ final class IncusDeviceLane {
         return imported;
     }
 
+    /** @return the pool a device of the definition names, or null when it names none */
+    static @Nullable String poolOf(@NonNull Map<String, Object> instance, @NonNull String deviceName) {
+        return instance.get("devices") instanceof Map<?, ?> devices
+                && devices.get(deviceName) instanceof Map<?, ?> device
+                && device.get("pool") instanceof String pool && !pool.isBlank() ? pool : null;
+    }
+
     /** Stamp the root disk's boot priority ABOVE the media's (see ensureCdrom's note). */
     private void ensureRootBootPriority(@NonNull String handle) throws IOException {
         Map<String, Object> instance = this.incus.instance(handle);
@@ -404,9 +411,9 @@ final class IncusDeviceLane {
     }
 
     /** @throws IOException when the volume's user.* labels do not attribute it to this record */
-    private static void requireOwnedVolume(@NonNull InstanceSpec spec,
-                                           @NonNull String volumeName,
-                                           @NonNull Map<String, Object> volume)
+    static void requireOwnedVolume(@NonNull InstanceSpec spec,
+                                   @NonNull String volumeName,
+                                   @NonNull Map<String, Object> volume)
             throws IOException {
         OwnerLabels.Owner want = OwnerLabels.parse(spec.ownerLabels());
         OwnerLabels.Owner actual = IncusDefinitions.ownerOf(volume);

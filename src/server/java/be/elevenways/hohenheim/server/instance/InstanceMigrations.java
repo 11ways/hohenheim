@@ -744,7 +744,8 @@ public final class InstanceMigrations {
             if (this.export == null) {
                 throw new IOException("importOnTarget before exportFromSource");
             }
-            this.target.importBackup(this.resolved.spec(), this.export);
+            // No disks: migration refuses a record with device rows before it exports anything.
+            this.target.importBackup(this.resolved.spec(), this.export, Map.of());
         }
 
         @Override

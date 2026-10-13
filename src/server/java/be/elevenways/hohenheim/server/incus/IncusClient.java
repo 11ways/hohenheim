@@ -523,16 +523,37 @@ public class IncusClient {
             DEFAULT_TIMEOUT_MS), LONG_OP_TIMEOUT_MS);
     }
 
-    /** Import an exported tarball as a NEW instance named {@code newName}. */
-    public void importInstance(@NonNull Path archive, @NonNull String newName)
-            throws IOException {
-        Http11.Raw raw = this.transport.exchangeUpload("POST", "/1.0/instances", archive,
-            "application/octet-stream", Map.of("X-Incus-Name", newName),
-            LONG_OP_TIMEOUT_MS);
+    /**
+     * Import an exported tarball as a NEW instance named {@code newName}, overriding device keys of the exported
+     * definition first (the {@code incus import --device} lane): the daemon validates the overridden devices, so a
+     * disk re-pointed at a volume of this host imports where the source's volume does not exist.
+     *
+     * AIDEV-NOTE: the override MERGES per key into the exported device (measured on Incus 7.3: pool and type stay),
+     * and the header is the CLI's own spelling, space-separated {@code device,key=value} entries; names and values
+     * here are daemon object names, which carry neither spaces nor commas.
+     *
+     * @param deviceOverrides device name to the keys to set on it
+     */
+    public void importInstance(@NonNull Path archive, @NonNull String newName,
+                               @NonNull Map<String, Map<String, String>> deviceOverrides) throws IOException {
+        Map<String, String> headers = new LinkedHashMap<>();
+        headers.put("X-Incus-Name", newName);
+        List<String> entries = new ArrayList<>();
+        deviceOverrides.forEach((device, keys) ->
+            keys.forEach((key, value) -> entries.add(device + "," + key + "=" + value)));
+        if (!entries.isEmpty()) {
+            headers.put("X-Incus-devices", String.join(" ", entries));
+        }
+        settleUpload(this.transport.exchangeUpload("POST", "/1.0/instances", archive,
+            "application/octet-stream", headers, LONG_OP_TIMEOUT_MS), "Incus backup import");
+    }
+
+    /** Wait out the operation an upload answered with; an upload that answers none is a failure. */
+    private void settleUpload(Http11.@NonNull Raw raw, @NonNull String what) throws IOException {
         Map<String, Object> envelope = envelopeOf(raw);
         Object operation = envelope.get("operation");
         if (!(operation instanceof String operationPath) || operationPath.isEmpty()) {
-            throw new IOException("Incus backup import answered no operation to wait on");
+            throw new IOException(what + " answered no operation to wait on");
         }
         waitOperation(operationPath, LONG_OP_TIMEOUT_MS);
     }
@@ -705,10 +726,24 @@ public class IncusClient {
      */
     public void importIsoVolume(@NonNull String pool, @NonNull String name,
                                 @NonNull Path isoFile) throws IOException {
+        importCustomVolume(pool, name, isoFile, "iso");
+    }
+
+    /**
+     * Import a custom volume export ({@link #exportVolumeBackup}) as a NEW custom volume named {@code name}; the
+     * volume keeps the exported config, the source's {@code user.*} labels included.
+     */
+    public void importVolumeBackup(@NonNull String pool, @NonNull String name,
+                                   @NonNull Path archive) throws IOException {
+        importCustomVolume(pool, name, archive, "backup");
+    }
+
+    private void importCustomVolume(@NonNull String pool, @NonNull String name, @NonNull Path file,
+                                    @NonNull String type) throws IOException {
         Http11.Raw raw = this.transport.exchangeUpload("POST",
-            "/1.0/storage-pools/" + pool + "/volumes/custom", isoFile,
+            "/1.0/storage-pools/" + pool + "/volumes/custom", file,
             "application/octet-stream",
-            Map.of("X-Incus-Name", name, "X-Incus-Type", "iso"),
+            Map.of("X-Incus-Name", name, "X-Incus-Type", type),
             LONG_OP_TIMEOUT_MS);
         Map<String, Object> envelope = envelopeOf(raw);
         if ("async".equals(envelope.get("type"))
@@ -716,6 +751,46 @@ public class IncusClient {
                 && !operation.isEmpty()) {
             waitOperation(operation, LONG_OP_TIMEOUT_MS);
         }
+    }
+
+    /**
+     * Create one daemon-side backup object of a custom volume: volume only (no snapshots) and never the pool
+     * driver's optimized format, so the export restores onto any pool (the instance lane's choice).
+     */
+    public void createVolumeBackup(@NonNull String pool, @NonNull String volume, @NonNull String backup)
+            throws IOException {
+        waitOperation(asyncOperation("POST", volumeBackupsPath(pool, volume),
+            Json.stringify(Map.of("name", backup, "volume_only", true, "optimized_storage", false)),
+            DEFAULT_TIMEOUT_MS), LONG_OP_TIMEOUT_MS);
+    }
+
+    /**
+     * Stream one custom volume backup's export tarball to {@code destination}.
+     *
+     * @param maxBytes hard cap enforced during the download
+     * @return the exported size in bytes
+     */
+    public long exportVolumeBackup(@NonNull String pool, @NonNull String volume, @NonNull String backup,
+                                   @NonNull Path destination, long maxBytes) throws IOException {
+        Http11.Raw raw = this.transport.exchangeDownload("GET",
+            volumeBackupsPath(pool, volume) + "/" + backup + "/export", destination, maxBytes, LONG_OP_TIMEOUT_MS);
+        if (raw.body().length > 0 || raw.status() < 200 || raw.status() >= 300) {
+            envelopeOf(raw);   // an error envelope throws the typed refusal
+            throw new IOException("Incus volume export of '" + volume
+                + "' answered HTTP " + raw.status() + " without a payload");
+        }
+        return Files.size(destination);
+    }
+
+    /** Delete one custom volume backup object; 404 surfaces as {@link ApiException#isNotFound}. */
+    public void deleteVolumeBackup(@NonNull String pool, @NonNull String volume, @NonNull String backup)
+            throws IOException {
+        waitOperation(asyncOperation("DELETE", volumeBackupsPath(pool, volume) + "/" + backup, null,
+            DEFAULT_TIMEOUT_MS), LONG_OP_TIMEOUT_MS);
+    }
+
+    private static @NonNull String volumeBackupsPath(@NonNull String pool, @NonNull String volume) {
+        return "/1.0/storage-pools/" + pool + "/volumes/custom/" + volume + "/backups";
     }
 
     /** Create a custom volume (block or filesystem; possibly async per pool driver). */

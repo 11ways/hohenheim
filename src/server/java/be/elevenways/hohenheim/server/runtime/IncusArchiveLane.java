@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.runtime;
 
+import be.elevenways.hohenheim.instance.DeviceType;
 import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.incus.IncusNetworkPolicy;
 import be.elevenways.protoblast.common.Blast;
@@ -9,6 +10,8 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -77,24 +80,87 @@ final class IncusArchiveLane {
 
     long exportBackup(@NonNull InstanceSpec spec, @NonNull Path destination, long maxBytes,
                       boolean withSnapshots) throws IOException {
-        // The daemon-side backup object is a TEMPORARY: the export tarball is the
-        // artifact, and leaving the object behind would silently fill the pool.
+        return exportThroughTemporary(spec.handle(),
+            backupName -> this.incus.createBackup(spec.handle(), backupName, !withSnapshots),
+            backupName -> this.incus.exportBackup(spec.handle(), backupName, destination, maxBytes),
+            backupName -> this.incus.deleteBackup(spec.handle(), backupName));
+    }
+
+    /**
+     * Export the volume behind each data disk the definition attaches (the classification
+     * {@link IncusDeviceLane#importedDevices} reads back), files named by position so no device name reaches a path.
+     */
+    @NonNull List<NativeSnapshotSupport.ExportedDisk> exportDisks(@NonNull InstanceSpec spec, @NonNull Path directory,
+                                                                  long maxBytes) throws IOException {
+        Map<String, Object> instance = this.incus.instance(spec.handle());
+        List<NativeSnapshotSupport.ExportedDisk> exported = new ArrayList<>();
+        for (NativeSnapshotSupport.ImportedDevice device : IncusDeviceLane.importedDevices(instance)) {
+            if (device.type() != DeviceType.DISK || device.source() == null) {
+                continue;
+            }
+            String volume = device.source();
+            String named = IncusDeviceLane.poolOf(instance, device.name());
+            String pool = named != null ? named : IncusDefinitions.managedPoolName(this.incus);
+            Map<String, Object> definition = this.incus.customVolume(pool, volume);
+            if (definition == null) {
+                throw new IOException("Data disk '" + device.name() + "' of '" + spec.handle() + "' names volume '"
+                    + volume + "', which pool '" + pool + "' does not hold");
+            }
+            Integer sizeGb = definition.get("config") instanceof Map<?, ?> config
+                ? IncusDefinitions.parseSizeGb(config.get("size")) : null;
+            if (sizeGb == null || sizeGb <= 0) {
+                throw new IOException("Data disk '" + device.name() + "' (volume '" + volume + "') declares no size,"
+                    + " so a restore could not claim it on its host; give the volume a size");
+            }
+            Path file = directory.resolve("disk-" + (exported.size() + 1) + ".tar");
+            long size = exportThroughTemporary(volume,
+                backupName -> this.incus.createVolumeBackup(pool, volume, backupName),
+                backupName -> this.incus.exportVolumeBackup(pool, volume, backupName, file, maxBytes),
+                backupName -> this.incus.deleteVolumeBackup(pool, volume, backupName));
+            exported.add(new NativeSnapshotSupport.ExportedDisk(device.name(), file, size, sizeGb));
+        }
+        return exported;
+    }
+
+    /** One call against a named daemon-side backup object. */
+    @FunctionalInterface
+    private interface BackupStep<T> {
+        T apply(@NonNull String backupName) throws IOException;
+    }
+
+    /** A step that answers nothing. */
+    @FunctionalInterface
+    private interface BackupAction {
+        void run(@NonNull String backupName) throws IOException;
+    }
+
+    /**
+     * Create a daemon-side backup object, stream its export, and remove it whatever happened: the object is a
+     * TEMPORARY (the export tarball is the artifact), and leaving it behind would silently fill the pool.
+     *
+     * @return the exported size in bytes
+     */
+    private long exportThroughTemporary(@NonNull String subject, @NonNull BackupAction create,
+                                        @NonNull BackupStep<Long> export, @NonNull BackupAction delete)
+            throws IOException {
         String backupName = "hib-" + Now.millis();
-        this.incus.createBackup(spec.handle(), backupName, !withSnapshots);
+        create.run(backupName);
         try {
-            return this.incus.exportBackup(spec.handle(), backupName, destination, maxBytes);
+            return export.apply(backupName);
         } finally {
             try {
-                this.incus.deleteBackup(spec.handle(), backupName);
+                delete.run(backupName);
             } catch (IOException cleanupFailed) {
                 Blast.log("INCUS: could not remove temporary backup object", backupName,
-                    "of", spec.handle(), ":", cleanupFailed.getMessage());
+                    "of", subject, ":", cleanupFailed.getMessage());
             }
         }
     }
 
     @NonNull List<NativeSnapshotSupport.ImportedDevice> importBackup(@NonNull InstanceSpec spec,
-                                                                     @NonNull Path archive) throws IOException {
+                                                                     @NonNull Path archive,
+                                                                     @NonNull Map<String, Path> disks)
+            throws IOException {
         // AIDEV-NOTE: the isolation ACL is ensured BEFORE the import, on THIS daemon. The
         // archive carries the source's device config, and its eth0 names this
         // controller's isolation ACL (`security.acls`); the daemon validates every
@@ -110,7 +176,7 @@ final class IncusArchiveLane {
         // the clone that could carry a duplicate MAC does not exist yet.
         this.policy.ensureIsolationAcl();
         this.runtime.stampPresence();
-        this.incus.importInstance(archive, spec.handle());
+        importWithDisks(spec, archive, disks);
         // Re-identification is part of the import contract: the tarball carries the
         // SOURCE instance's user.* labels (until they are replaced the import is
         // attributed to the wrong record -- a crash inside the window leaves an
@@ -151,6 +217,61 @@ final class IncusArchiveLane {
         this.runtime.verifyIsolated(spec);
         // Read off the SAME definition the import landed (the edits above touch config and eth0 only).
         return IncusDeviceLane.importedDevices(existing);
+    }
+
+    /**
+     * Land each disk as a new volume of {@code spec}'s device-volume naming, attributed to {@code spec}, then import
+     * the instance with those devices pointed at them; a failure takes back every volume this call landed.
+     *
+     * AIDEV-NOTE: the volumes land FIRST because the daemon validates every device while it creates the imported
+     * instance: a disk still naming the source's volume fails the import on a host without it ("Storage volume not
+     * found"), and on the source's own host it would share the source's disk.
+     */
+    private void importWithDisks(@NonNull InstanceSpec spec, @NonNull Path archive, @NonNull Map<String, Path> disks)
+            throws IOException {
+        String pool = disks.isEmpty() ? null : IncusDefinitions.managedPoolName(this.incus);
+        List<String> landed = new ArrayList<>();
+        Map<String, Map<String, String>> repoint = new LinkedHashMap<>();
+        try {
+            for (Map.Entry<String, Path> disk : disks.entrySet()) {
+                String volume = IncusInstanceRuntime.volumeNameOf(spec, disk.getKey());
+                if (this.incus.customVolume(pool, volume) != null) {
+                    throw new IOException("Volume '" + volume + "' already exists on pool '" + pool
+                        + "'; a restore lands a data disk only on a volume it creates");
+                }
+                this.incus.importVolumeBackup(pool, volume, disk.getValue());
+                landed.add(volume);
+                attribute(spec, pool, volume);
+                repoint.put(disk.getKey(), Map.of("pool", pool, "source", volume));
+            }
+            this.incus.importInstance(archive, spec.handle(), repoint);
+        } catch (IOException | RuntimeException failed) {
+            for (String volume : landed) {
+                try {
+                    this.incus.deleteCustomVolume(pool, volume);
+                } catch (IOException cleanupFailed) {
+                    failed.addSuppressed(cleanupFailed);
+                }
+            }
+            throw failed;
+        }
+    }
+
+    /** Replace the owner labels an imported volume carried from its source with {@code spec}'s, read back. */
+    private void attribute(@NonNull InstanceSpec spec, @NonNull String pool, @NonNull String volume)
+            throws IOException {
+        Map<String, Object> imported = this.incus.customVolume(pool, volume);
+        Map<String, Object> config = new LinkedHashMap<>();
+        if (imported != null && imported.get("config") instanceof Map<?, ?> current) {
+            current.forEach((key, value) -> config.put(String.valueOf(key), value));
+        }
+        spec.ownerLabels().forEach((key, value) -> config.put(USER_PREFIX + key, value));
+        this.incus.updateCustomVolume(pool, volume, Map.of("config", config));
+        Map<String, Object> readBack = this.incus.customVolume(pool, volume);
+        if (readBack == null) {
+            throw new IOException("Imported volume '" + volume + "' is gone from pool '" + pool + "'");
+        }
+        IncusDeviceLane.requireOwnedVolume(spec, volume, readBack);
     }
 
     /**

@@ -52,8 +52,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -469,11 +471,12 @@ class InstanceBackupsTest {
 
     /**
      * An imported export brings every device its definition carries: an extra network interface gets its device row
-     * on the new record from the same read that lands install media; a data disk, whose volume no export carries,
-     * holds the restore in error by name instead of landing a machine that points at the source's disk.
+     * on the new record from the same read that lands install media, and a data disk comes back with its contents on
+     * a volume of the new record's own naming, counted at its size by the capacity check. A backup an older build
+     * wrote (its export names the disk, nothing carries the volume) still holds the restore in error by name.
      */
     @Test
-    void aRestoredMachineGetsARowForEachDeviceItsExportCarries() throws Exception {
+    void aRestoredMachineGetsEachDeviceItsExportCarriesAndItsDataDisksWithTheirContents() throws Exception {
         try (FakeIncusSocket landing = FakeIncusSocket.start()) {
         Db.run(datasource, () -> {
             InstanceService service = new InstanceService();
@@ -489,7 +492,8 @@ class InstanceBackupsTest {
             FakeNativeDaemons.FakeWorkload source = FakeNativeDaemons.daemonOf(hostId)
                 .get(FakeNativeDaemons.handleOf(instanceId));
             source.nics.add("eth1");
-            java.util.Set<Integer> restored = new java.util.LinkedHashSet<>();
+            Map<String, FakeNativeDaemons.FakeVolume> sourceVolumes = FakeNativeDaemons.volumesOf(hostId);
+            Set<Integer> restored = new LinkedHashSet<>();
             int landingId = HostFixtures.admittedIncusHost("device-landing-host");
             Models.get(ServerModel.class).find().where(ServerModel.ID.eq(landingId))
                 .assign(ServerModel.INCUS_URL, landing.url()).updateAll();
@@ -507,24 +511,77 @@ class InstanceBackupsTest {
                 assertThat(FakeNativeDaemons.daemonOf(landingId).get(FakeNativeDaemons.handleOf(copyId)).nics)
                     .as("step 1: and the restored machine holds that one interface").containsExactly("eth1");
 
-                // 2. A data disk in the export holds the restore in error, naming the disk.
+                // 2. A data disk travels with the backup: the restored machine's disk is a volume of its own holding
+                //    what the source's held, attributed to the new record, and the record has the disk's row at the
+                //    captured size.
+                FakeNativeDaemons.FakeVolume disk = new FakeNativeDaemons.FakeVolume();
+                disk.data.put("marker", "disk-v1");
+                disk.sizeGb = 3;
+                sourceVolumes.put("source-data1", disk);
                 source.disks.put("data1", "source-data1");
                 int withDisk = backups.backupNow(instanceId, targetId, target);
+                int diskCopyId = backups.restoreToNew(withDisk, "disk-copy", landingId).instanceId();
+                restored.add(diskCopyId);
+                FakeNativeDaemons.FakeWorkload diskCopy = FakeNativeDaemons.daemonOf(landingId)
+                    .get(FakeNativeDaemons.handleOf(diskCopyId));
+                String copyVolume = FakeNativeDaemons.handleOf(diskCopyId) + "-data1";
+                assertThat(diskCopy.disks).as("step 2: the restored disk points at a volume of the copy's own naming")
+                    .containsExactly(Map.entry("data1", copyVolume));
+                assertThat(FakeNativeDaemons.volumesOf(landingId).get(copyVolume))
+                    .as("step 2: that volume holds the source disk's contents, owned by the copy").satisfies(volume -> {
+                        assertThat(volume.data).containsEntry("marker", "disk-v1");
+                        assertThat(volume.ownerId).isEqualTo(diskCopy.ownerId);
+                    });
+                assertThat(Models.get(InstanceDeviceModel.class).find()
+                        .where(InstanceDeviceModel.INSTANCE_ID.eq(diskCopyId))
+                        .where(InstanceDeviceModel.TYPE.eq(InstanceDeviceModel.TYPE_DISK)).all())
+                    .as("step 2: the copy has the disk's row at the captured size").singleElement().satisfies(row -> {
+                        assertThat((String) row.get(InstanceDeviceModel.NAME)).isEqualTo("data1");
+                        assertThat((Integer) row.get(InstanceDeviceModel.SIZE_GB)).isEqualTo(3);
+                    });
+                assertThat(RawValues.map((Object) Models.get(InstanceBackupModel.class).findById(withDisk)
+                        .get(InstanceBackupModel.SUMMARY)).get("disks"))
+                    .as("step 2: the backup row names the disk it carries").isEqualTo(List.of("data1"));
+
+                // 3. Capacity counts the disk at its declared size, not its archive's: a landing pool of 2 GiB holds
+                //    the export but not a 3 GB disk, and the restore is refused before any record exists.
+                landing.daemon.poolTotalBytes = 2L * 1024 * 1024 * 1024;
+                long beforeFull = Models.get(InstanceModel.class).find().count();
+                Throwable full = catchThrowable(() -> restored.add(
+                    backups.restoreToNew(withDisk, "disk-full", landingId).instanceId()));
+                landing.daemon.poolTotalBytes = 100L * 1024 * 1024 * 1024;
+                assertThat(full).as("step 3: the restore is refused").isInstanceOf(Violations.class);
+                assertThat(((Violations) full).all()).as("step 3: for capacity").anySatisfy(violation ->
+                    assertThat(violation.message().key()).isEqualTo("restore_capacity"));
+                assertThat(Models.get(InstanceModel.class).find().count()).as("step 3: and nothing was created")
+                    .isEqualTo(beforeFull);
+
+                // 4. A backup an older build wrote names the disk but carries no volume: the restore holds in error,
+                //    naming the disk.
+                FakeNativeDaemons.EXPORTS_DISKS.set(false);
+                int legacy = backups.backupNow(instanceId, targetId, target);
+                FakeNativeDaemons.EXPORTS_DISKS.set(true);
                 long before = Models.get(InstanceModel.class).find().count();
                 Throwable refused = catchThrowable(() -> restored.add(
-                    backups.restoreToNew(withDisk, "disk-copy", landingId).instanceId()));
-                Models.get(InstanceModel.class).find().where(InstanceModel.NAME.eq("disk-copy")).all()
+                    backups.restoreToNew(legacy, "legacy-copy", landingId).instanceId()));
+                Models.get(InstanceModel.class).find().where(InstanceModel.NAME.eq("legacy-copy")).all()
                     .forEach(row -> restored.add(row.get(InstanceModel.ID)));
-                assertThat(refused).as("step 2: the restore is refused").isInstanceOf(Violations.class);
-                assertThat(((Violations) refused).all()).as("step 2: naming the data disk").anySatisfy(violation ->
+                assertThat(refused).as("step 4: the restore is refused").isInstanceOf(Violations.class);
+                assertThat(((Violations) refused).all()).as("step 4: naming the data disk").anySatisfy(violation ->
                     assertThat(ApiSupport.shippedText(violation.message())).contains("data1"));
-                assertThat(Models.get(InstanceModel.class).find().count()).as("step 2: the record is held, not lost")
+                assertThat(Models.get(InstanceModel.class).find().count()).as("step 4: the record is held, not lost")
                     .isEqualTo(before + 1);
             } finally {
+                FakeNativeDaemons.EXPORTS_DISKS.set(true);
                 source.disks.clear();
+                sourceVolumes.remove("source-data1");
                 Models.get(InstanceDeviceModel.class).find().where(InstanceDeviceModel.INSTANCE_ID.eq(instanceId))
                     .all().forEach(row -> Models.get(InstanceDeviceModel.class).delete(row.get(InstanceDeviceModel.ID)));
                 Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
+                // Every record a restore created on the landing host, a held one included, so a failed step reports
+                // its own assertion rather than the host's in-use refusal.
+                Models.get(InstanceModel.class).find().where(InstanceModel.SERVER_ID.eq(landingId)).all()
+                    .forEach(row -> restored.add(row.get(InstanceModel.ID)));
                 restored.forEach(service::destroy);
                 service.destroy(instanceId);
                 Models.get(ServerModel.class).delete(landingId);

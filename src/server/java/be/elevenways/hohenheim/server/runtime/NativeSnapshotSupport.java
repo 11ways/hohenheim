@@ -70,15 +70,44 @@ public interface NativeSnapshotSupport extends WorkloadAttribution {
                       boolean withSnapshots) throws IOException;
 
     /**
+     * Export every data disk the workload's definition attaches as the daemon's own portable volume tarball in
+     * {@code directory}: the instance export only NAMES them, so a backup carries their contents beside it.
+     *
+     * AIDEV-NOTE: each disk is captured crash-consistent on its own, right after the instance export; the set is
+     * not one atomic point in time (the daemon snapshots each volume separately), which a guest writing across
+     * disks during the capture would see.
+     *
+     * @param maxBytes cap on each exported disk, enforced during the download
+     * @return the exported disks in definition order, empty for none
+     * @throws IOException when a disk cannot be exported or its declared size is unknown
+     */
+    @NonNull List<ExportedDisk> exportDisks(@NonNull InstanceSpec spec, @NonNull Path directory, long maxBytes)
+        throws IOException;
+
+    /**
+     * One exported data disk.
+     *
+     * @param device the device name in the workload's definition
+     * @param size   the exported file's size in bytes
+     * @param sizeGb the volume's declared size
+     */
+    record ExportedDisk(@NonNull String device, @NonNull Path file, long size, int sizeGb) {
+    }
+
+    /**
      * Import an exported tarball as a NEW stopped instance under {@code spec.handle()}
      * and stamp {@code spec}'s owner labels onto it -- the import carries the SOURCE
      * instance's labels, and an unattributable window would defeat every ownership
      * guard, so re-attribution is part of this contract, not a caller nicety.
      *
+     * @param disks the exported data disks by device name: each lands first as a new volume under {@code spec}'s
+     *              own device-volume naming, attributed to {@code spec}, and the imported device is pointed at it; a
+     *              disk device without an entry keeps naming the source's volume
      * @return the devices the imported definition carries that Hohenheim models as device rows, in definition order
      *         (empty for none): the export keeps them, so the new record's rows are written from this answer
      */
-    @NonNull List<ImportedDevice> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive) throws IOException;
+    @NonNull List<ImportedDevice> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive,
+                                               @NonNull Map<String, Path> disks) throws IOException;
 
     /**
      * One device an imported definition carries, as the device-row vocabulary names it.

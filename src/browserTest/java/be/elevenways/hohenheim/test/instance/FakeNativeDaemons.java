@@ -56,6 +56,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -159,7 +160,7 @@ final class FakeNativeDaemons {
         final Map<String, String> cdroms = new LinkedHashMap<>();
         /** Extra network interfaces by device name: an export carries them, an import lands them. */
         final List<String> nics = new ArrayList<>();
-        /** Data disks, device name to the volume they point at: an export names them, never carries the volume. */
+        /** Data disks, device name to the volume (in the host's volume store) they point at. */
         final Map<String, String> disks = new LinkedHashMap<>();
     }
 
@@ -180,7 +181,15 @@ final class FakeNativeDaemons {
         final Map<String, String> data = new LinkedHashMap<>();
         Identifier ownerModel;
         String ownerId;
+        /** The declared size of a data disk volume; 0 for a named Docker-tier volume. */
+        int sizeGb;
     }
+
+    /**
+     * Whether the native runtime exports its data disks with a backup; false writes the archive an older build wrote,
+     * whose export only names its disks.
+     */
+    static final AtomicBoolean EXPORTS_DISKS = new AtomicBoolean(true);
 
     // -- the observability lanes ----------------------------------------------
     // AIDEV-NOTE: stats and console live HERE rather than in a second fake because they
@@ -354,11 +363,20 @@ final class FakeNativeDaemons {
                        ConsoleStreamSupport, InstallSupport, DeviceAttachSupport {
 
         private final Map<String, FakeWorkload> daemon;
+        /** The host's volume store: data disks live here, beside the Docker-tier named volumes. */
+        private final Map<String, FakeVolume> volumes;
 
         FakeNativeRuntime(String serverName) {
             followDatabase();
             this.daemon = DAEMONS.computeIfAbsent(serverName,
                 name -> new ConcurrentHashMap<>());
+            this.volumes = VOLUME_STORES.computeIfAbsent(serverName,
+                name -> new ConcurrentHashMap<>());
+        }
+
+        /** The volume name a device's disk has on this host, the Incus lane's {@code <handle>-<device>}. */
+        private static String diskVolumeOf(InstanceSpec spec, String deviceName) {
+            return spec.handle() + "-" + deviceName;
         }
 
         private static OwnerLabels.Owner ownerOf(InstanceSpec spec) throws IOException {
@@ -486,12 +504,56 @@ final class FakeNativeDaemons {
         }
 
         @Override
-        public @NonNull List<ImportedDevice> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive)
-                throws IOException {
+        public @NonNull List<ExportedDisk> exportDisks(@NonNull InstanceSpec spec, @NonNull Path directory,
+                                                       long maxBytes) throws IOException {
+            FakeWorkload workload = require(spec.handle());
+            List<ExportedDisk> exported = new ArrayList<>();
+            if (!EXPORTS_DISKS.get()) {
+                return exported;
+            }
+            for (Map.Entry<String, String> disk : workload.disks.entrySet()) {
+                FakeVolume volume = this.volumes.get(disk.getValue());
+                if (volume == null) {
+                    throw new IOException("no volume " + disk.getValue());
+                }
+                StringBuilder text = new StringBuilder("size " + volume.sizeGb + "\n");
+                volume.data.forEach((key, value) ->
+                    text.append("data ").append(key).append('=').append(value).append('\n'));
+                Path file = directory.resolve("disk-" + (exported.size() + 1) + ".tar");
+                Files.writeString(file, text.toString());
+                exported.add(new ExportedDisk(disk.getKey(), file, Files.size(file), volume.sizeGb));
+            }
+            return exported;
+        }
+
+        @Override
+        public @NonNull List<ImportedDevice> importBackup(@NonNull InstanceSpec spec, @NonNull Path archive,
+                                                          @NonNull Map<String, Path> disks) throws IOException {
             if (this.daemon.containsKey(spec.handle())) {
                 throw new IOException("already exists: " + spec.handle());
             }
             OwnerLabels.Owner owner = ownerOf(spec);
+            // The disks land first, as volumes of this workload's own naming owned by it: the Incus lane's order.
+            Map<String, String> landed = new LinkedHashMap<>();
+            for (Map.Entry<String, Path> disk : disks.entrySet()) {
+                String name = diskVolumeOf(spec, disk.getKey());
+                if (this.volumes.containsKey(name)) {
+                    throw new IOException("volume already exists: " + name);
+                }
+                FakeVolume volume = new FakeVolume();
+                volume.ownerModel = owner.model();
+                volume.ownerId = owner.id();
+                for (String line : Files.readAllLines(disk.getValue())) {
+                    if (line.startsWith("size ")) {
+                        volume.sizeGb = Integer.parseInt(line.substring(5));
+                    } else if (line.startsWith("data ")) {
+                        String[] pair = line.substring(5).split("=", 2);
+                        volume.data.put(pair[0], pair.length > 1 ? pair[1] : "");
+                    }
+                }
+                this.volumes.put(name, volume);
+                landed.put(disk.getKey(), name);
+            }
             FakeWorkload workload = new FakeWorkload();
             workload.ownerModel = owner.model();
             workload.ownerId = owner.id();
@@ -507,8 +569,9 @@ final class FakeNativeDaemons {
                 } else if (line.startsWith("nic ")) {
                     workload.nics.add(line.substring(4));
                 } else if (line.startsWith("disk ")) {
+                    // A disk the import carries is re-pointed at its landed volume; one without keeps the source's.
                     String[] disk = line.substring(5).split("=", 2);
-                    workload.disks.put(disk[0], disk[1]);
+                    workload.disks.put(disk[0], landed.getOrDefault(disk[0], disk[1]));
                 }
             }
             this.daemon.put(spec.handle(), workload);
@@ -520,18 +583,31 @@ final class FakeNativeDaemons {
             return devices;
         }
 
-        // -- DeviceAttachSupport: install-media drives only ---------------------
+        // -- DeviceAttachSupport: install media, NICs and data disks (resize stays unsupported) -------------
 
         @Override
         public void ensureDisk(@NonNull InstanceSpec spec, @NonNull String deviceName, int sizeGb)
                 throws IOException {
-            throw new IOException("the fake native runtime carries install media only");
+            FakeWorkload workload = require(spec.handle());
+            OwnerLabels.Owner owner = ownerOf(spec);
+            String name = diskVolumeOf(spec, deviceName);
+            FakeVolume volume = this.volumes.computeIfAbsent(name, absent -> {
+                FakeVolume created = new FakeVolume();
+                created.ownerModel = owner.model();
+                created.ownerId = owner.id();
+                created.sizeGb = sizeGb;
+                return created;
+            });
+            if (!owner.model().equals(volume.ownerModel) || !owner.id().equals(volume.ownerId)) {
+                throw new IOException("volume " + name + " is not this record's");
+            }
+            workload.disks.put(deviceName, name);
         }
 
         @Override
         public void resizeDisk(@NonNull InstanceSpec spec, @NonNull String deviceName, int sizeGb)
                 throws IOException {
-            throw new IOException("the fake native runtime carries install media only");
+            throw new IOException("the fake native runtime does not resize disks");
         }
 
         @Override
@@ -553,15 +629,21 @@ final class FakeNativeDaemons {
                 throws IOException {
             require(spec.handle()).cdroms.remove(deviceName);
             require(spec.handle()).nics.remove(deviceName);
+            require(spec.handle()).disks.remove(deviceName);
+            if (hasVolume) {
+                deleteVolumes(spec, List.of(deviceName));
+            }
         }
 
         @Override
         public void deleteVolumes(@NonNull InstanceSpec spec, @NonNull List<String> deviceNames) {
+            deviceNames.forEach(deviceName -> this.volumes.remove(diskVolumeOf(spec, deviceName)));
         }
 
         @Override
         public @Nullable Integer diskSizeGb(@NonNull InstanceSpec spec, @NonNull String deviceName) {
-            return null;
+            FakeVolume volume = this.volumes.get(diskVolumeOf(spec, deviceName));
+            return volume == null ? null : volume.sizeGb;
         }
 
         @Override

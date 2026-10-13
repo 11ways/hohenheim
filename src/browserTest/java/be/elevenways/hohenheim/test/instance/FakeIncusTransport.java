@@ -40,6 +40,9 @@ final class FakeIncusTransport implements IncusTransport {
     /** What GET /state answers for every instance; the resize gate reads this. */
     String instanceStatus = "Stopped";
 
+    /** The default pool's total size; a restore's capacity probe reads it (the pool reports nothing used). */
+    volatile long poolTotalBytes = 100L * 1024 * 1024 * 1024;
+
     Map<String, Object> lastCreateBody;
     boolean execAttempted;
     private int operationCounter;
@@ -131,7 +134,7 @@ final class FakeIncusTransport implements IncusTransport {
         }
         if ("GET".equals(method) && path.equals("/1.0/storage-pools/default-pool/resources")) {
             // A roomy pool: a restore's capacity probe reads it before anything is created.
-            return sync(Map.of("space", Map.of("total", 100L * 1024 * 1024 * 1024, "used", 0L)));
+            return sync(Map.of("space", Map.of("total", this.poolTotalBytes, "used", 0L)));
         }
         if ("GET".equals(method) && path.equals("/1.0/storage-pools/default-pool/volumes/custom")) {
             return sync(List.copyOf(this.customVolumes.values()));

@@ -48,6 +48,8 @@ import be.elevenways.zenit.common.orm.model.Schema;
  * @param containerPort     the declared container port, or null
  * @param portProtocol      the port's protocol ({@code tcp}; UDP arrives with pre-allocation)
  * @param volumes           per-volume payload inventory with plaintext checksums
+ * @param disks             the data disks the workload's definition attached at capture, each with its own payload
+ *                          (the daemon's volume export); empty in an older manifest, whose export only names them
  * @param profile           the control-plane profile, or null for a version-1 manifest --
  *                          which DECLARES NOTHING about templates, variables or config
  *                          files rather than declaring them absent
@@ -66,6 +68,7 @@ public record BackupManifest(int version,
                              @Nullable Integer containerPort,
                              @NonNull String portProtocol,
                              @NonNull List<VolumeEntry> volumes,
+                             @NonNull List<DiskEntry> disks,
                              @Nullable InstanceProfile profile,
                              @Nullable ApplicationEntry application) {
 
@@ -116,6 +119,19 @@ public record BackupManifest(int version,
 
     /** Files accompanying an application, inside the SAME encrypted archive as its data. */
     public record PayloadEntry(@NonNull String file, @NonNull String sha256, long size) {}
+
+    /**
+     * One data disk the instance export names by device: the daemon's own export of the volume behind it, archive
+     * entry {@code disks/<file>}, which a restore lands as a new volume the imported device is pointed at.
+     *
+     * AIDEV-NOTE: a separate inventory from {@link #volumes}, never extra volume entries: a volume entry is a
+     * payload the lane restores INTO the workload (a Docker volume, the whole instance), a disk is a device the
+     * import re-points, and the capacity check counts it at its declared size, not at its compressed archive.
+     *
+     * @param device the device name in the exported definition
+     * @param sizeGb the volume's declared size, what the restored volume claims on its host
+     */
+    public record DiskEntry(@NonNull String device, int sizeGb, @NonNull PayloadEntry payload) {}
 
     /** Stable runtime catalog identity and the immutable source/image needed after host loss. */
     public record ApplicationEntry(@NonNull Map<String, Object> runtimeImage,
@@ -193,6 +209,15 @@ public record BackupManifest(int version,
         return total;
     }
 
+    /** What the restored data disks claim on their host: each volume at its declared size. */
+    public long totalDiskBytes() {
+        long total = 0;
+        for (DiskEntry disk : this.disks) {
+            total = Math.addExact(total, Math.multiplyExact((long) disk.sizeGb(), 1024L * 1024 * 1024));
+        }
+        return total;
+    }
+
     /** Serialize to the map DRY writes into {@code manifest.dry}. */
     public @NonNull Map<String, Object> toMap() {
         Map<String, Object> root = new LinkedHashMap<>();
@@ -235,6 +260,14 @@ public record BackupManifest(int version,
             volumeList.add(entry);
         }
         root.put("volumes", volumeList);
+        List<Map<String, Object>> diskList = new ArrayList<>();
+        for (DiskEntry disk : this.disks) {
+            Map<String, Object> entry = new LinkedHashMap<>(payloadMap(disk.payload()));
+            entry.put("device", disk.device());
+            entry.put("size_gb", disk.sizeGb());
+            diskList.add(entry);
+        }
+        root.put("disks", diskList);
         if (this.application != null) {
             Map<String, Object> app = new LinkedHashMap<>();
             app.put("runtime_image", this.application.runtimeImage());
@@ -293,6 +326,7 @@ public record BackupManifest(int version,
         summary.put("install_media", this.installMedia);
         summary.put("volume_count", this.volumes.size());
         summary.put("volume_bytes", this.totalVolumeBytes());
+        summary.put("disks", this.disks.stream().map(DiskEntry::device).toList());
         if (this.profile != null) {
             TemplateRef template = this.profile.template();
             summary.put("template", template != null ? template.name() : null);
@@ -380,6 +414,11 @@ public record BackupManifest(int version,
                 }
             }
         }
+        List<DiskEntry> disks = disksFrom(root.get("disks"), volumes);
+        if (!disks.isEmpty() && !PAYLOAD_INSTANCE_EXPORT.equals(payload)) {
+            throw new IOException("Backup manifest carries data disks for a '" + payload
+                + "' payload; only an instance export names devices to point them at");
+        }
 
         InstanceProfile profile = version.intValue() > VERSION_WITHOUT_PROFILE
             ? profileFrom(root, instance) : null;
@@ -388,7 +427,37 @@ public record BackupManifest(int version,
         Map<String, Object> typedSettings = (Map<String, Object>) settings;
         return new BackupManifest(version.intValue(), created, controllerVersion, name, kind,
             payload, typedSettings, imageReference, imageId, List.copyOf(installMedia), ownership, containerPort,
-            protocol, List.copyOf(volumes), profile, applicationFrom(root, version.intValue()));
+            protocol, List.copyOf(volumes), disks, profile, applicationFrom(root, version.intValue()));
+    }
+
+    /**
+     * The disk inventory, absent in a manifest written before disks were captured (= none). Each device and payload
+     * file appears once, and no disk file shadows a volume file.
+     */
+    private static @NonNull List<DiskEntry> disksFrom(@Nullable Object value, @NonNull List<VolumeEntry> volumes)
+            throws IOException {
+        if (value == null) {
+            return List.of();
+        }
+        if (!(value instanceof List<?> list)) {
+            throw new IOException("Backup manifest 'disks' is not a list");
+        }
+        List<DiskEntry> disks = new ArrayList<>();
+        for (Object element : list) {
+            if (!(element instanceof Map<?, ?> entry) || !(entry.get("size_gb") instanceof Number sizeGb)) {
+                throw new IOException("Backup manifest disk entry is not a map with a size_gb");
+            }
+            String device = requireText(entry.get("device"), "disks[].device");
+            PayloadEntry payload = payloadFrom(entry);
+            if (sizeGb.intValue() <= 0
+                    || disks.stream().anyMatch(disk -> disk.device().equals(device)
+                        || disk.payload().file().equals(payload.file()))
+                    || volumes.stream().anyMatch(volume -> volume.file().equals(payload.file()))) {
+                throw new IOException("Invalid or duplicate backup disk inventory");
+            }
+            disks.add(new DiskEntry(device, sizeGb.intValue(), payload));
+        }
+        return List.copyOf(disks);
     }
 
     /**

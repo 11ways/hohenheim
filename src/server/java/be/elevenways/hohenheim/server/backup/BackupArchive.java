@@ -68,6 +68,10 @@ public final class BackupArchive {
     public static final String VOLUME_PREFIX = "volumes/";
 
     public static final String APPLICATION_PREFIX = "application/";
+
+    /** Archive entry prefix of each data disk's payload ({@link BackupManifest.DiskEntry}). */
+    public static final String DISK_PREFIX = "disks/";
+
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final int GCM_TAG_BITS = 128;
     private static final int IV_BYTES = 12;
@@ -79,8 +83,8 @@ public final class BackupArchive {
 
     /**
      * Build and encrypt one archive. {@code volumeFiles} maps each manifest volume
-     * entry's {@code file} name to its local tar; application files are keyed with
-     * {@link #APPLICATION_PREFIX} so a volume cannot shadow the runtime image.
+     * entry's {@code file} name to its local tar; application and disk files are keyed with
+     * {@link #APPLICATION_PREFIX} and {@link #DISK_PREFIX} so a volume cannot shadow them.
      *
      * @return the encrypted archive's size in bytes
      */
@@ -105,16 +109,14 @@ public final class BackupArchive {
                     Files.copy(tar, zip);
                     zip.closeEntry();
                 }
-                if (manifest.application() != null) {
-                    for (BackupManifest.PayloadEntry payload : applicationPayloads(manifest)) {
-                        Path file = volumeFiles.get(APPLICATION_PREFIX + payload.file());
-                        if (file == null) {
-                            throw new IOException("Application backup payload is missing");
-                        }
-                        zip.putNextEntry(new ZipEntry(APPLICATION_PREFIX + payload.file()));
-                        Files.copy(file, zip);
-                        zip.closeEntry();
+                for (Map.Entry<String, BackupManifest.PayloadEntry> payload : sidePayloads(manifest).entrySet()) {
+                    Path file = volumeFiles.get(payload.getKey());
+                    if (file == null) {
+                        throw new IOException("Backup payload " + payload.getKey() + " is missing");
                     }
+                    zip.putNextEntry(new ZipEntry(payload.getKey()));
+                    Files.copy(file, zip);
+                    zip.closeEntry();
                 }
             }
             encrypt(plainZip, outFile, keyring);
@@ -167,14 +169,15 @@ public final class BackupArchive {
                             + " whole -- nothing was restored from it");
                     }
                 }
-                for (BackupManifest.PayloadEntry payload : applicationPayloads(manifest)) {
-                    ZipEntry entry = zip.getEntry(APPLICATION_PREFIX + payload.file());
+                for (Map.Entry<String, BackupManifest.PayloadEntry> payload : sidePayloads(manifest).entrySet()) {
+                    ZipEntry entry = zip.getEntry(payload.getKey());
                     if (entry == null) {
-                        throw new IOException("Application backup payload is missing");
+                        throw new IOException("Backup payload " + payload.getKey() + " is missing");
                     }
                     Hashed hashed = hashEntry(zip, entry);
-                    if (hashed.size() != payload.size() || !hashed.sha256().equals(payload.sha256())) {
-                        throw new IOException("Application backup payload does not match its"
+                    if (hashed.size() != payload.getValue().size()
+                            || !hashed.sha256().equals(payload.getValue().sha256())) {
+                        throw new IOException("Backup payload " + payload.getKey() + " does not match its"
                             + " recorded checksum; refused whole");
                     }
                 }
@@ -215,29 +218,68 @@ public final class BackupArchive {
         return tars;
     }
 
-    private static List<BackupManifest.PayloadEntry> applicationPayloads(
-            BackupManifest manifest) {
-        return manifest.application() == null ? List.of()
-            : List.of(manifest.application().artifact(), manifest.application().image());
+    /**
+     * The payloads beside the volume inventory, by archive entry name: the application's source and image, then
+     * each data disk.
+     */
+    private static Map<String, BackupManifest.PayloadEntry> sidePayloads(BackupManifest manifest) {
+        Map<String, BackupManifest.PayloadEntry> payloads = new LinkedHashMap<>();
+        if (manifest.application() != null) {
+            for (BackupManifest.PayloadEntry payload
+                    : List.of(manifest.application().artifact(), manifest.application().image())) {
+                payloads.put(APPLICATION_PREFIX + payload.file(), payload);
+            }
+        }
+        for (BackupManifest.DiskEntry disk : manifest.disks()) {
+            payloads.put(DISK_PREFIX + disk.payload().file(), disk.payload());
+        }
+        return payloads;
     }
 
     /** Extract the already authenticated source and runtime image, never volume payloads. */
     public static @NonNull Map<String, Path> extractApplication(@NonNull Opened opened,
                                                                @NonNull Path directory)
             throws IOException {
-        Files.createDirectories(directory);
+        BackupManifest.ApplicationEntry application = opened.manifest().application();
+        if (application == null) {
+            return Map.of();
+        }
         Map<String, Path> files = new LinkedHashMap<>();
-        try (ZipFile zip = new ZipFile(opened.zip().toFile())) {
-            for (BackupManifest.PayloadEntry payload : applicationPayloads(opened.manifest())) {
-                Path file = directory.resolve(payload.file());
-                try (InputStream in = zip.getInputStream(zip.getEntry(
-                        APPLICATION_PREFIX + payload.file()))) {
-                    Files.copy(in, file);
-                }
-                files.put(payload.file(), file);
-            }
+        for (BackupManifest.PayloadEntry payload : List.of(application.artifact(), application.image())) {
+            files.put(payload.file(), extractEntry(opened, APPLICATION_PREFIX + payload.file(),
+                directory.resolve(payload.file())));
         }
         return files;
+    }
+
+    /**
+     * Extract the already authenticated data disk payloads, keyed by device name.
+     *
+     * @return empty for a manifest without disks
+     */
+    public static @NonNull Map<String, Path> extractDisks(@NonNull Opened opened, @NonNull Path directory)
+            throws IOException {
+        Map<String, Path> files = new LinkedHashMap<>();
+        for (BackupManifest.DiskEntry disk : opened.manifest().disks()) {
+            files.put(disk.device(), extractEntry(opened, DISK_PREFIX + disk.payload().file(),
+                directory.resolve(disk.payload().file())));
+        }
+        return files;
+    }
+
+    private static @NonNull Path extractEntry(@NonNull Opened opened, @NonNull String entryName,
+                                              @NonNull Path target) throws IOException {
+        Files.createDirectories(target.getParent());
+        try (ZipFile zip = new ZipFile(opened.zip().toFile())) {
+            ZipEntry entry = zip.getEntry(entryName);
+            if (entry == null) {
+                throw new IOException("Backup archive is missing payload " + entryName);
+            }
+            try (InputStream in = zip.getInputStream(entry)) {
+                Files.copy(in, target);
+            }
+        }
+        return target;
     }
 
     /** Stream a local file through SHA-256 (zenit's {@link SecureTokens#sha256Hex(Path)}). */
