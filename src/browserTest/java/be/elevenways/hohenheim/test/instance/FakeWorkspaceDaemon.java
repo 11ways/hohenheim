@@ -46,6 +46,9 @@ final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport {
     /** Every script this daemon was asked to exec, in order. */
     final List<String> execs = new ArrayList<>();
 
+    /** The options each exec ran with, in the order of {@link #execs}. */
+    final List<ExecSupport.ExecOptions> execOptions = new ArrayList<>();
+
     /** Every spec this daemon was asked to CREATE a workload from, in order. */
     final List<InstanceSpec> created = new ArrayList<>();
 
@@ -163,6 +166,7 @@ final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport {
                                                     long timeoutMs) throws IOException {
         requireReachable();
         this.execs.add(command.get(command.size() - 1));
+        this.execOptions.add(options);
         return new ExecSupport.ExecOutcome(0, this.execOutput);
     }
 

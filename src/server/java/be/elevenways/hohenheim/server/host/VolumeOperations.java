@@ -64,6 +64,12 @@ public interface VolumeOperations {
     void destroy(@NonNull String hostPath);
 
     /**
+     * Remove an owner's folder ({@code <root>/<instance>}) and its snapshot mirror when nothing is left in them; a
+     * folder that still holds anything, or is absent, stays as it is.
+     */
+    void pruneOwner(@NonNull String ownerPath);
+
+    /**
      * Give the volume directory itself to a uid, so the workload can write in its own home.
      *
      * AIDEV-NOTE: the DIRECTORY only, never a recursive chown. A workspace's home holds a
@@ -161,6 +167,8 @@ public interface VolumeOperations {
         @Override public void deleteSnapshot(@NonNull String snapshotPath) { throw refuse(); }
 
         @Override public void destroy(@NonNull String hostPath) { throw refuse(); }
+
+        @Override public void pruneOwner(@NonNull String ownerPath) { throw refuse(); }
 
         @Override public void own(@NonNull String hostPath, int uid) { throw refuse(); }
 

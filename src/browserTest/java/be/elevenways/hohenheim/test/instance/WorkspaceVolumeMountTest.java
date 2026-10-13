@@ -9,8 +9,10 @@ import be.elevenways.hohenheim.server.incus.IncusClient;
 import be.elevenways.hohenheim.server.instance.DeployTrigger;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.instance.InstanceExec;
 import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.instance.WorkspaceKind;
+import be.elevenways.hohenheim.server.runtime.ExecSupport;
 import be.elevenways.hohenheim.server.runtime.Egress;
 import be.elevenways.hohenheim.server.runtime.IncusInstanceRuntime;
 import be.elevenways.hohenheim.server.runtime.IncusWorkloadType;
@@ -26,6 +28,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -154,6 +157,37 @@ class WorkspaceVolumeMountTest {
                 .as("step 7: an undeclared workspace mounts its home and nothing else")
                 .containsExactly(Map.entry(DATA_PATH + "/volumes/" + bare + "/home",
                     WorkspaceKind.HOME_PATH));
+        });
+    }
+
+    /**
+     * A command run from the Console tab starts in the workspace's home and sees it as HOME, as the workspace's own
+     * user: it ran in / with an empty HOME, so ~ never reached the files the workspace keeps.
+     */
+    @Test
+    void aCommandRunsInTheWorkspaceHomeAsItsUser() {
+        Db.run(datasource, () -> {
+            InstanceService service = new InstanceService();
+            int id = workspace("ws-exec-home");
+            service.deploy(id, DeployTrigger.MANUAL);
+            try {
+                daemon.start(handleOf(id));
+            } catch (IOException unreachable) {
+                throw new UncheckedIOException(unreachable);
+            }
+
+            // 1. The command runs, and the workload runs as the workspace's own uid.
+            InstanceExec.Run run = new InstanceExec(service).run(id, "pwd");
+            assertThat(run.exitCode()).as("step 1: the command ran").isZero();
+            assertThat(daemon.lastCreated().runUser()).as("step 1: the workload runs as the workspace's uid")
+                .isNotNull();
+
+            // 2. It starts in the home and sees it as HOME.
+            ExecSupport.ExecOptions options = daemon.execOptions.get(daemon.execOptions.size() - 1);
+            assertThat(options.workdir()).as("step 2: the command starts in the workspace home")
+                .isEqualTo(WorkspaceKind.HOME_PATH);
+            assertThat(options.env()).as("step 2: and HOME names that home")
+                .containsEntry("HOME", WorkspaceKind.HOME_PATH);
         });
     }
 

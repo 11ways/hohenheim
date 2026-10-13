@@ -52,6 +52,11 @@ public interface ExecSupport {
             return new ExecOptions(Map.of(), workdir);
         }
 
+        /** A command started in {@code home} with HOME naming it, or the runtime's own defaults when null. */
+        public static @NonNull ExecOptions inHome(@Nullable String home) {
+            return home == null ? none() : new ExecOptions(Map.of("HOME", home), home);
+        }
+
         public @NonNull ExecOptions withEnv(@NonNull Map<String, String> env) {
             return new ExecOptions(Map.copyOf(env), this.workdir);
         }

@@ -87,7 +87,10 @@ public final class InstanceExec {
 
         ExecSupport.ExecOutcome outcome;
         try {
-            outcome = support.runExec(resolved.spec(), argv, EXEC_TIMEOUT_MS);
+            // The workload's own home, as its spec declares it (a workspace: its home volume); a kind declaring none
+            // keeps what the runtime gives its user.
+            outcome = support.runExec(resolved.spec(), argv, ExecSupport.ExecOptions.inHome(resolved.spec().home()),
+                EXEC_TIMEOUT_MS);
         } catch (IOException e) {
             throw HohenheimViolations.instanceRefusal("exec_failed", resolved.row(), e);
         }

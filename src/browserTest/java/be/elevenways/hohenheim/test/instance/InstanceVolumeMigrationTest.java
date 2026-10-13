@@ -367,6 +367,8 @@ class InstanceVolumeMigrationTest {
                     .as("step 2: the source's named volume went with the completion").isNull();
                 assertThat(Files.exists(sourceHome))
                     .as("step 2: and so did the source's home directory").isFalse();
+                assertThat(Files.exists(sourceHome.getParent()))
+                    .as("step 2: and the instance's own folder it left empty").isFalse();
                 assertThat(InstanceVolumes.declaredFor(id))
                     .as("step 2: the record keeps its declaration").hasSize(1);
 
@@ -376,7 +378,15 @@ class InstanceVolumeMigrationTest {
                     .as("step 3: the home came back to the first host").hasContent("kept in home");
                 assertThat(Files.exists(targetHome))
                     .as("step 3: the host it left keeps no copy").isFalse();
-                service.destroy(id);
+                assertThat(Files.exists(targetHome.getParent()))
+                    .as("step 3: nor the instance's empty folder").isFalse();
+
+                // 4. Delete with data removes the home and the per-instance folder it leaves empty.
+                service.destroyWithData(id);
+                assertThat(Files.exists(sourceHome))
+                    .as("step 4: delete with data removed the home directory").isFalse();
+                assertThat(Files.exists(sourceHome.getParent()))
+                    .as("step 4: and the per-instance folder it left empty").isFalse();
             });
         } finally {
             FakeHostVolumes.uninstall();

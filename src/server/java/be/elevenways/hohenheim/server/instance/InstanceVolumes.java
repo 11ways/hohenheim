@@ -464,6 +464,7 @@ public final class InstanceVolumes {
                 operations.destroy(hostPathFor(ownerInstanceId, name));
             }
         }
+        pruneOwner(operations, ownerInstanceId);
     }
 
     /**
@@ -536,6 +537,7 @@ public final class InstanceVolumes {
             operations.destroy(hostPath);
             removed.add(hostPath);
         }
+        pruneOwner(operations, ownerInstanceId);
 
         model.find().where(InstanceVolumeModel.INSTANCE_ID.eq(ownerInstanceId)).delete();
 
@@ -572,7 +574,9 @@ public final class InstanceVolumes {
         }
         Row server = requireServer(serverName);
         String hostPath = hostPathFor(ownerInstanceId, name);
-        operationsFor(server).destroy(hostPath);
+        VolumeOperations operations = operationsFor(server);
+        operations.destroy(hostPath);
+        pruneOwner(operations, ownerInstanceId);
         model.find()
             .where(InstanceVolumeModel.INSTANCE_ID.eq(ownerInstanceId))
             .where(InstanceVolumeModel.NAME.eq(name))
@@ -581,6 +585,22 @@ public final class InstanceVolumes {
     }
 
     // -- internals -------------------------------------------------------------
+
+    /**
+     * Remove an owner's folder once its last volume left it empty (Delete with data used to leave
+     * {@code <volumes>/<id>} behind on the host).
+     *
+     * AIDEV-NOTE: logged, never thrown: it follows a removal that already happened, and a host whose installed helper
+     * predates the prune verb refuses it until the installer runs again; the empty folder is litter, not data.
+     */
+    private static void pruneOwner(@NonNull VolumeOperations operations, int ownerInstanceId) {
+        try {
+            operations.pruneOwner(rootFor(ownerInstanceId));
+        } catch (RuntimeException unpruned) {
+            Blast.log("VOLUMES: could not remove the empty folder of instance", ownerInstanceId, "-",
+                unpruned.getMessage());
+        }
+    }
 
     /**
      * Derive one declaration into a mount map.

@@ -6841,7 +6841,7 @@
       "scope": "backup_target_kind"
     },
     {
-      "text": "Een map op deze controller; alleen buiten de host als de map dat zelf is",
+      "text": "Een map op deze controller; die staat alleen buiten de host als de map zelf gerepliceerd of van een andere host gemount is",
       "scope": "backup_target_kind_description"
     }
   ],

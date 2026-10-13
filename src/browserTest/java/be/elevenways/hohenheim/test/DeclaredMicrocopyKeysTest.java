@@ -9,6 +9,8 @@ import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.instance.VariableTypeRegistry;
 import be.elevenways.hohenheim.server.cms.CmsSupport;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
+import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
+import be.elevenways.hohenheim.server.backup.FilesystemTargetKind;
 import be.elevenways.hohenheim.source.GitProviderKindRegistry;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
@@ -23,6 +25,7 @@ import be.elevenways.zenit.test.support.TaskLabelCoverage;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.util.Objects;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -108,6 +111,23 @@ class DeclaredMicrocopyKeysTest {
         for (HohenheimActivityAction verb : HohenheimActivityAction.values()) {
             assertNotNull(verb.happened(), verb.id() + " heads its rows with a sentence");
         }
+    }
+
+    @Test
+    void theFilesystemTargetSaysWhatMakesItOffHost() {
+        // The kind picker's description stopped mid-clause ("only off-host if the directory itself is"), in both
+        // languages; it names the condition in full.
+        ShippedCatalogs catalogs = new ShippedCatalogs();
+        Microcopy description = Objects.requireNonNull(
+            BackupTargetKinds.getHandler(FilesystemTargetKind.ID.toString())).getDescription();
+        assertEquals("A directory on this controller; it is off-host only when the directory itself is replicated or"
+                + " mounted from another host",
+            catalogs.resolveSource(description.key(), LocaleChain.ofTags("en"), description.filters()),
+            "step 1: the English description names what makes the directory off-host");
+        assertEquals("Een map op deze controller; die staat alleen buiten de host als de map zelf gerepliceerd of"
+                + " van een andere host gemount is",
+            catalogs.resolveSource(description.key(), LocaleChain.ofTags("nl"), description.filters()),
+            "step 2: the Dutch description names it too");
     }
 
     @Test

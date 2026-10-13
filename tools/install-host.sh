@@ -437,6 +437,7 @@ refuse() {
 
 usage() {
     printf 'usage: hohenheim-helper volume-create|volume-usage|volume-destroy <path>\n' >&2
+    printf '       hohenheim-helper volume-prune <instance folder>\n' >&2
     printf '       hohenheim-helper volume-quota <path> <bytes|none>\n' >&2
     printf '       hohenheim-helper volume-snapshot <path> <target>\n' >&2
     printf '       hohenheim-helper volume-own <path> <uid>\n' >&2
@@ -587,6 +588,26 @@ case "$verb" in
             btrfs subvolume delete "./$leaf"
         else
             rm -rf -- "./$leaf"
+        fi
+        ;;
+    volume-prune)
+        # An instance's folder, and its snapshot-tree mirror, go once they hold nothing:
+        # rmdir never removes a folder with anything left in it.
+        [ $# -eq 1 ] || usage
+        below "$VOLUME_ROOT" "$1" 1 1
+        owner="$BELOW"
+        case "$owner" in
+            *[!0-9]*) refuse "'$1' is not an instance folder" ;;
+        esac
+        enter "$VOLUME_ROOT" ""
+        if [ -d "./$owner" ] && [ ! -L "./$owner" ]; then
+            rmdir --ignore-fail-on-non-empty -- "./$owner"
+        fi
+        if [ -d ./.snapshots ] && [ ! -L ./.snapshots ]; then
+            enter "$VOLUME_ROOT" ".snapshots"
+            if [ -d "./$owner" ] && [ ! -L "./$owner" ]; then
+                rmdir --ignore-fail-on-non-empty -- "./$owner"
+            fi
         fi
         ;;
     volume-own)

@@ -128,6 +128,18 @@ final class FakeHostVolumes implements VolumeOperations.Hosts {
         }
 
         @Override
+        public void pruneOwner(@NonNull String ownerPath) {
+            Path directory = dir(ownerPath);
+            try (Stream<Path> entries = Files.isDirectory(directory) ? Files.list(directory) : Stream.empty()) {
+                if (Files.isDirectory(directory) && entries.findAny().isEmpty()) {
+                    Files.delete(directory);
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        @Override
         public void own(@NonNull String hostPath, int uid) {
         }
 

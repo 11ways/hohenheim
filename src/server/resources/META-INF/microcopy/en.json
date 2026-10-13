@@ -6841,7 +6841,7 @@
       "scope": "backup_target_kind"
     },
     {
-      "text": "A directory on this controller; only off-host if the directory itself is",
+      "text": "A directory on this controller; it is off-host only when the directory itself is replicated or mounted from another host",
       "scope": "backup_target_kind_description"
     }
   ],

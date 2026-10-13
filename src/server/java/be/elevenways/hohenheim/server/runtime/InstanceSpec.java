@@ -24,6 +24,9 @@ import java.util.Map;
  * @param image         image reference (repo[:tag] resolved by the caller)
  * @param command       command override, or null to keep the image's default
  * @param workdir       working directory override, or null to keep the image's default
+ * @param home          where a command run inside the workload starts and what it sees as HOME (the run user's
+ *                      home), or null for whatever the runtime gives its default user; never applied at create, so
+ *                      no driver refuses it
  * @param env           environment variables (name to value, ordered)
  * @param volumes       persistent named volumes: volume name to container path
  * @param binds         Hohenheim-OWNED host directories: host path to container path.
@@ -117,7 +120,8 @@ public record InstanceSpec(@NonNull String handle,
                            @Nullable Integer networkLimitMbit,
                            @Nullable Integer runUser,
                            boolean tty,
-                           @Nullable String workdir) {
+                           @Nullable String workdir,
+                           @Nullable String home) {
 
     /**
      * Every collection component is defensively copied, so a caller that keeps mutating the
@@ -208,6 +212,7 @@ public record InstanceSpec(@NonNull String handle,
         private @Nullable Integer runUser;
         private boolean tty;
         private @Nullable String workdir;
+        private @Nullable String home;
 
         private Builder(@NonNull String handle, @NonNull String image,
                         @NonNull ResourceLimits limits,
@@ -228,6 +233,12 @@ public record InstanceSpec(@NonNull String handle,
 
         public @NonNull Builder workdir(@Nullable String workdir) {
             this.workdir = Texts.blankAsNull(workdir);
+            return this;
+        }
+
+        /** Where a command run inside the workload starts and what it sees as HOME; null keeps the runtime's. */
+        public @NonNull Builder home(@Nullable String home) {
+            this.home = Texts.blankAsNull(home);
             return this;
         }
 
@@ -321,7 +332,7 @@ public record InstanceSpec(@NonNull String handle,
                 this.ownerLabels, this.cloudInitUserData, this.imageFingerprint,
                 this.imageOrigin, this.secureBoot, this.guestAgent, this.tmpfs,
                 this.healthCheck, this.rootDiskGb, this.networkLimitMbit, this.runUser,
-                this.tty, this.workdir);
+                this.tty, this.workdir, this.home);
         }
     }
 
@@ -351,7 +362,7 @@ public record InstanceSpec(@NonNull String handle,
             this.binds, List.copyOf(claimed), this.limits, this.hardening,
             this.ownerLabels, this.cloudInitUserData, this.imageFingerprint, this.imageOrigin,
             this.secureBoot, this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb,
-            this.networkLimitMbit, this.runUser, this.tty, this.workdir);
+            this.networkLimitMbit, this.runUser, this.tty, this.workdir, this.home);
     }
 
     /** A copy carrying the record's pinned resolved image identity. */
@@ -360,7 +371,7 @@ public record InstanceSpec(@NonNull String handle,
             this.binds, this.publications, this.limits, this.hardening, this.ownerLabels,
             this.cloudInitUserData, fingerprint, this.imageOrigin, this.secureBoot,
             this.guestAgent, this.tmpfs, this.healthCheck, this.rootDiskGb,
-            this.networkLimitMbit, this.runUser, this.tty, this.workdir);
+            this.networkLimitMbit, this.runUser, this.tty, this.workdir, this.home);
     }
 
     private static @NonNull List<PortPublication> listOf(@Nullable PortPublication one) {

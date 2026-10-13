@@ -180,7 +180,9 @@ calls="$(wc -l < "$DEPLOYED_CALLS")"
 verdict="current"
 upstream="current"
 unpushed=0
-if [ "$calls" = "1" ]; then verdict="pushed-ahead"; fi
+# The first call is the BEFORE report: the host still runs the old jar, so every repo
+# with commits since then reads pushed-ahead, upstream ones included.
+if [ "$calls" = "1" ]; then verdict="pushed-ahead"; upstream="pushed-ahead"; fi
 if [ "${FAKE_DEPLOYED:-current}" = "stuck" ]; then verdict="deployed-ahead"; fi
 if [ "${FAKE_DEPLOYED:-current}" = "upstream-ahead" ]; then upstream="pushed-ahead"; fi
 if [ "${FAKE_DEPLOYED:-current}" = "unpushed" ]; then unpushed=2; fi
@@ -268,6 +270,11 @@ if [ "$(wc -l < "$DEPLOYED_CALLS")" = "2" ]; then
 else
     no "zenit-dev deployed is asked before and after (got $(wc -l < "$DEPLOYED_CALLS") calls)"
 fi
+STEP2="$(printf '%s\n' "$OUT" | sed -n '/^== 2\./,/^== 3\./p')"
+expect "step 2 names the repos the pending deploy replaces" "$STEP2" \
+    "the host lacks pushed commits of upstream repos (the deploy is pending): zenit"
+expect "step 2 never reads the OLD jar's pushed-ahead as pushed after this build" "$OUT" \
+    "pushed after this build" no
 
 # --- 2. refusal: a dirty stamp ----------------------------------------------
 
@@ -325,10 +332,18 @@ else
 fi
 
 # An UPSTREAM repo pushed after the build fetched it is a warning, never a refusal:
-# the jar is exactly the pushed heads it was built from.
+# the jar is exactly the pushed heads it was built from. Only step 10, where the host
+# runs this build, can say so.
 OUT="$(FAKE_DEPLOYED=upstream-ahead run_lane testbox "$JAR" 2>&1)" || no "an upstream pushed-ahead lane exits 0"
-expect "an upstream pushed-ahead is reported as a warning" "$OUT" "WARNING: upstream repos were pushed after this build"
-expect "and names the repo" "$OUT" "ships them): zenit"
+STEP10="$(printf '%s\n' "$OUT" | sed -n '/^== 10\./,/^== 11\./p')"
+expect "an upstream pushed-ahead after the swap is reported as a warning" "$STEP10" \
+    "WARNING: upstream repos were pushed after this build"
+expect "and names the repo" "$STEP10" "ships them): zenit"
+if [ "$(printf '%s\n' "$OUT" | /usr/bin/grep -c 'pushed after this build')" = "1" ]; then
+    ok "the pushed-after-build warning comes from step 10 alone"
+else
+    no "the pushed-after-build warning comes from step 10 alone"
+fi
 
 # Unpushed local commits (hohenheim's own included) are in no deploy of pushed heads:
 # a warning naming the count, never a refusal; a lagging checkout is not even that.

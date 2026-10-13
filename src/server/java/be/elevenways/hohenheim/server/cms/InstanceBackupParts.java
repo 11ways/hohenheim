@@ -9,12 +9,15 @@ import be.elevenways.hohenheim.model.BackupTargetModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.http.Uri;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.cms.common.action.ActionPlacement;
 import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.CmsActionResult;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.server.page.CmsActionResultTranslator;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.common.resource.ResourceForm;
@@ -197,23 +200,27 @@ public final class InstanceBackupParts {
         .withZone(ZoneOffset.UTC);
 
     /**
-     * Restore-to-new, offered on a complete backup. A restore that could not bring everything back says so HERE, at
-     * the moment the operator is looking: a bare "restored as #N" over a record missing its template, variables or
-     * config files is the silent degradation the manifest inventory exists to end.
+     * Restore-to-new, offered on a complete backup. It ends on the NEW instance with a toast naming it; a restore that
+     * could not bring everything back says so in that toast, at the moment the operator is looking: a bare "restored as
+     * #N" over a record missing its template, variables or config files is the silent degradation the manifest
+     * inventory exists to end.
+     *
+     * AIDEV-NOTE: a Refresh stayed on the backup page, which offered no way to the new record (walked on daystrom,
+     * round r2y); the toast is stashed for the page the redirect lands on, the destroyWithDataAction shape.
      */
     private static @NonNull PanelAction<Row> restore() {
         Microcopy verb = HohenheimMicrocopy.INSTANCE_BACKUP.of("restore_new");
         return PanelAction.<Row, Restored>places(InstanceBackupOperations.RESTORE_BACKUP, ActionPlacement.ROW,
                 (request, result) -> {
                     Restored outcome = result.value();
-                    if (outcome.missing() != null) {
-                        return CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_BACKUP
-                            .of("restored_new_partial")
+                    Microcopy told = outcome.missing() != null
+                        ? HohenheimMicrocopy.INSTANCE_BACKUP.of("restored_new_partial")
                             .withArg("id", outcome.instanceId())
-                            .withArg("missing", outcome.missing()));
-                    }
-                    return CmsActionResult.refreshWithToast(HohenheimMicrocopy.INSTANCE_BACKUP.of("restored_new")
-                        .withArg("id", outcome.instanceId()));
+                            .withArg("missing", outcome.missing())
+                        : HohenheimMicrocopy.INSTANCE_BACKUP.of("restored_new").withArg("id", outcome.instanceId());
+                    CmsActionResultTranslator.stashSuccess(request.request().conduit(), told);
+                    return CmsActionResult.redirect(new Uri(CmsRoutes.subpage(request.request().panelSlug(),
+                        HohenheimSlugs.INSTANCES, outcome.instanceId(), RecordOverview.SLUG).toUrl()));
                 })
             .label(verb)
             .icon(Icon.of("clone"))

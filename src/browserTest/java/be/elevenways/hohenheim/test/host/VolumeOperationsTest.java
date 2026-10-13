@@ -131,6 +131,16 @@ class VolumeOperationsTest {
             .contains("btrfs subvolume delete '" + volume + "'")
             .contains("rm -rf '" + volume + "'");
 
+        // 5b. PRUNE takes the instance's folder and its snapshot mirror only when they hold nothing: Delete with data
+        //     left an empty /volumes/<id> behind on the host.
+        btrfs.pruneOwner("/srv/data/volumes/42");
+        assertThat(shell.last())
+            .as("step 5b: prune removes the empty instance folder and its snapshot mirror, nothing that holds data")
+            .contains("rmdir --ignore-fail-on-non-empty '/srv/data/volumes/42'")
+            .contains("rmdir --ignore-fail-on-non-empty '/srv/data/volumes/"
+                + BtrfsVolumeOperations.SNAPSHOT_DIRECTORY + "/42'")
+            .doesNotContain("rm -rf");
+
         // 6. A refusing host is a NAMED violation carrying the command's own words, never
         //    a silent success -- a create nobody checked is a deploy onto no storage.
         FakeShell failing = new FakeShell(script ->

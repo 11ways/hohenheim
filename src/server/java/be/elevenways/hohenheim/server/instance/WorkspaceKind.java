@@ -252,6 +252,7 @@ public final class WorkspaceKind implements InstanceKindHandler {
             .binds(binds)
             .publication(publicationOf(settings, image))
             .runUser(uid)
+            .home(HOME_PATH)
             .tty(ConsoleKind.requireDeclared(settings).interactive());
 
         if (incus) {

@@ -130,6 +130,21 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
     }
 
     @Override
+    public void pruneOwner(@NonNull String ownerPath) {
+        String mirror = PosixPaths.parentOf(ownerPath) + "/" + SNAPSHOT_DIRECTORY + "/" + PosixPaths.nameOf(ownerPath);
+        run(privileged(PrivilegedHelper.Verb.VOLUME_PRUNE, removedWhenEmpty(ownerPath) + " && "
+                + removedWhenEmpty(mirror), ownerPath),
+            "volume_destroy_failed", ownerPath);
+    }
+
+    /** {@code rmdir} of a real directory that holds nothing; an absent one, a symlink or a full one is left alone. */
+    private @NonNull String removedWhenEmpty(@NonNull String path) {
+        String quoted = HostShell.quote(path);
+        return "if [ -d " + quoted + " ] && [ ! -L " + quoted + " ]; then " + this.sudo
+            + "rmdir --ignore-fail-on-non-empty " + quoted + "; fi";
+    }
+
+    @Override
     public void own(@NonNull String hostPath, int uid) {
         String quoted = HostShell.quote(hostPath);
         // The directory itself, and its mode: 0700 so the number that owns it is the only

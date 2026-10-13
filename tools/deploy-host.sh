@@ -332,13 +332,21 @@ deployed_json() {
 # and no repo diverged/deployed-ahead/unknown/undiffable/inconsistent. Verdicts
 # compare the host against the PUSHED head each checkout tracks, so a local
 # checkout that lags its remote or holds unpushed commits never refuses; its
-# unpushed commits are a warning (no deploy of pushed heads can carry them). An
-# UPSTREAM repo reading pushed-ahead is a warning too: another session pushed it
-# after this lane's build fetched it, and the next deploy ships it.
+# unpushed commits are a warning (no deploy of pushed heads can carry them).
+# $2 is the phase, before or after the swap. An UPSTREAM repo reading pushed-ahead
+# AFTER the swap is a warning: the host then runs this lane's build, so another
+# session pushed it after the build fetched it, and the next deploy ships it.
+# AIDEV-NOTE: BEFORE the swap the stamps are the OLD jar's, so pushed-ahead there
+# says nothing about this build; reading it as "pushed after this build" flagged
+# every repo the deploy was about to ship (daystrom/starfleet, 2026-10-13).
 judge_deployed() {
-    python3 - "$1" <<'PY'
+    python3 - "$1" "$2" <<'PY'
 import json, sys
 report = json.loads(sys.argv[1])
+phase = sys.argv[2]
+if phase not in ('before', 'after'):
+    print('judge_deployed: unknown phase %r' % phase)
+    sys.exit(2)
 service = report.get('service') or {}
 print('   verdict: %s   jar %s' % (report.get('verdict'), (report.get('jar') or {}).get('path')))
 bad = []
@@ -360,9 +368,11 @@ for repo in report.get('repos') or []:
 if unpushed:
     print('   WARNING: local checkouts hold unpushed commits that no deploy of the pushed heads carries: '
           + ', '.join(unpushed))
-if pending:
+if pending and phase == 'after':
     print('   WARNING: upstream repos were pushed after this build fetched them (the next deploy ships them): '
           + ', '.join(pending))
+elif pending:
+    print('   the host lacks pushed commits of upstream repos (the deploy is pending): ' + ', '.join(pending))
 if service.get('restartPending'):
     bad.append('RESTART PENDING (the jar on disk is newer than the running process)')
 for problem in report.get('problems') or []:
@@ -474,7 +484,7 @@ info "$CLEAN_ROWS repos stamped clean"
 step "2. What runs on $TARGET right now"
 BEFORE_JSON="$(deployed_json)" || warn "zenit-dev deployed could not answer; recording that and continuing"
 if [ "$DRY_RUN" = "no" ] && [ -n "$BEFORE_JSON" ]; then
-    judge_deployed "$BEFORE_JSON" || info "(that is the state BEFORE the deploy; pushed-ahead is what a pending deploy looks like)"
+    judge_deployed "$BEFORE_JSON" before || info "(that is the state BEFORE the deploy; pushed-ahead is what a pending deploy looks like)"
 fi
 
 # --- 3. free space, then upload ---------------------------------------------
@@ -701,7 +711,7 @@ fi
 step "10. zenit-dev deployed $TARGET must answer current"
 AFTER_JSON="$(deployed_json)" || fail "zenit-dev deployed could not answer after the deploy"
 if [ "$DRY_RUN" = "no" ]; then
-    judge_deployed "$AFTER_JSON" || fail "the host does not report current for every repo (or a restart is pending); the deploy is not finished"
+    judge_deployed "$AFTER_JSON" after || fail "the host does not report current for every repo (or a restart is pending); the deploy is not finished"
     info "current, no restart pending"
 fi
 

@@ -56,6 +56,9 @@ public final class PrivilegedHelper {
         /** {@code <path>}: delete the subvolume, or the plain directory a stray one left. */
         VOLUME_DESTROY("volume-destroy"),
 
+        /** {@code <instance folder>}: remove it, and its snapshot-tree mirror, when they hold nothing. */
+        VOLUME_PRUNE("volume-prune"),
+
         /** {@code <path> <uid>}: give the volume directory itself to the uid, mode 0700. */
         VOLUME_OWN("volume-own"),
 
