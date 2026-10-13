@@ -334,9 +334,12 @@ tasks.named('serverJar') {
 // AIDEV-NOTE: ONE fork count for all three browser lanes. Gradle never runs two tasks of the
 // same project concurrently, so the lanes are strictly sequential and this number IS the
 // machine's utilisation: at the old min(cpus/2-1, 4) exactly 4 of 10 cores were ever busy.
-// The old cap was sized for the forkEvery=1 world, where a full lane meant ~140 JVMs each
-// holding a 2g heap; collapsing the lanes took that to 13, so the memory argument for 4 is
-// gone. Sized to leave the gradle daemon and the OS four cores.
+// It is an UPPER bound on processors alone. Memory is zenit-dev's fork plan (its init script,
+// zenit/tools/lib/memory.js): a fork here costs its 2g heap plus zenit-dev's declared ~0.4 GB
+// of JVM overhead and ~0.75 GB of browser, so 6 forks want ~19 GB, more than a 15 GB machine
+// has; the plan lowers each lane to what the memory free at the spawn holds (2 forks at
+// ~8.8 GB free), or refuses the lane up front naming the shortfall, and the verdict data says
+// which. Never raise this past what the plan can hold to "go faster": those forks never start.
 ext.browserTestForks = Math.min(Math.max(Runtime.runtime.availableProcessors() - 4, 1), 6)
 
 // --- Browser Test Task ---
@@ -362,7 +365,9 @@ tasks.named('browserTest') {
     // AIDEV-NOTE: a task timeout KILLS workers mid-test and Gradle then reports the
     // killed test as SKIPPED with no message (observed 2026-08-10: the per-class-JVM lane
     // hit 30m, RestoreCapacityLiveTest was killed mid-flight, its finally never ran and
-    // daystrom kept a stale root key). Two defenses: LiveLaneReport keeps a truncation
+    // daystrom kept a stale root key). zenit-dev reports such a test COULD_NOT_RUN by name
+    // (a SKIPPED row JUnit itself never skipped; testresults.settleUnexplainedSkips), so the
+    // lane is never green. Two defenses here too: LiveLaneReport keeps a truncation
     // marker (build/live-lane-truncations/) naming every unsettled test, and the budget
     // is sized to real runs -- measured full browser-lane invocations complete in ~31m
     // wall for BOTH buckets (runs 117/118, 2026-08-10) and the killed run's leftover
