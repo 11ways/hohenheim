@@ -177,7 +177,9 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
                 + " not silently omitted")
             .contains("data-migrate-target=\"" + unpinnedHostId + "\"");
 
-        // 5. And the survey answers for it with the authority's OWN named refusal.
+        // 5. And the survey answers for it with the placement authority's OWN named refusal. The kind-on-host verdict
+        //    (InstancePlacement.kindRefusalOn) is asked FIRST, as migrateTo asks it, so a host that is not admitted is
+        //    named for that before any client is constructed for it -- the throw that once escaped is never reached.
         InstanceMigrations.Destination unpinned = new InstanceMigrations()
             .destinationsFor(instanceId).stream()
             .filter(candidate -> candidate.serverId() == unpinnedHostId)
@@ -185,9 +187,8 @@ class InstanceMigrateSurfaceTest extends HohenheimTestBase {
         assertThat(unpinned.eligible())
             .as("step 5: an unaddressable host is not eligible").isFalse();
         assertThat(unpinned.refusal().key())
-            .as("step 5: named as UNREACHABLE (scan and confirm the key), never a"
-                + " generic no and never a 500")
-            .isEqualTo("instance_host_unreachable");
+            .as("step 5: named by the placement gate, never a generic no and never a 500")
+            .isEqualTo("host_not_admitted");
     }
 
     /**

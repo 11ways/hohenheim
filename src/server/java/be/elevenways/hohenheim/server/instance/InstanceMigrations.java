@@ -11,7 +11,6 @@ import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.auth.TenantWrites;
 import be.elevenways.hohenheim.server.game.GameDomains;
-import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.DeviceAttachSupport;
@@ -39,7 +38,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Set;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -141,7 +139,6 @@ public final class InstanceMigrations {
      */
     public @NonNull List<Destination> destinationsFor(int instanceId) {
         Resolved resolved = this.instances.resolve(instanceId);
-        Set<String> supportedRuntimes = resolved.handler().supportedRuntimes();
         boolean sourceTransportable = hasTransport(resolved.runtime());
         List<Destination> destinations = new ArrayList<>();
         for (Row server : Models.get(ServerModel.class).find().all()) {
@@ -150,8 +147,7 @@ public final class InstanceMigrations {
                 continue;
             }
             String name = String.valueOf((Object) server.get(ServerModel.NAME));
-            Microcopy refusal = refusalFor(server, serverId, name, resolved,
-                supportedRuntimes, sourceTransportable);
+            Microcopy refusal = refusalFor(serverId, name, resolved, sourceTransportable);
             Long budget = InstanceCapacity.budgetMbOf(server);
             destinations.add(new Destination(serverId, name, refusal == null, refusal,
                 Math.clamp(InstanceCapacity.bookedMbOn(serverId), 0, Integer.MAX_VALUE),
@@ -169,15 +165,16 @@ public final class InstanceMigrations {
      * is a NAMED reason beside every ineligible destination -- an empty eligible list
      * with no reason is exactly the illegible surface the Incus-only refusal never was.
      */
-    private static @Nullable Microcopy refusalFor(@NonNull Row server, int serverId,
+    private static @Nullable Microcopy refusalFor(int serverId,
                                                   @NonNull String name,
                                                   @NonNull Resolved resolved,
-                                                  @NonNull Set<String> supportedRuntimes,
                                                   boolean sourceTransportable) {
-        Microcopy runtimeRefusal = InstanceKinds.runtimeMismatch(name,
-            ServerModel.runtimeOf(server), supportedRuntimes);
-        if (runtimeRefusal != null) {
-            return runtimeRefusal;
+        // The kind-on-host verdict FIRST, as migrateTo asks it: a host of the wrong runtime is never asked for a
+        // client below.
+        Microcopy placement = InstancePlacement.kindRefusalOn(serverId, resolved.handler(),
+            resolved.row().get(InstanceModel.QUOTA_BUCKET), InstanceModel.settingsOf(resolved.row()));
+        if (placement != null) {
+            return placement;
         }
         // Through the ONE named-refusal funnel (InstanceService.runtimeFor): client
         // construction fails closed for an unpinned SSH host, and letting that throw
@@ -206,8 +203,7 @@ public final class InstanceMigrations {
         if (resolved.spec().publication() != null) {
             return HohenheimViolations.instanceRefusalText("migrate_publication_present", resolved.row(), null);
         }
-        return HostAdmission.instancePlacementRefusal(serverId, resolved.handler().isolation(),
-            resolved.row().get(InstanceModel.QUOTA_BUCKET));
+        return null;
     }
 
     // -- single-instance migration ---------------------------------------------
@@ -260,12 +256,12 @@ public final class InstanceMigrations {
         if (targetServerId == resolved.serverId()) {
             throw HohenheimViolations.instanceRefusal("migrate_same_host", resolved.row(), null);
         }
-        Row target = Models.get(ServerModel.class).findById(targetServerId);
-        InstanceKinds.requireRuntimeMatch(ServerModel.nameOf(targetServerId),
-            target != null ? ServerModel.runtimeOf(target) : "absent",
-            resolved.handler().supportedRuntimes());
-        HostAdmission.requireInstancePlacement(targetServerId, resolved.handler().isolation(),
-            resolved.row().get(InstanceModel.QUOTA_BUCKET));
+        // THE kind-on-host verdict the survey shows beside this host (destinationsFor), so the two cannot disagree.
+        Microcopy placement = InstancePlacement.kindRefusalOn(targetServerId, resolved.handler(),
+            resolved.row().get(InstanceModel.QUOTA_BUCKET), InstanceModel.settingsOf(resolved.row()));
+        if (placement != null) {
+            throw Violations.ofForm(placement);
+        }
 
         String targetName = ServerModel.nameOf(targetServerId);
         // The named-refusal funnel: an unaddressable destination (unpinned SSH host)

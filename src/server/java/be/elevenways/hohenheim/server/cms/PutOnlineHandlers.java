@@ -2,9 +2,6 @@ package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.instance.InstanceOperations;
-import be.elevenways.hohenheim.instance.InstanceTemplateOperations;
-import be.elevenways.zenit.common.edit.FormSpec;
-import be.elevenways.zenit.server.operation.InputScope;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -78,7 +75,6 @@ final class PutOnlineHandlers {
             .authorize(PutOnlineHandlers::admitWorkload)
             .handle(PutOnlineHandlers::putWorkloadOnline);
         OperationHandlers.attach(PutOnline.PUT_MACHINE_ONLINE)
-            .inputScope(PutOnlineHandlers::kindHosts)
             .authorize(PutOnlineHandlers::admitMachine)
             .handle(PutOnlineHandlers::putMachineOnline);
     }
@@ -147,14 +143,6 @@ final class PutOnlineHandlers {
                 InstanceModel.KIND.getName(), message("kind_not_a_workload"));
         }
         return null;
-    }
-
-    /** A kind-led input with its host pick narrowed to the hosts that can run the chosen kind. */
-    private static @NonNull InputScope kindHosts(@Nullable Void none, @NonNull FormSpec declared,
-                                                 @Nullable AccessContext access) {
-        return InputScope.of(InstanceTemplateHandlers.replacing(declared, Map.of(
-            InstanceTemplateOperations.SERVER_ID.getName(),
-            InstanceParts.hostPick(InstanceTemplateOperations.SERVER_ID))));
     }
 
     /**

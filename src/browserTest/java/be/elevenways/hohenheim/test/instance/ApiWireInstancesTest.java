@@ -9,6 +9,7 @@ import be.elevenways.hohenheim.test.ApiWire;
 import be.elevenways.hohenheim.test.ApiWire.Caller;
 import be.elevenways.hohenheim.test.ApiWire.PerRun;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.server.ApiKeyService;
@@ -191,6 +192,9 @@ class ApiWireInstancesTest extends HohenheimTestBase {
         row.set(ServerModel.VOLUME_BACKEND, "btrfs");
         row.set(ServerModel.SSH_TARGET, "root@" + name + ".test");
         Models.get(ServerModel.class).save(row);
-        return row.get(ServerModel.ID);
+        int id = row.get(ServerModel.ID);
+        // The create's host pick judges the kind's placement, so the wire create needs a host that takes it.
+        HostFixtures.admitDockerHost(id, 16384);
+        return id;
     }
 }

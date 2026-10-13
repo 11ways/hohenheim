@@ -24,13 +24,16 @@ import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.application.ApplicationReleases;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
+import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.InstanceDeclarations;
 import be.elevenways.hohenheim.server.instance.InstanceExposure;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
+import be.elevenways.hohenheim.server.instance.InstanceQuota;
 import be.elevenways.hohenheim.server.instance.InstanceResize;
+import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.typed.CoreTypes;
 import be.elevenways.protoblast.common.typed.rule.Condition;
@@ -59,6 +62,8 @@ import be.elevenways.zenit.cms.common.resource.ResourceMutations;
 import be.elevenways.zenit.cms.common.resource.ResourceReads;
 import be.elevenways.zenit.cms.common.resource.ResourceTabs;
 import be.elevenways.zenit.cms.common.resource.ResourceVerb;
+import be.elevenways.zenit.cms.common.resource.RowWriteCall;
+import be.elevenways.zenit.cms.common.resource.RowWriter;
 import be.elevenways.zenit.cms.common.resource.RowSave;
 import be.elevenways.zenit.cms.common.schema.ColumnSpec;
 import be.elevenways.zenit.cms.common.schema.FilterSpec;
@@ -74,6 +79,7 @@ import be.elevenways.zenit.common.edit.RelationPick;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.edit.EditContext;
 import be.elevenways.zenit.common.orm.field.IntegerField;
+import be.elevenways.zenit.common.edit.EditView;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.server.project.ProjectGuards;
 import be.elevenways.zenit.common.operation.SubjectType;
@@ -128,6 +134,17 @@ public final class InstanceParts {
 
     /** The relational host filter's variable key. */
     static final String HOST_FILTER = "server.name";
+
+    /**
+     * The create form's project: the OWNER a new instance is created into, never a column (a project owns a record
+     * through its manage grant, instance-tier-plan decision 7), so it exists on the create view only and an existing
+     * record moves through its Access tab.
+     */
+    static final IntegerField PROJECT = IntegerField.builder("project_id")
+        .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("project"))
+        .help(HohenheimMicrocopy.HELP.of("instance_project"))
+        .visibleIn(EditView.CREATE)
+        .build();
 
     private InstanceParts() {
     }
@@ -314,7 +331,7 @@ public final class InstanceParts {
     private static @NonNull ResourceMutations<Row> writes(boolean creates) {
         ResourceMutations.RowBuilder rows = ResourceMutations.rows();
         if (creates) {
-            rows.create();
+            rows.createAround(InstanceParts::createIntoProject);
         }
         return rows.update()
             .delete(InstanceOperations.DELETE)
@@ -325,19 +342,32 @@ public final class InstanceParts {
             .build();
     }
 
+    /**
+     * The operator's create: the ordinary save, run INTO the chosen project (or the chosen environment's) through the
+     * one ownership funnel the template lane uses, then the creation owner's manage grant, as every create plants it.
+     *
+     * AIDEV-NOTE: the project is taken out of the values before the framework applies them: it is no column, and
+     * the save hooks (placement included) run inside the funnel, so they see the project as the creation owner.
+     */
+    private static @NonNull Object createIntoProject(@NonNull RowWriteCall call, @NonNull RowWriter framework) {
+        Map<String, Object> staged = new LinkedHashMap<>(call.values());
+        Integer projectId = staged.remove(PROJECT.getName()) instanceof Number number ? number.intValue() : null;
+        Integer environmentId = staged.getOrDefault(InstanceModel.ENVIRONMENT_ID.getName(), null)
+            instanceof Number number ? number.intValue() : null;
+        RowWriteCall ordinary = new RowWriteCall(call.verb(), null, staged, call.access());
+        return Projects.createInto(projectId, environmentId, call.access(), PROJECT.getName(),
+            InstanceModel.ENVIRONMENT_ID.getName(), () -> {
+                Object key = Objects.requireNonNull(framework.write(ordinary), "the create answers its key");
+                HohenheimAccess.grantCreatorManage(InstanceModel.MODEL_ID, key, call.access());
+                return key;
+            });
+    }
+
     /** The delete dialog both twins show, naming the sites one record's destroy disables. */
     private static @NonNull DeleteConfirmation<Row> deleteConfirmation() {
         return DeleteConfirmation.<Row>of(deleteBody(null)).forRow((instance, request) -> deleteBody(instance));
     }
 
-    /**
-     * The create/edit form: choice cards decide the kind, and every placement pick NARROWS from it live (host by
-     * supported runtime + volume backend, runtime image by kind) -- the dependent-pick mechanism.
-     *
-     * AIDEV-NOTE: the resolvers carry SNAPSHOTS of the kind registry's declarations (runtimesByKind and friends),
-     * taken when the panel builds its entry; a test that replaces a kind delegates its facts to the real one, and the
-     * kind options themselves are Supplied, so a registry entry arriving after the build still resolves on coercion.
-     */
     /**
      * The create form's values: its defaults, plus the kind "Put something online" asked for ({@code ?kind=}) when it
      * names a kind that page offers.
@@ -353,6 +383,15 @@ public final class InstanceParts {
         return Map.copyOf(values);
     }
 
+    /**
+     * The create/edit form: choice cards decide the kind, and every placement pick follows it live (the host judged by
+     * the placement verdict, the runtime image narrowed by kind).
+     *
+     * AIDEV-NOTE: the image resolver carries a SNAPSHOT of the kind registry's declarations, taken when the panel
+     * builds its entry; a test that replaces a kind delegates its facts to the real one, and the kind options
+     * themselves are Supplied, so a registry entry arriving after the build still resolves on coercion. The host
+     * judge asks the registry on every call.
+     */
     private static @NonNull FormSpec createForm() {
         return FormSpec.builder()
             // AIDEV-NOTE: a create page falls back to the RESOURCE label for its heading, and this label is the PLURAL
@@ -372,8 +411,8 @@ public final class InstanceParts {
                 .build())
             .add(InstanceModel.NAME)
             // A host is admitted, preflighted and trusted before it can carry anything, so it is never created from
-            // inside another record's form -- and the offer follows the kind. The submit is re-narrowed server-side
-            // (relation_out_of_scope), the picker is never the gate.
+            // inside another record's form -- and every host is offered, judged by the kind: one the kind cannot be
+            // placed on is drawn disabled with the placement gate's reason, and refused in those words on the submit.
             .add(hostPick(InstanceModel.SERVER_ID))
             // The runtime image only offers images to kinds that run inside one, and is SHOWN only for those kinds (the
             // showWhen below): every other kind's deploy never reads the column. It stays clearable because a shown
@@ -389,13 +428,21 @@ public final class InstanceParts {
             // AIDEV-NOTE: deliberately NO template pick here. TEMPLATE_ID is only ever stamped by
             // InstanceTemplates.createFromTemplate, which coerces the template's variables and arms the install
             // lifecycle; creating from a template stays the template page's own flow (InstanceFromTemplatePage).
+            // The project a NEW instance is created into (create view only): the source's own scope is the project
+            // visibility policy, and the save re-judges membership (Projects.createInto).
+            .add(RelationPick.of(PROJECT, ProjectModel.MODEL_ID)
+                .creatable(false).clearable(true)
+                .build())
             // Grouping, never authority: the environments offered are ProjectGuards' own answer for this record's
             // owner (its owning project's), the rule its write hook refuses by, re-checked on the submit; a new one
-            // is created INTO that project, and an owner without one is told why the list is empty.
+            // is created INTO that project, and an owner without one is told why the list is empty. On a create,
+            // the project chosen beside it narrows them to that project's.
             .add(RelationPick.of(InstanceModel.ENVIRONMENT_ID, EnvironmentModel.MODEL_ID)
                 .clearable(true)
                 .rulesFromContext(InstanceParts::environmentRules)
-                .emptyReason(context -> ProjectGuards.noEnvironmentsReason(ownerOf(context)))
+                .rulesFromSiblings(new HohenheimPickRules.EnvironmentProjectRules(PROJECT.getName()),
+                    PROJECT.getName())
+                .emptyReason(InstanceParts::environmentEmptyReason)
                 .createPresets(InstanceParts::environmentPresets)
                 .build())
             .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
@@ -420,23 +467,45 @@ public final class InstanceParts {
     }
 
     /**
-     * THE host pick of a form that names its kind in a {@code kind} entry: only the hosts that can run that kind
-     * (its runtimes and, where it needs one, a volume backend), narrowed live and re-narrowed on submit. Blank stays
-     * a choice: placement then picks the host.
+     * THE host pick of a form that names its kind in a {@code kind} entry: every host, each judged by the chosen kind
+     * through the placement verdict ({@link InstancePlacement#kindRefusalOn}) the restore dialog and the migrate page
+     * show, live as the kind changes and again on submit. Blank stays a choice: placement then picks the host.
      */
-    static @NonNull RelationPick hostPick(@NonNull IntegerField field) {
-        return RelationPick.of(field, ServerModel.MODEL_ID)
-            .creatable(false)
-            .rulesFromSiblings(new HohenheimPickRules.KindHostRules(
-                InstanceModel.KIND.getName(),
-                InstanceKinds.runtimesByKind(),
-                InstanceKinds.kindsWhere(InstanceKindHandler::supportsVolumes)), InstanceModel.KIND.getName())
+    static @NonNull Select<Integer> hostPick(@NonNull IntegerField field) {
+        return Select.of(field)
+            .options(OptionSource.dynamic(context -> InstanceTemplateHandlers.hostOptions()))
+            .judgedBySibling(InstanceModel.KIND.getName(), InstanceParts::hostRefusal)
             .build();
     }
 
     /**
+     * Why the chosen kind cannot be placed on this host, charged to the edited record's bucket or, on a create, to the
+     * caller's creation bucket.
+     *
+     * AIDEV-NOTE: the host a stored record already names under its stored kind is never judged: moving or keeping a
+     * placed workload is the migrate operation's question, and an unrelated edit must not be refused over it.
+     */
+    private static @Nullable Microcopy hostRefusal(@NonNull EditContext context, @NonNull String kind,
+                                                   @NonNull Integer serverId) {
+        Row stored = context.record() instanceof Row row && row.has(InstanceModel.ID.getName())
+            && row.get(InstanceModel.ID) != null ? row : null;
+        if (stored != null && serverId.equals(stored.get(InstanceModel.SERVER_ID))
+                && kind.equals(stored.get(InstanceModel.KIND))) {
+            return null;
+        }
+        InstanceKindHandler handler = InstanceKinds.getHandler(kind);
+        if (handler == null) {
+            return HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown").withArg("kind", kind);
+        }
+        String bucket = stored != null ? stored.get(InstanceModel.QUOTA_BUCKET) : InstanceQuota.creationBucket();
+        return InstancePlacement.kindRefusalOn(serverId, handler, bucket, Map.of());
+    }
+
+    /**
      * The environments the edited record (or, on a create, the record this caller would create) may be grouped in:
-     * its grouping project's, plus the one it already sits in, since an unchanged environment is never judged.
+     * its grouping project's, plus the one it already sits in, since an unchanged environment is never judged. A
+     * create whose creator answers to no project may be created INTO one, so it is offered the environments of every
+     * project the caller sees, narrowed live by the project chosen beside it.
      */
     private static @NonNull Condition environmentRules(@NonNull EditContext context) {
         List<Condition> admitted = new ArrayList<>();
@@ -444,6 +513,12 @@ public final class InstanceParts {
         if (project != null) {
             admitted.add(Condition.test(EnvironmentModel.PROJECT_ID.getName(), CoreTypes.EQUALS,
                 Operand.of(project.get(ProjectModel.ID))));
+        } else if (editedId(context) == null) {
+            List<Object> creatable = creatableProjectIds(context);
+            if (!creatable.isEmpty()) {
+                admitted.add(Condition.test(EnvironmentModel.PROJECT_ID.getName(), CoreTypes.IN,
+                    Operand.of(creatable)));
+            }
         }
         Object current = context.record() instanceof Row row && row.has(InstanceModel.ENVIRONMENT_ID.getName())
             ? row.get(InstanceModel.ENVIRONMENT_ID) : null;
@@ -451,6 +526,28 @@ public final class InstanceParts {
             admitted.add(Condition.test(EnvironmentModel.ID.getName(), CoreTypes.EQUALS, Operand.of(current)));
         }
         return admitted.isEmpty() ? Condition.NOTHING : Condition.any(admitted);
+    }
+
+    /** @return the ids of the projects the caller sees ({@link Projects#visibleTo}), any of which a create may join */
+    private static @NonNull List<Object> creatableProjectIds(@NonNull EditContext context) {
+        List<Object> ids = new ArrayList<>();
+        for (Row visible : Projects.visibleTo(context.accessContext())) {
+            ids.add(visible.get(ProjectModel.ID));
+        }
+        return ids;
+    }
+
+    /**
+     * Why the environment pick is empty: the record's own project has none, or it answers to no project; a create
+     * that could be made into a project says that no project it may choose has one yet.
+     */
+    private static @NonNull Microcopy environmentEmptyReason(@NonNull EditContext context) {
+        Set<String> owner = ownerOf(context);
+        if (ProjectGuards.groupingProject(owner) == null && editedId(context) == null
+                && !creatableProjectIds(context).isEmpty()) {
+            return HohenheimMicrocopy.INSTANCE.of("environment_empty_creatable");
+        }
+        return ProjectGuards.noEnvironmentsReason(owner);
     }
 
     /** @return the environment an inline create makes: one of the grouping project's, null when there is none */

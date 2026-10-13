@@ -1,7 +1,9 @@
 package be.elevenways.hohenheim.test.host;
 
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.model.HostTrustSlot;
 import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.hohenheim.server.host.HostPins;
 import be.elevenways.hohenheim.server.host.HostPostureAcknowledgement;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.host.IncusPreflight;
@@ -161,6 +163,50 @@ public final class HostFixtures {
             null));
         return Models.get(ServerModel.class).findByName(name).get(ServerModel.ID);
     }
+
+    /**
+     * A new admitted, acknowledged and measured Docker host on the local socket, so no pinned identity is asked of it.
+     *
+     * @param memoryMb the measured total its budget is derived from
+     * @return the new server's id
+     */
+    public static int admittedDockerHost(@NonNull String name, long memoryMb) {
+        Row row = Models.get(ServerModel.class).createEmptyRow();
+        row.set(ServerModel.NAME, name);
+        row.set(ServerModel.RUNTIME, ServerModel.RUNTIME_DOCKER);
+        row.set(ServerModel.MODE, ServerModel.MODE_LOCAL);
+        Models.get(ServerModel.class).save(row);
+        int id = row.get(ServerModel.ID);
+        admitDockerHost(id, memoryMb);
+        return id;
+    }
+
+    /**
+     * Do for an enrolled Docker host what an operator does before it carries apps: pin and confirm its ssh identity
+     * when it is remote, admit it under shared_container, acknowledge that posture and store a passing, measured
+     * preflight.
+     *
+     * @param memoryMb the measured total its budget is derived from
+     */
+    public static void admitDockerHost(int serverId, long memoryMb) {
+        ServerModel servers = Models.get(ServerModel.class);
+        Row row = servers.findById(serverId);
+        row.set(ServerModel.ADMISSION, ServerModel.ADMISSION_ADMITTED);
+        row.set(ServerModel.POSTURE, ServerModel.POSTURE_SHARED_CONTAINER);
+        servers.save(row);
+        if (ServerModel.requiresPinnedIdentity(servers.findById(serverId))) {
+            HostPins.apply(servers.findById(serverId), HostTrustSlot.SSH, FIXTURE_SSH_KEY, "sha256:fixture");
+            HostPins.confirm(servers.findById(serverId), HostTrustSlot.SSH);
+        }
+        acknowledgePosture(servers.findById(serverId));
+        HostPreflight.store(String.valueOf((Object) row.get(ServerModel.NAME)), new HostPreflight.Report(List.of(
+            new HostPreflight.Check("daemon", HostPreflight.STATUS_PASS, true, "fake daemon")),
+            Map.of(HostPreflight.MEM_TOTAL_FACT, memoryMb * 1024L * 1024L), true, Now.instant(), null));
+    }
+
+    /** The ssh host key a remote fixture host is pinned to. */
+    private static final String FIXTURE_SSH_KEY =
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
     /** Admit the implicit local host for tenant placement (posture shared_container). */
     public static void admitLocal() {

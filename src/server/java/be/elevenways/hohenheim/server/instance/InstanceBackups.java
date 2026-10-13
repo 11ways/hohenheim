@@ -37,7 +37,6 @@ import be.elevenways.hohenheim.server.backup.BackupManifest.TemplateRef;
 import be.elevenways.hohenheim.server.backup.BackupManifest.VariableEntry;
 import be.elevenways.hohenheim.server.backup.BackupTarget;
 import be.elevenways.hohenheim.server.backup.BackupTargetKinds;
-import be.elevenways.hohenheim.server.host.HostAdmission;
 import be.elevenways.hohenheim.server.host.HostPreflight;
 import be.elevenways.hohenheim.server.instance.InstanceService.Resolved;
 import be.elevenways.hohenheim.server.orm.RecordStamp;
@@ -505,35 +504,28 @@ public final class InstanceBackups {
             }
             destinations.add(new Destination(serverId, String.valueOf((Object) server.get(ServerModel.NAME)),
                 kind == null ? HohenheimMicrocopy.VIOLATIONS.of("instance_kind_unknown").withArg("kind", kindId)
-                    : destinationRefusal(serverId, kind, installMedia)));
+                    : destinationRefusal(serverId, kind, Map.of(), installMedia)));
         }
         return destinations;
     }
 
     /**
-     * Why this host cannot receive a restore of this kind: the runtime it runs, the instance placement gate, then the
-     * install media the backed-up machine had in its drives, which an import needs on the destination.
+     * Why this host cannot receive a restore of this kind: the kind-on-host placement verdict, then the install media
+     * the backed-up machine had in its drives, which an import needs on the destination.
      *
      * AIDEV-NOTE: the import's own device override cannot drop the cdrom (Incus 7.3 refuses {@code type=none} on a
      * device with a boot priority), so a host without the ISO fails mid-import with "Storage volume not found". The
      * operator's way out is to detach the media and back up again, or to pick the host that holds them.
      *
+     * @param settings the restored settings, empty where the archive is not opened (the pick)
      * @return the first refusal, null when the host takes it
      */
     private static @Nullable Microcopy destinationRefusal(int serverId, @NonNull InstanceKindHandler kind,
+                                                          @NonNull Map<String, Object> settings,
                                                           @NonNull List<String> installMedia) {
-        Row server = Models.get(ServerModel.class).findById(serverId);
-        if (server != null) {
-            Microcopy runtime = InstanceKinds.runtimeMismatch(String.valueOf((Object) server.get(ServerModel.NAME)),
-                ServerModel.runtimeOf(server), kind.supportedRuntimes());
-            if (runtime != null) {
-                return runtime;
-            }
-        }
         // The record does not exist yet, so the owner it will be CHARGED to is asked for through the create hook's
         // own derivation -- never a second spelling.
-        Microcopy placement = HostAdmission.instancePlacementRefusal(serverId, kind.isolation(),
-            InstanceQuota.creationBucket());
+        Microcopy placement = InstancePlacement.kindRefusalOn(serverId, kind, InstanceQuota.creationBucket(), settings);
         if (placement != null || installMedia.isEmpty()) {
             return placement;
         }
@@ -615,7 +607,7 @@ public final class InstanceBackups {
                 ? ServerModel.canonicalServerId(serverSpelling)
                 : InstancePlacement.chooseForBucket(InstanceQuota.creationBucket(),
                     InstancePlacement.Workload.imported(restoredKind, settings), null);
-            Microcopy refused = destinationRefusal(serverId, restoredKind, manifest.installMedia());
+            Microcopy refused = destinationRefusal(serverId, restoredKind, settings, manifest.installMedia());
             if (refused != null) {
                 throw Violations.ofForm(refused);
             }

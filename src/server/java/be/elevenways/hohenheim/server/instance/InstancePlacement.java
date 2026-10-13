@@ -14,10 +14,12 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violation;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -339,6 +341,45 @@ public final class InstancePlacement {
             }
         }
         return first;
+    }
+
+    /**
+     * Why a workload of this kind cannot be placed on this host, or null when it can: THE kind-on-host verdict the
+     * create form's host pick, the restore dialog and the migrate page show beside each host, and their writes refuse by.
+     *
+     * AIDEV-NOTE: the runtime the host runs, then the admission gate for the kind's isolation and the owner it is
+     * charged to, then the kind's own placeability (a volume kind needs a quota-capable data root): the same three
+     * questions {@link #chooseForBucket} asks of every host, minus capacity, which the write books. Never add a branch
+     * here that one of those gates does not own. A caller without the workload's settings passes an empty map; the
+     * default placeability reads none.
+     *
+     * @param bucket the quota bucket the workload is, or will be, charged to
+     * @return the first refusal in the gate's own words
+     */
+    public static @Nullable Microcopy kindRefusalOn(int serverId, @NonNull InstanceKindHandler kind,
+                                                    @Nullable String bucket, @NonNull Map<String, Object> settings) {
+        Row server = Models.get(ServerModel.class).findById(serverId);
+        if (server != null) {
+            Microcopy runtime = InstanceKinds.runtimeMismatch(String.valueOf((Object) server.get(ServerModel.NAME)),
+                ServerModel.runtimeOf(server), kind.supportedRuntimes());
+            if (runtime != null) {
+                return runtime;
+            }
+        }
+        Microcopy admission = HostAdmission.instancePlacementRefusal(serverId, kind.isolation(), bucket);
+        if (admission != null || server == null) {
+            return admission;
+        }
+        try {
+            kind.requirePlaceableOn(String.valueOf((Object) server.get(ServerModel.NAME)), settings);
+            return null;
+        } catch (Violations refused) {
+            List<Violation> all = refused.all();
+            if (all.isEmpty()) {
+                throw new IllegalStateException("A kind refused a host without naming a reason");
+            }
+            return all.get(0).message();
+        }
     }
 
     /**

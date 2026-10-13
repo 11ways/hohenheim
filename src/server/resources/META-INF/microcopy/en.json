@@ -1353,6 +1353,10 @@
     "text": "Optional. The first hostname this site answers on; you can add more, and set TLS, on the Domains tab.",
     "scope": "help"
   },
+  "instance_project": {
+    "text": "Optional. The project this app is created into: its members manage it and the project's quota pays for it. Move an existing app on its Access tab.",
+    "scope": "help"
+  },
   "last_run_failed": {
     "text": "Last run failed",
     "scope": "attention_detail"
@@ -12158,6 +12162,14 @@
     "text": "Only an app in a project can sit in an environment, and this one belongs to no project.",
     "scope": "instance"
   },
+  "environment_empty_chosen_project": {
+    "text": "This project has no environments yet.",
+    "scope": "instance"
+  },
+  "environment_empty_creatable": {
+    "text": "No project you can create into has an environment yet.",
+    "scope": "instance"
+  },
   "home_quota": [
     {
       "text": "Home size limit (MB)",
@@ -12441,14 +12453,6 @@
   "unsupported_runtime_description": {
     "text": "This workload runs on a runtime hohenheim cannot open an interactive terminal on yet.",
     "scope": "instance_shell"
-  },
-  "no_quota_capable_host": {
-    "text": "No host both runs a runtime this kind supports ({$runtimes}) and has a data root that can enforce quotas. Under Hosts, mount a host's volumes directory on btrfs, then check that host again.",
-    "scope": "instance"
-  },
-  "no_runtime_host": {
-    "text": "No host runs a runtime this kind supports ({$runtimes}). Enrol one under Hosts first.",
-    "scope": "instance"
   },
   "no_enabled_runtime_image": {
     "text": "No runtime image is enabled. Enable the one this instance should run inside under Runtime images first.",

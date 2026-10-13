@@ -310,25 +310,34 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         assertThat(wizard).as("step 2: the settings step asks where the code comes from")
             .contains("repository_url");
 
-        // 3. One run creates the app and the website on its address; HTTPS waits because Let's Encrypt is off.
+        // 3. One run creates the app and the website on its address; HTTPS waits because Let's Encrypt is off. The
+        //    host pick judges the kind's placement, so the operator names a host an app can be placed on: the local
+        //    one, admitted, measured and given a quota-capable data root for this step only.
         Map<String, Object> form = new LinkedHashMap<>();
-        form.put(InstanceModel.NAME.getName(), PREFIX + "git-app");
-        form.put(PutOnline.HOSTNAME.getName(), "git." + PREFIX + "test");
-        form.put(InstanceModel.KIND.getName(), "hohenheim:application");
-        // The operator names the host; this test runtime has none that placement would pick on its own.
-        form.put("serverId", ServerModel.localServerId());
-        // The env map posts as the key/value editor submits it: indexed rows.
-        form.put(InstanceModel.SETTINGS.getName(), Map.of("repository_url", "https://git.example.test/acme/app.git",
-            "branch", "main", "environment_variables",
-            Map.of("0", Map.of("key", "API_KEY", "value", "env-secret"))));
-        form.put(PutOnline.HTTPS.getName(), PutOnline.HTTPS_AUTOMATIC);
-        OperationRun run = ended(runOf(OperationPipeline.invoke(OperationRequest.of(PutOnline.PUT_WORKLOAD_ONLINE,
-                CmsPlacementSurface.ADMIN_ACTION).caller(operator).form(form))), operator, "step 3");
-        assertThat(run.status()).as("step 3: the run succeeded (%s)", run.outcome())
-            .isEqualTo(OperationRunStatus.SUCCEEDED);
-        assertThat(Objects.requireNonNull(run.steps()).journeyBefore())
-            .as("step 3: the run ends the journey the wizard walked: what, where, settings, https").hasSize(4);
-        assertThat(run.skipped(1)).as("step 3: the website was made, so its step is done").isFalse();
+        HostFixtures.LocalHostState localBefore = HostFixtures.captureLocal();
+        try {
+            HostFixtures.makeLocalPlaceable(8192);
+            HostFixtures.giveLocalVolumeQuota();
+            form.put(InstanceModel.NAME.getName(), PREFIX + "git-app");
+            form.put(PutOnline.HOSTNAME.getName(), "git." + PREFIX + "test");
+            form.put(InstanceModel.KIND.getName(), "hohenheim:application");
+            form.put("serverId", ServerModel.localServerId());
+            // The env map posts as the key/value editor submits it: indexed rows.
+            form.put(InstanceModel.SETTINGS.getName(), Map.of("repository_url",
+                "https://git.example.test/acme/app.git", "branch", "main", "environment_variables",
+                Map.of("0", Map.of("key", "API_KEY", "value", "env-secret"))));
+            form.put(PutOnline.HTTPS.getName(), PutOnline.HTTPS_AUTOMATIC);
+            OperationRun run = ended(runOf(OperationPipeline.invoke(OperationRequest.of(
+                    PutOnline.PUT_WORKLOAD_ONLINE, CmsPlacementSurface.ADMIN_ACTION).caller(operator).form(form))),
+                operator, "step 3");
+            assertThat(run.status()).as("step 3: the run succeeded (%s)", run.outcome())
+                .isEqualTo(OperationRunStatus.SUCCEEDED);
+            assertThat(Objects.requireNonNull(run.steps()).journeyBefore())
+                .as("step 3: the run ends the journey the wizard walked: what, where, settings, https").hasSize(4);
+            assertThat(run.skipped(1)).as("step 3: the website was made, so its step is done").isFalse();
+        } finally {
+            localBefore.restore();
+        }
         Row app = Models.get(InstanceModel.class).find().where(InstanceModel.NAME.eq(PREFIX + "git-app")).first();
         assertThat(app).as("step 3: the app exists").isNotNull();
         assertThat(String.valueOf((Object) app.get(InstanceModel.KIND))).as("step 3: as an application")
@@ -342,8 +351,10 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
             .first()).as("step 3: a website serves it").isNotNull();
 
         // 4. A tenant has no such door, and a kind that serves no website is refused on the kind, both before a run.
+        //    A tenant never names a host, so the form carries none.
         form.put(InstanceModel.NAME.getName(), PREFIX + "tenant-git-app");
         form.remove(PutOnline.HOSTNAME.getName());
+        form.remove("serverId");
         assertThat(catchThrowableOfType(DomainRefusal.class, () -> OperationPipeline.invoke(OperationRequest.of(
                 PutOnline.PUT_WORKLOAD_ONLINE, CmsPlacementSurface.ADMIN_ACTION).caller(tenant).form(form))))
             .as("step 4: a tenant is refused in the request").isNotNull();
@@ -419,10 +430,11 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
             .as("step 4: its Delete with data speaks of the virtual machine, by its kind's isolation")
             .contains("This removes the virtual machine").doesNotContain("This removes the container");
 
-        // 5. A kind that serves a website is not put online as a machine: refused on the kind, before a run.
+        // 5. A kind that serves a website is not put online as a machine: refused on the kind, before a run. No host
+        //    is named, so the refusal is the kind's alone.
         form.put(InstanceModel.NAME.getName(), PREFIX + "not-a-machine");
         form.put(InstanceModel.KIND.getName(), "hohenheim:docker_container");
-        form.put("serverId", ServerModel.localServerId());
+        form.remove("serverId");
         form.put(InstanceModel.SETTINGS.getName(), Map.of("image", "alpine"));
         DomainRefusal notAMachine = catchThrowableOfType(DomainRefusal.class, () -> OperationPipeline.invoke(
             OperationRequest.of(PutOnline.PUT_MACHINE_ONLINE, CmsPlacementSurface.ADMIN_ACTION)

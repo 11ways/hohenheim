@@ -14,7 +14,6 @@ import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
-import be.elevenways.hohenheim.server.instance.InstanceTemplateHandlers;
 import be.elevenways.hohenheim.server.tls.HostnameReach;
 import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
@@ -445,14 +444,11 @@ public final class PutOnline {
     }
 
     /**
-     * The host pick both kind-led inputs declare: every host, placement judging the choice. The machine input's handler
-     * replaces it per request with the kind-narrowed pick ({@link InstanceParts#hostPick}), built once the kind registry
-     * is complete, so a machine is only offered the hosts that can run its kind.
+     * The host pick both kind-led inputs declare: THE kind-judged host pick ({@link InstanceParts#hostPick}), every
+     * host offered and each one the chosen kind cannot be placed on disabled with the placement gate's reason.
      */
     private static @NonNull Select<Integer> declaredHostPick() {
-        return Select.of(InstanceTemplateOperations.SERVER_ID)
-            .options(OptionSource.dynamic(context -> InstanceTemplateHandlers.hostOptions()))
-            .build();
+        return InstanceParts.hostPick(InstanceTemplateOperations.SERVER_ID);
     }
 
     private static @NonNull Select<String> httpsChoice() {

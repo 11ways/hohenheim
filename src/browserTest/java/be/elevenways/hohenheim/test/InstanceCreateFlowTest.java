@@ -1,6 +1,8 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.model.RuntimeImageModel;
+import be.elevenways.hohenheim.server.host.VolumeBackends;
 import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.hohenheim.host.VolumeBackend;
 import be.elevenways.hohenheim.model.InstanceModel;
@@ -21,15 +23,15 @@ import java.net.http.HttpResponse;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
- * The instance CREATE journey of the admin UI: choice cards decide the kind,
- * the host and runtime-image picks NARROW from it client-side, the submit persists the
- * matching record -- and the server re-narrows a hand-posted host that the picker would
- * never have offered (the falsification of the dependent-pick guard).
+ * The instance CREATE journey of the admin UI: choice cards decide the kind, the host pick JUDGES every host by it and
+ * the runtime-image pick narrows from it client-side, the submit persists the matching record -- and the server
+ * refuses a hand-posted host the kind cannot be placed on, in the placement gate's own words.
  */
 class InstanceCreateFlowTest extends HohenheimTestBase {
 
@@ -42,24 +44,33 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
 
     @BeforeAll
     static void seedHosts() {
-        dockerHostId = host("cf-docker-host", ServerModel.RUNTIME_DOCKER, "btrfs");
-        incusHostId = host("cf-incus-host", ServerModel.RUNTIME_INCUS, "none");
+        // Both admitted and measured, so what the pick says about them is the KIND's verdict: the docker host's data
+        // root enforces quotas, the incus host's does not.
+        dockerHostId = seeded("cf-docker-host", () -> HostFixtures.admittedDockerHost("cf-docker-host", 16384));
+        VolumeBackends.store(Models.get(ServerModel.class).findById(dockerHostId),
+            new VolumeBackends.Detection(VolumeBackend.BTRFS, "/fixture/volumes", "fixture: btrfs"));
+        incusHostId = seeded("cf-incus-host", () -> HostFixtures.admittedIncusHost("cf-incus-host"));
+        VolumeBackends.store(Models.get(ServerModel.class).findById(incusHostId),
+            new VolumeBackends.Detection(VolumeBackend.NONE, "/fixture/volumes", "fixture: ext4"));
     }
 
-    private static Integer host(String name, String runtime, String volumeBackend) {
-        var servers = Models.get(ServerModel.class);
-        Row existing = servers.find().where(ServerModel.NAME.eq(name)).first();
-        if (existing != null) {
-            return existing.get(ServerModel.ID);
-        }
-        Row row = servers.createEmptyRow();
-        row.set(ServerModel.NAME, name);
-        row.set(ServerModel.MODE, ServerModel.MODE_SSH);
-        row.set(ServerModel.RUNTIME, runtime);
-        row.set(ServerModel.VOLUME_BACKEND, volumeBackend);
-        row.set(ServerModel.SSH_TARGET, "root@" + name + ".test");
-        servers.save(row);
-        return row.get(ServerModel.ID);
+    /** @return the host of that name this database already holds, else the one the fixture creates */
+    private static Integer seeded(String name, IntSupplier create) {
+        Row existing = Models.get(ServerModel.class).findByName(name);
+        return existing != null ? existing.get(ServerModel.ID) : create.getAsInt();
+    }
+
+    /** Asserts the open host pick offers this host disabled, saying why in words that contain {@code words}. */
+    private void assertJudged(Integer hostId, String words, String message) {
+        page.waitForCondition(() -> "true".equals(page.locator(hostOption(hostId)).getAttribute("aria-disabled")));
+        assertThat(page.locator(hostOption(hostId)).textContent()).as(message).contains(words);
+    }
+
+    /** Asserts the open host pick offers this host as an ordinary choice. */
+    private void assertChoice(Integer hostId, String message) {
+        page.waitForSelector(hostOption(hostId));
+        page.waitForCondition(() -> !"true".equals(page.locator(hostOption(hostId)).getAttribute("aria-disabled")));
+        assertThat(page.locator(hostOption(hostId)).getAttribute("aria-disabled")).as(message).isNotEqualTo("true");
     }
 
     private void clickKindCard(String kind) {
@@ -115,44 +126,43 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
             .as("step 1b: the create screen names one instance, not the list")
             .isEqualTo("New instance");
 
-        // 2. No kind chosen: the host cannot narrow, so it is disabled, and the runtime image, which only the kinds that
-        //    run inside one ask, is not shown at all.
-        waitForSelector(HOST_SELECT + "[disabled]");
+        // 2. No kind chosen: every host is offered and none is judged yet, and the runtime image, which only the
+        //    kinds that run inside one ask, is not shown at all.
+        openPlSelect(HOST_SELECT);
+        assertChoice(dockerHostId, "step 2: no kind, nothing judged: the docker host is a choice");
+        assertChoice(incusHostId, "step 2: and so is the incus host");
+        closeOpenPopup();
         assertThat(imageShown()).as("step 2: no runtime image before a kind asks for one").isFalse();
 
-        // Reload marker: every narrowing step below must be client-side.
+        // Reload marker: every judging step below must be client-side.
         page.evaluate("window.__cfNoReloadMarker = 'alive'");
 
-        // 3. A Docker-only kind offers Docker hosts and never the Incus one.
+        // 3. A Docker-only kind: the Incus host is offered disabled, naming the runtime it lacks.
         clickKindCard("docker_container");
-        page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
         openPlSelect(HOST_SELECT);
-        page.waitForSelector(hostOption(dockerHostId));
-        assertCount(hostOption(incusHostId), 0, "step 3: a Docker-only kind never offers the Incus host");
+        assertChoice(dockerHostId, "step 3: the docker host takes a Docker container");
+        assertJudged(incusHostId, "runs only on", "step 3: the Incus host says it runs the wrong runtime");
         closeOpenPopup();
 
         // ...and the runtime image is still not shown: a raw container ignores the column, so the kind's declared
         // fields leave it out instead of offering a pick that says to leave it empty.
         assertThat(imageShown()).as("step 3: a Docker container shows no runtime image").isFalse();
 
-        // 4. An Incus-only kind flips the offer around.
+        // 4. An Incus-only kind flips the verdicts around.
         clickKindCard("vm");
-        page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
         openPlSelect(HOST_SELECT);
-        page.waitForSelector(hostOption(incusHostId));
-        assertCount(hostOption(dockerHostId), 0, "step 4: an Incus-only kind never offers the Docker host");
+        assertChoice(incusHostId, "step 4: the incus host takes a virtual machine");
+        assertJudged(dockerHostId, "runs only on", "step 4: the Docker host says it runs the wrong runtime");
         closeOpenPopup();
         assertThat(imageShown()).as("step 4: a virtual machine shows no runtime image").isFalse();
 
-        // 5. A workspace runs on both runtimes but DEMANDS a quota-capable volume
-        //    backend, so only the btrfs host qualifies -- the Incus host (backend none)
-        //    is out even though the runtime matches.
+        // 5. A workspace runs on both runtimes but DEMANDS a quota-capable volume backend, so the Incus host (an
+        //    ext4 data root) is offered disabled even though its runtime matches, in the kind's own words.
         clickKindCard("workspace");
-        page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
         openPlSelect(HOST_SELECT);
-        page.waitForSelector(hostOption(dockerHostId));
-        assertCount(hostOption(incusHostId), 0,
-            "step 5: a workspace never offers the Incus host, whose volume backend has no quota");
+        assertChoice(dockerHostId, "step 5: the btrfs host takes a workspace");
+        assertJudged(incusHostId, "cannot enforce a volume quota",
+            "step 5: the Incus host says its data root cannot enforce a volume quota");
 
         // 6. A workspace runs inside a runtime image: the pick is shown and resolves, and the seeded
         //    catalog answers (RuntimeImageSeeder ships node-22 and friends).
@@ -168,7 +178,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         page.waitForCondition(() -> page.locator(OPEN_SELECT_POPUP).count() == 0);
 
         assertThat(page.evaluate("window.__cfNoReloadMarker"))
-            .as("every narrowing step must be client-side")
+            .as("every judging step must be client-side")
             .isEqualTo("alive");
 
         // 7. Submit: the record carries the kind, the narrowed host and the image.
@@ -180,14 +190,14 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         assertThat((Object) saved.get(InstanceModel.KIND))
             .as("step 7: the card's kind persisted").isEqualTo("hohenheim:workspace");
         assertThat((Object) saved.get(InstanceModel.SERVER_ID))
-            .as("step 7: the narrowed host persisted").isEqualTo(dockerHostId);
+            .as("step 7: the chosen host persisted").isEqualTo(dockerHostId);
         assertThat((Object) saved.get(InstanceModel.RUNTIME_IMAGE_ID))
             .as("step 7: the chosen runtime image persisted").isNotNull();
     }
 
     /**
-     * FALSIFICATION: a hand-posted host the picker would never offer is refused by the
-     * server-side re-narrowing (the client filter is never the gate).
+     * FALSIFICATION: a hand-posted host the kind cannot be placed on is refused by the server's own judgement, in the
+     * runtime rule's words (the drawn disabled option is never the gate).
      */
     @Test
     void handPostedOutOfScopeHostIsRefused() throws Exception {
@@ -197,6 +207,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         assertThat(refused.statusCode())
             .as("a vm on a docker host must not create-redirect")
             .isNotIn(302, 303);
+        assertThat(refused.body()).as("and says why").contains("runs only on");
         assertThat(findInstance("cf-forged-vm"))
             .as("and no record was persisted").isNull();
 
@@ -209,6 +220,98 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         Row saved = findInstance("cf-honest-vm");
         assertThat(saved).isNotNull();
         assertThat((Object) saved.get(InstanceModel.SERVER_ID)).isEqualTo(incusHostId);
+    }
+
+    /**
+     * A host the chosen kind cannot be placed on is OFFERED, disabled, in the placement gate's own words, the way the
+     * restore dialog and the migrate page offer theirs, and a hand-posted choice of it is refused in those words.
+     *
+     * It used to be offered as an ordinary choice: a workspace saved onto a VM-isolated host, and only the record's
+     * page then said "Cannot start yet".
+     */
+    @Test
+    void aHostTheKindCannotBePlacedOnIsOfferedDisabledAndRefusedInTheGatesWords() throws Exception {
+        int vmOnly = admittedQuotaHost("cf-vm-only", ServerModel.POSTURE_VM_ISOLATED);
+        int takesIt = admittedQuotaHost("cf-takes-workspace", null);
+        String gateWords = "cf-vm-only is set to VM isolated, so it takes no container app";
+
+        navigateToApp("/admin/instances/new");
+        waitForHydration();
+        page.evaluate("window.__cfNoReloadMarker = 'alive'");
+
+        // 1. A workspace is a container: the VM-isolated host is offered DISABLED, its reason drawn under its name,
+        //    and the host that takes it is an ordinary choice.
+        clickKindCard("workspace");
+        openPlSelect(HOST_SELECT);
+        page.waitForSelector(hostOption(vmOnly));
+        assertThat(page.locator(hostOption(vmOnly)).getAttribute("aria-disabled"))
+            .as("step 1: the VM-isolated host is offered disabled").isEqualTo("true");
+        assertThat(page.locator(hostOption(vmOnly)).textContent())
+            .as("step 1: and says why, in the placement gate's words").contains(gateWords);
+        assertThat(page.locator(hostOption(takesIt)).getAttribute("aria-disabled"))
+            .as("step 1: the host that takes a workspace is a choice").isNotEqualTo("true");
+        closeOpenPopup();
+
+        // 2. A virtual machine is what that host takes: changing the kind enables it, without a round-trip.
+        clickKindCard("vm");
+        openPlSelect(HOST_SELECT);
+        page.waitForCondition(() -> !"true".equals(page.locator(hostOption(vmOnly)).getAttribute("aria-disabled")));
+        assertThat(page.locator(hostOption(vmOnly)).textContent())
+            .as("step 2: and its reason is gone").doesNotContain(gateWords);
+        closeOpenPopup();
+
+        // 3. Back to a workspace: disabled again, in the same words.
+        clickKindCard("workspace");
+        openPlSelect(HOST_SELECT);
+        page.waitForCondition(() -> "true".equals(page.locator(hostOption(vmOnly)).getAttribute("aria-disabled")));
+        assertThat(page.locator(hostOption(vmOnly)).textContent())
+            .as("step 3: the reason is back").contains(gateWords);
+        closeOpenPopup();
+        assertThat(page.evaluate("window.__cfNoReloadMarker"))
+            .as("step 3: every judgement was client-side").isEqualTo("alive");
+
+        // 4. Hand-posted anyway: refused in the gate's words, and nothing is written.
+        Integer image = Models.get(RuntimeImageModel.class).find()
+            .where(RuntimeImageModel.ENABLED.eq(true)).first().get(RuntimeImageModel.ID);
+        HttpResponse<String> refused = httpPostForm("/admin/instances/new",
+            "name=cf-ws-on-vm-host&kind=hohenheim%3Aworkspace&server_id=" + vmOnly + "&runtime_image_id=" + image,
+            sessionToken, csrfToken);
+        assertThat(refused.statusCode()).as("step 4: the save is refused, never redirected").isNotIn(302, 303);
+        assertThat(refused.body()).as("step 4: in the gate's words").contains(gateWords);
+        assertThat(findInstance("cf-ws-on-vm-host")).as("step 4: and no record was written").isNull();
+
+        // 5. The host that takes a workspace saves.
+        navigateToApp("/admin/instances/new");
+        waitForHydration();
+        clickKindCard("workspace");
+        openPlSelect(HOST_SELECT);
+        click(hostOption(takesIt));
+        page.waitForCondition(() -> page.locator(OPEN_SELECT_POPUP).count() == 0);
+        page.waitForCondition(() -> page.locator(IMAGE_SELECT + "[disabled]").count() == 0);
+        openPlSelect(IMAGE_SELECT);
+        page.waitForSelector(OPEN_SELECT_POPUP + " div[role='option']");
+        page.locator(OPEN_SELECT_POPUP + " div[role='option']").first().click();
+        page.waitForCondition(() -> page.locator(OPEN_SELECT_POPUP).count() == 0);
+        type("input[name='name']", "cf-ws-on-taking-host");
+        page.evaluate("document.querySelector('form.cms-form-layout').requestSubmit()");
+        page.waitForCondition(() -> findInstance("cf-ws-on-taking-host") != null);
+        assertThat((Object) findInstance("cf-ws-on-taking-host").get(InstanceModel.SERVER_ID))
+            .as("step 5: the workspace landed on the host that takes it").isEqualTo(takesIt);
+    }
+
+    /** @return an admitted, measured Incus host whose data root enforces quotas, under the given posture when one */
+    private static int admittedQuotaHost(String name, String posture) {
+        var servers = Models.get(ServerModel.class);
+        Row existing = servers.findByName(name);
+        int id = existing != null ? existing.get(ServerModel.ID) : HostFixtures.admittedIncusHost(name);
+        Row row = servers.findById(id);
+        if (posture != null) {
+            row.set(ServerModel.POSTURE, posture);
+            servers.save(row);
+        }
+        VolumeBackends.store(servers.findById(id),
+            new VolumeBackends.Detection(VolumeBackend.BTRFS, "/fixture/volumes", "fixture: btrfs"));
+        return id;
     }
 
     /**
@@ -384,118 +487,11 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
     }
 
     /**
-     * An empty host picker EXPLAINS itself. The narrowing is correct when it matches
-     * nothing -- a fresh installation has no host with a quota-capable data root -- and
-     * until KindHostRules declared an {@link be.elevenways.zenit.common.edit.EmptyNarrowingReason}
-     * the operator was told only "No results found", with the real explanation sitting on
-     * the host overview page they had no reason to open.
-     *
-     * Steps 1-2 are the SIBLING-SPECIFIC contract (a kind that only needs a runtime and a
-     * kind that also needs quota-capable storage get DIFFERENT sentences, each naming the
-     * runtimes that kind accepts); step 3 puts the picker in the genuinely empty state and
-     * proves the sentence is what the operator actually sees.
-     */
-    @Test
-    void anEmptyHostNarrowingExplainsItself() {
-        navigateToApp("/admin/instances/new");
-        waitForHydration();
-
-        // 1. A kind that demands nothing of the data root names only the runtime rule.
-        clickKindCard("docker_container");
-        page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
-        assertThat(hostEmptyText())
-            .as("step 1: a runtime-only narrowing names the runtimes that kind accepts")
-            .isEqualTo(RUNTIME_ONLY_REASON);
-
-        // 2. A kind that mounts volumes fails on a SECOND rule, and says so -- the whole
-        //    point of handing the resolver the sibling values.
-        clickKindCard("workspace");
-        page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
-        assertThat(hostEmptyText())
-            .as("step 2: a quota-demanding kind names the data-root rule too")
-            .isEqualTo(QUOTA_REASON);
-
-        // 3. And in the state a fresh install is actually in -- no host with a
-        //    quota-capable data root -- the list really is empty and the sentence is what
-        //    renders in it, not the generic "No results found".
-        Map<Integer, String> backends = withoutQuotaCapableHosts();
-        try {
-            navigateToApp("/admin/instances/new");
-            waitForHydration();
-            clickKindCard("workspace");
-            page.waitForCondition(() -> page.locator(HOST_SELECT + "[disabled]").count() == 0);
-            openPlSelect(HOST_SELECT);
-            // AIDEV-NOTE: zero options is also true while the provider request is still loading. Wait for the
-            // empty row presentation before asserting the declared explanation.
-            page.waitForCondition(() -> page.locator(
-                OPEN_SELECT_POPUP + " div[role='option']").count() == 0
-                && page.locator(OPEN_SELECT_POPUP + " .pl-select-empty").isVisible());
-            assertThat(page.locator(OPEN_SELECT_POPUP + " .pl-select-empty").isVisible())
-                .as("step 3: nothing qualifies, so the empty row is what the operator sees")
-                .isTrue();
-            assertThat(page.locator(OPEN_SELECT_POPUP + " .pl-select-empty").textContent().trim())
-                .as("step 3: and it explains WHY, instead of reading as a broken list")
-                .isEqualTo(QUOTA_REASON);
-            closeOpenPopup();
-        } finally {
-            restoreHostBackends(backends);
-        }
-    }
-
-    /** The declared reason for a kind whose only host rule is the runtime. */
-    private static final String RUNTIME_ONLY_REASON =
-        "No host runs a runtime this kind supports (Docker)."
-            + " Enrol one under Hosts first.";
-
-    /** The declared reason for a kind that also demands a quota-capable data root. */
-    private static final String QUOTA_REASON =
-        "No host both runs a runtime this kind supports (Docker, Incus) and has a data"
-            + " root that can enforce quotas. Under Hosts, mount a host's volumes"
-            + " directory on btrfs, then check that host again.";
-
-    /**
-     * pl-select keeps its empty row in the (portalled) popup whether or not the list came
-     * back empty and lets CSS decide whether it SHOWS, so the declared text is readable
-     * with options present -- which is what makes steps 1 and 2 assertable without
-     * touching any data.
-     */
-    private String hostEmptyText() {
-        openPlSelect(HOST_SELECT);
-        String text = page.locator(OPEN_SELECT_POPUP + " .pl-select-empty").textContent().trim();
-        closeOpenPopup();
-        return text;
-    }
-
-    /** @return every host's previous volume backend, after taking the quota away */
-    private static Map<Integer, String> withoutQuotaCapableHosts() {
-        Map<Integer, String> previous = new LinkedHashMap<>();
-        var servers = Models.get(ServerModel.class);
-        for (Row row : servers.find().all()) {
-            previous.put(row.get(ServerModel.ID), row.get(ServerModel.VOLUME_BACKEND));
-            row.set(ServerModel.VOLUME_BACKEND, VolumeBackend.NONE.token());
-            servers.save(row);
-        }
-        return previous;
-    }
-
-    private static void restoreHostBackends(Map<Integer, String> previous) {
-        var servers = Models.get(ServerModel.class);
-        for (Map.Entry<Integer, String> entry : previous.entrySet()) {
-            Row row = servers.find().where(ServerModel.ID.eq(entry.getKey())).first();
-            if (row != null) {
-                row.set(ServerModel.VOLUME_BACKEND, entry.getValue());
-                servers.save(row);
-            }
-        }
-    }
-
-    /**
      * WHAT THE PICKER SHOWS AND WHAT THE SUBMIT WRITES ARE ONE ANSWER.
      *
-     * The host pick narrows to hosts that ACCEPT the workload, so on a fresh installation
-     * it offers nothing -- and this create surface used to write NULL for an empty pick,
-     * which every reader downstream spells "the local daemon". The record was created
-     * against a machine the form had just refused to offer. The create now routes through
+     * On a fresh installation no host accepts the workload -- and this create surface used to
+     * write NULL for an empty pick, which every reader downstream spells "the local daemon".
+     * The record was created against a machine no gate would have admitted. The create now routes through
      * {@link InstancePlacement#forActor} like every other create funnel: an empty pick is
      * the CHOOSER's decision, and when nothing is eligible it is a refusal ON THE HOST
      * FIELD rather than a row.
@@ -507,11 +503,21 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
         Row before = servers.findById(local);
         String priorAdmission = before.get(ServerModel.ADMISSION);
         Object priorCapabilities = before.get(ServerModel.CAPABILITIES);
+        // Every other host this database holds is blocked for the walk, so the chooser has only the local one.
+        Map<Integer, String> otherAdmissions = new LinkedHashMap<>();
+        for (Row server : servers.find().all()) {
+            int id = server.get(ServerModel.ID);
+            if (id != local) {
+                otherAdmissions.put(id, server.get(ServerModel.ADMISSION));
+                server.set(ServerModel.ADMISSION, ServerModel.ADMISSION_BLOCKED);
+                servers.save(server);
+            }
+        }
         try {
             // 1. The state a fresh installation is in: the local daemon is enrolled and
-            //    BLOCKED, and this class's seeded hosts were never admitted either -- so
-            //    nothing is eligible. The submit is refused and writes NOTHING; it used to
-            //    create the record against the blocked local host.
+            //    BLOCKED, and so is every other host -- so nothing is eligible. The submit is
+            //    refused and writes NOTHING; it used to create the record against the blocked
+            //    local host.
             assertThat((String) before.get(ServerModel.ADMISSION))
                 .as("fixture: the local daemon is blocked until an operator admits it")
                 .isEqualTo(ServerModel.ADMISSION_BLOCKED);
@@ -569,7 +575,7 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
             // 3. The operator admits and preflights the local daemon. The SAME submit --
             //    still an empty pick -- now lands, and it lands on the host the chooser
             //    picked rather than on a default nobody chose.
-            HostFixtures.makeLocalPlaceable(8192);
+            HostFixtures.makeLocalPlaceable(32768);
             HttpResponse<String> placed = httpPostForm("/admin/instances/new",
                 "name=cf-chosen&kind=hohenheim%3Adocker_container&server_id=",
                 sessionToken, csrfToken);
@@ -581,9 +587,9 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
                     + " that only reads as local)")
                 .isEqualTo(local);
 
-            // 4. Naming a host is still the operator's own authority, and it is honoured
-            //    even where the chooser would not have gone: the picker is not the gate,
-            //    and an operator who names a host gets the host they named.
+            // 4. Naming a host the kind can be placed on is the operator's own authority, and it is honoured even
+            //    where the chooser would not have gone (the local host has more headroom than the docker one).
+            restoreAdmission(dockerHostId, otherAdmissions.get(dockerHostId));
             HttpResponse<String> named = httpPostForm("/admin/instances/new",
                 "name=cf-named&kind=hohenheim%3Adocker_container&server_id=" + dockerHostId,
                 sessionToken, csrfToken);
@@ -596,6 +602,15 @@ class InstanceCreateFlowTest extends HohenheimTestBase {
             after.set(ServerModel.ADMISSION, priorAdmission);
             after.set(ServerModel.CAPABILITIES, priorCapabilities);
             servers.save(after);
+            otherAdmissions.forEach(this::restoreAdmission);
+        }
+    }
+
+    private void restoreAdmission(int serverId, String admission) {
+        Row server = Models.get(ServerModel.class).findById(serverId);
+        if (server != null) {
+            server.set(ServerModel.ADMISSION, admission);
+            Models.get(ServerModel.class).save(server);
         }
     }
 

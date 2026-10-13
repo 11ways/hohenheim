@@ -81,9 +81,8 @@ public final class AdminSources {
                 .search(BackupTargetModel.NAME), BackupTargetModel.class, panel, targets));
         }
 
-        // Hosts, for the instance form's DEPENDENT host pick: the projection is the rule
-        // vocabulary, so runtime and volume_backend MUST be projected -- the resolver
-        // (HohenheimPickRules.KindHostRules) narrows on exactly those two.
+        // Hosts, for the record pickers and list relations that name a host. The instance form's host pick is a
+        // kind-judged select over every host (InstanceParts.hostPick), not this source.
         RecordSourceRegistry.INSTANCE.register(complete(RecordSource.of(ServerModel.class)
             .project(ServerModel.NAME, ServerModel.RUNTIME, ServerModel.VOLUME_BACKEND)
             .search(ServerModel.NAME), ServerModel.class, panel, panel.entryBySlug(HohenheimSlugs.SERVERS)));

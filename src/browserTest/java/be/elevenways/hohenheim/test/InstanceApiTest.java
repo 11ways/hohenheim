@@ -8,6 +8,7 @@ import be.elevenways.hohenheim.model.StoredRows;
 import be.elevenways.hohenheim.HohenheimCapabilities;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.hohenheim.test.docker.FakeDockerDaemon;
+import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.zenit.auth.CapabilityScopes;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
@@ -101,9 +102,9 @@ class InstanceApiTest extends HohenheimTestBase {
     // -- fixtures --------------------------------------------------------------
 
     /**
-     * A host the create form's own picker rules would offer for a Docker-runtime kind:
-     * the API is held to the SAME narrowing, so a host without these facts is refused
-     * `relation_out_of_scope` exactly as the select would never have listed it.
+     * A host the create form's own judgement takes for a Docker-runtime kind (admitted, measured, a quota-capable data
+     * root): the API is held to the SAME judgement, so a host the kind cannot be placed on is refused in the placement
+     * gate's words exactly as the select draws it disabled.
      */
     private static int host(String name) {
         var servers = Models.get(ServerModel.class);
@@ -118,7 +119,9 @@ class InstanceApiTest extends HohenheimTestBase {
         row.set(ServerModel.VOLUME_BACKEND, "btrfs");
         row.set(ServerModel.SSH_TARGET, "root@" + name + ".test");
         servers.save(row);
-        return row.get(ServerModel.ID);
+        int id = row.get(ServerModel.ID);
+        HostFixtures.admitDockerHost(id, 16384);
+        return id;
     }
 
     /**

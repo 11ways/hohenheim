@@ -83,6 +83,9 @@ class ApplicationBackupRecoveryTest {
         try {
             Db.run(datasource, () -> {
                 HostFixtures.admitLocal();
+                // An application is placed only where its data root can enforce a quota (the kind-on-host verdict
+                // the restore below is judged by), so the local host carries one.
+                HostFixtures.giveLocalVolumeQuota();
                 try {
                     Row image = Models.get(RuntimeImageModel.class).createEmptyRow();
                     image.set(RuntimeImageModel.NAME, "backup-runtime");

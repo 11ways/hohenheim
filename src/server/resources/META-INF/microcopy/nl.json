@@ -1353,6 +1353,10 @@
     "text": "Optioneel. De eerste hostnaam waarop deze site antwoordt; meer hostnamen en TLS stel je in op het tabblad Domeinen.",
     "scope": "help"
   },
+  "instance_project": {
+    "text": "Optioneel. Het project waarin deze app wordt aangemaakt: de leden beheren hem en het quotum van het project betaalt hem. Een bestaande app verplaats je op het tabblad Toegang.",
+    "scope": "help"
+  },
   "last_run_failed": {
     "text": "Laatste uitvoering mislukt",
     "scope": "attention_detail"
@@ -12158,6 +12162,14 @@
     "text": "Alleen een app in een project kan in een omgeving staan, en deze hoort bij geen enkel project.",
     "scope": "instance"
   },
+  "environment_empty_chosen_project": {
+    "text": "Dit project heeft nog geen omgevingen.",
+    "scope": "instance"
+  },
+  "environment_empty_creatable": {
+    "text": "Geen enkel project waarin je kunt aanmaken heeft al een omgeving.",
+    "scope": "instance"
+  },
   "home_quota": [
     {
       "text": "Limiet home (MB)",
@@ -12441,14 +12453,6 @@
   "unsupported_runtime_description": {
     "text": "Deze workload draait op een runtime waarop hohenheim nog geen interactieve terminal kan openen.",
     "scope": "instance_shell"
-  },
-  "no_quota_capable_host": {
-    "text": "Geen enkele host draait een runtime die deze soort ondersteunt ({$runtimes}) en heeft tegelijk een dataroot die quota kan afdwingen. Mount onder Hosts de volumes-map van een host op btrfs en controleer die host opnieuw.",
-    "scope": "instance"
-  },
-  "no_runtime_host": {
-    "text": "Geen enkele host draait een runtime die deze soort ondersteunt ({$runtimes}). Voeg er onder Hosts eerst een toe.",
-    "scope": "instance"
   },
   "no_enabled_runtime_image": {
     "text": "Er is geen enkele runtime-image ingeschakeld. Schakel onder Runtime-images eerst de image in waarin deze instantie moet draaien.",

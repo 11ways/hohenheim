@@ -346,6 +346,34 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
     }
 
     /**
+     * Detaching the install media on the Devices tab leaves the tab showing an empty drive once the run lands, in the
+     * same document: the operator never reloads to learn the cdrom row is gone.
+     */
+    @Test
+    void detachingTheInstallMediaShowsTheEmptyDriveWithoutAReload() {
+        int instanceId = deviceCapableInstance("devsurf-detach");
+        new InstanceDevices().attachCdrom(instanceId, NAME_PREFIX + "detach-cd", "debian.iso");
+        String cdromRow = "pl-table-row:has-text('" + NAME_PREFIX + "detach-cd')";
+
+        // 1. The tab lists the drive's cdrom row and offers the detach.
+        navigateToApp("/admin/instances/" + instanceId + "/page/devices");
+        waitForHydration();
+        page.evaluate("() => { window.__detachJourney = 'same document'; }");
+        assertCount(cdromRow, 1, "step 1: the cdrom row is listed");
+
+        // 2. The operator detaches it and confirms in the shell dialog.
+        page.locator("#detach-media [data-cms-page-action-submit]").click();
+        page.locator("[data-cms-confirm-ok]:visible").click();
+
+        // 3. Once the detach has run, the tab shows the drive empty and the row gone, without a reload.
+        page.waitForCondition(() -> page.locator(cdromRow).count() == 0
+            && page.locator("pl-section-header-lead:has-text('The drive is empty.')").count() == 1);
+        assertThat(deviceRows(instanceId)).as("step 3: the record holds no cdrom row").isEmpty();
+        assertThat(page.evaluate("() => window.__detachJourney"))
+            .as("step 3: the same document, never a reload").isEqualTo("same document");
+    }
+
+    /**
      * On a phone the Devices tab's table scrolls inside the framework's scroll area instead of being clipped at the
      * screen's edge, so every column stays reachable.
      */

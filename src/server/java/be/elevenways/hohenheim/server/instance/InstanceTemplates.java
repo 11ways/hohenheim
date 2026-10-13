@@ -7,10 +7,8 @@ import be.elevenways.hohenheim.model.InstanceFileModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
-import be.elevenways.hohenheim.model.EnvironmentModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVolumeModel;
-import be.elevenways.hohenheim.model.ProjectModel;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.hohenheim.server.project.Projects;
@@ -223,61 +221,9 @@ public final class InstanceTemplates {
         }
         requireSelectable(template, ctx);
 
-        // A create INTO a project: the submitted project (or the chosen environment's)
-        // becomes the creation OWNER -- the quota charge, the placement decision, the
-        // environment-grouping guard and the planted manage grant all follow the one
-        // pinned derivation (HohenheimAccess.withCreationOwner). Membership is the gate.
-        if (projectId == null && environmentId == null) {
-            return createRecord(template, name, serverId, null, variableValues, ctx);
-        }
-        Row project = projectFor(projectId, environmentId);
-        if (project == null || !Projects.mayCreateInto(ctx, project)) {
-            throw notAProjectMember(projectId, environmentId, fields);
-        }
-        int[] created = new int[1];
-        HohenheimAccess.withCreationOwner(Projects.ownerSubjectsOf(project), () ->
-            created[0] = createRecord(template, name, serverId, environmentId, variableValues, ctx));
-        return created[0];
-    }
-
-    /**
-     * The project a submit creates into: {@code project_id}, or the environment's parent,
-     * and null when either names nothing or the two disagree.
-     */
-    private static @Nullable Row projectFor(@Nullable Integer projectId,
-                                            @Nullable Integer environmentId) {
-        Integer owning = projectId;
-        if (environmentId != null) {
-            Row environment = Models.get(EnvironmentModel.class).findById(environmentId);
-            if (environment == null) {
-                return null;
-            }
-            Integer environmentProject = environment.get(EnvironmentModel.PROJECT_ID);
-            if (owning != null && !owning.equals(environmentProject)) {
-                return null;
-            }
-            owning = environmentProject;
-        }
-        return Models.get(ProjectModel.class).findById(owning);
-    }
-
-    /**
-     * THE refusal of a create into a project the actor cannot reach.
-     *
-     * AIDEV-NOTE: ONE answer for an unknown project, an unknown environment, an environment
-     * of another project and a project the actor is not a member of, on the field the
-     * submit itself named and carrying only the value it submitted. Distinct keys (or a
-     * refusal carrying the environment's real project id) were an existence oracle: a
-     * tenant could enumerate the installation's project and environment ids by probing.
-     */
-    private static @NonNull Violations notAProjectMember(@Nullable Integer projectId,
-                                                         @Nullable Integer environmentId,
-                                                         @NonNull OwnerFields fields) {
-        return projectId != null
-            ? Violations.ofField(fields.project(), projectId,
-                HohenheimMicrocopy.VIOLATIONS.of("project_member_required"))
-            : Violations.ofField(fields.environment(), environmentId,
-                HohenheimMicrocopy.VIOLATIONS.of("project_member_required"));
+        // A create INTO a project rides the one ownership funnel every create-into lane shares.
+        return Projects.createInto(projectId, environmentId, ctx, fields.project(), fields.environment(),
+            () -> createRecord(template, name, serverId, environmentId, variableValues, ctx));
     }
 
     private int createRecord(@NonNull Row template, @NonNull String name,

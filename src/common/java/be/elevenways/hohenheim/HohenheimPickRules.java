@@ -1,8 +1,6 @@
 package be.elevenways.hohenheim;
 
 import be.elevenways.hawkeye.common.annotation.HawkeyeClass;
-import be.elevenways.hohenheim.host.VolumeBackend;
-import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.protoblast.common.annotation.BlastAutoLoad;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.typed.CoreTypes;
@@ -18,9 +16,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The dependent-picker resolvers of the admin forms (host by kind, template by kind,
- * runtime image by kind, exposable instance by upstream kind), each a DRY value type
- * the browser re-runs on every form-scope publish.
+ * The dependent-picker resolvers of the admin forms (template by kind, runtime image by kind, exposable instance by
+ * upstream kind, environment by project), each a DRY value type the browser re-runs on every form-scope publish.
  *
  * A resolver that can say WHY it legitimately narrows to nothing also implements
  * {@link EmptyNarrowingReason}, so the empty picker explains itself instead of reading
@@ -44,10 +41,10 @@ public final class HohenheimPickRules {
     private HohenheimPickRules() {}
 
     private static boolean touch() {
-        if (new KindHostRules("k", Map.of(), List.of()) == null
-                || new SiblingEqualsRules("k", "f") == null
+        if (new SiblingEqualsRules("k", "f") == null
                 || new RuntimeImageRules("k", List.of(), List.of()) == null
-                || new UpstreamInstanceRules("k", "v", List.of()) == null) {
+                || new UpstreamInstanceRules("k", "v", List.of()) == null
+                || new EnvironmentProjectRules("p") == null) {
             throw new IllegalStateException("pick-rules resolvers failed to initialise");
         }
         return true;
@@ -74,68 +71,6 @@ public final class HohenheimPickRules {
         }
         String text = String.valueOf(value).trim();
         return text.isEmpty() ? null : text;
-    }
-
-    /**
-     * Hosts that can carry the chosen kind: runtime in the kind's declared set, plus a
-     * quota-capable volume backend for the kinds that demand one. An unknown kind
-     * narrows to nothing resolvable (fail closed).
-     *
-     * AIDEV-NOTE: the backend narrowing reads {@link VolumeBackend#quotaCapableTokens},
-     * never a spelled-out token comparison. It used to say {@code volume_backend != none},
-     * which offered every ZFS and XFS-prjquota host -- backends this build cannot drive --
-     * and the first deploy then refused. The picker must narrow on the SAME fact
-     * {@code VolumeBackends.requireQuotaCapableHost} refuses on, or the two disagree again.
-     */
-    @HawkeyeClass
-    public record KindHostRules(
-        @NonNull String kindSibling,
-        @NonNull Map<String, List<String>> runtimesByKind,
-        @NonNull List<String> volumeQuotaKinds
-    ) implements SiblingRulesResolver, EmptyNarrowingReason {
-
-        @Override
-        public @Nullable Condition resolve(@NonNull Map<String, Object> siblingValues) {
-            String kind = chosen(siblingValues, this.kindSibling);
-            if (kind == null) {
-                return null;
-            }
-            List<String> runtimes = this.runtimesByKind.get(kind);
-            if (runtimes == null || runtimes.isEmpty()) {
-                return null;
-            }
-            List<Condition> rules = new ArrayList<>();
-            rules.add(Condition.test("runtime", CoreTypes.IN, Operand.of(List.copyOf(runtimes))));
-            if (this.volumeQuotaKinds.contains(kind)) {
-                rules.add(Condition.test("volume_backend", CoreTypes.IN,
-                    Operand.of(VolumeBackend.quotaCapableTokens())));
-            }
-            return Condition.all(rules);
-        }
-
-        /**
-         * AIDEV-NOTE: the two branches are the two RULES above, and they must stay that
-         * way: a reason naming something the narrowing does not test (host ADMISSION is
-         * the tempting one -- it refuses at placement, not here) sends an operator to fix
-         * a fact that would not have widened this list. The runtimes are named by their
-         * labels, the same spelling {@code InstanceKinds.runtimeMismatch} shows an operator.
-         */
-        @Override
-        public @Nullable Microcopy reasonNothingQualifies(@NonNull Map<String, Object> siblingValues) {
-            String kind = chosen(siblingValues, this.kindSibling);
-            if (kind == null) {
-                return null;
-            }
-            List<String> runtimes = this.runtimesByKind.get(kind);
-            if (runtimes == null || runtimes.isEmpty()) {
-                return null;
-            }
-            String key = this.volumeQuotaKinds.contains(kind)
-                ? "no_quota_capable_host"
-                : "no_runtime_host";
-            return HohenheimMicrocopy.INSTANCE.of(key)
-                .withArg("runtimes", ServerModel.runtimeLabels(runtimes));
-        }
     }
 
     /**
@@ -269,6 +204,36 @@ public final class HohenheimPickRules {
                 ? "no_exposable_instance"
                 : "instance_upstream_not_applicable";
             return HohenheimMicrocopy.SITE.of(key);
+        }
+    }
+
+    /**
+     * The environments of the project chosen beside the pick, or no narrowing at all while none is chosen.
+     *
+     * AIDEV-NOTE: an unchosen project narrows NOTHING (never null, never NOTHING_QUALIFIES): the project entry is
+     * create-only, and an absent sibling cannot be told apart from a cleared one, so any other answer would disable or
+     * empty the edit form's environment pick. The edit context's rule (InstanceParts.environmentRules) is what decides
+     * there, and on a create without a project.
+     */
+    @HawkeyeClass
+    public record EnvironmentProjectRules(
+        @NonNull String projectSibling
+    ) implements SiblingRulesResolver, EmptyNarrowingReason {
+
+        @Override
+        public @Nullable Condition resolve(@NonNull Map<String, Object> siblingValues) {
+            String project = chosen(siblingValues, this.projectSibling);
+            if (project == null) {
+                return Condition.EVERYTHING;
+            }
+            return Condition.all(Condition.test("project_id", CoreTypes.EQUALS, Operand.of(project)));
+        }
+
+        /** One branch: a chosen project that has no environment yet; an unchosen one leaves the context's reason. */
+        @Override
+        public @Nullable Microcopy reasonNothingQualifies(@NonNull Map<String, Object> siblingValues) {
+            return chosen(siblingValues, this.projectSibling) == null ? null
+                : HohenheimMicrocopy.INSTANCE.of("environment_empty_chosen_project");
         }
     }
 }

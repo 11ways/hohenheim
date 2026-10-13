@@ -15,6 +15,7 @@ import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.project.Projects;
 import be.elevenways.hohenheim.test.ApiSupport;
+import be.elevenways.hohenheim.test.PanelEntryViews;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -24,9 +25,11 @@ import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.PermissionGroupModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.GrantService;
+import be.elevenways.zenit.cms.server.panel.PartsWrites;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Model;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -445,6 +448,100 @@ class ProjectOwnershipTest extends HohenheimTestBase {
                 .contains(created));
         } finally {
             Models.get(EnvironmentModel.class).delete(staging.get(EnvironmentModel.ID));
+        }
+    }
+
+    /**
+     * The operator's create form makes an app INTO a chosen project: the project owns it from the first write (its
+     * group holds manage, its bucket is charged), the environment pick narrows to that project's, another project's
+     * environment is refused, and a principal who is no member of the project cannot create into it.
+     */
+    @Test
+    void anOperatorCreatesAnAppIntoTheProjectItChooses() throws Exception {
+        String projectSelect = "pl-select[name='project_id']";
+        String environmentSelect = "pl-select[name='environment_id']";
+        String popup = "he-bottom .pl-select-popup[data-open]";
+        Row foreign = Models.get(EnvironmentModel.class).createEmptyRow();
+        foreign.set(EnvironmentModel.PROJECT_ID, projectTwoId);
+        foreign.set(EnvironmentModel.NAME, PREFIX + "two-staging");
+        Models.get(EnvironmentModel.class).save(foreign);
+        Integer foreignId = foreign.get(EnvironmentModel.ID);
+        int hostId = HostFixtures.admittedDockerHost(PREFIX + "admin-host", 16384);
+        String created = PREFIX + "admin-created";
+        Model instances = Models.get(InstanceModel.class);
+        try {
+            // 1. The create form offers the project an app is created into; a stored record's form does not (its
+            //    Access tab moves it).
+            navigateToApp("/admin/instances/" + omegaId);
+            waitForHydration();
+            assertThat(page.locator(projectSelect).count())
+                .as("step 1: an existing record's form has no project pick").isZero();
+            navigateToApp("/admin/instances/new");
+            waitForHydration();
+            assertThat(page.locator(projectSelect).count()).as("step 1: the create form has one").isEqualTo(1);
+
+            // 2. Choosing project one narrows the environment pick to project one's environments.
+            page.click(projectSelect + " .pl-select-field");
+            String one = popup + " div[role='option'][data-value='" + projectOneId + "']";
+            page.waitForSelector(one);
+            page.click(one);
+            waitForReactiveIdle();
+            page.click(environmentSelect + " .pl-select-field");
+            page.waitForSelector(popup + " div[role='option'][data-value='" + environmentId + "']");
+            assertThat(page.locator(popup + " div[role='option'][data-value='" + foreignId + "']").count())
+                .as("step 2: project two's environment is not offered beside project one").isZero();
+
+            // 3. The submit lands INTO project one: its group alone holds manage, and its bucket was charged.
+            HttpResponse<String> landed = httpPostForm("/admin/instances/new", "name=" + created
+                + "&kind=hohenheim%3Adocker_container&server_id=" + hostId + "&project_id=" + projectOneId
+                + "&environment_id=" + environmentId, sessionToken, csrfToken);
+            assertThat(landed.statusCode()).as("step 3: the create redirects").isIn(302, 303);
+            Row instance = instances.find().where(InstanceModel.NAME.eq(created)).first();
+            assertThat(instance).as("step 3: the instance exists").isNotNull();
+            assertThat(HohenheimAccess.manageSubjectsOf(InstanceModel.MODEL_ID, instance.get(InstanceModel.ID)))
+                .as("step 3: the project group alone manages it").containsExactly(Projects.subjectOf(projectOne));
+            assertThat((String) instance.get(InstanceModel.QUOTA_BUCKET))
+                .as("step 3: the project's bucket was charged").isEqualTo(OwnerBudget.INSTANCES.bucketOf(
+                    HohenheimAccess.packSubjects(Projects.ownerSubjectsOf(projectOne))));
+            assertThat((Integer) instance.get(InstanceModel.ENVIRONMENT_ID))
+                .as("step 3: grouped in the chosen environment").isEqualTo(environmentId);
+
+            // 4. Another project's environment beside project one is refused, on the form and on the persist lane.
+            String mismatched = PREFIX + "admin-mismatched";
+            HttpResponse<String> refused = httpPostForm("/admin/instances/new", "name=" + mismatched
+                + "&kind=hohenheim%3Adocker_container&server_id=" + hostId + "&project_id=" + projectOneId
+                + "&environment_id=" + foreignId, sessionToken, csrfToken);
+            assertThat(refused.statusCode()).as("step 4: the form refuses, re-rendered").isNotIn(302, 303);
+            Throwable direct = catchThrowable(() -> PartsWrites.persistRow(
+                PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES),
+                Map.<String, Object>of("name", mismatched, "kind", "hohenheim:docker_container", "server_id", hostId,
+                    "project_id", projectOneId, "environment_id", foreignId),
+                TenantConduits.operator()));
+            assertThat(violationKeys(direct)).as("step 4: the persist lane refuses with the one owner refusal")
+                .contains("project_member_required");
+            assertThat(instances.find().where(InstanceModel.NAME.eq(mismatched)).count())
+                .as("step 4: nothing landed").isZero();
+
+            // 5. A principal who is no member of project one cannot create into it.
+            String intruded = PREFIX + "admin-intruded";
+            Throwable intruder = catchThrowable(() -> PartsWrites.persistRow(
+                PanelEntryViews.of(HohenheimSlugs.ADMIN, HohenheimSlugs.INSTANCES),
+                Map.<String, Object>of("name", intruded, "kind", "hohenheim:docker_container", "server_id", hostId,
+                    "project_id", projectOneId),
+                AccessContext.of(TenantConduits.stubFor(new UserPrincipal(memberBId, "Member B")))));
+            assertThat(violationKeys(intruder)).as("step 5: a non-member is refused the project")
+                .contains("project_member_required");
+            assertThat(((Violations) intruder).all()).as("step 5: on the project field")
+                .anyMatch(violation -> violation.fieldName().equals("project_id"));
+            assertThat(instances.find().where(InstanceModel.NAME.eq(intruded)).count())
+                .as("step 5: nothing landed").isZero();
+        } finally {
+            for (Row row : instances.find().withTrashed().where(InstanceModel.NAME.startsWith(PREFIX + "admin-"))
+                    .all()) {
+                HardDeletes.byId(instances, row.get(InstanceModel.ID));
+            }
+            Models.get(EnvironmentModel.class).delete(foreignId);
+            Models.get(ServerModel.class).delete(hostId);
         }
     }
 

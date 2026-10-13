@@ -29,6 +29,7 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.orm.query.criteria.Criteria;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.security.AccessContext;
+import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -36,6 +37,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * The project tier's one policy home. A project's OWNER identity is its zenit-auth
@@ -135,6 +137,59 @@ public final class Projects {
             }
         }
         return false;
+    }
+
+    /**
+     * THE create INTO a project: the submitted project (or the chosen environment's) becomes the creation OWNER for
+     * {@code create}, so the quota charge, the placement decision, the environment-grouping guard and the planted
+     * manage grant all follow the one pinned derivation ({@link HohenheimAccess#withCreationOwner}); membership
+     * ({@link #mayCreateInto}) is the gate. With neither named, {@code create} runs as the caller's own create.
+     *
+     * AIDEV-NOTE: ONE refusal for an unknown project, an unknown environment, an environment of another project and a
+     * project the actor is not a member of, on the field the submit itself named and carrying only the value it
+     * submitted. Distinct keys (or a refusal carrying the environment's real project id) were an existence oracle: a
+     * tenant could enumerate the installation's project and environment ids by probing.
+     *
+     * @param projectField     the field a refusal lands on when the submit named a project
+     * @param environmentField the field a refusal lands on when it named only an environment
+     * @throws Violations {@code project_member_required} when the actor may not create into what the submit named
+     */
+    public static <T> T createInto(@Nullable Integer projectId, @Nullable Integer environmentId,
+                                   @Nullable AccessContext ctx, @NonNull String projectField,
+                                   @NonNull String environmentField, @NonNull Supplier<T> create) {
+        if (projectId == null && environmentId == null) {
+            return create.get();
+        }
+        Row project = projectFor(projectId, environmentId);
+        if (project == null || !mayCreateInto(ctx, project)) {
+            throw projectId != null
+                ? Violations.ofField(projectField, projectId, HohenheimMicrocopy.VIOLATIONS.of("project_member_required"))
+                : Violations.ofField(environmentField, environmentId,
+                    HohenheimMicrocopy.VIOLATIONS.of("project_member_required"));
+        }
+        List<T> created = new ArrayList<>(1);
+        HohenheimAccess.withCreationOwner(ownerSubjectsOf(project), () -> created.add(create.get()));
+        return created.getFirst();
+    }
+
+    /**
+     * The project a submit creates into: {@code projectId}, or the environment's parent, and null when either names
+     * nothing or the two disagree.
+     */
+    private static @Nullable Row projectFor(@Nullable Integer projectId, @Nullable Integer environmentId) {
+        Integer owning = projectId;
+        if (environmentId != null) {
+            Row environment = Models.get(EnvironmentModel.class).findById(environmentId);
+            if (environment == null) {
+                return null;
+            }
+            Integer environmentProject = environment.get(EnvironmentModel.PROJECT_ID);
+            if (owning != null && !owning.equals(environmentProject)) {
+                return null;
+            }
+            owning = environmentProject;
+        }
+        return owning == null ? null : Models.get(ProjectModel.class).findById(owning);
     }
 
     /** Add a user as a project member (a positive membership grant on its group). */

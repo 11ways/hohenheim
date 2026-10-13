@@ -22,7 +22,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -288,22 +287,6 @@ public final class InstanceKinds {
         }
         InstanceStatus status = InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
         return status != null && status.startable();
-    }
-
-    /**
-     * Every registered kind's supported runtimes, keyed by the stored kind value --
-     * the data the dependent host picker's resolver carries
-     * ({@code HohenheimPickRules.KindHostRules}).
-     */
-    public static @NonNull Map<String, List<String>> runtimesByKind() {
-        Map<String, List<String>> runtimes = new HashMap<>();
-        for (Identifier id : InstanceKindRegistry.REGISTRY.ids()) {
-            InstanceKindHandler handler = handlerFor(id);
-            if (handler != null) {
-                runtimes.put(id.toString(), List.copyOf(new TreeSet<>(handler.supportedRuntimes())));
-            }
-        }
-        return runtimes;
     }
 
     /** Stored kind values whose handler passes the predicate, registry order. */

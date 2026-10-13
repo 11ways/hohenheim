@@ -28,6 +28,8 @@ import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -128,8 +130,16 @@ class InstanceArtifactTabsTest extends HohenheimTestBase {
         // 4. The data disks a backup carries are named in its row and on its own page, read off its stored summary.
         assertThat(backups.body()).as("step 4: the backup row names the data disks it carries")
             .contains("artifactdisk-a, artifactdisk-b");
-        assertThat(httpGet(backupPage(HohenheimSlugs.ADMIN, backupId), sessionToken).body())
-            .as("step 4: and so does the backup's page").contains("artifactdisk-a, artifactdisk-b");
+        String page = httpGet(backupPage(HohenheimSlugs.ADMIN, backupId), sessionToken).body();
+        assertThat(page).as("step 4: and so does the backup's page").contains("artifactdisk-a, artifactdisk-b");
+
+        // 5. A backup is titled by when it was taken, also when its archive has a key: the key is a field on the page,
+        //    never its heading or its breadcrumb.
+        Matcher title = Pattern.compile("<title>([^<]*)</title>").matcher(page);
+        assertThat(title.find()).as("step 5: the backup's page has a title").isTrue();
+        assertThat(title.group(1)).as("step 5: the title is when the backup was taken")
+            .contains("2026-08-10 13:00 UTC").doesNotContain("complete.hib");
+        assertThat(page).as("step 5: the key stays a field on the page").contains("artifact-tabs/complete.hib");
     }
 
     /**
