@@ -2,10 +2,10 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.zenit.server.time.JvmZoneClock;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.Headers;
 
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
@@ -22,7 +22,7 @@ import java.util.Locale;
  */
 public final class AccessLog {
 
-    /** The original's {@code d/M/Y:H:i:s O} timestamp, in the host's zone. */
+    /** The original's {@code d/M/Y:H:i:s O} timestamp, on the office clock (the offset names it), never the host's. */
     private static final DateTimeFormatter TIMESTAMP =
         DateTimeFormatter.ofPattern("dd/MMM/yyyy:HH:mm:ss Z", Locale.ENGLISH);
 
@@ -53,7 +53,7 @@ public final class AccessLog {
     static String line(HttpServerExchange ex, String hostname, String clientIp, String path) {
         String query = ex.getQueryString();
         return LogFile.escape(hostname) + ": " + LogFile.escape(clientIp) + " - - ["
-            + TIMESTAMP.format(Now.instant().atZone(ZoneId.systemDefault())) + "] \""
+            + TIMESTAMP.format(Now.instant().atZone(JvmZoneClock.office())) + "] \""
             + LogFile.escape(ex.getRequestMethod().toString()) + " " + LogFile.escape(path)
             + (query != null && !query.isEmpty() ? "?" + LogFile.escape(query) : "")
             + " " + LogFile.escape(String.valueOf(ex.getProtocol())) + "\" " + ex.getStatusCode()
