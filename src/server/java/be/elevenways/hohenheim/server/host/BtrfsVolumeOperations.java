@@ -10,6 +10,9 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Locale;
 
 /**
@@ -138,6 +141,60 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
     }
 
     /**
+     * AIDEV-NOTE: the tar reads a read-only snapshot taken for it, never the live subvolume: the workload keeps
+     * running through a backup, and the snapshot is the one point in time the whole volume is read at (crash
+     * consistent, like the daemons' own exports). The snapshot goes again whatever the read did.
+     */
+    @Override
+    public long archive(@NonNull String hostPath, @NonNull Path target, long maxBytes) {
+        String snapshot = snapshot(hostPath, "backup");
+        try {
+            HostShell.Result result = this.shell.runReading(privileged(PrivilegedHelper.Verb.VOLUME_READ,
+                this.sudo + "tar --numeric-owner -C " + HostShell.quote(snapshot) + " -cf - .", snapshot),
+                target, maxBytes, HostShell.PAYLOAD_TIMEOUT_SECONDS);
+            if (!result.ok()) {
+                throw failure("volume_archive_failed", hostPath, result.text());
+            }
+            return Files.size(target);
+        } catch (IOException unreadable) {
+            throw failure("volume_archive_failed", hostPath, String.valueOf(unreadable.getMessage()));
+        } finally {
+            try {
+                deleteSnapshot(snapshot);
+            } catch (RuntimeException cleanupFailed) {
+                Blast.log("VOLUMES: could not remove the backup snapshot", snapshot, "-", cleanupFailed.getMessage());
+            }
+        }
+    }
+
+    @Override
+    public void restore(@NonNull String hostPath, @NonNull Path source, @Nullable Integer ownerUid) {
+        String quoted = HostShell.quote(hostPath);
+        String legacy = this.sudo + "tar --numeric-owner -C " + quoted + " -xf -"
+            + (ownerUid != null ? " && " + this.sudo + "chown -R -h " + ownerUid + ":" + ownerUid + " " + quoted : "");
+        HostShell.Result result = this.shell.runFeeding(privileged(PrivilegedHelper.Verb.VOLUME_WRITE, legacy,
+            hostPath, ownerUid != null ? String.valueOf(ownerUid) : "keep"), source, HostShell.PAYLOAD_TIMEOUT_SECONDS);
+        if (!result.ok()) {
+            throw failure("volume_restore_failed", hostPath, result.text());
+        }
+    }
+
+    @Override
+    public long availableBytes(@NonNull String path) {
+        HostShell.Result result = this.shell.run("df -B1 --output=avail " + HostShell.quote(path));
+        String[] lines = result.text().trim().split("\n");
+        try {
+            if (result.ok()) {
+                return Long.parseLong(lines[lines.length - 1].trim());
+            }
+        } catch (NumberFormatException unparseable) {
+            // unanswerable, like a failed df
+        }
+        Blast.log("VOLUMES: could not measure the free space of", path, "-", result.text());
+        return -1;
+    }
+
+    /**
      * Where a snapshot of this volume lands: a sibling {@code .snapshots} tree that mirrors
      * the volume's own {@code <instance>/<name>} layout, so a snapshot is never inside the
      * volume it copies (which would make the next snapshot recursive).
@@ -179,10 +236,15 @@ public final class BtrfsVolumeOperations implements VolumeOperations {
                      @NonNull String hostPath) {
         HostShell.Result result = this.shell.run(script);
         if (!result.ok()) {
-            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of(violation)
-                .withArg("path", hostPath)
-                .withArg("backend", VolumeBackend.BTRFS.label())
-                .withArg("reason", result.text()));
+            throw failure(violation, hostPath, result.text());
         }
+    }
+
+    private static @NonNull Violations failure(@NonNull String violation, @NonNull String hostPath,
+                                               @NonNull String reason) {
+        return Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of(violation)
+            .withArg("path", hostPath)
+            .withArg("backend", VolumeBackend.BTRFS.label())
+            .withArg("reason", reason));
     }
 }

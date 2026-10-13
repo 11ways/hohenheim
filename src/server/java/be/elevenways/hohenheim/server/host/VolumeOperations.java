@@ -3,9 +3,14 @@ package be.elevenways.hohenheim.server.host;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.host.VolumeBackend;
+import be.elevenways.hohenheim.model.ServerModel;
+import be.elevenways.protoblast.common.platform.PlatformSeam;
+import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+
+import java.nio.file.Path;
 
 /**
  * What a host's volume backend can DO to one volume directory -- the per-member operations
@@ -70,6 +75,50 @@ public interface VolumeOperations {
     void own(@NonNull String hostPath, int uid);
 
     /**
+     * Capture the volume's contents as a tar at {@code target}, numeric owners kept, from a point-in-time copy so a
+     * running workload's writes cannot tear it.
+     *
+     * @param maxBytes cap on the tar, enforced while it is written
+     * @return the tar's size in bytes
+     */
+    long archive(@NonNull String hostPath, @NonNull Path target, long maxBytes);
+
+    /**
+     * Unpack a tar {@link #archive} wrote into the (fresh) volume.
+     *
+     * @param ownerUid the uid every unpacked entry is given to, or null to keep the captured owners: a workspace's
+     *                 files belong to its derived uid, which a restored record does not share with its source
+     */
+    void restore(@NonNull String hostPath, @NonNull Path source, @Nullable Integer ownerUid);
+
+    /** @return bytes free on the filesystem holding {@code path}, or -1 when the host could not answer */
+    long availableBytes(@NonNull String path);
+
+    /** Who answers for one host's volume operations; a test installs a directory-backed one. */
+    @FunctionalInterface
+    interface Hosts {
+        @NonNull VolumeOperations forServer(@NonNull Row server);
+
+        /** Which storage a host keeps its volumes on: two hosts answering alike name one directory tree. */
+        default @NonNull String storageOf(@NonNull Row server) {
+            if (!ServerModel.hasSshLane(server)) {
+                return "local";
+            }
+            String target = String.valueOf((Object) server.get(ServerModel.SSH_TARGET));
+            return "ssh:" + target.substring(target.indexOf('@') + 1);
+        }
+    }
+
+    /** The seam behind {@link #forServer}: the host's detected backend over its shell. */
+    PlatformSeam<Hosts> HOSTS = PlatformSeam.withDefault(Hosts.class,
+        server -> forBackend(ServerModel.volumeBackendOf(server), HostShell.forServer(server)));
+
+    /** The operations of one inventoried host. */
+    static @NonNull VolumeOperations forServer(@NonNull Row server) {
+        return HOSTS.require().forServer(server);
+    }
+
+    /**
      * The operations of one host's backend.
      *
      * @throws Violations for a backend nothing implements yet, naming it
@@ -114,5 +163,15 @@ public interface VolumeOperations {
         @Override public void destroy(@NonNull String hostPath) { throw refuse(); }
 
         @Override public void own(@NonNull String hostPath, int uid) { throw refuse(); }
+
+        @Override public long archive(@NonNull String hostPath, @NonNull Path target, long maxBytes) {
+            throw refuse();
+        }
+
+        @Override public void restore(@NonNull String hostPath, @NonNull Path source, @Nullable Integer ownerUid) {
+            throw refuse();
+        }
+
+        @Override public long availableBytes(@NonNull String path) { throw refuse(); }
     }
 }

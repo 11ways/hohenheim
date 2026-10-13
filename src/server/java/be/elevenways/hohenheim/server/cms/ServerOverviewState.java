@@ -149,7 +149,13 @@ public final class ServerOverviewState {
                 HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend").resolve(locales, resolver),
                 WidgetBadge.of(volumeBackend.label().resolve(locales, resolver),
                     volumeBackend.color(), volumeBackend.icon())))));
-        if (volumeBackend == VolumeBackend.UNCHECKED) {
+        if (volumeBackend == VolumeBackend.UNCHECKED && server.get(ServerModel.VOLUME_PROBED_AT) == null) {
+            // Never checked at all (a new host's stored default): there is no finding and no reason yet.
+            state.add(alert(AlertVariant.WARNING, NoticeData.of(
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_never_checked_title").resolve(locales, resolver),
+                HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_never_checked_body")
+                    .resolve(locales, resolver))));
+        } else if (volumeBackend == VolumeBackend.UNCHECKED) {
             // The probe could not read the host: say so and why, never advise a filesystem it may already have.
             state.add(alert(AlertVariant.WARNING, NoticeData.of(
                 HohenheimMicrocopy.SERVER_OVERVIEW.of("volume_backend_unchecked_title").resolve(locales, resolver),

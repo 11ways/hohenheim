@@ -6797,6 +6797,14 @@
     "text": "Dataschijven",
     "scope": "instance_backup"
   },
+  "host_volumes": {
+    "text": "Hostvolumes",
+    "scope": "instance_backup"
+  },
+  "backup_contents": {
+    "text": "Inhoud",
+    "scope": "instance_backup"
+  },
   "restore_new": {
     "text": "Herstellen naar nieuwe instantie",
     "scope": "instance_backup"
@@ -9355,6 +9363,18 @@
     "text": "NIC aankoppelen",
     "scope": "instance_device"
   },
+  "attach_disk_title": {
+    "text": "Een schijf aankoppelen",
+    "scope": "instance_device"
+  },
+  "attach_nic_title": {
+    "text": "Een netwerkinterface aankoppelen",
+    "scope": "instance_device"
+  },
+  "attach_media_title": {
+    "text": "Installatiemedia invoegen",
+    "scope": "instance_device"
+  },
   "add_media": {
     "text": "Installatiemedia aankoppelen",
     "scope": "instance_device"
@@ -11689,6 +11709,14 @@
     "text": "Van volume '{$path}' kon geen snapshot gemaakt worden op de {$backend}-backend: {$reason}",
     "scope": "violations"
   },
+  "volume_archive_failed": {
+    "text": "De inhoud van volume '{$path}' kon niet vastgelegd worden op de {$backend}-backend: {$reason}",
+    "scope": "violations"
+  },
+  "volume_restore_failed": {
+    "text": "De vastgelegde inhoud kon niet in volume '{$path}' geschreven worden op de {$backend}-backend: {$reason}",
+    "scope": "violations"
+  },
   "volume_destroy_failed": {
     "text": "Volume '{$path}' kon niet verwijderd worden op de {$backend}-backend: {$reason}",
     "scope": "violations"
@@ -12256,6 +12284,14 @@
   },
   "volume_backend_unchecked_body": {
     "text": "Hohenheim kon de dataroot van deze host niet lezen, dus weet het niet of workspaces en applicaties hier geplaatst kunnen worden, en plaatst er geen tot het dat wel kan. Waar de controle op stuitte: {$reason}. Controleer deze host opnieuw zodra Hohenheim hem kan bereiken.",
+    "scope": "server_overview"
+  },
+  "volume_backend_never_checked_title": {
+    "text": "Volumeopslag nog niet gecontroleerd",
+    "scope": "server_overview"
+  },
+  "volume_backend_never_checked_body": {
+    "text": "Hohenheim heeft de dataroot van deze host nog niet gecontroleerd, dus plaatst het hier geen workspaces of applicaties tot dat gebeurd is. Controleer deze host om te weten welke volumeopslag hij biedt.",
     "scope": "server_overview"
   },
   "volume_backend_none_title": {

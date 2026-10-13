@@ -574,7 +574,7 @@ public final class InstanceService {
             if (target instanceof WorkloadAttribution support
                     && support.claimOf(resolved.spec())
                         == WorkloadAttribution.WorkloadClaim.OURS) {
-                InstanceMigrations.removeMigrationCopy(target, resolved);
+                InstanceMigrations.removeMigrationCopy(target, resolved, ServerModel.nameOf(targetId));
             }
         } catch (IOException | Violations cleanupFailed) {
             Blast.log("INSTANCE: destroy could not remove the mid-migration copy of",

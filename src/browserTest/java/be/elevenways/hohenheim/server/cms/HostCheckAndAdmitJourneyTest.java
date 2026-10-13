@@ -62,6 +62,17 @@ class HostCheckAndAdmitJourneyTest extends HohenheimTestBase {
                 || action.id().equals(HohenheimIds.id("preflight_server")));
         assertThat(check.labelFor(host).key()).as("step 1: offered as check-and-admit").isEqualTo("check_and_admit");
 
+        // 1b. Never checked, its volume storage reads as not checked yet: no "None" finding and no advice to mount a
+        //     filesystem nobody has looked for.
+        assertThat((String) Models.get(ServerModel.class).findById(host.get(ServerModel.ID))
+                .get(ServerModel.VOLUME_BACKEND))
+            .as("step 1b: a new host's volume storage is stored not checked").isEqualTo("unchecked");
+        String newHostPage = httpGet(CmsRoutes.subpage(HohenheimSlugs.ADMIN, HohenheimSlugs.SERVERS,
+            host.get(ServerModel.ID), RecordOverview.SLUG).toUrl(), sessionToken).body();
+        assertThat(newHostPage).as("step 1b: the host page says it was not checked yet")
+            .contains("Volume storage not checked yet")
+            .doesNotContain("Mount a btrfs filesystem");
+
         // 2. Checking a host it cannot reach (an unpinned SSH host) is refused naming the check that must pass; the
         //    report is stored anyway, and the host stays waiting.
         @SuppressWarnings("unchecked")

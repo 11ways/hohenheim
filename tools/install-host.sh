@@ -440,6 +440,8 @@ usage() {
     printf '       hohenheim-helper volume-quota <path> <bytes|none>\n' >&2
     printf '       hohenheim-helper volume-snapshot <path> <target>\n' >&2
     printf '       hohenheim-helper volume-own <path> <uid>\n' >&2
+    printf '       hohenheim-helper volume-read <snapshot>\n' >&2
+    printf '       hohenheim-helper volume-write <path> <uid|keep>\n' >&2
     printf '       hohenheim-helper spamservice-own <path>\n' >&2
     exit 64
 }
@@ -600,6 +602,29 @@ case "$verb" in
         enter "$VOLUME_ROOT" "$rel"
         chown "$2:$2" .
         chmod 0700 .
+        ;;
+    volume-read)
+        [ $# -eq 1 ] || usage
+        below "$VOLUME_ROOT/.snapshots" "$1" 2 2
+        enter "$VOLUME_ROOT" ".snapshots/$BELOW"
+        tar --numeric-owner -cf - .
+        ;;
+    volume-write)
+        [ $# -eq 2 ] || usage
+        volume "$1"
+        rel="$BELOW"
+        case "$2" in
+            keep) ;;
+            ''|*[!0-9]*) refuse "'$2' is not a numeric uid or keep" ;;
+            *)
+                if [ "${#2}" -gt 10 ] || [ "$2" -lt "$MIN_OWNER_UID" ] || [ "$2" -gt "$MAX_OWNER_UID" ]; then
+                    refuse "uid $2 is outside $MIN_OWNER_UID..$MAX_OWNER_UID"
+                fi
+                ;;
+        esac
+        enter "$VOLUME_ROOT" "$rel"
+        tar --numeric-owner -xf -
+        [ "$2" = keep ] || chown -R -h "$2:$2" .
         ;;
     spamservice-own)
         [ $# -eq 1 ] || usage

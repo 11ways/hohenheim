@@ -226,6 +226,10 @@ class InstanceDeviceSurfaceTest extends HohenheimTestBase {
         assertThat(conditionalHidden(nicForm, "size_gb")).as("step 1b: a NIC form hides the size").isTrue();
         String diskForm = adminGet("/admin/instance-devices/new?parent=" + instanceId + "&type=disk").body();
         assertThat(conditionalHidden(diskForm, "size_gb")).as("step 1b: a disk form shows the size").isFalse();
+        assertThat(diskForm).as("step 1b: the disk form is headed by what it attaches").contains("Attach a disk")
+            .doesNotContain("New device");
+        assertThat(nicForm).as("step 1b: and the NIC form names a network interface")
+            .contains("Attach a network interface").doesNotContain("New device");
 
         // 2. Attaching a disk through the form creates the VOLUME at the daemon, under the instance the create names:
         //    a posted instance_id naming another instance is no part of the write.

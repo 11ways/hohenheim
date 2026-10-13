@@ -43,7 +43,7 @@ class BackupArchiveTest {
             BackupManifest.PAYLOAD_VOLUME_TARS,
             Map.of("image", "alpine", "environment_variables", Map.of("SECRET", "s3cret")),
             "alpine:latest", "sha256:abc", List.of(), List.of(), "", 8080, "tcp",
-            List.of(new BackupManifest.VolumeEntry("data", "/data", "data.tar", sha, size)), List.of(),
+            List.of(new BackupManifest.VolumeEntry("data", "/data", "data.tar", sha, size)), List.of(), List.of(),
             new BackupManifest.InstanceProfile(
                 new BackupManifest.TemplateRef(7, "velocity", 3),
                 "restart", "staging", "offsite",
@@ -244,7 +244,7 @@ class BackupArchiveTest {
                 BackupArchive.sha256Of(instance), Files.size(instance))),
             List.of(new BackupManifest.DiskEntry("data1", 3, new BackupManifest.PayloadEntry("disk-1.tar",
                 BackupArchive.sha256Of(disk), Files.size(disk)))),
-            base.profile(), null);
+            List.of(), base.profile(), null);
 
         // 1. The archive carries the disk beside the instance export; both verify, and each extracts in its lane.
         Path archive = tmp.resolve("disks.hib");
@@ -423,7 +423,7 @@ class BackupArchiveTest {
             base.created(), base.controllerVersion(), "uploaded-app", "hohenheim:application",
             base.payload(), Map.of(), base.imageReference(), "sha256:" + "a".repeat(64), base.installMedia(),
             base.extraNics(),
-            base.ownership(), base.containerPort(), base.portProtocol(), base.volumes(), base.disks(),
+            base.ownership(), base.containerPort(), base.portProtocol(), base.volumes(), base.disks(), List.of(),
             base.profile(), application);
         Path archive = tmp.resolve("application.hib");
         BackupArchive.create(manifest, Map.of("data.tar", data,

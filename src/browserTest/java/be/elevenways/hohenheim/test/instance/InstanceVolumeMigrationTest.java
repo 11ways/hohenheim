@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.model.GameDomainModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceMigrations;
+import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -17,6 +18,8 @@ import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -316,6 +319,68 @@ class InstanceVolumeMigrationTest {
                 .containsEntry("marker", "precious");
             service.destroy(id);
         });
+    }
+
+    /**
+     * A record's host-directory volumes move with it through the host's volume storage, and a move interrupted after
+     * the source's workload was removed but before what lay beside it was, completed at boot, leaves nothing of the
+     * record on the source: neither its named volumes nor its host directories.
+     */
+    @Test
+    void hostVolumesMoveWithTheRecordAndAnInterruptedMoveLeavesNoSourceRemnants() throws Exception {
+        FakeHostVolumes storage = FakeHostVolumes.install();
+        try {
+            Db.run(datasource, () -> {
+                int src = HostFixtures.admittedIncusHost("hvmig-src");
+                int dst = HostFixtures.admittedIncusHost("hvmig-dst");
+                InstanceService service = new InstanceService();
+                int id = volumeInstance("hv-mover", src);
+                String handle = FakeNativeDaemons.handleOf(id);
+                service.deploy(id);
+                volumeOn(src, id, "data").data.put("marker", "named");
+                InstanceVolumes.declare(id, "home", "/home/dev", null, false);
+                InstanceVolumes.mountsFor(id, "hvmig-src", null);
+                String home = InstanceVolumes.hostPathFor(id, "home");
+                Path sourceHome = storage.directoryOf("hvmig-src", home);
+                Path targetHome = storage.directoryOf("hvmig-dst", home);
+                try {
+                    Files.writeString(sourceHome.resolve("notes.txt"), "kept in home");
+                } catch (java.io.IOException e) {
+                    throw new java.io.UncheckedIOException(e);
+                }
+
+                // 1. Killed right after the source's workload was removed: the source still holds what lay beside it.
+                assertThat(catchThrowable(
+                        () -> KilledController.migrationsCrashingAt("source_destroyed").migrateTo(id, dst)))
+                    .as("step 1: killed after the source container's removal").isInstanceOf(KilledController.Killed.class);
+                assertThat(FakeNativeDaemons.daemonOf(src).containsKey(handle))
+                    .as("step 1: the source container is gone").isFalse();
+                assertThat(targetHome.resolve("notes.txt"))
+                    .as("step 1: the home directory's contents landed on the destination's volume storage")
+                    .hasContent("kept in home");
+
+                // 2. Boot recovery completes FORWARD and takes what the source still held beside the workload.
+                InstanceMigrations.recoverInterrupted();
+                assertThat((Object) Models.get(InstanceModel.class).findById(id).get(InstanceModel.SERVER_ID))
+                    .as("step 2: the handoff completed onto the destination").isEqualTo(dst);
+                assertThat(volumeOn(src, id, "data"))
+                    .as("step 2: the source's named volume went with the completion").isNull();
+                assertThat(Files.exists(sourceHome))
+                    .as("step 2: and so did the source's home directory").isFalse();
+                assertThat(InstanceVolumes.declaredFor(id))
+                    .as("step 2: the record keeps its declaration").hasSize(1);
+
+                // 3. An uninterrupted move back carries the home again and leaves the destination's copy behind none.
+                migrations().migrateTo(id, src);
+                assertThat(sourceHome.resolve("notes.txt"))
+                    .as("step 3: the home came back to the first host").hasContent("kept in home");
+                assertThat(Files.exists(targetHome))
+                    .as("step 3: the host it left keeps no copy").isFalse();
+                service.destroy(id);
+            });
+        } finally {
+            FakeHostVolumes.uninstall();
+        }
     }
 
     @Test

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.instance;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimViolations;
 import be.elevenways.hohenheim.model.InstanceDeviceModel;
 import be.elevenways.zenit.common.validation.Violations;
@@ -96,6 +97,15 @@ public enum DeviceType {
     /** @return the details a row of this type means; any other detail is no fact about it, never shown for it */
     public @NonNull List<DeviceDetail> details() {
         return this.details;
+    }
+
+    /** @return the words that name attaching one device of this type: the heading of its create page */
+    public @NonNull Microcopy attachTitle() {
+        return switch (this) {
+            case DISK -> HohenheimMicrocopy.INSTANCE_DEVICE.of("attach_disk_title");
+            case NIC -> HohenheimMicrocopy.INSTANCE_DEVICE.of("attach_nic_title");
+            case CDROM -> HohenheimMicrocopy.INSTANCE_DEVICE.of("attach_media_title");
+        };
     }
 
     /** @return the member stored as {@code token}, or null when it is no member */

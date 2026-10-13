@@ -254,6 +254,12 @@ public class M011_ReviewHardening extends HohenheimMigration {
             column -> column.nullable(true).maxLength(50).defaultValue(CRASH_RESTART)));
         schema.data("restart every stored workload after a crash, the new default", "1",
             M011_ReviewHardening::restartStoredWorkloadsOnCrash);
+        // A host's volume storage is not checked until its probe ran: 'none' was the stored default before any probe,
+        // which the host page read as a finding and answered with the advice to mount btrfs.
+        schema.alterTable("servers", table -> table.changeColumn("volume_backend", ColumnType.STRING,
+            column -> column.nullable(true).maxLength(32).defaultValue(VOLUME_UNCHECKED)));
+        schema.data("mark every never-probed host's volume storage not checked", "1",
+            M011_ReviewHardening::uncheckNeverProbedHosts);
         // A new git source deploys on push by default now; every stored one keeps the off an absent flag used to read.
         schema.data("keep every stored git source's auto-deploy off", "1",
             M011_ReviewHardening::keepStoredSourcesManual);
@@ -349,6 +355,24 @@ public class M011_ReviewHardening extends HohenheimMigration {
             FrozenModel instances = new FrozenModel("instances", id, crashPolicy);
             instances.find().where(crashPolicy.eq(CRASH_NONE)).assign(crashPolicy, CRASH_RESTART).updateAll();
             instances.find().where(crashPolicy.isNull()).assign(crashPolicy, CRASH_RESTART).updateAll();
+        });
+    }
+
+    /** A host's volume storage before its first probe, as VolumeBackend.UNCHECKED spells it today. */
+    static final String VOLUME_UNCHECKED = "unchecked";
+
+    /** The volume storage the previous default stored before any probe, as production stored it. */
+    static final String VOLUME_NONE = "none";
+
+    /** The data step marking every host whose probe never ran (no probe time) not checked instead of none. */
+    public static void uncheckNeverProbedHosts(@NonNull Datasource datasource) {
+        Db.run(datasource, () -> {
+            IntegerField id = IntegerField.builder().name("id").build();
+            StringField backend = StringField.builder().name("volume_backend").build();
+            DateTimeField probedAt = DateTimeField.builder().name("volume_probed_at").build();
+            FrozenModel servers = new FrozenModel("servers", id, backend, probedAt);
+            servers.find().where(backend.eq(VOLUME_NONE)).where(probedAt.isNull())
+                .assign(backend, VOLUME_UNCHECKED).updateAll();
         });
     }
 

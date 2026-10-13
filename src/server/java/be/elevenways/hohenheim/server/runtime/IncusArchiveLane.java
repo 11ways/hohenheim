@@ -221,11 +221,14 @@ final class IncusArchiveLane {
 
     /**
      * Land each disk as a new volume of {@code spec}'s device-volume naming, attributed to {@code spec}, then import
-     * the instance with those devices pointed at them; a failure takes back every volume this call landed.
+     * the instance with those devices pointed at them and its host-directory devices at {@code spec}'s own
+     * directories; a failure takes back every volume this call landed.
      *
      * AIDEV-NOTE: the volumes land FIRST because the daemon validates every device while it creates the imported
      * instance: a disk still naming the source's volume fails the import on a host without it ("Storage volume not
-     * found"), and on the source's own host it would share the source's disk.
+     * found"), and on the source's own host it would share the source's disk. A host-directory device is the same
+     * hazard one level down: the export names the SOURCE record's directory, so it is re-pointed through the one
+     * derivation create uses ({@link IncusDefinitions#bindDevices}); the caller has restored the directories.
      */
     private void importWithDisks(@NonNull InstanceSpec spec, @NonNull Path archive, @NonNull Map<String, Path> disks)
             throws IOException {
@@ -244,6 +247,11 @@ final class IncusArchiveLane {
                 attribute(spec, pool, volume);
                 repoint.put(disk.getKey(), Map.of("pool", pool, "source", volume));
             }
+            IncusDefinitions.bindDevices(spec).forEach((device, definition) -> {
+                if (definition instanceof Map<?, ?> bind && bind.get("source") instanceof String source) {
+                    repoint.put(device, Map.of("source", source));
+                }
+            });
             this.incus.importInstance(archive, spec.handle(), repoint);
         } catch (IOException | RuntimeException failed) {
             for (String volume : landed) {

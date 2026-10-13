@@ -72,6 +72,9 @@ public final class BackupArchive {
     /** Archive entry prefix of each data disk's payload ({@link BackupManifest.DiskEntry}). */
     public static final String DISK_PREFIX = "disks/";
 
+    /** Archive entry prefix of each host volume's payload ({@link BackupManifest.HostVolumeEntry}). */
+    public static final String HOST_VOLUME_PREFIX = "host-volumes/";
+
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final int GCM_TAG_BITS = 128;
     private static final int IV_BYTES = 12;
@@ -220,7 +223,7 @@ public final class BackupArchive {
 
     /**
      * The payloads beside the volume inventory, by archive entry name: the application's source and image, then
-     * each data disk.
+     * each data disk, then each host volume.
      */
     private static Map<String, BackupManifest.PayloadEntry> sidePayloads(BackupManifest manifest) {
         Map<String, BackupManifest.PayloadEntry> payloads = new LinkedHashMap<>();
@@ -232,6 +235,9 @@ public final class BackupArchive {
         }
         for (BackupManifest.DiskEntry disk : manifest.disks()) {
             payloads.put(DISK_PREFIX + disk.payload().file(), disk.payload());
+        }
+        for (BackupManifest.HostVolumeEntry volume : manifest.hostVolumes()) {
+            payloads.put(HOST_VOLUME_PREFIX + volume.payload().file(), volume.payload());
         }
         return payloads;
     }
@@ -263,6 +269,21 @@ public final class BackupArchive {
         for (BackupManifest.DiskEntry disk : opened.manifest().disks()) {
             files.put(disk.device(), extractEntry(opened, DISK_PREFIX + disk.payload().file(),
                 directory.resolve(disk.payload().file())));
+        }
+        return files;
+    }
+
+    /**
+     * Extract the already authenticated host volume payloads, keyed by volume name.
+     *
+     * @return empty for a manifest without host volumes
+     */
+    public static @NonNull Map<String, Path> extractHostVolumes(@NonNull Opened opened, @NonNull Path directory)
+            throws IOException {
+        Map<String, Path> files = new LinkedHashMap<>();
+        for (BackupManifest.HostVolumeEntry volume : opened.manifest().hostVolumes()) {
+            files.put(volume.declaration().name(), extractEntry(opened,
+                HOST_VOLUME_PREFIX + volume.payload().file(), directory.resolve(volume.payload().file())));
         }
         return files;
     }

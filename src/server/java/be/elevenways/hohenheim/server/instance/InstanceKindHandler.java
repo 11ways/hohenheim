@@ -250,6 +250,14 @@ public interface InstanceKindHandler extends InstanceKindInfo {
     }
 
     /**
+     * The host uid this kind's workload writes its host-directory volumes as on {@code serverName}, or null when the
+     * kind keeps whatever owners the files carry; a restore or migration gives the carried files to it.
+     */
+    default @Nullable Integer volumeOwnerUid(int instanceId, @NonNull String serverName) {
+        return null;
+    }
+
+    /**
      * Whether records of this kind mount declared {@code instance_volumes} rows -- the
      * ONE fact behind three surfaces: the Volumes tab renders on it, the dependent host
      * picker narrows to quota-capable backends on it, and the default

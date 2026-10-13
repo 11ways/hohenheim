@@ -54,6 +54,32 @@ public final class RestoreCapacity {
     }
 
     /**
+     * The host-volume half: restored host-directory volumes land on the host's VOLUME storage, which is not the
+     * daemon's data root, so they are judged against what that filesystem has free, with the same headroom.
+     *
+     * @throws Violations {@code restore_capacity} or {@code restore_capacity_unknown}
+     */
+    public static void requireVolumeStorage(int serverId, long requiredBytes) {
+        if (requiredBytes <= 0) {
+            return;
+        }
+        String reason = "the volume storage did not report its free space";
+        long available;
+        try {
+            available = InstanceVolumes.availableBytesOn(ServerModel.nameOf(serverId));
+        } catch (RuntimeException unanswerable) {
+            available = -1;
+            reason = HohenheimViolations.reasonOf(unanswerable);
+        }
+        if (available < 0) {
+            throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("restore_capacity_unknown")
+                .withArg("server", ServerModel.labelOf(serverId))
+                .withArg("reason", reason));
+        }
+        judge(serverId, available, requiredBytes);
+    }
+
+    /**
      * The PROBE half: what the host's storage says is free right now.
      *
      * AIDEV-NOTE: split from {@link #judge} so the decision (headroom arithmetic and

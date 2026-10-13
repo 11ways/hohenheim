@@ -226,6 +226,11 @@ public final class InstanceBackups {
         List<List<VolumeSnapshotSupport.CapturedVolume>> capturedHolder = new ArrayList<>(1);
         List<ImageIdentity> imageHolder = new ArrayList<>(1);
         List<NativeSnapshotSupport.ExportedDisk> disks = new ArrayList<>();
+        // AIDEV-NOTE: the declared host-directory volumes ride every PLAIN backup, read on the host's volume
+        // storage inside the same capture window (decided round r2r); an application's own lane already carries
+        // its declarations and their contents, so it is not captured twice.
+        List<InstanceVolumes.Archived> hostVolumes = new ArrayList<>();
+        String serverName = ServerModel.nameOf(resolved.serverId());
         String payload;
         if (nativeSupport != null) {
             // -- capture phase (native lane: LIVE, crash-consistent) ------------
@@ -248,6 +253,8 @@ public final class InstanceBackups {
                         capturedHolder.add(List.of(new VolumeSnapshotSupport.CapturedVolume(
                             "instance", "/", export, size)));
                         disks.addAll(nativeSupport.exportDisks(resolved.spec(), staging,
+                            InstanceSnapshots.maxArchiveBytes()));
+                        hostVolumes.addAll(InstanceVolumes.archiveAll(instanceId, serverName, staging,
                             InstanceSnapshots.maxArchiveBytes()));
                     });
             } catch (IOException | RuntimeException error) {
@@ -291,6 +298,10 @@ public final class InstanceBackups {
                             throw new IOException("Application volume capture is incomplete");
                         }
                         capturedHolder.add(volumeTars);
+                        if (!application) {
+                            hostVolumes.addAll(InstanceVolumes.archiveAll(instanceId, serverName, staging,
+                                InstanceSnapshots.maxArchiveBytes()));
+                        }
                     });
             } catch (IOException | RuntimeException error) {
                 captureFailure = error;
@@ -349,7 +360,7 @@ public final class InstanceBackups {
             .set(InstanceBackupModel.REMOTE_KEY, key)
             .write();
         try {
-            BackupManifest manifest = buildManifest(owner, image, payload, captured, disks,
+            BackupManifest manifest = buildManifest(owner, image, payload, captured, disks, hostVolumes,
                 applicationEntry);
             Map<String, Path> files = new LinkedHashMap<>(applicationFiles);
             for (VolumeSnapshotSupport.CapturedVolume volume : captured) {
@@ -357,6 +368,9 @@ public final class InstanceBackups {
             }
             for (NativeSnapshotSupport.ExportedDisk disk : disks) {
                 files.put(BackupArchive.DISK_PREFIX + disk.file().getFileName(), disk.file());
+            }
+            for (InstanceVolumes.Archived volume : hostVolumes) {
+                files.put(BackupArchive.HOST_VOLUME_PREFIX + volume.file().getFileName(), volume.file());
             }
             Path archive = staging.resolve("archive.hib");
             long size = BackupArchive.create(manifest, files, archive, keyring());
@@ -607,6 +621,7 @@ public final class InstanceBackups {
             }
             // The data disks count at their declared size: that is what each restored volume claims on the host.
             RestoreCapacity.require(serverId, Math.addExact(manifest.totalVolumeBytes(), manifest.totalDiskBytes()));
+            RestoreCapacity.requireVolumeStorage(serverId, manifest.totalHostVolumeBytes());
             boolean application = InstanceKinds.isReleaseManaged(manifest.kind());
             Integer runtimeImageId = null;
             if (application) {
@@ -679,9 +694,15 @@ public final class InstanceBackups {
                                           int newId, @NonNull List<String> notRestored) {
         // The table-backed rows the settings map cannot carry, BEFORE resolve():
         // variable values substitute into the spec's command and environment, so a
-        // spec resolved without them is a spec for a different workload.
+        // spec resolved without them is a spec for a different workload. The host volumes
+        // are declared here for the same reason: the spec binds what the record declares.
         restoreVariables(newId, profile);
         restoreFiles(newId, profile, notRestored);
+        for (BackupManifest.HostVolumeEntry volume : manifest.hostVolumes()) {
+            BackupManifest.VolumeDeclaration declared = volume.declaration();
+            InstanceVolumes.declare(newId, declared.name(), declared.containerPath(), declared.quotaBytes(),
+                declared.exclusive());
+        }
         if (application) {
             try {
                 requireRematerialized(profile, newId);
@@ -752,8 +773,14 @@ public final class InstanceBackups {
      * in error by that destroy, its failure attached to the restore's.
      */
     private void abandonRestore(int newId, @NonNull RuntimeException failure) {
+        Row record = Models.get(InstanceModel.class).findById(newId);
         try {
             this.instances.destroy(newId);
+            // An ordinary destroy keeps host volumes (a soft-deleted record's data survives it); these were made by
+            // this restore alone, so they go with it.
+            if (record != null && !InstanceVolumes.declaredFor(newId).isEmpty()) {
+                InstanceVolumes.destroyAll(newId, ServerModel.nameOf(record.get(InstanceModel.SERVER_ID)));
+            }
         } catch (RuntimeException cleanupFailed) {
             failure.addSuppressed(cleanupFailed);
             Blast.log("BACKUP: could not take back the record of a failed restore", newId, "-",
@@ -776,6 +803,12 @@ public final class InstanceBackups {
         // restore, never deploy a workload whose config files or variables silently did
         // not come back.
         requireRematerialized(profile, newId);
+        // Host volumes land on the host's volume storage BEFORE the workload: an import validates its directory
+        // devices against the paths, and a created container binds them.
+        String serverName = ServerModel.nameOf(resolved.serverId());
+        InstanceVolumes.restoreAll(newId, serverName,
+            BackupArchive.extractHostVolumes(opened, staging.resolve("host-volumes")),
+            resolved.handler().volumeOwnerUid(newId, serverName));
         if (BackupManifest.PAYLOAD_INSTANCE_EXPORT.equals(manifest.payload())) {
             // Native lane: the daemon rebuilds the whole instance from its own export;
             // the deploy after the window CONVERGES onto it (the incus driver never
@@ -1092,6 +1125,7 @@ public final class InstanceBackups {
             @NonNull String payload,
             @NonNull List<VolumeSnapshotSupport.CapturedVolume> captured,
             @NonNull List<NativeSnapshotSupport.ExportedDisk> exportedDisks,
+            @NonNull List<InstanceVolumes.Archived> archivedHostVolumes,
             BackupManifest.@Nullable ApplicationEntry application) throws IOException {
         int instanceId = owner.get(InstanceModel.ID);
         Set<String> subjects = HohenheimAccess.manageSubjectsOf(InstanceModel.MODEL_ID, instanceId);
@@ -1110,6 +1144,14 @@ public final class InstanceBackups {
             disks.add(new BackupManifest.DiskEntry(disk.device(), disk.sizeGb(), new BackupManifest.PayloadEntry(
                 disk.file().getFileName().toString(), BackupArchive.sha256Of(disk.file()), disk.size())));
         }
+        List<BackupManifest.HostVolumeEntry> hostVolumes = new ArrayList<>();
+        for (InstanceVolumes.Archived volume : archivedHostVolumes) {
+            hostVolumes.add(new BackupManifest.HostVolumeEntry(
+                new BackupManifest.VolumeDeclaration(volume.name(), volume.containerPath(), volume.quotaBytes(),
+                    volume.exclusive()),
+                new BackupManifest.PayloadEntry(volume.file().getFileName().toString(),
+                    BackupArchive.sha256Of(volume.file()), volume.size())));
+        }
         return new BackupManifest(BackupManifest.FORMAT_VERSION, Now.instant().toString(),
             HostPreflight.controllerVersion(),
             String.valueOf((Object) owner.get(InstanceModel.NAME)),
@@ -1117,7 +1159,7 @@ public final class InstanceBackups {
             payload, settings, image.reference(), image.id(), InstanceDevices.installMediaOf(instanceId),
             InstanceDevices.extraNicsOf(instanceId), ownership,
             containerPort,
-            "tcp", volumes, disks, profileOf(owner, instanceId), application);
+            "tcp", volumes, disks, hostVolumes, profileOf(owner, instanceId), application);
     }
 
     /**

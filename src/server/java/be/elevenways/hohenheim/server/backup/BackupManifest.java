@@ -55,6 +55,8 @@ import be.elevenways.zenit.common.orm.model.Schema;
  * @param volumes           per-volume payload inventory with plaintext checksums
  * @param disks             the data disks the workload's definition attached at capture, each with its own payload
  *                          (the daemon's volume export); empty in an older manifest, whose export only names them
+ * @param hostVolumes       the instance's declared host-directory volumes, each with its contents; empty in an older
+ *                          manifest (none captured) and in an application's, whose own declarations carry them
  * @param profile           the control-plane profile, or null for a version-1 manifest --
  *                          which DECLARES NOTHING about templates, variables or config
  *                          files rather than declaring them absent
@@ -75,6 +77,7 @@ public record BackupManifest(int version,
                              @NonNull String portProtocol,
                              @NonNull List<VolumeEntry> volumes,
                              @NonNull List<DiskEntry> disks,
+                             @NonNull List<HostVolumeEntry> hostVolumes,
                              @Nullable InstanceProfile profile,
                              @Nullable ApplicationEntry application) {
 
@@ -138,6 +141,17 @@ public record BackupManifest(int version,
      * @param sizeGb the volume's declared size, what the restored volume claims on its host
      */
     public record DiskEntry(@NonNull String device, int sizeGb, @NonNull PayloadEntry payload) {}
+
+    /**
+     * One declared host-directory volume (the {@code instance_volumes} row) and its contents, archive entry
+     * {@code host-volumes/<file>}: a restore declares it on the new record and unpacks it onto that host's volume
+     * storage before the workload lands.
+     *
+     * AIDEV-NOTE: its own inventory rather than a {@link VolumeEntry}: a volume entry is restored INTO the workload
+     * through its driver, while a host volume lives beside the workload on the host's volume storage, which is what
+     * lets one capture serve both drivers and both payload kinds (decided round r2r).
+     */
+    public record HostVolumeEntry(@NonNull VolumeDeclaration declaration, @NonNull PayloadEntry payload) {}
 
     /** Stable runtime catalog identity and the immutable source/image needed after host loss. */
     public record ApplicationEntry(@NonNull Map<String, Object> runtimeImage,
@@ -236,6 +250,15 @@ public record BackupManifest(int version,
         return total;
     }
 
+    /** What the restored host volumes write onto the destination's volume storage. */
+    public long totalHostVolumeBytes() {
+        long total = 0;
+        for (HostVolumeEntry volume : this.hostVolumes) {
+            total = Math.addExact(total, volume.payload().size());
+        }
+        return total;
+    }
+
     /** Serialize to the map DRY writes into {@code manifest.dry}. */
     public @NonNull Map<String, Object> toMap() {
         Map<String, Object> root = new LinkedHashMap<>();
@@ -289,6 +312,13 @@ public record BackupManifest(int version,
             diskList.add(entry);
         }
         root.put("disks", diskList);
+        List<Map<String, Object>> hostVolumeList = new ArrayList<>();
+        for (HostVolumeEntry volume : this.hostVolumes) {
+            Map<String, Object> entry = new LinkedHashMap<>(payloadMap(volume.payload()));
+            entry.putAll(declarationMap(volume.declaration()));
+            hostVolumeList.add(entry);
+        }
+        root.put("host_volumes", hostVolumeList);
         if (this.application != null) {
             Map<String, Object> app = new LinkedHashMap<>();
             app.put("runtime_image", this.application.runtimeImage());
@@ -296,12 +326,7 @@ public record BackupManifest(int version,
             app.put("image", payloadMap(this.application.image()));
             List<Map<String, Object>> declarations = new ArrayList<>();
             for (VolumeDeclaration volume : this.application.declarations()) {
-                Map<String, Object> entry = new LinkedHashMap<>();
-                entry.put("name", volume.name());
-                entry.put("path", volume.containerPath());
-                entry.put("quota_bytes", volume.quotaBytes());
-                entry.put("exclusive", volume.exclusive());
-                declarations.add(entry);
+                declarations.add(declarationMap(volume));
             }
             app.put("declarations", declarations);
             root.put("application", app);
@@ -348,6 +373,8 @@ public record BackupManifest(int version,
         summary.put("volume_count", this.volumes.size());
         summary.put("volume_bytes", this.totalVolumeBytes());
         summary.put(InstanceBackupModel.SUMMARY_DISKS, this.disks.stream().map(DiskEntry::device).toList());
+        summary.put(InstanceBackupModel.SUMMARY_HOST_VOLUMES,
+            this.hostVolumes.stream().map(volume -> volume.declaration().name()).toList());
         if (this.profile != null) {
             TemplateRef template = this.profile.template();
             summary.put("template", template != null ? template.name() : null);
@@ -450,16 +477,66 @@ public record BackupManifest(int version,
             throw new IOException("Backup manifest carries data disks for a '" + payload
                 + "' payload; only an instance export names devices to point them at");
         }
+        List<HostVolumeEntry> hostVolumes = hostVolumesFrom(root.get("host_volumes"));
 
         InstanceProfile profile = version.intValue() > VERSION_WITHOUT_PROFILE
             ? profileFrom(root, instance) : null;
 
+        ApplicationEntry application = applicationFrom(root, version.intValue());
+        if (application != null && !hostVolumes.isEmpty()) {
+            throw new IOException("Backup manifest carries host volumes beside an application's own declarations;"
+                + " one volume would be restored twice");
+        }
         @SuppressWarnings("unchecked")
         Map<String, Object> typedSettings = (Map<String, Object>) settings;
         return new BackupManifest(version.intValue(), created, controllerVersion, name, kind,
             payload, typedSettings, imageReference, imageId, List.copyOf(installMedia),
             extraNics == null ? null : List.copyOf(extraNics), ownership, containerPort,
-            protocol, List.copyOf(volumes), disks, profile, applicationFrom(root, version.intValue()));
+            protocol, List.copyOf(volumes), disks, hostVolumes, profile, application);
+    }
+
+    /** The host volume inventory, absent in a manifest written before host volumes were captured (= none). */
+    private static @NonNull List<HostVolumeEntry> hostVolumesFrom(@Nullable Object value) throws IOException {
+        if (value == null) {
+            return List.of();
+        }
+        if (!(value instanceof List<?> list)) {
+            throw new IOException("Backup manifest 'host_volumes' is not a list");
+        }
+        List<HostVolumeEntry> hostVolumes = new ArrayList<>();
+        for (Object element : list) {
+            if (!(element instanceof Map<?, ?> entry)) {
+                throw new IOException("Backup manifest host volume entry is not a map");
+            }
+            VolumeDeclaration declaration = declarationFrom(entry, "host volume");
+            PayloadEntry payload = payloadFrom(entry);
+            if (hostVolumes.stream().anyMatch(volume -> volume.declaration().name().equals(declaration.name())
+                    || volume.payload().file().equals(payload.file()))) {
+                throw new IOException("Invalid or duplicate backup host volume inventory");
+            }
+            hostVolumes.add(new HostVolumeEntry(declaration, payload));
+        }
+        return List.copyOf(hostVolumes);
+    }
+
+    private static @NonNull Map<String, Object> declarationMap(@NonNull VolumeDeclaration volume) {
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("name", volume.name());
+        entry.put("path", volume.containerPath());
+        entry.put("quota_bytes", volume.quotaBytes());
+        entry.put("exclusive", volume.exclusive());
+        return entry;
+    }
+
+    private static @NonNull VolumeDeclaration declarationFrom(@NonNull Map<?, ?> volume, @NonNull String what)
+            throws IOException {
+        if (!(volume.get("exclusive") instanceof Boolean exclusive)) {
+            throw new IOException("Backup " + what + " declaration is incomplete");
+        }
+        String name = requireText(volume.get("name"), what + " name");
+        requireSegment(name, what + " name");
+        return new VolumeDeclaration(name, requireText(volume.get("path"), what + " path"),
+            volume.get("quota_bytes") instanceof Number quota ? quota.longValue() : null, exclusive);
     }
 
     /**
@@ -541,19 +618,14 @@ public record BackupManifest(int version,
         requireText(runtime.get("name"), "application.runtime_image.name");
         List<VolumeDeclaration> declarations = new ArrayList<>();
         for (Object value : declared) {
-            if (!(value instanceof Map<?, ?> volume)
-                    || !(volume.get("exclusive") instanceof Boolean exclusive)) {
+            if (!(value instanceof Map<?, ?> volume)) {
                 throw new IOException("Application backup volume declaration is incomplete");
             }
-            String name = requireText(volume.get("name"), "application volume name");
-            requireSegment(name, "application volume name");
-            if (declarations.stream().anyMatch(v -> v.name().equals(name))) {
+            VolumeDeclaration declaration = declarationFrom(volume, "application volume");
+            if (declarations.stream().anyMatch(v -> v.name().equals(declaration.name()))) {
                 throw new IOException("Duplicate application volume declaration");
             }
-            declarations.add(new VolumeDeclaration(name,
-                requireText(volume.get("path"), "application volume path"),
-                volume.get("quota_bytes") instanceof Number quota ? quota.longValue() : null,
-                exclusive));
+            declarations.add(declaration);
         }
         PayloadEntry artifact = payloadFrom(app.get("artifact"));
         PayloadEntry image = payloadFrom(app.get("image"));

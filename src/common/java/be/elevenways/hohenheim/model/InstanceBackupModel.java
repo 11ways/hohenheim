@@ -149,6 +149,9 @@ public class InstanceBackupModel extends Model {
     /** The summary key naming the data disks a backup carries, written by the manifest's summary. */
     public static final String SUMMARY_DISKS = "disks";
 
+    /** The summary key naming the host-directory volumes a backup carries, written by the manifest's summary. */
+    public static final String SUMMARY_HOST_VOLUMES = "host_volumes";
+
     /**
      * The data disks (device names) this backup carries, read off its stored summary: the one read every surface
      * naming them goes through.
@@ -156,14 +159,23 @@ public class InstanceBackupModel extends Model {
      * @return the names in capture order, empty for a backup without disks or written before disks were captured
      */
     public static @NonNull List<String> dataDisksOf(@NonNull Row backup) {
-        List<String> disks = new ArrayList<>();
-        for (Object device : RawValues.list(RawValues.map((Object) backup.get(SUMMARY)).get(SUMMARY_DISKS))) {
-            String name = RawValues.nonBlankString(device);
+        return summaryNamesOf(backup, SUMMARY_DISKS);
+    }
+
+    /** @return the host volumes (names) this backup carries, empty for one written before they were captured */
+    public static @NonNull List<String> hostVolumesOf(@NonNull Row backup) {
+        return summaryNamesOf(backup, SUMMARY_HOST_VOLUMES);
+    }
+
+    private static @NonNull List<String> summaryNamesOf(@NonNull Row backup, @NonNull String key) {
+        List<String> names = new ArrayList<>();
+        for (Object value : RawValues.list(RawValues.map((Object) backup.get(SUMMARY)).get(key))) {
+            String name = RawValues.nonBlankString(value);
             if (name != null) {
-                disks.add(name);
+                names.add(name);
             }
         }
-        return disks;
+        return names;
     }
 
     private static EnumField statusField() {

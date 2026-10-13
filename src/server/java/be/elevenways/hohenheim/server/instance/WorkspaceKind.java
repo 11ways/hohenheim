@@ -291,23 +291,24 @@ public final class WorkspaceKind implements InstanceKindHandler {
         Row instance = requireInstance(instanceId);
         Row image = RuntimeImages.requireFor(instance);
 
-        String runtime = runtimeOf(serverName);
-        int uid = WorkspaceUids.forInstance(instanceId);
-        int ownerUid = uid;
+        ensureHomeDeclared(instanceId, settings);
+        InstanceVolumes.mountsFor(instanceId, serverName, volumeOwnerUid(instanceId, serverName));
+        RuntimeImages.ensurePresent(image, serverName, runtimeOf(serverName));
+    }
 
-        if (ServerModel.RUNTIME_INCUS.equals(runtime)) {
+    @Override
+    public @NonNull Integer volumeOwnerUid(int instanceId, @NonNull String serverName) {
+        int uid = WorkspaceUids.forInstance(instanceId);
+        if (ServerModel.RUNTIME_INCUS.equals(runtimeOf(serverName))) {
             // The uid the WORKLOAD runs as is a namespace id there; the directory on the
             // host has to belong to the host uid that namespace id maps to.
             Row server = Models.get(ServerModel.class).findByName(serverName);
             if (server != null) {
-                ownerUid = WorkspaceUids.incusHostUid(uid,
+                return WorkspaceUids.incusHostUid(uid,
                     WorkspaceUids.incusSubuidBase(serverName, HostShell.forServer(server)));
             }
         }
-
-        ensureHomeDeclared(instanceId, settings);
-        InstanceVolumes.mountsFor(instanceId, serverName, ownerUid);
-        RuntimeImages.ensurePresent(image, serverName, runtime);
+        return uid;
     }
 
     /**

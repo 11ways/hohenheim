@@ -27,6 +27,7 @@ import be.elevenways.zenit.cms.common.action.ActionStyle;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.ListChrome;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
@@ -149,6 +150,11 @@ public final class InstanceAttachmentParts {
         return form.build();
     }
 
+    /** The device type a create link prefilled, or null when it named none. */
+    private static @Nullable DeviceType prefilledType(@NonNull PanelRequest request) {
+        return DeviceType.parse(CmsSupport.prefill(request.conduit(), HohenheimParams.DEVICE_TYPE_PREFILL));
+    }
+
     private static PanelResource.@NonNull Builder<Row> devices(@NonNull Identifier id, @NonNull FormSpec form) {
         TableSpec<Row> table = TableSpec.<Row>builder()
             .column(ColumnSpec.fromField(InstanceDeviceModel.NAME).filterable().build())
@@ -171,14 +177,18 @@ public final class InstanceAttachmentParts {
                 .tab(HohenheimSlugs.Tab.DEVICES).fixed())
             .reads(ResourceReads.rows())
             .form(ResourceForm.<Row>of(form).createDefaults(request -> {
-                DeviceType type = DeviceType.parse(CmsSupport.prefill(request.conduit(),
-                    HohenheimParams.DEVICE_TYPE_PREFILL));
+                DeviceType type = prefilledType(request);
                 Map<String, Object> values = new LinkedHashMap<>(form.defaultValues());
                 if (type != null) {
                     values.put(InstanceDeviceModel.TYPE.getName(), type.token());
                 }
                 return Map.copyOf(values);
             })
+                // The page a Devices tab link opens is named by the kind it attaches.
+                .createTitle(request -> {
+                    DeviceType type = prefilledType(request);
+                    return type != null ? type.attachTitle() : null;
+                })
                 // An attached device is seen where it lives: its instance's Devices tab, beside its siblings.
                 .createdRecordUrl((device, request) -> CmsRoutes.subpage(request.panelSlug(), HohenheimSlugs.INSTANCES,
                     device.get(InstanceDeviceModel.INSTANCE_ID), HohenheimSlugs.Tab.DEVICES))

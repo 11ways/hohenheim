@@ -18,6 +18,7 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -365,8 +366,7 @@ public final class InstanceVolumes {
                 .withArg("backend", backend.label()));
         }
 
-        VolumeOperations operations = VolumeOperations.forBackend(backend,
-            HostShell.forServer(server));
+        VolumeOperations operations = operationsFor(server);
 
         for (Row volume : declared) {
             String name = volume.get(InstanceVolumeModel.NAME);
@@ -376,6 +376,106 @@ public final class InstanceVolumes {
         }
 
         return snapshots;
+    }
+
+    /**
+     * One declared volume's contents, captured for a backup or a move.
+     *
+     * @param file the tar of its contents, numeric owners kept
+     */
+    public record Archived(@NonNull String name, @NonNull String containerPath, @Nullable Long quotaBytes,
+                           boolean exclusive, @NonNull Path file, long size) {}
+
+    /**
+     * Capture every declared volume of an owner on its host into {@code directory}, files named by position so no
+     * volume name reaches a path.
+     *
+     * @throws Violations naming the volume the host could not read
+     */
+    public static @NonNull List<Archived> archiveAll(int ownerInstanceId, @NonNull String serverName,
+                                                     @NonNull Path directory, long maxBytesPerVolume) {
+        List<Archived> archived = new ArrayList<>();
+        List<Row> declared = declaredFor(ownerInstanceId);
+        if (declared.isEmpty()) {
+            return archived;
+        }
+        VolumeOperations operations = operationsFor(requireServer(serverName));
+        for (Row volume : declared) {
+            String name = volume.get(InstanceVolumeModel.NAME);
+            String containerPath = volume.get(InstanceVolumeModel.CONTAINER_PATH);
+            if (name == null || containerPath == null || containerPath.isBlank()) {
+                continue;
+            }
+            Path file = directory.resolve("host-volume-" + (archived.size() + 1) + ".tar");
+            long size = operations.archive(hostPathFor(ownerInstanceId, name), file, maxBytesPerVolume);
+            archived.add(new Archived(name, containerPath, volume.get(InstanceVolumeModel.QUOTA_BYTES),
+                Boolean.TRUE.equals(volume.get(InstanceVolumeModel.EXCLUSIVE)), file, size));
+        }
+        return archived;
+    }
+
+    /**
+     * Create every declared volume of an owner on its host and unpack the captured contents into the ones named,
+     * giving them to the kind's volume owner.
+     *
+     * AIDEV-NOTE: the caller has DECLARED them (a restore from the manifest, a migration keeps its rows); this
+     * refuses a payload for a volume the owner does not declare rather than unpacking it nowhere.
+     *
+     * @param contents volume name to the tar {@link #archiveAll} wrote
+     * @throws Violations naming the volume the host could not create or write
+     */
+    public static void restoreAll(int ownerInstanceId, @NonNull String serverName,
+                                  @NonNull Map<String, Path> contents, @Nullable Integer ownerUid) {
+        if (contents.isEmpty()) {
+            return;
+        }
+        Map<String, String> mounts = mountsFor(ownerInstanceId, serverName, ownerUid);
+        VolumeOperations operations = operationsFor(requireServer(serverName));
+        for (Map.Entry<String, Path> content : contents.entrySet()) {
+            String hostPath = hostPathFor(ownerInstanceId, content.getKey());
+            if (!mounts.containsKey(hostPath)) {
+                throw Violations.ofForm(HohenheimMicrocopy.VIOLATIONS.of("volume_unknown")
+                    .withArg("name", content.getKey()));
+            }
+            operations.restore(hostPath, content.getValue(), ownerUid);
+        }
+    }
+
+    /** @return bytes free on the volume storage of {@code serverName} */
+    public static long availableBytesOn(@NonNull String serverName) {
+        return operationsFor(requireServer(serverName)).availableBytes(VolumeBackends.volumeRoot());
+    }
+
+    /**
+     * Remove an owner's volume directories from ONE host, keeping its declarations: what a move leaves on the host it
+     * left, or landed on a host it never reached. Absent directories are fine.
+     *
+     * @throws Violations naming the backend when the host cannot remove one
+     */
+    public static void removeFrom(int ownerInstanceId, @NonNull String serverName) {
+        List<Row> declared = declaredFor(ownerInstanceId);
+        if (declared.isEmpty()) {
+            return;
+        }
+        VolumeOperations operations = operationsFor(requireServer(serverName));
+        for (Row volume : declared) {
+            String name = volume.get(InstanceVolumeModel.NAME);
+            if (name != null) {
+                operations.destroy(hostPathFor(ownerInstanceId, name));
+            }
+        }
+    }
+
+    /**
+     * Whether two hosts keep their volumes on the SAME storage (both the controller's own machine, or one ssh
+     * target), where a volume's path names one directory for both and a move has nothing to carry.
+     *
+     * AIDEV-NOTE: load-bearing for the move's cleanup: removing the "source" directories of a move between two host
+     * records of one machine would delete the only copy.
+     */
+    public static boolean sameStorage(@NonNull String firstServer, @NonNull String secondServer) {
+        VolumeOperations.Hosts hosts = VolumeOperations.HOSTS.require();
+        return hosts.storageOf(requireServer(firstServer)).equals(hosts.storageOf(requireServer(secondServer)));
     }
 
     /** Record what each volume currently occupies; never throws, the number is advisory. */
@@ -501,8 +601,7 @@ public final class InstanceVolumes {
 
 
     private static @NonNull VolumeOperations operationsFor(@NonNull Row server) {
-        return VolumeOperations.forBackend(ServerModel.volumeBackendOf(server),
-            HostShell.forServer(server));
+        return VolumeOperations.forServer(server);
     }
 
     private static @NonNull Row requireServer(@NonNull String serverName) {

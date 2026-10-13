@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.instance.InstanceBackups;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
 import be.elevenways.hohenheim.server.instance.InstanceQuota;
+import be.elevenways.hohenheim.server.instance.InstanceVolumes;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.test.ApiSupport;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -371,6 +372,77 @@ class InstanceBackupsTest {
                 Models.get(ServerModel.class).delete(spareId);
             }
         });
+    }
+
+    /**
+     * A plain backup carries the instance's declared host-directory volumes with their contents, and a restore
+     * declares them on the new record and lands them on the target host's volume storage, counted in the capacity
+     * check before anything is created.
+     */
+    @Test
+    void aPlainBackupCarriesHostVolumesAndARestoreLandsThemOnTheTargetHost() throws Exception {
+        FakeHostVolumes storage = FakeHostVolumes.install();
+        try {
+            Db.run(datasource, () -> {
+                InstanceService service = new InstanceService();
+                InstanceBackups backups = new InstanceBackups();
+                int instanceId = instanceRecord("backup-host-volumes", hostId);
+                service.deploy(instanceId);
+                String hostName = ServerModel.nameOf(hostId);
+                InstanceVolumes.declare(instanceId, "home", "/home/dev", 512L * 1024 * 1024, true);
+                InstanceVolumes.mountsFor(instanceId, hostName, null);
+                Path sourceHome = storage.directoryOf(hostName, InstanceVolumes.hostPathFor(instanceId, "home"));
+                int spareId = HostFixtures.admittedIncusHost("backup-volume-spare");
+                List<Integer> restored = new ArrayList<>();
+                Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 0);
+                try {
+                    try {
+                        Files.writeString(sourceHome.resolve("notes.txt"), "kept in home");
+                    } catch (IOException e) {
+                        throw new java.io.UncheckedIOException(e);
+                    }
+
+                    // 1. The backup names the host volume it carries.
+                    int backupId = backups.backupNow(instanceId, targetId, target);
+                    Row backup = Models.get(InstanceBackupModel.class).findById(backupId);
+                    assertThat(List.<Object>copyOf(RawValues.list(RawValues.map((Object) backup.get(
+                            InstanceBackupModel.SUMMARY)).get(InstanceBackupModel.SUMMARY_HOST_VOLUMES))))
+                        .as("step 1: the backup carries the declared host volume").containsExactly("home");
+
+                    // 2. A target host whose volume storage cannot hold it refuses by name and creates nothing.
+                    long instancesBefore = Models.get(InstanceModel.class).find().count();
+                    FakeHostVolumes.availableBytes = 1;
+                    assertThat(violationKeys(catchThrowable(() -> backups.restoreToNew(backupId, "hv-full", spareId))))
+                        .as("step 2: the host volumes count in the restore's capacity check")
+                        .isEqualTo("restore_capacity ");
+                    assertThat(Models.get(InstanceModel.class).find().count())
+                        .as("step 2: no instance record was created").isEqualTo(instancesBefore);
+                    FakeHostVolumes.availableBytes = Long.MAX_VALUE / 4;
+
+                    // 3. Restored elsewhere, the new record declares the volume and its host holds the contents.
+                    int newId = backups.restoreToNew(backupId, "hv-restored", spareId).instanceId();
+                    restored.add(newId);
+                    List<Row> declared = InstanceVolumes.declaredFor(newId);
+                    assertThat(declared).as("step 3: the restored record declares the host volume").hasSize(1);
+                    assertThat((String) declared.get(0).get(be.elevenways.hohenheim.model.InstanceVolumeModel.CONTAINER_PATH))
+                        .as("step 3: at its captured path").isEqualTo("/home/dev");
+                    assertThat(storage.directoryOf("backup-volume-spare", InstanceVolumes.hostPathFor(newId, "home"))
+                            .resolve("notes.txt"))
+                        .as("step 3: the target host's volume storage holds the captured contents")
+                        .hasContent("kept in home");
+                    assertThat(sourceHome.resolve("notes.txt"))
+                        .as("step 3: the source keeps its own copy").hasContent("kept in home");
+                } finally {
+                    FakeHostVolumes.availableBytes = Long.MAX_VALUE / 4;
+                    Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Backup.RETENTION, 7);
+                    restored.forEach(service::destroy);
+                    service.destroy(instanceId);
+                    Models.get(ServerModel.class).delete(spareId);
+                }
+            });
+        } finally {
+            FakeHostVolumes.uninstall();
+        }
     }
 
     /**

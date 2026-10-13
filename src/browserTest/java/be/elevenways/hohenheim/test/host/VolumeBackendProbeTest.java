@@ -104,10 +104,11 @@ class VolumeBackendProbeTest {
         assertThat(VolumeBackend.forToken("ext4")).as("step 2: an unknown token resolves to nothing").isNull();
         assertThat(VolumeBackend.forToken(null)).isNull();
 
-        // 3. resolve() is the read a host row takes, and it folds absent and unknown onto
-        //    the refusing member instead of onto a capable one.
-        assertThat(VolumeBackend.resolve(null)).as("step 3: never probed is not capable")
-            .isEqualTo(VolumeBackend.NONE);
+        // 3. resolve() is the read a host row takes: absent (never probed) reads as not checked, unknown folds onto
+        //    the refusing member, and neither is capable.
+        assertThat(VolumeBackend.resolve(null)).as("step 3: never probed reads as not checked")
+            .isEqualTo(VolumeBackend.UNCHECKED);
+        assertThat(VolumeBackend.resolve(null).supportsQuota()).as("step 3: and is not capable").isFalse();
         assertThat(VolumeBackend.resolve("ext4")).isEqualTo(VolumeBackend.NONE);
     }
 

@@ -11,8 +11,13 @@ import java.time.Duration;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.io.FilterOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InterruptedIOException;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 /**
@@ -55,6 +60,27 @@ public interface HostShell {
      * wrong in (a probe that blocks boot) is the worse one.
      */
     @NonNull Result run(@NonNull String script, long timeoutSeconds);
+
+    /** How long one payload transfer (a volume's contents) may take. */
+    long PAYLOAD_TIMEOUT_SECONDS = 3600;
+
+    /**
+     * Run one snippet whose stdout IS a binary payload, written to {@code target}; the result's text is stderr.
+     *
+     * AIDEV-NOTE: a default that refuses, so a test's lambda shell (scripts and text only) stays a lambda; the
+     * process shell is the one that streams.
+     *
+     * @param maxBytes cap on the payload, enforced while it arrives
+     */
+    default @NonNull Result runReading(@NonNull String script, @NonNull Path target, long maxBytes,
+                                       long timeoutSeconds) {
+        return new Result(1, "this shell cannot stream a payload");
+    }
+
+    /** Run one snippet with {@code source} as its stdin; the result's text is stdout plus stderr. */
+    default @NonNull Result runFeeding(@NonNull String script, @NonNull Path source, long timeoutSeconds) {
+        return new Result(1, "this shell cannot stream a payload");
+    }
 
     /**
      * Whether snippets already run as root on the host, so a privileged command needs no
@@ -119,11 +145,7 @@ public interface HostShell {
 
         @Override
         public @NonNull Result run(@NonNull String script, long timeoutSeconds) {
-
-            List<String> argv = this.server != null && ServerModel.hasSshLane(this.server)
-                ? sshArgv(this.server, script)
-                : List.of("sh", "-c", script);
-
+            List<String> argv = argvFor(script);
             if (argv.isEmpty()) {
                 return new Result(1, "no ssh lane could be built for this host");
             }
@@ -133,17 +155,65 @@ public interface HostShell {
             // decorative -- readAllBytes blocks until the pipe closes, so a snippet that never
             // finished was waited on forever; a runtime-image build runs for minutes through
             // here, which is where that would have shown up as a thread nobody can free.
-            try {
-                ProcessOutcome result = Subprocess.of(argv)
+            return outcomeOf(Subprocess.of(argv)
+                .mergeStderr()
+                .collectStdout(MAX_OUTPUT_CHARS), timeoutSeconds, false);
+        }
+
+        @Override
+        public @NonNull Result runReading(@NonNull String script, @NonNull Path target, long maxBytes,
+                                          long timeoutSeconds) {
+            List<String> argv = argvFor(script);
+            if (argv.isEmpty()) {
+                return new Result(1, "no ssh lane could be built for this host");
+            }
+            try (OutputStream sink = new CappedSink(Files.newOutputStream(target), maxBytes)) {
+                return outcomeOf(Subprocess.of(argv)
+                    .stdoutTo(sink)
+                    .stderrLimit(MAX_OUTPUT_CHARS), timeoutSeconds, true);
+            } catch (IOException failed) {
+                return new Result(1, String.valueOf(failed.getMessage()));
+            }
+        }
+
+        @Override
+        public @NonNull Result runFeeding(@NonNull String script, @NonNull Path source, long timeoutSeconds) {
+            List<String> argv = argvFor(script);
+            if (argv.isEmpty()) {
+                return new Result(1, "no ssh lane could be built for this host");
+            }
+            try (InputStream input = Files.newInputStream(source)) {
+                return outcomeOf(Subprocess.of(argv)
+                    .stdin(input)
                     .mergeStderr()
-                    .collectStdout(MAX_OUTPUT_CHARS)
+                    .collectStdout(MAX_OUTPUT_CHARS), timeoutSeconds, false);
+            } catch (IOException failed) {
+                return new Result(1, String.valueOf(failed.getMessage()));
+            }
+        }
+
+        private @NonNull List<String> argvFor(@NonNull String script) {
+            return this.server != null && ServerModel.hasSshLane(this.server)
+                ? sshArgv(this.server, script)
+                : List.of("sh", "-c", script);
+        }
+
+        /** @param stderrText whether the result's text is stderr (stdout carried a payload) */
+        private static @NonNull Result outcomeOf(@NonNull Subprocess process, long timeoutSeconds,
+                                                 boolean stderrText) {
+            try {
+                ProcessOutcome result = process
                     .timeout(Duration.ofSeconds(timeoutSeconds))
                     .stopGrace(Duration.ZERO)
                     .runChecked();
                 if (result.termination() == Termination.TIMED_OUT) {
                     return new Result(1, "the host command timed out");
                 }
-                return new Result(result.exitCode(), result.stdout().text().trim());
+                if (result.failure() != null) {
+                    return new Result(1, String.valueOf(result.failure().getMessage()));
+                }
+                return new Result(result.exitCode(),
+                    (stderrText ? result.stderr() : result.stdout()).text().trim());
             } catch (InterruptedIOException interrupted) {
                 return new Result(1, "the host command was interrupted");
             } catch (IOException failed) {
@@ -160,6 +230,37 @@ public interface HostShell {
                 Blast.log("HostShell: cannot reach host", server.get(ServerModel.NAME),
                     "-", refusal.getMessage());
                 return List.of();
+            }
+        }
+
+        /** A payload sink that fails the transfer once it would pass its cap. */
+        private static final class CappedSink extends FilterOutputStream {
+
+            private final long maxBytes;
+            private long written;
+
+            CappedSink(@NonNull OutputStream target, long maxBytes) {
+                super(target);
+                this.maxBytes = maxBytes;
+            }
+
+            @Override
+            public void write(int b) throws IOException {
+                count(1);
+                this.out.write(b);
+            }
+
+            @Override
+            public void write(byte @NonNull [] bytes, int offset, int length) throws IOException {
+                count(length);
+                this.out.write(bytes, offset, length);
+            }
+
+            private void count(int length) throws IOException {
+                this.written += length;
+                if (this.written > this.maxBytes) {
+                    throw new IOException("the payload passed its cap of " + this.maxBytes + " bytes");
+                }
             }
         }
     }

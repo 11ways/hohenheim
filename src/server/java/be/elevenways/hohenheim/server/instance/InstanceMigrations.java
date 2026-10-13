@@ -80,7 +80,7 @@ public final class InstanceMigrations {
 
     /**
      * Test seam: invoked with a step name after each daemon-side milestone
-     * ("stopped", "exported", "imported", "source_removed", "flipped"). A hook that
+     * ("stopped", "exported", "imported", "source_destroyed", "source_removed", "flipped"). A hook that
      * throws an {@link Error} simulates a controller killed at that point -- it escapes
      * the failure net (IOException and RuntimeException, since a named refusal can land
      * mid-window), so no in-process settle runs and the record is left exactly as a dead
@@ -324,7 +324,7 @@ public final class InstanceMigrations {
                         .withArg("server", targetName));
                 }
                 if (claim == WorkloadClaim.OURS) {
-                    removeMigrationCopy(targetRuntime, resolved);
+                    removeMigrationCopy(targetRuntime, resolved, targetName);
                 }
             } catch (IOException unreachable) {
                 throw HohenheimViolations.instanceRefusal("instance_migrate_failed", resolved.row(), unreachable);
@@ -359,9 +359,29 @@ public final class InstanceMigrations {
 
             Files.createDirectories(staging);
             long size = transport.exportFromSource(staging);
+            // The declared host-directory volumes travel beside either transport, through the host's volume storage.
+            String sourceName = ServerModel.nameOf(resolved.serverId());
+            boolean carryHostVolumes = !InstanceVolumes.sameStorage(sourceName, targetName);
+            List<InstanceVolumes.Archived> hostVolumes = carryHostVolumes
+                ? InstanceVolumes.archiveAll(instanceId, sourceName,
+                    Files.createDirectories(staging.resolve("host-volumes")), InstanceSnapshots.maxArchiveBytes())
+                : List.of();
             this.checkpoint.accept("exported");
 
             this.capacity.require(targetServerId, size);
+            Map<String, Path> hostContents = new LinkedHashMap<>();
+            long hostBytes = 0;
+            for (InstanceVolumes.Archived volume : hostVolumes) {
+                hostContents.put(volume.name(), volume.file());
+                hostBytes = Math.addExact(hostBytes, volume.size());
+            }
+            RestoreCapacity.requireVolumeStorage(targetServerId, hostBytes);
+            if (carryHostVolumes) {
+                // An earlier attempt's directories would make the unpack a merge over stale data.
+                InstanceVolumes.removeFrom(instanceId, targetName);
+                InstanceVolumes.restoreAll(instanceId, targetName, hostContents,
+                    resolved.handler().volumeOwnerUid(instanceId, targetName));
+            }
             transport.importOnTarget();
             this.checkpoint.accept("imported");
             // "The API said yes" and "the destination holds a workload" are
@@ -379,10 +399,11 @@ public final class InstanceMigrations {
                     + ServerModel.nameOf(resolved.serverId())
                     + "' after its removal was accepted");
             }
-            // What the source daemon holds BESIDE the container (the volume transport's
-            // named volumes) goes with it: tenant data left on the old host, and a later
+            this.checkpoint.accept("source_destroyed");
+            // What the source host holds BESIDE the container (data disks, named volumes, host-directory
+            // volumes) goes with it: tenant data left on the old host, and a later
             // migration BACK would merge-restore over the stale copy.
-            transport.removeSourceRemnants();
+            removeRemnants(resolved.runtime(), resolved, sourceName, targetName);
             this.checkpoint.accept("source_removed");
 
             InstanceOperationGuard.handoff(this.instances.leases(), instanceId,
@@ -600,15 +621,18 @@ public final class InstanceMigrations {
         this.instances.leases().requireFence(resolved.serverId());
         String handle = resolved.spec().handle();
         if (sourceClaim == WorkloadClaim.OURS) {
-            // Roll back: the record's host is the data authority and still holds it.
-            if (targetClaim == WorkloadClaim.OURS) {
-                try {
-                    removeMigrationCopy(targetRuntime, resolved);
-                } catch (IOException undeletable) {
-                    Blast.log("MIGRATE: rollback of", handle, "could not remove the"
-                        + " destination copy on", targetName, ":", undeletable.getMessage());
-                    return false;
+            // Roll back: the record's host is the data authority and still holds it. Host-directory volumes the
+            // window landed on the destination go whether or not its workload got there.
+            try {
+                if (targetClaim == WorkloadClaim.OURS) {
+                    removeMigrationCopy(targetRuntime, resolved, targetName);
+                } else if (!InstanceVolumes.sameStorage(ServerModel.nameOf(resolved.serverId()), targetName)) {
+                    InstanceVolumes.removeFrom(instanceId, targetName);
                 }
+            } catch (IOException | RuntimeException undeletable) {
+                Blast.log("MIGRATE: rollback of", handle, "could not remove the"
+                    + " destination copy on", targetName, ":", undeletable.getMessage());
+                return false;
             }
             InstanceOperationGuard.clearMigration(this.instances.leases(), instanceId,
                 resolved.serverId(), targetId,
@@ -618,13 +642,14 @@ public final class InstanceMigrations {
             return true;
         }
         if (targetClaim == WorkloadClaim.OURS) {
-            // Forward: the only copy lives on the destination; complete the handoff. The source's disk volumes are the
-            // remnant the window may have left beside the removed workload: tenant data on the old host.
+            // Forward: the only copy lives on the destination; complete the handoff. What the source host holds beside
+            // the removed workload (data disks, named volumes, host-directory volumes) is the remnant the window may
+            // have left: tenant data on the old host.
             this.instances.leases().requireFence(targetId);
             try {
-                InstanceDevices.deleteVolumesOn(resolved.runtime(), resolved);
+                removeRemnants(resolved.runtime(), resolved, ServerModel.nameOf(resolved.serverId()), targetName);
             } catch (IOException undeletable) {
-                Blast.log("MIGRATE: completing", handle, "could not remove the source's disk volumes on",
+                Blast.log("MIGRATE: completing", handle, "could not remove the source's remnants on",
                     ServerModel.nameOf(resolved.serverId()), ":", undeletable.getMessage());
                 return false;
             }
@@ -680,13 +705,6 @@ public final class InstanceMigrations {
 
         /** Materialize the staged payload on the destination as a STOPPED workload. */
         void importOnTarget() throws IOException;
-
-        /**
-         * Remove what the source daemon holds BESIDE the container after a verified
-         * import (the volume transport's named volumes); the native transport holds
-         * nothing beside it.
-         */
-        void removeSourceRemnants() throws IOException;
     }
 
     /** Whether a runtime can carry a cold transfer at all (either transport shape). */
@@ -764,12 +782,6 @@ public final class InstanceMigrations {
             this.target.importBackup(this.resolved.spec(), this.export, this.disks,
                 !InstanceDevices.extraNicsOf(this.resolved.row().get(InstanceModel.ID)).isEmpty());
         }
-
-        @Override
-        public void removeSourceRemnants() throws IOException {
-            // destroy removed the instance; its data disks are custom volumes beside it.
-            InstanceDevices.deleteVolumesOn(this.resolved.runtime(), this.resolved);
-        }
     }
 
     /**
@@ -821,27 +833,45 @@ public final class InstanceMigrations {
             this.targetRuntime.create(this.resolved.spec());
             this.target.restoreVolumes(this.resolved.spec(), this.volumes, this.tars);
         }
-
-        @Override
-        public void removeSourceRemnants() throws IOException {
-            this.source.removeVolumesForRestore(this.resolved.spec(), this.volumes,
-                this.volumes.keySet());
-        }
     }
 
     /**
-     * Remove a same-record migration copy from a daemon: the container, the volumes of its device rows that landed
-     * beside it (a native copy's data disks) and, on a volume-transport runtime, the named volumes a later import
-     * would otherwise merge-restore over. The caller has already established the claim is OURS.
+     * Remove a same-record migration copy from a daemon: the container and what its host holds beside it
+     * ({@link #removeRemnants}). The caller has already established the claim is OURS.
      * Package-visible for {@code InstanceService.destroy}'s abandon-ship cleanup.
      */
-    static void removeMigrationCopy(@NonNull InstanceRuntime runtime,
-                                    @NonNull Resolved resolved) throws IOException {
+    static void removeMigrationCopy(@NonNull InstanceRuntime runtime, @NonNull Resolved resolved,
+                                    @NonNull String serverName) throws IOException {
         runtime.destroy(resolved.spec().handle());
+        removeRemnants(runtime, resolved, serverName, ServerModel.nameOf(resolved.serverId()));
+    }
+
+    /**
+     * Remove what one host holds of a record BESIDE its workload: the volumes of its device rows (a native copy's
+     * data disks), the named volumes a volume-transport runtime keeps through a destroy, and the host-directory
+     * volumes; the declarations stay with the record. Nothing host-directory goes when the other end of the move
+     * shares this host's storage, since the paths name the one copy.
+     *
+     * AIDEV-NOTE: ONE list of remnants for the verified move, the boot settle's forward completion and a rollback's
+     * destination copy. The settle used to remove only the disk volumes, so a Docker move interrupted after the
+     * source container's removal and completed at boot left the source's named volumes behind (round r2r).
+     *
+     * @param otherEnd the move's other host
+     */
+    static void removeRemnants(@NonNull InstanceRuntime runtime, @NonNull Resolved resolved,
+                               @NonNull String serverName, @NonNull String otherEnd) throws IOException {
         InstanceDevices.deleteVolumesOn(runtime, resolved);
         if (runtime instanceof VolumeSnapshotSupport volumes) {
             Map<String, String> logical = InstanceSnapshots.logicalVolumes(resolved);
             volumes.removeVolumesForRestore(resolved.spec(), logical, logical.keySet());
+        }
+        try {
+            if (!InstanceVolumes.sameStorage(serverName, otherEnd)) {
+                InstanceVolumes.removeFrom(resolved.row().get(InstanceModel.ID), serverName);
+            }
+        } catch (RuntimeException refused) {
+            throw new IOException("Host volumes of '" + resolved.spec().handle() + "' on '" + serverName
+                + "' could not be removed: " + HohenheimViolations.reasonOf(refused), refused);
         }
     }
 

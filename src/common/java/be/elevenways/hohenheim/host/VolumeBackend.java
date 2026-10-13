@@ -152,7 +152,8 @@ public enum VolumeBackend {
                 .color(backend.color()));
         }
 
-        return builder.defaultValue(NONE.token());
+        // A host is not checked until its probe ran: a new row's storage is unknown, never "none".
+        return builder.defaultValue(UNCHECKED.token());
     }
 
     /**
@@ -174,8 +175,14 @@ public enum VolumeBackend {
         return null;
     }
 
-    /** @return the stored backend of a host record's raw column value, {@link #NONE} when absent or unknown */
+    /**
+     * @return the stored backend of a host record's raw column value: {@link #UNCHECKED} when absent (never probed),
+     *         {@link #NONE} when unknown (fail closed)
+     */
     public static @NonNull VolumeBackend resolve(@Nullable String token) {
+        if (token == null) {
+            return UNCHECKED;
+        }
         VolumeBackend backend = forToken(token);
         return backend != null ? backend : NONE;
     }

@@ -34,6 +34,7 @@ import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.widget.common.WidgetInstance;
 import be.elevenways.zenit.widget.common.WidgetTree;
+import be.elevenways.zenit.widget.common.builtin.CardWidget;
 import be.elevenways.zenit.widget.common.builtin.FactListWidget;
 import be.elevenways.zenit.widget.common.data.WidgetFact;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -42,6 +43,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -92,22 +94,34 @@ public final class InstanceBackupParts {
             .build();
     }
 
-    /** A backup's front door: its fields, then what it carries beyond the instance export (its data disks). */
+    /** A backup's front door: its fields, then a card of what it carries beside the instance itself. */
     private static @NonNull RecordOverview<Row> overview() {
         return RecordOverview.<Row>fields().widgets(InstanceBackupParts::contents);
     }
 
-    /** The contents fact, null for a backup that carries nothing beside the instance itself. */
+    /**
+     * The contents card (its data disks, its host volumes), null for a backup that carries nothing beside the instance
+     * itself. A card of its own, so it sits in the overview's column the way the fields card does, never as a bare
+     * fact list under it.
+     */
     private static @Nullable WidgetTree contents(@NonNull Row backup, @NonNull AccessContext access) {
+        Conduit conduit = access.conduit();
+        List<WidgetFact> facts = new ArrayList<>();
         String disks = dataDisksText(backup);
-        if (disks == null) {
+        if (disks != null) {
+            facts.add(WidgetFact.of(HohenheimMicrocopy.INSTANCE_BACKUP.of(DATA_DISKS_COLUMN)
+                .resolve(conduit.getLocales(), conduit.getMessageResolver()), disks));
+        }
+        List<String> hostVolumes = InstanceBackupModel.hostVolumesOf(backup);
+        if (!hostVolumes.isEmpty()) {
+            facts.add(WidgetFact.of(HohenheimMicrocopy.INSTANCE_BACKUP.of("host_volumes")
+                .resolve(conduit.getLocales(), conduit.getMessageResolver()), String.join(", ", hostVolumes)));
+        }
+        if (facts.isEmpty()) {
             return null;
         }
-        Conduit conduit = access.conduit();
-        String label = HohenheimMicrocopy.INSTANCE_BACKUP.of(DATA_DISKS_COLUMN)
-            .resolve(conduit.getLocales(), conduit.getMessageResolver());
-        return new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of())
-            .withData(List.of(WidgetFact.of(label, disks)))));
+        return new WidgetTree(List.of(CardWidget.of(HohenheimMicrocopy.INSTANCE_BACKUP.of("backup_contents"),
+            new WidgetTree(List.of(new WidgetInstance(FactListWidget.ID, Map.of()).withData(List.copyOf(facts)))))));
     }
 
     /**

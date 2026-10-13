@@ -6797,6 +6797,14 @@
     "text": "Data disks",
     "scope": "instance_backup"
   },
+  "host_volumes": {
+    "text": "Host volumes",
+    "scope": "instance_backup"
+  },
+  "backup_contents": {
+    "text": "Contents",
+    "scope": "instance_backup"
+  },
   "restore_new": {
     "text": "Restore to new instance",
     "scope": "instance_backup"
@@ -9355,6 +9363,18 @@
     "text": "Attach NIC",
     "scope": "instance_device"
   },
+  "attach_disk_title": {
+    "text": "Attach a disk",
+    "scope": "instance_device"
+  },
+  "attach_nic_title": {
+    "text": "Attach a network interface",
+    "scope": "instance_device"
+  },
+  "attach_media_title": {
+    "text": "Insert install media",
+    "scope": "instance_device"
+  },
   "add_media": {
     "text": "Attach install media",
     "scope": "instance_device"
@@ -11689,6 +11709,14 @@
     "text": "Volume '{$path}' could not be snapshotted on the {$backend} backend: {$reason}",
     "scope": "violations"
   },
+  "volume_archive_failed": {
+    "text": "The contents of volume '{$path}' could not be captured on the {$backend} backend: {$reason}",
+    "scope": "violations"
+  },
+  "volume_restore_failed": {
+    "text": "The captured contents could not be written into volume '{$path}' on the {$backend} backend: {$reason}",
+    "scope": "violations"
+  },
   "volume_destroy_failed": {
     "text": "Volume '{$path}' could not be removed on the {$backend} backend: {$reason}",
     "scope": "violations"
@@ -12256,6 +12284,14 @@
   },
   "volume_backend_unchecked_body": {
     "text": "Hohenheim could not read this host's data root, so it cannot tell whether workspaces and applications can be placed here, and places none until it can. What the check ran into: {$reason}. Check this host again once Hohenheim can reach it.",
+    "scope": "server_overview"
+  },
+  "volume_backend_never_checked_title": {
+    "text": "Volume storage not checked yet",
+    "scope": "server_overview"
+  },
+  "volume_backend_never_checked_body": {
+    "text": "Hohenheim has not checked this host's data root yet, so it places no workspaces or applications here until it has. Check this host to find out which volume storage it offers.",
     "scope": "server_overview"
   },
   "volume_backend_none_title": {

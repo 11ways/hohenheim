@@ -59,6 +59,12 @@ public final class PrivilegedHelper {
         /** {@code <path> <uid>}: give the volume directory itself to the uid, mode 0700. */
         VOLUME_OWN("volume-own"),
 
+        /** {@code <snapshot>}: write a tar of one snapshot-tree copy to stdout, numeric owners kept. */
+        VOLUME_READ("volume-read"),
+
+        /** {@code <path> <uid|keep>}: unpack a tar from stdin into the volume, then give every entry to the uid. */
+        VOLUME_WRITE("volume-write"),
+
         /** {@code <path>}: give one managed Spamservice directory to the spamservice account. */
         SPAMSERVICE_OWN("spamservice-own");
 
