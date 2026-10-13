@@ -17960,6 +17960,8 @@
     "text": "Deze workload kan niet veranderen in {$kind}: de driver van de host kan wat nu draait niet omzetten naar die soort. Maak een nieuwe aan."
   },
   "step_ports": {"scope": "put_online", "text": "Poorten"},
+  "runs_on_card": {"scope": "put_online", "text": "Draait op"},
+  "runs_on_card_lead": {"scope": "put_online", "text": "Hohenheim kiest de host met ruimte ervoor, tenzij je er zelf een kiest. Het project bepaalt op wiens quotum het telt."},
   "step_ports_lead": {"scope": "put_online", "text": "De poorten waarmee spelers verbinden, gepubliceerd op elk adres van de host. Laat een poort leeg en Hohenheim kiest een vrije."},
   "step_service_where_lead": {"scope": "put_online", "text": "Geef het een naam en kies waar het draait. Het is bereikbaar op zijn eigen poorten, niet via een adres van de proxy."},
   "service_lead": {"scope": "put_online", "text": "Maakt het aan, publiceert zijn poorten en, als je er een geeft, zijn speladres."},

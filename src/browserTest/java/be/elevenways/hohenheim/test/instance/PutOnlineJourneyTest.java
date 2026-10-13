@@ -124,6 +124,13 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
             .contains("data-hh-put-online-group=\"machine\"").contains("instance:hohenheim:vm")
             .contains("data-hh-put-online-group=\"code\"").contains("kind:hohenheim:static")
             .contains("data-hh-put-online-steps");
+        // 1a. Before a choice the reach is unknown, so the chooser's stepper reads only the steps every flow shares:
+        //     no HTTPS (a game server has none), no Ports (a website has none).
+        String stepper = chooser.substring(chooser.indexOf("data-hh-put-online-steps"),
+            chooser.indexOf("</pl-stepper>", chooser.indexOf("data-hh-put-online-steps")));
+        assertThat(stepper).as("step 1a: the chooser's stepper reads What, Where and Going live")
+            .contains("What").contains("Where").contains("Going live")
+            .doesNotContain("HTTPS").doesNotContain("Ports").doesNotContain("Options");
         // 1b. A family Hohenheim ships reads its short card line, not its catalogue description; a template the
         //     operator wrote keeps its own words.
         Row starter = Models.get(InstanceTemplateModel.class).createEmptyRow();
@@ -143,6 +150,16 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
                 .doesNotContain("Catalogue form: official Apache image, PHP 99.9");
             assertThat(shipped).as("step 1b: the operator's own template keeps its description")
                 .contains("A shop that sells nothing");
+            // 1c. A template with other versions says its description and its versions in ONE meta line: two meta
+            //     lines share the list row's second grid row and overlap.
+            String versioned = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?template="
+                + starter.get(InstanceTemplateModel.ID)).body();
+            String whatCard = versioned.substring(versioned.indexOf("data-hh-put-online-what"),
+                versioned.indexOf("</pl-list>", versioned.indexOf("data-hh-put-online-what")));
+            assertThat(whatCard).as("step 1c: the what-card names the other versions")
+                .contains("data-hh-put-online-versions");
+            assertThat(whatCard.split("<pl-list-item-meta", -1).length - 1)
+                .as("step 1c: in one meta line, beside the description").isEqualTo(1);
         } finally {
             HardDeletes.row(Models.get(InstanceTemplateModel.class), starter);
         }
@@ -169,6 +186,8 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
             .contains("data-zf-step=\"where\"").contains("data-zf-step=\"https\"");
         assertThat(wizard).as("step 2: a template may go online without an address, and its hint says so")
             .contains("nobody reaches by name");
+        assertThat(wizard).as("step 2: the host pick stands in its Runs on card, with its describing line")
+            .contains("Runs on").contains("Hohenheim picks the host with room");
         assertThat(addressWizard).as("step 2: an address kind has nothing to serve without one, so no such hint")
             .doesNotContain("nobody reaches by name").contains("You can add more addresses later.");
         assertThat(addressWizard)

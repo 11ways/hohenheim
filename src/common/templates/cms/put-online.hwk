@@ -1,6 +1,8 @@
 {#- Put something online: without a choice, what to put online (a stepper over grouped cards and
     Continue); with one, the stepped wizard the framework draws for that PAGE action, submitted once to its run page.
-    Its sections stand in plumage's page frame (pl-page), which spaces them; the shell does not frame a module page. -#}
+    Its sections stand in plumage's page frame (pl-page), which spaces them; the shell does not frame a module page.
+    Before a choice the stepper reads only the steps every flow shares (PutOnline.sharedSteps): how what is put
+    online is reached, and so whether HTTPS or Ports follows, is not known yet. -#}
 {% declare title: String %}
 {% declare lead: Microcopy %}
 {% declare document: PageFormState = null %}
@@ -9,6 +11,7 @@
 {% declare whatDescription: String = "" %}
 {% declare versions: List = null %}
 {% declare groups: List = null %}
+{% declare steps: List = null %}
 {% declare chooseAction: String = "" %}
 {% declare cancelTarget: RouteTarget %}
 {% extend "zenitcms:shell" var:title=title %}
@@ -21,19 +24,24 @@
     <pl-list-item>
         {% if whatIcon != "" %}<pl-icon slot="leading" name={% whatIcon %} data-hh-put-online-what-icon></pl-icon>{% /if %}
         <pl-list-item-title>{{ what }}</pl-list-item-title>
-        {% if whatDescription != "" %}<pl-list-item-meta>{{ whatDescription }}</pl-list-item-meta>{% /if %}
-        {% if versions != null && versions.size() > 0 %}
-        <pl-list-item-meta data-hh-put-online-versions>
-            {{ t("versions", scope: "put_online") }}
-            {% each versions as index, version %}<a use:Zenit.route={% version.get("target") %}>{{ version.get("name") }}</a>{% if index < versions.size() - 1 %}, {% /if %}{% /each %}
+        {#- ONE meta line: the row's grid has a single second row, so a second meta line would overlap the first. -#}
+        {% if whatDescription != "" || (versions != null && versions.size() > 0) %}
+        <pl-list-item-meta class="pl-facts">
+            {% if whatDescription != "" %}<span>{{ whatDescription }}</span>{% /if %}
+            {% if versions != null && versions.size() > 0 %}
+            <span data-hh-put-online-versions>
+                {{ t("versions", scope: "put_online") }}
+                {% each versions as index, version %}<a use:Zenit.route={% version.get("target") %}>{{ version.get("name") }}</a>{% if index < versions.size() - 1 %}, {% /if %}{% /each %}
+            </span>
+            {% /if %}
         </pl-list-item-meta>
         {% /if %}
     </pl-list-item>
 </pl-list>
 {% render "zenitcms:form/page-action" var:page=document %}
 {% else %}
-<pl-stepper totalSteps={% 4 %} data-hh-put-online-steps>
-    <pl-stepper-indicator totalSteps={% 4 %} labels={% [t("step_what", scope: "put_online"), t("step_where", scope: "put_online"), t("step_https", scope: "put_online"), t("step_live", scope: "put_online")] %}></pl-stepper-indicator>
+<pl-stepper totalSteps={% steps.size() %} data-hh-put-online-steps>
+    <pl-stepper-indicator totalSteps={% steps.size() %} labels={% steps %}></pl-stepper-indicator>
 </pl-stepper>
 <form method="get" action={% chooseAction %} data-hh-put-online-chooser>
     <pl-field required={% true %}>

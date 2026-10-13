@@ -17960,6 +17960,8 @@
     "text": "This workload cannot be changed into {$kind}: its host's driver cannot turn what runs now into that kind. Create a new one instead."
   },
   "step_ports": {"scope": "put_online", "text": "Ports"},
+  "runs_on_card": {"scope": "put_online", "text": "Runs on"},
+  "runs_on_card_lead": {"scope": "put_online", "text": "Hohenheim picks the host with room for it, unless you pick one. The project decides whose quota it counts against."},
   "step_ports_lead": {"scope": "put_online", "text": "The ports players connect to, published on every address of its host. Leave a port empty and Hohenheim picks a free one."},
   "step_service_where_lead": {"scope": "put_online", "text": "Name it and pick where it runs. It is reached on its own ports, not through an address of the proxy."},
   "service_lead": {"scope": "put_online", "text": "Creates it, publishes its ports and, when you give one, its game address."},

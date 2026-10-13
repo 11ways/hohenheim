@@ -186,6 +186,9 @@ public final class PutOnlinePage extends PanelPage {
                 return request.conduit().softRedirect(chosen);
             }
             vars.put("groups", groups);
+            List<String> steps = new ArrayList<>();
+            PutOnline.sharedSteps().forEach(step -> steps.add(resolve(step, request)));
+            vars.put("steps", steps);
             vars.put("chooseAction", CmsRoutes.list(request.panelSlug(), HohenheimSlugs.PUT_ONLINE).toUrl());
         }
         return new RenderTemplateResult(HohenheimTemplateIds.PUT_ONLINE, vars);
