@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.hohenheim.server.tls.CertificateStore;
 import be.elevenways.hohenheim.server.tls.SniKeyManager;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.http.DefaultPorts;
 import be.elevenways.protoblast.common.thread.JobRunner;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.security.SecurityEventTypes;
@@ -657,7 +658,7 @@ public class SiteDispatcher implements HttpHandler {
             URI parsed = new URI(address.trim());
             String scheme = parsed.getScheme() != null ? parsed.getScheme().toLowerCase(Locale.ROOT) : null;
             if (!"http".equals(scheme) && !"https".equals(scheme) || parsed.getHost() == null) return null;
-            int port = parsed.getPort() > 0 ? parsed.getPort() : "https".equals(scheme) ? 443 : 80;
+            int port = DefaultPorts.effective(scheme, parsed.getPort());
             return new URI(scheme, null, parsed.getHost(), port, "/", null, null);
         } catch (URISyntaxException e) {
             return null;
@@ -747,7 +748,7 @@ public class SiteDispatcher implements HttpHandler {
             authority = hostHeader.replaceFirst(":\\d+$", "");
         }
 
-        if (httpsPort > 0 && httpsPort != 443) {
+        if (httpsPort > 0 && !DefaultPorts.isDefault("https", httpsPort)) {
             authority = authority + ":" + httpsPort;
         }
 

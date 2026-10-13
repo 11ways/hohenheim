@@ -24,16 +24,12 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
@@ -42,21 +38,12 @@ import static org.assertj.core.api.Assertions.catchThrowable;
  * Every quota dimension is declared once in {@link ChargedModel}, installed, reconciled by
  * being declared, and booked through the one lifecycle that unwinds a refused write.
  *
- * AIDEV-NOTE: the ledger-writer scan is the guard against a dimension implemented BESIDE the
- * mechanism: a class that reserves or releases ledger buckets on its own is either a new
- * dimension (declare it in ChargedModel) or a deliberate explicit move (add it to
- * {@link #LEDGER_WRITERS} with its reason). Its OWN datasource, so every bucket asserted
- * here is this class's alone.
+ * AIDEV-NOTE: the guard against a dimension implemented BESIDE the mechanism -- a class that
+ * reserves or releases ledger buckets on its own -- is the quota-ledger-writers local rule in
+ * hohenheim's build script, which gates every compile; its exclusions are the declared
+ * explicit moves. Its OWN datasource, so every bucket asserted here is this class's alone.
  */
 class QuotaDimensionDriftTest {
-
-    /** The files allowed to move ledger buckets outside a declared dimension, and why. */
-    private static final Map<String, String> LEDGER_WRITERS = Map.of(
-        "ChargedModel.java", "THE lifecycle every declared dimension is booked through",
-        "OwnerQuota.java", "the owner budgets' guarded reserve",
-        "QuotaReconciler.java", "the drift correction",
-        "InstanceCapacity.java", "the host budget's reserve and the explicit migration-window moves",
-        "InstanceQuota.java", "moveOwnerCharges, the uncapped heal when ownership moves");
 
     private static SqlDatasource datasource;
 
@@ -123,29 +110,6 @@ class QuotaDimensionDriftTest {
                     .as("step 4: and corrected to zero").isZero();
             }
         });
-    }
-
-    @Test
-    void noLedgerBucketMovesOutsideTheMechanism() throws IOException {
-        Path server = Path.of("src/server/java/be/elevenways/hohenheim");
-        Path common = Path.of("src/common/java/be/elevenways/hohenheim");
-        assertThat(Files.isDirectory(server) && Files.isDirectory(common))
-            .as("the scan needs the hohenheim project dir as its working directory").isTrue();
-        List<String> writers = new ArrayList<>();
-        for (Path root : List.of(server, common)) {
-            try (Stream<Path> files = Files.walk(root)) {
-                for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
-                    String source = Files.readString(file);
-                    if (source.contains("Quotas.reserve(") || source.contains("Quotas.release(")) {
-                        writers.add(file.getFileName().toString());
-                    }
-                }
-            }
-        }
-        assertThat(LEDGER_WRITERS.keySet())
-            .as("every ledger writer is the mechanism or a declared explicit move -- a quota"
-                + " dimension is declared in ChargedModel, never hand-written beside it")
-            .containsAll(writers);
     }
 
     @Test

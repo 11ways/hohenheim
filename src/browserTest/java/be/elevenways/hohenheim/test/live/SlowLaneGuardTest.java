@@ -6,14 +6,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,70 +22,31 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * AIDEV-NOTE: liveness is detected by source scan -- a reference to the live
  * helpers (the lane gate, the enrolled-host fixtures), own or inherited within
- * this source tree. A targeted run still executes slow-tagged classes: a
- * --class filter disables the tag exclusion, and `zenit-dev test --all` runs
- * the whole suite including them.
+ * this source tree, read through {@link BrowserTestSources}; inheritance and the
+ * zenit-dev config are beyond a line pattern, so this is no blastGuards rule. A
+ * targeted run still executes slow-tagged classes: a --class filter disables the
+ * tag exclusion, and `zenit-dev test --all` runs the whole suite including them.
  */
 class SlowLaneGuardTest {
-
-    /** The live helpers themselves plus this scanner; never test classes to enforce on. */
-    // BrowserTestLaneGuardTest is a sibling SOURCE SCANNER, not a live test: it names the
-    // live helpers and quotes @Tag("slow") in prose, which is exactly what this scan looks
-    // for, so without the exemption a guard would enforce lane rules against a guard.
-    private static final Set<String> HELPERS = Set.of(
-        "LiveLane", "LiveLaneReport", "LiveIncusHost", "LiveRemoteHost",
-        "FakeIncusTransport", "SlowLaneGuardTest", "BrowserTestLaneGuardTest");
 
     private static final Pattern LIVE_REF = Pattern.compile(
         "\\bLiveLane\\s*\\.|\\bLiveIncusHost\\b|\\bLiveRemoteHost\\b");
 
-    private static final Pattern EXTENDS = Pattern.compile(
-        "class\\s+(\\w+)(?:<[^>]*>)?\\s+extends\\s+([\\w.]+)");
-
     @Test
     void everyLiveCapableTestClassIsSlowTaggedAndDeclaredNonHermetic() throws IOException {
-        // 1. Collect every browser-test source file.
-        Path root = Path.of("src/browserTest/java");
-        assertThat(root).as("step 1: guard runs from the project root").isDirectory();
-        Map<String, String> sources = new HashMap<>();
-        try (Stream<Path> walk = Files.walk(root)) {
-            for (Path file : walk.filter(p -> p.toString().endsWith(".java")).toList()) {
-                String name = file.getFileName().toString();
-                sources.put(name.substring(0, name.length() - 5), Files.readString(file));
-            }
-        }
-        assertThat(sources).as("step 1: the browser test tree is non-empty").isNotEmpty();
-
-        // 2. Build the in-tree inheritance map so inherited liveness and tags count.
-        Map<String, String> parent = new HashMap<>();
-        for (Map.Entry<String, String> entry : sources.entrySet()) {
-            Matcher m = EXTENDS.matcher(entry.getValue());
-            while (m.find()) {
-                if (m.group(1).equals(entry.getKey())) {
-                    String sup = m.group(2);
-                    parent.put(entry.getKey(), sup.substring(sup.lastIndexOf('.') + 1));
-                    break;
-                }
-            }
-        }
+        // 1. Collect every browser-test source file and, 2., its in-tree inheritance, so inherited
+        //    liveness and tags count.
+        BrowserTestSources tree = BrowserTestSources.read();
 
         // 3. Find every concrete test class that uses a live capability, own or inherited.
         List<String> untagged = new ArrayList<>();
         List<String> liveClasses = new ArrayList<>();
-        for (Map.Entry<String, String> entry : sources.entrySet()) {
-            String cls = entry.getKey();
-            String src = entry.getValue();
-            if (HELPERS.contains(cls) || !cls.endsWith("Test")) {
-                continue;
-            }
-            if (src.contains("abstract class " + cls)) {
-                continue;
-            }
-            if (!chainMatches(cls, sources, parent, s -> LIVE_REF.matcher(s).find())) {
+        for (String cls : tree.sources.keySet()) {
+            if (!tree.isConcreteTest(cls) || !tree.chainMatches(cls, s -> LIVE_REF.matcher(s).find())) {
                 continue;
             }
             liveClasses.add(cls);
-            if (!chainMatches(cls, sources, parent, s -> s.contains("@Tag(\"slow\")"))) {
+            if (!tree.chainMatches(cls, s -> s.contains("@Tag(\"slow\")"))) {
                 untagged.add(cls);
             }
         }
@@ -116,19 +72,6 @@ class SlowLaneGuardTest {
             .as("step 4: live-capable classes not matched by any nonHermeticClasses glob "
                 + "in .zenit-dev.json -- add the class name so its receipts are never reused")
             .isEmpty();
-    }
-
-    private static boolean chainMatches(String cls, Map<String, String> sources,
-                                        Map<String, String> parent,
-                                        java.util.function.Predicate<String> predicate) {
-        Set<String> seen = new HashSet<>();
-        for (String c = cls; c != null && seen.add(c); c = parent.get(c)) {
-            String src = sources.get(c);
-            if (src != null && predicate.test(src)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /** The nonHermeticClasses entries, extracted from .zenit-dev.json. */

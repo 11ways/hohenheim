@@ -3,6 +3,7 @@ package be.elevenways.hohenheim;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import java.util.Objects;
 import be.elevenways.zenit.common.Zenit;
+import be.elevenways.protoblast.common.http.DefaultPorts;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.setting.SettingDefinition;
 import be.elevenways.zenit.common.setting.SettingGroup;
@@ -70,7 +71,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> HTTP_PORT = GROUP.buildSetting("http_port", Integer.class)
             .hostOnly()
-            .defaultValue(80)
+            .defaultValue(DefaultPorts.of("http"))
             .description("HTTP proxy listen port")
             .restartRequired()
             .build();
@@ -99,7 +100,7 @@ public class HohenheimSettings {
 
         public static final SettingDefinition<Integer> HTTPS_PORT = GROUP.buildSetting("https_port", Integer.class)
             .hostOnly()
-            .defaultValue(443)
+            .defaultValue(DefaultPorts.of("https"))
             .description("HTTPS proxy listen port")
             .restartRequired()
             .build();
@@ -801,7 +802,7 @@ public class HohenheimSettings {
         public static final SettingDefinition<String> NFTABLES_PORTS = GROUP.buildSetting("nftables_ports",
                 String.class)
             .hostOnly()
-            .defaultValue("80,443")
+            .defaultValue(DefaultPorts.of("http") + "," + DefaultPorts.of("https"))
             .description("Comma-separated TCP ports the nftables ban rule is scoped to; "
                 + "never widen this to ports like 22 or 53 that other services depend on")
             .build();

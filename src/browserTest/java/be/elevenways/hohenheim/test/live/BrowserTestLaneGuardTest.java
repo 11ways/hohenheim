@@ -3,17 +3,8 @@ package be.elevenways.hohenheim.test.live;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -32,17 +23,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code solo} "because it went red", which is almost always a leak worth fixing rather than
  * a JVM worth buying: the 2026-08-12 collapse took the lane from 513s to 340s precisely by
  * refusing that reflex, and one careless tag is a permanent 4s JVM boot plus a full runtime
- * boot back on the bill.
+ * boot back on the bill. It reads tags inherited across files and the comment above a tag,
+ * which no line pattern states, so it is a test over {@link BrowserTestSources}, not a
+ * blastGuards rule.
  */
 class BrowserTestLaneGuardTest {
-
-    /** Helpers and fixtures, not test classes to enforce lane membership on. */
-    private static final Set<String> HELPERS = Set.of(
-        "LiveLane", "LiveLaneReport", "LiveIncusHost", "LiveRemoteHost",
-        "FakeIncusTransport", "SlowLaneGuardTest", "BrowserTestLaneGuardTest");
-
-    private static final Pattern EXTENDS = Pattern.compile(
-        "class\\s+(\\w+)(?:<[^>]*>)?\\s+extends\\s+([\\w.]+)");
 
     /**
      * Every solo tag must carry a written justification, and no class may claim two lanes.
@@ -50,37 +35,18 @@ class BrowserTestLaneGuardTest {
     @Test
     void everySoloTagIsJustifiedAndNoClassClaimsTwoLanes() throws IOException {
         // 1. Collect every browser-test source file and its in-tree superclass.
-        Path root = Path.of("src/browserTest/java");
-        assertThat(root).as("step 1: guard runs from the project root").isDirectory();
-        Map<String, String> sources = new HashMap<>();
-        try (Stream<Path> walk = Files.walk(root)) {
-            for (Path file : walk.filter(p -> p.toString().endsWith(".java")).toList()) {
-                String name = file.getFileName().toString();
-                sources.put(name.substring(0, name.length() - 5), Files.readString(file));
-            }
-        }
-        assertThat(sources).as("step 1: the browser test tree is non-empty").isNotEmpty();
-
-        Map<String, String> parent = new HashMap<>();
-        for (Map.Entry<String, String> entry : sources.entrySet()) {
-            Matcher m = EXTENDS.matcher(entry.getValue());
-            while (m.find()) {
-                if (m.group(1).equals(entry.getKey())) {
-                    String sup = m.group(2);
-                    parent.put(entry.getKey(), sup.substring(sup.lastIndexOf('.') + 1));
-                    break;
-                }
-            }
-        }
+        BrowserTestSources tree = BrowserTestSources.read();
 
         // 2. shared-server and solo are mutually exclusive: browserTestSolo excludes the
         //    shared-server tag, so a class carrying both would run in NO lane at all.
         List<String> both = new ArrayList<>();
         List<String> soloClasses = new ArrayList<>();
-        for (String cls : concreteTestClasses(sources)) {
-            boolean solo = chainMatches(cls, sources, parent, s -> s.contains("@Tag(\"solo\")"));
-            boolean shared = chainMatches(cls, sources, parent,
-                s -> s.contains("@Tag(\"shared-server\")"));
+        for (String cls : tree.sources.keySet()) {
+            if (!tree.isConcreteTest(cls)) {
+                continue;
+            }
+            boolean solo = tree.chainMatches(cls, s -> s.contains("@Tag(\"solo\")"));
+            boolean shared = tree.chainMatches(cls, s -> s.contains("@Tag(\"shared-server\")"));
             if (solo) {
                 soloClasses.add(cls);
             }
@@ -99,7 +65,7 @@ class BrowserTestLaneGuardTest {
         //    state with no reset, not "it failed when I merged it".
         List<String> unjustified = new ArrayList<>();
         for (String cls : soloClasses) {
-            String src = sources.get(cls);
+            String src = tree.sources.get(cls);
             if (src == null || !declaresSoloItself(src)) {
                 continue;
             }
@@ -127,22 +93,6 @@ class BrowserTestLaneGuardTest {
             .hasSizeLessThanOrEqualTo(4);
     }
 
-    /** Concrete, enforceable test classes: named *Test, not abstract, not a helper. */
-    private static List<String> concreteTestClasses(Map<String, String> sources) {
-        List<String> out = new ArrayList<>();
-        for (Map.Entry<String, String> entry : sources.entrySet()) {
-            String cls = entry.getKey();
-            if (HELPERS.contains(cls) || !cls.endsWith("Test")) {
-                continue;
-            }
-            if (entry.getValue().contains("abstract class " + cls)) {
-                continue;
-            }
-            out.add(cls);
-        }
-        return out;
-    }
-
     /** True when the class writes the solo tag itself rather than inheriting it. */
     private static boolean declaresSoloItself(String source) {
         return source.contains("@Tag(\"solo\")");
@@ -165,19 +115,6 @@ class BrowserTestLaneGuardTest {
                 return false;
             }
             if (line.contains("Solo:")) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean chainMatches(String cls, Map<String, String> sources,
-                                        Map<String, String> parent,
-                                        java.util.function.Predicate<String> predicate) {
-        Set<String> seen = new HashSet<>();
-        for (String c = cls; c != null && seen.add(c); c = parent.get(c)) {
-            String src = sources.get(c);
-            if (src != null && predicate.test(src)) {
                 return true;
             }
         }

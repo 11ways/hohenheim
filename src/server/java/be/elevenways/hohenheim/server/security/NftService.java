@@ -5,6 +5,7 @@ import be.elevenways.hohenheim.security.BanScope;
 import be.elevenways.hohenheim.server.ControllerScope;
 import be.elevenways.hohenheim.server.files.HohenheimSftp;
 import be.elevenways.protoblast.common.Blast;
+import be.elevenways.protoblast.common.http.DefaultPorts;
 import be.elevenways.zenit.common.Zenit;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -178,8 +179,11 @@ public class NftService {
         return "{ " + ip + " timeout " + Math.max(1, ttlSeconds) + "s }";
     }
 
+    /** The web ports a ban is scoped to by default: HTTP's and HTTPS's, as the default-port table names them. */
+    static final List<Integer> WEB_PORTS = List.of(DefaultPorts.of("http"), DefaultPorts.of("https"));
+
     static @NonNull String portSetLiteral(@NonNull List<Integer> ports) {
-        return portSetLiteral(ports, List.of(80, 443));
+        return portSetLiteral(ports, WEB_PORTS);
     }
 
     static @NonNull String portSetLiteral(@NonNull List<Integer> ports,
@@ -202,7 +206,7 @@ public class NftService {
     public static @NonNull List<Integer> configuredPorts() {
         return parsePorts(
             Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Security.NFTABLES_PORTS),
-            List.of(80, 443));
+            WEB_PORTS);
     }
 
     /**

@@ -9,13 +9,6 @@ import be.elevenways.hohenheim.upstream.UpstreamKindInfo;
 import be.elevenways.hohenheim.upstream.UpstreamKinds;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.diagnostic.CommentMode;
-import be.elevenways.protoblast.guard.NamedPattern;
-import be.elevenways.protoblast.guard.ScanResult;
-import be.elevenways.protoblast.guard.ScanRoot;
-import be.elevenways.protoblast.guard.SourceRule;
-import be.elevenways.protoblast.guard.SourceRuleScanner;
-import be.elevenways.protoblast.guard.Violation;
 import be.elevenways.zenit.common.setting.ContentLocales;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
@@ -23,12 +16,8 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -39,11 +28,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * AIDEV-NOTE: this exists because two refusals embedded a display name as an argument of
  * a LOCALIZED violation (OwnedInstances instance_kind_owner_managed, SiteDatabaseResource
  * site_type_no_injection, 2026-08-09): a Dutch reader got a Dutch sentence with "Site
- * container" inside it. The guard is deliberately wider than that one shape -- it bans
- * the CALL, not just the withArg spelling -- because a display name is equally wrong in a
- * page title, a toast or a flash, and a rule that named only withArg would have to be
- * re-widened at every new call shape. Zero legitimate call sites exist, and no comment
- * excuses one.
+ * container" inside it. That no server code CALLS getDisplayName is the display-name-calls
+ * local rule in hohenheim's build script, which gates every compile; this test keeps the
+ * half no line pattern sees, that every label actually resolves.
  */
 class DisplayNameLocalizationTest {
 
@@ -56,42 +43,9 @@ class DisplayNameLocalizationTest {
      */
     private static final int SHIPPED_KIND_FLOOR = 10;
 
-    /** A CALL of getDisplayName; the declaration carries no dot and never matches. */
-    private static final Pattern CALL = Pattern.compile("\\.getDisplayName\\(\\)");
-
     @BeforeAll
     static void boot() {
         HohenheimTestRuntime.ensureBooted();
-    }
-
-    @Test
-    void noServerCodeRendersATypeDefinitionsEnglishDisplayName() throws IOException {
-        Path server = Path.of("src/server/java/be/elevenways/hohenheim");
-        Path common = Path.of("src/common/java/be/elevenways/hohenheim");
-        assertThat(Files.isDirectory(server) && Files.isDirectory(common))
-            .as("the scan needs the hohenheim project dir as its working directory")
-            .isTrue();
-
-        SourceRule rule = SourceRule.builder("display-name-localization")
-            .consequence("getDisplayName() is an English literal: reading it into anything"
-                + " a user sees renders half-translated copy. Use getLabel(), which is a"
-                + " Microcopy and resolves in the reader's locale even as a message argument")
-            .root(ScanRoot.of(server, "server"))
-            .root(ScanRoot.of(common, "common"))
-            .extensions("java")
-            .commentMode(CommentMode.STRIP_BLOCK_AWARE)
-            .pattern(NamedPattern.of("display-name-call", CALL, "server"))
-            .pattern(NamedPattern.of("display-name-call", CALL, "common"))
-            .build();
-
-        ScanResult result = SourceRuleScanner.scan(rule);
-        assertThat(result.scannedFiles())
-            .as("the scan actually walked the source tree (a zero count is vacuous)")
-            .isGreaterThan(20);
-        assertThat(result.violations())
-            .as(() -> "English display names read into user-facing text:\n"
-                + String.join("\n", result.violations().stream().map(Violation::format).toList()))
-            .isEmpty();
     }
 
     /**

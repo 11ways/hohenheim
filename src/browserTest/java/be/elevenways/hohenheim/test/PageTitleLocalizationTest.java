@@ -3,94 +3,26 @@ package be.elevenways.hohenheim.test;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.guard.NamedPattern;
-import be.elevenways.protoblast.guard.ScanResult;
-import be.elevenways.protoblast.guard.ScanRoot;
-import be.elevenways.protoblast.guard.SourceRule;
-import be.elevenways.protoblast.guard.SourceRuleScanner;
-import be.elevenways.protoblast.guard.Violation;
 import be.elevenways.zenit.server.microcopy.ShippedCatalogs;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The rule "every page and error is localized", enforced instead of
- * swept: no page may build its title by concatenating an English literal.
+ * The rule "every page and error is localized", enforced instead of swept.
  *
  * AIDEV-NOTE: this exists because the sweep alone provably does not hold. Three pages
  * were fixed in one sweep, nine were listed as remaining -- and by the time
  * the inventory was written the count was ELEVEN call sites, because
  * InstanceDevicesPage was authored after the list and inherited the defect from its
- * neighbours. A guard is worth more than the eleven edits it protects. The walk is the
- * shared protoblast-source-guard scanner in judge mode; the accepted spellings are
- * deliberately only three, and the third one is the DECISION about bare record names:
- * a title that is nothing but the record's own name carries no translatable copy (an
- * instance/site/zone name is user data and is never translated),
- * so it stays legal, while ANY literal mixed into a title is not.
+ * neighbours. That no page builds its title by concatenating an English literal is the
+ * page-title-literals and proxy-error-title-literals local rules in hohenheim's build
+ * script, which gate every compile; this test keeps the half they cannot see.
  */
 class PageTitleLocalizationTest {
-
-    /** A page title assignment; group 1 is the whole value expression. */
-    private static final Pattern TITLE = Pattern.compile("vars\\.put\\(\"title\",\\s*(.*)$");
-
-    /** A proxy error page's title argument, which sits beside the status-code literal. */
-    private static final Pattern PROXY_TITLE =
-        Pattern.compile("render\\(\\w+,\\s*\"\\d{3}\",\\s*(\".*)$");
-
-    /** The only spellings a title may start with; everything else must carry no literal. */
-    private static final List<String> RESOLVED = List.of("CmsSupport.pageTitle(", "Microcopy.of(",
-        "HohenheimMicrocopy.");
-
-    @Test
-    void noPageBuildsItsTitleByConcatenatingALiteral() throws IOException {
-        Path pages = Path.of("src/server/java/be/elevenways/hohenheim/server/cms");
-        Path errorPages = Path.of(
-            "src/server/java/be/elevenways/hohenheim/server/proxy/ErrorPages.java");
-        assertThat(Files.isDirectory(pages))
-            .as("the scan needs the hohenheim project dir as its working directory")
-            .isTrue();
-        assertThat(Files.isRegularFile(errorPages))
-            .as("ErrorPages is the one PUBLIC-facing error surface and must be scanned")
-            .isTrue();
-
-        SourceRule rule = SourceRule.builder("page-title-localization")
-            .consequence("a page title mixing an English literal into a record name is"
-                + " unlocalizable: resolve it through CmsSupport.pageTitle (microcopy key"
-                + " page_title in the page's own scope, en AND nl)")
-            .root(ScanRoot.of(pages, "cms"))
-            .root(ScanRoot.of(errorPages, "proxy"))
-            .extensions("java")
-            .pattern(NamedPattern.of("page-title", TITLE, "cms"))
-            .pattern(NamedPattern.of("proxy-error-title", PROXY_TITLE, "proxy"))
-            .judge(match -> {
-                String value = match.group(1).trim();
-                for (String accepted : RESOLVED) {
-                    if (value.startsWith(accepted)) {
-                        return null;
-                    }
-                }
-                // No literal at all: a bare record name, which is user data by decision.
-                return value.contains("\"") ? value : null;
-            })
-            .build();
-
-        ScanResult result = SourceRuleScanner.scan(rule);
-        assertThat(result.scannedFiles())
-            .as("the scan actually walked the page classes (a zero count is vacuous)")
-            .isGreaterThan(20);
-        assertThat(result.violations())
-            .as(() -> "page titles built by concatenating a literal:\n"
-                + String.join("\n", result.violations().stream().map(Violation::format).toList()))
-            .isEmpty();
-    }
 
     /**
      * Every scope a page passes to {@code CmsSupport.pageTitle}, plus the proxy error

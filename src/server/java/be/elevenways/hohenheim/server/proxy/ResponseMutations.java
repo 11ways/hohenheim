@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.proxy;
 
 import be.elevenways.hohenheim.server.sitetype.ResponseMutator;
 import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
+import be.elevenways.protoblast.common.http.DefaultPorts;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.HeaderMap;
 import io.undertow.util.Headers;
@@ -115,9 +116,6 @@ final class ResponseMutations {
     }
 
     private static int effectivePort(URI uri) {
-        if (uri.getPort() != -1) {
-            return uri.getPort();
-        }
-        return "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
+        return DefaultPorts.effective(uri.getScheme(), uri.getPort());
     }
 }

@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.server.sitetype.UnixSocketBridgeConnection;
 import be.elevenways.hohenheim.server.sitetype.UpstreamForwarder;
 import be.elevenways.hohenheim.server.sitetype.UpstreamProtocol;
 import be.elevenways.hohenheim.server.sitetype.UpstreamTarget;
+import be.elevenways.protoblast.common.http.DefaultPorts;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.*;
@@ -185,8 +186,7 @@ public class AddressUpstreamKind implements UpstreamKindHandler {
 
         String scheme = (String) settings.getOrDefault("forward_scheme", "http");
         Object portObj = settings.get("forward_port");
-        int defaultPort = "https".equals(scheme) ? 443 : 80;
-        int port = portObj instanceof Integer i ? i : defaultPort;
+        int port = portObj instanceof Integer i ? i : DefaultPorts.of(scheme);
 
         URI upstream;
         try {

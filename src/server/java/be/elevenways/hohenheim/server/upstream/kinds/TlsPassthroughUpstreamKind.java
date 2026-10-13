@@ -6,6 +6,7 @@ import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughProvider;
 import be.elevenways.hohenheim.server.sitetype.TlsPassthroughTarget;
 import be.elevenways.hohenheim.server.upstream.TenantUpstreams;
+import be.elevenways.protoblast.common.http.DefaultPorts;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.field.BooleanField;
@@ -33,7 +34,7 @@ public final class TlsPassthroughUpstreamKind implements TlsPassthroughProvider 
             .build());
 
     public static final IntegerField FORWARD_PORT = SETTINGS_SCHEMA.addField(
-        IntegerField.builder().name("forward_port").defaultValue(443).required()
+        IntegerField.builder().name("forward_port").defaultValue(DefaultPorts.of("https")).required()
             .validator(Range.of(1, 65535))
             .label(HohenheimMicrocopy.HOHENHEIM_FIELD.of("forward_port"))
             .help(HohenheimMicrocopy.HELP.of("tls_forward_port"))
@@ -73,7 +74,7 @@ public final class TlsPassthroughUpstreamKind implements TlsPassthroughProvider 
     @Override
     public TlsPassthroughTarget createTlsPassthroughTarget(Row site, Map<String, Object> settings) {
         String host = settings.get("forward_host") instanceof String value ? value : null;
-        int port = settings.get("forward_port") instanceof Integer value ? value : 443;
+        int port = settings.get("forward_port") instanceof Integer value ? value : DefaultPorts.of("https");
         int timeoutSeconds = settings.get("connect_timeout") instanceof Integer value ? value : 10;
         if (timeoutSeconds < 1 || timeoutSeconds > 300) {
             throw new IllegalArgumentException("Connect timeout must be between 1 and 300 seconds");
