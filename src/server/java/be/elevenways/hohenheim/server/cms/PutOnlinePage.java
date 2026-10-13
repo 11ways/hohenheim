@@ -202,9 +202,8 @@ public final class PutOnlinePage extends PanelPage {
                 }
                 vars.put("whatIcon", info.getIcon().name());
                 // A kind put online another way than its own card's is named as the chooser's card for that way.
-                String label = resolve(info.getLabel(), request);
                 boolean ownWay = reach == PutOnline.reachesOf(workload).getFirst();
-                vars.put("what", ownWay ? label : resolve(reach.cardLabel().withArg("kind", label), request));
+                vars.put("what", resolve(PutOnline.namedAs(workload, info.getLabel(), reach), request));
                 vars.put("whatDescription", resolve(ownWay ? info.getDescription() : reach.cardDescription(),
                     request));
             }

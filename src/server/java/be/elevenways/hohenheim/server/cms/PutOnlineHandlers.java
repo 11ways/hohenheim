@@ -455,7 +455,8 @@ final class PutOnlineHandlers {
         for (PublishedPort port : published) {
             hostPorts.add(port.hostPort() + "/" + port.protocol());
         }
-        call.reportStepDone(done("ports").withArg("ports", String.join(", ", hostPorts)));
+        call.reportStepDone(done("ports").withArg("ports", String.join(", ", hostPorts))
+            .withArg("count", hostPorts.size()));
     }
 
     /**
@@ -580,22 +581,22 @@ final class PutOnlineHandlers {
 
     /**
      * The first start, as the run's last step. A refusal (no admitted host, databases still provisioning) leaves the
-     * app for its page; an order that went out still waits for its certificate, so {@code note} says what follows.
+     * app for its page: the step is left undone with why, so the run reads as a success that still owes its start;
+     * an order that went out still waits for its certificate, so {@code note} says what follows.
      */
     private static void firstStart(@NonNull OperationCall<?, ?> call, int instanceId, @Nullable Microcopy note,
                                    @Nullable String hostname) {
-        Microcopy started;
         try {
             new InstanceService().deploy(instanceId, DeployTrigger.MANUAL);
-            call.reportOutcome(note != null ? note : message(hostname == null ? "running" : "live")
-                .withArg("address", hostname == null ? "" : hostname));
-            started = done("live");
         } catch (Violations | DomainRefusal notStarted) {
             Blast.log("PUT_ONLINE: first deploy of", instanceId, "did not start:", notStarted.getMessage());
             call.reportOutcome(message("not_started"));
-            started = done("live_waiting");
+            call.reportStepUndone(done("live_waiting"));
+            return;
         }
-        call.reportStepDone(started);
+        call.reportOutcome(note != null ? note : message(hostname == null ? "running" : "live")
+            .withArg("address", hostname == null ? "" : hostname));
+        call.reportStepDone(done("live"));
     }
 
     /**

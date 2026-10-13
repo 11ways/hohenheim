@@ -161,6 +161,8 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
                 .contains("data-hh-put-online-versions");
             assertThat(whatCard.split("<pl-list-item-meta", -1).length - 1)
                 .as("step 1c: in one meta line, beside the description").isEqualTo(1);
+            assertThat(whatCard).as("step 1c: a sentence, then its versions: no fact run, whose dot dangles at a wrap")
+                .doesNotContain("pl-facts");
         } finally {
             HardDeletes.row(Models.get(InstanceTemplateModel.class), starter);
         }

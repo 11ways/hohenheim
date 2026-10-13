@@ -182,7 +182,6 @@ public final class PutOnline {
     public static final StringField PORT_NAME = StringField.builder("name")
         .label(HohenheimMicrocopy.PUT_ONLINE.of("service_port_name"))
         .help(HohenheimMicrocopy.PUT_ONLINE.of("service_port_name_help"))
-        .placeholder("metrics")
         .build();
 
     public static final IntegerField PORT_CONTAINER = IntegerField.builder().name("container_port")
@@ -291,13 +290,13 @@ public final class PutOnline {
         .build();
 
     private static final FormSpec WORKLOAD_INPUT = FormSpec.builder()
-        .add(InstanceModel.NAME)
+        .add(InstanceTemplateOperations.NAME)
         .add(HOSTNAME)
         .add(declaredHostPick())
         .add(InstanceModel.KIND)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
         .add(httpsChoice())
-        .step(FormStep.of("where", STEP_WHERE, InstanceModel.NAME.getName(), HOSTNAME.getName(),
+        .step(FormStep.of("where", STEP_WHERE, InstanceTemplateOperations.NAME.getName(), HOSTNAME.getName(),
             InstanceTemplateOperations.SERVER_ID.getName(), InstanceModel.KIND.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_where_lead")))
         .step(FormStep.of("settings", STEP_OPTIONS, InstanceModel.SETTINGS.getName())
@@ -316,7 +315,7 @@ public final class PutOnline {
      * and the handler refuses an ISO for any other origin by name.
      */
     private static final FormSpec MACHINE_INPUT = FormSpec.builder()
-        .add(InstanceModel.NAME)
+        .add(InstanceTemplateOperations.NAME)
         .add(declaredHostPick())
         .add(InstanceModel.KIND)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
@@ -325,13 +324,13 @@ public final class PutOnline {
             .emptyReason(context -> InstallMedia.noneReason(null))
             .help(record -> HohenheimMicrocopy.INSTANCE_DEVICE.of("install_media_wizard_help"))
             .build())
-        .step(FormStep.of("where", STEP_WHERE, InstanceModel.NAME.getName(),
+        .step(FormStep.of("where", STEP_WHERE, InstanceTemplateOperations.NAME.getName(),
             InstanceTemplateOperations.SERVER_ID.getName(), InstanceModel.KIND.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_machine_where_lead")))
         .step(FormStep.of("settings", STEP_OPTIONS, InstanceModel.SETTINGS.getName(),
                 InstanceOperations.INSTALL_MEDIA.getName())
             .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_machine_settings_lead"))
-            .summarizedBy(PutOnline::kindSummary))
+            .summarizedBy(answers -> kindSummary(answers, PutOnlineReach.NONE)))
         .build();
 
     /**
@@ -344,20 +343,20 @@ public final class PutOnline {
      * row naming a port it already declares is refused (PutOnlineHandlers.servicePorts).
      */
     private static final FormSpec WORKLOAD_SERVICE_INPUT = FormSpec.builder()
-        .add(InstanceModel.NAME)
+        .add(InstanceTemplateOperations.NAME)
         .add(declaredHostPick())
         .add(InstanceModel.KIND)
         .add(FieldFormEntryRegistry.INSTANCE.deriveEntry(InstanceModel.SETTINGS))
         .add(SERVICE_PORTS)
         .add(GAME_ADDRESS)
-        .step(FormStep.of("where", STEP_WHERE, InstanceModel.NAME.getName(),
+        .step(FormStep.of("where", STEP_WHERE, InstanceTemplateOperations.NAME.getName(),
             InstanceTemplateOperations.SERVER_ID.getName(), InstanceModel.KIND.getName())
                 .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_service_where_lead")))
         .step(FormStep.of("settings", STEP_OPTIONS, InstanceModel.SETTINGS.getName())
             .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_settings_lead")))
         .step(FormStep.of(PORTS, STEP_PORTS, PORTS, GAME_ADDRESS.getName())
             .describe(HohenheimMicrocopy.PUT_ONLINE.of("step_service_ports_lead"))
-            .summarizedBy(PutOnline::kindSummary))
+            .summarizedBy(answers -> kindSummary(answers, PutOnlineReach.PORTS)))
         .build();
 
     /** The template's own create (named as its form names it), its address and its HTTPS choice. */
@@ -484,7 +483,8 @@ public final class PutOnline {
             .noSubject()
             .gate(OperationGate.open())
             .input(OperationInput.of(WORKLOAD_INPUT, Workload.class, values -> new Workload(
-                values.get(InstanceModel.NAME), values.get(HOSTNAME), values.get(InstanceTemplateOperations.SERVER_ID),
+                values.get(InstanceTemplateOperations.NAME), values.get(HOSTNAME),
+                values.get(InstanceTemplateOperations.SERVER_ID),
                 values.get(InstanceModel.KIND), RawValues.mapOrNull(values.get(InstanceModel.SETTINGS.getName())),
                 values.get(HTTPS))))
             .result(Integer.class)
@@ -504,7 +504,7 @@ public final class PutOnline {
             .noSubject()
             .gate(OperationGate.open())
             .input(OperationInput.of(MACHINE_INPUT, Machine.class, values -> new Machine(
-                values.get(InstanceModel.NAME), values.get(InstanceTemplateOperations.SERVER_ID),
+                values.get(InstanceTemplateOperations.NAME), values.get(InstanceTemplateOperations.SERVER_ID),
                 values.get(InstanceModel.KIND), RawValues.mapOrNull(values.get(InstanceModel.SETTINGS.getName())),
                 values.get(InstanceOperations.INSTALL_MEDIA))))
             .result(Integer.class)
@@ -526,7 +526,7 @@ public final class PutOnline {
             .noSubject()
             .gate(OperationGate.open())
             .input(OperationInput.of(WORKLOAD_SERVICE_INPUT, WorkloadService.class, values -> new WorkloadService(
-                values.get(InstanceModel.NAME), values.get(InstanceTemplateOperations.SERVER_ID),
+                values.get(InstanceTemplateOperations.NAME), values.get(InstanceTemplateOperations.SERVER_ID),
                 values.get(InstanceModel.KIND), RawValues.mapOrNull(values.get(InstanceModel.SETTINGS.getName())),
                 RawValues.list(values.get(PORTS)).stream().map(RawValues::map).toList(),
                 values.get(GAME_ADDRESS))))
@@ -577,6 +577,15 @@ public final class PutOnline {
     /** @return whether a kind with this stored id is put online from its own settings, reached this way */
     static boolean offeredWith(@Nullable String kind, @NonNull PutOnlineReach reach) {
         return reachesOf(kind).contains(reach);
+    }
+
+    /**
+     * @return a kind as a flow reaching it this way names it: its own label on its own way (its first reach), else
+     *         the chooser card's words for that way ("Docker container on its own ports")
+     */
+    static @NonNull Microcopy namedAs(@Nullable String kind, @NonNull Microcopy label, @NonNull PutOnlineReach reach) {
+        List<PutOnlineReach> reaches = reachesOf(kind);
+        return reaches.isEmpty() || reaches.getFirst() == reach ? label : reach.cardLabel().withArg("kind", label);
     }
 
     /** @return how a template's workload is reached, from its kind and its settings baseline */
@@ -655,18 +664,22 @@ public final class PutOnline {
     /** What a workload's HTTPS step shows of Where: its kind, its name and address, and where that points. */
     private static @NonNull List<SummaryLine> workloadSummary(@NonNull StepAnswers answers) {
         InstanceKindHandler handler = InstanceKinds.getHandler(answers.text(InstanceModel.KIND.getName()));
-        return servedSummary(handler == null ? null : handler.getLabel(), answers.text(InstanceModel.NAME.getName()),
-            answers.text(HOSTNAME.getName()), runsOnLine(answers));
+        return servedSummary(handler == null ? null : handler.getLabel(),
+            answers.text(InstanceTemplateOperations.NAME.getName()), answers.text(HOSTNAME.getName()),
+            runsOnLine(answers));
     }
 
-    /** What a kind-led step shows of Where: its kind, its name and where it runs. */
-    private static @NonNull List<SummaryLine> kindSummary(@NonNull StepAnswers answers) {
+    /** What a kind-led step shows of Where: the kind as this flow names it (the chooser's card), its name and host. */
+    private static @NonNull List<SummaryLine> kindSummary(@NonNull StepAnswers answers,
+                                                          @NonNull PutOnlineReach reach) {
         List<SummaryLine> lines = new ArrayList<>();
-        InstanceKindHandler handler = InstanceKinds.getHandler(answers.text(InstanceModel.KIND.getName()));
+        String kind = answers.text(InstanceModel.KIND.getName());
+        InstanceKindHandler handler = InstanceKinds.getHandler(kind);
         if (handler != null) {
-            lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_serves"), handler.getLabel()));
+            lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_serves"),
+                namedAs(kind, handler.getLabel(), reach)));
         }
-        String name = answers.text(InstanceModel.NAME.getName());
+        String name = answers.text(InstanceTemplateOperations.NAME.getName());
         if (name != null) {
             lines.add(new SummaryLine(HohenheimMicrocopy.PUT_ONLINE.of("summary_name"), Microcopy.literal(name)));
         }

@@ -189,6 +189,11 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
             .containsExactly("done_ports", "done_game_address", "done_live_waiting");
         assertThat(String.valueOf(Objects.requireNonNull(run.stepDetail(3)).args().get("address")))
             .as("step 3: the game address step names the address").isEqualTo(gameAddress);
+        assertThat(List.of(run.undone(4), run.leftAnyUndone()))
+            .as("step 3: the refused start reads as not done, and the run as a success that still owes its start")
+            .containsExactly(true, true);
+        assertThat(String.valueOf(Objects.requireNonNull(run.stepDetail(2)).args().get("count")))
+            .as("step 3: the ports line counts its ports, so one port reads in the singular").isEqualTo("1");
 
         // 4. Its settings name the host port the ledger claimed for the game port, a held public claim on its host.
         Row app = Models.get(InstanceModel.class).find().where(InstanceModel.NAME.eq(PREFIX + "survival")).first();
@@ -461,6 +466,10 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
             .doesNotContain("name=\"" + PutOnline.HOSTNAME.getName() + "\"");
         assertThat(wizard).as("step 2: the lead speaks of ports, never of a certificate")
             .contains("publishes its ports");
+        assertThat(wizard).as("step 2: the name entry is the one every flow shares")
+            .contains("Instance name");
+        assertThat(wizard).as("step 2: a port row's name is for Other only, never suggested on every row")
+            .doesNotContain("placeholder=\"metrics\"");
         assertThat(adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?workload=" + kind).body())
             .as("step 2: the same kind as a website keeps its HTTPS step").contains("data-zf-step=\"https\"");
 

@@ -24,9 +24,11 @@
     <pl-list-item>
         {% if whatIcon != "" %}<pl-icon slot="leading" name={% whatIcon %} data-hh-put-online-what-icon></pl-icon>{% /if %}
         <pl-list-item-title>{{ what }}</pl-list-item-title>
-        {#- ONE meta line: the row's grid has a single second row, so a second meta line would overlap the first. -#}
+        {#- ONE meta line: the row's grid has a single second row, so a second meta line would overlap the first. The
+            description is a sentence and the versions follow it as one, never a pl-facts run: its separator dot is
+            drawn after the description and dangles at the line's end once the versions wrap. -#}
         {% if whatDescription != "" || (versions != null && versions.size() > 0) %}
-        <pl-list-item-meta class="pl-facts">
+        <pl-list-item-meta>
             {% if whatDescription != "" %}<span>{{ whatDescription }}</span>{% /if %}
             {% if versions != null && versions.size() > 0 %}
             <span data-hh-put-online-versions>
