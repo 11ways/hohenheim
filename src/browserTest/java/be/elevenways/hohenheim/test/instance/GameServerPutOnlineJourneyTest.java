@@ -183,6 +183,12 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
             .containsExactly(true, false, false);
         assertThat(Objects.requireNonNull(run.outcome()).key()).as("step 3: its start was refused, and it says so")
             .isEqualTo("outcome_not_started");
+        assertThat(List.of(2, 3, 4).stream().map(run::stepDetail)
+                .map(line -> line == null ? "none" : line.key()).toList())
+            .as("step 3: the ports, the game address and the start each leave their line on the run")
+            .containsExactly("done_ports", "done_game_address", "done_live_waiting");
+        assertThat(String.valueOf(Objects.requireNonNull(run.stepDetail(3)).args().get("address")))
+            .as("step 3: the game address step names the address").isEqualTo(gameAddress);
 
         // 4. Its settings name the host port the ledger claimed for the game port, a held public claim on its host.
         Row app = Models.get(InstanceModel.class).find().where(InstanceModel.NAME.eq(PREFIX + "survival")).first();

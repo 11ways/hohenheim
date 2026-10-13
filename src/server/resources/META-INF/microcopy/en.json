@@ -18012,5 +18012,13 @@
     {"scope": "help", "text": "A name in a zone Hohenheim manages, such as mc.example.com: it points at this host and gets an SRV record for the game port. Empty: no game address, and its records go."}
   ],
   "port_spec_invalid": {"scope": "violations", "text": "Port {$name} is not written as [host port:]container port/protocol: {$spec}."},
-  "game_address_no_zone": {"scope": "violations", "text": "No zone Hohenheim manages covers {$address}. Add the zone under DNS first, or leave the game address empty."}
+  "game_address_no_zone": {"scope": "violations", "text": "No zone Hohenheim manages covers {$address}. Add the zone under DNS first, or leave the game address empty."},
+  "done_app": {"scope": "put_online", "text": "{$what}, on {$host}"},
+  "done_ports": {"scope": "put_online", "text": "On host ports {$ports}"},
+  "done_game_address": {"scope": "put_online", "text": "{$address} points here, with its SRV record"},
+  "done_website": {"scope": "put_online", "text": "Answers at {$address}"},
+  "done_certificate": {"scope": "put_online", "text": "Ordered from Let's Encrypt for {$address}"},
+  "done_live": {"scope": "put_online", "text": "Its first start went out to its host"},
+  "done_live_waiting": {"scope": "put_online", "text": "Not started yet: the app's page says what it waits for"},
+  "put_something_else": {"scope": "put_online", "text": "Put something else online"}
 }

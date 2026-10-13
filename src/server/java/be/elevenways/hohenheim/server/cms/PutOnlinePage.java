@@ -65,12 +65,16 @@ public final class PutOnlinePage extends PanelPage {
     /** The chooser's "Point an address somewhere else" group, as a fragment a link can scroll to. */
     public static final String ADDRESSES_ANCHOR = "put-online-" + PutOnlineGroup.ADDRESS.token();
 
+    /** Every put-online run's page also offers starting over at the chooser (board Online-4). */
+    private static final Microcopy PUT_SOMETHING_ELSE = HohenheimMicrocopy.PUT_ONLINE.of("put_something_else");
+
     /** A template, put online with its address and certificate. */
     public static final PanelAction<Row> FROM_TEMPLATE = PanelAction.<Row, Integer>placesRun(PutOnline.PUT_ONLINE,
             ActionPlacement.PAGE)
         .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
         .selectedBy(HohenheimParams.FROM_TEMPLATE_TEMPLATE.getName())
         .fixed((template, request) -> fixed(request.access()))
+        .offersAnotherRun(PUT_SOMETHING_ELSE, PutOnlinePage::chooser)
         .build();
 
     /** A template reached on its ports (a game server), put online with its ports and its game address. */
@@ -79,6 +83,7 @@ public final class PutOnlinePage extends PanelPage {
         .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
         .selectedBy(HohenheimParams.FROM_TEMPLATE_TEMPLATE.getName())
         .fixed((template, request) -> serviceFixed(request.access()))
+        .offersAnotherRun(PUT_SOMETHING_ELSE, PutOnlinePage::chooser)
         .build();
 
     /** An address that needs no workload: a redirect, an existing service, static files, TLS passthrough. */
@@ -87,6 +92,7 @@ public final class PutOnlinePage extends PanelPage {
         .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
         // The chooser already answered what it serves: the kind rides the form as transport, never asked again.
         .transport(SiteModel.UPSTREAM_KIND.getName())
+        .offersAnotherRun(PUT_SOMETHING_ELSE, PutOnlinePage::chooser)
         .build();
 
     /** A workload of one kind, put online from that kind's own settings with its address and certificate. */
@@ -95,6 +101,7 @@ public final class PutOnlinePage extends PanelPage {
         .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
         // The chooser already answered which kind: it rides the form as transport, never asked again.
         .transport(InstanceModel.KIND.getName())
+        .offersAnotherRun(PUT_SOMETHING_ELSE, PutOnlinePage::chooser)
         .build();
 
     /** A service of one kind, put online from that kind's own settings and reached on the ports it publishes. */
@@ -102,6 +109,7 @@ public final class PutOnlinePage extends PanelPage {
             PutOnline.PUT_WORKLOAD_SERVICE_ONLINE, ActionPlacement.PAGE)
         .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
         .transport(InstanceModel.KIND.getName())
+        .offersAnotherRun(PUT_SOMETHING_ELSE, PutOnlinePage::chooser)
         .build();
 
     /**
@@ -115,6 +123,7 @@ public final class PutOnlinePage extends PanelPage {
             ? HohenheimSlugs.Tab.FRAMEBUFFER : null)
         .confirmation(ConfirmationSpec.generic(HohenheimMicrocopy.PUT_ONLINE.of("finish"), false))
         .transport(InstanceModel.KIND.getName())
+        .offersAnotherRun(PUT_SOMETHING_ELSE, PutOnlinePage::chooser)
         .build();
 
     /** The journey's steps on other pages: the chooser before the wizard, the run page after it. */
@@ -133,6 +142,11 @@ public final class PutOnlinePage extends PanelPage {
     public @NonNull List<PanelAction<Row>> actions() {
         return List.of(FROM_TEMPLATE, FROM_SERVICE_TEMPLATE, (PanelAction) ADDRESS, (PanelAction) WORKLOAD,
             (PanelAction) WORKLOAD_SERVICE, (PanelAction) MACHINE);
+    }
+
+    /** @return the chooser, where putting something else online starts */
+    private static @NonNull RouteTarget chooser(@NonNull PanelRequest request) {
+        return CmsRoutes.list(request.panelSlug(), HohenheimSlugs.PUT_ONLINE);
     }
 
     @Override

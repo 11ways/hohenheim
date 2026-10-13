@@ -18012,5 +18012,13 @@
     {"scope": "help", "text": "Een naam in een zone die Hohenheim beheert, zoals mc.example.com: die wijst naar deze host en krijgt een SRV-record voor de spelpoort. Leeg: geen speladres, en zijn records verdwijnen."}
   ],
   "port_spec_invalid": {"scope": "violations", "text": "Poort {$name} is niet geschreven als [hostpoort:]containerpoort/protocol: {$spec}."},
-  "game_address_no_zone": {"scope": "violations", "text": "Geen zone die Hohenheim beheert omvat {$address}. Voeg de zone eerst toe onder DNS, of laat het speladres leeg."}
+  "game_address_no_zone": {"scope": "violations", "text": "Geen zone die Hohenheim beheert omvat {$address}. Voeg de zone eerst toe onder DNS, of laat het speladres leeg."},
+  "done_app": {"scope": "put_online", "text": "{$what}, op {$host}"},
+  "done_ports": {"scope": "put_online", "text": "Op hostpoorten {$ports}"},
+  "done_game_address": {"scope": "put_online", "text": "{$address} wijst hierheen, met zijn SRV-record"},
+  "done_website": {"scope": "put_online", "text": "Bereikbaar op {$address}"},
+  "done_certificate": {"scope": "put_online", "text": "Aangevraagd bij Let's Encrypt voor {$address}"},
+  "done_live": {"scope": "put_online", "text": "De eerste start is naar zijn host gestuurd"},
+  "done_live_waiting": {"scope": "put_online", "text": "Nog niet gestart: de pagina van de app zegt waarop het wacht"},
+  "put_something_else": {"scope": "put_online", "text": "Iets anders online zetten"}
 }

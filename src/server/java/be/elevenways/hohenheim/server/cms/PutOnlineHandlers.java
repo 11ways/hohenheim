@@ -6,6 +6,8 @@ import be.elevenways.hohenheim.app.PutOnlineReach;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.instance.InstanceKindInfo;
+import be.elevenways.hohenheim.instance.InstanceKindRegistry;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
@@ -24,8 +26,8 @@ import be.elevenways.hohenheim.server.instance.InstanceTemplates;
 import be.elevenways.hohenheim.server.upstream.kinds.InstanceUpstreamKind;
 import be.elevenways.hohenheim.site.SiteOperations;
 import be.elevenways.protoblast.common.Blast;
-import be.elevenways.protoblast.common.async.ProgressSink;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
@@ -340,13 +342,12 @@ final class PutOnlineHandlers {
     private static @NonNull Integer putOnline(@NonNull OperationCall<Row, PutOnline.FromTemplate> call) {
         PutOnline.FromTemplate input = Objects.requireNonNull(call.input(), "put online has its input");
         Row template = call.subject();
-        ProgressSink progress = call.progress();
 
         // 1. The app: the template's own create funnel (quota, placement, databases, variables).
         int instanceId = createApp(call, template, input.create());
         Row instance = Objects.requireNonNull(Models.get(InstanceModel.class).findById(instanceId), "the new app");
         call.attachSubject(InstanceOperations.INSTANCE, instance);
-        progress.reportProgressPart();
+        call.reportStepDone(appDone(String.valueOf((Object) template.get(InstanceTemplateModel.NAME)), instance));
 
         // 2. Its install step, when the template declares one.
         installStep(call, template, instanceId);
@@ -393,7 +394,7 @@ final class PutOnlineHandlers {
         int instanceId = createApp(call, template, input.create());
         Row instance = Objects.requireNonNull(Models.get(InstanceModel.class).findById(instanceId), "the new app");
         call.attachSubject(InstanceOperations.INSTANCE, instance);
-        call.progress().reportProgressPart();
+        call.reportStepDone(appDone(String.valueOf((Object) template.get(InstanceTemplateModel.NAME)), instance));
         installStep(call, template, instanceId);
         publishPorts(call, instance, chosenPorts(template, input.ports()));
         gameAddressStep(call, instanceId, input.game_address());
@@ -413,7 +414,7 @@ final class PutOnlineHandlers {
         } catch (Violations refused) {
             throw refusedAs("game address", refused);
         }
-        call.progress().reportProgressPart();
+        call.reportStepDone(done("game_address").withArg("address", gameAddress));
     }
 
     /**
@@ -450,7 +451,11 @@ final class PutOnlineHandlers {
         } catch (Violations refused) {
             throw refusedAs("ports", refused);
         }
-        call.progress().reportProgressPart();
+        List<String> hostPorts = new ArrayList<>();
+        for (PublishedPort port : published) {
+            hostPorts.add(port.hostPort() + "/" + port.protocol());
+        }
+        call.reportStepDone(done("ports").withArg("ports", String.join(", ", hostPorts)));
     }
 
     /**
@@ -543,7 +548,8 @@ final class PutOnlineHandlers {
             throw refusedAs("app", refused);
         }
         call.attachSubject(InstanceOperations.INSTANCE, instance);
-        call.progress().reportProgressPart();
+        InstanceKindInfo info = InstanceKindRegistry.REGISTRY.get(Identifier.tryParse(String.valueOf(kindId)));
+        call.reportStepDone(appDone(info == null ? String.valueOf(kindId) : info.getLabel(), instance));
         return instance;
     }
 
@@ -556,15 +562,14 @@ final class PutOnlineHandlers {
     private static @NonNull Integer goLive(@NonNull OperationCall<?, ?> call, @NonNull Row instance,
                                            @Nullable String address, @Nullable String https) {
         int instanceId = instance.get(InstanceModel.ID);
-        ProgressSink progress = call.progress();
         String hostname = Texts.trimmedOrNull(address);
         Microcopy note = null;
         if (hostname != null) {
             String name = String.valueOf((Object) instance.get(InstanceModel.NAME));
             createWebsite(name, hostname, InstanceUpstreamKind.ID.toString(), instanceId, Map.of());
-            progress.reportProgressPart();
+            call.reportStepDone(done("website").withArg("address", hostname));
             note = certificate(hostname, https, call.subjectAccess());
-            certificateStep(call, note);
+            certificateStep(call, note, hostname);
         } else {
             call.reportStepSkipped();
             call.reportStepSkipped();
@@ -579,15 +584,18 @@ final class PutOnlineHandlers {
      */
     private static void firstStart(@NonNull OperationCall<?, ?> call, int instanceId, @Nullable Microcopy note,
                                    @Nullable String hostname) {
+        Microcopy started;
         try {
             new InstanceService().deploy(instanceId, DeployTrigger.MANUAL);
             call.reportOutcome(note != null ? note : message(hostname == null ? "running" : "live")
                 .withArg("address", hostname == null ? "" : hostname));
+            started = done("live");
         } catch (Violations | DomainRefusal notStarted) {
             Blast.log("PUT_ONLINE: first deploy of", instanceId, "did not start:", notStarted.getMessage());
             call.reportOutcome(message("not_started"));
+            started = done("live_waiting");
         }
-        call.progress().reportProgressPart();
+        call.reportStepDone(started);
     }
 
     /**
@@ -597,22 +605,22 @@ final class PutOnlineHandlers {
      */
     private static @NonNull Integer putAddressOnline(@NonNull OperationCall<Void, PutOnline.Address> call) {
         PutOnline.Address input = Objects.requireNonNull(call.input(), "put online has its input");
-        ProgressSink progress = call.progress();
         String hostname = Objects.requireNonNull(Texts.trimmedOrNull(input.hostname()), "admitted with an address");
         int siteId = createWebsite(input.name(), hostname, Objects.requireNonNull(input.upstream_kind()), null,
             input.settings() == null ? Map.of() : input.settings());
         call.attachSubject(SiteOperations.SITE, Objects.requireNonNull(Models.get(SiteModel.class).findById(siteId)));
-        progress.reportProgressPart();
+        call.reportStepDone(done("website").withArg("address", hostname));
         Microcopy note = certificate(hostname, input.https(), call.subjectAccess());
         call.reportOutcome(note != null ? note : message("live").withArg("address", hostname));
-        certificateStep(call, note);
+        certificateStep(call, note, hostname);
         return siteId;
     }
 
     /** The certificate step: done when the order went out, skipped when HTTPS waits ({@code note} says why). */
-    private static void certificateStep(@NonNull OperationCall<?, ?> call, @Nullable Microcopy note) {
+    private static void certificateStep(@NonNull OperationCall<?, ?> call, @Nullable Microcopy note,
+                                        @NonNull String hostname) {
         if (note == null) {
-            call.progress().reportProgressPart();
+            call.reportStepDone(done("certificate").withArg("address", hostname));
         } else {
             call.reportStepSkipped();
         }
@@ -683,5 +691,19 @@ final class PutOnlineHandlers {
 
     private static @NonNull Microcopy message(@NonNull String key) {
         return HohenheimMicrocopy.PUT_ONLINE.of("outcome_" + key);
+    }
+
+    /**
+     * The line a finished step leaves on the run page: Microcopy resolved in each viewer's locale, the names it
+     * carries (a template, a host, an address) plain arguments.
+     */
+    private static @NonNull Microcopy done(@NonNull String key) {
+        return HohenheimMicrocopy.PUT_ONLINE.of("done_" + key);
+    }
+
+    /** @param what the template's name, or the kind's label for an app made from a kind's own settings */
+    private static @NonNull Microcopy appDone(@NonNull Object what, @NonNull Row instance) {
+        return done("app").withArg("what", what)
+            .withArg("host", ServerModel.canonicalNameOf(instance.get(InstanceModel.SERVER_ID)));
     }
 }

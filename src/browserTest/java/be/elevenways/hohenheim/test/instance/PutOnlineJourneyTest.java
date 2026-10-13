@@ -17,6 +17,7 @@ import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.time.Now;
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.GrantService;
@@ -237,6 +238,25 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         assertThat(Models.get(SiteDomainModel.class).find()
                 .where(SiteDomainModel.HOSTNAME.eq("shop." + PREFIX + "test"))
             .first()).as("step 3: on the address given").isNotNull();
+
+        // 3a. Each step the run did leaves its line, stored with the run: the app names its template and its host,
+        //     the website its address. The run's page draws them under the done steps, beside "Put something else
+        //     online", which leads back to the chooser.
+        Microcopy appLine = Objects.requireNonNull(run.stepDetail(0), "step 3a: the app step's line");
+        assertThat(appLine.key()).as("step 3a: the app step says what was made, and where").isEqualTo("done_app");
+        assertThat(List.of(String.valueOf(appLine.args().get("what")), String.valueOf(appLine.args().get("host"))))
+            .as("step 3a: the template's name and the host it runs on")
+            .containsExactly(PREFIX + "shop", ServerModel.canonicalNameOf(app.get(InstanceModel.SERVER_ID)));
+        assertThat(run.stepDetail(3)).as("step 3a: the skipped certificate step left no line").isNull();
+        String runPage = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "/run/" + run.id()).body();
+        assertThat(runPage).as("step 3a: the run page draws the app step's line under it")
+            .contains("data-cms-run-step-detail")
+            .contains(PREFIX + "shop, on " + ServerModel.canonicalNameOf(app.get(InstanceModel.SERVER_ID)))
+            .contains("Answers at shop." + PREFIX + "test");
+        assertThat(runPage).as("step 3a: and offers putting something else online, at the chooser")
+            .contains("data-cms-operation-run-another")
+            .contains("href=\"/admin/" + HohenheimSlugs.PUT_ONLINE + "\"")
+            .contains("Put something else online");
 
         // 4. A redirect needs no workload: one run creates only its website and address.
         Map<String, Object> redirect = new LinkedHashMap<>();
