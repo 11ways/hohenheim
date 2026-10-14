@@ -119,12 +119,11 @@ public final class UploadedCertificates {
                 chain.add((X509Certificate) certificate);
             }
         } catch (Exception unreadable) {
-            throw Violations.ofField(CERTIFICATE_FIELD, null, HohenheimMicrocopy.VIOLATIONS.of("cert_pem_invalid")
-                .withArg("detail", String.valueOf(unreadable.getMessage())));
+            // The parser's own words name its internals, never what to paste: the refusal says that instead.
+            throw Violations.ofField(CERTIFICATE_FIELD, null, HohenheimMicrocopy.VIOLATIONS.of("cert_pem_invalid"));
         }
         if (chain.isEmpty()) {
-            throw Violations.ofField(CERTIFICATE_FIELD, null, HohenheimMicrocopy.VIOLATIONS.of("cert_pem_invalid")
-                .withArg("detail", "no certificate"));
+            throw Violations.ofField(CERTIFICATE_FIELD, null, HohenheimMicrocopy.VIOLATIONS.of("cert_pem_invalid"));
         }
         return chain;
     }
@@ -134,9 +133,8 @@ public final class UploadedCertificates {
         if (pem == null || pem.isBlank()) {
             throw Violations.ofField(KEY_FIELD, null, HohenheimMicrocopy.VIOLATIONS.of("key_pem_required"));
         }
-        Object read;
         try (PEMParser parser = new PEMParser(new StringReader(pem))) {
-            read = parser.readObject();
+            Object read = parser.readObject();
             JcaPEMKeyConverter converter = new JcaPEMKeyConverter();
             if (read instanceof PEMKeyPair pair) {
                 return converter.getKeyPair(pair).getPrivate();
@@ -145,12 +143,10 @@ public final class UploadedCertificates {
                 return converter.getPrivateKey(info);
             }
         } catch (Exception unreadable) {
-            throw Violations.ofField(KEY_FIELD, null, HohenheimMicrocopy.VIOLATIONS.of("key_pem_invalid")
-                .withArg("detail", String.valueOf(unreadable.getMessage())));
+            throw Violations.ofField(KEY_FIELD, null, HohenheimMicrocopy.VIOLATIONS.of("key_pem_invalid"));
         }
         // Never quote the PEM: a certificate pasted into the key field must not be echoed, nor a key anywhere.
-        throw Violations.ofField(KEY_FIELD, null, HohenheimMicrocopy.VIOLATIONS.of("key_pem_invalid")
-            .withArg("detail", read == null ? "no private key" : "not a private key"));
+        throw Violations.ofField(KEY_FIELD, null, HohenheimMicrocopy.VIOLATIONS.of("key_pem_invalid"));
     }
 
     /** Whether the private key signs what the certificate's public key verifies. */

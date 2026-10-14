@@ -368,6 +368,11 @@ final class PutOnlineHandlers {
             return new DomainRefusal(ZenitRefusalReason.INVALID, "kind " + input.upstream_kind() + " is no app",
                 SiteModel.UPSTREAM_KIND.getName(), message("kind_not_offered"));
         }
+        // The rule the site's write and the route loader ask too: a passthrough site never decrypts, so no access list.
+        Violations gated = SiteModel.httpGateRefusal(input.upstream_kind(), null, input.httpsAnswer().accessListId());
+        if (gated != null) {
+            return refusedAs("access list", gated);
+        }
         return httpsRefusal(input.hostname(), input.httpsAnswer(), access);
     }
 
@@ -699,7 +704,10 @@ final class PutOnlineHandlers {
             input.settings() == null ? Map.of() : input.settings(), input.httpsAnswer().accessListId());
         call.attachSubject(SiteOperations.SITE, Objects.requireNonNull(Models.get(SiteModel.class).findById(siteId)));
         call.reportStepDone(done("website").withArg("address", hostname));
-        Microcopy note = certificate(hostname, input.httpsAnswer(), call.subjectAccess());
+        // A passthrough site's backend answers TLS with its own certificate: the proxy orders or stores none for it.
+        Microcopy note = SiteModel.terminatesTls(input.upstream_kind())
+            ? certificate(hostname, input.httpsAnswer(), call.subjectAccess())
+            : message("https_passthrough_note").withArg("address", hostname);
         call.reportOutcome(note != null ? note : message("live").withArg("address", hostname));
         certificateStep(call, note, hostname, input.httpsAnswer());
         return siteId;

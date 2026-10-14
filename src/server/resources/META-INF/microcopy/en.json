@@ -8,7 +8,7 @@
     "scope": "violations"
   },
   "cert_pem_invalid": {
-    "text": "Invalid certificate PEM: {$detail}",
+    "text": "This is not a readable certificate. Paste the -----BEGIN CERTIFICATE----- blocks, the server certificate first.",
     "scope": "violations"
   },
   "database_already_attached": {
@@ -75,7 +75,7 @@
     "scope": "violations"
   },
   "key_pem_invalid": {
-    "text": "Invalid private key PEM: {$detail}",
+    "text": "This is not a readable private key. Paste the -----BEGIN PRIVATE KEY----- block that belongs to the certificate.",
     "scope": "violations"
   },
   "local_server_immutable": {
@@ -4387,7 +4387,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "The PEM-encoded private key matching the certificate. Stored as a secret; when editing an existing certificate, leave it blank to keep the stored key.",
+      "text": "The PEM-encoded private key that belongs to the certificate. It is stored encrypted.",
       "scope": "help"
     }
   ],
@@ -15339,6 +15339,14 @@
   },
   "outcome_https_refused_note": {
     "text": "Live at {$address} over HTTP. The certificate request was refused; request it again from the address once it points here.",
+    "scope": "put_online"
+  },
+  "outcome_https_passthrough_note": {
+    "text": "Live at {$address}. Its TLS passes through untouched, so its own server's certificate answers and Hohenheim orders none.",
+    "scope": "put_online"
+  },
+  "access_list_none": {
+    "text": "No access lists yet. Make one under Access; you can pick it on the site later.",
     "scope": "put_online"
   },
   "outcome_address_required": {

@@ -106,8 +106,9 @@ public final class PutOnline {
         .placeholder("shop.example.com")
         .build();
 
+    /** The certificate card the step opens on: Automatic, the choice that needs nothing more from the operator. */
     public static final StringField HTTPS = StringField.builder("https")
-        .label(HohenheimMicrocopy.PUT_ONLINE.of("certificate")).build();
+        .label(HohenheimMicrocopy.PUT_ONLINE.of("certificate")).defaultValue(HTTPS_AUTOMATIC).build();
 
     /**
      * The access list the new website follows, from the lists Hohenheim already has (their IP/CIDR rules and HTTP
@@ -115,6 +116,7 @@ public final class PutOnline {
      */
     static final RelationPick ACCESS_LIST = RelationPick.of(SiteModel.ACCESS_LIST_ID, AccessListModel.MODEL_ID)
         .creatable(false)
+        .emptyReason(context -> HohenheimMicrocopy.PUT_ONLINE.of("access_list_none"))
         .build();
 
     /** The host ports a service's declared ports are published on, one entry per declared port (per template). */

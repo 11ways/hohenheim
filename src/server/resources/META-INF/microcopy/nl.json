@@ -8,7 +8,7 @@
     "scope": "violations"
   },
   "cert_pem_invalid": {
-    "text": "Ongeldig certificaat-PEM: {$detail}",
+    "text": "Dit is geen leesbaar certificaat. Plak de -----BEGIN CERTIFICATE----- blokken, het servercertificaat eerst.",
     "scope": "violations"
   },
   "database_already_attached": {
@@ -75,7 +75,7 @@
     "scope": "violations"
   },
   "key_pem_invalid": {
-    "text": "Ongeldig private-sleutel-PEM: {$detail}",
+    "text": "Dit is geen leesbare privesleutel. Plak het -----BEGIN PRIVATE KEY----- blok dat bij het certificaat hoort.",
     "scope": "violations"
   },
   "local_server_immutable": {
@@ -4387,7 +4387,7 @@
       "scope": "hohenheim_field"
     },
     {
-      "text": "De PEM-gecodeerde privé-sleutel die bij het certificaat hoort. Opgeslagen als geheim; laat bij het bewerken van een bestaand certificaat leeg om de opgeslagen sleutel te behouden.",
+      "text": "De PEM-gecodeerde privesleutel die bij het certificaat hoort. Ze wordt versleuteld opgeslagen.",
       "scope": "help"
     }
   ],
@@ -15339,6 +15339,14 @@
   },
   "outcome_https_refused_note": {
     "text": "Online op {$address} via HTTP. De certificaataanvraag werd geweigerd; vraag het opnieuw aan vanaf het adres zodra het hierheen wijst.",
+    "scope": "put_online"
+  },
+  "outcome_https_passthrough_note": {
+    "text": "Online op {$address}. Het TLS-verkeer gaat onaangeroerd door, dus het certificaat van de eigen server antwoordt en Hohenheim vraagt er geen aan.",
+    "scope": "put_online"
+  },
+  "access_list_none": {
+    "text": "Nog geen toegangslijsten. Maak er een onder Toegang; je kunt ze later op de site kiezen.",
     "scope": "put_online"
   },
   "outcome_address_required": {

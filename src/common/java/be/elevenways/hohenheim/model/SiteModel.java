@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import be.elevenways.zenit.common.validation.Violations;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 public class SiteModel extends Model {
 
@@ -293,9 +294,36 @@ public class SiteModel extends Model {
         }
     }
 
+    /** @return whether Hohenheim's proxy decrypts a site of this upstream kind; a TLS passthrough site hands it on */
+    public static boolean terminatesTls(@Nullable Object upstreamKind) {
+        return !UPSTREAM_TLS_PASSTHROUGH.equals(upstreamKind);
+    }
+
     /**
-     * A TLS passthrough site never decrypts, so it can carry no HTTP login gate or access
-     * list, and none of its domain rows an HTTP-only option.
+     * THE rule that a site whose proxy never decrypts carries no HTTP gate: the write hook below, the route loader
+     * (TlsPassthroughRoutes) and the put-online wizard's request all ask it, so none of them words its own copy.
+     *
+     * @return the refusal on the gate's field, null when a site of this kind may carry the gates given
+     */
+    public static @Nullable Violations httpGateRefusal(@Nullable Object upstreamKind, @Nullable Object authProvider,
+                                                       @Nullable Object accessList) {
+        if (terminatesTls(upstreamKind)) {
+            return null;
+        }
+        if (authProvider != null) {
+            return Violations.ofField("auth_provider_id", authProvider,
+                HohenheimMicrocopy.VIOLATIONS.of("tls_passthrough_no_http_auth"));
+        }
+        if (accessList != null) {
+            return Violations.ofField("access_list_id", accessList,
+                HohenheimMicrocopy.VIOLATIONS.of("tls_passthrough_no_access_list"));
+        }
+        return null;
+    }
+
+    /**
+     * A TLS passthrough site never decrypts, so it can carry no HTTP login gate or access list ({@link
+     * #httpGateRefusal}), and none of its domain rows an HTTP-only option.
      *
      * @throws Violations {@code tls_passthrough_no_http_auth}, {@code tls_passthrough_no_access_list}
      *         or a domain row's own passthrough refusal
@@ -306,16 +334,12 @@ public class SiteModel extends Model {
         if (row == null || !(row.has(UPSTREAM_KIND.getName()) || row.has(AUTH_PROVIDER_ID.getName())
                 || row.has(ACCESS_LIST_ID.getName()))) return;
         Row stored = StoredRows.of(Models.get(SiteModel.class), row);
-        if (!UPSTREAM_TLS_PASSTHROUGH.equals(row.afterWrite(UPSTREAM_KIND, stored))) return;
-        Object authProvider = row.afterWrite(AUTH_PROVIDER_ID, stored);
-        if (authProvider != null) {
-            throw Violations.ofField("auth_provider_id", authProvider,
-                HohenheimMicrocopy.VIOLATIONS.of("tls_passthrough_no_http_auth"));
-        }
-        Object accessList = row.afterWrite(ACCESS_LIST_ID, stored);
-        if (accessList != null) {
-            throw Violations.ofField("access_list_id", accessList,
-                HohenheimMicrocopy.VIOLATIONS.of("tls_passthrough_no_access_list"));
+        Object kind = row.afterWrite(UPSTREAM_KIND, stored);
+        if (terminatesTls(kind)) return;
+        Violations refused = httpGateRefusal(kind, row.afterWrite(AUTH_PROVIDER_ID, stored),
+            row.afterWrite(ACCESS_LIST_ID, stored));
+        if (refused != null) {
+            throw refused;
         }
         Integer id = row.has(ID.getName()) ? row.get(ID) : null;
         if (id != null) {

@@ -7,6 +7,7 @@ import be.elevenways.hohenheim.model.AccessRuleModel;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.SiteModel;
 import be.elevenways.hohenheim.server.cms.PutOnline;
+import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.proxy.ProxyServer;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.ProxyTestSupport;
@@ -18,6 +19,8 @@ import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.refusal.DomainRefusal;
+import be.elevenways.zenit.common.validation.Violation;
+import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.operation.OperationRunStatus;
 import be.elevenways.zenit.server.http.RateLimitMiddleware;
@@ -53,6 +56,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
 /**
@@ -142,6 +146,12 @@ class PutOnlineHttpsJourneyTest extends HohenheimTestBase {
         X509Certificate elsewhere = issue("other.example", leafKeys, ca, caKeys.getPrivate(), 0, 90, false);
         assertUploadRefused("step 4d: a certificate for another name", pem(elsewhere) + pem(ca), keyPem(leafKeys),
             "certificate_pem", "cert_not_covering");
+        DomainRefusal unreadable = refusal(redirect("refused", "up." + DOMAIN, "upload", goodChain,
+            "-----BEGIN PRIVATE KEY-----\nbm90IGEga2V5\n-----END PRIVATE KEY-----\n", null));
+        assertThat(List.of(String.valueOf(unreadable.field()), Objects.requireNonNull(unreadable.words()).key(),
+                String.valueOf(unreadable.words().args().get("detail"))))
+            .as("step 4e: a key that does not parse is refused in words, never in the parser's")
+            .containsExactly("private_key_pem", "key_pem_invalid", "null");
 
         // 5. The right chain and key: the run stores the certificate (provider "uploaded", its names and expiry read
         //    from it), and its step says so.
@@ -187,6 +197,67 @@ class PutOnlineHttpsJourneyTest extends HohenheimTestBase {
             .as("step 6: THE ASSERTION, the proxy refuses the denied network").contains(" 403 ");
         assertThat(ProxyTestSupport.rawRequest(port, "open.r3b-acl.test", "/"))
             .as("step 6: the twin without a list redirects").contains(" 301 ").contains("https://target.example/");
+    }
+
+    @Test
+    void aTlsPassthroughAddressIsRefusedAnAccessListUpFrontInTheWizardAndOnTheSiteForm() throws Exception {
+        AccessContext operator = TenantConduits.operator();
+        Row list = Models.get(AccessListModel.class).createEmptyRow();
+        list.set(AccessListModel.NAME, "r3b passthrough list");
+        list.set(AccessListModel.SATISFY, AccessListModel.SATISFY_ALL);
+        Models.get(AccessListModel.class).save(list);
+        Integer listId = list.get(AccessListModel.ID);
+
+        // 1. The wizard refuses a TLS passthrough address with an access list in the request, on the list's pick and
+        //    in the words the site's own write uses: no run is recorded and no site exists.
+        DomainRefusal gated = refusal(passthrough("pass-gated", "gated.r3b-pass.test", listId));
+        assertThat(List.of(String.valueOf(gated.field()), Objects.requireNonNull(gated.words()).key()))
+            .as("step 1: refused on the access list, before any run")
+            .containsExactly(SiteModel.ACCESS_LIST_ID.getName(), "tls_passthrough_no_access_list");
+        assertThat(Models.get(SiteModel.class).find().where(SiteModel.NAME.eq("r3b-pass-gated")).first())
+            .as("step 1: nothing was created").isNull();
+
+        // 2. Without the list it goes live; Automatic orders nothing for it, since its backend answers TLS itself.
+        OperationRun live = run(passthrough("pass-open", "open.r3b-pass.test", null), operator);
+        assertThat(live.status()).as("step 2: the run succeeded (%s)", live.outcome())
+            .isEqualTo(OperationRunStatus.SUCCEEDED);
+        assertThat(Objects.requireNonNull(live.outcome()).key())
+            .as("step 2: its words say the backend's certificate answers")
+            .isEqualTo("outcome_https_passthrough_note");
+        Row site = Models.get(SiteModel.class).find().where(SiteModel.NAME.eq("r3b-pass-open")).first();
+        assertThat(site).as("step 2: the site exists").isNotNull();
+
+        // 3. The site form refuses the same list on the same pick, through the same rule.
+        Map<String, Object> edit = new LinkedHashMap<>();
+        edit.put(SiteModel.NAME.getName(), "r3b-pass-open");
+        edit.put(SiteModel.UPSTREAM_KIND.getName(), SiteModel.UPSTREAM_TLS_PASSTHROUGH);
+        edit.put(SiteModel.SETTINGS.getName(), Map.of("forward_host", "127.0.0.1", "forward_port", 8443,
+            "connect_timeout", 10));
+        edit.put(SiteModel.ENABLED.getName(), true);
+        edit.put(SiteModel.ACCESS_LIST_ID.getName(), listId);
+        Throwable refused = catchThrowable(() -> OperationPipeline.invoke(
+            OperationRequest.of(SiteWrites.UPDATE, CmsPlacementSurface.ADMIN_ACTION).caller(operator)
+                .subjects(List.of(site)).form(edit)));
+        assertThat(refused).as("step 3: the site form refuses the list").isInstanceOf(Violations.class);
+        Violation first = ((Violations) refused).all().getFirst();
+        assertThat(List.of(first.fieldName(), first.message().key())).as("step 3: on its pick, in the same words")
+            .containsExactly(SiteModel.ACCESS_LIST_ID.getName(), "tls_passthrough_no_access_list");
+        assertThat((Object) Models.get(SiteModel.class).findById(site.get(SiteModel.ID)).get(SiteModel.ACCESS_LIST_ID))
+            .as("step 3: the site keeps no list").isNull();
+    }
+
+    private static Map<String, Object> passthrough(String name, String hostname, Integer accessList) {
+        Map<String, Object> form = new LinkedHashMap<>();
+        form.put(SiteModel.NAME.getName(), "r3b-" + name);
+        form.put(PutOnline.HOSTNAME.getName(), hostname);
+        form.put(SiteModel.UPSTREAM_KIND.getName(), SiteModel.UPSTREAM_TLS_PASSTHROUGH);
+        form.put(SiteModel.SETTINGS.getName(), Map.of("forward_host", "127.0.0.1", "forward_port", 8443,
+            "connect_timeout", 10));
+        form.put(PutOnline.HTTPS.getName(), PutOnline.HTTPS_AUTOMATIC);
+        if (accessList != null) {
+            form.put(SiteModel.ACCESS_LIST_ID.getName(), accessList);
+        }
+        return form;
     }
 
     private static void assertUploadRefused(String step, String chain, String key, String field, String words) {

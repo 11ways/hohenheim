@@ -184,7 +184,8 @@ public final class TlsPassthroughRoutes {
     private static Decision passthroughSiteDecision(Row site, String siteName,
                                                      TlsPassthroughProvider provider,
                                                      Map<String, Object> settings) {
-        if (site.get(SiteModel.ACCESS_LIST_ID) != null || site.get(SiteModel.AUTH_PROVIDER_ID) != null) {
+        if (SiteModel.httpGateRefusal(site.get(SiteModel.UPSTREAM_KIND), site.get(SiteModel.AUTH_PROVIDER_ID),
+                site.get(SiteModel.ACCESS_LIST_ID)) != null) {
             Blast.log("TLS passthrough: site", siteName,
                 "has HTTP-only access control configured; rejecting its SNI routes");
             return Decision.reject();
