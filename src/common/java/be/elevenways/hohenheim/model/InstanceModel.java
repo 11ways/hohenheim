@@ -503,15 +503,23 @@ public class InstanceModel extends Model {
         .build());
 
     /**
-     * Whether a release in this role books workload memory on its host and owner.
+     * Whether a release in this role is ever started again.
      *
      * A retired release's container is stopped for good: a rollback boots a fresh candidate from its spec and never
-     * starts the retired one again, so booking it only kept memory from workloads that could run.
+     * starts the retired one again.
      *
-     * @return false only for {@link #ROLE_RETIRED}; an unknown role keeps its booking (fails closed)
+     * @return false only for {@link #ROLE_RETIRED}; an unknown role starts again (fails closed)
+     */
+    public static boolean roleStartsAgain(@Nullable String role) {
+        return !ROLE_RETIRED.equals(role);
+    }
+
+    /**
+     * Whether a release in this role books workload memory on its host and owner: only one that starts again
+     * ({@link #roleStartsAgain}), since booking a retired one only kept memory from workloads that could run.
      */
     public static boolean roleHoldsMemory(@Nullable String role) {
-        return !ROLE_RETIRED.equals(role);
+        return roleStartsAgain(role);
     }
 
     /**

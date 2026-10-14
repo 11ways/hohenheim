@@ -11,6 +11,7 @@ import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.ReleaseOperationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.StoredRows;
+import be.elevenways.hohenheim.ports.PortLedger;
 import be.elevenways.hohenheim.server.BootSettle;
 import be.elevenways.hohenheim.server.HandlerSupport;
 import be.elevenways.hohenheim.server.build.BuildArtifacts;
@@ -586,7 +587,7 @@ public final class ReleaseEngine {
         }
     }
 
-    /** The shared drain completion: stop retained, reclaim older, prune, succeed. */
+    /** The shared drain completion: stop retained, free its kept ports, reclaim older, prune, succeed. */
     private static void completeDrain(int applicationId, @NonNull Row op, int retiredId,
                                       @NonNull String servingImage, @NonNull String how) {
         try {
@@ -607,6 +608,7 @@ public final class ReleaseEngine {
             Blast.log("RELEASE: application", applicationId, "superseded release stop failed -",
                 HohenheimViolations.reasonOf(stopFailed));
         }
+        releaseSettledPorts(retiredId);
         reclaimOlderRetired(applicationId, retiredId, op);
         pruneArtifactsQuietly(applicationId, servingImage, op);
         // Detached databases lose their link network HERE, after the switch and once the
@@ -618,6 +620,22 @@ public final class ReleaseEngine {
             step(op, "WARNING: database link-network sweep failed: " + HohenheimViolations.reasonOf(e));
         }
         finish(op, ReleaseOperationModel.LIFECYCLE.stored(OperationStatus.SUCCEEDED), null, "release complete");
+    }
+
+    /**
+     * Free the observed port claims of the retained release once it is stopped: a stop keeps them for the next start
+     * (InstanceService.stop), and a retired release never starts again ({@link InstanceModel#roleStartsAgain}).
+     *
+     * AIDEV-NOTE: read from the row, never from whether this drain ran the stop: an exclusive-volume swap stopped the
+     * prior release while it still served, so the drain finds it already settled. A failed stop leaves it running,
+     * its claims parked by that failure.
+     */
+    private static void releaseSettledPorts(int retiredId) {
+        Row retired = Models.get(InstanceModel.class).findById(retiredId);
+        if (retired != null && !InstanceModel.roleStartsAgain(retired.get(InstanceModel.RUNTIME_ROLE))
+                && InstanceModel.STATUS_STOPPED.equals(retired.get(InstanceModel.STATUS))) {
+            PortLedger.releaseOwnerObserved(InstanceModel.MODEL_ID, retiredId);
+        }
     }
 
     /** Destroy every retired release of the application EXCEPT the newest (the one retained). */

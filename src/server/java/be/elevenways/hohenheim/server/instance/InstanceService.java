@@ -408,7 +408,8 @@ public final class InstanceService {
      * Stop the workload. Every port claim SURVIVES a confirmed stop: a pre-allocated one is the stable number DNS
      * points at, and an observed (record-after) one is the number the next start asks the daemon for again
      * ({@link PortPublications#ensureClaimed}), so a restart or a backup's stop and start keeps the instance's ports.
-     * A stopped record is not servable, so nothing routes to the kept number meanwhile.
+     * A stopped record is not servable, so nothing routes to the kept number meanwhile. Only a destroy, or the drain
+     * that settles a release which never starts again ({@code ReleaseEngine.completeDrain}), releases them.
      *
      * @throws Violations naming the failure; the claims are parked, the status untouched
      */
@@ -447,7 +448,7 @@ public final class InstanceService {
             resolved.runtime().stop(resolved.spec().handle(), 10);
             this.beforeOutcomeWrite.run();
             stampGuarded(resolved, InstanceModel.STATUS_STOPPED);
-            // The claims stay: see the method's doc. Only a destroy releases them.
+            // The claims stay: see the method's doc.
             recordPower(instanceId, HohenheimActivityAction.STOPPED, resolved);
         } catch (IOException e) {
             stampGuardedError(resolved, HohenheimActivityAction.WORKLOAD_STOP_FAILED, e.getMessage());
