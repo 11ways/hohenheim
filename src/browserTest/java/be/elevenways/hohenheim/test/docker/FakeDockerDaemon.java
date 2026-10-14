@@ -1,17 +1,14 @@
 package be.elevenways.hohenheim.test.docker;
 
-import be.elevenways.hohenheim.app.PutOnlineGroup;
-import be.elevenways.hohenheim.app.PutOnlineReach;
-import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.server.docker.DockerClient;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.docker.OwnerLabels;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.DockerContainerKind;
-import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
+import be.elevenways.hohenheim.test.instance.ForwardingKindHandler;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.PortPublication;
@@ -19,10 +16,6 @@ import be.elevenways.hohenheim.server.runtime.WorkloadLiveness;
 import be.elevenways.hohenheim.server.util.Json;
 import be.elevenways.protoblast.common.dry.Dry;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.common.orm.model.Schema;
-import be.elevenways.zenit.common.ui.BadgeColor;
-import be.elevenways.zenit.common.ui.Icon;
 import com.sun.net.httpserver.HttpServer;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -403,84 +396,20 @@ public final class FakeDockerDaemon implements DockerTransport {
 
     /**
      * The real docker-container kind with its runtime swapped: schema, spec derivation,
-     * publication shape and footprint all come from production.
+     * publication shape, reach and footprint all come from production.
      */
-    private static final class FakeContainerKind implements InstanceKindHandler {
+    private static final class FakeContainerKind extends ForwardingKindHandler {
 
-        private final DockerContainerKind real = new DockerContainerKind();
         private final FakeDockerDaemon daemon;
 
         FakeContainerKind(@NonNull FakeDockerDaemon daemon) {
+            super(new DockerContainerKind());
             this.daemon = daemon;
         }
 
         @Override
-        public @NonNull Identifier typeId() { return DockerContainerKind.ID; }
-
-        @Override
-        public @NonNull String getDisplayName() { return this.real.getDisplayName(); }
-
-        @Override
-        public @NonNull Microcopy getLabel() { return this.real.getLabel(); }
-
-        @Override
-        public @NonNull Microcopy getDescription() { return this.real.getDescription(); }
-
-        @Override
-        public Icon getIcon() { return this.real.getIcon(); }
-
-        @Override
-        public BadgeColor color() { return this.real.color(); }
-
-        @Override
-        public Schema getSchema() { return this.real.getSchema(); }
-
-        @Override
-        public @NonNull Set<String> supportedRuntimes() { return this.real.supportedRuntimes(); }
-
-        @Override
-        public boolean supportsSiteUpstream() { return this.real.supportsSiteUpstream(); }
-
-        // How the real kind is reached (a container publishing ports is a service): the interface default would
-        // read every fake container as a website and put a game server online through the address flow.
-        @Override
-        public @NonNull PutOnlineReach reachOf(@NonNull Map<String, Object> settings) {
-            return this.real.reachOf(settings);
-        }
-
-        // Offered by "Put something online" as the real kind is, in the same ways.
-        @Override
-        public PutOnlineGroup putOnlineGroup() { return this.real.putOnlineGroup(); }
-
-        @Override
-        public @NonNull List<PutOnlineReach> putOnlineReaches() { return this.real.putOnlineReaches(); }
-
-        @Override
-        public @NonNull List<String> portSettings() { return this.real.portSettings(); }
-
-        @Override
-        public boolean supportsVolumes() { return this.real.supportsVolumes(); }
-
-        @Override
-        public boolean tenantAuthored() { return this.real.tenantAuthored(); }
-
-        @Override
-        public @NonNull WorkloadIsolation isolation() { return this.real.isolation(); }
-
-        @Override
         public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
             return this.daemon.runtime();
-        }
-
-        @Override
-        public @NonNull InstanceSpec specFor(int instanceId,
-                                             @NonNull Map<String, Object> settings) {
-            return this.real.specFor(instanceId, settings);
-        }
-
-        @Override
-        public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
-            return this.real.defaultFootprintMb(settings);
         }
     }
 
@@ -489,62 +418,18 @@ public final class FakeDockerDaemon implements DockerTransport {
      * generated-only refusal and footprint all come from production, so a spec bug still
      * fails here.
      */
-    private static final class FakeReleaseKind implements InstanceKindHandler {
+    private static final class FakeReleaseKind extends ForwardingKindHandler {
 
-        private final ReleaseKind real = new ReleaseKind();
         private final FakeDockerDaemon daemon;
 
         FakeReleaseKind(@NonNull FakeDockerDaemon daemon) {
+            super(new ReleaseKind());
             this.daemon = daemon;
         }
 
         @Override
-        public @NonNull Identifier typeId() { return ReleaseKind.ID; }
-
-        @Override
-        public @NonNull String getDisplayName() { return this.real.getDisplayName(); }
-
-        @Override
-        public @NonNull Microcopy getLabel() { return this.real.getLabel(); }
-
-        @Override
-        public @NonNull Microcopy getDescription() { return this.real.getDescription(); }
-
-        @Override
-        public Icon getIcon() { return this.real.getIcon(); }
-
-        @Override
-        public BadgeColor color() { return this.real.color(); }
-
-        @Override
-        public Schema getSchema() { return this.real.getSchema(); }
-
-        @Override
-        public boolean tenantAuthored() { return this.real.tenantAuthored(); }
-
-        // The wrapper answers for the REAL kind on both trust axes. Leaving one to the
-        // interface default is how a fake quietly answers SHARED_KERNEL for a kind that
-        // is not, and a placement test then passes for the wrong reason.
-        @Override
-        public @NonNull WorkloadIsolation isolation() { return this.real.isolation(); }
-
-        @Override
-        public boolean generatedOnly() { return this.real.generatedOnly(); }
-
-        @Override
         public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
             return this.daemon.runtime();
-        }
-
-        @Override
-        public @NonNull InstanceSpec specFor(int instanceId,
-                                             @NonNull Map<String, Object> settings) {
-            return this.real.specFor(instanceId, settings);
-        }
-
-        @Override
-        public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
-            return this.real.defaultFootprintMb(settings);
         }
     }
 

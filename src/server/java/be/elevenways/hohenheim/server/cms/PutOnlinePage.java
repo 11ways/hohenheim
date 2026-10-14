@@ -127,7 +127,7 @@ public final class PutOnlinePage extends PanelPage {
         .build();
 
     /** The journey's steps on other pages: the chooser before the wizard, the run page after it. */
-    private static final List<Microcopy> BEFORE_WIZARD = List.of(PutOnline.STEP_WHAT);
+    private static final List<Microcopy> BEFORE_WIZARD = PutOnline.BEFORE_FORM;
     private static final List<Microcopy> AFTER_WIZARD = List.of(PutOnline.STEP_LIVE);
 
     @Override public @NonNull Identifier id() { return HohenheimIds.id("put_online"); }
@@ -169,10 +169,8 @@ public final class PutOnlinePage extends PanelPage {
                 if (templateAction == FROM_SERVICE_TEMPLATE) {
                     vars.put("lead", HohenheimMicrocopy.PUT_ONLINE.of("service_lead"));
                 }
-                InstanceKindInfo kindInfo = InstanceKindRegistry.REGISTRY.get(
-                    Identifier.tryParse(String.valueOf((Object) chosen.get(InstanceTemplateModel.KIND))));
                 vars.put("document", form.state().withJourney(BEFORE_WIZARD, AFTER_WIZARD));
-                vars.put("whatIcon", kindInfo == null ? "cube" : kindInfo.getIcon().name());
+                vars.put("whatIcon", TemplateFamily.iconOf(chosen).name());
                 vars.put("what", String.valueOf((Object) chosen.get(InstanceTemplateModel.NAME)));
                 Object description = chosen.get(InstanceTemplateModel.DESCRIPTION);
                 vars.put("whatDescription", description == null ? "" : String.valueOf(description));
@@ -235,10 +233,8 @@ public final class PutOnlinePage extends PanelPage {
         Map<PutOnlineGroup, List<Map<String, Object>>> cards = new EnumMap<>(PutOnlineGroup.class);
         for (TemplateFamily family : TemplateFamily.of(request)) {
             Row template = family.current();
-            InstanceKindInfo kindInfo = InstanceKindRegistry.REGISTRY.get(
-                Identifier.tryParse(String.valueOf((Object) template.get(InstanceTemplateModel.KIND))));
-            card(cards, targets, PutOnlineGroup.TEMPLATE, "template:" + family.name(),
-                kindInfo == null ? "cube" : kindInfo.getIcon().name(), family.name(),
+            card(cards, targets, PutOnlineGroup.TEMPLATE, "template:" + family.name(), family.icon().name(),
+                family.name(),
                 resolve(family.cardLine(), request),
                 CmsRoutes.list(request.panelSlug(), HohenheimSlugs.PUT_ONLINE)
                     .with(HohenheimParams.FROM_TEMPLATE_TEMPLATE, template.get(InstanceTemplateModel.ID)));

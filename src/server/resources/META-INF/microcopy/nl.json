@@ -15242,6 +15242,10 @@
     "text": "Opties",
     "scope": "put_online"
   },
+  "run_heading": {
+    "text": "{$name} gaat online",
+    "scope": "put_online"
+  },
   "step_options_lead": {
     "text": "De waarden waarmee het start. Een leeg geheim behoudt de waarde van het sjabloon.",
     "scope": "put_online"

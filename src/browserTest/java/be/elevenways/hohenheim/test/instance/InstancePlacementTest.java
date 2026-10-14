@@ -17,11 +17,8 @@ import be.elevenways.hohenheim.server.instance.InstanceCapacity;
 import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstancePlacement;
-import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
-import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestAccessContexts;
 import be.elevenways.hohenheim.test.host.HostFixtures;
@@ -36,7 +33,6 @@ import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.model.Schema;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
@@ -548,49 +544,10 @@ class InstancePlacementTest {
      * {@code VmKind.requireImageOn} has when a prepared alias is not published
      * on the candidate, without needing a daemon to say so.
      */
-    private record RefusingKind(InstanceKindHandler delegate) implements InstanceKindHandler {
+    private static final class RefusingKind extends ForwardingKindHandler {
 
-        @Override
-        public Identifier typeId() {
-            return this.delegate.typeId();
-        }
-
-        @Override
-        public InstanceRuntime runtimeFor(String serverName) {
-            return this.delegate.runtimeFor(serverName);
-        }
-
-        @Override
-        public InstanceSpec specFor(
-                int instanceId, Map<String, Object> settings) {
-            return this.delegate.specFor(instanceId, settings);
-        }
-
-        @Override
-        public @NonNull Microcopy getDescription() {
-            return this.delegate.getDescription();
-        }
-
-        @Override
-        public Schema getSchema() {
-            return this.delegate.getSchema();
-        }
-
-        @Override
-        public @NonNull String getDisplayName() {
-            return this.delegate.getDisplayName();
-        }
-
-        @Override
-        public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
-            return this.delegate.defaultFootprintMb(settings);
-        }
-
-        // Both trust axes follow the delegate; answering the interface default here
-        // would make a pairing assertion about a wrapped VM kind pass as a container.
-        @Override
-        public @NonNull WorkloadIsolation isolation() {
-            return this.delegate.isolation();
+        RefusingKind(InstanceKindHandler delegate) {
+            super(delegate);
         }
 
         @Override

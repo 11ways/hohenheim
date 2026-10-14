@@ -149,6 +149,10 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
                 .firstValue("location").orElse(""))
             .as("step 1: its card opens the standalone template's wizard")
             .contains("template=" + templateId);
+        assertThat(chooserCard(chooser, "Minecraft server")).as("step 1: the starter's card wears its own icon")
+            .contains("name=\"gamepad\"");
+        assertThat(chooserCard(chooser, "Velocity proxy")).as("step 1: so does the proxy's")
+            .contains("name=\"diagram-project\"");
 
         // 2. The wizard asks where it runs, its options and its Ports: one entry for the game port and the game
         //    address; no address of the proxy and no HTTPS step.
@@ -185,8 +189,15 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
             operator, "step 3");
         assertThat(run.status()).as("step 3: the run succeeded (%s)", run.outcome())
             .isEqualTo(OperationRunStatus.SUCCEEDED);
-        assertThat(Objects.requireNonNull(run.steps()).journeyBefore())
-            .as("step 3: the run ends the journey the wizard walked: what, where, options, ports").hasSize(4);
+        String runPage = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "/run/" + run.id()).body();
+        assertThat(runPage).as("step 3: the run page is headed by what it puts online, the name given in Where")
+            .contains("Putting " + PREFIX + "survival online");
+        assertThat(run.journey().stream().map(step -> step.key()).toList())
+            .as("step 3: the run ends the journey the wizard walked: what, where, ports; never the Options step the"
+                + " wizard passed over for a template without variables")
+            .containsExactly("step_what", "step_where", "step_ports", "step_live");
+        assertThat(runPage).as("step 3: its page draws those three steps done before its own")
+            .contains("data-cms-operation-run-journey total-steps=\"1\" leading-steps=\"3\"");
         assertThat(List.of(run.skipped(1), run.skipped(2), run.skipped(3)))
             .as("step 3: the template has no install step; its ports and its game address were done")
             .containsExactly(true, false, false);
@@ -568,8 +579,8 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
             operator, "step 4");
         assertThat(run.status()).as("step 4: the run succeeded (%s)", run.outcome())
             .isEqualTo(OperationRunStatus.SUCCEEDED);
-        assertThat(Objects.requireNonNull(run.steps()).journeyBefore())
-            .as("step 4: the run ends the journey the wizard walked: what, where, options, ports").hasSize(4);
+        assertThat(run.journey())
+            .as("step 4: the run ends the journey the wizard walked: what, where, options, ports, live").hasSize(5);
         assertThat(List.of(run.skipped(1), run.skipped(2)))
             .as("step 4: its ports and its game address were done").containsExactly(false, false);
 
@@ -680,5 +691,17 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
         try (ServerSocket socket = new ServerSocket(0)) {
             return socket.getLocalPort();
         }
+    }
+
+    /** @return the drawn chooser card whose label is exactly this, empty when the chooser draws none */
+    private static String chooserCard(String chooser, String label) {
+        for (String card : chooser.split("<pl-choice-card")) {
+            String drawn = card.contains("</pl-choice-card>") ? card.substring(0, card.indexOf("</pl-choice-card>"))
+                : card;
+            if (drawn.contains(">" + label + "<")) {
+                return drawn;
+            }
+        }
+        return "";
     }
 }

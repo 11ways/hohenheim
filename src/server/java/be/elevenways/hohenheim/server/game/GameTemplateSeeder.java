@@ -2,6 +2,7 @@ package be.elevenways.hohenheim.server.game;
 
 import be.elevenways.hohenheim.model.InstanceTemplateFileModel;
 import be.elevenways.hohenheim.instance.ReadinessKind;
+import be.elevenways.hohenheim.instance.StarterTemplate;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.hohenheim.model.InstanceTemplateVariableModel;
 import be.elevenways.hohenheim.instance.InstanceKindFields;
@@ -35,12 +36,13 @@ public final class GameTemplateSeeder implements Seeder {
     private static final String TYPE_SECRET = "hohenheim:secret";
 
     /** The standalone server's name, shown as the chooser's "Minecraft server" family. */
-    public static final String MINECRAFT_SERVER = "Minecraft server";
+    public static final String MINECRAFT_SERVER = StarterTemplate.MINECRAFT_SERVER.familyName();
 
     /** The behind-the-proxy backend's name: a family of its own, never the standalone server's. */
-    public static final String MINECRAFT_BACKEND = "Minecraft backend (behind Velocity)";
+    public static final String MINECRAFT_BACKEND = StarterTemplate.MINECRAFT_BACKEND.familyName()
+        + " (behind Velocity)";
 
-    public static final String VELOCITY_PROXY = "Velocity proxy";
+    public static final String VELOCITY_PROXY = StarterTemplate.VELOCITY_PROXY.familyName();
 
     /** The port Velocity listens on inside its container, published as its game port. */
     private static final int VELOCITY_PORT = 25577;

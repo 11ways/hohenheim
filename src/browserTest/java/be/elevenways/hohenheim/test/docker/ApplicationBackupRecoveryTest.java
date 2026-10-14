@@ -2,7 +2,6 @@ package be.elevenways.hohenheim.test.docker;
 
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSettings;
-import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.InstanceVariableModel;
@@ -17,12 +16,12 @@ import be.elevenways.hohenheim.server.docker.DockerStreamTransport;
 import be.elevenways.hohenheim.server.docker.DockerTransport;
 import be.elevenways.hohenheim.server.docker.ReleaseKind;
 import be.elevenways.hohenheim.server.instance.InstanceBackups;
-import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.InstanceService;
 import be.elevenways.hohenheim.server.instance.InstanceVariables;
 import be.elevenways.hohenheim.server.runtime.ImageIdentity;
 import be.elevenways.hohenheim.server.runtime.InstanceRuntime;
+import be.elevenways.hohenheim.test.instance.ForwardingKindHandler;
 import be.elevenways.hohenheim.server.runtime.InstanceSpec;
 import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
@@ -30,15 +29,11 @@ import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.test.host.HostFixtures;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.model.Schema;
-import be.elevenways.zenit.common.ui.BadgeColor;
-import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.server.orm.crypto.EncryptionKeyring;
 import be.elevenways.zenit.common.validation.Violations;
 import be.elevenways.zenit.server.orm.crypto.FieldEncryption;
@@ -251,21 +246,13 @@ class ApplicationBackupRecoveryTest {
         }
     }
 
-    private record SnapshotKind(SnapshotRuntime runtime) implements InstanceKindHandler {
-        private static final ReleaseKind REAL = new ReleaseKind();
-        public Identifier typeId() { return ReleaseKind.ID; }
-        public String getDisplayName() { return REAL.getDisplayName(); }
-        public Microcopy getLabel() { return REAL.getLabel(); }
-        public Microcopy getDescription() { return REAL.getDescription(); }
-        public Icon getIcon() { return REAL.getIcon(); }
-        public BadgeColor color() { return REAL.color(); }
-        public Schema getSchema() { return REAL.getSchema(); }
-        public boolean tenantAuthored() { return REAL.tenantAuthored(); }
-        public boolean generatedOnly() { return REAL.generatedOnly(); }
-        public WorkloadIsolation isolation() { return REAL.isolation(); }
-        public InstanceRuntime runtimeFor(String server) { return runtime; }
-        public InstanceSpec specFor(int id, Map<String, Object> settings) { return REAL.specFor(id, settings); }
-        public int defaultFootprintMb(Map<String, Object> settings) { return REAL.defaultFootprintMb(settings); }
+    private static final class SnapshotKind extends ForwardingKindHandler {
+        private final SnapshotRuntime runtime;
+        SnapshotKind(SnapshotRuntime runtime) {
+            super(new ReleaseKind());
+            this.runtime = runtime;
+        }
+        @Override public InstanceRuntime runtimeFor(String server) { return runtime; }
     }
 
     private static final class ImageTransport implements DockerTransport, DockerStreamTransport {

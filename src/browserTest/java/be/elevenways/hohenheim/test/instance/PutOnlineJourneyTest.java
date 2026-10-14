@@ -219,8 +219,9 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         assertThat(run.status()).as("step 3: the run succeeded (%s)", run.outcome())
                 .isEqualTo(OperationRunStatus.SUCCEEDED);
         assertThat(run.stepsDone()).as("step 3: every step passed").isEqualTo(5L);
-        assertThat(Objects.requireNonNull(run.steps()).journeyBefore())
-            .as("step 3: the run ends the journey the wizard walked: what, where, options, https").hasSize(4);
+        assertThat(run.journey())
+            .as("step 3: the run ends the journey the wizard walked: what, where, https, live; no Options, as the"
+                + " template asks no variables").hasSize(4);
         assertThat(run.skipped(3)).as("step 3: the certificate waits for the setting, so its step reads skipped")
             .isTrue();
         assertThat(run.skipped(2)).as("step 3: the website was made, so its step is done").isFalse();
@@ -375,8 +376,9 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
                 operator, "step 3");
             assertThat(run.status()).as("step 3: the run succeeded (%s)", run.outcome())
                 .isEqualTo(OperationRunStatus.SUCCEEDED);
-            assertThat(Objects.requireNonNull(run.steps()).journeyBefore())
-                .as("step 3: the run ends the journey the wizard walked: what, where, settings, https").hasSize(4);
+            assertThat(run.journey())
+                .as("step 3: the run ends the journey the wizard walked: what, where, settings, https, live")
+                .hasSize(5);
             assertThat(run.skipped(1)).as("step 3: the website was made, so its step is done").isFalse();
         } finally {
             localBefore.restore();
@@ -457,8 +459,8 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         form.put("serverId", hostId);
         OperationRun run = ended(runOf(OperationPipeline.invoke(OperationRequest.of(PutOnline.PUT_MACHINE_ONLINE,
                 CmsPlacementSurface.ADMIN_ACTION).caller(operator).form(form))), operator, "step 4");
-        assertThat(Objects.requireNonNull(run.steps()).journeyBefore())
-            .as("step 4: the run ends the journey the wizard walked: what, where, settings").hasSize(3);
+        assertThat(run.journey())
+            .as("step 4: the run ends the journey the wizard walked: what, where, settings, live").hasSize(4);
         assertThat(ApiSupport.shippedText(Objects.requireNonNull(run.steps()).steps().getFirst().label()))
             .as("step 4: its first step makes a machine, in the start verb's words for one, never the app's")
             .isEqualTo("Create the machine");

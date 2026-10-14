@@ -19,6 +19,12 @@
 
     style {
         display: contents;
+
+        /* The gauges' wrappers break the card's sibling rule for gauges one under the other (zenit-widget's
+           .widget-usage:not(:first-child)), so this element keeps its own two apart by the same distance. */
+        > [data-live-gauge] + [data-live-gauge] {
+            margin-top: var(--pl-space-lg);
+        }
     }
 
     @mount

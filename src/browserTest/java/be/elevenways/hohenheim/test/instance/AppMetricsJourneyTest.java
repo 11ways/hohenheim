@@ -134,6 +134,12 @@ class AppMetricsJourneyTest extends HohenheimTestBase {
             pushHeld(stream, 2, sample(1_100_000_000L, 10_400_000_000L, 500, 600));
             awaitGauge("step 2: the memory gauge reads the live sample", "memory", "512.0 MB", "1.0 GB");
             awaitGauge("step 2: the CPU gauge reads the window", "cpu", "100%", "4 cores");
+            Object gap = page.evaluate("() => document.querySelector(\"[data-live-gauge='cpu'] .widget-usage\")"
+                + ".getBoundingClientRect().top - document.querySelector(\"[data-live-gauge='memory'] .widget-usage\")"
+                + ".getBoundingClientRect().bottom");
+            assertThat(((Number) gap).doubleValue())
+                .as("step 2: the CPU gauge keeps apart from the memory gauge above it, as gauges in a card do")
+                .isGreaterThanOrEqualTo(16.0);
 
             // 3. Leaving the overview releases the feed: no viewer is left, so the daemon stream closes.
             navigateToApp("/admin/instances");

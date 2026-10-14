@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.wordpress;
 
 import be.elevenways.hohenheim.instance.ReadinessKind;
+import be.elevenways.hohenheim.instance.StarterTemplate;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
@@ -91,7 +92,7 @@ public final class WordPressTemplateSeeder implements Seeder {
 
     /** The template name a member seeds under. */
     public static @NonNull String templateName(@NonNull WordPressPhp php) {
-        return "WordPress (PHP " + php.version() + ")";
+        return StarterTemplate.WORDPRESS.familyName() + " (PHP " + php.version() + ")";
     }
 
     /** The kind settings baseline every WordPress template starts from. */

@@ -1,10 +1,7 @@
 package be.elevenways.hohenheim.test.instance;
 
-import be.elevenways.hohenheim.app.PutOnlineGroup;
-import be.elevenways.hohenheim.instance.WorkloadIsolation;
 import be.elevenways.hohenheim.model.InstanceModel;
 import be.elevenways.hohenheim.model.RuntimeImageModel;
-import be.elevenways.hohenheim.server.instance.InstanceKindHandler;
 import be.elevenways.hohenheim.server.instance.InstanceKinds;
 import be.elevenways.hohenheim.server.instance.WorkspaceKind;
 import be.elevenways.hohenheim.server.runtime.ContainerState;
@@ -16,12 +13,8 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.source.GitSourceSchema;
 import be.elevenways.protoblast.common.i18n.Microcopy;
-import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
-import be.elevenways.zenit.common.orm.model.Schema;
-import be.elevenways.zenit.common.ui.BadgeColor;
-import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -32,7 +25,6 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * A hermetic WORKSPACE: the real {@link WorkspaceKind} with two things swapped out -- the
@@ -261,49 +253,23 @@ final class FakeWorkspaceDaemon implements InstanceRuntime, ExecSupport, VolumeS
     }
 
     /** The real workspace kind, delegating everything but its runtime and host prep. */
-    private static final class FakeWorkspaceKind implements InstanceKindHandler {
+    private static final class FakeWorkspaceKind extends ForwardingKindHandler {
 
-        private final WorkspaceKind real = new WorkspaceKind();
         private final FakeWorkspaceDaemon daemon;
 
         private FakeWorkspaceKind(FakeWorkspaceDaemon daemon) {
+            super(new WorkspaceKind());
             this.daemon = daemon;
-        }
-
-        @Override public @NonNull Identifier typeId() { return WorkspaceKind.ID; }
-        @Override public @NonNull String getDisplayName() { return this.real.getDisplayName(); }
-        @Override public @NonNull Microcopy getLabel() { return this.real.getLabel(); }
-        @Override public @NonNull Microcopy getDescription() { return this.real.getDescription(); }
-        @Override public Icon getIcon() { return this.real.getIcon(); }
-        @Override public BadgeColor color() { return this.real.color(); }
-        @Override public Schema getSchema() { return this.real.getSchema(); }
-        @Override public @NonNull Set<String> supportedRuntimes() {
-            return this.real.supportedRuntimes();
-        }
-        @Override public boolean supportsVolumes() { return this.real.supportsVolumes(); }
-        // The deploy fold and the put-online group are the kind's own decisions, never the daemon's: without them
-        // InstanceService.deploy of a repository workspace skipped WorkspaceBuilds and proved nothing about it.
-        @Override public boolean deploysSource(@NonNull Row instance) { return this.real.deploysSource(instance); }
-        @Override public PutOnlineGroup putOnlineGroup() { return this.real.putOnlineGroup(); }
-        @Override public boolean usesRuntimeImage() { return this.real.usesRuntimeImage(); }
-        @Override public boolean requiresRuntimeImage() {
-            return this.real.requiresRuntimeImage();
-        }
-        @Override public boolean supportsSiteUpstream() {
-            return this.real.supportsSiteUpstream();
-        }
-        @Override public @NonNull WorkloadIsolation isolation() { return this.real.isolation(); }
-        @Override public int defaultFootprintMb(@NonNull Map<String, Object> settings) {
-            return this.real.defaultFootprintMb(settings);
-        }
-        @Override public @NonNull InstanceSpec specFor(int instanceId,
-                                                       @NonNull Map<String, Object> settings) {
-            return this.real.specFor(instanceId, settings);
         }
 
         /** The one real swap: no daemon, no host, no filesystem. */
         @Override public @NonNull InstanceRuntime runtimeFor(@NonNull String serverName) {
             return this.daemon;
+        }
+
+        /** No host directories to hand over: carried files keep their owners, as on a kind that declares none. */
+        @Override public @Nullable Integer volumeOwnerUid(int instanceId, @NonNull String serverName) {
+            return null;
         }
 
         /**

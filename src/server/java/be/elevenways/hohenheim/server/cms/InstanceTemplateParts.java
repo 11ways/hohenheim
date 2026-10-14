@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.instance.StarterTemplate;
 import be.elevenways.hohenheim.HohenheimEndpoints;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -144,7 +145,7 @@ public final class InstanceTemplateParts {
                 SubjectType.record(InstanceTemplateModel.MODEL_ID))
             .label(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("plural"))
             .recordLabel(HohenheimMicrocopy.INSTANCE_TEMPLATE.of("singular"))
-            .icon(Icon.of("clone"))
+            .icon(Icon.of(StarterTemplate.TEMPLATE_ICON))
             .navGroup(HohenheimPanel.DEPLOY_GROUP)
             .reads(ResourceReads.rows());
     }

@@ -1,6 +1,7 @@
 package be.elevenways.hohenheim.server.cms;
 
 import be.elevenways.hohenheim.HohenheimMicrocopy;
+import be.elevenways.hohenheim.instance.StarterTemplate;
 import be.elevenways.hohenheim.model.InstanceTemplateModel;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.text.SlugText;
@@ -10,6 +11,7 @@ import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.QueryBuilder;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.common.ui.Icon;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -85,6 +87,20 @@ record TemplateFamily(@NonNull String name, @NonNull List<Row> members) {
     /** @return the catalogue key of a starter family's card line: its name in lower snake case (SlugText's fold) */
     static @NonNull String cardKey(@NonNull String familyName) {
         return SlugText.slugify(familyName, "_");
+    }
+
+    /** @return the icon the family's card wears: its starter's own, else the generic template icon */
+    @NonNull Icon icon() {
+        return iconOf(this.current());
+    }
+
+    /** @return the icon a template wears: its starter family's own, else the generic template icon */
+    static @NonNull Icon iconOf(@NonNull Row template) {
+        boolean seeded = InstanceTemplateModel.SOURCE_STARTER.equals(template.get(InstanceTemplateModel.SOURCE));
+        StarterTemplate starter = seeded
+            ? StarterTemplate.ofFamily(familyName(String.valueOf((Object) template.get(InstanceTemplateModel.NAME))))
+            : null;
+        return starter == null ? Icon.of(StarterTemplate.TEMPLATE_ICON) : starter.icon();
     }
 
     /** @return whether a template of this id is one of the members */

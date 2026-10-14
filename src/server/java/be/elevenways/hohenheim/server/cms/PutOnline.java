@@ -54,6 +54,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 
 /**
  * "Put something online": one flow that creates an app, its address and its certificate, as background operations
@@ -120,11 +121,9 @@ public final class PutOnline {
     static final Microcopy STEP_LIVE = HohenheimMicrocopy.PUT_ONLINE.of("step_live");
     static final Microcopy STEP_PORTS = HohenheimMicrocopy.PUT_ONLINE.of("step_ports");
 
-    /* Each flow's journey before its run page, one declaration each: its operation's steps and the chooser read them. */
-    private static final List<Microcopy> WEBSITE_JOURNEY = List.of(STEP_WHAT, STEP_WHERE, STEP_OPTIONS, STEP_HTTPS);
-    private static final List<Microcopy> SERVICE_JOURNEY = List.of(STEP_WHAT, STEP_WHERE, STEP_OPTIONS, STEP_PORTS);
-    private static final List<Microcopy> ADDRESS_JOURNEY = List.of(STEP_WHAT, STEP_WHERE, STEP_HTTPS);
-    private static final List<Microcopy> MACHINE_JOURNEY = List.of(STEP_WHAT, STEP_WHERE, STEP_OPTIONS);
+    /* The journey's step before every flow's own form (the chooser) and its last, the run page: each operation's run
+       walks What, then its own form's steps as the wizard showed them, then Going live. */
+    static final List<Microcopy> BEFORE_FORM = List.of(STEP_WHAT);
 
     /** The run's steps for a template: the app, its install, its website, its certificate, then live. */
     private static final OperationSteps APP_STEPS = OperationSteps.of(
@@ -133,7 +132,8 @@ public final class PutOnline {
         OperationSteps.step("website", HohenheimMicrocopy.PUT_ONLINE.of("run_website")),
         OperationSteps.step("certificate", HohenheimMicrocopy.PUT_ONLINE.of("run_certificate")),
         OperationSteps.step("live", HohenheimMicrocopy.PUT_ONLINE.of("run_live")))
-        .inJourney(WEBSITE_JOURNEY, STEP_LIVE);
+        .inJourneyAfterItsForm(BEFORE_FORM, STEP_LIVE)
+        .titled(titleFrom(InstanceTemplateOperations.NAME.getName()));
 
     /** The run's steps for a service from a template: the app, its install, its ports, its game address, then live. */
     private static final OperationSteps SERVICE_STEPS = OperationSteps.of(
@@ -142,13 +142,15 @@ public final class PutOnline {
         OperationSteps.step("ports", HohenheimMicrocopy.PUT_ONLINE.of("run_ports")),
         OperationSteps.step("game_address", HohenheimMicrocopy.PUT_ONLINE.of("run_game_address")),
         OperationSteps.step("live", HohenheimMicrocopy.PUT_ONLINE.of("run_live")))
-        .inJourney(SERVICE_JOURNEY, STEP_LIVE);
+        .inJourneyAfterItsForm(BEFORE_FORM, STEP_LIVE)
+        .titled(titleFrom(InstanceTemplateOperations.NAME.getName()));
 
     /** The run's steps for an address: its website and its certificate. */
     private static final OperationSteps ADDRESS_STEPS = OperationSteps.of(
         OperationSteps.step("website", HohenheimMicrocopy.PUT_ONLINE.of("run_website")),
         OperationSteps.step("certificate", HohenheimMicrocopy.PUT_ONLINE.of("run_certificate")))
-        .inJourney(ADDRESS_JOURNEY, STEP_LIVE);
+        .inJourneyAfterItsForm(BEFORE_FORM, STEP_LIVE)
+        .titled(titleFrom(SiteModel.NAME.getName()));
 
     /** The run's steps for a workload of one kind: the app, its website, its certificate, then live. */
     private static final OperationSteps WORKLOAD_STEPS = OperationSteps.of(
@@ -156,13 +158,15 @@ public final class PutOnline {
         OperationSteps.step("website", HohenheimMicrocopy.PUT_ONLINE.of("run_website")),
         OperationSteps.step("certificate", HohenheimMicrocopy.PUT_ONLINE.of("run_certificate")),
         OperationSteps.step("live", HohenheimMicrocopy.PUT_ONLINE.of("run_live")))
-        .inJourney(WEBSITE_JOURNEY, STEP_LIVE);
+        .inJourneyAfterItsForm(BEFORE_FORM, STEP_LIVE)
+        .titled(titleFrom(InstanceTemplateOperations.NAME.getName()));
 
     /** The run's steps for a machine: the machine, in its group's words, then its first start. */
     private static final OperationSteps MACHINE_STEPS = OperationSteps.of(
         OperationSteps.step("app", PutOnlineGroup.MACHINE.words(HohenheimMicrocopy.PUT_ONLINE.of("run_app"))),
         OperationSteps.step("live", HohenheimMicrocopy.PUT_ONLINE.of("run_live")))
-        .inJourney(MACHINE_JOURNEY, STEP_LIVE);
+        .inJourneyAfterItsForm(BEFORE_FORM, STEP_LIVE)
+        .titled(titleFrom(InstanceTemplateOperations.NAME.getName()));
 
     /** The run's steps for a service of one kind: the app, its ports, its game address, then live. */
     private static final OperationSteps WORKLOAD_SERVICE_STEPS = OperationSteps.of(
@@ -170,7 +174,8 @@ public final class PutOnline {
         OperationSteps.step("ports", HohenheimMicrocopy.PUT_ONLINE.of("run_ports")),
         OperationSteps.step("game_address", HohenheimMicrocopy.PUT_ONLINE.of("run_game_address")),
         OperationSteps.step("live", HohenheimMicrocopy.PUT_ONLINE.of("run_live")))
-        .inJourney(SERVICE_JOURNEY, STEP_LIVE);
+        .inJourneyAfterItsForm(BEFORE_FORM, STEP_LIVE)
+        .titled(titleFrom(InstanceTemplateOperations.NAME.getName()));
 
     /** What one port of a kind-led service is for; Other names it with {@link #PORT_NAME}. */
     public static final StringField PORT_PURPOSE = StringField.builder("purpose")
@@ -555,15 +560,32 @@ public final class PutOnline {
 
     /**
      * The journey steps every flow shares, in order, then the run page: what the chooser's stepper shows while what is
-     * put online, and so how it is reached, is not chosen yet.
+     * put online, and so how it is reached, is not chosen yet. Read off the flows' own declared forms.
      */
     static @NonNull List<Microcopy> sharedSteps() {
-        List<Microcopy> shared = new ArrayList<>(WEBSITE_JOURNEY);
-        for (List<Microcopy> journey : List.of(SERVICE_JOURNEY, ADDRESS_JOURNEY, MACHINE_JOURNEY)) {
-            shared.retainAll(journey);
+        List<Microcopy> shared = null;
+        for (Operation<?, ?, ?> flow : List.of(PUT_ONLINE, PUT_SERVICE_ONLINE, PUT_ADDRESS_ONLINE, PUT_WORKLOAD_ONLINE,
+                PUT_WORKLOAD_SERVICE_ONLINE, PUT_MACHINE_ONLINE)) {
+            List<Microcopy> journey = new ArrayList<>(BEFORE_FORM);
+            flow.input().form().declaredSteps().forEach(step -> journey.add(step.label()));
+            if (shared == null) {
+                shared = journey;
+            } else {
+                shared.retainAll(journey);
+            }
         }
-        shared.add(STEP_LIVE);
-        return shared;
+        List<Microcopy> steps = new ArrayList<>(Objects.requireNonNull(shared));
+        steps.add(STEP_LIVE);
+        return steps;
+    }
+
+    /** @return a run's title from the name its Where step was given ("Putting Shop online"), null without one */
+    private static @NonNull Function<Map<String, Object>, @Nullable Microcopy> titleFrom(@NonNull String nameField) {
+        return input -> {
+            Object name = input.get(nameField);
+            return name == null || String.valueOf(name).isBlank() ? null
+                : HohenheimMicrocopy.PUT_ONLINE.of("run_heading").withArg("name", String.valueOf(name));
+        };
     }
 
     /** @return whether the upstream kind with this stored id may be put online as an app of its own */

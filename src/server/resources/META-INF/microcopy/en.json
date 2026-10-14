@@ -15242,6 +15242,10 @@
     "text": "Options",
     "scope": "put_online"
   },
+  "run_heading": {
+    "text": "Putting {$name} online",
+    "scope": "put_online"
+  },
   "step_options_lead": {
     "text": "The values it starts with. A secret left empty keeps the template's own value.",
     "scope": "put_online"
