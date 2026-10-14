@@ -10929,6 +10929,10 @@
     "text": "Gereserveerd",
     "scope": "instance_overview"
   },
+  "loopback_only": {
+    "text": "Poort {$port} is alleen op 127.0.0.1 gepubliceerd, dus alleen zijn host bereikt ze rechtstreeks.",
+    "scope": "instance_overview"
+  },
   "no_public_address": {
     "text": "Poort {$port} heeft nog geen publiek adres: host {$host} declareert er geen, dus alleen zijn eigen netwerk bereikt ze.",
     "scope": "instance_overview"

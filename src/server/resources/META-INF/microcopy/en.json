@@ -10929,6 +10929,10 @@
     "text": "Reserved",
     "scope": "instance_overview"
   },
+  "loopback_only": {
+    "text": "Port {$port} is published on 127.0.0.1 only, so only its host reaches it directly.",
+    "scope": "instance_overview"
+  },
   "no_public_address": {
     "text": "Port {$port} has no public address yet: host {$host} declares none, so only its own network reaches it.",
     "scope": "instance_overview"

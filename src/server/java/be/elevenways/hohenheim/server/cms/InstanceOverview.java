@@ -467,19 +467,23 @@ public final class InstanceOverview {
             PortState state = PortState.of(claim, workloadLive);
             String address = addressOf(claim);
             String protocol = Objects.toString(claim.get(PortAllocationModel.PROTOCOL), "");
+            // A loopback port is reached by its host alone: no public address would change that, so none is asked.
+            boolean loopback = PublishedPort.LOOPBACK.equals(claim.get(PortAllocationModel.HOST_IP));
+            boolean asksAddress = address.isBlank() && !loopback;
             endpoints.add(new InstanceEndpointView(
-                address,
+                loopback ? "" : address,
                 port,
                 protocol,
                 state.key(),
                 state.words(),
                 PortLedger.isPreallocated(claim),
-                !address.isBlank() ? null
+                loopback ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("loopback_only").withArg("port", port)
+                    : !asksAddress ? null
                     : delegated ? HohenheimMicrocopy.INSTANCE_OVERVIEW.of("no_public_address_delegated")
                     : HohenheimMicrocopy.INSTANCE_OVERVIEW.of("no_public_address").withArg("port", port)
                         .withArg("host", ServerModel.labelOf(claim.get(PortAllocationModel.SERVER_ID))),
                 purposeOf(named, port, protocol),
-                !address.isBlank() || delegated ? null : CmsRoutes.detail(HohenheimSlugs.ADMIN,
+                !asksAddress || delegated ? null : CmsRoutes.detail(HohenheimSlugs.ADMIN,
                     HohenheimSlugs.SERVERS, claim.get(PortAllocationModel.SERVER_ID)).toUrl()));
         }
         return endpoints;

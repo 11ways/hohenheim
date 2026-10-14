@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.AttentionSubject;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimStatsFunctions;
+import be.elevenways.hohenheim.ports.PublishedPort;
 import be.elevenways.hohenheim.HohenheimWidgets;
 import be.elevenways.hohenheim.instance.InstanceOperations;
 import be.elevenways.hohenheim.model.BuildOperationModel;
@@ -597,6 +598,15 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             assertThat(ported).as("step 3: THE ASSERTION -- with a link to where the address is set")
                 .contains("data-endpoint-fix=\"1\"").contains("Set the host's public address")
                 .contains("/admin/" + HohenheimSlugs.SERVERS + "/" + ServerModel.localServerId());
+
+            // 4. A port published on the loopback alone never asks for a public address: only the host reaches it.
+            PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, id);
+            PortLedger.claim(ServerModel.localServerId(), PublishedPort.LOOPBACK, 25567, "tcp",
+                InstanceModel.MODEL_ID, id, "app journey");
+            String loopback = adminGet("/admin/instances/" + id + "/page/overview").body();
+            assertThat(loopback).as("step 4: the loopback port says only the host reaches it, with no fix link")
+                .contains("Port 25567 is published on 127.0.0.1 only")
+                .doesNotContain("data-endpoint-fix=\"1\"").doesNotContain("Port 25567 has no public address");
         } finally {
             PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, id);
             HardDeletes.row(Models.get(InstanceModel.class), instance);
