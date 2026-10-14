@@ -30,6 +30,7 @@ import be.elevenways.hohenheim.server.cms.ManageDnsRecordParts;
 import be.elevenways.hohenheim.server.cms.NotificationChannelParts;
 import be.elevenways.hohenheim.server.cms.ServerParts;
 import be.elevenways.hohenheim.server.docker.ServerService;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -42,6 +43,7 @@ import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.datasource.sql.SqlDatasource;
 import be.elevenways.zenit.common.orm.model.Models;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.security.AccessContext;
 import be.elevenways.zenit.server.operation.OperationPipeline;
@@ -171,6 +173,10 @@ class DeleteConfirmationTest {
             assertThat(hop.body().key()).as("step 6b: the hostname wording, which names no app")
                 .isEqualTo("delete_confirm_hostnames");
             assertThat(hop.body().args().get("app")).as("step 6b: no app is named for a redirect").isNull();
+            assertThat(hop.body().resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
+                .as("step 6b: the rendered words name the Redirect's hostname and nothing behind it")
+                .contains("hop." + ORIGIN)
+                .doesNotContain("app").doesNotContain("application").doesNotContain("keeps running");
 
             // 7. A site with no hostname bound gets the generic body instead of a
             //    sentence naming nothing.

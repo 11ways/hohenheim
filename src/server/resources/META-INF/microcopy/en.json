@@ -12686,7 +12686,11 @@
     "scope": "site"
   },
   "disable_confirm": {
-    "text": "Stop serving {$name}? These hostnames stop answering immediately: {$hostnames}. Nothing is deleted -- the application behind it keeps running, and enabling the site again restores routing.",
+    "text": "Stop serving {$name}? These hostnames stop answering immediately: {$hostnames}. Nothing is deleted, and enabling the site again restores routing.",
+    "scope": "site"
+  },
+  "disable_confirm_exposing": {
+    "text": "Stop serving {$name}? These hostnames stop answering immediately: {$hostnames}. Nothing is deleted: the app {$app} behind it keeps running, and enabling the site again restores routing.",
     "scope": "site"
   },
   "disable_confirm_no_hostnames": {

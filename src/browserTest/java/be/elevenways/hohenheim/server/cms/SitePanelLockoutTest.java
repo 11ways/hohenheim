@@ -1,14 +1,24 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.hohenheim.HohenheimSlugs;
+import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteDomainModel;
 import be.elevenways.hohenheim.model.SiteModel;
+import be.elevenways.hohenheim.server.upstream.kinds.RedirectUpstreamKind;
+import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.TenantConduits;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.auth.model.UserModel;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.cms.common.action.PanelAction;
+import be.elevenways.zenit.cms.common.panel.Panel;
+import be.elevenways.zenit.cms.common.panel.PanelRegistry;
+import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.hohenheim.site.SiteOperations;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -17,6 +27,13 @@ import be.elevenways.zenit.server.operation.OperationPipeline;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+
+import static be.elevenways.hohenheim.test.ProxyTestSupport.addDomain;
+import static be.elevenways.hohenheim.test.ProxyTestSupport.setupInstanceSite;
+import static be.elevenways.hohenheim.test.ProxyTestSupport.setupSite;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -35,6 +52,16 @@ class SitePanelLockoutTest extends HohenheimTestBase {
     private static final String PANEL_HOST = "panel.lockout.test";
 
     private static final String OTHER_HOST = "other.lockout.test";
+
+    private static final String REDIRECT_HOST = "redirect.lockout.test";
+
+    private static final String BACKED_HOST = "backed.lockout.test";
+
+    private static final String APP_NAME = "lockout-app";
+
+    private static final LocaleChain EN = LocaleChain.ofTags("en");
+
+    private static final LocaleChain NL = LocaleChain.ofTags("nl");
 
     private static int panelSiteId;
     private static int otherSiteId;
@@ -148,6 +175,74 @@ class SitePanelLockoutTest extends HohenheimTestBase {
         assertThat(disableAction.confirmationFor(hostless).body().key())
             .as("step 4: no hostnames, no hostname list")
             .isEqualTo("disable_confirm_no_hostnames");
+    }
+
+    /**
+     * The delete and the switch-off dialogs follow one fact, the site kind's own: a Redirect exposes no app, so neither
+     * dialog speaks of an app keeping on running; an app-backed site's dialogs name its app, in en and nl.
+     */
+    @Test
+    void bothSiteDialogsNameAnAppOnlyWhenTheSiteExposesOne() {
+        PanelAction<Row> disableAction = placed(SiteOperations.DISABLE);
+        Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN));
+        PanelRequest request = new PanelRequest(admin, TenantConduits.stubFor(null), AccessContext.anonymous(), null);
+        Row app = instance();
+        Row redirect = setupSite(RedirectUpstreamKind.ID.toString(), "Lockout Redirect", "lockout-redirect",
+            new LinkedHashMap<>(Map.of("target", "https://example.com")));
+        addDomain(redirect, REDIRECT_HOST, "exact", null, false);
+        Row backed = setupInstanceSite("Lockout Backed", "lockout-backed", app.get(InstanceModel.ID));
+        addDomain(backed, BACKED_HOST, "exact", null, false);
+        try {
+            // 1. A Redirect's switch-off names its hostname and nothing behind it.
+            String redirectOff = say(disableAction.confirmationFor(siteRow(redirect)).body(), EN);
+            assertThat(redirectOff).as("step 1: the Redirect's switch-off names its hostname").contains(REDIRECT_HOST)
+                .doesNotContain("app").doesNotContain("application").doesNotContain("keeps running");
+
+            // 2. Its delete says the same about what is behind it: nothing.
+            String redirectDelete = say(SiteParts.admin().deleteConfirmation().forRow(siteRow(redirect), request)
+                .body(), EN);
+            assertThat(redirectDelete).as("step 2: the Redirect's delete names its hostname").contains(REDIRECT_HOST)
+                .doesNotContain("app").doesNotContain("keeps running");
+
+            // 3. An app-backed site's switch-off and delete both name the app that keeps running.
+            assertThat(say(disableAction.confirmationFor(siteRow(backed)).body(), EN))
+                .as("step 3: the app-backed switch-off names its app")
+                .contains(BACKED_HOST).contains("the app " + APP_NAME + " behind it keeps running");
+            assertThat(say(SiteParts.admin().deleteConfirmation().forRow(siteRow(backed), request).body(), EN))
+                .as("step 3: and so does its delete")
+                .contains(BACKED_HOST).contains("the app " + APP_NAME + " it exposes keeps running");
+
+            // 4. In Dutch the same fact decides: only the app-backed site's dialog says an app keeps running.
+            assertThat(say(disableAction.confirmationFor(siteRow(backed)).body(), NL))
+                .as("step 4: the Dutch app-backed switch-off names its app")
+                .contains("de app " + APP_NAME + " erachter blijft draaien");
+            assertThat(say(disableAction.confirmationFor(siteRow(redirect)).body(), NL))
+                .as("step 4: the Dutch Redirect switch-off names none").doesNotContain("blijft draaien");
+        } finally {
+            HardDeletes.row(Models.get(SiteModel.class), siteRow(redirect));
+            HardDeletes.row(Models.get(SiteModel.class), siteRow(backed));
+            HardDeletes.row(Models.get(InstanceModel.class), app);
+        }
+    }
+
+    private static String say(Microcopy copy, LocaleChain locales) {
+        return copy.resolve(locales, Zenit.getMessageResolver());
+    }
+
+    /** A stopped container app on the local host, for a site to expose. */
+    private static Row instance() {
+        Row app = Models.get(InstanceModel.class).createEmptyRow();
+        Map.of(InstanceModel.NAME.getName(), (Object) APP_NAME,
+            InstanceModel.KIND.getName(), "hohenheim:docker_container",
+            InstanceModel.SETTINGS.getName(), new LinkedHashMap<>(Map.of("image", "alpine", "command", "sleep 60")),
+            InstanceModel.STATUS.getName(), InstanceModel.STATUS_STOPPED,
+            InstanceModel.SERVER_ID.getName(), ServerModel.localServerId()).forEach(app::set);
+        Models.get(InstanceModel.class).save(app);
+        return app;
+    }
+
+    private static Row siteRow(Row site) {
+        return siteRow(site.get(SiteModel.ID));
     }
 
     /**

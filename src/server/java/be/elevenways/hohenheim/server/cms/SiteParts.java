@@ -332,30 +332,42 @@ public final class SiteParts {
 
     /**
      * The delete dialog NAMING the hostnames that stop answering, the whole consequence of a site delete, and the app
-     * the site exposes when its kind exposes one (the kind's {@code requiresInstance} fact): a redirect exposes none, so
-     * its dialog says nothing about an app. The record-less fallback can only say that much.
-     *
-     * AIDEV-NOTE: separate bodies, never one with an empty list: microcopy args echo verbatim, so an empty hostname list
-     * would render a dangling colon.
+     * the site exposes when it exposes one ({@link #siteBody}). The record-less fallback can only say that much.
      *
      * @param site the site, null for the record-less fallback
      */
     private static @NonNull ConfirmationSpec deleteBody(@Nullable Row site) {
-        String hostnames = site == null ? ""
-            : DeleteImpact.join(DeleteImpact.hostnamesOfSite(site.get(SiteModel.ID)));
-        if (site == null || hostnames.isEmpty()) {
-            return DeleteConfirmation.body(HohenheimMicrocopy.SITE.of("delete_confirm"));
-        }
-        String app = exposedAppOf(site);
-        Microcopy body = HohenheimMicrocopy.SITE.of(app == null ? "delete_confirm_hostnames" : "delete_confirm_exposing")
-            .withArg("name", String.valueOf((Object) site.get(SiteModel.NAME)))
-            .withArg("hostnames", hostnames);
-        return DeleteConfirmation.body(app == null ? body : body.withArg("app", app));
+        return DeleteConfirmation.body(site == null ? HohenheimMicrocopy.SITE.of("delete_confirm")
+            : siteBody(site, "delete_confirm", "delete_confirm_hostnames", "delete_confirm_exposing"));
     }
 
     /**
-     * @return the name of the app this site exposes, null when its kind exposes none (a redirect), the kind is unknown
-     *         or its app no longer resolves, so the dialog never claims an app that is not there
+     * THE body rule of the site dialogs (delete, switch off, switch on): {@code none} when no hostname is bound,
+     * {@code exposing} naming the app when the site exposes one ({@link #exposedAppOf}), else {@code hostnames}; each
+     * with the site's name, the latter two with its hostnames, so no dialog claims an app a redirect never had.
+     *
+     * AIDEV-NOTE: separate bodies, never one with an empty list: microcopy args echo verbatim, so an empty hostname list
+     * would render a dangling colon.
+     *
+     * @param exposing the app-naming body, null when the dialog words every kind alike
+     */
+    static @NonNull Microcopy siteBody(@NonNull Row site, @NonNull String none, @NonNull String hostnames,
+                                       @Nullable String exposing) {
+        String name = String.valueOf((Object) site.get(SiteModel.NAME));
+        String bound = DeleteImpact.join(DeleteImpact.hostnamesOfSite(site.get(SiteModel.ID)));
+        if (bound.isEmpty()) {
+            return HohenheimMicrocopy.SITE.of(none).withArg("name", name);
+        }
+        String app = exposing == null ? null : exposedAppOf(site);
+        Microcopy body = HohenheimMicrocopy.SITE.of(app == null ? hostnames : exposing).withArg("name", name)
+            .withArg("hostnames", bound);
+        return app == null ? body : body.withArg("app", app);
+    }
+
+    /**
+     * @return the name of the app this site exposes, null when its kind exposes none (the kind's
+     *         {@code requiresInstance} fact: a redirect, a static root, an address), the kind is unknown or its app no
+     *         longer resolves, so a dialog never claims an app that is not there
      */
     static @Nullable String exposedAppOf(@NonNull Row site) {
         UpstreamKindHandler kind = UpstreamKindHandlers.getHandler((String) site.get(SiteModel.UPSTREAM_KIND));

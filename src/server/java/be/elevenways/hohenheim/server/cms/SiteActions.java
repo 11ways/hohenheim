@@ -212,18 +212,11 @@ final class SiteActions {
             .build();
     }
 
-    /**
-     * The switch dialog's body over one site, naming the site and its hostnames.
-     *
-     * AIDEV-NOTE: the four bodies are a deliberate 2x2 (direction x hostnames yes/no): microcopy args echo verbatim,
-     * so an empty hostname list would render a dangling colon.
-     */
+    /** The switch dialog's body over one site, in the direction the click goes ({@link SiteParts#siteBody}). */
     private static @NonNull Microcopy toggleBody(boolean disabling, @NonNull Row site) {
-        String hostnames = DeleteImpact.join(DeleteImpact.hostnamesOfSite(site.get(SiteModel.ID)));
-        Microcopy body = HohenheimMicrocopy.SITE.of((disabling ? "disable_confirm" : "enable_confirm")
-                + (hostnames.isEmpty() ? "_no_hostnames" : ""))
-            .withArg("name", String.valueOf((Object) site.get(SiteModel.NAME)));
-        return hostnames.isEmpty() ? body : body.withArg("hostnames", hostnames);
+        return disabling
+            ? SiteParts.siteBody(site, "disable_confirm_no_hostnames", "disable_confirm", "disable_confirm_exposing")
+            : SiteParts.siteBody(site, "enable_confirm_no_hostnames", "enable_confirm", null);
     }
 
     /** The record-creating clone; the form opens on {@link #freeCloneName}, and the copy's page is where it lands. */

@@ -12686,7 +12686,11 @@
     "scope": "site"
   },
   "disable_confirm": {
-    "text": "{$name} uitschakelen? Deze hostnamen antwoorden meteen niet meer: {$hostnames}. Er wordt niets verwijderd -- de applicatie erachter blijft draaien en opnieuw inschakelen herstelt de routering.",
+    "text": "{$name} uitschakelen? Deze hostnamen antwoorden meteen niet meer: {$hostnames}. Er wordt niets verwijderd en opnieuw inschakelen herstelt de routering.",
+    "scope": "site"
+  },
+  "disable_confirm_exposing": {
+    "text": "{$name} uitschakelen? Deze hostnamen antwoorden meteen niet meer: {$hostnames}. Er wordt niets verwijderd: de app {$app} erachter blijft draaien en opnieuw inschakelen herstelt de routering.",
     "scope": "site"
   },
   "disable_confirm_no_hostnames": {
