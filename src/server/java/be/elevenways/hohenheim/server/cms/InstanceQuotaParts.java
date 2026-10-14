@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -75,7 +76,7 @@ public final class InstanceQuotaParts {
             .reads(ResourceReads.rows()
                 .mapCells((row, column) -> InstanceQuotaModel.SUBJECTS.getName().equals(column.name())
                     ? HohenheimAccess.labelSubjects(row.get(InstanceQuotaModel.SUBJECTS)) : null)
-                .title(InstanceQuotaParts::title))
+                .title(quota -> Microcopy.literalOrNull(title(quota))))
             .form(ResourceForm.<Row>of(form)
                 // The three caps an override is usually opened for; the rest default to unlimited.
                 .quickCreate(QuickCreateSpec.of(InstanceQuotaModel.SUBJECTS.getName(),

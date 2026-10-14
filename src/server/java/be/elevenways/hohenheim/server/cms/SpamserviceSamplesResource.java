@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
@@ -158,7 +159,7 @@ public final class SpamserviceSamplesResource {
                 .values(SpamserviceSamplesResource::values)
                 .build()
                 // Without this the analysis tab is headed by the sample's UUID.
-                .title(SampleSummary::ip))
+                .title(sample -> Microcopy.literalOrNull(sample.ip())))
             .list(ResourceList.store(table, SpamserviceRemoteStore.pages(ID, clients, FIELDS, List.of(),
                     (client, applied, access) -> client.samples(applied.page(), applied.schema().pageSize(),
                         SpamserviceRemoteStore.textFilter(applied, "client_id"),

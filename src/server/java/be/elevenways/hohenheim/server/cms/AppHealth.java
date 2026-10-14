@@ -496,7 +496,7 @@ final class AppHealth {
             String reason = StackFailures.reasonOf(stack);
             return switch (stoppage) {
                 case DEPLOY_FAILED -> RecordHealth.broken(stoppage.headline())
-                    .detail(reason == null ? null : Microcopy.literal(reason));
+                    .detail(Microcopy.literalOrNull(reason));
                 // A stack's stoppage is never a start that failed (stackStoppage); its services stopped either way.
                 case AFTER_ERROR, START_FAILED -> RecordHealth.broken(stoppage.headline())
                     .detail(HohenheimMicrocopy.APP_HEALTH.of("stack_failed_detail"));

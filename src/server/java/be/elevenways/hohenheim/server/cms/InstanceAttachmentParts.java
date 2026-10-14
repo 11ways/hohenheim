@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.RawValues;
 import be.elevenways.hohenheim.HohenheimActivityAction;
 import be.elevenways.hohenheim.HohenheimIds;
@@ -410,15 +411,15 @@ public final class InstanceAttachmentParts {
      * "{database} on {instance}": the two sides ARE the record; the schema's display field is the env prefix, which
      * titled every attachment "DB".
      */
-    private static @Nullable String linkTitle(@NonNull Row link) {
+    private static @Nullable Microcopy linkTitle(@NonNull Row link) {
         String database = DeleteImpact.databaseNameOf(link.get(InstanceDatabaseModel.DATABASE_ID));
         String instance = DeleteImpact.instanceNameOf(link.get(InstanceDatabaseModel.INSTANCE_ID));
         if (database == null || instance == null) {
             return null;
         }
-        return CmsSupport.resolvedTextOrDefault(HohenheimMicrocopy.INSTANCE_DATABASE.of("record_title")
+        return HohenheimMicrocopy.INSTANCE_DATABASE.of("record_title")
             .withArg("database", database)
-            .withArg("instance", instance));
+            .withArg("instance", instance);
     }
 
     /** Reachability is revoked at the daemon on confirm, the injected variable family at the next deploy. */

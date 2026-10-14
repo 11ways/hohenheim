@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -68,7 +69,7 @@ public final class GameDomainResource {
             .navOrder(21)
             .showInNav(false)
             .standsUnder(HohenheimSlugs.INSTANCES)
-            .reads(ResourceReads.rows().title(GameDomainResource::hostname))
+            .reads(ResourceReads.rows().title(mapping -> Microcopy.literalOrNull(hostname(mapping))))
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL).build())
             .form(ResourceForm.<Row>of(GameDomainOperations.FORM).build())
             .writes(ResourceMutations.rows().create(GameDomainOperations.CREATE)

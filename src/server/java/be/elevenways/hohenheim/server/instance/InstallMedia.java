@@ -202,7 +202,7 @@ public final class InstallMedia {
         List<FieldOption<String>> options = new ArrayList<>();
         for (Medium medium : media) {
             FieldOption<String> option = FieldOption.of(medium.name(), Microcopy.literal(medium.name()))
-                .withDescription(medium.description() == null ? null : Microcopy.literal(medium.description()));
+                .withDescription(Microcopy.literalOrNull(medium.description()));
             options.add(host == null ? option : option.inGroup(host));
         }
         return options;

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.activity.OperationSentences;
@@ -202,7 +203,7 @@ public final class SpamserviceClientKeysResource {
                 .load((key, access) -> load(clients, key))
                 .values(SpamserviceClientKeysResource::values)
                 .build()
-                .title(ManagedClientKey::name))
+                .title(key -> Microcopy.literalOrNull(key.name())))
             // Outside a client the list asks the service nothing, as the unscoped list always did.
             .list(ResourceList.store(table, SpamserviceRemoteStore.nothing(FIELDS),
                     SpamserviceRemoteStore.pagesUnder(ID, clients, (client, parentKey, applied, access) -> {

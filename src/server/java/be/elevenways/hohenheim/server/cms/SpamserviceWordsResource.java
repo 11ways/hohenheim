@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -87,7 +88,7 @@ public final class SpamserviceWordsResource {
                 })
                 .values(SpamserviceWordsResource::values)
                 .build()
-                .title(SpamWordEntry::word))
+                .title(entry -> Microcopy.literalOrNull(entry.word())))
             .list(ResourceList.store(table, SpamserviceRemoteStore.pages(ID, clients, FIELDS, List.of("word"),
                     (client, applied, access) -> client.spamWords(applied.page(), applied.schema().pageSize(),
                         applied.searchTerm())))

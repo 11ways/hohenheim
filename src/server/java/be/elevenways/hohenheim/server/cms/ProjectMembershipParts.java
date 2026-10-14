@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -80,7 +81,8 @@ public final class ProjectMembershipParts {
             .reads(ResourceReads.<Membership>typed(Membership::key)
                 .load((key, access) -> memberships(access).stream().filter(row -> row.key().equals(key))
                     .findFirst().orElse(null))
-                .values(ProjectMembershipParts::values).build().title(Membership::member))
+                .values(ProjectMembershipParts::values).build()
+                .title(membership -> Microcopy.literalOrNull(membership.member())))
             .build();
     }
 

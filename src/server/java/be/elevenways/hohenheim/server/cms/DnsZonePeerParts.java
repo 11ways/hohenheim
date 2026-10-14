@@ -118,7 +118,7 @@ public final class DnsZonePeerParts {
             .tab(HohenheimSlugs.Tab.SECONDARIES))
             // A link row carries no name of its own, so it borrows the peer's: the zone is already the breadcrumb it
             // hangs under, which leaves the peer as the only thing telling one link from the next.
-            .reads(ResourceReads.rows().title(DnsZonePeerParts::peerName))
+            .reads(ResourceReads.rows().title(link -> Microcopy.literalOrNull(peerName(link))))
             .list(ResourceList.rows(table).chrome(ListChrome.MINIMAL)
                 .computed(Objects.requireNonNull(table.column(PEER_NAME)), (row, request) -> peerName(row))
                 .computed(Objects.requireNonNull(table.column(TRANSFER_HOST)), (row, request) -> {
@@ -195,7 +195,7 @@ public final class DnsZonePeerParts {
         /** @return the freshness badge, the last probe's failure verbatim under it */
         @NonNull StateLineCell cell(@NonNull Row link) {
             String error = link.get(DnsZonePeerModel.PROBE_ERROR);
-            return StateLineCell.of(this, null).withNote(error == null ? null : Microcopy.literal(error));
+            return StateLineCell.of(this, null).withNote(Microcopy.literalOrNull(error));
         }
     }
 

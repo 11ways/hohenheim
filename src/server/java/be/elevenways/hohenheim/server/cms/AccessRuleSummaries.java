@@ -64,18 +64,16 @@ final class AccessRuleSummaries {
      * The rule's type label and its summary as one line, for the surfaces that have room
      * for neither a badge nor a second row (the record heading, the list's name cell).
      *
-     * @return the resolved line, or null when no request is in scope to resolve it in
+     * @return the line in the reader's language, null for a rule without a type
      */
-    static @Nullable String titleOf(@NonNull Row rule) {
+    static @Nullable Microcopy titleOf(@NonNull Row rule) {
         String type = rule.get(AccessRuleModel.TYPE);
-        String kind = CmsSupport.enumLabel(AccessRuleModel.TYPE, type);
-        String summary = CmsSupport.resolvedText(summaryOf(rule, type));
-        if (kind == null || summary == null) {
+        if (type == null) {
             return null;
         }
-        return CmsSupport.resolvedText(HohenheimMicrocopy.ACCESS_RULE.of("summary_line")
-            .withArg("kind", kind)
-            .withArg("summary", summary));
+        return HohenheimMicrocopy.ACCESS_RULE.of("summary_line")
+            .withArg("kind", CmsSupport.enumValueLabel(AccessRuleModel.TYPE, type))
+            .withArg("summary", summaryOf(rule, type));
     }
 
     /**

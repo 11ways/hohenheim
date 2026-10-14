@@ -128,12 +128,10 @@ public final class InstanceScheduleRunParts {
      * A run has nothing but its outcome and when it happened, so it is titled by the outcome plus the run's own
      * number: two runs of one schedule differ by nothing else a heading can carry.
      */
-    private static @Nullable String title(@NonNull Row run) {
-        String status = CmsSupport.enumLabel(RecordScheduleRunModel.STATUS, run.get(RecordScheduleRunModel.STATUS));
-        String title = status == null ? null : CmsSupport.resolvedText(
-            HohenheimMicrocopy.INSTANCE_SCHEDULE.of("run_title")
-                .withArg("id", String.valueOf((Object) run.get(RecordScheduleRunModel.ID)))
-                .withArg("status", status));
-        return title != null && !title.isBlank() ? title : null;
+    private static @Nullable Microcopy title(@NonNull Row run) {
+        Object status = run.get(RecordScheduleRunModel.STATUS);
+        return status == null ? null : HohenheimMicrocopy.INSTANCE_SCHEDULE.of("run_title")
+            .withArg("id", String.valueOf((Object) run.get(RecordScheduleRunModel.ID)))
+            .withArg("status", CmsSupport.enumValueLabel(RecordScheduleRunModel.STATUS, status));
     }
 }

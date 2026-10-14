@@ -173,7 +173,7 @@ public final class Alerts {
         }
         return Comms.notifyNowWithReason(new AlertNotification("test", about(NotificationChannelModel.MODEL_ID,
                 row.get(NotificationChannelModel.ID)), Microcopy.literal(subject),
-            message == null ? null : Microcopy.literal(message)), recipient);
+            Microcopy.literalOrNull(message)), recipient);
     }
 
     private static boolean subscribes(@NonNull Row channel, @NonNull String event) {

@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
@@ -66,7 +67,7 @@ public final class InstanceSnapshotParts {
             .form(ResourceForm.<Row>of(FormSpec.builder().add(InstanceSnapshotModel.NOTE).build())
                 .inlineEditable(InstanceSnapshotModel.NOTE).build())
             .list(ResourceList.rows(tableSpec()).chrome(ListChrome.MINIMAL).search(InstanceSnapshotModel.NOTE).build())
-            .reads(ResourceReads.rows().title(InstanceSnapshotParts::title))
+            .reads(ResourceReads.rows().title(snapshot -> Microcopy.literalOrNull(title(snapshot))))
             .writes(ResourceMutations.rows().update().delete(InstanceSnapshotOperations.DELETE).build())
             .authority(ResourceAuthority.<Row>builder().write(null,
                     (row, access) -> HohenheimAccess.reachesRecord(access,

@@ -177,7 +177,7 @@ public final class AppParts {
                     .filter(app -> app.key().equals(key)).findFirst().orElse(null))
                 .values(AppParts::values)
                 .build()
-                .title(App::name));
+                .title(app -> Microcopy.literalOrNull(app.name())));
     }
 
     /** The table: state glyph, app, address, kind, host (operator only), HTTPS, fix; the filter columns stay hidden. */

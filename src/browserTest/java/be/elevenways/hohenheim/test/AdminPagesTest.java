@@ -1004,7 +1004,7 @@ class AdminPagesTest extends HohenheimTestBase {
             //    about a person rather than about a storage key.
             assertThat(PartsReads.recordTitle(InstanceQuotaParts.admin(), quota))
                 .as("step 4: the record title names the owner too")
-                .isEqualTo("Quota Label Owner");
+                .isEqualTo(Microcopy.literal("Quota Label Owner"));
         } finally {
             Models.get(InstanceQuotaModel.class).delete(quota.get(InstanceQuotaModel.ID));
             Models.get(InstanceQuotaModel.class).delete(dangling.get(InstanceQuotaModel.ID));

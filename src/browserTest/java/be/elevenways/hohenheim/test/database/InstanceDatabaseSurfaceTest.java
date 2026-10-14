@@ -23,7 +23,9 @@ import be.elevenways.hohenheim.server.runtime.ContainerState;
 import be.elevenways.hohenheim.test.HardDeletes;
 import be.elevenways.hohenheim.test.HohenheimTestBase;
 import be.elevenways.hohenheim.test.host.HostFixtures;
+import be.elevenways.protoblast.common.i18n.LocaleChain;
 import be.elevenways.protoblast.common.i18n.Microcopy;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.cms.common.action.ConfirmationSpec;
@@ -132,7 +134,8 @@ class InstanceDatabaseSurfaceTest extends HohenheimTestBase {
             HohenheimSlugs.Tab.DATABASES).toUrl();
 
         // 1. The record is titled by both sides, never by its env prefix.
-        assertThat(attachments.recordTitle(link))
+        assertThat(Objects.requireNonNull(attachments.recordTitle(link))
+                .resolve(LocaleChain.ofTags("en"), Zenit.getMessageResolver()))
             .as("step 1: the attachment title names the database and the instance")
             .contains(PREFIX + "db")
             .contains(PREFIX + "web")

@@ -169,7 +169,7 @@ public final class InstanceBackupParts {
             .navOrder(17)
             .showInNav(false)
             .parent(parent)
-            .reads(ResourceReads.rows().title(InstanceBackupParts::title))
+            .reads(ResourceReads.rows().title(backup -> Microcopy.literal(title(backup))))
             // A backup is immutable evidence: no create (born from the instance action or the nightly task) and no
             // update; readers view, actions act. Its archive key is a field of the page, never its title.
             .form(ResourceForm.<Row>of(FormSpec.builder().add(instance).add(InstanceBackupModel.REMOTE_KEY).build())

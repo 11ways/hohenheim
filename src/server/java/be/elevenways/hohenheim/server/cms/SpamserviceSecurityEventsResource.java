@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.cms;
 
+import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.hohenheim.HohenheimMicrocopy;
@@ -111,7 +112,7 @@ public final class SpamserviceSecurityEventsResource {
                 .values(SpamserviceSecurityEventsResource::values)
                 .build()
                 // Type plus origin: the two facts that tell one aggregated event row from the next.
-                .title(row -> row.type() + " " + row.ip()))
+                .title(row -> Microcopy.literal(row.type() + " " + row.ip())))
             .list(ResourceList.store(table, SpamserviceRemoteStore.pages(ID, clients, FIELDS, List.of(),
                     (client, applied, access) -> {
                         RangeFilterValue days = applied.filter().get("day") instanceof RangeFilterValue range

@@ -118,9 +118,8 @@ public final class InstanceScheduleStepParts {
             .tab(HohenheimSlugs.Tab.STEPS))
             // A step IS its action; the label is read off the action registry's own declaration.
             .reads(ResourceReads.rows().title(step -> {
-                String action = CmsSupport.enumLabel(RecordScheduleStepModel.ACTION,
-                    step.get(RecordScheduleStepModel.ACTION));
-                return action != null && !action.isBlank() ? action : null;
+                Object action = step.get(RecordScheduleStepModel.ACTION);
+                return action == null ? null : CmsSupport.enumValueLabel(RecordScheduleStepModel.ACTION, action);
             }))
             .form(ResourceForm.<Row>of(form)
                 // A step belongs to the schedule it was created in: the form renders it read-only on an existing
