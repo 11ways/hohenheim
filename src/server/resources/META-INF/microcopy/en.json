@@ -5043,7 +5043,7 @@
       "scope": "stack"
     },
     {
-      "text": "Stop this instance? Its published port is released; the container and its data are kept.",
+      "text": "Stop this instance? It keeps its published port for its next start; the container and its data are kept.",
       "scope": "instance"
     }
   ],

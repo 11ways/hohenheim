@@ -5043,7 +5043,7 @@
       "scope": "stack"
     },
     {
-      "text": "Deze instantie stoppen? De gepubliceerde poort wordt vrijgegeven; de container en zijn data blijven bestaan.",
+      "text": "Deze instantie stoppen? Ze houdt haar gepubliceerde poort voor de volgende start; de container en zijn data blijven bestaan.",
       "scope": "instance"
     }
   ],
