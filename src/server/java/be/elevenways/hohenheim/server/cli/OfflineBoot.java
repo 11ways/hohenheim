@@ -4,6 +4,7 @@ import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.HohenheimSettingsBoot;
 import be.elevenways.hohenheim.server.auth.HohenheimAccess;
 import be.elevenways.zenit.server.cli.HostConsole;
+import be.elevenways.zenit.server.cli.OfflineCommand;
 import be.elevenways.zenit.server.cli.OfflineCommandException;
 import be.elevenways.zenit.server.cli.OfflineCommands;
 import be.elevenways.zenit.server.cli.ServerCli;
@@ -88,14 +89,21 @@ public final class OfflineBoot {
         return OfflineCommands.runIfRequested(args, out, OfflineBoot::prepareHost);
     }
 
-    /** Settings, grant declarations and the datasource, for a command that needs the host; closed after it. */
-    private static OfflineCommands.@NonNull PreparedHost prepareHost() {
+    /**
+     * Settings and grant declarations, plus the datasource for a command that needs the whole host; released after.
+     */
+    private static OfflineCommands.@NonNull PreparedHost prepareHost(OfflineCommand.@NonNull Needs needs) {
         HohenheimSettingsBoot.load();
         // Registry writes only, and the same ones the migration lane does: a command that
         // touches a grant-aware model must see the same liveness declarations a boot would.
         HohenheimAccess.declareGrantableModels();
-        HohenheimDatabase.openDatasource();
-        return HohenheimDatabase::closeDatasource;
+        return switch (needs) {
+            case NOTHING, SETTINGS -> () -> { };
+            case HOST -> {
+                HohenheimDatabase.openDatasource();
+                yield HohenheimDatabase::closeDatasource;
+            }
+        };
     }
 
     private static boolean namesAnOption(String[] args) {

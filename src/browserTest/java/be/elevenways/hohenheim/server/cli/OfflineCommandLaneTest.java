@@ -284,6 +284,7 @@ class OfflineCommandLaneTest {
         // 1. Pointing the rehearsal at the LIVE file is an error, never a run -- this is
         //    the exact invocation the broken lane effectively performed.
         Path live = ControlPlaneBackups.databaseFile();
+        Datasource registered = Datasources.getDefault();
         assertThatThrownBy(() -> OfflineBoot.runIfRequested(new String[] {
                 RehearseMigrationsCommand.FLAG, live.toString()}, line -> { }))
             .as("step 1: the live database is refused by file identity")
@@ -328,6 +329,12 @@ class OfflineCommandLaneTest {
         assertThat(scalar(live, "SELECT COUNT(*) FROM zenit_migrations"))
             .as("step 4: the live ledger is untouched")
             .isEqualTo(liveLedger);
+
+        // 5. Nor was it ever OPENED: the rehearsal asks the host for its settings only, so no step registered the
+        //    configured datasource (the lane opened the live database on every deploy's rehearsal before).
+        assertThat(Datasources.getDefault())
+            .as("step 5: neither the refusal nor the rehearsal opened the host's datasource")
+            .isSameAs(registered);
         Files.deleteIfExists(copy);
     }
 

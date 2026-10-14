@@ -31,6 +31,11 @@ import java.util.List;
  * configured live file (symlinks included), so pointing it at production is an error
  * message, never a silent live migration.
  *
+ * AIDEV-NOTE: it needs the SETTINGS, never the host's datasource ({@link Needs#SETTINGS}): the settings name the live
+ * file it refuses ({@code database.path}) and carry what a migration's data step may read (the encryption keyring),
+ * but opening the configured datasource opened the LIVE database during every deploy's rehearsal (seen on starfleet,
+ * 2026-10-14) although only the copy is migrated.
+ *
  * @author Jelle De Loecker
  * @since 0.7.0
  */
@@ -41,6 +46,11 @@ public final class RehearseMigrationsCommand implements OfflineCommand {
     @Override
     public @NonNull String flag() {
         return FLAG;
+    }
+
+    @Override
+    public @NonNull Needs needs() {
+        return Needs.SETTINGS;
     }
 
     @Override
