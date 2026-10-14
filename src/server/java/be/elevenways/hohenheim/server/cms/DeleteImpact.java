@@ -342,14 +342,29 @@ public final class DeleteImpact {
         return null;
     }
 
-    /** @return the instance's name, or null when the reference is absent or dangling */
+    /** @return the instance's name, trashed included, or null when the reference is absent or dangling */
     static @Nullable String instanceNameOf(@Nullable Integer instanceId) {
+        Row instance = instanceOf(instanceId);
+        return instance == null ? null : instance.get(InstanceModel.NAME);
+    }
+
+    /**
+     * @return the instance's name, or null when the reference is absent, dangling or trashed: an app that was deleted
+     *         keeps running nowhere, so a dialog naming it as running would claim what is not there
+     */
+    static @Nullable String liveInstanceNameOf(@Nullable Integer instanceId) {
+        Row instance = instanceOf(instanceId);
+        return instance == null || InstanceModel.SOFT_DELETE.isTrashed(instance) ? null
+            : instance.get(InstanceModel.NAME);
+    }
+
+    private static @Nullable Row instanceOf(@Nullable Integer instanceId) {
         if (instanceId == null) {
             return null;
         }
         for (Row instance : instances()) {
             if (instanceId.equals(instance.get(InstanceModel.ID))) {
-                return instance.get(InstanceModel.NAME);
+                return instance;
             }
         }
         return null;

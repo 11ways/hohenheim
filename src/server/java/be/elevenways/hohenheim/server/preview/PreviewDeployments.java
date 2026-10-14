@@ -430,8 +430,7 @@ public final class PreviewDeployments {
                 Blast.log("PREVIEW: artifact prune of preview", previewId, "failed -",
                     pruneFailed.getMessage());
             }
-            GitCheckout.deleteTree(
-                GitCheckout.directoryFor(PreviewDeploymentModel.MODEL_ID, previewId));
+            GitCheckout.discard(PreviewDeploymentModel.MODEL_ID, previewId);
             preview.set(PreviewDeploymentModel.STATUS,
                 "expired".equals(reason) ? PreviewDeploymentModel.STATUS_EXPIRED
                                          : PreviewDeploymentModel.STATUS_DESTROYED);

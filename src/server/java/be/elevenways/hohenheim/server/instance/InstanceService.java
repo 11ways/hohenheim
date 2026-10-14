@@ -29,6 +29,7 @@ import be.elevenways.hohenheim.server.runtime.InstanceStatus;
 import be.elevenways.hohenheim.server.runtime.NativeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.VolumeSnapshotSupport;
 import be.elevenways.hohenheim.server.runtime.WorkloadAttribution;
+import be.elevenways.hohenheim.server.source.GitCheckout;
 import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
@@ -493,6 +494,7 @@ public final class InstanceService {
         if (releaseManaged(instanceId)) {
             ApplicationReleases.destroyFor(instanceId);
             trash(instanceId);
+            GitCheckout.discard(InstanceModel.MODEL_ID, instanceId);
             InstanceExposure.disableForDestroyedInstance(instanceId);
             return;
         }
@@ -545,6 +547,7 @@ public final class InstanceService {
         // DISABLED, never deleted: the hostnames, certificates and access rules are the
         // SITE's, and re-pointing it at another instance is one toggle away.
         InstanceExposure.disableForDestroyedInstance(instanceId);
+        GitCheckout.discard(InstanceModel.MODEL_ID, instanceId);
         Blast.log("INSTANCE: destroyed", resolved.spec().handle(),
             "- container removed, volumes kept, record soft-deleted");
     }
@@ -957,6 +960,8 @@ public final class InstanceService {
         if (!InstanceModel.SOFT_DELETE.isTrashed(row)) {
             destroy(instanceId);
         }
+        // A checkout outlives no delete; this also clears one a record trashed by an older controller left behind.
+        GitCheckout.discard(InstanceModel.MODEL_ID, instanceId);
         List<String> removed = new ArrayList<>(removeNamedVolumes(row, serverName));
         removed.addAll(InstanceVolumes.destroyAll(instanceId, serverName));
         ActivityLog.record(Models.get(InstanceModel.class), instanceId, HohenheimActivityAction.DELETED_DATA,

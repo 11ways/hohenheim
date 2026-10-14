@@ -45,6 +45,20 @@ public final class GitCheckout {
     }
 
     /**
+     * Remove an owner record's checkout, then its owner-model folder and the checkouts folder once they are empty.
+     *
+     * AIDEV-NOTE: every end of an owner takes this (a plain delete, Delete with data, a preview's destroy): a
+     * checkout is a rebuildable build context, never data, so a soft delete does not keep it until a purge; a
+     * restored record clones again on its next deploy. Deleting an application used to leave
+     * {@code checkouts/instance/<id>} on the controller forever.
+     */
+    public static void discard(@NonNull Identifier ownerModel, int ownerId) {
+        File checkout = directoryFor(ownerModel, ownerId);
+        deleteTree(checkout);
+        FileTrees.removeEmptyUpTo(checkout.toPath(), DataDirectory.path());
+    }
+
+    /**
      * Materialize {@code ref} of the source into {@code checkout}.
      *
      * AIDEV-NOTE: the URL and the ref are judged HERE, before git runs, with named

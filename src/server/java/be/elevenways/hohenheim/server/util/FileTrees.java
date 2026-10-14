@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.server.util;
 
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import java.io.IOException;
@@ -66,5 +67,31 @@ public final class FileTrees {
             return walkFailed.getCause();
         }
         return first[0];
+    }
+
+    /**
+     * Remove {@code directory} and then each parent while it is empty, stopping below {@code stop}.
+     *
+     * AIDEV-NOTE: emptiness is the filesystem's own answer (a delete of a directory that holds anything refuses),
+     * never a listing read first, so a racing writer that just created a child keeps its folder. A symlink is never
+     * treated as a directory to climb, and nothing at or above {@code stop} is touched.
+     */
+    public static void removeEmptyUpTo(@NonNull Path directory, @NonNull Path stop) {
+        Path root = stop.toAbsolutePath().normalize();
+        Path current = directory.toAbsolutePath().normalize();
+        while (current != null && current.startsWith(root) && !current.equals(root)) {
+            if (!Files.isDirectory(current, LinkOption.NOFOLLOW_LINKS)) {
+                if (Files.exists(current, LinkOption.NOFOLLOW_LINKS)) {
+                    return;
+                }
+            } else {
+                try {
+                    Files.delete(current);
+                } catch (IOException notEmpty) {
+                    return;
+                }
+            }
+            current = current.getParent();
+        }
     }
 }

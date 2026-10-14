@@ -15235,7 +15235,7 @@
     "scope": "put_online"
   },
   "address_help": {
-    "text": "De hostnaam die bezoekers typen. Laat leeg voor een app die niemand bij naam bereikt, zoals een gameserver. Je kunt later meer adressen toevoegen.",
+    "text": "De hostnaam die bezoekers typen. Laat leeg om het later een adres te geven. Je kunt dan ook meer adressen toevoegen.",
     "scope": "put_online"
   },
   "https_automatic": {

@@ -54,6 +54,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -201,6 +202,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         Integer keptId = kept == null ? null : kept.get(InstanceModel.ID);
 
         Map<Integer, String> commits = releaseCommits(operations);
+        Map<Object, Row> ranBuilds = buildsRun(operations, builds);
         List<Map<String, Object>> deployments = new ArrayList<>();
         for (Row row : operations) {
             Integer candidate = row.get(ReleaseOperationModel.CANDIDATE_INSTANCE_ID);
@@ -208,7 +210,7 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
                 ReleaseOperationModel.STATUS, row.get(ReleaseOperationModel.STATUS),
                 Objects.toString(row.get(ReleaseOperationModel.KIND), ""),
                 candidate == null ? null : commits.get(candidate),
-                row.get(ReleaseOperationModel.DURATION_MS),
+                releaseDurationMs(row, ranBuilds.get(row.get(ReleaseOperationModel.ID))),
                 failures.shown(row.get(ReleaseOperationModel.FAILURE_REASON)),
                 row.get(ReleaseOperationModel.STARTED_AT),
                 // The engine's step log carries daemon text (ReleaseEngine.reasonOf): operators
@@ -242,6 +244,56 @@ public final class InstanceDeploymentsPage implements RecordTab.Rendered<Row> {
         deployments.sort(Comparator.comparing((Map<String, Object> entry) ->
             Objects.toString(entry.get("startedAtIso"), "")).reversed());
         vars.put("deployments", deployments);
+    }
+
+    /**
+     * The build each release ran, keyed by the release's id: per release, oldest first, the newest succeeded build of
+     * its image that started before it and that no earlier release ran.
+     *
+     * AIDEV-NOTE: a release row times only its own switch (start the candidate, probe, swap); the build that made its
+     * image is a row of its own, so a first static release read "548 ms". A rollback, or a restart of an unchanged
+     * image, runs no build: the build of its image belongs to the release that ran it first.
+     *
+     * @param releases the owner's releases, newest first
+     * @param builds   the owner's builds, newest first
+     */
+    static @NonNull Map<Object, Row> buildsRun(@NonNull List<Row> releases, @NonNull List<Row> builds) {
+        Map<Object, Row> ran = new HashMap<>();
+        Set<Object> taken = new HashSet<>();
+        for (Row release : releases.reversed()) {
+            String image = Objects.toString(release.get(ReleaseOperationModel.IMAGE_ID), "");
+            Instant started = release.get(ReleaseOperationModel.STARTED_AT);
+            if (image.isEmpty() || started == null) {
+                continue;
+            }
+            for (Row build : builds) {
+                Instant built = build.get(BuildOperationModel.STARTED_AT);
+                if (image.equals(Objects.toString(build.get(BuildOperationModel.IMAGE_ID), ""))
+                        && BuildOperationModel.LIFECYCLE.is(build.get(BuildOperationModel.STATUS),
+                            OperationStatus.SUCCEEDED)
+                        && built != null && !built.isAfter(started)) {
+                    if (taken.add(build.get(BuildOperationModel.ID))) {
+                        ran.put(release.get(ReleaseOperationModel.ID), build);
+                    }
+                    break;
+                }
+            }
+        }
+        return ran;
+    }
+
+    /**
+     * @return how long the whole release took: from the start of the build it ran to its own finish, or its own switch
+     *         time when it ran no build; null while it runs
+     */
+    static @Nullable Integer releaseDurationMs(@NonNull Row release, @Nullable Row build) {
+        Integer own = release.get(ReleaseOperationModel.DURATION_MS);
+        Instant finished = release.get(ReleaseOperationModel.FINISHED_AT);
+        Instant built = build == null ? null : build.get(BuildOperationModel.STARTED_AT);
+        if (own == null || finished == null || built == null) {
+            return own;
+        }
+        return (int) (finished.toEpochMilli() - built.toEpochMilli());
     }
 
     /**

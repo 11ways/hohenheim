@@ -92,10 +92,13 @@ public final class PutOnline {
     /** The HTTPS choice: no order now; the address answers over HTTP until a certificate is added. */
     public static final String HTTPS_LATER = HttpsChoice.LATER.token();
 
-    /** The address visitors type. Named like the site create's first hostname, so route refusals path on it. */
+    /**
+     * The address visitors type. Named like the site create's first hostname, so route refusals path on it. Only the
+     * website flows ask it, so its help is the website reach's.
+     */
     public static final StringField HOSTNAME = StringField.builder(SiteDomainModel.HOSTNAME.getName())
         .label(HohenheimMicrocopy.PUT_ONLINE.of("address"))
-        .help(HohenheimMicrocopy.PUT_ONLINE.of("address_help"))
+        .help(Objects.requireNonNull(PutOnlineReach.WEBSITE.addressHelp(), "a website asks an address"))
         .placeholder("shop.example.com")
         .build();
 

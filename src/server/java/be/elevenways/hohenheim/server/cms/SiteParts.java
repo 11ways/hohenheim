@@ -366,15 +366,15 @@ public final class SiteParts {
 
     /**
      * @return the name of the app this site exposes, null when its kind exposes none (the kind's
-     *         {@code requiresInstance} fact: a redirect, a static root, an address), the kind is unknown or its app no
-     *         longer resolves, so a dialog never claims an app that is not there
+     *         {@code requiresInstance} fact: a redirect, a static root, an address), the kind is unknown, or its app is
+     *         deleted (trashed included) or no longer resolves, so a dialog never claims an app that is not there
      */
     static @Nullable String exposedAppOf(@NonNull Row site) {
         UpstreamKindHandler kind = UpstreamKindHandlers.getHandler((String) site.get(SiteModel.UPSTREAM_KIND));
         if (kind == null || !kind.requiresInstance()) {
             return null;
         }
-        return DeleteImpact.instanceNameOf(site.get(SiteModel.INSTANCE_ID));
+        return DeleteImpact.liveInstanceNameOf(site.get(SiteModel.INSTANCE_ID));
     }
 
     /**

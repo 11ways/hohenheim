@@ -199,11 +199,11 @@ class PutOnlineJourneyTest extends HohenheimTestBase {
         assertThat(addressWizard).as("step 2: an address kind opens its own wizard")
             .contains("data-zf-step=\"where\"").contains("data-zf-step=\"https\"");
         assertThat(wizard).as("step 2: a template may go online without an address, and its hint says so")
-            .contains("nobody reaches by name");
+            .contains("Leave it empty to give it an address later.");
         assertThat(wizard).as("step 2: the host pick stands in its Runs on card, with its describing line")
             .contains("Runs on").contains("Hohenheim picks the host with room");
         assertThat(addressWizard).as("step 2: an address kind has nothing to serve without one, so no such hint")
-            .doesNotContain("nobody reaches by name").contains("You can add more addresses later.");
+            .doesNotContain("Leave it empty").contains("You can add more addresses later.");
         assertThat(addressWizard)
             .as("step 2: the wizard's state carries the journey around it, What before it and Going live after")
             .contains("step_what").contains("step_live");

@@ -15235,7 +15235,7 @@
     "scope": "put_online"
   },
   "address_help": {
-    "text": "The hostname visitors type. Leave it empty for an app nobody reaches by name, like a game server. You can add more addresses later.",
+    "text": "The hostname visitors type. Leave it empty to give it an address later. You can add more addresses then too.",
     "scope": "put_online"
   },
   "https_automatic": {

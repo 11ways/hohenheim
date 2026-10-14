@@ -1,5 +1,6 @@
 package be.elevenways.hohenheim.test;
 
+import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSlugs;
 import be.elevenways.hohenheim.server.quota.OwnerBudget;
 import be.elevenways.hohenheim.model.AccessListModel;
@@ -10,6 +11,8 @@ import be.elevenways.hohenheim.server.cms.AccessListParts;
 import be.elevenways.hohenheim.server.cms.SiteWrites;
 import be.elevenways.hohenheim.server.instance.ApplicationKind;
 import be.elevenways.hohenheim.server.instance.InstanceService;
+import be.elevenways.hohenheim.server.source.GitCheckout;
+import be.elevenways.hohenheim.server.util.FileTrees;
 import be.elevenways.zenit.cms.common.panel.PanelRegistry;
 import be.elevenways.zenit.cms.common.panel.Panel;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
@@ -17,6 +20,7 @@ import be.elevenways.zenit.cms.common.resource.DeleteConfirmation;
 import be.elevenways.zenit.cms.common.resource.PanelResource;
 import be.elevenways.zenit.cms.server.panel.PartsReads;
 import be.elevenways.zenit.cms.test.support.PanelResourceCalls;
+import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.activity.ZenitActivityAction;
 import be.elevenways.zenit.common.orm.datasource.Db;
@@ -30,6 +34,10 @@ import be.elevenways.zenit.common.validation.Violations;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -163,42 +171,76 @@ class SoftDeleteJourneyTest {
     }
 
     @Test
-    void destroyingAnApplicationRecordsTheDestroyItIs() {
-        Db.run(datasource, () -> {
-            Model instances = Models.get(InstanceModel.class);
-            int applicationId = application(PREFIX + "application");
-            try {
-                // 1. An application has no container, so its destroy is the release lane
-                //    followed by the trash write.
-                new InstanceService().destroy(applicationId);
-                assertThat(instances.findById(applicationId))
-                    .as("step 1: the destroyed application leaves the default reads").isNull();
-                assertThat((Object) StoredRows.byId(instances, applicationId).get(InstanceModel.DELETED_AT))
-                    .as("step 1: and is kept trashed").isNotNull();
+    void destroyingAnApplicationRecordsTheDestroyAndRemovesItsCheckout() throws Exception {
+        Path dataRoot = Files.createTempDirectory("softdel-data");
+        String savedDataPath = Zenit.SETTINGS_VALUES.getValue(HohenheimSettings.Storage.DATA_PATH);
+        Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, dataRoot.toString());
+        try {
+            Db.run(datasource, () -> destroyJourney(dataRoot));
+        } finally {
+            Zenit.SETTINGS_VALUES.setValue(HohenheimSettings.Storage.DATA_PATH, savedDataPath);
+            FileTrees.deleteQuietly(dataRoot);
+        }
+    }
 
-                // 2. BUG FIXED: the application lane saved deleted_at bare, recorded as an
-                //    "update"; it now takes the one trash write every destroy shares.
-                List<Row> deletes = activityFor(InstanceModel.MODEL_ID.toString(), applicationId,
-                    ZenitActivityAction.DELETE.id().toString());
-                assertThat(deletes).as("step 2: the destroy is recorded as one delete").hasSize(1);
-                assertThat((String) deletes.get(0).get(ActivityModel.DETAIL))
-                    .as("step 2: named as the verified destroy it is")
-                    .isEqualTo(InstanceService.ACTIVITY_DESTROY_DETAIL);
-                assertThat(activityFor(InstanceModel.MODEL_ID.toString(), applicationId,
-                        ZenitActivityAction.UPDATE.id().toString()))
-                    .as("step 2: and never as a bare update").isEmpty();
+    private static void destroyJourney(Path dataRoot) {
+        Model instances = Models.get(InstanceModel.class);
+        int applicationId = application(PREFIX + "application");
+        int neighbourId = application(PREFIX + "neighbour");
+        try {
+            Path checkout = checkout(applicationId);
+            Path neighbour = checkout(neighbourId);
 
-                // 3. Destroying it again refuses (there is no live record) and writes nothing.
-                assertThat(catchThrowable(() -> new InstanceService().destroy(applicationId)))
-                    .as("step 3: a trashed record is not destroyed twice")
-                    .isInstanceOf(Violations.class);
-                assertThat(activityFor(InstanceModel.MODEL_ID.toString(), applicationId,
-                        ZenitActivityAction.DELETE.id().toString()))
-                    .as("step 3: and nothing more is recorded").hasSize(1);
-            } finally {
-                HardDeletes.byId(instances, applicationId);
-            }
-        });
+            // 1. An application has no container, so its destroy is the release lane
+            //    followed by the trash write.
+            new InstanceService().destroy(applicationId);
+            assertThat(instances.findById(applicationId))
+                .as("step 1: the destroyed application leaves the default reads").isNull();
+            assertThat((Object) StoredRows.byId(instances, applicationId).get(InstanceModel.DELETED_AT))
+                .as("step 1: and is kept trashed").isNotNull();
+
+            // 2. BUG FIXED: the application lane saved deleted_at bare, recorded as an
+            //    "update"; it now takes the one trash write every destroy shares.
+            List<Row> deletes = activityFor(InstanceModel.MODEL_ID.toString(), applicationId,
+                ZenitActivityAction.DELETE.id().toString());
+            assertThat(deletes).as("step 2: the destroy is recorded as one delete").hasSize(1);
+            assertThat((String) deletes.get(0).get(ActivityModel.DETAIL))
+                .as("step 2: named as the verified destroy it is")
+                .isEqualTo(InstanceService.ACTIVITY_DESTROY_DETAIL);
+            assertThat(activityFor(InstanceModel.MODEL_ID.toString(), applicationId,
+                    ZenitActivityAction.UPDATE.id().toString()))
+                .as("step 2: and never as a bare update").isEmpty();
+
+            // 3. BUG FIXED: the plain (soft) delete removes the git checkout, which used to stay on the
+            //    controller forever; another application's checkout, and so the shared folder, stay.
+            assertThat(checkout).as("step 3: the destroyed application's checkout is gone").doesNotExist();
+            assertThat(neighbour).as("step 3: another application's checkout is untouched").isDirectory();
+
+            // 4. Destroying it again refuses (there is no live record) and writes nothing.
+            assertThat(catchThrowable(() -> new InstanceService().destroy(applicationId)))
+                .as("step 4: a trashed record is not destroyed twice")
+                .isInstanceOf(Violations.class);
+            assertThat(activityFor(InstanceModel.MODEL_ID.toString(), applicationId,
+                    ZenitActivityAction.DELETE.id().toString()))
+                .as("step 4: and nothing more is recorded").hasSize(1);
+
+            // 5. Delete with data on a record an older controller trashed with its checkout left behind
+            //    removes that checkout too.
+            checkout(applicationId);
+            new InstanceService().destroyWithData(applicationId);
+            assertThat(checkout).as("step 5: Delete with data removes a leftover checkout").doesNotExist();
+
+            // 6. Delete with data on a live application removes its checkout, and with the last one gone the
+            //    empty checkouts folder goes too; the data directory itself stays.
+            new InstanceService().destroyWithData(neighbourId);
+            assertThat(neighbour).as("step 6: Delete with data removes the checkout").doesNotExist();
+            assertThat(dataRoot.resolve("checkouts")).as("step 6: the empty checkouts folder is pruned")
+                .doesNotExist();
+            assertThat(dataRoot).as("step 6: the data directory stays").isDirectory();
+        } finally {
+            HardDeletes.byId(instances, applicationId);
+            HardDeletes.byId(instances, neighbourId);
+        }
     }
 
     // -- fixtures ---------------------------------------------------------------
@@ -232,6 +274,18 @@ class SoftDeleteJourneyTest {
         row.set(InstanceModel.STATUS, InstanceModel.STATUS_CREATED);
         Models.get(InstanceModel.class).save(row);
         return row.get(InstanceModel.ID);
+    }
+
+    /** A checkout as a deploy leaves it: the owner's directory holding a clone. */
+    private static Path checkout(int applicationId) {
+        Path directory = GitCheckout.directoryFor(InstanceModel.MODEL_ID, applicationId).toPath();
+        try {
+            Files.createDirectories(directory.resolve(".git"));
+            Files.writeString(directory.resolve("index.html"), "<h1>checkout</h1>");
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return directory;
     }
 
     private static String gatingKey(DeleteConfirmation<Row> lists, int listId) {

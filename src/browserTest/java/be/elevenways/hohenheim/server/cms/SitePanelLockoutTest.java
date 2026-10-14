@@ -218,6 +218,16 @@ class SitePanelLockoutTest extends HohenheimTestBase {
                 .contains("de app " + APP_NAME + " erachter blijft draaien");
             assertThat(say(disableAction.confirmationFor(siteRow(redirect)).body(), NL))
                 .as("step 4: the Dutch Redirect switch-off names none").doesNotContain("blijft draaien");
+
+            // 5. BUG FIXED: once its app is deleted ("Delete with data" trashes the record), the site's dialogs stop
+            //    saying that app keeps running; they name the hostnames alone.
+            assertThat(Models.get(InstanceModel.class).delete(app.get(InstanceModel.ID)))
+                .as("step 5: the app is trashed").isTrue();
+            assertThat(say(SiteParts.admin().deleteConfirmation().forRow(siteRow(backed), request).body(), EN))
+                .as("step 5: the delete of a site whose app is deleted names no running app")
+                .contains(BACKED_HOST).doesNotContain(APP_NAME).doesNotContain("keeps running");
+            assertThat(say(disableAction.confirmationFor(siteRow(backed)).body(), NL))
+                .as("step 5: nor does its Dutch switch-off").doesNotContain("blijft draaien");
         } finally {
             HardDeletes.row(Models.get(SiteModel.class), siteRow(redirect));
             HardDeletes.row(Models.get(SiteModel.class), siteRow(backed));

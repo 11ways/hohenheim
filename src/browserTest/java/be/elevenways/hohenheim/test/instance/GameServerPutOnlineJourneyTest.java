@@ -491,6 +491,24 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
     }
 
     /**
+     * The address a website flow asks is helped by the website reach's own words: a static site and a container image
+     * put online as websites never hear of a game server, which is reached on its ports and never asked an address.
+     */
+    @Test
+    void aWebsiteAddressHelpSpeaksOfTheWebsiteReachAlone() throws Exception {
+        for (String kind : List.of("hohenheim:static_site", "hohenheim:docker_container")) {
+            String wizard = adminGet("/admin/" + HohenheimSlugs.PUT_ONLINE + "?workload=" + kind).body();
+            // 1. The wizard asks the address.
+            assertThat(wizard).as("step 1: the %s wizard asks an address", kind)
+                .contains("name=\"" + PutOnline.HOSTNAME.getName() + "\"");
+            // 2. BUG FIXED: its help no longer names a game server; it says what an empty address means here.
+            assertThat(wizard).as("step 2: the %s address help names no game server", kind)
+                .doesNotContain("like a game server")
+                .contains("Leave it empty to give it an address later.");
+        }
+    }
+
+    /**
      * A container image goes online as a service on its own ports, without a template: the chooser offers it on its
      * ports beside the website card; that wizard asks Where, Options and Ports, never an address or HTTPS; a port
      * name given twice is refused before a run; one run creates the container with a game and a query port, both

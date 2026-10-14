@@ -39,6 +39,20 @@ public enum PutOnlineReach {
         };
     }
 
+    /**
+     * @return the help under the address a flow reaching it this way asks, null when it asks none
+     *
+     * AIDEV-NOTE: the help is the reach's, never one text for every flow: the address once said "leave it empty for
+     * an app nobody reaches by name, like a game server" on a static site, long after game servers moved to their
+     * Ports step and stopped being asked an address at all.
+     */
+    public @Nullable Microcopy addressHelp() {
+        return switch (this) {
+            case WEBSITE -> HohenheimMicrocopy.PUT_ONLINE.of("address_help");
+            case PORTS, NONE -> null;
+        };
+    }
+
     /** @return the reach as a route names it */
     public @NonNull String token() {
         return switch (this) {
