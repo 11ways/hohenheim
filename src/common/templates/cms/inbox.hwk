@@ -1,9 +1,9 @@
 {#- The operator's own notification inbox. The list, the unread styling, the
-    importance badges and both read forms are the shipped zenit-comms surface;
+    importance badges and both read forms are the shipped zenit-notifications surface;
     this page owns only the route, the heading (zenitcms:page-header, so a cluster landing has one h1) and
     the page window. -#}
 {% declare title: String %}
-{% declare items: List<CommsInboxItemView> %}
+{% declare items: List<NotificationInboxItemView> %}
 {% declare markAllTarget: RouteTarget %}
 {% declare pager: Pager %}
 {% declare lead: Microcopy %}
@@ -15,7 +15,7 @@
 <section class="cms-resource-form-page" data-admin-inbox>
     {% render "zenitcms:page-header" var:title=title var:lead=lead %}
 
-    <zc-inbox items={% items %} markAllTarget={% markAllTarget %}></zc-inbox>
+    <znt-inbox items={% items %} markAllTarget={% markAllTarget %}></znt-inbox>
 
     {#- plumage's numbered pager over core's PageWindow; it renders nothing for one page. -#}
     <pl-pager pager={% pager %} label={% t("pagination", scope: "admin_inbox") %} data-admin-inbox-pagination></pl-pager>

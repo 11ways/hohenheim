@@ -18,11 +18,11 @@ import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
 import be.elevenways.zenit.common.task.record.RunStatus;
 import be.elevenways.zenit.common.task.record.StepFailurePolicy;
 import be.elevenways.zenit.common.task.record.StepStatus;
-import be.elevenways.zenit.comms.CommsChannel;
-import be.elevenways.zenit.comms.server.Comms;
-import be.elevenways.zenit.comms.server.CommsDeliveryModel;
-import be.elevenways.zenit.comms.server.CommsDispatcher;
-import be.elevenways.zenit.comms.server.transport.TransportTypes;
+import be.elevenways.zenit.notifications.server.transport.TransportTypes;
+import be.elevenways.zenit.notifications.DeliveryChannel;
+import be.elevenways.zenit.notifications.server.DeliveryModel;
+import be.elevenways.zenit.notifications.server.NotificationDispatcher;
+import be.elevenways.zenit.notifications.server.Notifications;
 import be.elevenways.zenit.server.task.record.RecordSchedules;
 import be.elevenways.zenit.test.support.OutboundFixture;
 import com.sun.net.httpserver.HttpServer;
@@ -81,14 +81,14 @@ class ScheduledBackupAlertTest {
             exchange.close();
         });
         this.receiver.start();
-        // The comms guard refuses a loopback destination, so the channel names a public-looking host the fixture
-        // routes to the receiver.
+        // The notifications guard refuses a loopback destination, so the channel names a public-looking host the
+        // fixture routes to the receiver.
         this.outbound = OutboundFixture.route("alerts.example.test", this.receiver.getAddress().getPort());
         Db.run(datasource, () -> {
             Models.get(NotificationChannelModel.class).find().delete();
-            Models.get(CommsDeliveryModel.class).find().delete();
-            Comms.install(new CommsDispatcher(Map.of(
-                CommsChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+            Models.get(DeliveryModel.class).find().delete();
+            Notifications.install(new NotificationDispatcher(Map.of(
+                DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
             NotificationChannelModel channels = Models.get(NotificationChannelModel.class);
             Row channel = channels.createEmptyRow();
             channel.set(NotificationChannelModel.NAME, "ops");
@@ -102,7 +102,7 @@ class ScheduledBackupAlertTest {
     @AfterEach
     void tearDown() {
         RecordSchedules.setBetweenStepHookForTest(null);
-        Comms.install(null);
+        Notifications.install(null);
         this.outbound.close();
         this.receiver.stop(0);
     }

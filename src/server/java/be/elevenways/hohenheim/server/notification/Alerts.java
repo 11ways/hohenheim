@@ -6,13 +6,13 @@ import be.elevenways.protoblast.common.Blast;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
 import be.elevenways.zenit.auth.server.PermissionHolders;
-import be.elevenways.zenit.comms.AdHocRecipient;
-import be.elevenways.zenit.comms.CommsChannel;
-import be.elevenways.zenit.comms.CommsRecipient;
-import be.elevenways.zenit.comms.CommsTexts;
-import be.elevenways.zenit.comms.server.Comms;
-import be.elevenways.zenit.comms.server.CommsInboxOwners;
-import be.elevenways.zenit.comms.server.NotifyOutcome;
+import be.elevenways.zenit.notifications.AdHocRecipient;
+import be.elevenways.zenit.notifications.DeliveryChannel;
+import be.elevenways.zenit.notifications.NotificationRecipient;
+import be.elevenways.zenit.notifications.NotificationTexts;
+import be.elevenways.zenit.notifications.server.NotificationInboxOwners;
+import be.elevenways.zenit.notifications.server.Notifications;
+import be.elevenways.zenit.notifications.server.NotifyOutcome;
 import be.elevenways.zenit.common.orm.activity.ActivityLog;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -26,7 +26,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Platform alerting on top of zenit-comms: resolves the admin-managed
+ * Platform alerting on top of zenit-notifications: resolves the admin-managed
  * notification channels into recipients and hands delivery to the durable
  * outbox (retries and failure rows replace the old best-effort HTTP posts).
  *
@@ -71,14 +71,14 @@ public final class Alerts {
     public static int send(@NonNull NotificationEvents event, @NonNull String about, @NonNull Microcopy subject,
                            @Nullable Microcopy message) {
         AlertNotification notification = new AlertNotification(event.token(), about, subject, message);
-        List<CommsRecipient> recipients = new ArrayList<>(administrators());
+        List<NotificationRecipient> recipients = new ArrayList<>(administrators());
 
         for (Row row : Models.get(NotificationChannelModel.class).find().all()) {
             if (!subscribes(row, event.token())) {
                 continue;
             }
 
-            CommsRecipient recipient = recipientFor(row);
+            NotificationRecipient recipient = recipientFor(row);
 
             if (recipient == null) {
                 continue;
@@ -87,10 +87,10 @@ public final class Alerts {
         }
         // AIDEV-NOTE: an alert's delivery rows and inbox items are the system's own bookkeeping, recorded in the
         // delivery log, never activity: inside a person's command (Probe now) they were headed by that command's
-        // sentence ("Jelle checked whether Comms delivery #3 answers").
+        // sentence ("Jelle checked whether Notification delivery #3 answers").
         ActivityLog.suppressed(() -> {
-            for (CommsRecipient recipient : recipients) {
-                Comms.notify(notification, recipient);
+            for (NotificationRecipient recipient : recipients) {
+                Notifications.notify(notification, recipient);
             }
         });
         int queued = recipients.size();
@@ -100,7 +100,7 @@ public final class Alerts {
             // can otherwise believe alerting works while receiving nothing.
             Blast.slog("hohenheim.notification.undelivered", Map.of(
                 "event", event.token(),
-                "subject", String.valueOf(CommsTexts.plain(subject)),
+                "subject", String.valueOf(NotificationTexts.plain(subject)),
                 "reason", "no_recipients"));
         }
         return queued;
@@ -110,7 +110,7 @@ public final class Alerts {
      * {@link #send} that never throws.
      *
      * AIDEV-NOTE: THE shape for alerting from inside a failure path. Every such caller
-     * used to wrap send in its own try/catch so a comms failure could not swallow the
+     * used to wrap send in its own try/catch so a notifications failure could not swallow the
      * failure it was reporting; that is this method's whole job, done once.
      *
      * @return the number of deliveries queued, or -1 when queueing itself failed (logged)
@@ -127,7 +127,7 @@ public final class Alerts {
     }
 
     /**
-     * The panel inbox of every enabled administrator, as comms recipients.
+     * The panel inbox of every enabled administrator, as notification recipients.
      *
      * A revoked or disabled account drops out on the next alert because the holder list
      * is read fresh; a boot without the auth tables degrades to no inbox recipients
@@ -135,13 +135,13 @@ public final class Alerts {
      *
      * @return one INBOX-routed recipient per administrator, never null
      */
-    public static @NonNull List<CommsRecipient> administrators() {
-        List<CommsRecipient> recipients = new ArrayList<>();
+    public static @NonNull List<NotificationRecipient> administrators() {
+        List<NotificationRecipient> recipients = new ArrayList<>();
 
         try {
             for (Integer id : PermissionHolders.userIdsHolding(HohenheimSources.ADMIN_ACCESS)) {
                 recipients.add(new AdHocRecipient()
-                    .route(CommsChannel.INBOX, CommsInboxOwners.userKey(id)));
+                    .route(DeliveryChannel.INBOX, NotificationInboxOwners.userKey(id)));
             }
         } catch (Exception unavailable) {
             Blast.slog("hohenheim.notification.inbox_unavailable", Map.of(
@@ -166,12 +166,12 @@ public final class Alerts {
      */
     public static @NonNull NotifyOutcome testChannelOutcome(@NonNull Row row, @NonNull String subject,
                                                             @Nullable String message) {
-        CommsRecipient recipient = recipientFor(row);
+        NotificationRecipient recipient = recipientFor(row);
 
         if (recipient == null) {
             return NotifyOutcome.failed("Channel row has no usable url or format");
         }
-        return Comms.notifyNowWithReason(new AlertNotification("test", about(NotificationChannelModel.MODEL_ID,
+        return Notifications.notifyNowWithReason(new AlertNotification("test", about(NotificationChannelModel.MODEL_ID,
                 row.get(NotificationChannelModel.ID)), Microcopy.literal(subject),
             Microcopy.literalOrNull(message)), recipient);
     }
@@ -182,13 +182,13 @@ public final class Alerts {
     }
 
     /**
-     * Map a channel row onto a comms recipient: slack/discord URLs become
+     * Map a channel row onto a notification recipient: slack/discord URLs become
      * DSN-shaped CHAT routes (each names its own transport), generic URLs
      * become plain WEBHOOK routes delivered by the configured webhook chain.
      *
      * @return null (with a slog) when the row's URL cannot be mapped
      */
-    public static @Nullable CommsRecipient recipientFor(@NonNull Row row) {
+    public static @Nullable NotificationRecipient recipientFor(@NonNull Row row) {
         String name = row.get(NotificationChannelModel.NAME);
         String format = row.get(NotificationChannelModel.FORMAT);
         String url = row.get(NotificationChannelModel.URL);
@@ -206,7 +206,7 @@ public final class Alerts {
                     slogUnmappable(name, format, "not an https webhook URL");
                     return null;
                 }
-                return new AdHocRecipient().route(CommsChannel.CHAT, route).setDisplayName(name);
+                return new AdHocRecipient().route(DeliveryChannel.CHAT, route).setDisplayName(name);
             }
             case NotificationChannelModel.FORMAT_DISCORD -> {
                 route = discordRoute(url);
@@ -214,7 +214,7 @@ public final class Alerts {
                     slogUnmappable(name, format, "not a discord /api/webhooks/ID/TOKEN URL");
                     return null;
                 }
-                return new AdHocRecipient().route(CommsChannel.CHAT, route).setDisplayName(name);
+                return new AdHocRecipient().route(DeliveryChannel.CHAT, route).setDisplayName(name);
             }
             case NotificationChannelModel.FORMAT_GENERIC -> {
                 return AdHocRecipient.webhook(url).setDisplayName(name);

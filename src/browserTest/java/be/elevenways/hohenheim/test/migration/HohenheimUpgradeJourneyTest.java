@@ -53,10 +53,10 @@ import be.elevenways.zenit.common.task.orm.SystemTaskHistoryModel;
 import be.elevenways.zenit.common.task.orm.SystemTaskModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleModel;
 import be.elevenways.zenit.common.task.record.RecordScheduleStepModel;
-import be.elevenways.zenit.comms.CommsChannel;
-import be.elevenways.zenit.comms.server.CommsDeliveryModel;
-import be.elevenways.zenit.comms.server.CommsInboxModel;
-import be.elevenways.zenit.comms.server.hub.HubIdempotency;
+import be.elevenways.zenit.notifications.DeliveryChannel;
+import be.elevenways.zenit.notifications.server.DeliveryModel;
+import be.elevenways.zenit.notifications.server.NotificationInboxModel;
+import be.elevenways.zenit.notifications.server.hub.HubIdempotency;
 import be.elevenways.zenit.common.time.ClockOffset;
 import be.elevenways.zenit.server.ServerZenitRuntime;
 import be.elevenways.zenit.server.data.SavedViews;
@@ -337,8 +337,10 @@ class HohenheimUpgradeJourneyTest {
         assertThat(strings(url, "SELECT DISTINCT model FROM zenit_activity"))
             .as("step 6: every activity row names today's model id")
             .contains("zenit:user", "zenit:grant", "zenit:permission_group", "zenit:record_grant", "zenit:api_key",
-                "zenit:comms_inbox_item", "zenit:comms_delivery", "zenit:saved_view", "zenit:record_schedule_step")
-            .noneMatch(model -> model.startsWith("zenit-auth:") || model.startsWith("zenit-comms:"));
+                "zenit:notification_inbox_item", "zenit:notification_delivery", "zenit:saved_view",
+                "zenit:record_schedule_step")
+            .noneMatch(model -> model.startsWith("zenit-auth:") || model.startsWith("zenit-comms:")
+                || model.startsWith("zenit:comms_"));
 
         // 7. The site's revision and the activity row linked to it read as before.
         List<Row> revisions = new RevisionModel(HohenheimDatabase.datasource()).find().noCache()
@@ -462,16 +464,24 @@ class HohenheimUpgradeJourneyTest {
         assertThat(session).as("step 12: the session resolves").isNotNull();
         assertThat(session.get(AuthKeys.USER_ID)).as("step 12: to the operator").isEqualTo((long) operatorId);
 
-        // 13. The comms rows Hohenheim's alert wrote: both inboxes, both deliveries on today's inbox channel.
+        // 13. The rows Hohenheim's alert wrote, in today's notifications_ tables: both inboxes, both deliveries on
+        //     today's inbox channel, and no comms_ table left behind.
+        assertThat(strings(url, "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'comms\\_%' "
+                + "ESCAPE '\\'"))
+            .as("step 13: every comms_ table was renamed").isEmpty();
+        assertThat(strings(url, "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE "
+                + "'notifications\\_%' ESCAPE '\\'"))
+            .as("step 13: to its notifications_ name").contains("notifications_deliveries", "notifications_inbox_items",
+                "notifications_hub_projects", "notifications_watch_queue");
         Db.run(HohenheimDatabase.datasource(), () -> {
-            List<Row> inbox = Models.get(CommsInboxModel.class).find().noCache().all();
-            assertThat(inbox).extracting(row -> row.get(CommsInboxModel.RECIPIENT))
+            List<Row> inbox = Models.get(NotificationInboxModel.class).find().noCache().all();
+            assertThat(inbox).extracting(row -> row.get(NotificationInboxModel.RECIPIENT))
                 .as("step 13: each administrator's inbox item").containsExactlyInAnyOrder("user:1", "user:2");
-            assertThat(inbox).extracting(row -> row.get(CommsInboxModel.NOTIFICATION_KEY))
+            assertThat(inbox).extracting(row -> row.get(NotificationInboxModel.NOTIFICATION_KEY))
                 .as("step 13: for the certificate alert").containsOnly("hohenheim:cert_expiring");
-            List<Row> deliveries = Models.get(CommsDeliveryModel.class).find().noCache().all();
-            assertThat(deliveries).extracting(row -> CommsChannel.find(row.get(CommsDeliveryModel.CHANNEL)))
-                .as("step 13: both deliveries read as the inbox channel").containsOnly(CommsChannel.INBOX);
+            List<Row> deliveries = Models.get(DeliveryModel.class).find().noCache().all();
+            assertThat(deliveries).extracting(row -> DeliveryChannel.find(row.get(DeliveryModel.CHANNEL)))
+                .as("step 13: both deliveries read as the inbox channel").containsOnly(DeliveryChannel.INBOX);
         });
 
         // 14. The next boot finds nothing left in the old spellings.

@@ -5,13 +5,13 @@ import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
-import be.elevenways.zenit.comms.CommsChannel;
-import be.elevenways.zenit.comms.server.Comms;
-import be.elevenways.zenit.comms.server.CommsDeliveryModel;
-import be.elevenways.zenit.comms.server.CommsDispatcher;
-import be.elevenways.zenit.comms.server.NotifyOutcome;
-import be.elevenways.zenit.comms.server.transport.TransportTypes;
-import be.elevenways.zenit.comms.test.support.FakeTransport;
+import be.elevenways.zenit.notifications.server.transport.TransportTypes;
+import be.elevenways.zenit.notifications.test.support.FakeTransport;
+import be.elevenways.zenit.notifications.DeliveryChannel;
+import be.elevenways.zenit.notifications.server.DeliveryModel;
+import be.elevenways.zenit.notifications.server.NotificationDispatcher;
+import be.elevenways.zenit.notifications.server.Notifications;
+import be.elevenways.zenit.notifications.server.NotifyOutcome;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterEach;
@@ -41,12 +41,12 @@ class NotificationChannelTestToastTest {
     @BeforeEach
     void cleanSlate() {
         Models.get(NotificationChannelModel.class).find().delete();
-        Models.get(CommsDeliveryModel.class).find().delete();
+        Models.get(DeliveryModel.class).find().delete();
     }
 
     @AfterEach
     void restoreDispatcher() {
-        Comms.install(null);
+        Notifications.install(null);
     }
 
     private static Row addChannel(String name) {
@@ -62,8 +62,8 @@ class NotificationChannelTestToastTest {
 
     private static void installWebhookTransport(String dsn) {
         FakeTransport.install();
-        Comms.install(new CommsDispatcher(Map.of(
-            CommsChannel.WEBHOOK, List.of(TransportTypes.create(dsn))), 1, true));
+        Notifications.install(new NotificationDispatcher(Map.of(
+            DeliveryChannel.WEBHOOK, List.of(TransportTypes.create(dsn))), 1, true));
     }
 
     @Test
@@ -77,9 +77,9 @@ class NotificationChannelTestToastTest {
         assertThat(handoff.delivered()).as("a relay proves no delivery").isFalse();
 
         // 2. The persisted trail agrees: accepted, not sent.
-        Row delivery = Models.get(CommsDeliveryModel.class).find().first();
+        Row delivery = Models.get(DeliveryModel.class).find().first();
         assertThat(delivery).as("the inline send must have persisted a row").isNotNull();
-        assertThat(delivery.get(CommsDeliveryModel.STATUS))
+        assertThat(delivery.get(DeliveryModel.STATUS))
             .as("a relay handoff is recorded as accepted").isEqualTo("accepted");
 
         // 3. So the toast names a handoff instead of claiming the test was delivered.
@@ -87,11 +87,11 @@ class NotificationChannelTestToastTest {
             .as("a handoff must not be toasted as a delivery").isEqualTo("test_accepted");
 
         // 4. A transport that owns the outcome still gets the plain delivered toast.
-        Models.get(CommsDeliveryModel.class).find().delete();
+        Models.get(DeliveryModel.class).find().delete();
         installWebhookTransport("fake://ok");
         NotifyOutcome delivered = Alerts.testChannelOutcome(channel, "Test", "hello");
         assertThat(delivered.delivered()).as("a provider transport proves delivery").isTrue();
-        assertThat(Models.get(CommsDeliveryModel.class).find().first().get(CommsDeliveryModel.STATUS))
+        assertThat(Models.get(DeliveryModel.class).find().first().get(DeliveryModel.STATUS))
             .as("a real delivery is recorded as sent").isEqualTo("sent");
         assertThat(NotificationChannelParts.testSucceeded(delivered).key())
             .as("a delivery keeps the plain success toast").isEqualTo("test_ok");

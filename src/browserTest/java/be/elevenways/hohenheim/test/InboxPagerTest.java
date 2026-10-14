@@ -2,9 +2,9 @@ package be.elevenways.hohenheim.test;
 
 import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.comms.server.CommsInbox;
-import be.elevenways.zenit.comms.server.CommsInboxModel;
-import be.elevenways.zenit.comms.server.CommsInboxOwners;
+import be.elevenways.zenit.notifications.server.NotificationInbox;
+import be.elevenways.zenit.notifications.server.NotificationInboxModel;
+import be.elevenways.zenit.notifications.server.NotificationInboxOwners;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.Test;
@@ -26,14 +26,14 @@ class InboxPagerTest extends HohenheimTestBase {
 
     @Test
     void theInboxPagesThroughNumberedRungs() throws Exception {
-        String owner = CommsInboxOwners.userKey(harnessAdminId());
+        String owner = NotificationInboxOwners.userKey(harnessAdminId());
         try {
             // 1. Exactly one page of items (whatever alerts the shared server already
             //    delivered to this admin count too): the pager renders nothing at all.
-            long existing = Models.get(CommsInboxModel.class).unarchivedCountFor(owner);
+            long existing = Models.get(NotificationInboxModel.class).unarchivedCountFor(owner);
             assertThat(existing).as("step 1: the harness admin's inbox fits one page")
-                .isLessThanOrEqualTo(CommsInbox.DEFAULT_LIMIT);
-            seed(owner, (int) (CommsInbox.DEFAULT_LIMIT - existing));
+                .isLessThanOrEqualTo(NotificationInbox.DEFAULT_LIMIT);
+            seed(owner, (int) (NotificationInbox.DEFAULT_LIMIT - existing));
             HttpResponse<String> single = adminGet("/admin/inbox");
             assertThat(single.statusCode()).as("step 1: the inbox renders").isEqualTo(200);
             assertThat(single.body()).as("step 1: one page needs no pager")
@@ -58,9 +58,9 @@ class InboxPagerTest extends HohenheimTestBase {
             assertThat(second.body()).as("step 3: page 2 still carries the pager")
                 .contains("data-admin-inbox-pagination");
         } finally {
-            for (Row row : Models.get(CommsInboxModel.class).find()
-                    .where(CommsInboxModel.NOTIFICATION_KEY.eq(MARKER)).all()) {
-                Models.get(CommsInboxModel.class).delete(row);
+            for (Row row : Models.get(NotificationInboxModel.class).find()
+                    .where(NotificationInboxModel.NOTIFICATION_KEY.eq(MARKER)).all()) {
+                Models.get(NotificationInboxModel.class).delete(row);
             }
         }
     }
@@ -73,13 +73,13 @@ class InboxPagerTest extends HohenheimTestBase {
 
     private static void seed(String owner, int count) {
         for (int i = 0; i < count; i++) {
-            Row item = Models.get(CommsInboxModel.class).createEmptyRow();
-            item.set(CommsInboxModel.RECIPIENT, owner);
-            item.set(CommsInboxModel.NOTIFICATION_KEY, MARKER);
-            item.set(CommsInboxModel.TITLE, "Pager item " + i);
-            item.set(CommsInboxModel.CREATED_AT, Now.instant());
-            item.set(CommsInboxModel.UPDATED_AT, Now.instant());
-            Models.get(CommsInboxModel.class).save(item);
+            Row item = Models.get(NotificationInboxModel.class).createEmptyRow();
+            item.set(NotificationInboxModel.RECIPIENT, owner);
+            item.set(NotificationInboxModel.NOTIFICATION_KEY, MARKER);
+            item.set(NotificationInboxModel.TITLE, "Pager item " + i);
+            item.set(NotificationInboxModel.CREATED_AT, Now.instant());
+            item.set(NotificationInboxModel.UPDATED_AT, Now.instant());
+            Models.get(NotificationInboxModel.class).save(item);
         }
     }
 }

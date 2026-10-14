@@ -4,13 +4,11 @@ import be.elevenways.hohenheim.HohenheimMicrocopy;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.hohenheim.HohenheimEndpoints;
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.HohenheimSources;
 import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.server.host.HostProbe;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.notification.Alerts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
@@ -18,15 +16,11 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantModel;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserModel;
-import be.elevenways.zenit.comms.CommsChannel;
-import be.elevenways.zenit.comms.CommsRecipient;
-import be.elevenways.zenit.comms.CommsSettings;
-import be.elevenways.zenit.comms.server.Comms;
-import be.elevenways.zenit.comms.server.CommsDeliveryModel;
-import be.elevenways.zenit.comms.server.CommsDispatcher;
-import be.elevenways.zenit.comms.server.CommsInboxModel;
-import be.elevenways.zenit.comms.server.CommsInboxOwners;
-import be.elevenways.zenit.comms.server.transport.TransportTypes;
+import be.elevenways.zenit.notifications.server.transport.TransportTypes;
+import be.elevenways.zenit.notifications.DeliveryChannel;
+import be.elevenways.zenit.notifications.NotificationRecipient;
+import be.elevenways.zenit.notifications.NotificationSettings;
+import be.elevenways.zenit.notifications.server.*;
 import be.elevenways.zenit.common.orm.activity.ActivityModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -54,7 +48,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Platform alerting through zenit-comms: channel-row-to-recipient mapping,
+ * Platform alerting through zenit-notifications: channel-row-to-recipient mapping,
  * event subscriptions, durable delivery rows, and the generic webhook envelope.
  */
 // Solo: private-network host declarations are process-global, sealed at boot and have no reset.
@@ -66,11 +60,11 @@ class AlertsTest {
         // The test host declares its LAN webhook authority before runtime seals boot declarations.
         ExecutionIdentity.runDetachedAsSystem("alerts test host boot", () -> {
             new DrySettingsWriter(ServerZenitRuntime.settingsFile(PrivateNetworkBoot.FILE))
-                .setPath(CommsSettings.Webhook.ALLOW_PRIVATE_NETWORKS.configurationPath(), true).persist();
-            CommsSettings.Webhook.ALLOW_PRIVATE_NETWORKS.declareAtBoot(true);
+                .setPath(NotificationSettings.Webhook.ALLOW_PRIVATE_NETWORKS.configurationPath(), true).persist();
+            NotificationSettings.Webhook.ALLOW_PRIVATE_NETWORKS.declareAtBoot(true);
         });
         // The shared browserTest runtime registers models and runs migrations
-        // (comms tables included, via migration auto-discovery).
+        // (notifications tables included, via migration auto-discovery).
         HohenheimEndpoints.init();
         TestDatabases.freshDatabase();
         HohenheimTestRuntime.ensureBooted();
@@ -79,20 +73,20 @@ class AlertsTest {
     @BeforeEach
     void cleanSlate() {
         Models.get(NotificationChannelModel.class).find().delete();
-        Models.get(CommsDeliveryModel.class).find().delete();
-        Models.get(CommsInboxModel.class).find().delete();
+        Models.get(DeliveryModel.class).find().delete();
+        Models.get(NotificationInboxModel.class).find().delete();
         // The inbox fanout is driven by who holds the admin permission, so every
         // method decides that for itself instead of inheriting the previous one's.
         Models.get(GrantModel.class).find().delete();
         Models.get(UserModel.class).find().delete();
         // Inline webhook-only dispatcher: assertions run right after send().
-        Comms.install(new CommsDispatcher(Map.of(
-            CommsChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+        Notifications.install(new NotificationDispatcher(Map.of(
+            DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
     }
 
     @AfterEach
     void restoreDispatcher() {
-        Comms.install(null);
+        Notifications.install(null);
     }
 
     private static Row addChannel(String name, String format, String url, List<String> events) {
@@ -116,21 +110,21 @@ class AlertsTest {
         Row generic = addChannel("gen", NotificationChannelModel.FORMAT_GENERIC,
             "https://example.com/hook", null);
 
-        CommsRecipient slack_recipient = Alerts.recipientFor(slack);
+        NotificationRecipient slack_recipient = Alerts.recipientFor(slack);
         assertThat(slack_recipient).isNotNull();
-        assertThat(slack_recipient.routeFor(CommsChannel.CHAT))
+        assertThat(slack_recipient.routeFor(DeliveryChannel.CHAT))
             .isEqualTo("slack://hooks.slack.com/services/T0/B0/XYZ");
 
-        CommsRecipient discord_recipient = Alerts.recipientFor(discord);
+        NotificationRecipient discord_recipient = Alerts.recipientFor(discord);
         assertThat(discord_recipient).isNotNull();
-        assertThat(discord_recipient.routeFor(CommsChannel.CHAT))
+        assertThat(discord_recipient.routeFor(DeliveryChannel.CHAT))
             .isEqualTo("discord://1234/tok-en");
 
-        CommsRecipient generic_recipient = Alerts.recipientFor(generic);
+        NotificationRecipient generic_recipient = Alerts.recipientFor(generic);
         assertThat(generic_recipient).isNotNull();
-        assertThat(generic_recipient.routeFor(CommsChannel.WEBHOOK))
+        assertThat(generic_recipient.routeFor(DeliveryChannel.WEBHOOK))
             .isEqualTo("https://example.com/hook");
-        assertThat(generic_recipient.routeFor(CommsChannel.CHAT)).isNull();
+        assertThat(generic_recipient.routeFor(DeliveryChannel.CHAT)).isNull();
     }
 
     @Test
@@ -166,11 +160,11 @@ class AlertsTest {
                 .isEqualTo(2);
 
             // Every queued delivery ended up SENT in the durable outbox.
-            List<Row> rows = Models.get(CommsDeliveryModel.class).find().all();
+            List<Row> rows = Models.get(DeliveryModel.class).find().all();
             assertThat(rows).hasSize(3);
             for (Row row : rows) {
-                assertThat((String) row.get(CommsDeliveryModel.STATUS))
-                    .as("delivery error: " + row.get(CommsDeliveryModel.ERROR))
+                assertThat((String) row.get(DeliveryModel.STATUS))
+                    .as("delivery error: " + row.get(DeliveryModel.ERROR))
                     .isEqualTo("sent");
             }
         } finally {
@@ -204,10 +198,10 @@ class AlertsTest {
             Row good = addChannel("good", NotificationChannelModel.FORMAT_GENERIC,
                 receiver.url("/t"), null);
             boolean outcome = Alerts.testChannel(good, "Test", "hello");
-            Row delivery = Models.get(CommsDeliveryModel.class).find().first();
+            Row delivery = Models.get(DeliveryModel.class).find().first();
             assertThat(outcome)
                 .as("delivery row: " + (delivery == null ? "(none)"
-                    : delivery.get(CommsDeliveryModel.STATUS) + " / " + delivery.get(CommsDeliveryModel.ERROR)))
+                    : delivery.get(DeliveryModel.STATUS) + " / " + delivery.get(DeliveryModel.ERROR)))
                 .isTrue();
             assertThat(receiver.lastPath.get()).isEqualTo("/t");
 
@@ -236,8 +230,8 @@ class AlertsTest {
         assertThat(Alerts.administrators())
             .as("only the enabled holder of the admin permission is an alert recipient")
             .hasSize(1);
-        assertThat(Alerts.administrators().get(0).routeFor(CommsChannel.INBOX))
-            .isEqualTo(CommsInboxOwners.userKey(admin));
+        assertThat(Alerts.administrators().get(0).routeFor(DeliveryChannel.INBOX))
+            .isEqualTo(NotificationInboxOwners.userKey(admin));
 
         // 2. The alert is queued for that inbox, and reports it as reached.
         assertThat(Alerts.send(NotificationEvents.BACKUP_FAILED, Alerts.INSTALLATION, lit("Backup failed"),
@@ -246,25 +240,25 @@ class AlertsTest {
             .isEqualTo(1);
 
         // 3. The delivery row is a real, local, terminal delivery.
-        Row delivery = Models.get(CommsDeliveryModel.class).find().first();
+        Row delivery = Models.get(DeliveryModel.class).find().first();
         assertThat(delivery).isNotNull();
-        assertThat((String) delivery.get(CommsDeliveryModel.CHANNEL))
-            .isEqualTo(CommsChannel.INBOX.getDbValue());
-        assertThat((String) delivery.get(CommsDeliveryModel.STATUS))
+        assertThat((String) delivery.get(DeliveryModel.CHANNEL))
+            .isEqualTo(DeliveryChannel.INBOX.getDbValue());
+        assertThat((String) delivery.get(DeliveryModel.STATUS))
             .as("a local channel is delivered here, so it really is sent")
             .isEqualTo("sent");
-        assertThat((String) delivery.get(CommsDeliveryModel.RECIPIENT))
-            .isEqualTo(CommsInboxOwners.userKey(admin));
+        assertThat((String) delivery.get(DeliveryModel.RECIPIENT))
+            .isEqualTo(NotificationInboxOwners.userKey(admin));
 
         // 4. And the item the administrator will actually read exists, badged.
-        List<Row> items = Models.get(CommsInboxModel.class).find().all();
+        List<Row> items = Models.get(NotificationInboxModel.class).find().all();
         assertThat(items).hasSize(1);
-        assertThat((String) items.get(0).get(CommsInboxModel.RECIPIENT))
+        assertThat((String) items.get(0).get(NotificationInboxModel.RECIPIENT))
             .as("neither the disabled account (" + disabled + ") nor the bystander ("
                 + bystander + ") receives one")
-            .isEqualTo(CommsInboxOwners.userKey(admin));
-        assertThat((String) items.get(0).get(CommsInboxModel.TITLE)).isEqualTo("Backup failed");
-        assertThat((String) items.get(0).get(CommsInboxModel.IMPORTANCE)).isEqualTo("high");
+            .isEqualTo(NotificationInboxOwners.userKey(admin));
+        assertThat((String) items.get(0).get(NotificationInboxModel.TITLE)).isEqualTo("Backup failed");
+        assertThat((String) items.get(0).get(NotificationInboxModel.IMPORTANCE)).isEqualTo("high");
 
         // 5. The catalog lane: an alert composed of Microcopy (resolved per reader, never
         //    pre-rendered English) is queued the same way, through the one never-throwing
@@ -276,7 +270,7 @@ class AlertsTest {
                     .withArg("name", "shop").withArg("reason", "disk full")))
             .as("step 5: a Microcopy alert reaches the administrator's inbox too")
             .isEqualTo(1);
-        assertThat(Models.get(CommsInboxModel.class).find().all())
+        assertThat(Models.get(NotificationInboxModel.class).find().all())
             .as("step 5: as a second inbox item").hasSize(2);
 
         // 6. A host that stops answering is worded for a person, its technical detail after the words, and its
@@ -289,15 +283,15 @@ class AlertsTest {
                     .withArg("failure", HostProbe.FailureKind.UNREACHABLE.label())
                     .withArg("detail", "kex_exchange_identification: read: Connection reset by peer"));
         }
-        List<Row> hostItems = Models.get(CommsInboxModel.class).find()
-            .where(CommsInboxModel.REPEAT_KEY.eq("host_unreachable:" + phoenix)).all();
+        List<Row> hostItems = Models.get(NotificationInboxModel.class).find()
+            .where(NotificationInboxModel.REPEAT_KEY.eq("host_unreachable:" + phoenix)).all();
         assertThat(hostItems).as("step 6: three occurrences about one host are one item").hasSize(1);
-        assertThat((Integer) hostItems.get(0).get(CommsInboxModel.REPEATS))
+        assertThat((Integer) hostItems.get(0).get(NotificationInboxModel.REPEATS))
             .as("step 6: which says how often it came").isEqualTo(3);
-        assertThat((String) hostItems.get(0).get(CommsInboxModel.TITLE))
+        assertThat((String) hostItems.get(0).get(NotificationInboxModel.TITLE))
             .as("step 6: the headline names the host in words, no token in brackets")
             .isEqualTo("phoenix stopped answering");
-        assertThat((String) hostItems.get(0).get(CommsInboxModel.BODY))
+        assertThat((String) hostItems.get(0).get(NotificationInboxModel.BODY))
             .as("step 6: the raw ssh error stays available as the detail after the words")
             .endsWith(": kex_exchange_identification: read: Connection reset by peer");
 
@@ -306,7 +300,7 @@ class AlertsTest {
         long activity = Models.get(ActivityModel.class).find().count();
         Alerts.send(NotificationEvents.HOST_UNREACHABLE, Alerts.about(ServerModel.MODEL_ID, 42),
             HohenheimMicrocopy.ALERT.of("host_unreachable_subject").withArg("name", "kumulus"), null);
-        assertThat(Models.get(CommsInboxModel.class).find().all())
+        assertThat(Models.get(NotificationInboxModel.class).find().all())
             .as("step 7: another host's alert stands beside it").hasSize(4);
         assertThat(Models.get(ActivityModel.class).find().count())
             .as("step 7: sending it recorded no activity").isEqualTo(activity);

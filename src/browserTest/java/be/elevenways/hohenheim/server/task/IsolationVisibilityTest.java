@@ -1,5 +1,7 @@
 package be.elevenways.hohenheim.server.task;
-
+import be.elevenways.zenit.notifications.DeliveryChannel;
+import be.elevenways.zenit.notifications.server.NotificationDispatcher;
+import be.elevenways.zenit.notifications.server.Notifications;
 import be.elevenways.zenit.test.support.OutboundFixture;
 import be.elevenways.hohenheim.AttentionItem;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
@@ -14,10 +16,7 @@ import be.elevenways.hohenheim.server.util.Http11;
 import be.elevenways.hohenheim.test.HohenheimTestRuntime;
 import be.elevenways.hohenheim.test.TestDatabases;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.comms.CommsChannel;
-import be.elevenways.zenit.comms.server.Comms;
-import be.elevenways.zenit.comms.server.CommsDispatcher;
-import be.elevenways.zenit.comms.server.transport.TransportTypes;
+import be.elevenways.zenit.notifications.server.transport.TransportTypes;
 import be.elevenways.zenit.common.orm.datasource.Datasources;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
@@ -82,8 +81,8 @@ class IsolationVisibilityTest {
 
         // Inline delivery, the CertExpiryAlertTest shape: the receiver's count is settled
         // by the time publish() returns, so no polling and no sleeping.
-        Comms.install(new CommsDispatcher(Map.of(
-            CommsChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+        Notifications.install(new NotificationDispatcher(Map.of(
+            DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
 
         NotificationChannelModel channels = Models.get(NotificationChannelModel.class);
         Row channel = channels.createEmptyRow();
@@ -101,7 +100,7 @@ class IsolationVisibilityTest {
 
     @AfterAll
     static void tearDown() throws Exception {
-        Comms.install(null);
+        Notifications.install(null);
         if (destination != null) {
             destination.close();
         }

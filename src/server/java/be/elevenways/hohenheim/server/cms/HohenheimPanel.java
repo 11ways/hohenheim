@@ -14,9 +14,9 @@ import be.elevenways.zenit.cms.common.panel.PanelEntry;
 import be.elevenways.zenit.cms.server.page.BuildInfoPage;
 import be.elevenways.zenit.cms.server.page.SettingsPage;
 import be.elevenways.zenit.cms.server.task.TaskAdmin;
-import be.elevenways.zenit.comms.server.cms.CommsHubAdmin;
 import be.elevenways.zenit.common.security.Permission;
 import be.elevenways.zenit.common.ui.Icon;
+import be.elevenways.zenit.notifications.server.cms.NotificationHubAdmin;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -170,11 +170,12 @@ public final class HohenheimPanel extends Panel {
         addIf(peers, DnsPeerParts.admin(), Role.DNS);
         addIf(peers, DnsZonePeerParts.admin(), Role.DNS);
         peers.add(NotificationChannelParts.admin());
-        // zenit-comms' delivery log: every alert the channels above sent, whether it arrived, and its retry. Gated by
-        // comms' own permissions (other people's notification history), never the delegable panel grant; an operator
-        // holding "*" sees it, a delegated admin only through an explicit comms.deliveries.* grant. Hohenheim is no
+        // zenit-notifications' delivery log: every alert the channels above sent, whether it arrived, and its retry.
+        // Gated by that module's own permissions (other people's notification history), never the delegable panel
+        // grant; an operator holding "*" sees it, a delegated admin only through an explicit notifications.deliveries.*
+        // grant (a stored comms.deliveries.* grant is its alias). Hohenheim is no
         // hub, so the hub's projects entry is not mounted.
-        PanelEntry deliveries = CommsHubAdmin.install(CommsHubAdmin.Permissions.MODULE)
+        PanelEntry deliveries = NotificationHubAdmin.install(NotificationHubAdmin.Permissions.MODULE)
                 .deliveryLog(NavGroup.SYSTEM, 93);
         peers.add(deliveries);
         addIf(peers, BanParts.admin(), Role.FIREWALL);

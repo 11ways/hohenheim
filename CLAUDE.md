@@ -178,7 +178,7 @@ A new alert event is a constant plus an `ALL` entry, and that is the WHOLE
 declaration -- the OPPOSITE of the task pin. Coverage is derived:
 `NotificationAdminTest` asserts the rendered vocabulary `isEqualTo(ALL.size())`,
 and the admin select and validation both read `ALL`, so no test edit is owed. To
-test one end-to-end: inline `CommsDispatcher` + `webhook://default` + a local
+test one end-to-end: inline `NotificationDispatcher` + `webhook://default` + a local
 `HttpServer`, per `CertExpiryAlertTest`.
 
 ## Migrations

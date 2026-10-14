@@ -247,7 +247,7 @@ version of the same procedure.
 ├── hohenheim-server.jar          # fat jar (rename the built artifact)
 ├── public/                       # static assets (shipped with the repo)
 ├── settings/
-│   ├── local.dry                 # every setting: hohenheim.*, auth.*, comms.*, ... (not tracked)
+│   ├── local.dry                 # every setting: hohenheim.*, auth.*, notifications.*, ... (not tracked)
 │   └── local.dry.example         # reference
 ├── data/                         # instance volumes, backups, build contexts
 ├── hohenheim.db                  # SQLite database (auto-created)

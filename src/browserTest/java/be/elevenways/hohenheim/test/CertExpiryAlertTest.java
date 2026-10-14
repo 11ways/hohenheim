@@ -1,17 +1,15 @@
 package be.elevenways.hohenheim.test;
 
 import be.elevenways.hohenheim.HohenheimEndpoints;
-import be.elevenways.hohenheim.HohenheimSettings;
 import be.elevenways.hohenheim.model.CertificateModel;
 import be.elevenways.hohenheim.model.NotificationChannelModel;
-import be.elevenways.hohenheim.server.HohenheimDatabase;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.hohenheim.server.tls.AcmeService;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.comms.CommsChannel;
-import be.elevenways.zenit.comms.server.Comms;
-import be.elevenways.zenit.comms.server.CommsDispatcher;
-import be.elevenways.zenit.comms.server.transport.TransportTypes;
+import be.elevenways.zenit.notifications.server.transport.TransportTypes;
+import be.elevenways.zenit.notifications.DeliveryChannel;
+import be.elevenways.zenit.notifications.server.NotificationDispatcher;
+import be.elevenways.zenit.notifications.server.Notifications;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 
@@ -21,7 +19,6 @@ import be.elevenways.zenit.test.support.OutboundFixture;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
 import java.net.InetSocketAddress;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -64,8 +61,8 @@ class CertExpiryAlertTest {
         int port = receiver.getAddress().getPort();
         try (OutboundFixture destination = OutboundFixture.route("expiry-watch.example.test", port)) {
             // Inline delivery so the receiver's hit count is settled when the sweep returns.
-            Comms.install(new CommsDispatcher(Map.of(
-                CommsChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+            Notifications.install(new NotificationDispatcher(Map.of(
+                DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
 
             NotificationChannelModel channels = Models.get(NotificationChannelModel.class);
             Row channel = channels.createEmptyRow();
@@ -103,7 +100,7 @@ class CertExpiryAlertTest {
             AcmeService.checkExpiryAlerts(certModel, now.plus(50, ChronoUnit.DAYS));
             assertThat(hits.get()).as("re-armed for the next cycle").isEqualTo(2);
         } finally {
-            Comms.install(null);
+            Notifications.install(null);
             receiver.stop(0);
         }
     }

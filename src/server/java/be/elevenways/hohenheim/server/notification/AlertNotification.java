@@ -3,14 +3,14 @@ package be.elevenways.hohenheim.server.notification;
 import be.elevenways.hohenheim.HohenheimIds;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.registry.Identifier;
-import be.elevenways.zenit.comms.CommsChannel;
-import be.elevenways.zenit.comms.CommsRecipient;
-import be.elevenways.zenit.comms.CommsTexts;
-import be.elevenways.zenit.comms.Importance;
-import be.elevenways.zenit.comms.Notification;
-import be.elevenways.zenit.comms.message.ChatMessage;
-import be.elevenways.zenit.comms.message.InboxMessage;
-import be.elevenways.zenit.comms.message.WebhookMessage;
+import be.elevenways.zenit.notifications.Importance;
+import be.elevenways.zenit.notifications.Notification;
+import be.elevenways.zenit.notifications.DeliveryChannel;
+import be.elevenways.zenit.notifications.NotificationRecipient;
+import be.elevenways.zenit.notifications.NotificationTexts;
+import be.elevenways.zenit.notifications.envelope.ChatEnvelope;
+import be.elevenways.zenit.notifications.envelope.InboxEnvelope;
+import be.elevenways.zenit.notifications.envelope.WebhookEnvelope;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -28,8 +28,8 @@ import java.util.Map;
  * it as {@code Microcopy.literal}, which never touches the resolver.
  *
  * AIDEV-NOTE: the inbox item's repeat key is the event and what the alert is about, never its wording: a host that
- * stops answering eight times is one item that says "8 times" (zenit-comms folds it), and an archived item is closed,
- * so the next occurrence opens a new one.
+ * stops answering eight times is one item that says "8 times" (zenit-notifications folds it), and an archived item is
+ * closed, so the next occurrence opens a new one.
  *
  * @author  Jelle De Loecker
  * @since   0.2.0
@@ -63,24 +63,24 @@ public final class AlertNotification extends Notification {
 
     /** Only the channels this recipient actually routes: a chat-only endpoint must never produce webhook rows. */
     @Override
-    public @NonNull List<CommsChannel> via(@NonNull CommsRecipient recipient) {
+    public @NonNull List<DeliveryChannel> via(@NonNull NotificationRecipient recipient) {
         // The panel inbox is LOCAL: it needs no transport and no operator configuration,
         // which is what makes it the lane an alert can always be seen on.
-        if (recipient.routeFor(CommsChannel.INBOX) != null) {
-            return List.of(CommsChannel.INBOX);
+        if (recipient.routeFor(DeliveryChannel.INBOX) != null) {
+            return List.of(DeliveryChannel.INBOX);
         }
-        if (recipient.routeFor(CommsChannel.CHAT) != null) {
-            return List.of(CommsChannel.CHAT);
+        if (recipient.routeFor(DeliveryChannel.CHAT) != null) {
+            return List.of(DeliveryChannel.CHAT);
         }
-        if (recipient.routeFor(CommsChannel.WEBHOOK) != null) {
-            return List.of(CommsChannel.WEBHOOK);
+        if (recipient.routeFor(DeliveryChannel.WEBHOOK) != null) {
+            return List.of(DeliveryChannel.WEBHOOK);
         }
         return List.of();
     }
 
     @Override
-    public @Nullable InboxMessage toInbox(@NonNull CommsRecipient recipient) {
-        return new InboxMessage()
+    public @Nullable InboxEnvelope toInbox(@NonNull NotificationRecipient recipient) {
+        return new InboxEnvelope()
             .setTitle(this.subject)
             .setBody(this.message)
             .setIcon("bell")
@@ -88,16 +88,16 @@ public final class AlertNotification extends Notification {
     }
 
     @Override
-    public @Nullable ChatMessage toChat(@NonNull CommsRecipient recipient) {
-        return new ChatMessage().setTitle(this.subject).setBody(this.message);
+    public @Nullable ChatEnvelope toChat(@NonNull NotificationRecipient recipient) {
+        return new ChatEnvelope().setTitle(this.subject).setBody(this.message);
     }
 
     @Override
-    public @Nullable WebhookMessage toWebhook(@NonNull CommsRecipient recipient) {
+    public @Nullable WebhookEnvelope toWebhook(@NonNull NotificationRecipient recipient) {
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("subject", CommsTexts.plain(this.subject));
-        String message = CommsTexts.plain(this.message);
+        data.put("subject", NotificationTexts.plain(this.subject));
+        String message = NotificationTexts.plain(this.message);
         data.put("message", message == null ? "" : message);
-        return new WebhookMessage().setEvent(this.event).setData(data);
+        return new WebhookEnvelope().setEvent(this.event).setData(data);
     }
 }

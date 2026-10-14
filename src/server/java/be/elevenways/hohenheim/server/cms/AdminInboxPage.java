@@ -12,8 +12,8 @@ import be.elevenways.zenit.cms.common.page.CmsRoutes;
 import be.elevenways.zenit.cms.common.panel.NavGroup;
 import be.elevenways.zenit.cms.common.panel.PanelRequest;
 import be.elevenways.zenit.cms.common.resource.PanelPage;
-import be.elevenways.zenit.comms.inbox.CommsInboxItemView;
-import be.elevenways.zenit.comms.server.CommsInbox;
+import be.elevenways.zenit.notifications.inbox.NotificationInboxItemView;
+import be.elevenways.zenit.notifications.server.NotificationInbox;
 import be.elevenways.zenit.common.conduit.Conduit;
 import be.elevenways.zenit.common.data.PageWindow;
 import be.elevenways.zenit.common.result.ActionResult;
@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The operator's own notification inbox: the shipped zenit-comms surface mounted
+ * The operator's own notification inbox: the shipped zenit-notifications surface mounted
  * under this panel's route and gate.
  *
  * AIDEV-NOTE: this is where a platform alert becomes VISIBLE with nothing
@@ -38,7 +38,7 @@ import java.util.Map;
  * and no credential -- which is the whole point, because zero configured channels
  * is exactly the state every production installation was in.
  *
- * Ownership is the module's: {@code CommsInbox} scopes every read to the
+ * Ownership is the module's: {@code NotificationInbox} scopes every read to the
  * requesting principal, so this page shows the reader their OWN items and the
  * panel permission is the only gate it needs.
  *
@@ -67,17 +67,17 @@ public final class AdminInboxPage extends PanelPage {
     @Override
     public @NonNull ActionResult<?> render(@NonNull PanelRequest request) {
         Conduit conduit = request.conduit();
-        long total = CommsInbox.itemCount(conduit);
+        long total = NotificationInbox.itemCount(conduit);
         PageWindow window = PageWindow.of(requestedPage(conduit), total,
-            CommsInbox.DEFAULT_LIMIT, PageWindow.OutOfRange.CLAMP);
-        List<CommsInboxItemView> items =
-            CommsInbox.itemsFor(conduit, window.pageSize(), window.offset());
+            NotificationInbox.DEFAULT_LIMIT, PageWindow.OutOfRange.CLAMP);
+        List<NotificationInboxItemView> items =
+            NotificationInbox.itemsFor(conduit, window.pageSize(), window.offset());
 
         Map<String, Object> vars = new HashMap<>();
         vars.put("title", label().asString(conduit));
         vars.put("lead", description());
         vars.put("items", items);
-        vars.put("markAllTarget", CommsInbox.markAllTarget(conduit));
+        vars.put("markAllTarget", NotificationInbox.markAllTarget(conduit));
         vars.put("pager", Pager.of(window, total, page -> pageUrl(page).toUrl()));
         return new RenderTemplateResult(HohenheimTemplateIds.INBOX, vars);
     }

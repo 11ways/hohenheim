@@ -52,8 +52,8 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
             .isSameAs(NavGroup.SYSTEM);
         List<SettingsPage.Mount> mounts = ((SettingsPage) peer).mounts();
         assertThat(mounts).extracting(SettingsPage.Mount::key).as("step 2: the sections in their order")
-            .containsExactly("general", "brand", "https", "backups", "comms", "apps", "hosts", "dns", "blocking",
-                "spamservice", "proxy", SettingsPage.FRAMEWORK_MOUNT_KEY);
+            .containsExactly("general", "brand", "https", "backups", "notifications", "apps", "hosts", "dns",
+                "blocking", "spamservice", "proxy", SettingsPage.FRAMEWORK_MOUNT_KEY);
         assertThat(mounts).filteredOn(SettingsPage.Mount::advanced).extracting(SettingsPage.Mount::key)
             .as("step 2: only the framework mount is advanced").containsExactly(SettingsPage.FRAMEWORK_MOUNT_KEY);
 
@@ -102,14 +102,14 @@ class AdminSettingsMountsTest extends HohenheimTestBase {
         assertThat(backups).as("step 5: the backups section anchors its database group")
             .isEqualTo("setting-backups-database");
         navigateToApp("/admin/settings?section=setting-https," + backups
-            + ",setting-framework-network,setting-comms-channels");
+            + ",setting-framework-network,setting-notifications-channels");
         waitForHydration();
         assertThat(page.locator("[data-path='https.letsencrypt_enabled']").count())
             .as("step 5: a one-group section offers its rows under the section key").isEqualTo(1);
         assertThat(page.locator("[data-path='backups.database.control_plane_backup_target']").count())
             .as("step 5: a section of several groups keeps each group's path").isEqualTo(1);
-        assertThat(page.locator("[data-path='comms.channels.mail_transports']").count())
-            .as("step 5: the notifications section is comms' own mount").isEqualTo(1);
+        assertThat(page.locator("[data-path='notifications.channels.mail_transports']").count())
+            .as("step 5: the notifications section is zenit-notifications' own mount").isEqualTo(1);
         assertThat(page.locator("#setting-framework-network").isVisible())
             .as("step 5: a requested framework group shows although the disclosure is folded").isTrue();
         assertThat(page.locator("[data-path='framework.network.request_body_size_limit']").count())

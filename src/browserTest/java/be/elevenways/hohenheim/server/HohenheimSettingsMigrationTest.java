@@ -62,11 +62,12 @@ class HohenheimSettingsMigrationTest {
         assertThat(HohenheimSettings.Ssl.LETSENCRYPT_ENABLED.getPath()).as("step 4: the toggle's path")
             .isEqualTo("hohenheim.ssl.letsencrypt_enabled");
 
-        // 4b. The retired comms file an existing deployment carries is adopted the same way, under comms.*.
+        // 4b. The retired comms file an existing deployment carries is adopted the same way, under notifications.*.
         Path oldComms = this.root.resolve("settings/comms.dry");
         Files.writeString(oldComms, "{\"channels\":{\"mail_transports\":\"hub://herald\"}}", StandardCharsets.UTF_8);
         RetiredConfiguration.adopt(this.root, this.root.resolve("home"), local);
-        assertThat(new DryFileSource(local).snapshot().get("comms")).as("step 4b: the comms keys live under comms.*")
+        assertThat(new DryFileSource(local).snapshot().get("notifications"))
+            .as("step 4b: the old file's keys live under notifications.*")
             .isEqualTo(Map.of("channels", Map.of("mail_transports", "hub://herald")));
         assertThat(Files.exists(oldComms)).as("step 4b: the old comms file is moved away").isFalse();
         RetiredConfiguration.refuse(this.root, Map.of());

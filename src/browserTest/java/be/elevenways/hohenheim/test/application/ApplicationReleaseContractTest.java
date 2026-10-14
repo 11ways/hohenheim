@@ -35,10 +35,10 @@ import be.elevenways.protoblast.common.time.Now;
 import be.elevenways.zenit.auth.model.GrantSubjectType;
 import be.elevenways.zenit.auth.model.UserPrincipal;
 import be.elevenways.zenit.auth.server.RecordGrants;
-import be.elevenways.zenit.comms.CommsChannel;
-import be.elevenways.zenit.comms.server.Comms;
-import be.elevenways.zenit.comms.server.CommsDispatcher;
-import be.elevenways.zenit.comms.server.transport.TransportTypes;
+import be.elevenways.zenit.notifications.server.transport.TransportTypes;
+import be.elevenways.zenit.notifications.DeliveryChannel;
+import be.elevenways.zenit.notifications.server.NotificationDispatcher;
+import be.elevenways.zenit.notifications.server.Notifications;
 import be.elevenways.zenit.common.Zenit;
 import be.elevenways.zenit.common.orm.datasource.Db;
 import be.elevenways.zenit.common.orm.datasource.Row;
@@ -276,8 +276,8 @@ class ApplicationReleaseContractTest {
         receiver.start();
         int port = receiver.getAddress().getPort();
         try (OutboundFixture destination = OutboundFixture.route("deploy-watch.example.test", port)) {
-            Comms.install(new CommsDispatcher(Map.of(
-                CommsChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+            Notifications.install(new NotificationDispatcher(Map.of(
+                DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
             Db.run(datasource, () -> {
                 NotificationChannelModel channels = Models.get(NotificationChannelModel.class);
                 Row channel = channels.createEmptyRow();
@@ -318,7 +318,7 @@ class ApplicationReleaseContractTest {
                 }
             });
         } finally {
-            Comms.install(null);
+            Notifications.install(null);
             receiver.stop(0);
         }
     }

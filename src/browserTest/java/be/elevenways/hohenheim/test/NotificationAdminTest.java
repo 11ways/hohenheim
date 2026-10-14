@@ -6,10 +6,10 @@ import be.elevenways.hohenheim.server.cms.NotificationChannelParts;
 import be.elevenways.hohenheim.server.notification.NotificationEvents;
 import be.elevenways.zenit.cms.common.page.CmsEndpoints;
 import be.elevenways.zenit.cms.common.page.CmsRoutes;
-import be.elevenways.zenit.comms.server.CommsDeliveryModel;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import be.elevenways.zenit.common.orm.query.SortOrder;
+import be.elevenways.zenit.notifications.server.DeliveryModel;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.assertions.PlaywrightAssertions;
@@ -117,10 +117,10 @@ class NotificationAdminTest extends HohenheimTestBase {
 
         // A test send is one-shot: the row it left behind is terminal, so the sweeper
         // never goes back to hammer a URL the operator was already told is dead.
-        Row delivery = Models.get(CommsDeliveryModel.class).find()
-            .orderBy(CommsDeliveryModel.ID, SortOrder.DESC).first();
+        Row delivery = Models.get(DeliveryModel.class).find()
+            .orderBy(DeliveryModel.ID, SortOrder.DESC).first();
         assertThat(delivery).as("the test send persisted a delivery row").isNotNull();
-        assertThat((String) delivery.get(CommsDeliveryModel.STATUS))
+        assertThat((String) delivery.get(DeliveryModel.STATUS))
             .as("an inline test delivery must not stay queued for retry")
             .isEqualTo("failed");
 
@@ -128,7 +128,7 @@ class NotificationAdminTest extends HohenheimTestBase {
         // row, failed.
         navigateToApp("/admin/deliveries");
         waitForHydration();
-        String deliveryRow = page.locator("pl-table-row[data-row-key='" + delivery.get(CommsDeliveryModel.ID) + "']")
+        String deliveryRow = page.locator("pl-table-row[data-row-key='" + delivery.get(DeliveryModel.ID) + "']")
             .innerText();
         assertThat(deliveryRow).as("the delivery log lists the failed test send").contains("failed");
     }

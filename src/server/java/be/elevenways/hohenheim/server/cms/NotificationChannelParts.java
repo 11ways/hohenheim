@@ -41,6 +41,7 @@ import be.elevenways.zenit.common.edit.OptionSource;
 import be.elevenways.zenit.common.edit.Select;
 import be.elevenways.zenit.common.operation.OperationInput;
 import be.elevenways.zenit.forms.common.edit.CheckMatrix;
+import be.elevenways.zenit.notifications.server.NotifyOutcome;
 import be.elevenways.zenit.common.operation.Operation;
 import be.elevenways.zenit.common.operation.OperationFact;
 import be.elevenways.zenit.common.operation.OperationGate;
@@ -52,7 +53,6 @@ import be.elevenways.zenit.common.orm.query.SortOrder;
 import be.elevenways.zenit.common.routing.RouteLocales;
 import be.elevenways.zenit.common.ui.Icon;
 import be.elevenways.zenit.common.validation.Violations;
-import be.elevenways.zenit.comms.server.NotifyOutcome;
 import be.elevenways.zenit.server.operation.OperationHandlers;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
@@ -357,8 +357,8 @@ public final class NotificationChannelParts {
      * The toast for a test send that went out, saying which of the two things happened.
      *
      * AIDEV-NOTE: {@code sent()} covers a relay HANDOFF too: "Test delivered" over a chain that only handed the
-     * message to the comms hub told the operator their channel works while the hub's own row could still say it had
-     * no transport for it.
+     * message to the notifications hub told the operator their channel works while the hub's own row could still
+     * say it had no transport for it.
      */
     static @NonNull Microcopy testSucceeded(@NonNull NotifyOutcome outcome) {
         return HohenheimMicrocopy.NOTIFICATION_CHANNEL.of(outcome.delivered() ? "test_ok" : "test_accepted");

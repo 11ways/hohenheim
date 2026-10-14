@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
  * ContentLocales.endingWithDefault -- never hand-spelled as "nl,en". A browser sending
  * only {@code Accept-Language: nl} used to get a chain of exactly {@code [nl]} and leaked
  * 17 keys from framework modules shipping English-only catalogs (zenit-widget, zenit-media,
- * zenit-comms); Conduit.setLocales now terminates every request chain with the default
+ * zenit-notifications); Conduit.setLocales now terminates every request chain with the default
  * content locale, so that viewer sees English rather than raw keys. This test judges that
  * produced chain, so it fails if the guarantee is ever removed.
  */

@@ -27,11 +27,11 @@ import be.elevenways.protoblast.common.i18n.MessageResolvers;
 import be.elevenways.protoblast.common.i18n.Microcopy;
 import be.elevenways.protoblast.common.thread.ExecutionContext;
 import be.elevenways.protoblast.common.time.Now;
-import be.elevenways.zenit.comms.CommsChannel;
-import be.elevenways.zenit.comms.server.Comms;
-import be.elevenways.zenit.comms.server.CommsDeliveryModel;
-import be.elevenways.zenit.comms.server.CommsDispatcher;
-import be.elevenways.zenit.comms.server.transport.TransportTypes;
+import be.elevenways.zenit.notifications.server.transport.TransportTypes;
+import be.elevenways.zenit.notifications.DeliveryChannel;
+import be.elevenways.zenit.notifications.server.DeliveryModel;
+import be.elevenways.zenit.notifications.server.NotificationDispatcher;
+import be.elevenways.zenit.notifications.server.Notifications;
 import be.elevenways.zenit.common.orm.datasource.Row;
 import be.elevenways.zenit.common.orm.model.Models;
 import org.junit.jupiter.api.AfterAll;
@@ -111,14 +111,14 @@ class DnsFederationHealthTest {
     /** An inline webhook dispatcher, so a queued alert is a delivery row right after send(). */
     @BeforeEach
     void inlineDispatcher() {
-        Models.get(CommsDeliveryModel.class).find().delete();
-        Comms.install(new CommsDispatcher(Map.of(
-            CommsChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
+        Models.get(DeliveryModel.class).find().delete();
+        Notifications.install(new NotificationDispatcher(Map.of(
+            DeliveryChannel.WEBHOOK, List.of(TransportTypes.create("webhook://default"))), 1, true));
     }
 
     @AfterEach
     void restoreDispatcher() {
-        Comms.install(null);
+        Notifications.install(null);
     }
 
     /**
@@ -131,7 +131,7 @@ class DnsFederationHealthTest {
         long ourSerial = DnsZoneStore.INSTANCE.getZone(ORIGIN).getSerial();
         FakeNameserver secondary = FakeNameserver.serving(ORIGIN, ourSerial);
         Row channel = subscribe("stale-watch", NotificationEvents.DNS_SECONDARY_STALE);
-        Models.get(CommsDeliveryModel.class).find().delete();
+        Models.get(DeliveryModel.class).find().delete();
         try {
             int peerId = transferPeer("fresh-peer", "127.0.0.1", secondary.port());
             int linkId = linkZonePeer(zoneId, peerId);
@@ -393,7 +393,7 @@ class DnsFederationHealthTest {
         FakeNameserver parent = FakeNameserver.parent(PARENT, ORIGIN, delegation);
         FakeNameserver staleNs = FakeNameserver.serving(ORIGIN, 1);
         Row channel = subscribe("delegation-watch", NotificationEvents.DNS_DELEGATION_BROKEN);
-        Models.get(CommsDeliveryModel.class).find().delete();
+        Models.get(DeliveryModel.class).find().delete();
         TestLookup lookup = new TestLookup(ownPort);
         lookup.parents = List.of(parent.address());
         lookup.addresses.put("ns2.elsewhere.test", List.of(staleNs.address()));
@@ -629,7 +629,7 @@ class DnsFederationHealthTest {
     }
 
     private static long deliveries() {
-        return Models.get(CommsDeliveryModel.class).find().count();
+        return Models.get(DeliveryModel.class).find().count();
     }
 
     /** A webhook channel subscribed to exactly one event, so a queued delivery IS the alert. */
