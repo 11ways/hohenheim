@@ -137,12 +137,13 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
         HostFixtures.LocalHostState localBefore = HostFixtures.captureLocal();
         Row instance = instance("app-journey-workload");
         try {
-            // 1. On an admitted host a stopped workload is not running, and deploying it is the fix.
+            // 1. On an admitted host a stopped workload reads as stopped, never as a problem; deploying is the fix.
             HostFixtures.admitLocal();
             String stopped = adminGet("/admin/instances/" + instance.get(InstanceModel.ID) + "/page/overview").body();
-            assertThat(stopped).as("step 1: a stopped workload is an attention verdict")
-                .contains("data-cms-record-health=\"attention\"")
-                .contains("Not running");
+            assertThat(stopped).as("step 1: a stopped workload is no attention verdict")
+                .doesNotContain("data-cms-record-health=\"attention\"")
+                .contains("data-cms-record-health=\"unknown\"")
+                .contains("Stopped");
             assertThat(stopped).as("step 1: and not a host problem")
                 .doesNotContain("Cannot start yet");
 
@@ -209,12 +210,16 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
             assertThat(statusFact(adminGet("/admin/instances/" + id + "/page/overview").body()))
                 .as("step 1b: the run gone, it is not deployed yet again").contains("Not deployed yet");
 
-            // 2. Once it ran and stopped, it is not running, and Restart is offered again.
+            // 2. Once it ran and was stopped, it reads as stopped (a deliberate stop is no problem), and Restart is
+            //    offered again.
             status(id, InstanceModel.STATUS_STOPPED);
             String stopped = adminGet("/admin/instances/" + id + "/page/overview").body();
-            assertThat(stopped).as("step 2: a stopped workload is an attention verdict")
-                .contains("data-cms-record-health=\"attention\"")
-                .contains("Not running");
+            assertThat(stopped).as("step 2: a stopped workload is no attention verdict")
+                .doesNotContain("data-cms-record-health=\"attention\"")
+                .contains("data-cms-record-health=\"unknown\"");
+            assertThat(statusFact(stopped)).as("step 2: the Details card's Status says Stopped, not Needs attention")
+                .contains("Stopped")
+                .doesNotContain("Needs attention");
             assertThat(stopped).as("step 2: and offers Restart")
                 .contains("/invoke/hohenheim.restart_instance");
         } finally {
@@ -724,7 +729,7 @@ class AppOverviewJourneyTest extends HohenheimTestBase {
 
             // 3. The release stopped: so is the app.
             status(release[0], InstanceModel.STATUS_STOPPED);
-            assertThat(headlineOf(id)).as("step 3: a stopped release is a stopped app").isEqualTo("not_running");
+            assertThat(headlineOf(id)).as("step 3: a stopped release is a stopped app").isEqualTo("stopped");
             assertThat(adminGet("/admin/instances?filter.status=stopped").body())
                 .as("step 3: Status 'Stopped' now keeps it").contains("app-journey-released");
         } finally {

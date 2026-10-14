@@ -409,10 +409,14 @@ final class AppHealth {
                 // /manage it is offered to a holder of power; everyone else reads who can (spokenTo).
                 yield root != null ? stopped : stopped.fixedBy(InstanceOperations.RESTART.id());
             }
+            // A stored STOPPED is always a settled stop someone asked for (Stop, a typed stop command, a backup's or a
+            // move's cold stop): an unobserved death settles to ERROR or a restart (InstanceStatusReconciler). So it
+            // reads as stopped, the neutral tone CREATED wears too; ATTENTION's word "Needs attention" told the
+            // operator who had just stopped it that something was wrong.
             case STOPPED -> {
                 RecordHealth broken = siteBrokenOnItsOwn(facts.sitesByInstance.get(instance.get(InstanceModel.ID)),
                     facts.sites, delegated, viewer);
-                yield broken != null ? broken : RecordHealth.attention(Headline.NOT_RUNNING.copy())
+                yield broken != null ? broken : RecordHealth.unknown(status.label())
                     .detail(HohenheimMicrocopy.APP_HEALTH.of("not_running_detail"))
                     .fixedBy(InstanceOperations.START.id());
             }

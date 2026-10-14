@@ -268,8 +268,9 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
 
             // 8. The count tiles: Apps, Hosts, Certificates and Backups, each with the line saying what
             //    its count holds, only where a fact backs it.
+            //    The two stopped apps are no problem: a stopped workload reads as stopped, not as needing attention.
             assertThat(tile(dashboard, "apps")).as("step 8: the apps, live and with a problem, by their verdicts")
-                .contains("href=\"/admin/apps\"").contains(">3<").contains("1 live, 2 with a problem");
+                .contains("href=\"/admin/apps\"").contains(">3<").contains("1 live").doesNotContain("with a problem");
             assertThat(tile(dashboard, "hosts")).as("step 8: the hosts, tallied by their standing")
                 .contains("href=\"/admin/servers\"").contains(">1<").contains("1 refuses new apps");
             assertThat(tile(dashboard, "certificates")).as("step 8: no certificate, so no line about one")
@@ -281,7 +282,7 @@ class DashboardAttentionJourneyTest extends HohenheimTestBase {
             Panel admin = Objects.requireNonNull(PanelRegistry.getBySlug(HohenheimSlugs.ADMIN), "the admin panel");
             AccessContext operator = TenantConduits.operator();
             assertThat(admin.entryBySlug(HohenheimSlugs.APPS).navBadge(operator))
-                .as("step 8: the sidebar badges Apps with its 2 problems, the tile's own count").isEqualTo(2L);
+                .as("step 8: the sidebar badges no problem, the tile's own count: stopped apps are none").isNull();
             assertThat(admin.entryBySlug("inbox").navBadge(operator))
                 .as("step 8: the inbox's unread alerts no longer badge Activity").isNull();
             assertThat(dashboard).as("step 8: the access-list and bans tiles are gone")
