@@ -18,6 +18,7 @@ import be.elevenways.hohenheim.model.DatabaseModel;
 import be.elevenways.hohenheim.model.InstanceBackupModel;
 import be.elevenways.hohenheim.model.InstanceDatabaseModel;
 import be.elevenways.hohenheim.model.InstanceModel;
+import be.elevenways.hohenheim.model.InstanceStatus;
 import be.elevenways.hohenheim.model.PortAllocationModel;
 import be.elevenways.hohenheim.model.ServerModel;
 import be.elevenways.hohenheim.model.SiteModel;
@@ -456,12 +457,14 @@ public final class InstanceOverview {
         List<InstanceEndpointView> endpoints = new ArrayList<>();
         Row instance = Models.get(InstanceModel.class).findById(instanceId);
         List<PublishedPort> named = instance == null ? List.of() : namedPorts(settingsOf(instance));
+        InstanceStatus status = instance == null ? null : InstanceStatus.forToken(instance.get(InstanceModel.STATUS));
+        boolean workloadLive = status != null && status.servable();
         for (Row claim : PortLedger.claimsOf(InstanceModel.MODEL_ID, instanceId)) {
             Integer port = claim.get(PortAllocationModel.PORT);
             if (port == null) {
                 continue;
             }
-            PortState state = PortState.of(claim);
+            PortState state = PortState.of(claim, workloadLive);
             String address = addressOf(claim);
             String protocol = Objects.toString(claim.get(PortAllocationModel.PROTOCOL), "");
             endpoints.add(new InstanceEndpointView(
@@ -508,19 +511,23 @@ public final class InstanceOverview {
     /** What a claim means to an operator, as a stable hook and in words; never the ledger's own status word. */
     private record PortState(@NonNull String key, @NonNull Microcopy words) {
 
-        static @NonNull PortState of(@NonNull Row claim) {
-            if (PortLedger.isPreallocated(claim)) {
-                return new PortState("reserved",
-                    HohenheimMicrocopy.INSTANCE_OVERVIEW.of("reserved"));
-            }
+        /**
+         * @param workloadLive whether the owning record leaves a workload that holds its ports; a pre-allocated claim
+         *                     is the owner's number for life, so only this says whether anything listens on it
+         */
+        static @NonNull PortState of(@NonNull Row claim, boolean workloadLive) {
             String status = claim.get(PortAllocationModel.STATUS);
-            if (PortAllocationModel.STATUS_HELD.equals(status)) {
-                return new PortState("port_in_use",
-                    HohenheimMicrocopy.INSTANCE_OVERVIEW.of("port_in_use"));
-            }
             if (PortAllocationModel.STATUS_RELEASING.equals(status)) {
                 return new PortState("port_freeing",
                     HohenheimMicrocopy.INSTANCE_OVERVIEW.of("port_freeing"));
+            }
+            if (PortLedger.isPreallocated(claim) && !workloadLive) {
+                return new PortState("reserved",
+                    HohenheimMicrocopy.INSTANCE_OVERVIEW.of("reserved"));
+            }
+            if (PortAllocationModel.STATUS_HELD.equals(status)) {
+                return new PortState("port_in_use",
+                    HohenheimMicrocopy.INSTANCE_OVERVIEW.of("port_in_use"));
             }
             return new PortState("port_unknown",
                 HohenheimMicrocopy.INSTANCE_OVERVIEW.of("port_unknown"));

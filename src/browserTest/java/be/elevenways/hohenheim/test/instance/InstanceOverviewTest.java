@@ -283,6 +283,48 @@ class InstanceOverviewTest extends HohenheimTestBase {
     }
 
     /**
+     * A pre-allocated port (a game server's published port) reads Reserved only while nothing runs on it.
+     *
+     * AIDEV-NOTE: the round r3c defect, seen live on daystrom 2026-10-14: a running Minecraft server answered on its
+     * published port 30000 and its Connect to card still said Reserved, because the state read the claim's allocation
+     * mode alone. A pre-allocated claim is the owner's number for life; whether the port is in use is the RECORD's
+     * question, answered by {@code InstanceStatus.servable}.
+     */
+    @Test
+    void aPreallocatedPortReadsInUseWhileItsWorkloadRuns() throws Exception {
+        int id = instance();
+        var instances = Models.get(InstanceModel.class);
+        PortLedger.claimPreallocated(ServerModel.localServerId(), null, 25566, "tcp", InstanceModel.MODEL_ID, id,
+            "overview test");
+        try {
+            // 1. Stopped: the number is held for it, nothing listens, so it is Reserved.
+            assertThat(adminGet(overviewUrl()).body())
+                .as("step 1: a stopped instance's pre-allocated port is reserved")
+                .contains("data-endpoint-state=\"reserved\"").contains("Reserved");
+
+            // 2. THE DEFECT: running, the workload holds the port, so it is In use (pre-fix: still Reserved).
+            Row running = instances.findById(id);
+            running.set(InstanceModel.STATUS, InstanceModel.STATUS_RUNNING);
+            instances.save(running);
+            assertThat(adminGet(overviewUrl()).body())
+                .as("step 2: a running instance's pre-allocated port is in use")
+                .contains("data-endpoint-state=\"port_in_use\"").contains("In use")
+                .doesNotContain("data-endpoint-state=\"reserved\"");
+
+            // 3. Parked by a changed declaration, the claim is being freed whatever the workload does.
+            PortLedger.parkPreallocatedClaims(InstanceModel.MODEL_ID, id);
+            assertThat(adminGet(overviewUrl()).body())
+                .as("step 3: a parked pre-allocated port is being freed")
+                .contains("data-endpoint-state=\"port_freeing\"");
+        } finally {
+            Row stopped = instances.findById(id);
+            stopped.set(InstanceModel.STATUS, InstanceModel.STATUS_STOPPED);
+            instances.save(stopped);
+            PortLedger.releaseOwnerFully(InstanceModel.MODEL_ID, id);
+        }
+    }
+
+    /**
      * A refused deploy leaves a DURABLE explanation on the record, not a one-shot toast.
      *
      * AIDEV-NOTE: step 4 is the whole point and is the assertion a flash toast can never
