@@ -196,8 +196,10 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
             .as("step 3: the run ends the journey the wizard walked: what, where, ports; never the Options step the"
                 + " wizard passed over for a template without variables")
             .containsExactly("step_what", "step_where", "step_ports", "step_live");
-        assertThat(runPage).as("step 3: its page draws those three steps done before its own")
-            .contains("data-cms-operation-run-journey total-steps=\"1\" leading-steps=\"3\"");
+        // The server writes these attributes in no fixed order (three orders seen across runs), so each is read alone.
+        assertThat(openTag(runPage, "data-cms-operation-run-journey"))
+            .as("step 3: its page draws those three steps done before its own")
+            .contains(" leading-steps=\"3\"").contains(" total-steps=\"1\"").contains(" trailing-steps=\"0\"");
         assertThat(List.of(run.skipped(1), run.skipped(2), run.skipped(3)))
             .as("step 3: the template has no install step; its ports and its game address were done")
             .containsExactly(true, false, false);
@@ -692,6 +694,15 @@ class GameServerPutOnlineJourneyTest extends HohenheimTestBase {
         try (ServerSocket socket = new ServerSocket(0)) {
             return socket.getLocalPort();
         }
+    }
+
+    /** @return the opening tag of the first element carrying the marker attribute, empty when none does */
+    private static String openTag(String page, String marker) {
+        int at = page.indexOf(" " + marker);
+        if (at < 0) {
+            return "";
+        }
+        return page.substring(page.lastIndexOf('<', at), page.indexOf('>', at) + 1);
     }
 
     /** @return the drawn chooser card whose label is exactly this, empty when the chooser draws none */
